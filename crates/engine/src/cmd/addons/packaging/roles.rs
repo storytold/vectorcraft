@@ -10,6 +10,7 @@ use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
+use super::super::super::edit::{outermost, refuse_symbol_part, roots_of};
 use super::super::super::overprint::edit_counted;
 use super::super::super::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, has_selection, switch_or, text_param};
 use crate::{Result, Session};
@@ -186,7 +187,7 @@ fn free_role_name(d: &Document, table: &RoleTable, role: Role) -> String {
 
 /// Whether `n` can carry a role: a path (a live shape too) that is neither a clipping path nor a
 /// guide, or a compound path.
-fn can_carry(n: &Node) -> bool {
+pub(super) fn can_carry(n: &Node) -> bool {
     match &n.kind {
         NodeKind::Path { clipping, guide, .. } => !clipping && !guide,
         NodeKind::Compound { .. } => true,
@@ -194,12 +195,47 @@ fn can_carry(n: &Node) -> bool {
     }
 }
 
+/// The objects a command that changes roles or angles takes for params `p`: `ids` (the outermost of
+/// them), or else the selection (as `selected_roots` takes it), with a path of a compound path that
+/// is locked or hidden, or in a locked or hidden group or layer, or on a locked artboard, left out
+/// before it stands for its compound, and how many such paths were left out, each once.
+pub(super) fn taken_roots(s: &Session, p: &Value, command: &str) -> Result<(Vec<NodeId>, usize)> {
+    if p.get("ids").is_some_and(|v| !v.is_null()) {
+        let roots = checked_ids_or_selection(s, p, command)?;
+        return Ok(editable_members(&s.doc()?.doc, roots));
+    }
+    refuse_symbol_part(s)?;
+    let st = s.doc()?;
+    // An object inside another selected one is left out first, as it is from `ids`.
+    let (kept, left) = editable_members(&st.doc, outermost(&st.doc, st.selection.in_paint_order(&st.doc)));
+    Ok((roots_of(&st.doc, kept), left))
+}
+
+/// `ids` less the paths of compound paths among them that are locked or hidden (or in a locked or
+/// hidden group or layer, or on a locked artboard), and how many different ones were left out.
+pub(super) fn editable_members(d: &Document, ids: Vec<NodeId>) -> (Vec<NodeId>, usize) {
+    let ok = d.editable();
+    let member = |id: NodeId| d.parent_of(id).is_some_and(|p| matches!(d.node(p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
+    let mut left = std::collections::HashSet::new();
+    let kept = ids
+        .into_iter()
+        .filter(|id| {
+            let out = member(*id) && !ok(*id);
+            if out {
+                left.insert(*id);
+            }
+            !out
+        })
+        .collect();
+    (kept, left.len())
+}
+
 /// The objects under the outermost objects `roots` that can carry a role, through groups and clip
 /// groups, each once, and
 /// how many of `roots` and their members can't (text, images, symbol instances and other objects).
 /// With `editable`, objects that are locked or hidden, are in a locked or hidden group or layer, or
 /// are on a locked artboard are left out and counted as skipped.
-fn role_targets(d: &Document, roots: &[NodeId], editable: bool) -> (Vec<NodeId>, usize) {
+pub(super) fn role_targets(d: &Document, roots: &[NodeId], editable: bool) -> (Vec<NodeId>, usize) {
     fn walk(n: &Node, out: &mut Vec<NodeId>, skipped: &mut usize) {
         match &n.kind {
             NodeKind::Group { children, .. } => {
@@ -257,7 +293,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make Fold Line",
             ["Object", "Plug-ins", "Packaging Tools"],
             None,
-            "{role: cut|crease|partialCut|perforation|none, ids?: [id…] (default: the selection), overprint?: bool (true)} give each path, compound path and live shape among the objects (through groups and clip groups; objects that are locked or hidden, in a locked or hidden group or layer, or on a locked artboard are left out and counted as skipped, even when named in ids) a fold line role: its top stroke is painted with the role's swatch (addon.packaging.roles) at 100% and shown, a path without a stroke gets a 1 pt stroke, and the stroke overprints, or with overprint: false does not. A missing role swatch is made as a global spot swatch (Cut 100% magenta, Crease 100% cyan, Partial Cut 100% yellow, Perforation 50% magenta and 50% cyan, in the document's color mode; named \"Cut 2\" and so on, in the role table too, when a color group or a swatch that can't carry a role, such as a process color that is not global, has the name). none takes the role away: a role stroke keeps the color it shows, no longer linked to the swatch, and stops overprinting. Text, images, symbol instances and other objects are skipped and counted. One undo step, none when nothing changes → {ids (the objects that can carry a role), changed, skipped}",
+            "{role: cut|crease|partialCut|perforation|none, ids?: [id…] (default: the selection), overprint?: bool (true)} give each path, compound path and live shape among the objects (through groups and clip groups; objects that are locked or hidden, in a locked or hidden group or layer, or on a locked artboard are left out and counted as skipped, even when named in ids) a fold line role: its top stroke is painted with the role's swatch (addon.packaging.roles) at 100% and shown, a path without a stroke gets a 1 pt stroke, and the stroke overprints, or with overprint: false does not. A missing role swatch is made as a global spot swatch (Cut 100% magenta, Crease 100% cyan, Partial Cut 100% yellow, Perforation 50% magenta and 50% cyan, in the document's color mode; named \"Cut 2\" and so on, in the role table too, when a color group or a swatch that can't carry a role, such as a process color that is not global, has the name). none takes the role away: a role stroke keeps the color it shows, no longer linked to the swatch, and stops overprinting. A line keeps its own fold angle (addon.packaging.setFoldAngle) through a role change and through none. Text, images, symbol instances and other objects are skipped and counted. One undo step, none when nothing changes → {ids (the objects that can carry a role), changed, skipped}",
             has_selection,
             set_role
         ),
@@ -266,7 +302,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fold Lines",
             [],
             None,
-            "{ids?: [id…] (default: the selection)} the fold line roles → {roles: [{role: cut|crease|partialCut|perforation, name, swatch (the swatch that carries it), exists (the document has the swatch), count}], scope: ids|selection|document, selected (objects given or selected)}; count is how many of the paths, compound paths and live shapes among the objects (through groups, locked and hidden members included, each object once) have the role, or among every object of the document while nothing is selected and ids is left out",
+            "{ids?: [id…] (default: the selection)} the fold line roles → {roles: [{role: cut|crease|partialCut|perforation, name, swatch (the swatch that carries it), exists (the document has the swatch), count}], scope: ids|selection|document, selected (objects given or selected), foldLines, foldAngle, ownAngles, storedAngles}; count is how many of the paths, compound paths and live shapes among the objects (through groups, locked and hidden members included, each object once) have the role, or among every object of the document while nothing is selected and ids is left out. foldLines is how many of the Crease, Partial Cut and Perforation lines among them addon.packaging.setFoldAngle can change (those not locked or hidden; none while nothing is selected and ids is left out, or while the selection holds only a layer and objects in it), foldAngle the angle in degrees they all fold at (their own or their role's), null when they fold at different angles or there are none, ownAngles how many of them have an angle of their own, and storedAngles how many hold stored angle text, an angle or not, which setFoldAngle's reset: true removes",
             has_doc,
             roles
         ),
@@ -382,8 +418,9 @@ fn give_role(d: &mut Document, table: &RoleTable, id: NodeId, paint: Option<&Pai
 fn set_role(s: &mut Session, p: &Value) -> Result<Value> {
     let role = role_param(p, SET_ROLE, true)?;
     let overprint = switch_or(p, "overprint", true, SET_ROLE)?;
-    let roots = checked_ids_or_selection(s, p, SET_ROLE)?;
+    let (roots, left) = taken_roots(s, p, SET_ROLE)?;
     let (ids, skipped) = role_targets(&s.doc()?.doc, &roots, true);
+    let skipped = skipped + left;
     if ids.is_empty() {
         return Err(bad(SET_ROLE, "select a path that is neither locked nor hidden: text, images and symbol instances can't have a fold line role"));
     }
@@ -403,19 +440,38 @@ fn set_role(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn roles(s: &mut Session, p: &Value) -> Result<Value> {
     let given = p.get("ids").is_some_and(|v| !v.is_null());
-    let roots = checked_ids_or_selection(s, p, ROLES)?;
-    let d = &s.doc()?.doc;
+    // The objects Set Fold Angle takes: a locked or hidden path of a compound path does not stand
+    // for its compound there. They are the objects the counts are of unless such a path was left
+    // out, and only then are those found apart.
+    let (taken, left) = taken_roots(s, p, ROLES)?;
+    let (roots, angle_roots) = if left == 0 { (taken, vec![]) } else { (checked_ids_or_selection(s, p, ROLES)?, taken) };
+    let st = s.doc()?;
+    let d = &st.doc;
     let (scope, ids) = match (given, roots.is_empty()) {
         (true, _) => ("ids", role_targets(d, &roots, false).0),
         (false, false) => ("selection", role_targets(d, &roots, false).0),
         (false, true) => ("document", document_targets(d)),
     };
+    let whole = scope == "document";
+    // The lines Set Fold Angle can change are those of the objects it takes: with nothing selected,
+    // or a selection that holds no such object (only a layer and what is in it), it takes none,
+    // though the counts are the document's.
+    let angles_of_all = given || !roots.is_empty();
     let table = RoleTable::of(d);
     let mut counts = [0usize; 4];
-    for r in ids.iter().filter_map(|id| d.node(*id)).filter_map(|n| table.role_of(n)) {
+    let editable = d.editable();
+    let mut angles = super::angle::FoldAngles::default();
+    for n in ids.iter().filter_map(|id| d.node(*id)) {
+        let Some(r) = table.role_of(n) else { continue };
         if let Some(c) = counts.get_mut(r.index()) {
             *c += 1;
         }
+        if left == 0 && angles_of_all && super::angle::folds(r) && editable(n.id) {
+            angles.add(n, r);
+        }
+    }
+    if !whole && left > 0 {
+        angles = super::angle::fold_angles(d, &angle_roots);
     }
     let rows: Vec<Value> = Role::ALL
         .into_iter()
@@ -425,7 +481,10 @@ fn roles(s: &mut Session, p: &Value) -> Result<Value> {
             json!({ "role": r.id(), "name": r.name(), "swatch": swatch, "exists": d.swatch(swatch).is_some(), "count": count })
         })
         .collect();
-    Ok(json!({ "roles": rows, "scope": scope, "selected": roots.len() }))
+    Ok(json!({
+        "roles": rows, "scope": scope, "selected": roots.len(),
+        "foldLines": angles.lines, "foldAngle": angles.angle, "ownAngles": angles.own, "storedAngles": angles.stored,
+    }))
 }
 
 fn set_role_swatch(s: &mut Session, p: &Value) -> Result<Value> {

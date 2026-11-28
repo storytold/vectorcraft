@@ -1,19 +1,35 @@
-//! Tabs panel: tab-stop alignment, X position (Y in vertical type), leader and "align on", and a
-//! ruler numbered in the General unit on which a click adds a stop, dragging moves one and dragging
-//! it off the ruler deletes it. Ctrl-dragging a stop (Command on macOS) moves all the stops by the
-//! same distance. A stop placed or dragged on the ruler lands on the nearest whole point. With Snap
-//! to Unit on, or Shift held, it lands on the ruler's nearest tick.
+//! Tabs panel: tab-stop alignment, X position (Y in vertical type; a position typed there for a
+//! paragraph with no stops adds a stop at it), leader and "align on", and the
+//! framework's text ruler numbered in the General unit, on which a click adds a stop, dragging moves
+//! one and dragging it off the ruler deletes it. Ctrl-dragging a stop (Command on macOS) moves all the
+//! stops by the same distance. A stop lands on the ruler's step, or free with Alt held. While a stop is
+//! dragged, the canvas draws a guide through the selected text where the stop would land.
 
 use std::collections::HashSet;
 
-use egui::{Sense, Stroke, Ui, vec2};
+use craft::keymap::CommandRef;
+use craft::text::ui::DocUnit;
+use craft::text::ui::ruler::{RulerItem, RulerValues, TabAlign as RulerAlign, TabLeader, TabStop as RulerStop, TextRuler};
+use craft::theme::variant::Tone;
+use craft::ui::buttons::{Button, ToggleButton};
+use craft::ui::canvas::CanvasSpace;
+use craft::ui::canvas_controls::{SmartGuides, SmartLine};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::form::Field;
+use craft::ui::layout::RowAlign;
+use craft::ui::layout_components::Row;
+use craft::ui::menu::PanelRow;
+use craft::ui::notices::{Notice, NoticeLayout};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::env::Label;
+use craft::ui::text::{NumberField, TextField};
+use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject};
+use vectorcraft_geom::{Point, Vec2};
 
-use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
-use crate::theme::Tokens;
-use crate::widgets::{self, menu_item};
+use crate::canvas::rulers::{general_lengths, unit_kind};
 
 const ALIGNS: [(TabAlign, &str); 4] = [(TabAlign::Left, "⇥"), (TabAlign::Center, "⇹"), (TabAlign::Right, "⇤"), (TabAlign::Decimal, ".⇥")];
 
@@ -43,11 +59,39 @@ fn align_id(a: TabAlign) -> &'static str {
 /// The panel body's margin and the ruler's own inset: the ruler's 0 is this far right of the panel.
 const RULER_LEFT: f32 = 10.0 + 4.0;
 
-/// The most ticks the ruler draws.
-const MAX_TICKS: usize = 10_000;
-
 /// The largest stop position `text.tabs.set` takes, in points.
 const MAX_STOP: f64 = 100_000.0;
+
+/// The salt of the ruler's id: the panel's own pass and the canvas's stop guide name the same ruler by it
+/// (`TextRuler::dragging`).
+pub(crate) const RULER_ID: &str = "tabs-ruler";
+
+const CLEAR_ALL: &str = "ui.tabs.clearAll";
+const DELETE_TAB: &str = "ui.tabs.deleteTab";
+const REPEAT_TAB: &str = "ui.tabs.repeatTab";
+const COMMANDS: [&str; 3] = [CLEAR_ALL, DELETE_TAB, REPEAT_TAB];
+
+/// What the panel remembers between frames: the stop the fields show, the marker picked on the ruler
+/// (it takes the fields over while it is set), the alignment a new stop takes and the text the panel
+/// was last placed above.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TabsPanel {
+    /// The picked stop, clamped to the paragraph's last stop where it is read ([`Self::stop_in`]).
+    stop: usize,
+    /// The indent marker picked on the ruler; the fields show and edit it in place of the stop.
+    marker: Option<RulerItem>,
+    /// The alignment the buttons show while no stop is picked, and the one a new stop takes.
+    align: TabAlign,
+    /// The document and text Position Panel Above Text last sized the ruler for.
+    above: Option<(u64, NodeId)>,
+}
+
+impl TabsPanel {
+    /// The picked stop within a paragraph of `count` stops.
+    fn stop_in(&self, count: usize) -> usize {
+        self.stop.min(count.saturating_sub(1))
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum IndentMarker {
@@ -183,62 +227,6 @@ fn bounded_marker_position(marker: IndentMarker, target: f64, span: f64, targets
     (low <= high).then(|| target.clamp(low, high))
 }
 
-fn hit_marker(pos: egui::Pos2, rect: egui::Rect, para: &ParaStyle, span: f64, mixed_left: bool, to_x: impl Fn(f64) -> f32) -> Option<IndentMarker> {
-    if pos.y < rect.top() || pos.y > rect.top() + 16.0 {
-        return None;
-    }
-    let upper = (to_x(marker_position(IndentMarker::Upper, para).clamp(0.0, span)) - pos.x).abs() <= 6.0;
-    let lower = !mixed_left && (to_x(marker_position(IndentMarker::Lower, para).clamp(0.0, span)) - pos.x).abs() <= 6.0;
-    match (upper, lower) {
-        (true, true) if pos.y >= rect.top() + 8.0 => Some(IndentMarker::Lower),
-        (true, _) => Some(IndentMarker::Upper),
-        (_, true) => Some(IndentMarker::Lower),
-        _ => None,
-    }
-}
-
-struct MarkerPaint<'a> {
-    rect: egui::Rect,
-    span: f64,
-    para: &'a ParaStyle,
-    mixed_left: bool,
-    selected: Option<IndentMarker>,
-    drag: Option<(IndentMarker, bool)>,
-    preview: Option<(IndentMarker, f64, bool)>,
-}
-
-fn paint_markers(ui: &mut Ui, painter: &egui::Painter, tokens: &Tokens, view: MarkerPaint<'_>, to_x: impl Fn(f64) -> f32) {
-    for marker in [IndentMarker::Upper, IndentMarker::Lower] {
-        if marker == IndentMarker::Lower && view.mixed_left {
-            continue;
-        }
-        let value = match view.preview {
-            Some((IndentMarker::Upper, x, _)) if marker == IndentMarker::Upper => x,
-            Some((IndentMarker::Lower, x, _)) if marker == IndentMarker::Lower => x,
-            Some((IndentMarker::Lower, x, true)) if marker == IndentMarker::Upper => marker_position(marker, view.para) + x - view.para.left_indent,
-            _ => marker_position(marker, view.para),
-        };
-        let x = to_x(value.clamp(0.0, view.span));
-        let top = view.rect.top() + 1.0;
-        let points = if marker == IndentMarker::Upper {
-            vec![egui::pos2(x - 5.0, top), egui::pos2(x + 5.0, top), egui::pos2(x, top + 7.0)]
-        } else {
-            vec![egui::pos2(x - 5.0, top + 15.0), egui::pos2(x + 5.0, top + 15.0), egui::pos2(x, top + 8.0)]
-        };
-        let selected = view.selected == Some(marker) || view.drag.is_some_and(|(m, _)| m == marker);
-        painter.add(egui::Shape::convex_polygon(points, tokens.text, Stroke::new(1.5, if selected { tokens.accent } else { tokens.text_dim })));
-        let name = match marker {
-            IndentMarker::Upper => tl!("First-line Left Indent"),
-            IndentMarker::Lower => tl!("Left Indent"),
-        };
-        let hit =
-            egui::Rect::from_center_size(egui::pos2(x, view.rect.top() + if marker == IndentMarker::Upper { 4.0 } else { 12.0 }), vec2(12.0, 8.0));
-        let hover = ui.interact(hit, ui.scope_id().with(("tabs-indent", marker as u8)), Sense::hover());
-        hover.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, name));
-        hover.on_hover_text(name);
-    }
-}
-
 /// Apply an absolute ruler position through paragraph-format commands. When the paragraphs need
 /// values of their own, one command sets each paragraph's ([`set_each_indent`]), and threaded text
 /// flows again once.
@@ -340,7 +328,7 @@ fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
         None => super::character::first_selected_text_node(app)?.clone(),
     };
     let NodeKind::Text(t) = &n.kind else { return None };
-    let para = editing.map_or(0, |(_, a, _)| t.paragraphs_in(a, a).start);
+    let para = shown_paragraph(app, t);
     let span = match &t.kind {
         TextKind::Area { frame } => frame.bounds().map_or(360.0, |b| b.width()),
         _ => 360.0,
@@ -350,23 +338,34 @@ fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
     Some((n, para, span.max(72.0)))
 }
 
+/// The index of the paragraph of text `t` whose stops the panel shows: the paragraph of the Type
+/// tool's insertion point, else the first.
+fn shown_paragraph(app: &VectorcraftApp, t: &TextObject) -> usize {
+    super::character::text_editing(app).map_or(0, |(_, a, _)| t.paragraphs_in(a, a).start)
+}
+
 /// [`above_text`], then note the active document and text `n`. A floating panel is
 /// at least [`crate::panel_docking::PANEL_MIN_WIDTH`] wide, so for narrow text at a low zoom the
 /// panel comes out wider than asked; the ruler then draws text `n` at [`screen_scale`] and runs
-/// on past the text's width.
-fn place_above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64) {
-    if above_text(app, ctx, n, span).is_some() {
-        set_pstate(ctx, "tabs-above", app.session.active().map(|doc| (doc.uid, n.id)));
+/// on past the text's width ([`ruler_scale`]).
+fn place_above_text(app: &mut VectorcraftApp, n: &Node, span: f64) {
+    if above_text(app, n, span).is_some() {
+        app.ui.tabs_panel.above = app.session.active().map(|doc| (doc.uid, n.id));
     }
+}
+
+/// Text `n`'s bounds on the screen under `view`.
+fn on_screen_bounds(view: &craft::behavior::CanvasView, n: &Node) -> Option<egui::Rect> {
+    Some(egui::Rect::from_points(&view.quad(n.geometric_bounds()?)))
 }
 
 /// Screen points per point of text `n` at the canvas zoom, as [`above_text`] sizes the ruler:
 /// across the frame for area type, the zoom for point type.
 fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
-    let xf = app.canvas_xf()?;
+    let view = app.canvas_view()?;
     let per = match &n.kind {
-        NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. }) => f64::from(xf.rect_to_screen(n.geometric_bounds()?).width()) / span,
-        _ => xf.zoom,
+        NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. }) => f64::from(on_screen_bounds(&view, n)?.width()) / span,
+        _ => view.zoom,
     };
     (per.is_finite() && per > 0.0).then_some(per)
 }
@@ -374,24 +373,12 @@ fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
 /// Position Panel Above Text: float the panel just above text `n`, as wide as its ruler needs to
 /// put 0 on the text's left edge and its marks at the canvas zoom, so each stop sits over the
 /// column it sets (#729). `span`: the ruler's length in the text's points.
-fn above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64) -> Option<()> {
-    let xf = app.canvas_xf()?;
-    let on_screen = xf.rect_to_screen(n.geometric_bounds()?);
-    // Screen points per point of the text: across the frame for area type (so a scaled frame
-    // lines up too), the zoom for point type.
-    let per = match &n.kind {
-        NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. }) => on_screen.width() / span as f32,
-        _ => xf.zoom as f32,
-    };
-    if !per.is_finite() || per <= 0.0 {
-        return None;
-    }
+fn above_text(app: &mut VectorcraftApp, n: &Node, span: f64) -> Option<()> {
+    let view = app.canvas_view()?;
+    let on_screen = on_screen_bounds(&view, n)?;
+    let per = screen_scale(app, n, span)? as f32;
     let width = span as f32 * per + RULER_LEFT * 2.0;
-    let height = crate::panel_docking::layout_of(&app.ui)
-        .floating
-        .iter()
-        .find(|w| w.contains(&"tabs".to_string()))
-        .map_or(crate::panel_docking::floating_size("tabs").y, |w| w.rect[3]);
+    let height = crate::panel_docking::floating_height(app, "tabs");
     // Text near the top of the window: the panel goes just below the text when that place is in
     // the window and the panel fits there in the canvas, else at the window's top, so its bar
     // stays where it can be grabbed rather than above the screen.
@@ -399,15 +386,35 @@ fn above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64
     let below = on_screen.bottom() + 6.0;
     let top = if above >= 0.0 {
         above
-    } else if below >= 0.0 && below + height <= app.canvas_rect.map_or(f32::NEG_INFINITY, |c| c.bottom()) {
+    } else if below >= 0.0 && below + height <= view.rect.bottom() {
         below
     } else {
         0.0
     };
     let pos = egui::pos2(on_screen.left() - RULER_LEFT, top);
-    let origin = ctx.input(|i| i.raw.viewports.get(&egui::ViewportId::ROOT).and_then(|v| v.inner_rect)).map(|r| r.min);
-    crate::panel_docking::place_floating(app, "tabs", pos, width, origin).ok()?;
+    crate::panel_docking::place_floating(app, "tabs", pos, width).ok()?;
     Some(())
+}
+
+/// Screen points per point of the ruler for a ruler `w` screen points wide over text `node`. After
+/// Position Panel Above Text on this text, while the panel floats no wider than the narrowest
+/// floating window, a ruler wider than the text is on screen draws the text at its screen scale and
+/// runs on past its width. Any other ruler fits the span to its width.
+fn ruler_scale(app: &VectorcraftApp, node: &Node, span: f64, w: f32) -> f64 {
+    let w = f64::from(w);
+    let at = app.session.active().map(|doc| (doc.uid, node.id));
+    let narrowest = crate::panel_docking::layout_of(&app.ui)
+        .floating
+        .iter()
+        .find(|f| f.contains("tabs"))
+        .is_some_and(|f| f.rect.width() <= crate::panel_docking::PANEL_MIN_WIDTH + 0.5);
+    app.ui
+        .tabs_panel
+        .above
+        .filter(|above| Some(*above) == at && narrowest)
+        .and_then(|_| screen_scale(app, node, span))
+        .filter(|per| span * per + 8.0 < w - 0.5)
+        .unwrap_or((w - 8.0) / span)
 }
 
 fn stops_json(stops: &[TabStop]) -> Value {
@@ -423,8 +430,8 @@ fn stops_json(stops: &[TabStop]) -> Value {
 /// frame of the selected stories ([`super::character::selected_stories`]). Returns false when it
 /// fails.
 fn apply(app: &mut VectorcraftApp, stops: &[TabStop]) -> bool {
-    if let Some((id, a, b)) = super::character::text_editing(app) {
-        super::character::end_typing(app);
+    let Ok(editing) = super::character::text_editing_kept(app) else { return false };
+    if let Some((id, a, b)) = editing {
         let p = match super::character::text_story(app) {
             // After Select All in threaded text: every paragraph of every frame.
             Some(story) => json!({"stops": stops_json(stops), "ids": story.iter().map(|f| f.0).collect::<Vec<_>>()}),
@@ -438,297 +445,378 @@ fn apply(app: &mut VectorcraftApp, stops: &[TabStop]) -> bool {
     }
 }
 
-/// Move stop `i` to `position`, sort the stops by position and set them, then select the first
-/// stop within 1e-6 pt of `position` on the ruler, the stop `text.tabs.set` keeps of those it
-/// merges. Returns its index, or `None` when the stops are not set and `stops` and the selection
-/// stay as they were.
-fn apply_moved(app: &mut VectorcraftApp, ctx: &egui::Context, stops: &mut Vec<TabStop>, i: usize, position: f64) -> Option<usize> {
+/// Move stop `i` to `position`, sort the stops by position and set them. Returns the index of the
+/// first stop within 1e-6 pt of `position`, the stop `text.tabs.set` keeps of those it merges, or
+/// `None` when the stops are not set and `stops` stays as it was.
+fn apply_moved(app: &mut VectorcraftApp, stops: &mut Vec<TabStop>, i: usize, position: f64) -> Option<usize> {
     let mut moved = stops.clone();
     moved.get_mut(i)?.position = position;
     moved.sort_by(|a, b| a.position.total_cmp(&b.position));
     let sel = moved.iter().position(|s| (s.position - position).abs() < 1e-6).unwrap_or(0);
     apply(app, &moved).then(|| {
         *stops = moved;
-        set_pstate(ctx, "tabs-sel", sel);
         sel
     })
 }
 
-/// `stops` with every stop moved by the distance that takes stop `i` to `position`, or by less
-/// when that would put a stop below 0 or past [`MAX_STOP`], so the leftmost stop ends at 0 or the
-/// rightmost at [`MAX_STOP`] and the stops keep their spacing. The stops keep their order,
-/// alignment, leader and "align on". `None` when there is no stop `i`.
-fn moved_all(stops: &[TabStop], i: usize, position: f64) -> Option<Vec<TabStop>> {
-    let from = stops.get(i)?.position;
-    let lowest = stops.iter().map(|s| s.position).fold(f64::INFINITY, f64::min);
-    let highest = stops.iter().map(|s| s.position).fold(f64::NEG_INFINITY, f64::max);
-    let offset = (position - from).min(MAX_STOP - highest).max(-lowest);
-    Some(stops.iter().map(|s| TabStop { position: s.position + offset, ..s.clone() }).collect())
+/// The guide through text `t` for paragraph `para`'s stop at 0 on the ruler, in document space:
+/// its two ends and how far it moves per point of stop position. For area type it crosses the frame
+/// cell the paragraph starts in, and the ruler's 0 is where the frame lets the paragraph's first
+/// line start (the cell's edge inside the inset, or past a wrap object); for point
+/// type it crosses the paragraph's lines, and the ruler's 0 is the type's origin. In vertical type
+/// it runs across the columns. `None` for type on a path and for a paragraph that does not fit in
+/// the frame.
+fn guide_axis(t: &TextObject, para: usize) -> Option<(Point, Point, Vec2)> {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    if lay.on_path {
+        return None;
+    }
+    let text = t.plain_text();
+    let start = if para == 0 { 0 } else { text.match_indices('\n').nth(para - 1)?.0 + 1 };
+    let end = text.get(start..)?.find('\n').map_or(text.len(), |i| start + i);
+    let mut lines = lay.lines.iter().filter(|l| l.start >= start && l.start <= end);
+    let to_doc = |x: f64, y: f64| t.xf * lay.physical_point(Point::new(x, y));
+    let (x, top, bottom) = match &t.kind {
+        TextKind::Area { .. } => {
+            // The layout measures a line's stops from where the frame lets the line start (past a
+            // wrap object, or in a frame that is not a rectangle): the paragraph's first line's
+            // room less its indent, mirrored for a right-to-left list.
+            let first = lines.next()?;
+            let style = t.para_at(para);
+            let indent = if first.rtl && style.list.is_some() {
+                style.right_indent
+            } else {
+                style.laid_out_left_indent() + if para == 0 && t.first_para_continues { 0.0 } else { style.first_line_indent }
+            };
+            let cell = lay.line_xf.inverse().transform_rect_bbox(*lay.frames.get(first.region)?);
+            (first.avail.0 - indent, cell.y0, cell.y1)
+        }
+        TextKind::Point => {
+            let (top, bottom) =
+                lines.fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), l| (a.min(l.baseline - l.ascent), b.max(l.baseline + l.descent)));
+            (0.0, top, bottom)
+        }
+        _ => return None,
+    };
+    let (a, b) = (to_doc(x, top), to_doc(x, bottom));
+    let along = to_doc(x + 1.0, top) - a;
+    [a.x, a.y, b.x, b.y, along.x, along.y].iter().all(|v| v.is_finite()).then_some((a, b, along))
 }
 
-/// Move every stop as [`moved_all`] does, in one `text.tabs.set`, and select stop `i`. Returns its
-/// index, or `None` when the stops are not set and `stops` and the selection stay as they were.
-fn apply_moved_all(app: &mut VectorcraftApp, ctx: &egui::Context, stops: &mut Vec<TabStop>, i: usize, position: f64) -> Option<usize> {
-    let moved = moved_all(stops, i, position)?;
-    apply(app, &moved).then(|| {
-        *stops = moved;
-        set_pstate(ctx, "tabs-sel", i);
-        i
-    })
+/// The guide's two document points for a stop at `position` points from the ruler's 0, on the
+/// `axis` [`guide_axis`] gives.
+fn guide_at(axis: (Point, Point, Vec2), position: f64) -> (Point, Point) {
+    let (a, b, along) = axis;
+    (a + along * position, b + along * position)
 }
 
+/// The canvas control that shows where a dragged tab stop would land: a guide through the selected
+/// text while the ruler reports a dragged stop (`TextRuler::dragging`, which is `None` once the drag
+/// ends, is cancelled, leaves the ruler for deleting the stop, or the panel stops showing). Paint
+/// only, and none for type on a path.
+pub(crate) fn stop_guide(app: &mut VectorcraftApp, ui: &mut Ui, _space: &CanvasSpace) {
+    // PLAN: `_space` is unused: `SmartGuides` reads the canvas view from the canvas body itself; canvas-w10 still passes it (ty.S13).
+    let Some(drag) = TextRuler::dragging(ui.ctx(), egui::Id::unique(RULER_ID)).filter(|d| matches!(d.item, RulerItem::Stop(_))) else { return };
+    let Some(revision) = app.session.active().map(|doc| (doc.uid, doc.revision)) else { return };
+    let Some((node, _, _)) = current_para(app) else { return };
+    let NodeKind::Text(t) = &node.kind else { return };
+    let paragraph = shown_paragraph(app, t);
+    // Lay the text out once per document change, not in every frame of the drag.
+    let key = (revision.0, node.id, paragraph, revision.1);
+    // PLAN: assumed `app.canvas.tabs_guide_axis: Option<((u64, NodeId, usize, u64), Option<(Point, Point, Vec2)>)>` (hub-w1, ty.S18)
+    let axis = match &app.canvas.tabs_guide_axis {
+        Some((k, axis)) if *k == key => *axis,
+        _ => {
+            let axis = guide_axis(t, paragraph);
+            app.canvas.tabs_guide_axis = Some((key, axis));
+            axis
+        }
+    };
+    let Some(axis) = axis else { return };
+    let (a, b) = guide_at(axis, f64::from(drag.position));
+    let line = [SmartLine::new(a, b)];
+    SmartGuides::new(&line, &[]).show(ui);
+}
+
+/// The ruler's values for `para` and its `stops`: the stops, and the indents the ruler draws its
+/// markers at. The ruler's stops carry no "align on" character and no leader text beyond its five
+/// leaders ([`ruler_leader`]), so [`apply_ruler_stops`] keeps the app's stops for the ones it shows.
+fn ruler_values(para: &ParaStyle, stops: &[TabStop]) -> RulerValues {
+    let mut values = RulerValues::default();
+    values.stops = stops.iter().map(|s| RulerStop::new(s.position as f32, ruler_align(s.align), ruler_leader(&s.leader))).collect();
+    values.left_indent = para.left_indent as f32;
+    values.first_line_indent = para.first_line_indent as f32;
+    values.right_indent = para.right_indent as f32;
+    values
+}
+
+fn ruler_align(a: TabAlign) -> RulerAlign {
+    match a {
+        TabAlign::Left => RulerAlign::Left,
+        TabAlign::Center => RulerAlign::Center,
+        TabAlign::Right => RulerAlign::Right,
+        TabAlign::Decimal => RulerAlign::Decimal,
+    }
+}
+
+/// The ruler's leader nearest the app's leader text: its own five fills, none for any other text.
+fn ruler_leader(leader: &str) -> TabLeader {
+    match leader {
+        "." => TabLeader::Dot,
+        "-" => TabLeader::Hyphen,
+        "_" => TabLeader::Underscore,
+        "·" => TabLeader::MiddleDot,
+        _ => TabLeader::None,
+    }
+}
+
+/// The indent marker the ruler's `item` stands for; the hanging triangle and the box both move the
+/// left indent.
+fn indent_marker(item: RulerItem) -> Option<IndentMarker> {
+    match item {
+        RulerItem::FirstLine => Some(IndentMarker::Upper),
+        RulerItem::Hanging | RulerItem::LeftBox => Some(IndentMarker::Lower),
+        _ => None,
+    }
+}
+
+/// Where the ruler draws `item`, in points from the ruler's 0: the stop's position, an indent
+/// marker's, or the right indent's distance from the paragraph's end edge.
+fn picked_position(item: RulerItem, para: &ParaStyle, span: f64) -> Option<f64> {
+    match item {
+        RulerItem::Right => Some(span - para.right_indent),
+        RulerItem::Stop(i) => para.tabs.get(i).map(|s| s.position),
+        marker => indent_marker(marker).map(|m| marker_position(m, para)),
+    }
+}
+
+/// For each stop of `after`, the index in `old` of the stop it continues. Stops that kept their
+/// position come first; the stops left on both sides then continue each other in order, when as
+/// many are left on each (a moved stop, or all of them moved together). A stop with no partner is
+/// new.
+fn pair_stops(old: &[TabStop], after: &[RulerStop]) -> Vec<Option<usize>> {
+    let mut taken = vec![false; old.len()];
+    let mut paired: Vec<Option<usize>> = after
+        .iter()
+        .map(|s| {
+            let i = old.iter().enumerate().find_map(|(i, o)| (taken.get(i) == Some(&false) && o.position as f32 == s.position).then_some(i))?;
+            if let Some(t) = taken.get_mut(i) {
+                *t = true;
+            }
+            Some(i)
+        })
+        .collect();
+    let free: Vec<usize> = taken.iter().enumerate().filter(|(_, t)| !**t).map(|(i, _)| i).collect();
+    let loose: Vec<usize> = paired.iter().enumerate().filter(|(_, p)| p.is_none()).map(|(i, _)| i).collect();
+    if free.len() == loose.len() {
+        for (at, old_at) in loose.into_iter().zip(free) {
+            if let Some(p) = paired.get_mut(at) {
+                *p = Some(old_at);
+            }
+        }
+    }
+    paired
+}
+
+/// Set the stops the ruler shows after an edit: a stop that continues one of the paragraph's keeps
+/// its leader and "align on"; a new one takes the panel's alignment. A full list takes no more
+/// stops: the edit leaves the stops as they are and the status bar shows the limit. The pick follows
+/// the moved stop, or goes to the added one.
+fn apply_ruler_stops(app: &mut VectorcraftApp, para: &ParaStyle, after: &[RulerStop]) {
+    let max = TabStop::MAX_STOPS;
+    if after.len() > max {
+        app.status(format!("at most {max} tab stops"));
+        return;
+    }
+    let paired = pair_stops(&para.tabs, after);
+    let align = app.ui.tabs_panel.align;
+    let stops: Vec<TabStop> = after
+        .iter()
+        .zip(&paired)
+        .map(|(s, partner)| {
+            let position = f64::from(s.position);
+            match partner.and_then(|i| para.tabs.get(i)) {
+                Some(old) => TabStop { position, ..old.clone() },
+                None => TabStop { position, align, leader: String::new(), align_on: '.' },
+            }
+        })
+        .collect();
+    if !apply(app, &stops) {
+        return;
+    }
+    let panel = &mut app.ui.tabs_panel;
+    if let Some(added) = paired.iter().position(Option::is_none) {
+        panel.marker = None;
+        panel.stop = added;
+    } else if let Some(moved) = paired.iter().position(|p| *p == Some(panel.stop)) {
+        panel.stop = moved;
+    }
+}
+
+/// Apply the ruler's whole new values `after` of a finished edit (`before`: the values it showed) to
+/// the paragraph `para` of text `node`, whose ruler is `span` points long: the stops, then the
+/// indents. A drag has no preview, so this runs once, when the edit commits.
+pub(crate) fn apply_ruler_edit(app: &mut VectorcraftApp, node: &Node, para: &ParaStyle, span: f64, before: &RulerValues, after: &RulerValues) {
+    if before == after {
+        return;
+    }
+    if before.stops != after.stops {
+        apply_ruler_stops(app, para, &after.stops);
+    }
+    let targets = indent_targets(app, node);
+    if after.left_indent == before.left_indent && after.first_line_indent != before.first_line_indent {
+        let target = para.left_indent + f64::from(after.first_line_indent);
+        set_marker(app, IndentMarker::Upper, target, para, span, &targets, false);
+    } else if after.left_indent != before.left_indent {
+        // The first line keeps its place unless it moved with the left indent.
+        let together = after.first_line_indent == before.first_line_indent;
+        set_marker(app, IndentMarker::Lower, f64::from(after.left_indent), para, span, &targets, together);
+    }
+    if after.right_indent != before.right_indent {
+        run_on_targets(app, &targets, json!({"rightIndent": f64::from(after.right_indent)}));
+    }
+}
+
+/// The X (Y in vertical type) field's `value`: a picked marker moves to it, else the picked stop
+/// does and stays picked after the stops are sorted. A paragraph with no stops and no picked marker
+/// gets a stop there with the panel's alignment, which is then picked, as a click on the ruler adds
+/// one. A position past [`MAX_STOP`] is refused by `text.tabs.set` and nothing changes. `picked`:
+/// the stop and the marker of [`TabsPanel`].
+pub(crate) fn set_position(app: &mut VectorcraftApp, node: &Node, para: &ParaStyle, span: f64, picked: (usize, Option<RulerItem>), value: f64) {
+    let (stop, marker) = picked;
+    match marker {
+        Some(RulerItem::Right) => {
+            let targets = indent_targets(app, node);
+            run_on_targets(app, &targets, json!({"rightIndent": (span - value).max(0.0)}));
+        }
+        Some(item) => {
+            if let Some(marker) = indent_marker(item) {
+                let targets = indent_targets(app, node);
+                set_marker(app, marker, value, para, span, &targets, false);
+            }
+        }
+        None if para.tabs.is_empty() => {
+            let align = app.ui.tabs_panel.align;
+            let added = TabStop { position: value.max(0.0), align, leader: String::new(), align_on: '.' };
+            if apply(app, std::slice::from_ref(&added)) {
+                app.ui.tabs_panel.stop = 0;
+            }
+        }
+        None => {
+            let mut stops = para.tabs.clone();
+            if let Some(i) = apply_moved(app, &mut stops, stop, value.max(0.0)) {
+                app.ui.tabs_panel.stop = i;
+            }
+        }
+    }
+}
+
+/// The Tabs panel. It reads no frame input itself: every edit comes from a component's events, and
+/// a component reports only its own pass's input, so a second pass in a frame applies nothing again.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
     let Some((node, para, span)) = current_para(app) else {
-        super::empty_state(ui, "pilcrow", tl!("No text selected"), tl!("Select a text object to set its tab stops."));
+        Notice::new(Tone::Neutral, tl!("Select a text object to set its tab stops."))
+            .layout(NoticeLayout::Centred)
+            .title(tl!("No text selected"))
+            .show(ui);
         return;
     };
-    let mut stops = para.tabs.clone();
+    let vertical = matches!(&node.kind, NodeKind::Text(text) if text.vertical);
     let targets = indent_targets(app, &node);
     let mixed_left = targets.iter().any(|p| p.left != para.left_indent);
-    let stored_marker: Option<IndentMarker> = pstate(ui.ctx(), "tabs-marker-sel");
-    let selected_marker = stored_marker.filter(|marker| !mixed_left || *marker != IndentMarker::Lower);
-    if selected_marker != stored_marker {
-        set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
+    let panel = &mut app.ui.tabs_panel;
+    // Paragraphs with different left indents have no one left-indent marker to pick.
+    if mixed_left && matches!(panel.marker, Some(RulerItem::Hanging | RulerItem::LeftBox)) {
+        panel.marker = None;
     }
-    let mut sel: usize = pstate(ui.ctx(), "tabs-sel");
-    if sel >= stops.len() {
-        sel = stops.len().saturating_sub(1);
-    }
-    let mut align_idx: usize = pstate(ui.ctx(), "tabs-align");
-    let vertical = matches!(&node.kind, NodeKind::Text(text) if text.vertical);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 3.0;
-        for (i, (a, label)) in ALIGNS.iter().enumerate() {
-            let on = if selected_marker.is_some() { align_idx == i } else { stops.get(sel).map_or(align_idx == i, |s| s.align == *a) };
-            let tip = align_name(*a, vertical);
-            let resp = ui.add(egui::Button::new(egui::RichText::new(*label).size(13.0)).selected(on).min_size(vec2(28.0, 24.0)));
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), on, tip));
-            if resp.on_hover_text(tip).clicked() {
-                align_idx = i;
-                set_pstate(ui.ctx(), "tabs-align", i);
-                if let Some(s) = stops.get_mut(sel).filter(|_| selected_marker.is_none()) {
-                    s.align = *a;
-                    apply(app, &stops);
-                }
-            }
-        }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button(tl!("Above Text")).on_hover_text(tl!("Position Panel Above Text")).clicked() {
-                place_above_text(app, ui.ctx(), &node, span);
-            }
-        });
-    });
-    ui.add_space(4.0);
-    egui::Grid::new("tabs-grid").num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
-        ui.label(egui::RichText::new(if vertical { tl!("Y:") } else { tl!("X:") }).color(t.text));
-        let x = selected_marker.map(|m| marker_position(m, &para)).or_else(|| stops.get(sel).map(|s| s.position));
-        if let Some(v) = widgets::spin_field(ui, "tabs-x", x, app.session.general_unit(), 90.0, 1.0, 0.0, &[]) {
-            if let Some(marker) = selected_marker {
-                set_marker(app, marker, v, &para, span, &targets, false);
-            } else if let Some(i) = apply_moved(app, ui.ctx(), &mut stops, sel, v.max(0.0)) {
-                sel = i;
-            }
-        }
-        ui.end_row();
-        ui.label(egui::RichText::new(tl!("Leader:")).color(t.text));
-        // The fields keep what is typed until Enter or a click away commits it (#924).
-        let leader = stops.get(sel).filter(|_| selected_marker.is_none()).map(|s| s.leader.clone()).unwrap_or_default();
-        let typed = ui
-            .add_enabled_ui(stops.get(sel).is_some() && selected_marker.is_none(), |ui| {
-                widgets::exact_text_field_named(ui, "tabs-leader", Some(tl!("Leader:")), &leader, 90.0)
+    panel.stop = panel.stop_in(para.tabs.len());
+    let (stop, marker, align) = (panel.stop, panel.marker, panel.align);
+    let mut stops = para.tabs.clone();
+
+    let shown_align = if marker.is_some() { align } else { stops.get(stop).map_or(align, |s| s.align) };
+    let row = Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+        let buttons = Row::new().show(ui, |ui, _| {
+            ALIGNS.iter().fold(None, |hit, (a, glyph)| {
+                let name = align_name(*a, vertical);
+                let out = ToggleButton::new(*glyph, Bind::given(shown_align == *a)).spoken(Label::from(name)).tooltip(name).show(ui);
+                hit.or(out.events.committed().map(|_| *a))
             })
-            .inner;
-        if let (Some(leader), Some(s)) = (typed, stops.get_mut(sel)) {
-            // Up to eight characters repeat in the leader.
-            s.leader = leader.chars().take(8).collect();
-            apply(app, &stops);
-        }
-        ui.end_row();
-        ui.label(egui::RichText::new(tl!("Align On:")).color(t.text));
-        let decimal = selected_marker.is_none() && stops.get(sel).is_some_and(|s| s.align == TabAlign::Decimal);
-        let on = stops.get(sel).map(|s| s.align_on.to_string()).unwrap_or_else(|| ".".into());
-        let typed = ui.add_enabled_ui(decimal, |ui| widgets::exact_text_field_named(ui, "tabs-align-on", Some(tl!("Align On:")), &on, 30.0)).inner;
-        if let (Some(c), Some(s)) = (typed.and_then(|t| t.chars().next()), stops.get_mut(sel)) {
-            s.align_on = c;
-            apply(app, &stops);
-        }
-        ui.end_row();
+        });
+        let above = Button::new(tl!("Above Text")).tooltip(tl!("Position Panel Above Text")).show(ui).clicked();
+        (buttons.inner.flatten(), above)
     });
-    ui.add_space(6.0);
-    // The ruler.
+    let (clicked, above) = row.inner.unwrap_or_default();
+    if let Some(a) = clicked {
+        app.ui.tabs_panel.align = a;
+        if marker.is_none()
+            && let Some(s) = stops.get_mut(stop)
+        {
+            s.align = a;
+            apply(app, &stops);
+        }
+    }
+    if above {
+        place_above_text(app, &node, span);
+    }
+
+    let lengths = general_lengths(app);
+    let label = if vertical { tl!("Y:") } else { tl!("X:") };
+    let x = marker.map_or_else(|| stops.get(stop).map(|s| s.position), |item| picked_position(item, &para, span));
+    let typed = Field::new(label)
+        .show(ui, |ui, _| NumberField::length(label, Bind::given(x), lengths).range(0.0..=MAX_STOP).show(ui))
+        .inner
+        .and_then(|out| out.edit.events.committed().copied().flatten());
+    if let Some(value) = typed {
+        set_position(app, &node, &para, span, (stop, marker), value);
+    }
+
+    let on_stop = marker.is_none() && stop < stops.len();
+    let leader = stops.get(stop).filter(|_| marker.is_none()).map(|s| s.leader.clone()).unwrap_or_default();
+    let typed = Field::new(tl!("Leader:"))
+        .show(ui, |ui, _| TextField::new(tl!("Leader:"), Bind::given(leader.clone())).limit(8_usize).enabled(on_stop).show(ui))
+        .inner
+        .and_then(|out| out.events.committed().cloned());
+    if let (Some(leader), Some(s)) = (typed, stops.get_mut(stop)) {
+        s.leader = leader;
+        apply(app, &stops);
+    }
+
+    let decimal = marker.is_none() && stops.get(stop).is_some_and(|s| s.align == TabAlign::Decimal);
+    let on = stops.get(stop).map_or_else(|| ".".to_string(), |s| s.align_on.to_string());
+    let typed = Field::new(tl!("Align On:"))
+        .show(ui, |ui, _| TextField::new(tl!("Align On:"), Bind::given(on.clone())).limit(1_usize).enabled(decimal).show(ui))
+        .inner
+        .and_then(|out| out.events.committed().and_then(|text| text.chars().next()));
+    if let (Some(c), Some(s)) = (typed, stops.get_mut(stop)) {
+        s.align_on = c;
+        apply(app, &stops);
+    }
+
+    let values = ruler_values(&para, &para.tabs);
     let w = ui.available_width().max(120.0);
-    let (rect, resp) = ui.allocate_exact_size(vec2(w, 34.0), Sense::click_and_drag());
-    let p = ui.painter_at(rect.expand(2.0));
-    p.rect_filled(rect, 2.0, t.input);
-    p.rect_stroke(rect, 2.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    // After Position Panel Above Text on this text, while the panel floats no wider than the
-    // narrowest floating window, a ruler wider than the text is on screen draws the text at its
-    // screen scale and runs on past its width. Any other ruler fits the span to its width.
-    let above: Option<(u64, vectorcraft_doc::NodeId)> = pstate(ui.ctx(), "tabs-above");
-    let narrowest = || {
-        let floating = app.ui.docking.as_ref().and_then(|l| l.floating.iter().find(|f| f.contains(&"tabs".to_string())));
-        floating.is_some_and(|f| f.rect[2] <= crate::panel_docking::PANEL_MIN_WIDTH + 0.5)
-    };
-    let scale = above
-        .filter(|at| Some(*at) == app.session.active().map(|doc| (doc.uid, node.id)) && narrowest())
-        .and_then(|_| screen_scale(app, &node, span))
-        .filter(|per| span * per + 8.0 < w as f64 - 0.5)
-        .unwrap_or((w as f64 - 8.0) / span);
-    let length = span.max((w as f64 - 8.0) / scale);
-    let to_x = |pt: f64| rect.left() + 4.0 + (pt * scale) as f32;
-    let to_pt = |x: f32| (((x - rect.left() - 4.0) as f64) / scale).max(0.0);
-    // The ruler is numbered in the General unit, with the canvas rulers' label step at its scale
-    // and a tick every tenth of a step.
-    let unit = app.session.general_unit();
-    let step = unit.ruler_step(scale);
-    let minor = step / 10.0;
-    for k in 0..=((unit.from_pt(length) / minor + 1e-6).floor() as usize).min(MAX_TICKS) {
-        let v = k as f64 * minor;
-        let x = to_x(unit.to_pt(v));
-        let len = match k % 10 {
-            0 => 10.0,
-            5 => 7.0,
-            _ => 4.0,
-        };
-        p.line_segment([egui::pos2(x, rect.bottom() - len), egui::pos2(x, rect.bottom())], Stroke::new(1.0, t.text_dim));
-        if k % 10 == 0 {
-            p.text(
-                egui::pos2(x + 2.0, rect.top() + 1.0),
-                egui::Align2::LEFT_TOP,
-                crate::canvas::ruler_label(v, step),
-                egui::FontId::proportional(9.0),
-                t.text_dim,
-            );
-        }
+    let scale = ruler_scale(app, &node, span, w);
+    // Points are pixels in a document: 72 pixels to the inch.
+    let unit = DocUnit::new(unit_kind(app.session.general_unit()), 72.0);
+    let mut ruler = TextRuler::new(tl!("Tabs"), Bind::given(values.clone()), span as f32)
+        .id(egui::Id::unique(RULER_ID))
+        .unit(unit)
+        .scale(scale as f32)
+        .tooltip(tl!("Click to add a tab stop, drag to move it, drag it off the ruler to delete it"));
+    if marker.is_none() && !para.tabs.is_empty() {
+        ruler = ruler.picked_stop(stop);
     }
-    // A stop placed or dragged on the ruler lands on the nearest whole point. With Snap to Unit on,
-    // or Shift held, it lands on the ruler's nearest tick, which can be a fraction of a point.
-    let snap = pstate::<bool>(ui.ctx(), "tabs-snap") || ui.input(|i| i.modifiers.shift);
-    let place = |x: f32| if snap { unit.snap_to_ruler_tick(to_pt(x), scale).max(0.0) } else { to_pt(x).round() };
-    let stored_drag: Option<(IndentMarker, bool)> = pstate(ui.ctx(), "tabs-marker-drag");
-    let marker_drag = stored_drag.filter(|(marker, _)| !mixed_left || *marker != IndentMarker::Lower);
-    if marker_drag != stored_drag {
-        set_pstate::<Option<(IndentMarker, bool)>>(ui.ctx(), "tabs-marker-drag", None);
-    }
-    let preview = marker_drag.and_then(|(marker, both)| {
-        let pointer = ui.input(|i| i.pointer.interact_pos())?;
-        let value = bounded_marker_position(marker, place(pointer.x), span, &targets, both)?;
-        Some((marker, value, both))
+    let out = ruler.show(ui);
+    crate::edits::apply_edits(app, &out.edit, crate::edits::EditPath::Scope, |app, after, _| {
+        apply_ruler_edit(app, &node, &para, span, &values, after);
     });
-    paint_markers(ui, &p, &t, MarkerPaint { rect, span, para: &para, mixed_left, selected: selected_marker, drag: marker_drag, preview }, to_x);
-    let drag: Option<usize> = pstate(ui.ctx(), "tabs-drag");
-    let drag_all = drag.is_some() && pstate::<bool>(ui.ctx(), "tabs-drag-all");
-    // While a Ctrl-drag (Command on macOS) is on the ruler, the stops are drawn where the drop puts them.
-    let all_preview = drag.filter(|_| drag_all).and_then(|i| {
-        let pointer = ui.input(|input| input.pointer.any_down().then(|| input.pointer.interact_pos()).flatten())?;
-        (pointer.y <= rect.bottom() + 20.0).then(|| moved_all(&stops, i, place(pointer.x))).flatten()
-    });
-    for (i, s) in all_preview.as_deref().unwrap_or(&stops).iter().enumerate() {
-        let x = to_x(s.position);
-        let c = if i == sel && selected_marker.is_none() { t.accent } else { t.text };
-        let y = rect.bottom() - 2.0;
-        // An original marker: a stem with a foot showing which way the text runs.
-        p.line_segment([egui::pos2(x, y - 12.0), egui::pos2(x, y)], Stroke::new(1.5, c));
-        let foot = match s.align {
-            TabAlign::Left => [egui::pos2(x, y), egui::pos2(x + 6.0, y)],
-            TabAlign::Right => [egui::pos2(x - 6.0, y), egui::pos2(x, y)],
-            TabAlign::Center | TabAlign::Decimal => [egui::pos2(x - 4.0, y), egui::pos2(x + 4.0, y)],
-        };
-        p.line_segment(foot, Stroke::new(1.5, c));
-        if s.align == TabAlign::Decimal {
-            p.circle_filled(egui::pos2(x + 3.0, y - 6.0), 1.5, c);
+    match out.picked {
+        Some(RulerItem::Stop(i)) => {
+            app.ui.tabs_panel.stop = i;
+            app.ui.tabs_panel.marker = None;
         }
+        Some(item) => app.ui.tabs_panel.marker = Some(item),
+        None => {}
     }
-    // The stop within 5 px of `x`.
-    let hit_at = |x: f32| stops.iter().position(|s| (to_x(s.position) - x).abs() <= 5.0);
-    let cancel_drag = ui.input(|i| i.key_pressed(egui::Key::Escape));
-    if cancel_drag || (marker_drag.is_some() && !resp.drag_stopped() && !ui.input(|i| i.pointer.any_down())) {
-        set_pstate::<Option<(IndentMarker, bool)>>(ui.ctx(), "tabs-marker-drag", None);
-        set_pstate::<Option<usize>>(ui.ctx(), "tabs-drag", None);
-    }
-    // egui reports the drag only once the pointer is a few pixels from the press, past the hit
-    // tolerance, so hit-test where the button went down (#1458).
-    if resp.drag_started()
-        && let Some(pos) = ui.input(|i| i.pointer.press_origin()).or(resp.interact_pointer_pos())
-    {
-        if let Some(marker) = hit_marker(pos, rect, &para, span, mixed_left, to_x) {
-            let both = marker == IndentMarker::Lower && ui.input(|i| i.modifiers.command);
-            set_pstate(ui.ctx(), "tabs-marker-sel", Some(marker));
-            set_pstate(ui.ctx(), "tabs-marker-drag", Some((marker, both)));
-            set_pstate::<Option<usize>>(ui.ctx(), "tabs-drag", None);
-        } else {
-            let hit = hit_at(pos.x);
-            set_pstate(ui.ctx(), "tabs-drag", hit);
-            set_pstate(ui.ctx(), "tabs-drag-all", hit.is_some() && ui.input(|i| i.modifiers.command));
-            if let Some(i) = hit {
-                set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
-                set_pstate(ui.ctx(), "tabs-sel", i);
-            }
-        }
-    }
-    if resp.drag_stopped()
-        && !cancel_drag
-        && let Some((marker, both)) = marker_drag
-    {
-        set_pstate::<Option<(IndentMarker, bool)>>(ui.ctx(), "tabs-marker-drag", None);
-        if let Some(pos) = resp.interact_pointer_pos() {
-            set_marker(app, marker, place(pos.x), &para, span, &targets, both);
-        }
-    } else if resp.drag_stopped()
-        && !cancel_drag
-        && let (Some(i), Some(pos)) = (drag, resp.interact_pointer_pos())
-    {
-        set_pstate::<Option<usize>>(ui.ctx(), "tabs-drag", None);
-        if i < stops.len() {
-            if pos.y > rect.bottom() + 20.0 {
-                // Dragged off the ruler: delete.
-                stops.remove(i);
-                apply(app, &stops);
-            } else if drag_all {
-                apply_moved_all(app, ui.ctx(), &mut stops, i, place(pos.x));
-            } else {
-                apply_moved(app, ui.ctx(), &mut stops, i, place(pos.x));
-            }
-        }
-    } else if resp.clicked()
-        && let Some(pos) = resp.interact_pointer_pos()
-    {
-        if let Some(marker) = hit_marker(pos, rect, &para, span, mixed_left, to_x) {
-            set_pstate(ui.ctx(), "tabs-marker-sel", Some(marker));
-        } else {
-            match hit_at(pos.x) {
-                Some(i) => {
-                    set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
-                    set_pstate(ui.ctx(), "tabs-sel", i);
-                }
-                None => {
-                    let position = place(pos.x);
-                    // A click that lands on a stop's whole point or tick selects that stop and records no
-                    // undo step.
-                    let added = !stops.iter().any(|s| s.position == position);
-                    let max = TabStop::MAX_STOPS;
-                    if added && stops.len() >= max {
-                        // A full list takes no more stops: the click leaves the stops and the
-                        // selection as they are and shows the limit.
-                        app.status(format!("at most {max} tab stops"));
-                    } else {
-                        if added {
-                            stops.push(TabStop { position, align: ALIGNS[align_idx.min(3)].0, leader: String::new(), align_on: '.' });
-                            stops.sort_by(|a, b| a.position.total_cmp(&b.position));
-                        }
-                        let i = stops.iter().position(|s| s.position == position).unwrap_or(0);
-                        set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
-                        set_pstate(ui.ctx(), "tabs-sel", i);
-                        if added {
-                            apply(app, &stops);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    resp.on_hover_text(tl!("Click to add a tab stop, drag to move it, drag it off the ruler to delete it"));
 }
 
 /// Whether a paragraph of the whole story Clear All Tabs acts on has tab stops: after Select All in
@@ -745,64 +833,95 @@ fn story_has_tabs(app: &VectorcraftApp) -> bool {
     }
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some((_, para, _)) = current_para(app) else {
-        ui.add_enabled(false, egui::Button::new(tl!("Select text")).frame(false));
-        snap_to_unit_item(ui);
-        return;
-    };
-    // `current_para` gives the left indent with the list level's indent added.
-    let left_indent = para.left_indent;
-    let mut stops = para.tabs;
-    let selected_marker: Option<IndentMarker> = pstate(ui.ctx(), "tabs-marker-sel");
-    // Clamp the selection to the last stop, as `show` does for the ruler.
-    let mut sel: usize = pstate(ui.ctx(), "tabs-sel");
-    if sel >= stops.len() {
-        sel = stops.len().saturating_sub(1);
-    }
-    if menu_item(ui, tl!("Clear All Tabs"), !stops.is_empty() || story_has_tabs(app), false)
-        && let Err(e) = super::paragraph::run_on_paragraphs(app, "text.tabs.clear", json!({}))
-    {
-        app.status(e);
-    }
-    if menu_item(ui, tl!("Delete Tab"), sel < stops.len() && selected_marker.is_none(), false) {
-        stops.remove(sel);
-        apply(app, &stops);
-    }
-    // Repeat Tab: copies of the selected stop across the ruler, spaced by its distance from the
-    // previous stop, or from the paragraph's left indent plus its list level's indent when it is
-    // the first stop. The copies stop at the 256-stop limit, which the status bar then shows.
-    if menu_item(ui, tl!("Repeat Tab"), sel < stops.len() && selected_marker.is_none(), false) {
-        let step = match sel {
-            0 => (stops[0].position - left_indent).abs(),
-            _ => stops[sel].position - stops[sel - 1].position,
-        }
-        .max(1.0);
-        let base = stops[sel].clone();
-        stops.truncate(sel + 1);
-        let max = TabStop::MAX_STOPS;
-        let mut pos = base.position + step;
-        while pos <= base.position + step * 20.0 && pos < 2000.0 {
-            if stops.len() >= max {
-                app.status(format!("at most {max} tab stops"));
-                break;
-            }
-            stops.push(TabStop { position: pos, ..base.clone() });
-            pos += step;
-        }
-        apply(app, &stops);
-    }
-    snap_to_unit_item(ui);
+/// The panel menu's rows: Clear All Tabs, Delete Tab and Repeat Tab.
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    COMMANDS.iter().map(|id| PanelRow::Command(CommandRef::new(*id))).collect()
 }
 
-/// The panel menu's Snap to Unit, checked while it is on: stops placed or dragged on the ruler land
-/// on its nearest tick.
-fn snap_to_unit_item(ui: &mut Ui) {
-    ui.separator();
-    let on: bool = pstate(ui.ctx(), "tabs-snap");
-    if menu_item(ui, tl!("Snap to Unit"), true, on) {
-        set_pstate(ui.ctx(), "tabs-snap", !on);
+/// Enable or disable the panel menu's commands as [`can`] says.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    for id in COMMANDS {
+        states.set(CommandRef::new(id), CommandState::new().enabled(can(app, id)));
     }
+}
+
+/// Whether the panel command `id` can run now. With no text all are off. Clear All needs a stop in
+/// the shown paragraph or tab stops anywhere in the story; Delete Tab and Repeat Tab need a picked
+/// stop and no picked marker.
+fn can(app: &VectorcraftApp, id: &str) -> bool {
+    let Some((_, para, _)) = current_para(app) else { return false };
+    let panel = &app.ui.tabs_panel;
+    let on_stop = panel.marker.is_none() && panel.stop_in(para.tabs.len()) < para.tabs.len();
+    match id {
+        CLEAR_ALL => !para.tabs.is_empty() || story_has_tabs(app),
+        DELETE_TAB | REPEAT_TAB => on_stop,
+        _ => false,
+    }
+}
+
+/// Run the panel command `id` (`None`: not one of this panel's). A command that [`can`] not run
+/// returns an error and changes nothing, whether it was asked for by its menu row, the palette or
+/// automation.
+// PLAN: assumed `run(app: &mut VectorcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>>` (hub-w2, ty.S8)
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    if !COMMANDS.contains(&id) {
+        return None;
+    }
+    if !can(app, id) {
+        return Some(Err(format!("{id} is not available")));
+    }
+    Some(match id {
+        CLEAR_ALL => super::paragraph::run_on_paragraphs(app, "text.tabs.clear", json!({})),
+        DELETE_TAB => delete_tab(app),
+        _ => repeat_tab(app),
+    })
+}
+
+/// Set `stops` as the panel's stops.
+fn set_stops(app: &mut VectorcraftApp, stops: &[TabStop]) -> Result<Value, String> {
+    apply(app, stops).then_some(Value::Null).ok_or_else(|| "the tab stops were not set".to_string())
+}
+
+/// Remove the picked stop; the pick moves to the new last stop when it was the last.
+fn delete_tab(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let (_, para, _) = current_para(app).ok_or("no text")?;
+    let mut stops = para.tabs;
+    let at = app.ui.tabs_panel.stop_in(stops.len());
+    if at >= stops.len() {
+        return Err("no tab stop to delete".into());
+    }
+    stops.remove(at);
+    let done = set_stops(app, &stops)?;
+    app.ui.tabs_panel.stop = app.ui.tabs_panel.stop_in(stops.len());
+    Ok(done)
+}
+
+/// Copies of the picked stop across the ruler, spaced by its distance from the previous stop, or
+/// from the paragraph's left indent plus its list level's indent when it is the first stop. The
+/// copies stop at the 256-stop limit, which the status bar then shows.
+fn repeat_tab(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let (_, para, _) = current_para(app).ok_or("no text")?;
+    let mut stops = para.tabs;
+    let at = app.ui.tabs_panel.stop_in(stops.len());
+    let base = stops.get(at).cloned().ok_or("no tab stop to repeat")?;
+    let previous = at.checked_sub(1).and_then(|p| stops.get(p)).map(|s| s.position);
+    let step = match previous {
+        None => (base.position - para.left_indent).abs(),
+        Some(previous) => base.position - previous,
+    }
+    .max(1.0);
+    stops.truncate(at + 1);
+    let max = TabStop::MAX_STOPS;
+    let mut pos = base.position + step;
+    while pos <= base.position + step * 20.0 && pos < 2000.0 {
+        if stops.len() >= max {
+            app.status(format!("at most {max} tab stops"));
+            break;
+        }
+        stops.push(TabStop { position: pos, ..base.clone() });
+        pos += step;
+    }
+    set_stops(app, &stops)
 }
 
 #[cfg(test)]

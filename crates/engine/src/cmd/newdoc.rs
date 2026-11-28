@@ -15,10 +15,10 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Artboard, Background, ColorMode, Document, LayerColor, Node, Unit};
+use vectorcraft_doc::{Artboard, Background, ColorMode, CompositeFont, DEFAULT_GRAPHIC_STYLE, Document, GraphicStyle, LayerColor, Node, Unit};
 use vectorcraft_geom::{Point, Rect};
 
-use super::{CommandSpec, Result, Session, always, bad, clock_date, cmd, date_param, str_param, switch_or};
+use super::{CommandSpec, Result, Session, always, bad, clock_date, cmd, date_param, has_doc, str_param, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Document Presets",
             [],
             None,
-            "{category?: \"Recent\"|\"Saved\"|\"Mobile\"|\"Web\"|\"Print\"|\"Film & Video\"|\"Art & Illustration\"|\"Branding\"|\"Social\"} the New Document presets by category (Recent: the last sizes used; Saved: the user's presets) → {categories: [{name, presets: [{name, size: \"1920 × 1080 px\", width: pt, height: pt, units, orientation, artboards, artboardLayout: {layout, columns, spacing, rightToLeft}, bleed, backgroundContents, colorMode, rasterEffectsPpi, previewMode, alignNewObjectsToPixelGrid (on in the Mobile and Web presets)}]}]}; file.new {preset: name} starts from one",
+            "{category?: \"Recent\"|\"Saved\"|\"Mobile\"|\"Web\"|\"Print\"|\"Film & Video\"|\"Art & Illustration\"|\"Branding\"|\"Social\"} the New Document presets by category (Recent: the last sizes used; Saved: the user's presets) → {categories: [{name, presets: [{name, size: \"1920 × 1080 px\", width: pt, height: pt, units, orientation, artboards, artboardLayout: {layout, columns, rows? (a grid by column made with rows), spacing, rightToLeft}, bleed, backgroundContents, colorMode, rasterEffectsPpi, previewMode, alignNewObjectsToPixelGrid (on in the Mobile and Web presets)}]}]}; file.new {preset: name} starts from one",
             always,
             list
         ),
@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Profile",
             [],
             None,
-            "{name: a category of file.newPresets} open the category's New Document profile as a document to edit (File › Save keeps the changes for the next file.new); a category without a profile file gets the shipped profile written first; under automation roots it needs write and read access to the file, and an error names the file by its file name outside the read roots → document.open's result",
+            "{name: a built-in category of file.newPresets (not Recent or Saved)} open the category's New Document profile as a document to edit (File › Save keeps the changes for the next file.new); a category without a profile file gets the shipped profile written first; under automation roots it needs write and read access to the file, and an error names the file by its file name outside the read roots → document.open's result",
             always,
             edit_profile
         ),
@@ -72,9 +72,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Profile",
             [],
             None,
-            "{name: a category of file.newPresets} delete the category's profile file, so the shipped profile (today's defaults) applies again; an open copy of it stays open; under automation roots it needs write access to the file, and an error names the file by its file name outside the read roots → {name, reset: whether a file was deleted}",
+            "{name: a built-in category of file.newPresets (not Recent or Saved)} delete the category's profile file, so the shipped profile (today's defaults) applies again; an open copy of it stays open; under automation roots it needs write access to the file, and an error names the file by its file name outside the read roots → {name, reset: whether a file was deleted}",
             always,
             reset_profile
+        ),
+        cmd!(
+            "file.newProfiles.applyDefaults",
+            "Use Profile Defaults",
+            [],
+            None,
+            "{name: a built-in category of file.newPresets (not Recent or Saved)} give the active document the default fill and stroke and the default font of the category's New Document profile (VectorCraft's own command; a category without a profile file gives the shipped ones): the document's Default Graphic Style takes the fills, strokes, effects and transparency of the profile's, and its [Normal Character Style] the profile's attributes (a composite font of the profile they name replaces the document's of that name, as type.compositeFonts.import does), the profile's colors converted to the document's color mode, with the swatches, patterns, symbols and brushes they paint with, in one undo step (none when applying the profile leaves the document unchanged). As Redefine Graphic Style and Redefine Character Style do, objects still linked to the Default Graphic Style and type in [Normal Character Style] take the new definitions and keep their overrides. New art then starts as paint.default gives it (see appearance.newArt), and new type in the profile's [Normal Character Style]. An error when the profile's file can't be read, its [Normal Character Style] has attributes charStyle.new does not take, or the composite font it names can't join the document's (as type.compositeFonts.set checks them) → {name, changed: whether the document changed, warnings?: [text] (a color profile or font the profile's file carries that can't be used)}",
+            has_doc,
+            apply_defaults
         ),
     ]
 }
@@ -146,6 +155,11 @@ fn de_ppi<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<f64, D:
     Ok(Some(f64::deserialize(d)?).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0))
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 /// Everything New Document sets: a preset (built-in, saved or recent) or `file.new`'s params.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -166,6 +180,9 @@ pub struct DocSettings {
     pub layout: ArtboardLayout,
     /// Columns of a grid layout.
     pub columns: u32,
+    /// Rows of a grid by column, in place of `columns` when more than 0.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub rows: u32,
     /// Space between artboards, points: 0 to `MAX_SPACING` (a saved or Recent preset's value
     /// outside that range is read as the nearer end).
     #[serde(deserialize_with = "de_spacing")]
@@ -203,6 +220,7 @@ impl Default for DocSettings {
             artboards: 1,
             layout: ArtboardLayout::GridByRow,
             columns: 0,
+            rows: 0,
             spacing: 20.0,
             right_to_left: false,
             bleed: [0.0; 4],
@@ -222,9 +240,17 @@ pub const MAX_ARTBOARDS: u32 = 1000;
 pub const RASTER_PPI: [(f64, &str); 3] = [(72.0, "Screen (72 ppi)"), (150.0, "Medium (150 ppi)"), (300.0, "High (300 ppi)")];
 
 impl DocSettings {
+    /// The rows a grid by column with `rows` uses, at most one for each artboard.
+    fn grid_rows(&self) -> Option<usize> {
+        (self.layout == ArtboardLayout::GridByColumn && self.rows > 0).then(|| (self.rows as usize).min(self.artboards.max(1) as usize))
+    }
+
     /// The columns a grid actually uses (0 or more than the artboards: one row).
     pub fn grid_columns(&self) -> usize {
         let n = self.artboards.max(1) as usize;
+        if let Some(rows) = self.grid_rows() {
+            return n.div_ceil(rows);
+        }
         match self.layout {
             ArtboardLayout::Row => n,
             ArtboardLayout::Column => 1,
@@ -246,6 +272,12 @@ impl DocSettings {
 
     /// As `file.newPresets` lists it (and `file.new` takes it back).
     pub fn to_json(&self) -> Value {
+        let mut layout =
+            json!({"layout": self.layout.id(), "columns": self.grid_columns(), "spacing": self.spacing, "rightToLeft": self.right_to_left});
+        // The rows as set, also when there are fewer artboards than rows.
+        if let Some(o) = layout.as_object_mut().filter(|_| self.grid_rows().is_some()) {
+            o.insert("rows".into(), json!(self.rows));
+        }
         json!({
             "name": self.name,
             "size": self.size_label(),
@@ -254,7 +286,7 @@ impl DocSettings {
             "units": self.units.label(),
             "orientation": self.orientation(),
             "artboards": self.artboards,
-            "artboardLayout": {"layout": self.layout.id(), "columns": self.grid_columns(), "spacing": self.spacing, "rightToLeft": self.right_to_left},
+            "artboardLayout": layout,
             "bleed": self.bleed,
             "backgroundContents": self.background.id(),
             "colorMode": color_mode_id(self.color_mode),
@@ -337,25 +369,23 @@ impl DocSettings {
         Ok(self)
     }
 
-    /// `artboardLayout: {layout?, columns?, spacing?, rightToLeft?}` or just a layout id.
+    /// `artboardLayout: {layout?, columns?, rows?, spacing?, rightToLeft?}` or just a layout id.
     fn layout_params(&mut self, l: &Value, cmd: &str) -> Result<()> {
         let bad_layout = || bad(cmd, "artboardLayout.layout must be gridByRow, gridByColumn, row or column");
         if let Some(id) = l.as_str() {
             self.layout = ArtboardLayout::parse(id).ok_or_else(bad_layout)?;
+            if self.layout != ArtboardLayout::GridByColumn {
+                self.rows = 0;
+            }
             return Ok(());
         }
         let o = l.as_object().ok_or_else(|| bad(cmd, "artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}"))?;
+        let count = |v: &Value| v.as_f64().filter(|c| c.is_finite() && *c >= 1.0).map(|c| c.round().min(MAX_ARTBOARDS as f64) as u32);
         for (k, v) in o {
             match k.as_str() {
                 "layout" => self.layout = v.as_str().and_then(ArtboardLayout::parse).ok_or_else(bad_layout)?,
-                "columns" => {
-                    self.columns = v
-                        .as_f64()
-                        .filter(|c| c.is_finite() && *c >= 1.0)
-                        .ok_or_else(|| bad(cmd, "artboardLayout.columns must be 1 or more"))?
-                        .round()
-                        .min(MAX_ARTBOARDS as f64) as u32
-                }
+                "columns" => self.columns = count(v).ok_or_else(|| bad(cmd, "artboardLayout.columns must be 1 or more"))?,
+                "rows" => self.rows = count(v).ok_or_else(|| bad(cmd, "artboardLayout.rows must be 1 or more"))?,
                 "spacing" => {
                     self.spacing = v
                         .as_f64()
@@ -366,18 +396,29 @@ impl DocSettings {
                 _ => return Err(bad(cmd, format!("unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)"))),
             }
         }
+        if o.contains_key("rows") && self.layout != ArtboardLayout::GridByColumn {
+            return Err(bad(cmd, "artboardLayout.rows needs the gridByColumn layout"));
+        }
+        // Columns without rows, or another layout, replace a preset's rows.
+        if (o.contains_key("columns") && !o.contains_key("rows")) || self.layout != ArtboardLayout::GridByColumn {
+            self.rows = 0;
+        }
+        // While rows are set, `grid_columns` gives the columns they make; the stored columns stay as
+        // they were given, and are the ones a later layout without rows uses.
         Ok(())
     }
 
-    /// The artboard rectangles, the first at the origin's side.
+    /// The artboard rectangles, the first at the origin's side. A grid by column with `rows` has
+    /// that many rows (at most one for each artboard).
     pub fn boards(&self) -> Vec<Rect> {
         let n = self.artboards.max(1) as usize;
         let sizes = vec![(self.width, self.height); n];
         let by_column = self.layout == ArtboardLayout::GridByColumn;
-        grid_origins(&sizes, Point::ZERO, self.grid_columns(), self.spacing, by_column, self.right_to_left)
-            .into_iter()
-            .map(|o| Rect::from_origin_size(o, (self.width, self.height)))
-            .collect()
+        let origins = match self.grid_rows() {
+            Some(rows) => grid_origins_rc(&sizes, Point::ZERO, (rows, n.div_ceil(rows)), self.spacing, true, self.right_to_left),
+            None => grid_origins(&sizes, Point::ZERO, self.grid_columns(), self.spacing, by_column, self.right_to_left),
+        };
+        origins.into_iter().map(|o| Rect::from_origin_size(o, (self.width, self.height))).collect()
     }
 
     /// The new document (title and swatches set by `file.new`).
@@ -528,7 +569,7 @@ pub(crate) fn side_error(cmd: &str, units: Unit) -> crate::EngineError {
     bad(cmd, format!("width and height must be more than 0 and at most {limit}"))
 }
 /// Largest artboard spacing, points.
-const MAX_SPACING: f64 = 1.0e5;
+pub(crate) const MAX_SPACING: f64 = 1.0e5;
 
 pub fn color_mode_id(m: ColorMode) -> &'static str {
     match m {
@@ -599,6 +640,30 @@ pub(crate) fn grid_origins_rc(
             Point::new(origin.x + offset(&col_w, c), origin.y + offset(&row_h, r))
         })
         .collect()
+}
+
+/// Rearrange Artboards' grid for artboards of `sizes`, in their order, its top-left at `origin`:
+/// `lines` is the column count of a grid by row and the row count of a grid by column (kept to 1
+/// to the artboard count), and `rtl` puts the first column at the right. Returns each artboard's
+/// top-left corner and the grid's rows and columns.
+pub fn rearrange_grid(
+    sizes: &[(f64, f64)],
+    origin: Point,
+    layout: ArtboardLayout,
+    lines: u64,
+    spacing: f64,
+    rtl: bool,
+) -> (Vec<Point>, usize, usize) {
+    let n = sizes.len().max(1);
+    let lines = usize::try_from(lines).unwrap_or(usize::MAX).clamp(1, n);
+    let (rows, cols) = match layout {
+        ArtboardLayout::GridByRow => (n.div_ceil(lines), lines),
+        ArtboardLayout::GridByColumn => (lines, n.div_ceil(lines)),
+        ArtboardLayout::Row => (1, n),
+        ArtboardLayout::Column => (n, 1),
+    };
+    let origins = grid_origins_rc(sizes, origin, (rows, cols), spacing, layout == ArtboardLayout::GridByColumn, rtl);
+    (origins, rows, cols)
 }
 
 /// The built-in presets: (category, presets as (name, width, height, units)), with the category's
@@ -814,6 +879,10 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     // The profile's links keep their relative paths, which name places from the profile's file, as
     // a new document from a history state keeps its source's.
     s.doc_mut()?.links_from = links_from;
+    // A profile whose Default Graphic Style was redefined gives new art in the document that style.
+    if super::newart::redefined_default_style(&s.doc()?.doc).is_some() {
+        super::newart::reset(s);
+    }
     // Overprint Preview is the engine's (the UI turns Pixel Preview on from `previewMode`). Both
     // are views of the whole app, so Default leaves them as they are.
     if settings.preview_mode == PreviewMode::Overprint {
@@ -940,26 +1009,36 @@ impl Session {
 
     /// Profile `name`'s document, its file's path and a warning for each color profile the file
     /// carries that can't be used: `None` when it has no file (the shipped profile, the defaults),
-    /// the reason when the request being served may not read it, or its file can't be read, is
-    /// larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft reads.
+    /// the reason when the request being served may not read it, or its file is a link or a folder,
+    /// can't be read, is larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft
+    /// reads.
     fn read_profile(&self, name: &str) -> std::result::Result<Option<ReadProfile>, String> {
         let Some(path) = self.profile_path(name) else { return Ok(None) };
         let file = path.to_string_lossy().to_string();
         // Checked before the file is looked for, so a request that may not read the folder learns
         // nothing of its files, nor where the folder is.
+        // A script's gate does not apply to reads of the app's own folder; the automation roots in
+        // force still do.
         let denied = |_| PROFILE_DENIED.to_string();
-        crate::file_access::check_read(&file).map_err(denied)?;
-        if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
-            return Ok(None);
-        }
-        crate::file_access::check_read(&file).map_err(denied)?;
-        let bytes = crate::store::read_capped(&path, MAX_PROFILE_BYTES)?;
+        let read = crate::file_access::app_folder_read(|| {
+            crate::file_access::check_read(&file).map_err(denied)?;
+            match std::fs::symlink_metadata(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                // A link is refused: the script's gate does not check where it leads.
+                Ok(m) if !m.file_type().is_file() => return Err("not a plain file".to_string()),
+                _ => {}
+            }
+            crate::file_access::check_read(&file).map_err(denied)?;
+            crate::store::read_capped(&path, MAX_PROFILE_BYTES).map(Some)
+        })?;
+        let Some(bytes) = read else { return Ok(None) };
         // The color profiles the file carries are installed where missing, as opening it installs
         // them, so the new document's assigned profiles draw and are saved with it.
-        let (mut doc, _, warnings) = super::fileio::native_file(&bytes).map_err(|e| e.to_string())?;
+        let (mut doc, _, mut warnings) = super::fileio::decode_native_file(&bytes).map_err(|e| e.to_string())?;
         // Linked images in its symbols, patterns and brushes are read from their files, as placing
         // a document reads them.
         super::links::resolve(&mut doc, super::links::LinkBase::file(Some(&file)), false, false);
+        warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
         Ok(Some(ReadProfile { doc, file, warnings }))
     }
 }
@@ -1041,4 +1120,99 @@ fn reset_profile(s: &mut Session, p: &Value) -> Result<Value> {
         Err(e) => return Err(profile_error(format!("{path}: {e}"), &path)),
     };
     Ok(json!({ "name": name, "reset": reset }))
+}
+
+/// `file.newProfiles.applyDefaults`: the active document takes the Default Graphic Style and
+/// [Normal Character Style] of profile `name`, and new art is reset to them.
+fn apply_defaults(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "file.newProfiles.applyDefaults";
+    let name = profile_name(p.get("name").unwrap_or(&Value::Null), C)?;
+    let mode = s.doc()?.doc.color_mode;
+    let (mut src, warnings) = match s.read_profile(name) {
+        Ok(Some(p)) => (p.doc, p.warnings),
+        // The shipped profile: the defaults of a new document in this color mode.
+        Ok(None) => (Document::new_with_mode(1.0, 1.0, mode), vec![]),
+        Err(e) => return Err(bad(C, format!("the {name} profile can't be read: {e}"))),
+    };
+    if src.color_mode != mode {
+        super::colormgmt::set_color_mode(&mut src, mode, true, None, super::colormgmt::Grays::Profile);
+    }
+    // A profile without a Default Graphic Style gives the shipped one, as a new document from it
+    // starts with the shipped fill and stroke.
+    let look = match src.graphic_style(DEFAULT_GRAPHIC_STYLE) {
+        Some(g) => g.clone(),
+        None => Document::new_with_mode(1.0, 1.0, mode).graphic_style(DEFAULT_GRAPHIC_STYLE).cloned().unwrap_or_else(shipped_default_style),
+    };
+    let normal = super::textstyles::style_attrs(&src, false, super::textstyles::NORMAL_CHAR).unwrap_or_default();
+    let chars = s.prefs.override_char_color;
+    // A composite font the style names comes with it, in place of the document's of its name, as
+    // Import Composite Fonts brings it.
+    let family = normal.get("font_family").and_then(Value::as_str);
+    let fonts_before = s.doc()?.doc.composite_fonts.to_vec();
+    let fonts = family
+        .and_then(|f| CompositeFont::named(&src.composite_fonts, f))
+        .map(|f| super::compositefonts::with_font(&fonts_before, f))
+        .filter(|after| *after != fonts_before);
+    if let Some(after) = &fonts {
+        super::compositefonts::check_set(after, C)?;
+    }
+    let fonts_changed = match &fonts {
+        Some(after) => super::compositefonts::register(s, &fonts_before, after),
+        None => vec![],
+    };
+    let apply = |d: &mut Document| -> Result<()> {
+        if let Some(after) = &fonts {
+            super::compositefonts::set_fonts(d, after, &fonts_changed)?;
+        }
+        let before = d.clone();
+        let (appearance, attrs) = super::clipboard::resources::import_looks(&src, d, &look.appearance, &normal)?;
+        let attrs = if attrs.is_empty() {
+            attrs
+        } else {
+            super::textstyles::stored_style_attrs(d, false, &attrs)
+                .ok_or_else(|| bad(C, format!("the {name} profile's [Normal Character Style] has attributes charStyle.new does not take")))?
+        };
+        let new = GraphicStyle { appearance, ..look.clone() };
+        match d.graphic_style_index(DEFAULT_GRAPHIC_STYLE) {
+            Some(i) if d.graphic_styles[i].same_look(&new) => {}
+            Some(i) => super::style::redefine_in(d, &before, i, new, None, chars),
+            None => {
+                let id = d.next_graphic_style_id();
+                d.graphic_styles.insert(0, GraphicStyle { name: DEFAULT_GRAPHIC_STYLE.to_string(), id, ..new });
+            }
+        }
+        super::textstyles::redefine_normal_char(d, &attrs)
+    };
+    // An undo step only when the document changes; Undo puts the new-art paints back too.
+    let paint_before = super::colormgmt::new_art_colors_before(s)?;
+    let mut run = || -> Result<bool> {
+        let mut trial = (*s.doc()?.doc).clone();
+        apply(&mut trial)?;
+        let changed = trial != *s.doc()?.doc;
+        if changed {
+            s.edit("Use Profile Defaults", |d, _| apply(d))?;
+        }
+        Ok(changed)
+    };
+    let changed = run();
+    if fonts.is_some() {
+        super::compositefonts::sync(s);
+    }
+    let changed = changed?;
+    super::newart::reset(s);
+    // The selection's appearance does not replace the defaults just set.
+    s.note_defaults_only();
+    if changed || s.batch_stash.is_some() || s.doc()?.undo_group.is_some() {
+        super::colormgmt::record_new_art_colors(s, paint_before)?;
+    }
+    let mut out = json!({ "name": name, "changed": changed });
+    if !warnings.is_empty() {
+        out["warnings"] = json!(warnings);
+    }
+    Ok(out)
+}
+
+/// The shipped Default Graphic Style: white fill, 1 pt black stroke.
+fn shipped_default_style() -> GraphicStyle {
+    GraphicStyle::new(DEFAULT_GRAPHIC_STYLE, vectorcraft_doc::Appearance::default_art())
 }

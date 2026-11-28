@@ -29,7 +29,9 @@ pub(super) fn seg_direction(seg: &PathSeg, t: f64) -> Vec2 {
 }
 
 /// The parameters in (0, 1) where the line from `at` to `seg` is square to it (`perpendicular`)
-/// or grazes it, found by sampling the curve for a change of sign and bisecting.
+/// or grazes it, found by sampling the curve for a change of sign and bisecting. A sample where
+/// the line is exactly square or grazing, and its neighbors are not, is one of them too: no sign
+/// changes on either side of it.
 pub(super) fn touch_params(seg: &PathSeg, at: Point, perpendicular: bool) -> Vec<f64> {
     const STEPS: usize = 24;
     let f = |t: f64| {
@@ -41,7 +43,17 @@ pub(super) fn touch_params(seg: &PathSeg, at: Point, perpendicular: bool) -> Vec
     for i in 1..=STEPS {
         let t = i as f64 / STEPS as f64;
         let cur = (t, f(t));
-        if prev.1.is_finite() && cur.1.is_finite() && prev.1 * cur.1 < 0.0 {
+        if cur.1 == 0.0 {
+            // Not at the end (t = 1), not where `at` lies on the curve or the direction is zero
+            // (a cusp), and not along a stretch that is zero throughout, such as a straight
+            // curve seen from its own line. The sign need not change: the tangent at an
+            // inflection touches zero without crossing it.
+            let isolated = |n: f64| n.is_finite() && n != 0.0;
+            let (v, d) = (seg.eval(t) - at, seg_direction(seg, t));
+            if i < STEPS && isolated(prev.1) && isolated(f((i + 1) as f64 / STEPS as f64)) && v.hypot() * d.hypot() > 1e-12 {
+                out.push(t);
+            }
+        } else if prev.1.is_finite() && cur.1.is_finite() && prev.1 * cur.1 < 0.0 {
             let (mut lo, mut hi) = (prev, cur);
             for _ in 0..40 {
                 let mid = 0.5 * (lo.0 + hi.0);
@@ -313,9 +325,10 @@ pub fn square(d: Vec2) -> Vec2 {
 /// too, so they all snap alike, and shows its [`Self::guides`].
 ///
 /// The targets ([`Targets::for_drawing`], the art in the window) are gathered once per document
-/// state: hovering gathers them again only after the document, the selection, what is left out,
-/// the window or the snapping options changed; a press always gathers them afresh, and the drag
-/// it starts keeps them, the document then showing the drag's own previews.
+/// state: hovering and pressing gather them again only after the document, the selection, what is
+/// left out, the window or the snapping options changed, so a press keeps the targets the hover
+/// before it gathered. The drag a press starts keeps them, the document then showing the drag's
+/// own previews.
 ///
 /// The Measure and Measure & Inspect tools keep one too, for the ends of a drag only. They do not
 /// ask it while hovering. [`Self::measure`] gathers [`Targets::for_measure`] instead, and a press
@@ -364,28 +377,53 @@ impl SnapKey {
     }
 }
 
+/// Every setting that can move a snapped drawn point besides the document: the window and the
+/// zoom, the options and tolerances [`SnapKey`] holds except the guides' color and labels, and
+/// the construction guides' angles a [`Leave::segment`] follows. A tool that keeps a hover's
+/// snapped point compares two of these to see whether a click would still snap the same way.
+#[derive(PartialEq)]
+pub(crate) struct SnapSettings {
+    screen: Option<ScreenFrame>,
+    zoom: f64,
+    view: [bool; 7],
+    snap_to_glyph: Option<GlyphSnap>,
+    alignment_lines: bool,
+    tolerances: [f64; 2],
+    angles: &'static [f64],
+}
+
+impl SnapSettings {
+    pub(crate) fn of(cx: &ToolContext) -> Self {
+        let SnapKey { screen, view, snap_to_glyph, style, tolerances, .. } = SnapKey::of(cx, &[]);
+        Self { screen, zoom: cx.zoom, view, snap_to_glyph, alignment_lines: style.lines, tolerances, angles: cx.construction_angles }
+    }
+}
+
 /// The part of the document the window shows (none headless: all of it).
-fn visible(cx: &ToolContext) -> Option<Rect> {
+pub(super) fn visible(cx: &ToolContext) -> Option<Rect> {
     let s = cx.screen?;
     let (w, h) = s.size;
     Some(Rect::from_points(s.at(0.0, 0.0), s.at(w, h)).union_pt(s.at(w, 0.0)).union_pt(s.at(0.0, h)))
 }
 
 impl DrawSnap {
+    /// Whether the last hover or press still has the current targets, without gathering the art
+    /// again. A caller caching the snapped point can use this before reusing it for a cursor.
+    pub(crate) fn is_current(&self, cx: &ToolContext, exclude: &[NodeId]) -> bool {
+        self.targets.as_ref().is_some_and(|(key, _)| key.as_ref() == Some(&SnapKey::of(cx, exclude)))
+    }
+
     /// Snap the pointer hovering at `p` (the art but `exclude` as targets, the anchors of
     /// `exclude` still pulling), reusing the targets while nothing they depend on changed.
     pub fn hover(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
-        let key = SnapKey::of(cx, exclude);
-        if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
-            self.gather(cx, key);
-        }
+        self.gather_unless_current(cx, exclude);
         self.snap(cx, p, from)
     }
 
-    /// Snap the point pressed at `p`, the targets gathered afresh: the drag that follows keeps
-    /// them ([`Self::drag`]).
+    /// Snap the point pressed at `p`, reusing the targets the last hover or press gathered while
+    /// nothing they depend on changed: the drag that follows keeps them ([`Self::drag`]).
     pub fn press(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
-        self.gather(cx, SnapKey::of(cx, exclude));
+        self.gather_unless_current(cx, exclude);
         self.snap(cx, p, from)
     }
 
@@ -421,12 +459,66 @@ impl DrawSnap {
         self.guides.clear();
     }
 
+    /// Snap to Tangent for a circle drawn around `center`, its radius `r` set by the pointer at `p`
+    /// through the dragged `corner` (where [`Self::drag`] put it): the radius, within the Smart
+    /// Guides snapping tolerance of `r`, at which the circle touches nearby art
+    /// ([`Targets::tangent_radius`]), its guides replacing the last snap's. None, the guides kept,
+    /// with Smart Guides or Snap to Tangent off, pixels or the grid snapping instead (each read
+    /// again on every move, as [`PointSnap::snap_from`] reads pixels and the grid), nothing in
+    /// reach, or an anchor, center or crossing in reach of `p` or at `corner`.
+    pub fn circle_radius(&mut self, cx: &ToolContext, center: Point, p: Point, corner: Point, r: f64) -> Option<f64> {
+        let Some((_, PointSnap { targets: Some((t, tol)), op })) = &self.targets else { return None };
+        if !cx.smart_guides || !cx.snap_tangent || cx.snaps_to_pixel(*op) || cx.snap_to_grid {
+            return None;
+        }
+        let (radius, guides) = t.tangent_radius(center, p, corner, r, cx.tol(*tol))?;
+        self.guides = guides;
+        Some(radius)
+    }
+
     /// Snap `p`, dragged since the press, with the targets the press gathered.
     pub fn drag(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> Point {
         if self.targets.is_none() {
             self.gather(cx, SnapKey::of(cx, &[]));
         }
         self.snap(cx, p, from)
+    }
+
+    /// How far from `p` the nearest Smart Guides point (an anchor or a center) or crossing of the
+    /// targets lies, when one is within the snapping tolerance: none otherwise, and none while
+    /// pixels or the grid snap instead.
+    pub(crate) fn point_within_reach(&self, cx: &ToolContext, p: Point) -> Option<f64> {
+        let Some((_, PointSnap { targets: Some((t, tol)), .. })) = &self.targets else { return None };
+        if !cx.smart_guides {
+            return None;
+        }
+        let tol = cx.tol(*tol);
+        let point = t.nearest_point(p, tol).map(|(q, _)| q.distance(p));
+        let crossing = t.crossing(p, tol).map(|q| q.distance(p));
+        match (point, crossing) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+
+    /// Whether `q`, where a point at `p` snapped to, is the nearest Smart Guides point (an anchor or
+    /// a center) or the nearest crossing of the targets within the snapping tolerance of `p`.
+    pub(crate) fn snapped_to_point(&self, cx: &ToolContext, p: Point, q: Point) -> bool {
+        let Some((_, PointSnap { targets: Some((t, tol)), .. })) = &self.targets else { return false };
+        if !cx.smart_guides {
+            return false;
+        }
+        let tol = cx.tol(*tol);
+        let at = |a: Point| a.distance(q) <= 1e-9 * tol.max(1.0);
+        t.nearest_point(p, tol).is_some_and(|(a, _)| at(a)) || t.crossing(p, tol).is_some_and(at)
+    }
+
+    /// Whether a point at `p` leaving `from` lands on one of the targets the last hover or press
+    /// gathered ([`Targets::snap_hit`]), whether or not its guides show. False with Smart Guides
+    /// off, with no targets, and while pixels or the grid snap instead.
+    pub(crate) fn lands_on_target(&self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> bool {
+        let Some((_, PointSnap { targets: Some((t, tol)), op })) = &self.targets else { return false };
+        cx.smart_guides && !cx.snaps_to_pixel(*op) && !cx.snap_to_grid && t.snap_hit(p, from, cx.tol(*tol)).2
     }
 
     /// The guides of the last snap.
@@ -437,6 +529,26 @@ impl DrawSnap {
     /// Hide the guides (the gesture ended).
     pub fn clear(&mut self) {
         self.guides.clear();
+    }
+
+    /// Replace the guides with one label `text` at `p`, for a point a tool placed by a rule of its
+    /// own (an anchor or a path it found itself). The label uses the style of the targets the last
+    /// snap gathered. No label shows when Smart Guides or Anchor/Path Labels are off (Snap to Point
+    /// alone gathers targets without labels), or when the last snap gathered no targets.
+    pub(crate) fn label(&mut self, p: Point, text: &str) {
+        self.guides = match &self.targets {
+            Some((_, PointSnap { targets: Some((t, _)), .. })) => t.label(p, text).into_iter().collect(),
+            _ => vec![],
+        };
+    }
+
+    /// Gather the targets for the art but `exclude` unless the last hover or press gathered them
+    /// for the same [`SnapKey`].
+    fn gather_unless_current(&mut self, cx: &ToolContext, exclude: &[NodeId]) {
+        let key = SnapKey::of(cx, exclude);
+        if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
+            self.gather(cx, key);
+        }
     }
 
     fn gather(&mut self, cx: &ToolContext, key: SnapKey) {

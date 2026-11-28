@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Name, Object, Stream};
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Name, Object, Stream};
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::{ColorMode, Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
@@ -19,7 +19,41 @@ fn doc(mode: ColorMode, colorize: Option<Paint>) -> Document {
     d.swatches.push(Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), global: true, spot: true });
     let gray = image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap();
     let mut png = vec![];
-    gray.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = gray.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     d.images.insert("pic".into(), ImageBlob::png(png));
     let im = ImageObject { key: "pic".into(), width: 2, height: 1, xf: Affine::scale(20.0), link: None, placement: Default::default(), pixels: None };
     let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
@@ -87,6 +121,40 @@ fn a_process_color_writes_the_image_in_that_color_with_a_soft_mask() {
     assert_eq!(images(&pdf(&doc(ColorMode::Cmyk, None))), [("DeviceGray".into(), vec![], false)]);
 }
 
+/// A colorized image whose color overprints is drawn with an overprinting graphics state
+/// (ISO 32000-1 §8.6.7), its DeviceN image unchanged; one that knocks out sets none.
+#[test]
+fn an_overprinting_colorized_image_sets_overprint() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let text = |d: &Document| String::from_utf8_lossy(&pdf(d)).into_owned();
+    assert!(!text(&d).contains("/OP true"), "a knocking-out image sets no overprint");
+    let Some(id) = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id) else { panic!("the image") };
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+    let out = pdf(&d);
+    assert!(text(&d).contains("/OP true/op true"), "the image overprints");
+    assert!(images(&out).contains(&("DeviceN".into(), vec!["Ink".into()], true)), "still the ink's DeviceN image");
+
+    // A process color is written in only the process inks it puts down, so its zero plates keep
+    // the inks below: an image's samples take no part in the nonzero overprint mode.
+    let mut d = doc(ColorMode::Cmyk, Some(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0))));
+    assert_eq!(images(&pdf(&d)), [("DeviceGray".into(), vec![], false), ("DeviceCMYK".into(), vec![], true)], "knocking out: CMYK");
+    let Some(id) = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id) else { panic!("the image") };
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+    assert!(images(&pdf(&d)).contains(&("DeviceN".into(), vec!["Black".into()], true)), "{:?}", images(&pdf(&d)));
+    // A gray color is black ink alone.
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::Gray { k: 0.6 })));
+    assert!(images(&pdf(&d)).contains(&("DeviceN".into(), vec!["Black".into()], true)), "{:?}", images(&pdf(&d)));
+
+    // White knocks out with Discard White Overprint (the default), as a white fill does; without
+    // it, an overprinting white process color puts no ink down and paints nothing.
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.0))));
+    assert_eq!(images(&pdf(&d)).len(), 2, "the white image and its soft mask");
+    assert!(!text(&d).contains("/OP true"), "white knocks out");
+    d.setup.discard_white_overprint = false;
+    assert!(images(&pdf(&d)).is_empty(), "{:?}", images(&pdf(&d)));
+}
+
 /// Registration prints on every plate: the process inks and the document's spot inks.
 #[test]
 fn registration_writes_the_image_in_every_ink() {
@@ -110,7 +178,41 @@ fn colorized_images_are_downsampled() {
     let mut d = Document::new(100.0, 100.0);
     let gray = image::GrayImage::from_fn(600, 600, |x, y| image::Luma([((x + y) % 200) as u8]));
     let mut png = vec![];
-    gray.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = gray.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     d.images.insert("pic".into(), ImageBlob::png(png));
     // One inch wide: 600 ppi.
     let im = ImageObject {
@@ -141,7 +243,41 @@ fn a_colorized_warped_image_is_written_once_for_all_its_pieces() {
         let mut d = Document::new(100.0, 100.0);
         let gray = image::GrayImage::from_fn(600, 600, |x, y| image::Luma([((x + y) % 200) as u8]));
         let mut png = vec![];
-        gray.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = gray.into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
         d.images.insert("pic".into(), ImageBlob::png(png));
         let im = ImageObject {
             key: "pic".into(),
@@ -201,6 +337,106 @@ fn separations_print_the_image_on_its_ink_plate() {
     }
 }
 
+/// On printed separations an overprinting colorized image is hidden on the plates its color puts
+/// no ink on, so a writer without blending modes (PostScript) keeps the ink below it there; a
+/// knocking-out one is drawn on every plate.
+#[test]
+fn separations_hide_an_overprinting_image_on_plates_without_its_ink() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let shown = |overprint: bool, postscript: bool| {
+        let mut d = doc(ColorMode::Cmyk, Some(spot.clone()));
+        let id = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(id).unwrap().extras_mut().colorize_overprint = overprint;
+        let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+        let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+        let job = plan(&d, &PrintOptions { settings, postscript, ..Default::default() }).unwrap();
+        names.into_iter().zip(&job.plates).map(|(name, p)| (name, p.layers[0].children().unwrap()[0].visible)).collect::<Vec<_>>()
+    };
+    for postscript in [true, false] {
+        let knocking = shown(false, postscript);
+        assert!(knocking.len() > 1 && knocking.iter().all(|(_, v)| *v), "{knocking:?}");
+        for (name, visible) in shown(true, postscript) {
+            assert_eq!(visible, name == "Ink", "{name}");
+        }
+    }
+
+    // With a drop shadow of its own the image knocks out on every plate, so the PostScript
+    // writer draws it there.
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let id = d.layers[0].children().unwrap()[0].id;
+    let n = d.node_mut(id).unwrap();
+    n.extras_mut().colorize_overprint = true;
+    n.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({}), visible: true });
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let job = plan(&d, &PrintOptions { settings, postscript: true, ..Default::default() }).unwrap();
+    for p in &job.plates {
+        let image = &p.layers[0].children().unwrap()[0];
+        assert!(image.visible && !image.extras().colorize_overprint, "{:?}", image.extras());
+    }
+}
+
+/// With Discard White Overprint on, an overprinting colorized image in a tint of a spot ink whose
+/// color is white still overprints, in the PDF and on printed separations: it prints as that ink,
+/// not as paper white.
+#[test]
+fn a_white_spot_ink_image_overprints_with_discard_white_overprint() {
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let spot = Paint::Solid { color: white, swatch: Some("White Ink".into()), tint: 0.5 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    d.swatches.push(Swatch { name: "White Ink".into(), paint: Paint::solid(white), global: true, spot: true });
+    d.setup.discard_white_overprint = true;
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+    let out = pdf(&d);
+    assert!(String::from_utf8_lossy(&out).contains("/OP true/op true"), "the image overprints");
+    assert!(images(&out).contains(&("DeviceN".into(), vec!["White Ink".into()], true)), "{:?}", images(&out));
+
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+    for postscript in [true, false] {
+        let job = plan(&d, &PrintOptions { settings: settings.clone(), postscript, ..Default::default() }).unwrap();
+        for (name, p) in names.iter().zip(&job.plates) {
+            assert_eq!(p.layers[0].children().unwrap()[0].visible, name == "White Ink", "{name}");
+        }
+    }
+    // Printed as process inks, the white ink is paper white: the image knocks out on every plate.
+    let converted = serde_json::json!({"output": {"mode": "separations", "inks": [{"name": "White Ink", "convertToProcess": true}]}});
+    let settings: PrintSettings = serde_json::from_value(converted).unwrap();
+    for postscript in [true, false] {
+        let job = plan(&d, &PrintOptions { settings: settings.clone(), postscript, ..Default::default() }).unwrap();
+        assert!(!job.plates.is_empty());
+        for p in &job.plates {
+            assert!(p.layers[0].children().unwrap()[0].visible, "a converted white ink knocks out");
+        }
+    }
+}
+
+/// An overprinting colorized image whose pixels don't take its color (a color preview of its
+/// file) is separated as those pixels on every plate, so it is not hidden on the plates its
+/// color puts no ink on.
+#[test]
+fn separations_show_an_overprinting_image_whose_pixels_refuse_its_color() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    for postscript in [true, false] {
+        let mut d = doc(ColorMode::Cmyk, Some(spot.clone()));
+        let preview = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+        d.images.insert(
+            "pic".into(),
+            ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() },
+        );
+        let id = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+        let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+        let job = plan(&d, &PrintOptions { settings, postscript, ..Default::default() }).unwrap();
+        assert!(job.plates.len() > 1);
+        for p in &job.plates {
+            let n = &p.layers[0].children().unwrap()[0];
+            assert!(n.visible, "postscript {postscript}: the pixels print on every plate");
+            assert!(n.extras().colorize.is_none() && !n.extras().colorize_overprint, "postscript {postscript}: {:?}", n.extras());
+        }
+    }
+}
+
 /// Printed separations separate a colorized image with a color mask as it shows: the pixels the
 /// mask hides print on no plate.
 #[test]
@@ -208,11 +444,10 @@ fn separations_print_a_color_masked_image_as_it_shows() {
     let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
     let mut d = doc(ColorMode::Cmyk, Some(spot));
     // The black pixel hidden.
-    let mut png = vec![];
-    image::GrayAlphaImage::from_raw(2, 1, vec![0, 0, 255, 255])
-        .unwrap()
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    let img =
+        craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, vec![0, 0, 255, 255])
+            .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     d.images.insert("shown".into(), ImageBlob::png(png));
     let id = d.layers[0].children().unwrap()[0].id;
     d.node_mut(id).unwrap().extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
@@ -242,12 +477,12 @@ fn separations_colorize_masked_pixels_whose_own_pixels_are_a_preview() {
     let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
     let mut d = doc(ColorMode::Cmyk, Some(spot));
     let preview = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-    d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
-    let mut png = vec![];
-    image::GrayAlphaImage::from_raw(2, 1, vec![0, 0, 255, 255])
-        .unwrap()
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    d.images
+        .insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() });
+    let img =
+        craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, vec![0, 0, 255, 255])
+            .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     d.images.insert("shown".into(), ImageBlob::png(png));
     let id = d.layers[0].children().unwrap()[0].id;
     d.node_mut(id).unwrap().extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
@@ -279,7 +514,8 @@ fn a_colorized_missing_link_placeholder_is_written_in_its_own_colors() {
     let placeholder = || {
         let mut d = doc(ColorMode::Cmyk, None);
         let bytes = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-        d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+        d.images
+            .insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() });
         d
     };
     let plain = placeholder();
@@ -299,12 +535,47 @@ fn a_colorized_missing_link_placeholder_is_written_in_its_own_colors() {
     }
 }
 
+/// A `w` × `h` gray PNG of `px`.
+fn gray_png(w: u32, h: u32, px: Vec<u8>) -> Vec<u8> {
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, px).unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
+}
+
+/// Whether each image XObject of `pdf`, soft masks too, has /Interpolate true.
+fn interpolated(pdf: &[u8]) -> Vec<bool> {
+    let file = Pdf::new(Arc::new(pdf.to_vec())).unwrap();
+    file.objects()
+        .into_iter()
+        .filter_map(|o| match o {
+            Object::Stream(s) if s.dict().get::<Name<'_>>(b"Subtype").is_some_and(|n| n.as_ref() == b"Image") => {
+                Some(s.dict().get::<bool>(b"Interpolate") == Some(true))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A colorized image whose pixels are black or white (a 1-bit image mask, as both importers open
+/// one) is written without /Interpolate, its soft mask too: a RIP that smooths the mask greys its
+/// edges, and the same mask drawn below in another ink shows there. A grayscale image keeps it.
+#[test]
+fn a_black_and_white_colorized_image_asks_viewers_not_to_smooth_it() {
+    let red = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    for (pixels, smooth) in [(vec![0, 255], false), (vec![0, 128], true)] {
+        let mut d = doc(ColorMode::Cmyk, Some(red.clone()));
+        d.images.insert("pic".into(), ImageBlob::png(gray_png(2, 1, pixels.clone())));
+        let found = interpolated(&pdf(&d));
+        assert_eq!(found, [smooth, smooth], "{pixels:?}: the image and its soft mask");
+    }
+}
+
 /// A pixelated colorized image (an envelope's with Anti-Alias off) is written without
-/// /Interpolate, as an uncolorized one is.
+/// /Interpolate, as an uncolorized one is. (Its pixels are gray: a black-and-white one never is.)
 #[test]
 fn a_pixelated_colorized_image_asks_viewers_not_to_smooth_it() {
     for pixelated in [false, true] {
         let mut d = doc(ColorMode::Cmyk, Some(Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0))));
+        d.images.insert("pic".into(), ImageBlob::png(gray_png(2, 1, vec![0, 128])));
         let id = d.layers[0].children().unwrap()[0].id;
         d.node_mut(id).unwrap().extras_mut().pixelated = pixelated;
         let out = pdf(&d);
@@ -342,7 +613,23 @@ fn imported_images(d: &Document) -> Vec<(Option<Paint>, Vec<u8>)> {
         l.walk(&mut |n| {
             if let NodeKind::Image(im) = &n.kind {
                 let blob = d.images.get(&im.key).unwrap();
-                let gray = image::load_from_memory(&blob.bytes).unwrap();
+                let gray = craft_image_codecs::decode(&blob.bytes)
+                    .map(|__cimg| {
+                        let (__w, __h) = __cimg.dimensions();
+                        match (__cimg.layout(), __cimg.sample_type()) {
+                            (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                        }
+                    })
+                    .unwrap();
                 assert_eq!(gray.color(), image::ColorType::L8, "a grayscale image");
                 out.push((n.extras().colorize.as_deref().cloned(), gray.into_luma8().into_raw()));
             }
@@ -506,8 +793,9 @@ fn a_separation_image_drawn_twice_is_colorized_twice() {
 /// A one-component JPEG in a Separation space is read through its decoder.
 #[test]
 fn a_separation_jpeg_opens_colorized_by_its_ink() {
-    let mut jpeg = vec![];
-    jpeg_encoder::Encoder::new(&mut jpeg, 100).encode(&[0, 0, 255, 255, 0, 0, 255, 255], 8, 1, jpeg_encoder::ColorType::Luma).unwrap();
+    let img = craft_image_codecs::Image::from_u8(8, 1, craft_image_codecs::ChannelLayout::Gray, vec![0, 0, 255, 255, 0, 0, 255, 255]).unwrap();
+    let opts = craft_image_codecs::EncodeOptions { jpeg_quality: 100, embed_icc: false, embed_metadata: false, ..Default::default() };
+    let jpeg = craft_image_codecs::encode(&img, craft_image_codecs::Format::Jpeg, &opts).unwrap();
     let hex: String = jpeg.iter().map(|b| format!("{b:02X}")).collect();
     let d = separation_page(SPOT_RED, 8, 8, "/Filter [/ASCIIHexDecode /DCTDecode]", &hex, &[]);
     let images = imported_images(&d);

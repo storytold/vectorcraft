@@ -14,8 +14,10 @@ mod pen;
 mod select;
 mod shapes;
 mod typetools;
+mod units;
 
 pub(crate) use image::{DecodedImages, refresh_color_masks};
+pub use packaging::{FoldAngles, fold_source, print_hidden, selection_fold_angles, selection_fold_lines};
 pub(crate) use packaging::{role_swatch_edited, role_swatches_merged};
 
 use super::CommandSpec;
@@ -35,5 +37,6 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(select::specs());
     v.extend(shapes::specs());
     v.extend(typetools::specs());
+    v.extend(units::specs());
     v
 }

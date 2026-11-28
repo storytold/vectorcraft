@@ -15,12 +15,12 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Symbol, SymbolNineSlice};
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, Rect, SubPath, shapes};
 
-use super::brushsym::{CURRENT_SYMBOL, natural_size, normalize, place_xf, set_natural_size};
+use super::brushsym::{CURRENT_SYMBOL, Placement, natural_size, normalize, place_xf, set_natural_size};
 use super::clipboard::Clipboard;
 use super::clipboard::resources::SwatchChoices;
 use super::swatch::str_list;
 use super::swatchlib::{FileData, LibraryFile, LibraryInfo, concealed_library_id, concealed_library_ids, shown_id, shown_library_id, stem};
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, number_or, str_param};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, number_or, str_param, u64_req};
 
 /// The extension of saved symbol libraries: native documents.
 pub const SYMBOLS_EXT: &str = vectorcraft_format::EXTENSION;
@@ -50,9 +50,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Symbols",
             ["Window", "Symbol Libraries"],
             None,
-            "{library: id or name, name? | names?: [symbol names in the library] (default: all of it), place?: false (also place an instance of the first one, its registration point at x, y: default the first artboard's centre), x?, y?, swatchConflict? (as edit.paste)} copy library symbols into the document's Symbols as one undo step (with the place), with their Symbol Options and the resources they use (the symbols they nest, patterns, swatches, brushes, graphic styles, images). A symbol the document already has (same name and art) isn't added again; a name another symbol has gets a number (\"Star 2\"). The first one becomes the current symbol → {library, names: [each symbol's name in the document], added: [names added], existing: [names already there], placed?: id}",
+            "{library: id or name, name? | names?: [symbol names in the library] (default: all of it), place?: false (also place an instance of the first one, its registration point at x, y: default the first artboard's centre, in the stacking order symbol.place gives it, Draw Behind included), x?, y?, swatchConflict? (as edit.paste)} copy library symbols into the document's Symbols as one undo step (with the place), with their Symbol Options and the resources they use (the symbols they nest, patterns, swatches, brushes, graphic styles, images). A symbol the document already has (same name and art) isn't added again; a name another symbol has gets a number (\"Star 2\"). The first one becomes the current symbol → {library, names: [each symbol's name in the document], added: [names added], existing: [names already there], placed?: id}",
             has_doc,
             add
+        ),
+        cmd!(
+            "symbol.placeFromDocument",
+            "Place Symbol Instance",
+            [],
+            None,
+            "{sourceDocument: uid, name: a symbol of that document, x?, y?} place an instance of a symbol of another open document so its registration point is at (x, y) (default: the first artboard's center), in the stacking order symbol.place gives it (Draw Behind included), as a symbol dragged from that document's Symbols panel onto the canvas is placed. The symbol, the symbols it nests and the resources they use are added as a drop of art from that document adds them, in the same undo step as the instance: a symbol the active document already has with the same name, art and Symbol Options is used, and one with the same name but other art or Symbol Options gets a number (\"Leaf 2\"); each symbol added takes its Symbol Options along. When sourceDocument is the active document, its own symbol is placed, as symbol.place places it. An error, with no edit, when that document is no longer open or has no symbol `name` → {id, name: the symbol's name in the active document}",
+            has_doc,
+            place_from_document
         ),
         cmd!(
             "symbol.saveLibrary",
@@ -161,6 +170,8 @@ pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
     BuiltinSymbolLibrary { id: "inventory-icons", name: "Inventory Icons", make: inventory_icons },
     BuiltinSymbolLibrary { id: "skill-icons", name: "Skill Icons", make: skill_icons },
     BuiltinSymbolLibrary { id: "weather-icons", name: "Weather Icons", make: weather_icons },
+    BuiltinSymbolLibrary { id: "nature-icons", name: "Nature Icons", make: nature_icons },
+    BuiltinSymbolLibrary { id: "media-controls", name: "Media Controls", make: media_controls },
 ];
 
 /// Built-in library `id`, made once.
@@ -493,18 +504,228 @@ fn weather_icons() -> SymbolLibrary {
     SymbolLibrary { name: "Weather Icons".into(), doc }
 }
 
+/// Nature Icons: five original silhouettes for diagrams and reusable artwork.
+fn nature_icons() -> SymbolLibrary {
+    let poly = |coords: &[(f64, f64)]| {
+        let points: Vec<Point> = coords.iter().map(|&(x, y)| Point::new(x, y)).collect();
+        SubPath::polyline(&points, true)
+    };
+    let leaf = PathData::new(vec![
+        poly(&[(0.0, -20.0), (12.0, -13.0), (17.0, -2.0), (12.0, 10.0), (0.0, 19.0), (-12.0, 10.0), (-17.0, -2.0), (-12.0, -13.0)]),
+        poly(&[(-1.0, -13.0), (1.0, -13.0), (1.0, 20.0), (-1.0, 20.0)]),
+    ]);
+    let mut flower_parts = shapes::ellipse(Rect::new(-6.0, -6.0, 6.0, 6.0)).subpaths;
+    for i in 0..6 {
+        let angle = i as f64 * std::f64::consts::PI / 3.0;
+        let (sin, cos) = angle.sin_cos();
+        let x = 12.0 * cos;
+        let y = 12.0 * sin;
+        flower_parts.extend(shapes::ellipse(Rect::new(x - 5.5, y - 5.5, x + 5.5, y + 5.5)).subpaths);
+    }
+    let flower = PathData::new(flower_parts);
+    let tree = PathData::new(vec![
+        poly(&[(-3.0, 6.0), (3.0, 6.0), (3.0, 20.0), (-3.0, 20.0)]),
+        poly(&[
+            (0.0, -21.0),
+            (12.0, -8.0),
+            (8.0, -8.0),
+            (17.0, 4.0),
+            (11.0, 4.0),
+            (18.0, 12.0),
+            (-18.0, 12.0),
+            (-11.0, 4.0),
+            (-17.0, 4.0),
+            (-8.0, -8.0),
+            (-12.0, -8.0),
+        ]),
+    ]);
+    let mountain = PathData::new(vec![
+        poly(&[(-21.0, 17.0), (-6.0, -17.0), (2.0, 0.0), (8.0, -11.0), (21.0, 17.0)]),
+        poly(&[(-12.0, -4.0), (-6.0, -17.0), (0.0, -4.0), (-5.0, -7.0), (-8.0, -3.0)]),
+    ]);
+    let wave = PathData::new(
+        (0..3)
+            .map(|row| {
+                let y = row as f64 * 9.0 - 10.0;
+                poly(&[
+                    (-20.0, y),
+                    (-14.0, y - 4.0),
+                    (-8.0, y - 4.0),
+                    (-2.0, y),
+                    (4.0, y + 4.0),
+                    (10.0, y + 4.0),
+                    (16.0, y),
+                    (20.0, y),
+                    (20.0, y + 3.0),
+                    (16.0, y + 3.0),
+                    (10.0, y + 7.0),
+                    (4.0, y + 7.0),
+                    (-2.0, y + 3.0),
+                    (-8.0, y - 1.0),
+                    (-14.0, y - 1.0),
+                    (-20.0, y + 3.0),
+                ])
+            })
+            .collect(),
+    );
+    let icons = [
+        ("Leaf", leaf, "#4f9d59"),
+        ("Flower", flower, "#d977a7"),
+        ("Tree", tree, "#287c53"),
+        ("Mountain", mountain, "#768899"),
+        ("Wave", wave, "#388fb8"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in icons {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Nature Icons".into();
+    SymbolLibrary { name: "Nature Icons".into(), doc }
+}
+
+/// Media Controls: play, pause, stop, skip next, shuffle and repeat for audio/video UI art (original, no 9-slice).
+fn media_controls() -> SymbolLibrary {
+    // 1. Play: Right-pointing equilateral triangle.
+    let play = shapes::polygon(Point::ZERO, 18.0, 3, 90.0);
+
+    // 2. Pause: Two parallel vertical rounded bars.
+    let mut pause_subpaths = Vec::new();
+    pause_subpaths.extend(shapes::rounded_rectangle(Rect::new(-11.0, -15.0, -3.0, 15.0), 3.0).subpaths);
+    pause_subpaths.extend(shapes::rounded_rectangle(Rect::new(3.0, -15.0, 11.0, 15.0), 3.0).subpaths);
+    let pause = PathData::new(pause_subpaths);
+
+    // 3. Stop: Rounded square.
+    let stop = shapes::rounded_rectangle(Rect::new(-14.0, -14.0, 14.0, 14.0), 4.0);
+
+    // 4. Skip Next: Right-pointing triangle with adjacent vertical bar.
+    let mut skip_subpaths = Vec::new();
+    let tri_pts = [Point::new(-14.0, -14.0), Point::new(6.0, 0.0), Point::new(-14.0, 14.0)];
+    skip_subpaths.push(SubPath::polyline(&tri_pts, true));
+    skip_subpaths.extend(shapes::rounded_rectangle(Rect::new(8.0, -14.0, 13.0, 14.0), 2.0).subpaths);
+    let skip_next = PathData::new(skip_subpaths);
+
+    // Helper for ribbon arrows with optional arrowhead
+    let make_arrow = |pts: &[Point], half_w: f64, head: Option<(f64, f64)>| -> SubPath {
+        let n = pts.len();
+        let mut left_pts = Vec::new();
+        let mut right_pts = Vec::new();
+
+        let mut seg_normals = Vec::with_capacity(n - 1);
+        let mut seg_dirs = Vec::with_capacity(n - 1);
+        for i in 0..(n - 1) {
+            let d = pts[i + 1] - pts[i];
+            let len = (d.x * d.x + d.y * d.y).sqrt().max(1e-6);
+            let dir = Point::new(d.x / len, d.y / len);
+            let normal = Point::new(-dir.y, dir.x);
+            seg_dirs.push(dir);
+            seg_normals.push(normal);
+        }
+
+        for i in 0..n {
+            let normal = if i == 0 {
+                seg_normals[0]
+            } else if i == n - 1 {
+                seg_normals[n - 2]
+            } else {
+                let n1 = seg_normals[i - 1];
+                let n2 = seg_normals[i];
+                let avg = Point::new((n1.x + n2.x) * 0.5, (n1.y + n2.y) * 0.5);
+                let len = (avg.x * avg.x + avg.y * avg.y).sqrt().max(1e-6);
+                Point::new(avg.x / len, avg.y / len)
+            };
+            left_pts.push(Point::new(pts[i].x + normal.x * half_w, pts[i].y + normal.y * half_w));
+            right_pts.push(Point::new(pts[i].x - normal.x * half_w, pts[i].y - normal.y * half_w));
+        }
+
+        let mut poly = left_pts;
+        if let Some((head_w, head_len)) = head {
+            let end_pt = pts[n - 1];
+            let end_dir = seg_dirs[n - 2];
+            let end_norm = seg_normals[n - 2];
+            poly.push(Point::new(end_pt.x + end_norm.x * head_w, end_pt.y + end_norm.y * head_w));
+            poly.push(Point::new(end_pt.x + end_dir.x * head_len, end_pt.y + end_dir.y * head_len));
+            poly.push(Point::new(end_pt.x - end_norm.x * head_w, end_pt.y - end_norm.y * head_w));
+        }
+        right_pts.reverse();
+        poly.extend(right_pts);
+        SubPath::polyline(&poly, true)
+    };
+
+    // 5. Shuffle: Two crossing/intertwined arrows.
+    let a1 = [Point::new(-14.0, -9.0), Point::new(-5.0, -9.0), Point::new(5.0, 9.0), Point::new(8.0, 9.0)];
+    let a2a = [Point::new(-14.0, 9.0), Point::new(-5.0, 9.0), Point::new(-1.8, 3.24)];
+    let a2b = [Point::new(1.8, -3.24), Point::new(5.0, -9.0), Point::new(8.0, -9.0)];
+    let shuffle = PathData::new(vec![make_arrow(&a1, 1.4, Some((4.0, 6.0))), make_arrow(&a2a, 1.4, None), make_arrow(&a2b, 1.4, Some((4.0, 6.0)))]);
+
+    // 6. Repeat: Looping circular arrows.
+    let r_mid = 11.5;
+    let r_in = 9.8;
+    let r_out = 13.2;
+    let head_w = 4.0;
+    let tip_len = 5.0;
+    let a_start = -150.0_f64.to_radians();
+    let a_end = -15.0_f64.to_radians();
+    let steps = 14;
+
+    let mut top_pts = Vec::new();
+    for i in 0..=steps {
+        let a = a_start + (a_end - a_start) * (i as f64) / (steps as f64);
+        top_pts.push(Point::new(r_out * a.cos(), r_out * a.sin()));
+    }
+    top_pts.push(Point::new((r_mid + head_w) * a_end.cos(), (r_mid + head_w) * a_end.sin()));
+    let t_dir = Point::new(-a_end.sin(), a_end.cos());
+    top_pts.push(Point::new(r_mid * a_end.cos() + tip_len * t_dir.x, r_mid * a_end.sin() + tip_len * t_dir.y));
+    top_pts.push(Point::new((r_mid - head_w) * a_end.cos(), (r_mid - head_w) * a_end.sin()));
+    for i in (0..=steps).rev() {
+        let a = a_start + (a_end - a_start) * (i as f64) / (steps as f64);
+        top_pts.push(Point::new(r_in * a.cos(), r_in * a.sin()));
+    }
+
+    let bottom_pts: Vec<Point> = top_pts.iter().map(|p| Point::new(-p.x, -p.y)).collect();
+
+    let repeat = PathData::new(vec![SubPath::polyline(&top_pts, true), SubPath::polyline(&bottom_pts, true)]);
+
+    let icons = [
+        ("Play", play, "#2ecc71"),
+        ("Pause", pause, "#f39c12"),
+        ("Stop", stop, "#e74c3c"),
+        ("Skip Next", skip_next, "#3498db"),
+        ("Shuffle", shuffle, "#9b59b6"),
+        ("Repeat", repeat, "#1abc9c"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in icons {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Media Controls".into();
+    SymbolLibrary { name: "Media Controls".into(), doc }
+}
+
 /// An instance of symbol `name` (what the resource gathering follows).
 fn instance(name: &str) -> Node {
     Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::IDENTITY })
 }
 
 /// Symbol `from`'s Symbol Options in `src` (natural size, registration, export type, 9-slice
-/// guides) given to symbol `to` of `d`.
+/// guides, Align to Pixel Grid) given to symbol `to` of `d`.
 fn copy_options(src: &Document, from: &str, d: &mut Document, to: &str) {
     set_natural_size(d, to, Some(natural_size(src, from)));
     d.set_symbol_registration(to, src.symbol_registration(from));
     d.set_symbol_export_type(to, src.symbol_export_type(from));
     d.set_symbol_nine_slice(to, src.symbol_nine_slice(from));
+    d.set_symbol_pixel_aligned(to, src.symbol_pixel_aligned(from));
 }
 
 fn builtin_info(b: &BuiltinSymbolLibrary) -> LibraryInfo {
@@ -595,7 +816,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let doc_names: Vec<String> = picked.iter().map(|n| target(&imported.renamed, n)).collect();
     let centre = st.doc.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
     let at = if place { Some(Point::new(number_or(p, "x", centre.x, C)?, number_or(p, "y", centre.y, C)?)) } else { None };
-    let parent = if place { st.target_parent()? } else { None };
+    let spot = if place { Some(Placement::of(s)?) } else { None };
     let mut out = json!({ "library": shown_library_id(s, &info.id) });
     if imported.added > 0 || place {
         let placed = s.edit("Add to Symbols", |d, sel| {
@@ -609,10 +830,10 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             }
             let Some(first) = doc_names.first() else { return Ok(None) };
             d.unknown.insert(CURRENT_SYMBOL.into(), json!(first));
-            let Some(at) = at else { return Ok(None) };
+            let (Some(at), Some(spot)) = (at, &spot) else { return Ok(None) };
             let xf = place_xf(at, natural_size(d, first), d.symbol_registration(first));
             let id = d.alloc_id();
-            d.insert(parent, usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: first.clone(), xf }))?;
+            spot.insert(d, Node::new(id, NodeKind::SymbolInstance { symbol: first.clone(), xf }))?;
             sel.set([id]);
             Ok(Some(id))
         })?;
@@ -627,6 +848,46 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     out["added"] = json!(added);
     out["existing"] = json!(existing);
     Ok(out)
+}
+
+/// `symbol.placeFromDocument`: an instance of symbol `name` of the open document `sourceDocument`
+/// placed in the active document, with the symbol and the resources it uses added as a drop of
+/// art from that document adds them, in one undo step. The source document is not changed.
+fn place_from_document(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.placeFromDocument";
+    let uid = u64_req(p, "sourceDocument", C)?;
+    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?;
+    let st = s.doc()?;
+    let centre = st.doc.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
+    let at = Point::new(number_or(p, "x", centre.x, C)?, number_or(p, "y", centre.y, C)?);
+    let spot = Placement::of(s)?;
+    let same = uid == st.uid;
+    let src = s.documents().iter().find(|d| d.uid == uid).map(|d| Arc::clone(&d.doc));
+    let src = src.ok_or_else(|| bad(C, "the document the symbol came from is no longer open"))?;
+    if !src.symbols.iter().any(|sym| sym.name == name) {
+        return Err(bad(C, format!("no symbol named `{name}` in the document it came from")));
+    }
+    // A symbol of the active document itself is placed as it is.
+    let clip = (!same).then(|| Clipboard::gather(&src, vec![instance(name)]));
+    // The source's colors are kept even where the active document has swatches of the same names.
+    let choices = SwatchChoices::parse(C, &json!({"swatchConflict": "add"}))?;
+    let (id, placed) = s.edit("Place Symbol Instance", |d, sel| {
+        let placed = match &clip {
+            // Each symbol added takes its Symbol Options along.
+            Some(clip) => {
+                let imported = clip.import_into(d, &choices, false)?;
+                let renamed = imported.renamed.iter().find(|r| r["kind"] == "symbol" && r["from"] == name).and_then(|r| r["to"].as_str());
+                renamed.unwrap_or(name).to_string()
+            }
+            None => name.to_string(),
+        };
+        let xf = place_xf(at, natural_size(d, &placed), d.symbol_registration(&placed));
+        let id = d.alloc_id();
+        spot.insert(d, Node::new(id, NodeKind::SymbolInstance { symbol: placed.clone(), xf }))?;
+        sel.set([id]);
+        Ok((id, placed))
+    })?;
+    Ok(json!({ "id": id.0, "name": placed }))
 }
 
 fn save(s: &mut Session, p: &Value) -> Result<Value> {

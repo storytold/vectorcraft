@@ -8,10 +8,10 @@ use std::collections::HashSet;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{ExportAsset, NodeId};
 
-use super::edit::{roots_of, selected_roots};
+use super::edit::{refuse_symbol_part, roots_of, selected_roots};
 use super::fileio::{
-    DEFAULT_FORMAT_3D, FORMATS_3D, SCREEN_SETTINGS_KEYS, check_screen_settings, create_dir, export_crop, export_screens, mesh_file_names, mesh_files,
-    safe_file_name, store_screen_settings, with_screen_export_preset, write_file,
+    DEFAULT_FORMAT_3D, FORMATS_3D, SCREEN_SETTINGS_KEYS, TEXTURE_SIZE, TEXTURE_SIZES, check_screen_settings, create_dir, export_crop, export_screens,
+    image_maps, mesh_file_names, mesh_files, safe_file_name, store_screen_settings, textures, with_screen_export_preset, write_file,
 };
 use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_param, cmd, has_doc, ok, str_param, switch_or, text_param};
 
@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export 3D Object",
             [],
             None,
-            "{ids?: [id…] (default: the selected objects), format?: usda|usdz|gltf|obj (default usda)} collect each object with an Extrude & Bevel, Revolve, Inflate or Rotate effect as a 3D asset of Window › Asset Export, named after the object (else Asset 1, Asset 2…): assets.export3D writes it as a mesh file. An object already collected as a 3D asset keeps it; an object without such an effect is refused → {assets: [asset id…] (in order), added: n}",
+            "{ids?: [id…] (default: the selected objects), format?: usda|usdz|gltf|obj (default usda)} collect each object with an Extrude & Bevel, Revolve, Inflate or Rotate effect as a 3D asset of Window › Asset Export, named after the object (else Asset 1, Asset 2…): assets.export3D writes it as a mesh file. An object already collected as a 3D asset keeps it; an object in ids without such an effect is refused. Without ids, the selected objects without one (on a group or layer, one on its fill or stroke draws nothing and does not count), and a selected object inside another selected object that has one, are left out; refused when none is left → {assets: [asset id…] (in order), added: n}",
             has_doc,
             add_3d
         ),
@@ -80,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export 3D Assets",
             [],
             None,
-            "{assets?: [asset id…] (default every 3D asset), folder?, zip?} each 3D asset's object as a mesh file in its format (assets.set3DFormat), named after the asset: USDA or USDZ, glTF 2.0 (one .gltf, its buffer embedded) or OBJ with its .mtl (whitespace and # in an OBJ's name become _). Every solid of the object (the fill's, each stroke's, a group's members') is a mesh with a material in the color it is painted; faces turned away from the viewer are included, at the object's 3D rotation, y up, about the point it turns about, in points (glTF: meters). Files that would share a name get -2, -3…; an object with a hole that crosses its face's outline or another hole, or with more than 2,000,000 triangles, is refused → {files: [path…]} (no folder: {files: [{name, dataBase64}]}, or with zip one zip as {name, dataBase64, files})",
+            "{assets?: [asset id…] (default every 3D asset), folder?, zip?, textureSize?: 128…4096 (default 1024: the pixels along the longer side of each face's texture)} each 3D asset's object as a mesh file in its format (assets.set3DFormat), named after the asset: USDA or USDZ, glTF 2.0 (one .gltf, its buffer embedded) or OBJ with its .mtl (whitespace and # in an OBJ's name become _). Every solid of the object (the fill's, each stroke's, a group's members') is a mesh with a material in the color it is painted; faces turned away from the viewer are included, at the object's 3D rotation, y up, about the point it turns about, in points (glTF: meters). The graphics mapped onto a plane or onto Extrude & Bevel's front or back cap (threeD.mapGraphic) are a PNG texture of that face: its color with the graphics drawn over it, flat and unlit, on a mesh of the face's own with texture coordinates; glTF embeds it, USDZ stores it after the layer, and OBJ and USDA write it beside them as <name>-texture-1.png… (whitespace, # and @ become _); a face that is not opaque keeps its opacity in the texture's alpha, and an OBJ also gets <name>-texture-1-opacity.png…, the alpha as gray levels for its map_d. Graphics on Revolve's side (in a group, the side of the member with the longest profile) are a texture of the side unrolled as the canvas lays it out, on a mesh of the side's triangles; its end caps and cut sides stay plain. Files that would share a name get -2, -3…; an object with a hole that crosses its face's outline or another hole, or with more than 2,000,000 triangles, or textures of more than 67,108,864 pixels in one export, is refused → {files: [path…]} (no folder: {files: [{name, dataBase64}]}, or with zip one zip as {name, dataBase64, files})",
             has_doc,
             export_3d
         ),
@@ -203,10 +203,36 @@ fn three_d_asset_ids(d: &vectorcraft_doc::Document, p: &Value, key: &str, cmd: &
     Ok(ids)
 }
 
+/// The selected objects `assets.add3D` collects without `ids`: those with a 3D effect it exports
+/// ([`vectorcraft_render::effects::exports_three_d`]; a path of a compound path counts as the
+/// compound path), layers included, in tree order, dropping
+/// each one inside another of them (that one's asset holds it). Refused while an object of a
+/// dynamic symbol instance's art is selected, as [`selected_roots`] is.
+fn selected_3d_roots(s: &Session) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
+    let st = s.doc()?;
+    // A path of a compound path stands for the compound path, which holds the paint and effects.
+    let found = st
+        .selection
+        .objects
+        .iter()
+        .map(|id| super::path::compound_or_self(&st.doc, *id))
+        .filter(|id| st.doc.node(*id).is_some_and(vectorcraft_render::effects::exports_three_d));
+    let mut paths: Vec<(Vec<usize>, NodeId)> = st.doc.index_paths(found).into_iter().map(|(id, path)| (path, id)).collect();
+    paths.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut kept: Vec<(Vec<usize>, NodeId)> = Vec::with_capacity(paths.len());
+    for (path, id) in paths {
+        if !kept.last().is_some_and(|(outer, _)| path.starts_with(outer)) {
+            kept.push((path, id));
+        }
+    }
+    Ok(kept.into_iter().map(|(_, id)| id).collect())
+}
+
 fn add_3d(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "assets.add3D";
     let format = format_3d_param(p, C, Some(DEFAULT_FORMAT_3D))?;
-    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { selected_roots(s)? };
+    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { selected_3d_roots(s)? };
     if ids.is_empty() {
         return Err(bad(C, "select an object with a 3D effect (or give its ids)"));
     }
@@ -273,6 +299,8 @@ fn export_3d(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let folder = text_param(p, "folder", C)?.filter(|f| !f.is_empty());
     let zip = switch_or(p, "zip", false, C)?;
+    let size = texture_size_param(p, C)?;
+    let mut pixels = 0u64;
     // Every file's name, compared without case: a later file that would take one gets -2, -3…
     let mut taken: HashSet<String> = HashSet::new();
     let mut files: Vec<(String, Vec<u8>)> = vec![];
@@ -285,18 +313,20 @@ fn export_3d(s: &mut Session, p: &Value) -> Result<Value> {
         let what = &a.name;
         let parts =
             vectorcraft_render::effects::three_d_meshes_of_in(Some(d), nodes).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
+        let pictures = textures(d, &parts, size, &mut pixels).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
+        let images = image_maps(&pictures);
         let base = Some(safe_file_name(&a.name)).filter(|b| !b.is_empty()).unwrap_or_else(|| "Asset".into());
         let mut stem = base.clone();
         let mut k = 1;
         loop {
-            let names = mesh_file_names(&stem, format).map_err(|e| bad(C, e))?;
+            let names = mesh_file_names(&stem, format, &images).map_err(|e| bad(C, e))?;
             if names.iter().all(|n| !taken.contains(&n.to_lowercase())) {
                 break;
             }
             k += 1;
             stem = format!("{base}-{k}");
         }
-        let made = mesh_files(&stem, format, &parts).map_err(|e| bad(C, e))?;
+        let made = mesh_files(&stem, format, &parts, &pictures).map_err(|e| bad(C, e))?;
         taken.extend(made.iter().map(|(n, _)| n.to_lowercase()));
         files.extend(made);
     }
@@ -331,6 +361,21 @@ fn export_3d(s: &mut Session, p: &Value) -> Result<Value> {
                 files.iter().map(|(name, bytes)| json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) })).collect();
             Ok(json!({ "files": files }))
         }
+    }
+}
+
+/// Param `textureSize` of command `cmd`: the pixels along the longer side of each face's texture,
+/// [`TEXTURE_SIZE`] when it is not given.
+fn texture_size_param(p: &Value, cmd: &str) -> Result<u32> {
+    let key = "textureSize";
+    let (lo, hi) = TEXTURE_SIZES;
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(TEXTURE_SIZE),
+        Some(v) => v
+            .as_u64()
+            .and_then(|n| u32::try_from(n).ok())
+            .filter(|n| (lo..=hi).contains(n))
+            .ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number of pixels from {lo} to {hi}"))),
     }
 }
 

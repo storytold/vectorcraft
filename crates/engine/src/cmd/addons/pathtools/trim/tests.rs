@@ -2,8 +2,9 @@
 //! one undo step, and what takes no part.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{NodeId, NodeKind};
+use vectorcraft_doc::{NodeId, NodeKind, Selection};
 use vectorcraft_geom::{PathData, Point};
+use vectorcraft_tools::addons::trim::plan::{self, Limits, Stretches};
 
 use crate::Session;
 
@@ -420,6 +421,139 @@ fn the_selection_stays_as_it_was_and_the_pieces_of_a_selected_path_are_selected(
     assert!(s.doc().unwrap().selection.is_empty(), "a removed path leaves the selection");
 }
 
+/// Run the command with `p`, and check that it leaves the selection exactly as changing it one
+/// id at a time does: for each trimmed path in the plan's order, its anchors and segments let go,
+/// a path with no pieces left removed, and each piece of a selected path added; then each emptied
+/// compound path removed. Returns the selection.
+fn same_selection_as_one_id_at_a_time(s: &mut Session, p: Value) -> Selection {
+    let st = s.doc().unwrap();
+    let pick = super::pick(&p).unwrap();
+    let root = crate::cmd::ordinary_isolation(st);
+    let plan: Vec<(NodeId, usize)> =
+        plan::plan(&st.doc, root, &pick, Limits::COMMAND, &mut Stretches::default()).unwrap().into_iter().map(|t| (t.id, t.pieces.len())).collect();
+    let mut compounds: Vec<NodeId> = plan
+        .iter()
+        .filter_map(|(id, _)| st.doc.parent_of(*id))
+        .filter(|c| matches!(st.doc.node(*c).map(|n| &n.kind), Some(NodeKind::Compound { .. })))
+        .collect();
+    compounds.dedup();
+    let mut want = st.selection.clone();
+    let made = ids(&s.execute(TRIM, &p).unwrap());
+    assert_eq!(made.len(), plan.iter().map(|(_, n)| n).sum::<usize>());
+    let mut made = made.into_iter();
+    for (id, n) in plan {
+        let selected = want.contains(id);
+        want.anchors.remove(&id);
+        want.segments.remove(&id);
+        let pieces: Vec<NodeId> = made.by_ref().take(n).collect();
+        if pieces.is_empty() {
+            want.remove(id);
+        } else if selected {
+            for piece in pieces {
+                if !want.contains(piece) {
+                    want.add(piece);
+                }
+            }
+        }
+    }
+    let st = s.doc().unwrap();
+    for c in compounds {
+        if st.doc.node(c).is_none() {
+            want.remove(c);
+        }
+    }
+    want.prune(&st.doc);
+    assert_eq!(st.selection, want);
+    st.selection.clone()
+}
+
+/// Two lines across split by a rectangle, one of them selected; a selected line nothing crosses
+/// and a selected compound path of two such lines, which the rectangle removes whole; and a
+/// selected line elsewhere with an anchor and a segment direct-selected. Returns (the selected
+/// line across, the line removed whole, the compound path, the line elsewhere).
+fn trim_scene(s: &mut Session) -> (NodeId, NodeId, NodeId, NodeId) {
+    let (h, ..) = across_and_uprights(s);
+    line(s, &[(0.0, 120.0), (300.0, 120.0)], false);
+    let alone = line(s, &[(145.0, 200.0), (155.0, 200.0)], false);
+    let c1 = line(s, &[(145.0, 170.0), (155.0, 170.0)], false);
+    let c2 = line(s, &[(145.0, 180.0), (155.0, 180.0)], false);
+    s.execute("select.set", &json!({"ids": [c1.0, c2.0]})).unwrap();
+    let compound = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let elsewhere = line(s, &[(0.0, 250.0), (10.0, 250.0), (20.0, 250.0)], false);
+    s.execute("select.set", &json!({"ids": [elsewhere.0, h.0, alone.0, compound.0]})).unwrap();
+    s.edit("direct", |_, sel| {
+        sel.anchors.insert(elsewhere, [(0, 1)].into());
+        sel.anchors.insert(h, [(0, 0)].into());
+        sel.segments.insert(elsewhere, [(0, 0)].into());
+        Ok(())
+    })
+    .unwrap();
+    (h, alone, compound, elsewhere)
+}
+
+#[test]
+fn the_selection_after_a_trim_is_the_one_changing_it_one_id_at_a_time_gives() {
+    // A removed key object stops being the key.
+    let mut s = session();
+    let (h, alone, compound, elsewhere) = trim_scene(&mut s);
+    s.edit("key", |_, sel| {
+        sel.key = Some(alone);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 90, 20, 120]}));
+    assert_eq!(sel.key, None);
+    assert!(!sel.contains(alone) && !sel.contains(compound));
+    assert_eq!(&sel.objects[..2], [elsewhere, h]);
+    assert_eq!(sel.objects.len(), 3, "{:?}", sel.objects);
+    assert!(sel.anchors.contains_key(&elsewhere) && sel.segments.contains_key(&elsewhere) && !sel.anchors.contains_key(&h));
+    // A key object that keeps its first piece stays the key.
+    let mut s = session();
+    let (h, alone, compound, _) = trim_scene(&mut s);
+    s.edit("key", |_, sel| {
+        sel.key = Some(h);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 90, 20, 120]}));
+    assert_eq!(sel.key, Some(h));
+    assert!(!sel.contains(alone) && !sel.contains(compound));
+    // Trimming only paths that are not selected leaves a targeted object targeted.
+    let mut s = session();
+    let (h, _, _, elsewhere) = trim_scene(&mut s);
+    s.execute("select.set", &json!({"ids": [elsewhere.0]})).unwrap();
+    s.edit("target", |_, sel| {
+        sel.target = Some(elsewhere);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 90, 20, 40]}));
+    assert_eq!((sel.objects.as_slice(), sel.target), ([elsewhere].as_slice(), Some(elsewhere)));
+    assert!(exists(&s, h));
+    // A selected path that gains a piece changes the object selection, which lets go of the target.
+    let mut s = session();
+    let (h, _, _, elsewhere) = trim_scene(&mut s);
+    s.execute("select.set", &json!({"ids": [elsewhere.0, h.0]})).unwrap();
+    s.edit("target", |_, sel| {
+        sel.target = Some(elsewhere);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 90, 20, 40]}));
+    assert_eq!((sel.objects.len(), sel.target), (3, None));
+    // So does a selected path that is removed whole.
+    let mut s = session();
+    let (_, alone, _, elsewhere) = trim_scene(&mut s);
+    s.execute("select.set", &json!({"ids": [elsewhere.0, alone.0]})).unwrap();
+    s.edit("target", |_, sel| {
+        sel.target = Some(elsewhere);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 190, 20, 20]}));
+    assert_eq!((sel.objects.as_slice(), sel.target), ([elsewhere].as_slice(), None));
+}
+
 #[test]
 fn many_paths_far_from_the_trimmed_one_cost_no_crossing_search() {
     let mut s = session();
@@ -480,6 +614,129 @@ fn the_tool_trims_on_release_as_one_step_and_escape_drops_a_drag() {
     assert_eq!(steps(&s), n + 2);
 }
 
+/// The ends of each red path the tool shows.
+fn highlighted(s: &mut Session, view: crate::ViewInfo) -> Vec<(Point, Point)> {
+    use vectorcraft_geom::kurbo::ParamCurve;
+    s.overlays(view)
+        .into_iter()
+        .filter_map(|o| match o {
+            vectorcraft_tools::Overlay::Path { path, color, .. } if color == vectorcraft_tools::builder::HIGHLIGHT_RED => {
+                let segs: Vec<_> = path.segments().collect();
+                Some((segs.first()?.start(), segs.last()?.end()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn hovering_with_the_tool_shows_the_stretch_its_click_removes() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let (h, _, _) = across_and_uprights(&mut s);
+    let hidden = line(&mut s, &[(0.0, 200.0), (300.0, 200.0)], false);
+    set_flags(&mut s, hidden, false, false);
+    let view = crate::ViewInfo { smart_guides: false, ..crate::ViewInfo::default() };
+    s.select_tool("trimAtCrossings", view).unwrap();
+    let n = steps(&s);
+    // Over the middle of the line across: the stretch between the uprights, and nothing changes.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 150.0, 101.0), view).unwrap();
+    let shown = highlighted(&mut s, view);
+    assert!(matches!(shown.as_slice(), [(a, b)] if near(*a, 100.0, 100.0) && near(*b, 200.0, 100.0)), "{shown:?}");
+    assert_eq!(steps(&s), n);
+    // Over the hidden path and over empty canvas: nothing.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 150.0, 200.0), view).unwrap();
+    assert!(highlighted(&mut s, view).is_empty());
+    s.pointer(&PointerEvent::new(PointerKind::Move, 150.0, 250.0), view).unwrap();
+    assert!(highlighted(&mut s, view).is_empty());
+    // A click where the stretch was shown removes exactly it: the line keeps 0 to 100 and 200 to 300.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 150.0, 101.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 101.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 101.0), view).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    assert!(near(ends(&s, h).0, 0.0, 100.0) && near(ends(&s, h).1, 100.0, 100.0));
+    let rest = stack(&s).into_iter().find(|id| *id != h && path(&s, *id).subpaths.len() == 1 && near(ends(&s, *id).0, 200.0, 100.0));
+    assert!(rest.is_some_and(|id| near(ends(&s, id).1, 300.0, 100.0)));
+    assert!(highlighted(&mut s, view).is_empty(), "the edit drops the highlight");
+}
+
+/// The red paths the tool shows.
+fn red(s: &mut Session, view: crate::ViewInfo) -> Vec<vectorcraft_geom::BezPath> {
+    s.overlays(view)
+        .into_iter()
+        .filter_map(|o| match o {
+            vectorcraft_tools::Overlay::Path { path, color, .. } if color == vectorcraft_tools::builder::HIGHLIGHT_RED => Some(path),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The length of every path in the first layer.
+fn total_length(s: &Session) -> f64 {
+    use vectorcraft_geom::kurbo::ParamCurveArclen;
+    stack(s).into_iter().flat_map(|id| path(s, id).to_bezpath().segments().collect::<Vec<_>>()).map(|seg| seg.arclen(1e-9)).sum()
+}
+
+/// `act` removes exactly the red paths shown before it: the paths lose their length, and nothing
+/// is left on the middle of any of them.
+fn removes_what_was_shown(s: &mut Session, view: crate::ViewInfo, act: &dyn Fn(&mut Session)) {
+    use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen};
+    let shown = red(s, view);
+    assert!(!shown.is_empty());
+    let shown_length: f64 = shown.iter().flat_map(|p| p.segments().collect::<Vec<_>>()).map(|seg| seg.arclen(1e-9)).sum();
+    let before = total_length(s);
+    act(s);
+    assert!((before - total_length(s) - shown_length).abs() < 1e-3, "{before} - {} != {shown_length}", total_length(s));
+    for p in &shown {
+        let segs: Vec<_> = p.segments().collect();
+        let mid = segs[segs.len() / 2].eval(if segs.len() % 2 == 1 { 0.5 } else { 0.0 });
+        let left = stack(s).into_iter().filter_map(|id| path(s, id).nearest(mid)).map(|n| n.4).fold(f64::INFINITY, f64::min);
+        assert!(left > 0.5, "a path is left at {mid:?}");
+    }
+}
+
+#[test]
+fn what_the_tool_shows_before_a_click_or_a_release_is_what_the_command_removes() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let view = crate::ViewInfo { smart_guides: false, ..crate::ViewInfo::default() };
+    let ev = |kind, x, y| PointerEvent::new(kind, x, y);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let setup = || {
+        let mut s = session();
+        s.execute("shape.ellipse", &json!({"x": 100, "y": 50, "width": 200, "height": 100})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        line(&mut s, &[(50.0, 100.0), (350.0, 100.0)], false);
+        // A Z whose first and last sides cross.
+        line(&mut s, &[(0.0, 160.0), (100.0, 260.0), (100.0, 160.0), (0.0, 260.0)], false);
+        s.select_tool("trimAtCrossings", view).unwrap();
+        s
+    };
+    // A click on the ellipse's top, on the line inside it and on the Z's loop.
+    for (x, y) in [(200.0, 51.0), (200.0, 101.0), (101.0, 210.0)] {
+        let mut s = setup();
+        s.pointer(&ev(PointerKind::Move, x, y), view).unwrap();
+        removes_what_was_shown(&mut s, view, &|s| {
+            s.pointer(&ev(PointerKind::Down, x, y), view).unwrap();
+            s.pointer(&ev(PointerKind::Up, x, y), view).unwrap();
+        });
+    }
+    // A rectangle over the ellipse's left side and the line.
+    let mut s = setup();
+    s.pointer(&ev(PointerKind::Down, 90.0, 90.0), view).unwrap();
+    s.pointer(&ev(PointerKind::Drag, 120.0, 110.0), view).unwrap();
+    removes_what_was_shown(&mut s, view, &|s| {
+        s.pointer(&ev(PointerKind::Up, 120.0, 110.0), view).unwrap();
+    });
+    // An Alt line through the ellipse's bottom and the Z's tail.
+    let mut s = setup();
+    s.pointer(&ev(PointerKind::Down, 200.0, 140.0).with_mods(alt), view).unwrap();
+    s.pointer(&ev(PointerKind::Drag, 200.0, 170.0).with_mods(alt), view).unwrap();
+    s.pointer(&ev(PointerKind::Drag, 10.0, 250.0).with_mods(alt), view).unwrap();
+    removes_what_was_shown(&mut s, view, &|s| {
+        s.pointer(&ev(PointerKind::Up, 10.0, 250.0).with_mods(alt), view).unwrap();
+    });
+}
+
 #[test]
 fn a_line_too_long_to_check_against_the_paths_is_refused() {
     let mut s = session();
@@ -524,4 +781,46 @@ fn bad_params_are_refused_and_change_nothing() {
     }
     assert_eq!(steps(&s), n);
     assert!(*s.doc().unwrap().doc == *before);
+}
+
+#[test]
+fn a_line_ending_on_a_curve_that_was_cut_still_divides_it_there() {
+    // An open egg-shaped curve, lines across it whose stubs on the left are trimmed away, so each
+    // line ends on the curve, and the curve's bottom trimmed off below the last line, which cuts
+    // its segments there. A click on the curve between the last two lines removes only that
+    // stretch: the lines' ends on it still divide it, however the curve was cut. Twenty placements,
+    // as how near a cut end lies to the curve depends on the coordinates.
+    for shift in 0..20 {
+        let dx = shift as f64 * 7.31;
+        let mut s = session();
+        let egg = json!({"anchors": [
+            {"x": 160.0 + dx, "y": 40.0, "out": [110.0 + dx, 80.0]},
+            {"x": 92.3 + dx, "y": 190.7, "in": [88.0 + dx, 140.0], "out": [97.0 + dx, 240.0]},
+            {"x": 170.0 + dx, "y": 268.0, "in": [130.0 + dx, 265.0], "out": [210.0 + dx, 271.0]},
+            {"x": 236.4 + dx, "y": 170.2, "in": [238.0 + dx, 230.0], "out": [233.0 + dx, 110.0]},
+            {"x": 150.0 + dx, "y": 20.0, "in": [200.0 + dx, 40.0]}
+        ], "closed": false});
+        let egg = NodeId(s.execute("path.create", &egg).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.none", &json!({})).unwrap();
+        let ys: Vec<f64> = (0..8).map(|k| 70.0 + k as f64 * 23.17 + shift as f64 * 0.37).collect();
+        let lines: Vec<NodeId> = ys.iter().map(|y| line(&mut s, &[(40.0 + dx, *y), (300.0 + dx, *y)], false)).collect();
+        for y in &ys {
+            assert_eq!(s.execute(TRIM, &json!({"at": [50.0 + dx, y], "tolerance": 0.5})).unwrap()["removed"], json!(1));
+        }
+        assert_eq!(s.execute(TRIM, &json!({"at": [170.0 + dx, 268.0], "tolerance": 0.5})).unwrap()["removed"], json!(1));
+        let start = |id: NodeId| path(&s, id).subpaths[0].anchors[0].p;
+        let ends: Vec<Point> = lines.iter().map(|id| start(*id)).collect();
+        // Off every path but the lines: the curve's pieces.
+        let off_curve = |s: &Session, p: Point| {
+            stack(s).into_iter().filter(|id| !lines.contains(id)).filter_map(|id| path(s, id).nearest(p)).map(|n| n.4).fold(f64::INFINITY, f64::min)
+        };
+        let (a, b) = (ends[6], ends[7]);
+        let click = path(&s, egg).nearest(a.midpoint(b)).unwrap().3;
+        assert!(off_curve(&s, a) < 1e-3 && off_curve(&s, click) < 1e-3);
+        assert_eq!(s.execute(TRIM, &json!({"at": [click.x, click.y], "tolerance": 0.5})).unwrap()["removed"], json!(1));
+        assert!(off_curve(&s, click) > 0.5, "{shift}: the stretch clicked is left");
+        for (k, e) in ends.iter().enumerate().take(7) {
+            assert!(off_curve(&s, *e) < 1e-3, "{shift}: the curve no longer reaches line {k}'s end");
+        }
+    }
 }

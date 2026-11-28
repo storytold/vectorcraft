@@ -10,37 +10,43 @@
 //! selected), `path` (the file; picked when empty) and `paths` (with each: the files chosen so
 //! far, one per row of `links` in order; the next OK takes `path` or picks one for the next row).
 
+// PLAN: assumed craft_ui paths for CloseReason, HoldsOk, List, ListRow, SelectMode, ResetFooter, ResetPick, Field and craft_behavior's DisplayOrder/ItemSource.
+use std::borrow::Cow;
+
+use craft::behavior::{DisplayOrder, ItemSource};
+use craft::host::{Host, PickId, PickRequest};
+use craft::ui::contract::SelectMode;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
+use craft::ui::form::Field;
+use craft::ui::list::{List, ListRow};
+use craft::ui::patterns::form_dialogs::{FormDialog, ResetFooter, ResetPick};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::Label;
+use craft::ui::runtime::overlay::CloseReason;
 use serde_json::{Value, json};
 
-use super::DialogSpec;
-use super::form;
-use crate::state::Dialog;
-use crate::theme::{self, Tokens};
-use crate::{VectorcraftApp, widgets};
+use crate::VectorcraftApp;
 
-pub(super) const KIND: &str = "relink";
+const KEY: &str = "relink";
 const CMD: &str = "links.relink";
-/// (value, label) of each Replace choice.
-const SCOPES: [(&str, &str); 4] = [
-    ("each", "Each Link Separately"),
-    ("selected", "Selected Instances"),
-    ("all", "All Instances"),
-    ("missingInFolder", "Missing Links from This Folder"),
-];
-const LABEL: f32 = 70.0;
+/// The Replace choices, in the order the select lists them.
+const SCOPES: [&str; 4] = ["each", "selected", "all", "missingInFolder"];
+/// The rows the link list shows before it scrolls.
+const LIST_ROWS: u16 = 6;
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Relink").into(),
-    body,
-    confirm,
-    ok: Some("Relink…"),
-    min_width: 400.0,
-    max_width: Some(460.0),
-    ..DialogSpec::FORM
-};
+fn scope_label(scope: &str) -> Label {
+    match scope {
+        "each" => tl!("Each Link Separately").into(),
+        "selected" => tl!("Selected Instances").into(),
+        "all" => tl!("All Instances").into(),
+        _ => tl!("Missing Links from This Folder").into(),
+    }
+}
 
 /// Open the dialog on the images and placed documents `ids` (default: the selected ones).
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let document = app.session.active().ok_or("no document open")?.uid;
     let ids = match p.get("ids").filter(|v| !v.is_null()) {
         Some(v) => v.as_array().cloned().ok_or_else(|| format!("`ids` must be an array of object ids, not {v}"))?,
         None => crate::panels::links::selected_ids(app).into_iter().map(Value::from).collect(),
@@ -75,95 +81,265 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             links.push(json!({ "name": name, "ids": [id] }));
         }
     }
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "ids": ids, "links": links, "scope": "selected", "path": "", "paths": [] })));
+    let dialog = RelinkDialog::new(document, ids, links);
+    crate::dialogs::host::open_held(app, dialog, relink).ok_or("no window")?;
     Ok(Value::Null)
 }
 
-fn rows(d: &Dialog, key: &str) -> Vec<Value> {
-    d.fields.get(key).and_then(Value::as_array).cloned().unwrap_or_default()
+/// The relink rule: one `links.relink` call with the answer's parameters, and the status it earns.
+fn relink(app: &mut VectorcraftApp, (document, params): &(u64, Value)) -> Result<(), String> {
+    if app.session.active().is_none_or(|st| st.uid != *document) {
+        let reason = tl!("Relink can only change links in the document where it was opened.");
+        app.status(reason);
+        return Err(reason.to_owned());
+    }
+    let r = app.run(CMD, params.clone())?;
+    let missed: Vec<&str> = r["notFound"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+    app.status(crate::panels::links::relinked_status_missed(r["relinked"].as_array().map_or(0, Vec::len), &missed));
+    Ok(())
 }
 
-/// The file the next OK uses: `path`, else one picked (none: cancelled).
-fn file(app: &mut VectorcraftApp, d: &Dialog) -> Result<String, String> {
-    match d.str("path") {
-        p if !p.is_empty() => Ok(p),
-        _ => {
-            let pick = crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::place_filters()), ..Default::default() };
-            crate::picks::open(app, &pick).ok_or_else(|| "cancelled".to_string())
+/// The link names as the list's rows; a row's key is its place.
+struct Names<'a>(&'a [String]);
+
+impl DisplayOrder<usize> for Names<'_> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn key(&self, at: usize) -> usize {
+        at
+    }
+
+    fn text(&self, at: usize) -> Option<Cow<'_, str>> {
+        self.0.get(at).map(|name| Cow::Borrowed(name.as_str()))
+    }
+}
+
+impl ItemSource<usize> for Names<'_> {}
+
+/// Relink…: the links to relink and the Replace choice. OK holds its answer, the `links.relink` parameters, for the
+/// app (`HoldsOk`); with Each Link Separately it stays open until every link has a file.
+pub(crate) struct RelinkDialog {
+    id: DialogId,
+    /// The document that owns the link IDs.
+    document: u64,
+    ids: Vec<Value>,
+    links: Vec<Value>,
+    scope: String,
+    path: String,
+    paths: Vec<String>,
+    /// The file picker OK asked for, answered in a later pass.
+    pick: Option<PickId>,
+    held: HeldAnswer<Value>,
+}
+
+impl RelinkDialog {
+    fn new(document: u64, ids: Vec<Value>, links: Vec<Value>) -> Self {
+        RelinkDialog {
+            id: dialog_id(KEY),
+            document,
+            ids,
+            links,
+            scope: "selected".into(),
+            path: String::new(),
+            paths: vec![],
+            pick: None,
+            held: HeldAnswer::new(),
+        }
+    }
+
+    fn names(&self) -> Vec<String> {
+        self.links.iter().map(|l| l["name"].as_str().unwrap_or_default().to_owned()).collect()
+    }
+
+    /// OK: the file in `path` (set by automation), else a file picked from the user. Does nothing while an answer is
+    /// held or a pick is open.
+    fn ok_step(&mut self, ctx: &egui::Context) {
+        if self.held.is_waiting() || self.pick.is_some() {
+            return;
+        }
+        if !self.path.is_empty() {
+            let path = std::mem::take(&mut self.path);
+            self.advance(path);
+            return;
+        }
+        let Some(host) = Host::try_of_ctx(ctx) else { return };
+        let mut request = PickRequest::open("relink");
+        for (name, extensions) in vectorcraft_engine::cmd::fileio::place_filters() {
+            request = request.filter(name, extensions);
+        }
+        self.pick = Some(host.files().pick(request));
+    }
+
+    /// `path` is the file for the next link. Nothing relinks before the last link has one.
+    fn advance(&mut self, path: String) {
+        if self.scope == "each" {
+            self.paths.push(path);
+            if self.paths.len() < self.links.len() {
+                return;
+            }
+            let entries: Vec<Value> = self.links.iter().zip(&self.paths).map(|(l, p)| json!({ "ids": l["ids"], "path": p })).collect();
+            self.held.file(json!({ "scope": "each", "paths": entries }));
+        } else {
+            self.held.file(json!({ "ids": self.ids, "path": path, "scope": self.scope }));
+        }
+    }
+
+    fn forget_pick(&mut self, ctx: &egui::Context) {
+        if let (Some(ticket), Some(host)) = (self.pick.take(), Host::try_of_ctx(ctx)) {
+            host.files().forget(ticket);
         }
     }
 }
 
-/// OK: relink with the chosen scope. With each, a file for the next link: the dialog stays open
-/// until every link has one, then relinks them all.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let scope = d.str("scope");
-    let r = if scope == "each" {
-        let links = rows(d, "links");
-        let mut paths = rows(d, "paths");
-        if paths.len() < links.len() {
-            paths.push(json!(file(app, d)?));
+impl HoldsOk for RelinkDialog {
+    type Answer = (u64, Value);
+
+    fn held_ok(self) -> Self {
+        self
+    }
+
+    fn take_ok(&mut self) -> Option<Self::Answer> {
+        self.held.take().map(|params| (self.document, params))
+    }
+
+    fn answer_ok(&mut self, answer: Result<(), Label>) {
+        // A refused complete pass starts over so each new pick is assigned to a link.
+        if answer.is_err() && self.scope == "each" {
+            self.paths.clear();
         }
-        if paths.len() < links.len() {
-            let mut next = d.clone();
-            next.fields.insert("paths".into(), json!(paths));
-            next.fields.insert("path".into(), json!(""));
-            app.ui.dialog = Some(next);
-            return Ok(json!({ "next": links.get(paths.len()).map_or(Value::Null, |l| l["name"].clone()) }));
-        }
-        let entries: Vec<Value> = links.iter().zip(&paths).map(|(l, p)| json!({ "ids": l["ids"], "path": p })).collect();
-        app.run(CMD, json!({ "scope": "each", "paths": entries }))?
-    } else {
-        let path = file(app, d)?;
-        app.run(CMD, json!({ "ids": d.fields.get("ids").cloned().unwrap_or(Value::Null), "path": path, "scope": scope }))?
-    };
-    app.ui.dialog = None;
-    let missed: Vec<&str> = r["notFound"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-    app.status(crate::panels::links::relinked_status_missed(r["relinked"].as_array().map_or(0, Vec::len), &missed));
-    Ok(r)
+        self.held.answer(answer);
+    }
 }
 
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let links = rows(d, "links");
-    let paths = rows(d, "paths");
-    let each = d.str("scope") == "each";
-    widgets::list_box(ui, |ui| {
-        ui.set_width(ui.available_width());
-        for (i, l) in links.iter().enumerate() {
-            ui.horizontal(|ui| {
-                ui.add_space(6.0);
-                // With each: the link the next OK picks a file for is in bold.
-                let font = if each && i == paths.len() { theme::semibold(12.0) } else { egui::FontId::proportional(12.0) };
-                ui.label(egui::RichText::new(l["name"].as_str().unwrap_or_default()).font(font).color(t.text_strong));
-                if let Some(p) = paths.get(i).and_then(Value::as_str).filter(|_| each) {
-                    let name = std::path::Path::new(p).file_name().map_or(p.into(), |n| n.to_string_lossy());
-                    ui.add(egui::Label::new(egui::RichText::new(format!("→ {name}")).size(11.5).color(t.text_dim)).truncate()).on_hover_text(p);
+impl StackDialog for RelinkDialog {
+    type Result = Value;
+
+    fn id(&self) -> DialogId {
+        self.id
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(KEY)
+    }
+
+    fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<Value>> {
+        let finish = self.held.is_accepted();
+        let ticket = self.pick;
+        let names = self.names();
+        let (each, done) = (self.scope == "each", self.paths.len());
+        let entries: Vec<Entry<String>> = SCOPES.iter().map(|s| Entry::new((*s).to_owned(), scope_label(s))).collect();
+        let paths = &self.paths;
+        let mut taken = None;
+        let footer = ResetFooter::new(ui, None, true);
+        let shown = FormDialog::new(tl!("Relink"), Bind::bound(&mut self.scope))
+            .ok_label(tl!("Relink…"))
+            .accept_stays_open(true)
+            .enter_confirms(false)
+            .ok_enabled(!self.held.is_waiting() && ticket.is_none())
+            .show(ui, |ui, cx, scope| {
+                // A measuring run closes nothing: the real run of the pass makes the close.
+                if finish && !craft::ui::runtime::measure::active(ui.ctx()) {
+                    cx.request_close_as(CloseReason::Activated);
                 }
+                taken = ticket.and_then(|ticket| cx.take_pick_answer(ticket));
+                let source = Names(&names);
+                List::new(tl!("Links")).id_salt("links").select(SelectMode::None).max_rows(LIST_ROWS).show_items(ui, &source, &mut |&i, _| {
+                    let row = ListRow::new(names[i].clone()).strong(each && i == done);
+                    match paths.get(i).filter(|_| each) {
+                        Some(path) => {
+                            let name = std::path::Path::new(path).file_name().map_or(path.clone(), |n| n.to_string_lossy().into_owned());
+                            row.trailing_named(format!("→ {name}"), path.clone())
+                        }
+                        None => row,
+                    }
+                });
+                Field::new(tl!("Replace:")).show(ui, |ui, _| {
+                    Select::new(tl!("Replace:"), Bind::bound(scope), &entries).show(ui);
+                });
+                true
             });
+        let ok = matches!(footer.pick(shown.picked), Some(ResetPick::Accept));
+        if let Some(picked) = taken {
+            self.pick = None;
+            if let Some(path) = picked.paths().into_iter().next() {
+                self.advance(path.to_string_lossy().into_owned());
+            }
         }
-    });
-    ui.add_space(8.0);
-    form::choice(ui, d, "scope", tl!("Replace:"), (LABEL, 260.0), &SCOPES);
-    false
+        if ok {
+            self.ok_step(ui.ctx());
+        }
+        match shown.closed {
+            Some(CloseReason::Activated) if finish => Some(self.held.finish().map_or(DialogResult::Cancel, DialogResult::Ok)),
+            Some(_) => {
+                self.forget_pick(ui.ctx());
+                Some(DialogResult::Cancel)
+            }
+            None => None,
+        }
+    }
+
+    fn confirm(&mut self, ctx: &egui::Context) -> Option<Value> {
+        if self.held.is_accepted() {
+            return self.held.finish();
+        }
+        self.ok_step(ctx);
+        None
+    }
+
+    fn held_state(&self) -> Option<HeldOk> {
+        self.held.state()
+    }
+
+    fn cancelled(&mut self, ctx: &egui::Context) {
+        self.forget_pick(ctx);
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        Some(json!({ "ids": self.ids, "links": self.links, "scope": self.scope, "path": self.path, "paths": self.paths }))
+    }
+
+    fn set_json_field(&mut self, ctx: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        let text = || value.as_str().map(str::to_owned).ok_or_else(|| FieldRefusal::Rejects(&value).message(field));
+        match field {
+            "ids" | "links" => return Err(FieldRefusal::ReadOnly.message(field)),
+            "scope" => {
+                let scope = text()?;
+                if !SCOPES.contains(&scope.as_str()) {
+                    return Err(FieldRefusal::Rejects(&value).message(field));
+                }
+                self.scope = scope;
+            }
+            "path" => self.path = text()?,
+            "paths" => {
+                let list = value.as_array().and_then(|a| a.iter().map(|p| p.as_str().map(str::to_owned)).collect::<Option<Vec<_>>>());
+                self.paths = list.ok_or_else(|| FieldRefusal::Rejects(&value).message(field))?;
+            }
+            _ => return Err(FieldRefusal::Unknown.message(field)),
+        }
+        ctx.request_repaint();
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::picks::{answer_dialog, open_dialogs, scripted};
     use vectorcraft_engine::Session;
 
-    fn frame(app: &mut VectorcraftApp) -> String {
-        crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
-    }
-
     fn png(rgb: [u8; 3]) -> Vec<u8> {
-        let mut out = vec![];
         let [r, g, b] = rgb;
-        image::RgbaImage::from_pixel(40, 30, image::Rgba([r, g, b, 255]))
-            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-            .unwrap();
-        out
+        let img = craft_image_codecs::Image::from_raw(
+            40,
+            30,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [r, g, b, 255].repeat(40 * 30),
+        )
+        .unwrap();
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
     }
 
     /// A fresh folder with the PNG files `names` → (app with a document, folder).
@@ -174,7 +350,7 @@ mod tests {
         for n in names {
             std::fs::write(dir.join(n), png([200, 0, 0])).unwrap();
         }
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         (app, dir)
@@ -198,29 +374,155 @@ mod tests {
         p.to_string_lossy().into_owned()
     }
 
+    fn ctx(app: &VectorcraftApp) -> egui::Context {
+        app.ui_ctx.clone().expect("a window")
+    }
+
+    /// One frame of the dialogs, the held-OK pump, and the frame that closes an accepted dialog.
+    fn pass(app: &mut VectorcraftApp) {
+        let ctx = ctx(app);
+        let dialogs = app.dialogs().expect("a window");
+        for _ in 0..2 {
+            // With the app's frame input, as the hosts give it: the dialog takes its pick's answer from the host there.
+            crate::testing::part_frame(app, &ctx, egui::RawInput::default(), |_, ui| dialogs.with(|host| host.run(ui)));
+            crate::dialogs::host::pump(app, &ctx);
+        }
+    }
+
+    fn relink_dialog(app: &VectorcraftApp) -> craft::ui::dialog::OpenDialog {
+        open_dialogs(app).into_iter().find(|d| d.key.as_deref() == Some(KEY)).expect("the relink dialog")
+    }
+
+    fn fields(app: &VectorcraftApp) -> Value {
+        relink_dialog(app).fields.expect("fields")
+    }
+
+    /// Sets `set` and presses OK of the open Relink dialog.
+    fn ok(app: &mut VectorcraftApp, set: &[(&str, Value)]) {
+        let id = relink_dialog(app).id;
+        answer_dialog(app, id, set, true);
+        pass(app);
+    }
+
+    fn check_relink_stays_in_opening_drawing(native_picker: bool) {
+        let (mut app, dir) = setup(if native_picker { "opening-picker" } else { "opening-path" }, &["source.png", "destination.png"]);
+        let picker = scripted(&mut app);
+        let original = dir.join("source.png");
+        let destination = dir.join("destination.png");
+        let source_id = place(&mut app, &original);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let destination_id = place(&mut app, &destination);
+        assert_eq!(source_id, destination_id, "linked objects may have the same local ID");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.relinkDialog", json!({"ids": [source_id]})).unwrap();
+        if native_picker {
+            ok(&mut app, &[]);
+        }
+
+        let selected = new_file(&dir, "replacement.png");
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        if native_picker {
+            picker.answer(&[&selected]);
+            pass(&mut app);
+        } else {
+            ok(&mut app, &[("path", json!(selected))]);
+        }
+        assert_eq!(link_path(&app, destination_id), destination.to_string_lossy());
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.ui.status, "Relink can only change links in the document where it was opened.");
+        let dialog = relink_dialog(&app).id;
+        assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        ok(&mut app, &[("path", json!(selected))]);
+        assert!(open_dialogs(&app).is_empty());
+        assert_eq!(link_path(&app, source_id), selected);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn relink_opening_drawing_is_required_for_a_path_confirmation() {
+        check_relink_stays_in_opening_drawing(false);
+    }
+
+    #[test]
+    fn relink_opening_drawing_is_required_when_the_file_picker_answers() {
+        check_relink_stays_in_opening_drawing(true);
+    }
+
+    #[test]
+    fn replace_popup_cancel_preserves_selected_instances_and_enter_relinks_all() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+
+        struct Scratch(std::path::PathBuf);
+        impl Drop for Scratch {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        for commit in [false, true] {
+            let (mut app, dir) = setup(if commit { "popup-commit" } else { "popup-cancel" }, &["photo.png", "other.png"]);
+            let _scratch = Scratch(dir.clone());
+            let a = place(&mut app, &dir.join("photo.png"));
+            let b = place(&mut app, &dir.join("photo.png"));
+            let c = place(&mut app, &dir.join("other.png"));
+            let picker = scripted(&mut app);
+            let chosen = new_file(&dir, "replacement.png");
+            let original_path = dir.join("photo.png").to_string_lossy().into_owned();
+            let other_path = link_path(&app, c);
+            let original = app.session.active().unwrap().doc.clone();
+            let revision = app.session.active().unwrap().revision;
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(900.0, 700.0));
+            panel.app().run("ui.relinkDialog", json!({"ids": [a]})).unwrap();
+            panel.frame();
+            let before = fields(&panel.app());
+            panel.click_role("Replace:", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            assert_eq!(fields(&panel.app())["scope"], "all", "the open popup previews All Instances");
+            panel.key(if commit { Key::Enter } else { Key::Escape }, Modifiers::NONE);
+            assert_eq!(fields(&panel.app())["scope"], if commit { "all" } else { "selected" });
+            if !commit {
+                assert_eq!(fields(&panel.app()), before, "Escape preserves all pending Relink fields");
+            }
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            assert_eq!(panel.app().session.active().unwrap().revision, revision);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            panel.click("Relink…");
+            assert_eq!(picker.requests().len(), 1);
+            picker.answer(&[&chosen]);
+            panel.frame();
+            panel.frame();
+            assert!(open_dialogs(&panel.app()).is_empty());
+            {
+                let app = panel.app();
+                assert_eq!(link_path(&app, a), chosen);
+                assert_eq!(link_path(&app, b), if commit { chosen.clone() } else { original_path.clone() });
+                assert_eq!(link_path(&app, c), other_path);
+                assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+            }
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
+    }
+
     #[test]
     fn relink_opens_with_the_replace_choice_and_all_instances_relinks_every_copy() {
         let (mut app, dir) = setup("all", &["photo.png", "other.png"]);
         let (a, b, c) = (place(&mut app, &dir.join("photo.png")), place(&mut app, &dir.join("photo.png")), place(&mut app, &dir.join("other.png")));
         app.run("select.set", json!({"ids": [a]})).unwrap();
-        app.services.pick_open = None;
-        assert!(!crate::menus::enabled(&app, "ui.relinkDialog"), "no file picker (the web)");
-        let picked = new_file(&dir, "blue.png");
-        let answer = picked.clone();
-        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(answer.clone())));
         assert!(crate::menus::enabled(&app, "ui.relinkDialog"));
         app.run("ui.relinkDialog", json!({})).unwrap();
-        let d = app.ui.dialog.as_ref().expect("the dialog");
-        assert_eq!((d.kind.as_str(), d.str("scope"), d.fields["links"].as_array().unwrap().len()), (KIND, "selected".to_string(), 1));
-        let text = frame(&mut app);
-        for label in ["Relink", "photo.png", "Replace:", "Selected Instances", "Relink…", "Cancel"] {
-            assert!(text.contains(label), "{label} in {text}");
-        }
-        app.ui.dialog.as_mut().unwrap().fields.insert("scope".into(), json!("all"));
-        // OK picks the file.
-        let r = super::super::confirm(&mut app).unwrap();
-        assert_eq!(r["relinked"], json!([a, b]));
-        assert!(app.ui.dialog.is_none());
+        let f = fields(&app);
+        assert_eq!((f["scope"].as_str(), f["links"].as_array().map(Vec::len)), (Some("selected"), Some(1)));
+        let picked = new_file(&dir, "blue.png");
+        ok(&mut app, &[("scope", json!("all")), ("path", json!(picked))]);
+        assert!(open_dialogs(&app).is_empty());
         assert_eq!((link_path(&app, a), link_path(&app, b)), (picked.clone(), picked.clone()));
         assert_eq!(link_path(&app, c), dir.join("other.png").to_string_lossy());
         app.run("edit.undo", json!({})).unwrap();
@@ -236,21 +538,19 @@ mod tests {
     #[test]
     fn each_link_separately_asks_for_a_file_for_each_link_then_relinks_them_all() {
         let (mut app, dir) = setup("each", &["one.png", "two.png"]);
+        let picker = scripted(&mut app);
         let (a, b) = (place(&mut app, &dir.join("one.png")), place(&mut app, &dir.join("two.png")));
         let (x, y) = (new_file(&dir, "x.png"), new_file(&dir, "y.png"));
-        let mut answers = vec![y.clone(), x.clone()];
-        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| answers.pop()));
         app.run("ui.relinkDialog", json!({"ids": [a, b]})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("scope".into(), json!("each"));
-        let r = super::super::confirm(&mut app).unwrap();
-        assert_eq!(r, json!({"next": "two.png"}));
-        let d = app.ui.dialog.as_ref().expect("asks for the next link's file");
-        assert_eq!(d.fields["paths"], json!([x]));
+        ok(&mut app, &[("scope", json!("each"))]);
+        picker.answer(&[&x]);
+        pass(&mut app);
+        assert_eq!(fields(&app)["paths"], json!([x]), "asks for the next link's file");
         assert_eq!(link_path(&app, a), dir.join("one.png").to_string_lossy(), "nothing relinked yet");
-        assert!(frame(&mut app).contains("→ x.png"));
-        let r = super::super::confirm(&mut app).unwrap();
-        assert_eq!(r["relinked"], json!([a, b]));
-        assert!(app.ui.dialog.is_none());
+        ok(&mut app, &[]);
+        picker.answer(&[&y]);
+        pass(&mut app);
+        assert!(open_dialogs(&app).is_empty());
         assert_eq!((link_path(&app, a), link_path(&app, b)), (x.clone(), y.clone()));
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(
@@ -258,6 +558,39 @@ mod tests {
             (dir.join("one.png").to_string_lossy().into_owned(), dir.join("two.png").to_string_lossy().into_owned()),
             "one undo step"
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn each_link_separately_lets_the_user_choose_new_paths_after_a_refusal() {
+        let (mut app, dir) = setup("each-after-refusal", &["one.png", "two.png"]);
+        let picker = scripted(&mut app);
+        let ids = [place(&mut app, &dir.join("one.png")), place(&mut app, &dir.join("two.png"))];
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.relinkDialog", json!({"ids": ids})).unwrap();
+        ok(&mut app, &[("scope", json!("each"))]);
+        picker.answer(&[&new_file(&dir, "old-one.png")]);
+        pass(&mut app);
+        ok(&mut app, &[]);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        picker.answer(&[&new_file(&dir, "old-two.png")]);
+        pass(&mut app);
+        let dialog = relink_dialog(&app).id;
+        assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let paths = [new_file(&dir, "new-one.png"), new_file(&dir, "new-two.png")];
+        for (i, path) in paths.iter().enumerate() {
+            ok(&mut app, &[]);
+            picker.answer(&[path]);
+            pass(&mut app);
+            if i == 0 {
+                assert_eq!(fields(&app)["paths"], json!([path]), "the second link still needs its new file");
+            }
+        }
+        assert!(open_dialogs(&app).is_empty());
+        assert_eq!(ids.map(|id| link_path(&app, id)), paths);
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -269,8 +602,8 @@ mod tests {
         let (a, b) = (place(&mut app, &dir.join("one.png")), place(&mut app, &dir.join("one.png")));
         app.run("links.embed", json!({"ids": [b]})).unwrap();
         app.run("ui.relinkDialog", json!({"ids": [a, b, b]})).unwrap();
-        let d = app.ui.dialog.as_ref().expect("the dialog");
-        let rows = d.fields["links"].as_array().unwrap();
+        let f = fields(&app);
+        let rows = f["links"].as_array().unwrap();
         assert_eq!((rows.len(), &rows[0]["ids"], &rows[1]["ids"]), (2, &json!([a]), &json!([b])));
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -284,8 +617,7 @@ mod tests {
         std::fs::write(dir.join("photo.png"), png([0, 200, 0])).unwrap();
         let b = place(&mut app, &dir.join("photo.png"));
         app.run("ui.relinkDialog", json!({"ids": [a, b]})).unwrap();
-        let d = app.ui.dialog.as_ref().expect("the dialog");
-        assert_eq!(d.fields["links"], json!([{"name": "photo.png", "ids": [a, b]}]));
+        assert_eq!(fields(&app)["links"], json!([{"name": "photo.png", "ids": [a, b]}]));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -301,15 +633,15 @@ mod tests {
         app.run("file.close", json!({})).unwrap();
         crate::io::open_path(&mut app, &doc).unwrap();
         // The Linked File Not Found question is left for the Links panel.
-        app.ui.dialog = None;
+        let (ctx, dialogs) = (ctx(&app), app.dialogs().expect("a window"));
+        for open in open_dialogs(&app) {
+            dialogs.with(|host| host.cancel_by_id(&ctx, open.id));
+        }
         let chosen = new_file(&dir, "renamed.png");
         let found = new_file(&dir, "b.png");
         app.run("ui.relinkDialog", json!({"ids": [a]})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("scope".into(), json!("missingInFolder"));
-        d.fields.insert("path".into(), json!(chosen));
-        let r = super::super::confirm(&mut app).unwrap();
-        assert_eq!(r, json!({"relinked": [a, b], "notFound": []}));
+        ok(&mut app, &[("scope", json!("missingInFolder")), ("path", json!(chosen))]);
+        assert!(open_dialogs(&app).is_empty());
         assert_eq!((link_path(&app, a), link_path(&app, b)), (chosen, found));
         let _ = std::fs::remove_dir_all(dir);
     }

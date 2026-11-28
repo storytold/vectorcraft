@@ -232,7 +232,7 @@ fn a_face_reaching_past_the_eye_has_no_plane() {
     for (far, has_plane) in [(eye / 2.0, true), (2.0 * eye, false)] {
         let mut builder = Builder::new(&camera, false, false, Keep::Facets);
         let corners = vec![V3(-10.0, -10.0, 0.0), V3(10.0, -10.0, 0.0), V3(0.0, 10.0, far)];
-        builder.face(vec![corners], V3(0.0, -far, 20.0), Order::Depth).unwrap();
+        builder.face(vec![corners], V3(0.0, -far, 20.0), Order::Depth, crate::MeshPart::Front, |_| super::Attrs::Corners(vec![])).unwrap();
         assert_eq!(builder.facets.len(), 1, "{far}");
         assert_eq!(builder.facets[0].plane.is_some(), has_plane, "{far}");
     }
@@ -354,6 +354,40 @@ fn bevel_shapes_repeats_and_both_sides_change_the_surface() {
     }
 }
 
+/// A custom bevel's points are its cross-section, joined by straight lines: two points make the
+/// classic chamfer, and the step shape's points make the step shape's solid. Other points change
+/// the surface. A profile must run from (0, 0) to (1, 1) with every share in 0..1.
+#[test]
+fn custom_bevel_profiles_shape_the_bevel() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: -20.0, rotation_y: 30.0, ..front() };
+    let solid = |shape: BevelShape| {
+        let bevel = Bevel { shape, width: 12.0, height: 12.0, repeat: 2, space: 0.2, both_sides: true, ..Bevel::default() };
+        extrude(&p, FillRule::EvenOdd, b, Extrude { bevel: Some(bevel), ..Extrude::default() }, v).unwrap()
+    };
+    let custom = |pts: &[(f64, f64)]| BevelShape::Custom(BevelProfile::new(pts).unwrap());
+    assert_eq!(solid(custom(&[(0.0, 0.0), (1.0, 1.0)])), solid(BevelShape::Classic));
+    let step = [(0.0, 0.0), (0.0, 0.5), (0.5, 0.5), (0.5, 1.0), (1.0, 1.0)];
+    assert_eq!(solid(custom(&step)), solid(BevelShape::Step));
+    let notch = custom(&[(0.0, 0.0), (0.2, 0.6), (0.7, 0.4), (1.0, 1.0)]);
+    assert_ne!(solid(notch), solid(BevelShape::Classic));
+    assert_eq!(notch.id(), "custom");
+    assert_eq!(BevelShape::parse("custom"), None);
+    assert_eq!(notch.at(0.0), (0.0, 0.0));
+    assert_eq!(notch.at(1.0), (1.0, 1.0));
+    // The point a third of the way along is the second point, kept to 1/32,768.
+    let (x, y) = notch.at(1.0 / 3.0);
+    assert!(close(x, 0.2, 1e-4) && close(y, 0.6, 1e-4), "{x}, {y}");
+    // Inside, the bevel carves the shape with the same points.
+    let inside = Bevel { shape: notch, width: 12.0, height: 12.0, inside: true, ..Bevel::default() };
+    assert!(extrude(&p, FillRule::EvenOdd, b, Extrude { bevel: Some(inside), ..Extrude::default() }, v).is_ok());
+    let too_many = vec![(0.5, 0.5); BevelProfile::MAX_POINTS + 1];
+    for bad in [&[(0.0, 0.0)][..], &[(0.1, 0.0), (1.0, 1.0)], &[(0.0, 0.0), (1.0, 0.9)], &[(0.0, 0.0), (1.2, 0.5), (1.0, 1.0)], &too_many] {
+        assert_eq!(BevelProfile::new(bad), None, "{bad:?}");
+    }
+    assert!(BevelProfile::new(&[(0.0, 0.0), (f64::NAN, 0.5), (1.0, 1.0)]).is_none());
+}
+
 #[test]
 fn holes_stay_holes_in_the_caps_and_get_walls_of_their_own() {
     let mut b = square(0.0, 0.0, 100.0);
@@ -424,6 +458,122 @@ fn inflate_leaves_holes_open() {
 }
 
 #[test]
+fn inflate_marks_where_each_piece_lies_in_the_art_for_graphics() {
+    let (p, r) = shape(&square(0.0, 0.0, 100.0));
+    let on = |o: Inflate, view: View| inflate(&p, FillRule::EvenOdd, r, Inflate { map_surface: true, ..o }, view).unwrap();
+    // Without the request no piece carries a surface point.
+    assert!(inflate(&p, FillRule::EvenOdd, r, Inflate::default(), front()).unwrap().iter().all(|f| f.surface.is_none() && f.membrane.is_none()));
+    // Straight on, every piece is a front triangle whose corners lie where the art does, as
+    // offsets from the center of the bounds, and together they cover the shape.
+    let f = on(Inflate::default(), front());
+    let marked: Vec<&Facet> = f.iter().filter(|f| f.surface.is_some()).collect();
+    assert!(marked.len() > 20, "{}", marked.len());
+    assert!(close(marked.iter().map(|f| signed_area(&f.contours[0]).abs()).sum::<f64>(), 100.0 * 100.0, 1e-3));
+    for f in &marked {
+        let s = f.surface.as_ref().unwrap();
+        assert_eq!(f.membrane, Some(PlanarFace::Front));
+        assert!(s.outward);
+        for (page, uv) in s.page.iter().zip(&s.uv) {
+            assert!(close(page.x, uv.x + 50.0, 1e-6) && close(page.y, uv.y + 50.0, 1e-6), "{page:?} {uv:?}");
+        }
+    }
+    // Both sides puffs a back: seen from behind its pieces show their outside, and under Twist
+    // they keep the untwisted art points while the pieces turn on the page.
+    let behind = View { rotation_y: 180.0, ..front() };
+    let back = |o: Inflate| {
+        on(o, behind)
+            .into_iter()
+            .filter(|f| f.membrane == Some(PlanarFace::Back) && f.surface.as_ref().is_some_and(|s| s.outward))
+            .collect::<Vec<_>>()
+    };
+    let plain = back(Inflate { both_sides: true, ..Inflate::default() });
+    assert!(!plain.is_empty());
+    let twisted = back(Inflate { both_sides: true, twist: 30.0, ..Inflate::default() });
+    assert!(!twisted.is_empty());
+    let uv_extent =
+        |f: &[Facet]| f.iter().flat_map(|f| f.surface.as_ref().unwrap().uv.clone()).fold(Rect::new(0.0, 0.0, 0.0, 0.0), |r, q| r.union_pt(q));
+    assert!(close(uv_extent(&twisted).width(), 100.0, 1e-6) && close(uv_extent(&twisted).height(), 100.0, 1e-6));
+    assert!(extent(&twisted).width() > extent(&plain).width() + 10.0, "{:?} {:?}", extent(&twisted), extent(&plain));
+    // Without Both sides there is no back to mark.
+    assert!(on(Inflate::default(), behind).iter().all(|f| f.membrane != Some(PlanarFace::Back)));
+}
+
+/// A square 0.3 pt across with its corner at the lattice point `(qx, qy)` of the grid of a
+/// 100 pt shape, offset 0.1 pt: it lies inside one quarter cell of that grid.
+fn speck(qx: f64, qy: f64) -> BezPath {
+    let unit = 100.0 / 48.0 / 4.0;
+    square(qx * unit + 0.1, qy * unit + 0.1, 0.3)
+}
+
+/// The area of the pieces marked for graphics on `face`.
+fn mapped_area(f: &[Facet], face: PlanarFace) -> f64 {
+    f.iter().filter(|f| f.membrane == Some(face)).map(|f| signed_area(&f.contours[0]).abs()).sum()
+}
+
+/// A hole inside one cell of the surface's grid leaves that cell's piece with a hole in it:
+/// graphics still map onto the rest of the cell, front and back, and the hole stays open.
+#[test]
+fn inflate_maps_graphics_around_a_hole_inside_one_cell() {
+    let mut b = square(0.0, 0.0, 100.0);
+    b.extend(speck(96.0, 96.0));
+    let (p, r) = shape(&b);
+    let o = Inflate { map_surface: true, both_sides: true, ..Inflate::default() };
+    let f = inflate(&p, FillRule::EvenOdd, r, o, front()).unwrap();
+    let mapped = mapped_area(&f, PlanarFace::Front);
+    assert!(close(mapped, 100.0 * 100.0 - 0.3 * 0.3, 1e-3), "{mapped}");
+    let f = inflate(&p, FillRule::EvenOdd, r, o, View { rotation_y: 180.0, ..front() }).unwrap();
+    let mapped = mapped_area(&f, PlanarFace::Back);
+    assert!(close(mapped, 100.0 * 100.0 - 0.3 * 0.3, 1e-3), "{mapped}");
+}
+
+/// The cells graphics are mapped onto that need their holes cut out share one budget for the
+/// whole surface: past it the surface is refused, however little each cell takes.
+#[test]
+fn inflate_cuts_holed_cells_for_graphics_within_one_budget() {
+    let mut b = square(0.0, 0.0, 100.0);
+    for i in 0..8 {
+        for j in 0..8 {
+            b.extend(speck(20.0 + 20.0 * i as f64, 20.0 + 20.0 * j as f64));
+        }
+    }
+    let (p, r) = shape(&b);
+    let o = Inflate { map_surface: true, ..Inflate::default() };
+    let f = inflate(&p, FillRule::EvenOdd, r, o, front()).unwrap();
+    assert!(close(mapped_area(&f, PlanarFace::Front), 100.0 * 100.0 - 64.0 * 0.3 * 0.3, 1e-3));
+    let all = FLAT_WORK.with(std::cell::Cell::get);
+    assert!(all > 0);
+    // Half the work all 64 cells took is far more than any one of them takes.
+    FLAT_BUDGET.with(|w| w.set(all / 2));
+    let half = inflate(&p, FillRule::EvenOdd, r, o, front());
+    FLAT_BUDGET.with(|w| w.set(MAX_FLAT_WORK));
+    assert_eq!(half.err().as_deref(), Some(TOO_COMPLEX_SOLID));
+    // The art draws without graphics as before.
+    assert!(inflate(&p, FillRule::EvenOdd, r, Inflate::default(), front()).is_ok());
+}
+
+/// A cell graphics are mapped onto whose pieces have more corners than one cut may take refuses
+/// the surface rather than drawing that cell without its graphics.
+#[test]
+fn inflate_refuses_graphics_on_a_cell_with_too_many_corners() {
+    let mut b = square(0.0, 0.0, 100.0);
+    let unit = 100.0 / 48.0 / 4.0;
+    let c = Point::new(96.5 * unit, 96.5 * unit);
+    let n = MAX_FLAT_CORNERS + 10;
+    let mut ring = BezPath::new();
+    for k in 0..n {
+        let a = -std::f64::consts::TAU * k as f64 / n as f64;
+        let q = (c.x + 0.2 * a.cos(), c.y + 0.2 * a.sin());
+        if k == 0 { ring.move_to(q) } else { ring.line_to(q) }
+    }
+    ring.close_path();
+    b.extend(ring);
+    let (p, r) = shape(&b);
+    let mapped = inflate(&p, FillRule::EvenOdd, r, Inflate { map_surface: true, ..Inflate::default() }, front());
+    assert_eq!(mapped.err().as_deref(), Some(TOO_COMPLEX_SOLID));
+    assert!(inflate(&p, FillRule::EvenOdd, r, Inflate::default(), front()).is_ok());
+}
+
+#[test]
 fn malformed_and_degenerate_input_is_bounded() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
     for r in [Rect::new(f64::NAN, 0.0, 1.0, 1.0), Rect::new(0.0, 0.0, 1e9, 1.0)] {
@@ -438,15 +588,18 @@ fn malformed_and_degenerate_input_is_bounded() {
         cap: true,
         bevel: Some(Bevel { width: f64::NAN, height: 1e12, repeat: usize::MAX, space: 7.0, ..Bevel::default() }),
         hidden: false,
+        map_surfaces: false,
+        map_surface: true,
     };
     let f = extrude(&p, FillRule::EvenOdd, b, wild, View { rotation_x: f64::NAN, perspective: 900.0, ..front() }).unwrap();
     assert!(f.iter().flat_map(|f| f.contours.iter().flatten()).all(|q| q.x.is_finite() && q.y.is_finite()));
+    assert!(f.iter().filter_map(|f| f.surface.as_ref()).flat_map(|c| c.uv.iter()).all(|q| q.x.is_finite() && q.y.is_finite()));
     assert!(
         inflate(
             &p,
             FillRule::EvenOdd,
             b,
-            Inflate { depth: -5.0, volume: f64::NAN, both_sides: true, twist: f64::INFINITY, taper: f64::NAN, cap: true },
+            Inflate { depth: -5.0, volume: f64::NAN, both_sides: true, twist: f64::INFINITY, taper: f64::NAN, cap: true, map_surface: false },
             front()
         )
         .is_ok()

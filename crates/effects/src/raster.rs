@@ -365,8 +365,13 @@ impl Rasterize {
 
 /// Parse a blend mode name (`"multiply"`, `"Screen"`, `"color-burn"`…).
 pub fn blend_mode(s: &str) -> BlendMode {
+    named_blend_mode(s).unwrap_or(BlendMode::Normal)
+}
+
+/// The blend mode `s` names as [`blend_mode`] reads it; `None` when it names none.
+pub(crate) fn named_blend_mode(s: &str) -> Option<BlendMode> {
     let key: String = s.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
-    BlendMode::ALL.iter().copied().find(|m| format!("{m:?}").to_ascii_lowercase() == key).unwrap_or(BlendMode::Normal)
+    BlendMode::ALL.iter().copied().find(|m| format!("{m:?}").to_ascii_lowercase() == key)
 }
 
 /// An effect's `color` parameter (`"#rrggbb"`, `[r, g, b]` 0..1 or a colour object).
@@ -608,21 +613,36 @@ fn transform_step(e: &Effect) -> Option<Affine> {
 
 /// The Transform effects of `effects` that move the image of its last visible Rasterize effect
 /// instead of the art it is made from: the indices of the visible Transform effects listed after
-/// it that move the art, when from the first visible Transform effect after it on every visible
-/// effect is a Transform effect that moves the art once (no copies, not at random). Effects apply
-/// in the order they are listed, so the image is made of the art before those Transform effects
-/// and moves with them, its pixel grid and room around the art included. `None` when there is no
-/// such Transform effect, or the effects after the Rasterize effect hold anything else from there
-/// on.
+/// it that move or copy the art, when from the first visible Transform effect after it on every
+/// visible effect is a Transform effect that does not move at random, and at most one of them makes
+/// copies. Effects apply in the order they are listed, so the image is made of the art before those
+/// Transform effects and moves with them, its pixel grid and room around the art included; each copy
+/// carries the same image ([`stage_maps`]). `None` when there is no such Transform effect, or the
+/// effects after the Rasterize effect hold anything else from there on.
 pub fn rasterize_stage(effects: &[Effect]) -> Option<Vec<usize>> {
     let r = effects.iter().rposition(|e| e.visible && e.id == RASTERIZE)?;
     let first = r + 1 + effects.get(r + 1..)?.iter().position(|e| e.visible && e.id == "distort.transform")?;
     let mut at = vec![];
+    let mut copying = false;
     for (i, e) in effects.iter().enumerate().skip(first).filter(|(_, e)| e.visible) {
-        if e.id != "distort.transform" || transform_step(e).is_none() {
+        if e.id != "distort.transform" {
             return None;
         }
-        if crate::distort::transform_map(Rect::ZERO, &merged_params(&e.id, &e.params), 0).0 != Affine::IDENTITY {
+        let p = merged_params(&e.id, &e.params);
+        if !flag(&p, "objects", true) {
+            continue;
+        }
+        if flag(&p, "random", false) {
+            return None;
+        }
+        let (map, copies) = crate::distort::transform_map(Rect::ZERO, &p, 0);
+        if copies > 0 {
+            if copying {
+                return None;
+            }
+            copying = true;
+        }
+        if copies > 0 || map != Affine::IDENTITY {
             at.push(i);
         }
     }
@@ -641,22 +661,41 @@ pub fn staged_effects(effects: &[Effect], at: &[usize]) -> Vec<Effect> {
     out
 }
 
-/// The map the Transform effects at `at` of `effects` ([`rasterize_stage`]) move the Rasterize
+/// The maps the Transform effects at `at` of `effects` ([`rasterize_stage`]) place the Rasterize
 /// image by, for `staged`, the geometry the effects before them make: each one's map about its
 /// reference point on the bounds of the geometry it takes, as the geometry pass applies it, the
-/// last one outermost. `None` when `staged` is empty or the map is not a number.
-pub fn stage_map(effects: &[Effect], at: &[usize], staged: &vectorcraft_geom::PathData) -> Option<Affine> {
+/// last one outermost. A Transform effect with copies places the image once more for each copy
+/// the geometry pass makes, copy `k` through its map `k` times. The maps come in the order the
+/// images paint, the lowest first: the last copy lowest and the original on top, as copied objects
+/// stack. `None` when `staged` is empty or a map is not a number.
+pub fn stage_maps(effects: &[Effect], at: &[usize], staged: &vectorcraft_geom::PathData) -> Option<Vec<Affine>> {
     let mut cur = staged.clone();
     let mut b = staged.bounds()?;
-    let mut map = Affine::IDENTITY;
+    // The original's map first, then each copy's.
+    let mut maps = vec![Affine::IDENTITY];
     for &i in at {
         let e = effects.get(i)?;
-        let (m, _) = crate::distort::transform_map(b, &merged_params(&e.id, &e.params), 0);
-        map = m * map;
-        cur = cur.transformed(m);
+        let p = merged_params(&e.id, &e.params);
+        let (m, copies) = crate::distort::transform_map(b, &p, 0);
+        if copies == 0 {
+            maps.iter_mut().for_each(|x| *x = m * *x);
+            cur = cur.transformed(m);
+        } else {
+            // As many copies as the geometry pass makes: it stops early past its limits.
+            let next = crate::distort::transform(&cur, b, &p, 0);
+            let made = (next.anchor_count() / cur.anchor_count().max(1)).saturating_sub(1);
+            let placed = maps.clone();
+            let mut xf = Affine::IDENTITY;
+            for _ in 0..made {
+                xf = m * xf;
+                maps.extend(placed.iter().map(|x| xf * *x));
+            }
+            cur = next;
+        }
         b = cur.bounds().unwrap_or(b);
     }
-    map.is_finite().then_some(map)
+    maps.reverse();
+    maps.iter().all(|m| m.is_finite()).then_some(maps)
 }
 
 /// Does raster effect `id` follow the Transform effects listed after it ([`followed`])? An SVG

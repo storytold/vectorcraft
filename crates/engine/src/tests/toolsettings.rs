@@ -30,6 +30,55 @@ fn blob_tip_options_report_and_persist() {
     assert_eq!((next.tool_options()["angle"].as_f64(), next.tool_options()["roundness"].as_f64()), (Some(45.0), Some(0.0)));
 }
 
+/// The Circle tool's From Center survives a tool switch and is saved with the preferences.
+#[test]
+fn circle_from_center_persists() {
+    let mut s = session();
+    select(&mut s, "circle");
+    let mut want = s.tool_options();
+    assert_eq!(want["fromCenter"], json!(false));
+    want["fromCenter"] = json!(true);
+    s.set_tool_option("fromCenter", &json!(true));
+    select(&mut s, "selection");
+    select(&mut s, "circle");
+    assert_eq!(s.tool_options(), want);
+    select(&mut s, "selection");
+    let saved = serde_json::to_string(&s.prefs).unwrap();
+    let mut next = session();
+    next.apply_prefs(serde_json::from_str(&saved).unwrap());
+    select(&mut next, "circle");
+    assert_eq!(next.tool_options(), want);
+}
+
+/// An option set during a press (`tool.setOption`, or a Control bar change) is kept when the press
+/// is dropped: the drop gives back only what the press itself changed.
+#[test]
+fn the_circle_from_center_set_during_a_dropped_press_is_kept() {
+    let v = ViewInfo::default();
+    let mut s = session();
+    select(&mut s, "circle");
+    let mut want = s.tool_options();
+    s.set_tool_option("fromCenter", &json!(true));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.set_tool_option_cmd(&json!({"key": "fromCenter", "value": false})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    want["fromCenter"] = json!(false);
+    assert_eq!(s.tool_options(), want);
+    assert_eq!(s.prefs.tool_settings["circle"]["fromCenter"], json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.set_tool_option("fromCenter", &json!(true));
+    s.drop_tool_press(v).unwrap();
+    want["fromCenter"] = json!(true);
+    assert_eq!(s.tool_options(), want);
+    assert_eq!(s.prefs.tool_settings["circle"]["fromCenter"], json!(true));
+    // Setting a Parametric Shape's kind also puts its numbers back to that kind's: those are kept too.
+    select(&mut s, "parametricShape");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    let set = s.set_tool_option_cmd(&json!({"key": "kind", "value": "star"})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options(), set);
+}
+
 #[test]
 fn options_survive_a_tool_switch() {
     let mut s = session();
@@ -136,6 +185,105 @@ fn a_dropped_press_does_not_keep_what_its_drag_changed() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 150.0), v).unwrap();
     assert!(s.active().unwrap().doc.art_bounds().is_some(), "a release draws the polygon");
     assert_eq!(s.prefs.tool_settings["polygon"]["sides"], json!(7), "and stores its sides");
+}
+
+/// An option set with `tool.setOption` while a press is held survives the dropped press, in the
+/// tool and in the stored options, while what the drag itself changed is put back in both.
+#[test]
+fn an_option_set_during_a_dropped_press_is_kept() {
+    let mut s = session();
+    select(&mut s, "rectangularGrid");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!((s.tool_options()["rows"].clone(), s.tool_options()["columns"].clone()), (json!(6), json!(6)));
+    s.set_tool_option_cmd(&json!({"key": "columns", "value": 9})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    let o = s.tool_options();
+    assert_eq!((o["rows"].clone(), o["columns"].clone()), (json!(5), json!(9)), "the drag's rows go back; the set columns stay");
+    let saved = &s.prefs.tool_settings["rectangularGrid"];
+    assert_eq!((saved["rows"].clone(), saved["columns"].clone()), (json!(5), json!(9)), "the drag's rows are not stored; the set columns are");
+    select(&mut s, "selection");
+    select(&mut s, "rectangularGrid");
+    let o = s.tool_options();
+    assert_eq!((o["rows"].clone(), o["columns"].clone()), (json!(5), json!(9)), "a tool switch keeps the set columns");
+    // The same through the desktop app's setter.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    s.tool_key(ToolKey::Up, Mods::default(), v).unwrap();
+    s.set_tool_option("columns", &json!(3));
+    s.drop_tool_press(v).unwrap();
+    let o = s.tool_options();
+    assert_eq!((o["rows"].clone(), o["columns"].clone()), (json!(5), json!(3)));
+    let saved = &s.prefs.tool_settings["rectangularGrid"];
+    assert_eq!((saved["rows"].clone(), saved["columns"].clone()), (json!(5), json!(3)));
+}
+
+/// A Corner Radius preference set while a Rounded Rectangle press is held survives the dropped
+/// press, in the tool and in the preference.
+#[test]
+fn a_corner_radius_set_during_a_dropped_press_is_kept() {
+    let mut s = session();
+    select(&mut s, "roundedRectangle");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    let mut p = s.prefs.clone();
+    p.corner_radius = 30.0;
+    s.apply_prefs(p);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options()["cornerRadius"].as_f64(), Some(30.0), "the tool keeps the new radius");
+    assert_eq!(s.prefs.corner_radius, 30.0, "the preference keeps it");
+}
+
+/// An option set with `tool.setOption` on a tool that lent a selection tool for a Cmd-drag
+/// survives the dropped press, in the tool and in the stored options. So does a Corner Radius
+/// preference set while the Rounded Rectangle lends one.
+#[test]
+fn an_option_set_on_a_lending_tool_during_a_dropped_press_is_kept() {
+    let mut s = session();
+    select(&mut s, "rectangularGrid");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    let cmd = Mods { cmd: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.lender.as_ref().map(|t| t.id()), Some("rectangularGrid"), "the press lent a selection tool");
+    s.set_tool_option_cmd(&json!({"tool": "rectangularGrid", "key": "columns", "value": 9})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_id(), "rectangularGrid", "the lending tool is back");
+    assert_eq!(s.tool_options()["columns"], json!(9), "the tool keeps the set columns");
+    assert_eq!(s.prefs.tool_settings["rectangularGrid"]["columns"], json!(9), "and stores them");
+    select(&mut s, "roundedRectangle");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.lender.as_ref().map(|t| t.id()), Some("roundedRectangle"), "the press lent a selection tool");
+    let mut p = s.prefs.clone();
+    p.corner_radius = 30.0;
+    s.apply_prefs(p);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options()["cornerRadius"].as_f64(), Some(30.0), "the tool keeps the new radius");
+    assert_eq!(s.prefs.corner_radius, 30.0, "the preference keeps it");
+}
+
+/// A shared Liquify brush size set through another Liquify tool during a held press survives the
+/// dropped press, also when the set value equals the size the press's drag has made current.
+#[test]
+fn a_shared_option_set_through_another_tool_during_a_dropped_press_is_kept() {
+    let mut s = session();
+    select(&mut s, "warp");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    let before = s.tool_options()["width"].as_f64().unwrap();
+    // The press's own change to the shared size, not stored.
+    s.tool.set_option("width", &json!(before + 40.0));
+    let current = s.tool_options()["width"].clone();
+    s.set_tool_option_cmd(&json!({"tool": "pucker", "key": "width", "value": before + 40.0})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options()["width"], current, "the tool keeps the size set through the other tool");
+    assert_eq!(s.prefs.tool_settings["liquify"]["width"], current, "and stores it");
 }
 
 /// A dropped Pen press drops only the anchor it was placing: the path being drawn goes on with
@@ -246,7 +394,12 @@ fn spiral_decay_is_normalized_for_active_and_inactive_tools_and_preferences() {
     let mut s = session();
     for active in [false, true] {
         select(&mut s, if active { "spiral" } else { "selection" });
-        let options = s.set_tool_option_cmd(&json!({"tool": "spiral", "values": {"decay": 150, "segments": 4, "clockwise": false}})).unwrap();
+        // A decay past the 99.99 % a spiral draws is refused, and nothing changes.
+        let before = s.tool_options_of("spiral");
+        let refused = s.set_tool_option_cmd(&json!({"tool": "spiral", "values": {"decay": 150, "segments": 4, "clockwise": false}}));
+        assert_eq!(refused.err(), Some("tool `spiral`: `decay` must be a number from 5 to 99.99".to_string()));
+        assert_eq!(s.tool_options_of("spiral"), before);
+        let options = s.set_tool_option_cmd(&json!({"tool": "spiral", "values": {"decay": 99.99, "segments": 4, "clockwise": false}})).unwrap();
         assert_eq!(options["decay"], json!(99.99));
         assert_eq!(s.tool_options_of("spiral")["decay"], json!(99.99));
         assert_eq!(s.prefs.tool_settings["spiral"]["decay"], json!(99.99));
@@ -385,5 +538,163 @@ fn alt_smoothing_takes_the_smooth_tools_fidelity() {
         s.set_tool_option_cmd(&json!({"tool": "smooth", "key": "fidelity", "value": 9})).unwrap();
         assert_eq!(alt_smooth_fidelity(&mut s), Some(9.0), "{id}");
         assert_eq!(s.tool_options()["fidelity"], json!(3.0), "{id}");
+    }
+}
+
+/// The Smoothness an Alt smoothing drag sends with `path.smoothRegion` on a selected path.
+fn alt_smoothness(s: &mut Session) -> Option<f64> {
+    use vectorcraft_tools::Action;
+    let mods = Mods { alt: true, ..Default::default() };
+    let mut last = vec![];
+    for (kind, x, y) in [(PointerKind::Down, 50.0, 150.0), (PointerKind::Drag, 150.0, 150.0), (PointerKind::Up, 250.0, 160.0)] {
+        let ev = PointerEvent { mods, ..PointerEvent::new(kind, x, y) };
+        last = s.with_tool_cx(ViewInfo::default(), |t, cx| t.pointer(cx, &ev));
+    }
+    last.iter().find_map(|a| match a {
+        Action::Exec(c, v) if c == "path.smoothRegion" => v["smoothness"].as_f64(),
+        _ => None,
+    })
+}
+
+/// Smooth Tool Options' Smoothness is kept with the preferences (50% until it is set), and Alt
+/// smoothing with the Pencil, Paintbrush and Blob Brush uses it. A Smoothness outside 0 to 100 is
+/// an error that sets nothing.
+#[test]
+fn the_smooth_tools_smoothness_is_kept_and_alt_smoothing_takes_it() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    select(&mut s, "smooth");
+    assert_eq!(s.tool_options()["smoothness"], json!(50.0));
+    for bad in [json!(-1), json!(100.5), json!("30"), json!(null)] {
+        let e = s.set_tool_option_cmd(&json!({"key": "smoothness", "value": bad})).unwrap_err();
+        assert_eq!(e, "tool `smooth`: `smoothness` must be a number from 0 to 100", "{bad}");
+    }
+    assert_eq!(s.tool_options()["smoothness"], json!(50.0));
+    s.set_tool_option("smoothness", &json!(80));
+    assert_eq!(s.prefs.tool_settings["smooth"]["smoothness"], json!(80.0));
+    for id in ["pencil", "paintbrush", "blobBrush"] {
+        select(&mut s, id);
+        if id == "pencil" {
+            s.set_tool_option("altSmooth", &json!(true));
+        }
+        assert_eq!(alt_smoothness(&mut s), Some(80.0), "{id}");
+        assert!(s.tool_options().get("smoothness").is_none(), "{id} has no Smoothness of its own");
+    }
+    s.set_tool_option_cmd(&json!({"tool": "smooth", "key": "smoothness", "value": 10})).unwrap();
+    assert_eq!(alt_smoothness(&mut s), Some(10.0), "the Blob Brush takes the new Smoothness");
+    let saved = serde_json::to_string(&s.prefs).unwrap();
+    let mut next = session();
+    next.apply_prefs(serde_json::from_str(&saved).unwrap());
+    select(&mut next, "smooth");
+    assert_eq!(next.tool_options()["smoothness"], json!(10.0));
+}
+
+/// `tool.setOption` with a value of the wrong type, a number out of range, an unknown value or an
+/// option the tool doesn't have is an error naming the tool and the option. Nothing is set, also
+/// when another option given with it is good, and nothing is saved or recorded for undo.
+#[test]
+fn bad_option_values_are_errors_that_set_nothing() {
+    let mut s = session();
+    select(&mut s, "smooth");
+    let (options, saved, undo) = (s.tool_options(), s.prefs.tool_settings.clone(), s.doc().unwrap().history.undo.len());
+    let fidelity = "tool `smooth`: `fidelity` must be a number from 0.05 to 100";
+    for bad in [json!("abc"), json!(true), json!(-3), json!(1e9), json!(null), json!([2])] {
+        assert_eq!(s.set_tool_option_cmd(&json!({"key": "fidelity", "value": bad})).unwrap_err(), fidelity, "{bad}");
+    }
+    let cases = [
+        (json!({"key": "bogus", "value": 1}), "tool `smooth`: unknown option `bogus`"),
+        (json!({"tool": "pencil", "values": {"closeWithin": 5, "fidelity": "x"}}), "tool `pencil`: `fidelity` must be a number from 0.01 to 100"),
+        (json!({"tool": "pencil", "key": "fill", "value": "yes"}), "tool `pencil`: `fill` must be true or false"),
+        (
+            json!({"tool": "blobBrush", "key": "sizeMode", "value": "huge"}),
+            "tool `blobBrush`: `sizeMode` must be one of `fixed`, `pressure`, `stylusWheel`",
+        ),
+        (json!({"tool": "eraser", "key": "fidelity", "value": 4}), "tool `eraser`: unknown option `fidelity`"),
+        (json!({"tool": "polygon", "key": "sides", "value": 2}), "tool `polygon`: `sides` must be a whole number from 3 to 1000"),
+        (
+            json!({"tool": "mirrorCut", "key": "axis", "value": "diagonal"}),
+            "tool `mirrorCut`: `axis` must be one of `vertical`, `horizontal`, `free`",
+        ),
+        (json!({"tool": "selection", "key": "fidelity", "value": 4}), "tool `selection`: unknown option `fidelity`"),
+        (json!({"values": [1]}), "`values` must be an object"),
+        (json!({"tool": 3, "key": "fidelity", "value": 4}), "`tool` must be a tool id"),
+        (json!({"key": "fidelity"}), "`value` is missing for `fidelity`"),
+    ];
+    for (p, want) in cases {
+        assert_eq!(s.set_tool_option_cmd(&p).unwrap_err(), want, "{p}");
+    }
+    assert_eq!(s.tool_options_of("pencil")["closeWithin"], session().tool_options_of("pencil")["closeWithin"]);
+    assert_eq!((s.tool_options(), &s.prefs.tool_settings, s.doc().unwrap().history.undo.len()), (options, &saved, undo));
+    // A good value after the errors is set and read back.
+    assert_eq!(s.set_tool_option_cmd(&json!({"key": "fidelity", "value": 9})).unwrap()["fidelity"], json!(9.0));
+}
+
+/// `tool.setOption {}` reads the options, of the active tool or of the tool named, and saves nothing.
+#[test]
+fn an_empty_set_option_reads_and_saves_nothing() {
+    let mut s = session();
+    select(&mut s, "smooth");
+    let saved = s.prefs.tool_settings.clone();
+    assert_eq!(s.set_tool_option_cmd(&json!({})).unwrap(), s.tool_options());
+    assert_eq!(s.set_tool_option_cmd(&json!({"tool": "flare"})).unwrap(), s.tool_options_of("flare"));
+    // No params (null) read too; params that are not an object are an error.
+    assert_eq!(s.set_tool_option_cmd(&serde_json::Value::Null).unwrap(), s.tool_options());
+    for (bad, got) in [(json!(true), "true"), (json!([]), "[]")] {
+        assert_eq!(s.set_tool_option_cmd(&bad).unwrap_err(), format!("the params must be an object, not {got}"));
+    }
+    assert_eq!(s.prefs.tool_settings, saved);
+}
+
+/// A Place queue with a malformed entry is an error, and the queue held stays as it was.
+#[test]
+fn a_malformed_place_queue_is_an_error() {
+    let mut s = session();
+    select(&mut s, "place");
+    let entry = json!({"params": {"svg": "<svg/>"}, "name": "a", "width": 10, "height": 10});
+    s.set_tool_option_cmd(&json!({"key": "queue", "value": {"entries": [entry]}})).unwrap();
+    let bad = json!({"params": {}, "name": "b", "width": "wide", "height": 10});
+    let e = s.set_tool_option_cmd(&json!({"key": "queue", "value": {"entries": [entry, bad]}})).unwrap_err();
+    assert!(e.starts_with("tool `place`: `queue` must be"), "{e}");
+    assert_eq!(s.tool_options()["names"], json!(["a"]));
+    assert_eq!(
+        s.set_tool_option_cmd(&json!({"key": "current", "value": 1})).unwrap_err(),
+        "tool `place`: `current` must be the index of a queued file, from 0 to 0"
+    );
+}
+
+/// A `current` given with a new Place queue picks among the files of that queue.
+#[test]
+fn a_place_queue_and_its_current_file_set_together() {
+    let mut s = session();
+    select(&mut s, "place");
+    let entry = |name: &str| json!({"params": {"svg": "<svg/>"}, "name": name, "width": 10, "height": 10});
+    let queue = json!({"entries": [entry("a"), entry("b"), entry("c")]});
+    let out = s.set_tool_option_cmd(&json!({"values": {"queue": queue, "current": 2}})).unwrap();
+    assert_eq!((out["names"].clone(), out["current"].clone()), (json!(["a", "b", "c"]), json!(2)));
+    let short = json!({"entries": [entry("d")]});
+    let e = s.set_tool_option_cmd(&json!({"values": {"queue": short, "current": 2}})).unwrap_err();
+    assert_eq!(e, "tool `place`: `current` must be the index of a queued file, from 0 to 0");
+    assert_eq!(s.tool_options()["names"], json!(["a", "b", "c"]), "a refused call keeps the queue held");
+}
+
+/// A value given with a parametric shape's new `kind` is checked against that kind's range and
+/// set on it, whether the tool is chosen or not.
+#[test]
+fn a_parametric_shape_kind_and_its_values_set_together() {
+    for active in [false, true] {
+        let mut s = session();
+        if active {
+            select(&mut s, "parametricShape");
+        }
+        let set = |s: &mut Session, values: serde_json::Value| s.set_tool_option_cmd(&json!({"tool": "parametricShape", "values": values}));
+        set(&mut s, json!({"kind": "polygon"})).unwrap();
+        let out = set(&mut s, json!({"kind": "star", "a": 0.8})).unwrap();
+        assert_eq!((out["kind"].clone(), out["a"].clone()), (json!("star"), json!(0.8)), "active {active}");
+        set(&mut s, json!({"kind": "ring"})).unwrap();
+        let out = set(&mut s, json!({"kind": "star", "a": 1.0})).unwrap();
+        assert_eq!((out["kind"].clone(), out["a"].clone()), (json!("star"), json!(1.0)), "active {active}");
+        let e = set(&mut s, json!({"kind": "ring", "a": 1.0})).unwrap_err();
+        assert!(e.contains("`a`"), "{e}");
+        assert_eq!(s.tool_options_of("parametricShape")["kind"], json!("star"), "a refused call sets nothing");
     }
 }

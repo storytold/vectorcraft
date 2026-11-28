@@ -671,6 +671,48 @@ fn character_ruby_and_path_handle_refuse_a_param_of_the_wrong_type() {
     s.execute("text.setPathHandle", &handle(Value::Null)).unwrap();
 }
 
+/// Range edits, Set Text, area and on-path type and the glyph commands refuse a param of the wrong
+/// type with an error naming the param, and leave the document and the undo history as they were:
+/// text that is not a string, a byte offset that is fractional or negative, and a point that is not
+/// two numbers. Null counts as a param left out, which keeps its default.
+#[test]
+fn text_edits_refuse_a_param_of_the_wrong_type() {
+    use crate::tests::not_refused;
+    let mut s = session();
+    let id = text(&mut s, "abc");
+    let frame = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let line = s.execute("path.create", &json!({"anchors": [{"x": 100, "y": 400}, {"x": 400, "y": 400}]})).unwrap()["id"].clone();
+    let string = |k: &str| format!("`{k}` must be a string");
+    let whole = "`start` must be a whole number".to_string();
+    let point = "`at` must be a point: [x, y]".to_string();
+    let calls: Vec<(String, Value, String)> = [
+        ("text.editRange", json!({"id": id.0, "start": 0, "end": 1, "insert": 5}), string("insert")),
+        ("text.editRange", json!({"id": id.0, "start": 0, "end": 3, "insert": ["x"]}), string("insert")),
+        ("text.setText", json!({"ids": [id.0], "text": true}), string("text")),
+        ("text.createInPath", json!({"path": frame, "mode": 1}), string("mode")),
+        ("text.createInPath", json!({"path": frame, "text": true}), string("text")),
+        ("text.createInPath", json!({"path": line, "mode": "onPath", "text": "a", "at": [1, "y"]}), point.clone()),
+        ("text.createInPath", json!({"path": line, "mode": "onPath", "at": [100]}), point.clone()),
+        ("text.createInPath", json!({"path": frame, "text": "a", "at": "start"}), point),
+        ("text.touchType", json!({"id": id.0, "start": 1.5, "dy": 2}), whole.clone()),
+        ("text.touchType", json!({"id": id.0, "start": -1, "dy": 2}), whole.clone()),
+        ("text.glyphAlternates", json!({"id": id.0, "start": 1.5}), whole.clone()),
+        ("text.setGlyphAlternate", json!({"id": id.0, "start": -1, "gid": null}), whole),
+    ]
+    .into_iter()
+    .map(|(cmd, p, msg)| (cmd.to_string(), p, msg))
+    .collect();
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    // Null keeps each default: nothing inserted, area type with no text, no start point.
+    s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": 1, "insert": null})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "bc");
+    let r = s.execute("text.createInPath", &json!({"path": frame, "mode": null, "text": null, "at": null})).unwrap();
+    let t = obj(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert!(matches!(t.kind, TextKind::Area { .. }) && t.plain_text().is_empty(), "{:?}", t.kind);
+    s.execute("text.createInPath", &json!({"path": line, "mode": "onPath", "text": "a", "at": [100, 400]})).unwrap();
+}
+
 /// Where each glyph of type object `id` is drawn from (its origin in font units), document space.
 fn glyph_pens(s: &Session, id: NodeId) -> Vec<(usize, Point)> {
     let t = obj(s, id);
@@ -2289,6 +2331,41 @@ fn threaded_list_edited_in_its_second_frame() -> (Session, NodeId, NodeId, Strin
     (s, a, b, story)
 }
 
+/// Type › Insert Break Character › Forced Line Break (`type.insert`) after Select All in threaded
+/// text replaces the whole story, every frame's text, as one undo step.
+#[test]
+fn insert_character_replaces_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), "\u{2028}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+}
+
+/// When `type.insert` at the caret in the first frame of threaded text pushes the caret's place on
+/// into the next frame, the Type tool's caret goes there with it, and typing goes after the
+/// insertion.
+#[test]
+fn insert_character_moves_the_caret_with_the_text_it_flows_on() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    let first = obj(&s, a).plain_text();
+    // Before the last word of the first frame: two line breaks there push the line after the
+    // first one on into the second frame.
+    let at = first.trim_end().rfind(' ').map_or(0, |k| k + 1);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": at, "caret": at}));
+    for _ in 0..2 {
+        s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    }
+    assert!(obj(&s, a).plain_text().len() < at + 6, "the second break flows on into the second frame");
+    s.tool_text("X", ViewInfo::default()).unwrap();
+    let want = format!("{}\u{2028}\u{2028}X{}", &story[..at], &story[at..]);
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), want);
+}
+
 #[test]
 fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
     let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
@@ -3136,6 +3213,59 @@ fn a_previewed_transform_while_typing_keeps_the_typing() {
     s.tool_text("!", v).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "Hello world!");
     assert!((left(&s, id) - 400.0).abs() < 1e-6);
+}
+
+/// With Performance › Real-time Drawing and Editing off, the typing is applied when its session
+/// ends. Ending it for another edit applies it first, as a step of its own: a dialog or a panel
+/// beginning its preview, the font menus ([`Session::keep_typing`]), a paint for the selected
+/// characters.
+#[test]
+fn ending_deferred_typing_for_another_edit_keeps_the_typing() {
+    let typed = |end: &dyn Fn(&mut Session)| {
+        let mut s = session();
+        s.prefs.real_time_drawing = false;
+        let v = ViewInfo::default();
+        let id = text(&mut s, "Hello");
+        s.select_tool("type", v).unwrap();
+        let b = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+        click(&mut s, b.x1 - 1.0, b.center().y);
+        s.tool_text(" world", v).unwrap();
+        assert_eq!(obj(&s, id).plain_text(), "Hello", "the typing waits for its session to end");
+        let steps = undo_labels(&s).len();
+        end(&mut s);
+        assert_eq!(obj(&s, id).plain_text(), "Hello world");
+        assert_eq!(undo_labels(&s)[steps], "Typing", "{:?}", undo_labels(&s));
+    };
+    typed(&|s| {
+        assert!(s.begin_interaction_warned("Fill Color").unwrap().is_empty());
+        s.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+        s.commit_interaction().unwrap();
+    });
+    typed(&|s| {
+        assert!(s.keep_typing().unwrap().is_empty());
+        assert!(!s.in_interaction());
+    });
+    typed(&|s| {
+        s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    });
+}
+
+/// An effect applied while typing waits for its session to end keeps the typing as its own step
+/// first, and the effect's own step still keeps the effect it applied.
+#[test]
+fn an_effect_applied_while_typing_waits_keeps_its_effect_on_its_step() {
+    let mut s = session();
+    s.prefs.real_time_drawing = false;
+    let v = ViewInfo::default();
+    let id = text(&mut s, "Hello");
+    s.select_tool("type", v).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    click(&mut s, b.x1 - 1.0, b.center().y);
+    s.tool_text(" world", v).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.feather", "ids": [id.0]})).unwrap();
+    assert_eq!(undo_labels(&s).iter().rev().take(2).collect::<Vec<_>>(), ["Feather", "Typing"]);
+    let h = s.doc().unwrap().history.undo.last().unwrap();
+    assert_eq!(h.effect(), Some("stylize.feather"));
 }
 
 /// #1950: a colour previewed while typing (the Color Picker, a Color panel slider) colours the
@@ -4026,4 +4156,67 @@ fn apply_fill_to_stroke_with_characters_selected_changes_only_them() {
     assert!(t.runs[1].style.stroke.is_none(), "the rest of the type keeps its stroke");
     let labels = undo_labels(&s);
     assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Apply Fill to Stroke")));
+}
+
+/// Redefines `[Normal Character Style]` with `fill` (`charStyle.setAttrs`).
+fn set_normal_fill(s: &mut Session, fill: vectorcraft_color::Paint) {
+    let attrs = crate::cmd::textstyles::char_attrs(&CharStyle { fill, ..CharStyle::default() });
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": {"fill": attrs["fill"]}})).unwrap();
+}
+
+/// #7975: type the Type tool starts is filled as [Normal Character Style] is, black unless it was
+/// redefined, not with the current fill a shape left behind.
+#[test]
+fn new_type_takes_the_normal_character_style_fill_not_the_current_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "the current fill is red");
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    s.tool_text("Black", v).unwrap();
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(obj(&s, id).runs[0].style.fill, Paint::solid(Color::BLACK));
+    // A redefined [Normal Character Style] gives new type its fill.
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    set_normal_fill(&mut s, blue.clone());
+    let made = s.execute("text.create", &json!({"x": 100, "y": 300, "text": "Blue"})).unwrap();
+    assert_eq!(obj(&s, NodeId(made["id"].as_u64().unwrap())).runs[0].style.fill, blue);
+    // A color given to the command still wins.
+    let made = s.execute("text.create", &json!({"x": 100, "y": 400, "text": "Green", "color": "#00ff00"})).unwrap();
+    assert_eq!(obj(&s, NodeId(made["id"].as_u64().unwrap())).runs[0].style.fill, Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+}
+
+/// A client answers the question a Type tool click asks about type in a missing font through
+/// `tool.setOption {key: "missingFontEdit", value: {token, ok}}`: OK starts the edit at the next poll.
+#[test]
+fn tool_set_option_answers_the_missing_font_question() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Hello", "size": 20, "font": "Missing Test Family 8408"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let t = obj(&s, id);
+    let (a, b) = vectorcraft_text::caret_position(&vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t), 2);
+    let at = t.xf * a.midpoint(b);
+    let mut asked = vec![];
+    for k in [PointerKind::Down, PointerKind::Up] {
+        asked.extend(s.pointer(&PointerEvent::new(k, at.x + 0.1, at.y), v).unwrap());
+    }
+    let token = asked
+        .iter()
+        .find_map(|r| match r {
+            UiRequest::Dialog(k, p) if k == "missingFontEdit" => p["token"].as_u64(),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("the missing-font question: {asked:?}"));
+    assert!(!s.tool_wants_text());
+    s.set_tool_option_cmd(&json!({"key": "missingFontEdit", "value": {"token": token, "ok": true}})).unwrap();
+    s.tool_poll(v, false).unwrap();
+    assert!(s.tool_wants_text());
+    assert_eq!(s.tool_options()["editing"], json!(id.0));
 }

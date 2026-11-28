@@ -5,7 +5,9 @@ use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, Anchor, ParamCurve, PathData, Point, Rect, SubPath, Vec2};
 use vectorcraft_pathops::addons::pathtools::insert_at;
 
-use crate::util::{catmull_rom, fit_piece, flag, map_nonlinear_within, mean_size, noise, normal_at, num, pieces, seed, seg_cubic, smooth_points};
+use crate::util::{
+    catmull_rom, fit_piece, flag, map_handles_within, map_nonlinear_within, mean_size, noise, normal_at, num, pieces, seed, seg_cubic, smooth_points,
+};
 
 fn diag(b: Rect) -> f64 {
     b.width().hypot(b.height()).max(1e-6)
@@ -325,8 +327,8 @@ pub fn tweak(path: &PathData, b: Rect, p: &Value) -> PathData {
 }
 
 /// Twist: rotation that is strongest at the centre and fades to zero at the bounding circle,
-/// clockwise on the page for a positive `angle`, making at most `max` anchors
-/// ([`map_nonlinear_within`]).
+/// clockwise on the page for a positive `angle`, making at most `max` anchors. Its handles follow
+/// the rotation's directional derivative, including each side of the outer circle.
 pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
     let ang = angle.clamp(-3600.0, 3600.0).to_radians();
     if ang == 0.0 {
@@ -334,16 +336,46 @@ pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
     }
     let c = b.center();
     let r = diag(b) / 2.0;
+    let half = Vec2::new(b.width() * 0.5, b.height() * 0.5);
+    let boundary = move |p: Point, length: f64| {
+        if length == r {
+            return true;
+        }
+        if !r.is_finite() || (length - r).abs() > 8.0 * f64::EPSILON * r {
+            return false;
+        }
+        // A bounds-relative distance identifies boundary points affected by center rounding.
+        (Vec2::new(p.x - b.x0, p.y - b.y0) - half).hypot() == r
+    };
     let f = move |q: Point| {
         let d = q - c;
-        let t = (1.0 - d.hypot() / r).max(0.0);
+        let length = d.hypot();
+        let t = (1.0 - length / r).max(0.0);
         // y runs down, so a positive turn is clockwise on the page.
         let a = ang * t;
+        if a == 0.0 {
+            return q;
+        }
         let (s, co) = a.sin_cos();
         c + Vec2::new(d.x * co - d.y * s, d.x * s + d.y * co)
     };
     let piece = (r / 8.0).min(r / (1.0 + ang.abs() * 2.0));
-    map_nonlinear_within(path, piece, max, f)
+    map_handles_within(path, piece, max, f, |p, h| {
+        let v = h - p;
+        if !v.hypot().is_finite() {
+            return f(p);
+        }
+        let d = p - c;
+        let length = d.hypot();
+        let radial = if length > 0.0 { (d / length).dot(v) } else { 0.0 };
+        // The clamped rotation has different inward and outward derivatives at the circle.
+        let inside = if boundary(p, length) { radial < 0.0 } else { length < r };
+        let gradient = if inside { -ang / r * radial } else { 0.0 };
+        let tangent = if gradient == 0.0 { v } else { v + Vec2::new(-d.y, d.x) * gradient };
+        let a = ang * (1.0 - length / r).max(0.0);
+        let (s, co) = a.sin_cos();
+        f(p) + Vec2::new(tangent.x * co - tangent.y * s, tangent.x * s + tangent.y * co)
+    })
 }
 
 const ZIGZAG_ARCLEN_ACCURACY: f64 = 1e-4;

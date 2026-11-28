@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Options…",
             ["Object", "Blend"],
             None,
-            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends; easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (omitted ones keep their value; out of range is an error); with no blend selected, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
+            "{id?: id, spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends (or of the blend `id` alone; a hidden or locked one is an error); easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (each blend keeps its own value for every option omitted; out of range is an error and changes nothing; no undo step when nothing changes); with no blend selected and no `id`, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
             always,
             blend_options
         ),
@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Spine Point",
             [],
             None,
-            "{id? (default: the selected blend), anchor: index, x, y, with?: [index…], handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), and the points `with` names by as much, or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on a moved point moves with it. The first edit turns the straight spine into a path",
+            "{id? (default: the selected blend), anchor: index, x, y, with?: [index…], handle?: in|out, independent?: bool, symmetric?: bool, link?: bool} move a point of the blend's spine (its handles along), and the points `with` names by as much, or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`; `symmetric` mirrors the opposite handle about the anchor without changing its kind, except at an open end of the spine; `link` makes the point smooth with the other handle in line at its own length, a retracted one pulled out to the moved handle's length where a segment leaves the point on its side; `symmetric` and `link` need `handle`, `symmetric` cannot go with `independent`, and `link` cannot go with `independent` or `symmetric`; all default false). A key object sitting on a moved point moves with it. The first edit turns the straight spine into a path",
             has_doc,
             spine_move_anchor
         ),
@@ -199,7 +199,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Info",
             [],
             None,
-            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, version (a warp's map: 1, each style as one Bézier patch; 0, the earlier map), rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
+            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, version (a warp's map: 1, each style as one Bézier patch; 0, the earlier map), rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, a side shorter than 1e-6 pt taking the other side's, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
             has_doc,
             env_info
         ),

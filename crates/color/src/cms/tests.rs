@@ -194,6 +194,100 @@ fn colour_blindness_proofs() {
     assert_eq!(ProofTarget::parse(&ProofTarget::Cmyk("X".into()).id()), Some(ProofTarget::Cmyk("X".into())));
 }
 
+/// Proof Setup › Customize: Simulate Black Ink shows the press black of a CMYK device as the dark
+/// gray it prints, where the proof otherwise shows it as black; Simulate Paper Color shows it so
+/// as well, on the paper's color.
+#[test]
+fn simulate_black_ink_shows_the_press_black_as_gray() {
+    let c = cms();
+    let device = ProofSetup { target: ProofTarget::Cmyk(GENERIC_CMYK.into()), ..Default::default() };
+    let black = ProofSetup { simulate_black: true, ..device.clone() };
+    let paper = ProofSetup { simulate_paper: true, ..device.clone() };
+    let plain = c.proof_srgb([0.0; 3], &device);
+    let gray = c.proof_srgb([0.0; 3], &black);
+    assert!(plain.iter().all(|v| *v < 0.02), "black stays black: {plain:?}");
+    assert!(gray.iter().all(|v| *v > 0.05), "the press black shows as a gray: {gray:?}");
+    assert_eq!(c.proof_srgb([1.0; 3], &black), [1.0; 3], "the paper stays white");
+    assert!(c.proof_srgb([0.0; 3], &paper).iter().all(|v| *v > 0.05));
+    // The working CMYK target, and the inks Separations Preview shows, follow it too.
+    let working = ProofSetup { target: ProofTarget::WorkingCmyk, simulate_black: true, ..Default::default() };
+    assert_eq!(c.proof_srgb([0.0; 3], &working), gray);
+    assert!(c.proof_cmyk_to_srgb([0.0, 0.0, 0.0, 1.0], &black)[0] > c.proof_cmyk_to_srgb([0.0, 0.0, 0.0, 1.0], &device)[0] + 0.05);
+    // The table the canvas draws through is made for each setting.
+    assert!(de(c.proof_lut(&black).apply([0.0; 3]), gray) < 2.5);
+    assert!(de(c.proof_lut(&device).apply([0.0; 3]), plain) < 2.5);
+}
+
+/// Preserve CMYK Numbers sends the color's CMYK numbers in the document's space to the simulated
+/// device unchanged: with Device CMYK as the working space, K50 shows as the simulated press
+/// prints K50 (darker, with its dot gain). Without it the color is converted into the device's
+/// space with the intent, and the gray looks as it does on screen.
+#[test]
+fn preserve_cmyk_numbers_sends_the_numbers_unchanged() {
+    let dev = Cms::new(&ColorSettings { cmyk: DEVICE_CMYK.into(), ..Default::default() }).unwrap();
+    let press = Cms::new(&ColorSettings::default()).unwrap();
+    let k50 = [0.0, 0.0, 0.0, 0.5];
+    let gray = dev.cmyk_to_srgb(k50, false);
+    let device = ProofSetup { target: ProofTarget::Cmyk(GENERIC_CMYK.into()), ..Default::default() };
+    let preserved = dev.proof_srgb(gray, &ProofSetup { preserve_numbers: true, ..device.clone() });
+    let want = press.cmyk_to_srgb(k50, false);
+    assert!(de(preserved, want) < 0.5, "{preserved:?} vs {want:?}");
+    let converted = dev.proof_srgb(gray, &device);
+    assert!(de(converted, gray) < 1.5, "{converted:?} vs {gray:?}");
+    assert!(de(converted, preserved) > 3.0, "{converted:?} vs {preserved:?}");
+    // With the numbers preserved the intent is not used.
+    let perceptual = ProofSetup { intent: Intent::Perceptual, preserve_numbers: true, ..device };
+    assert_eq!(dev.proof_srgb(gray, &perceptual), preserved);
+}
+
+/// An RGB profile as the device to simulate: with Preserve RGB Numbers the document's RGB numbers
+/// show as that device shows them (sRGB numbers on a Display P3 device look more saturated);
+/// without it a color the device can show looks the same, and one it can't show is clipped.
+#[test]
+fn rgb_device_proofs_show_the_device_numbers() {
+    let c = cms();
+    let p3 = ProofSetup { target: ProofTarget::Rgb(DISPLAY_P3.into()), ..Default::default() };
+    assert_eq!(ProofTarget::parse(&p3.target.id()), Some(p3.target.clone()));
+    assert_eq!(p3.target.id(), format!("rgb:{DISPLAY_P3}"));
+    assert!(!p3.target.is_cmyk());
+    let red = [0.7, 0.3, 0.25];
+    let converted = c.proof_srgb(red, &p3);
+    assert!(de(converted, red) < 1.0, "{converted:?}");
+    let preserved = c.proof_srgb(red, &ProofSetup { preserve_numbers: true, ..p3.clone() });
+    assert!(preserved[0] > red[0] + 0.02 && preserved[1] < red[1] - 0.02, "{preserved:?}");
+    // An RGB color's own numbers give the same proof.
+    let own = c.proof_color(&Color::rgb(red[0], red[1], red[2]), &ProofSetup { preserve_numbers: true, ..p3.clone() });
+    assert!(de(own, preserved) < 0.01, "{own:?} vs {preserved:?}");
+    // sRGB numbers on an sRGB device: as they are either way.
+    let srgb = ProofSetup { target: ProofTarget::Rgb(SRGB.into()), preserve_numbers: true, ..Default::default() };
+    assert!(de(c.proof_srgb(red, &srgb), red) < 0.01);
+    // A wider working space's numbers on an sRGB device: its green clips to sRGB green.
+    let wide = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    let green = wide.rgb_to_srgb([0.2, 0.8, 0.2]);
+    let shown = wide.proof_srgb(green, &srgb);
+    assert!(de(shown, green) > 3.0, "the wide space's numbers show as sRGB numbers: {shown:?}");
+    // A profile that is gone leaves the colors as they are.
+    let gone = ProofSetup { target: ProofTarget::Rgb("Nope".into()), ..Default::default() };
+    assert_eq!(c.proof_srgb(red, &gone), red);
+}
+
+/// A CMYK device whose profile is not loaded leaves a color as the screen shows it, with Preserve
+/// CMYK Numbers on as well as off, the same as for a pixel of that color.
+#[test]
+fn missing_cmyk_device_leaves_colors_as_they_are() {
+    let c = cms();
+    let gone = ProofSetup { target: ProofTarget::Cmyk("Nope".into()), preserve_numbers: true, ..Default::default() };
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    let shown = c.display_rgb(&blue);
+    assert_eq!(c.proof_color(&blue, &gone), shown);
+    assert_eq!(c.proof_srgb(shown, &gone), shown);
+    let off = ProofSetup { preserve_numbers: false, ..gone.clone() };
+    assert_eq!(c.proof_color(&blue, &off), shown);
+    // A CMYK color keeps its inks' display color.
+    let ink = Color::Cmyk { c: 0.2, m: 0.7, y: 0.1, k: 0.05 };
+    assert!(de(c.proof_color(&ink, &gone), c.display_rgb(&ink)) < 0.01);
+}
+
 /// The expected colors were computed separately with NumPy from the same published inputs (linear
 /// sRGB to XYZ from IEC 61966-2-1, Smith & Pokorny's XYZ to LMS, Judd-Vos XYZ at 485 nm and 660 nm),
 /// following Brettel, Viénot & Mollon (1997) with the display's white as the neutral axis.
@@ -426,6 +520,33 @@ fn with_active_puts_settings_in_place_on_this_thread_only() {
 }
 
 #[test]
+fn with_active_keeps_its_working_settings_while_another_thread_sets_them() {
+    let before = working_settings();
+    let p3 = Arc::new(Cms::new(&ColorSettings { rgb: DISPLAY_P3.into(), cmyk: DEVICE_CMYK.into(), ..Default::default() }).unwrap());
+    let (inside, after_other, other) = with_active(p3.clone(), || {
+        let inside = working();
+        // The same settings again, so other tests in this binary see the same values.
+        let again = before.clone();
+        let other = std::thread::spawn(move || {
+            set_active(&again).unwrap();
+            working()
+        })
+        .join()
+        .unwrap();
+        (inside, working(), other)
+    });
+    assert!(Arc::ptr_eq(&inside, &p3), "settings made from no others are their own working settings");
+    assert!(Arc::ptr_eq(&after_other, &p3), "a set_active on another thread leaves this thread's working settings");
+    assert!(!Arc::ptr_eq(&other, &p3), "the other thread has the settings it set");
+    assert_eq!(working_settings(), before, "the working settings come back after");
+    // A document's context keeps the working settings it was made from.
+    let doc = for_document(Some(DISPLAY_P3), None);
+    let (active, working) = with_active(doc, || (active_settings(), working_settings()));
+    assert_eq!(active.rgb, DISPLAY_P3, "the document's profile is active");
+    assert_eq!(working, before, "the working RGB space stays the working one");
+}
+
+#[test]
 fn a_document_gets_the_same_context_for_the_same_profiles() {
     // Other tests load profiles meanwhile, and a load makes the contexts again: try until one pair
     // of calls sees none.
@@ -459,6 +580,23 @@ fn policies_parse_and_default_in_saved_settings() {
     assert_eq!((saved["rgbPolicy"].as_str(), saved["cmykPolicy"].as_str()), (Some("preserveEmbedded"), Some("preserveNumbers")));
 }
 
+/// The three Ask boxes are off by default and in settings saved before they existed, and save
+/// under their own keys.
+#[test]
+fn ask_boxes_default_off_and_save() {
+    let old: ColorSettings =
+        serde_json::from_str(r#"{"rgb": "sRGB IEC61966-2.1", "cmyk": "Device CMYK (uncalibrated)", "intent": "perceptual", "bpc": false}"#).unwrap();
+    assert!(!old.ask_mismatch_open && !old.ask_mismatch_paste && !old.ask_missing_open);
+    let st = ColorSettings::default();
+    assert!(!st.ask_mismatch_open && !st.ask_mismatch_paste && !st.ask_missing_open);
+    let saved = serde_json::to_value(ColorSettings { ask_mismatch_paste: true, ..Default::default() }).unwrap();
+    assert_eq!(saved["askMismatchOpen"], false);
+    assert_eq!(saved["askMismatchPaste"], true);
+    assert_eq!(saved["askMissingOpen"], false);
+    let back: ColorSettings = serde_json::from_value(saved).unwrap();
+    assert!(back.ask_mismatch_paste);
+}
+
 /// Convert to Working Space keeps a color's appearance: an RGB color of a wide space converts into
 /// sRGB, and a CMYK color of one CMYK space into another, with numbers that look the same. Grey and
 /// Lab colors stay as they are.
@@ -476,5 +614,50 @@ fn convert_into_keeps_the_appearance() {
     assert!(delta_e2000(wide.lab(&ink), working.lab(&moved)) < 3.0, "{ink:?} → {moved:?}");
     for c in [Color::Gray { k: 0.3 }, Color::Lab { l: 50.0, a: 10.0, b: -20.0 }] {
         assert_eq!(wide.convert_into(&working, &c, Intent::RelativeColorimetric), c);
+    }
+}
+
+/// With black-point compensation on, Generic CMYK displays its press black as black, so dark inks
+/// converted out of it keep that appearance: into Device CMYK, and into another document whose
+/// CMYK space is also Generic CMYK.
+#[test]
+fn convert_into_keeps_compensated_dark_inks() {
+    let generic = cms();
+    let device = Cms::new(&ColorSettings { cmyk: DEVICE_CMYK.into(), ..Default::default() }).unwrap();
+    let other_generic = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    for ink in [
+        Color::Cmyk { c: 0.6, m: 0.5, y: 0.5, k: 0.9 },
+        Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 1.0 },
+        Color::Cmyk { c: 0.3, m: 0.2, y: 0.2, k: 0.75 },
+    ] {
+        for dest in [&device, &other_generic] {
+            let moved = generic.convert_into(dest, &ink, Intent::RelativeColorimetric);
+            assert!(matches!(moved, Color::Cmyk { .. }), "{ink:?} → {moved:?}");
+            let d = delta_e2000(generic.lab(&ink), dest.lab(&moved));
+            assert!(d < 2.0, "{ink:?} → {moved:?}: ΔE {d}");
+        }
+    }
+}
+
+/// Absolute Colorimetric converts CMYK out of Generic CMYK from the inks' absolute Lab (paper color
+/// included, no black-point compensation): into another document whose CMYK space is also Generic
+/// CMYK, the paper, dark inks and mid tones keep their absolute appearance.
+#[test]
+fn absolute_cmyk_conversion_keeps_the_absolute_appearance() {
+    let generic = cms();
+    let other_generic = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    let absolute = |c: &Cms, ink: &Color| match (&c.cmyk, ink) {
+        (CmykSpace::Generic(g), Color::Cmyk { c, m, y, k }) => g.to_lab_abs([*c, *m, *y, *k]),
+        _ => panic!("Generic CMYK inks expected, not {ink:?}"),
+    };
+    for ink in [
+        Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 0.0 },
+        Color::Cmyk { c: 0.6, m: 0.5, y: 0.5, k: 0.9 },
+        Color::Cmyk { c: 0.3, m: 0.2, y: 0.2, k: 0.75 },
+        Color::Cmyk { c: 0.4, m: 0.1, y: 0.6, k: 0.1 },
+    ] {
+        let moved = generic.convert_into(&other_generic, &ink, Intent::AbsoluteColorimetric);
+        let d = delta_e2000(absolute(&generic, &ink), absolute(&other_generic, &moved));
+        assert!(d < 2.0, "{ink:?} → {moved:?}: ΔE {d}");
     }
 }

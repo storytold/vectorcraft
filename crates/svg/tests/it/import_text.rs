@@ -974,7 +974,7 @@ fn absolutely_placed_right_to_left_characters_sit_on_their_own_x() {
             vec![(0..2, 20.0), (3..4, 100.0), (4..5, 160.0)],
         ),
     ];
-    let unplaced = |w: &[String]| w.iter().any(|w| w.contains("absolutely placed"));
+    let unplaced = |w: &[String]| w.iter().any(|w| w.contains("point type objects"));
     for (body, share, chunks) in cases {
         let (d, w) = import_with_report(&svg(&body)).unwrap();
         assert!(!unplaced(&w), "{body}: {w:?}");
@@ -988,12 +988,82 @@ fn absolutely_placed_right_to_left_characters_sit_on_their_own_x() {
             assert!(close(left, want, 0.05), "{body}: the chunk {bytes:?} spans {left}..{right}, so it does not start at {want}");
         }
     }
-    // A left-to-right character between right-to-left ones is drawn right next to the one after
-    // it, with no kerning between them: that one keeps its place in the line, and a warning says so.
-    let (d, w) = import_with_report(&svg(r#"<text x="100 160 220" y="80" direction="rtl" font-size="20">אbג</text>"#)).unwrap();
-    assert!(unplaced(&w), "{w:?}");
-    let (left, right) = chunk_edges(only_text(&d), 2..3);
-    assert!(close(right, 160.0, 0.05), "b spans {left}..{right}");
+}
+
+/// The document-space edges of character `ch`, in whichever text of `d` holds it (as
+/// [`chunk_edges`] measures them), and the y it is drawn at (its baseline moved by its baseline
+/// shift).
+fn char_edges(d: &Document, ch: char) -> (f64, f64, f64) {
+    let t = texts(d).into_iter().find(|t| t.plain_text().contains(ch)).unwrap_or_else(|| panic!("no text holds {ch}"));
+    let at = t.plain_text().find(ch).unwrap();
+    let (left, right) = chunk_edges(t, at..at + ch.len_utf8());
+    let shift = t.runs.iter().find(|r| r.text.contains(ch)).unwrap().style.baseline_shift;
+    let y = layout(FontDb::global(), t).glyphs.iter().find(|g| g.byte == at).map(|g| (t.xf * g.origin).y).unwrap() - shift;
+    (left, right, y)
+}
+
+/// SVG 2 › Text (https://www.w3.org/TR/SVG2/text.html): each absolute position starts a chunk,
+/// and bidi reordering happens only within a chunk. A left-to-right character drawn right before a
+/// right-to-left one has no kerning between them in one text object, so such a text imports as a
+/// group of point type objects, each character on its own x.
+#[test]
+fn absolutely_placed_characters_one_object_cannot_place_import_as_a_group() {
+    // (markup, the characters of its objects in order, each character with the x its right edge
+    // sits on and its baseline)
+    type Case = (&'static str, &'static str, Vec<(char, f64, f64)>);
+    let cases: Vec<Case> = vec![
+        (
+            r#"<text id="t" x="100 160 220" y="80" direction="rtl" font-size="20">אbג</text>"#,
+            "אbג",
+            vec![('א', 100.0, 80.0), ('b', 160.0, 80.0), ('ג', 220.0, 80.0)],
+        ),
+        (
+            r#"<text id="t" x="100 160 220 280" y="80" direction="rtl" font-size="20">אbגd</text>"#,
+            "אbגd",
+            vec![('א', 100.0, 80.0), ('b', 160.0, 80.0), ('ג', 220.0, 80.0), ('d', 280.0, 80.0)],
+        ),
+        // x values that decrease.
+        (
+            r#"<text id="t" x="220 160 100" y="80" direction="rtl" font-size="20">אbג</text>"#,
+            "אbג",
+            vec![('א', 220.0, 80.0), ('b', 160.0, 80.0), ('ג', 100.0, 80.0)],
+        ),
+        // On a second line, and with a baseline of its own.
+        (
+            r#"<text id="t" direction="rtl" font-size="20"><tspan x="40" y="40">אב</tspan><tspan x="100 160 220" y="80 80 90">גbד</tspan></text>"#,
+            "אבגbד",
+            vec![('א', 40.0, 40.0), ('ג', 100.0, 80.0), ('b', 160.0, 80.0), ('ד', 220.0, 90.0)],
+        ),
+    ];
+    for (body, text, chars) in cases {
+        let (d, w) = import_with_report(&svg(body)).unwrap();
+        assert!(w.iter().any(|w| w.contains("point type objects in a group")), "{body}: {w:?}");
+        let top = d.layers[0].children().unwrap();
+        assert_eq!(top.len(), 1, "{body}: {top:?}");
+        assert_eq!(top[0].name.as_deref(), Some("t"), "{body}: the group takes the element's id");
+        let NodeKind::Group { children, clip: false } = &top[0].kind else { panic!("{body}: {:?}", top[0].kind) };
+        assert!(children.len() > 1 && children.iter().all(|c| matches!(c.kind, NodeKind::Text(_))), "{body}: {children:?}");
+        let all: String = texts(&d).iter().map(|t| t.plain_text().replace('\n', "")).collect();
+        assert_eq!(all, text, "{body}: every character once, in order");
+        for (ch, x, y) in chars {
+            let (left, right, base) = char_edges(&d, ch);
+            assert!(close(right, x, 0.05), "{body}: {ch} spans {left}..{right}, not ending at {x}");
+            assert!(close(base, y, 1e-6), "{body}: {ch} sits on {base}, not {y}");
+        }
+    }
+    // Placed characters one object can place stay one object, also when their x values decrease.
+    for (body, chars) in [
+        (r#"<text x="100 160 220" y="80" direction="rtl" font-size="20">אbc</text>"#, [('א', 100.0), ('b', 160.0), ('c', 220.0)]),
+        (r#"<text x="220 160 100" y="80" direction="rtl" font-size="20">אבג</text>"#, [('א', 220.0), ('ב', 160.0), ('ג', 100.0)]),
+    ] {
+        let (d, w) = import_with_report(&svg(body)).unwrap();
+        assert!(!w.iter().any(|w| w.contains("point type objects")), "{body}: {w:?}");
+        only_text(&d);
+        for (ch, x) in chars {
+            let (left, right, _) = char_edges(&d, ch);
+            assert!(close(right, x, 0.05), "{body}: {ch} spans {left}..{right}, not ending at {x}");
+        }
+    }
 }
 
 #[test]

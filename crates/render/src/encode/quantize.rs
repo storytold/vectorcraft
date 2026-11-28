@@ -1,8 +1,9 @@
 //! Colour reduction for palette formats (PNG-8, GIF): a palette of at most 256 colours chosen by
 //! median cut over a 15-bit histogram (refined by a few k-means passes) or a fixed palette, then
 //! each pixel mapped to its nearest entry with optional dithering (Floyd–Steinberg diffusion, an
-//! 8×8 ordered pattern, or noise). Pixels under half opacity can become one transparent entry;
-//! the others are blended over the matte colour.
+//! 8×8 ordered pattern, or noise). Pixels under half opacity can become one transparent entry, or
+//! with a transparency dither a share of the partly transparent pixels that follows their
+//! opacity; the others are blended over the matte color.
 
 use std::collections::HashMap;
 
@@ -111,11 +112,18 @@ pub struct PaletteOptions {
     pub dither: Dither,
     /// Dither strength 0–100.
     pub dither_amount: u8,
-    /// Pixels under half opacity become a transparent entry; otherwise every pixel is opaque.
+    /// Pixels under half opacity become a transparent entry (see `transparency_dither`);
+    /// otherwise every pixel is opaque.
     pub transparency: bool,
     /// The colour partly transparent pixels are blended over. `None`: with transparency, they
     /// keep their own colour (hard edges); without, white.
     pub matte: Option<[u8; 3]>,
+    /// With `transparency`, how partly transparent pixels are split between the transparent entry
+    /// and their color ([`clear_mask`]); `Dither::None` cuts them at half opacity.
+    pub transparency_dither: Dither,
+    /// The strength of the diffusion transparency dither, 0–100 (0 cuts at half opacity); the
+    /// pattern and noise methods do not use it.
+    pub transparency_dither_amount: u8,
 }
 
 impl Default for PaletteOptions {
@@ -127,6 +135,8 @@ impl Default for PaletteOptions {
             dither_amount: 100,
             transparency: true,
             matte: Some([255; 3]),
+            transparency_dither: Dither::None,
+            transparency_dither_amount: 100,
         }
     }
 }
@@ -153,12 +163,12 @@ pub fn quantize(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions) -> Ind
 /// them all anyway; locked colours no pixel ends up using are left out.
 pub fn quantize_locked(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions, locked: &[[u8; 3]]) -> Indexed {
     let px = rgba.as_chunks::<4>().0;
-    let clear = |p: &[u8; 4]| o.transparency && p[3] < 128;
+    let clear = clear_mask(rgba, width, o);
     let matte = o.matte.unwrap_or([255; 3]);
     let colors = opaque_colors(px, o, matches!(o.reduction, Reduction::Gray | Reduction::BlackWhite));
-    let has_clear = px.iter().any(clear);
+    let has_clear = clear.contains(&true);
     let k = (o.colors.clamp(2, 256) as usize - usize::from(has_clear)).max(1);
-    let opaque = || colors.iter().zip(px).filter(|(_, p)| !clear(p)).map(|(c, _)| *c);
+    let opaque = || colors.iter().zip(&clear).filter(|(_, c)| !**c).map(|(c, _)| *c);
     // Locked colours take their slots first (at least one is left for the reduction).
     let mut lock: Vec<[u8; 3]> = Vec::with_capacity(locked.len().min(k));
     for c in locked {
@@ -168,6 +178,22 @@ pub fn quantize_locked(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions,
     }
     let free = k - lock.len();
     let (mut palette, exact) = match o.reduction {
+        // With one entry left (two colors and a transparent entry, or the others locked): black or
+        // white, whichever leaves the opaque pixels nearer the palette, the locked colors included.
+        Reduction::BlackWhite if free < 2 => {
+            let mut hist = [0u64; 256];
+            for c in opaque() {
+                hist[c[0] as usize] += 1;
+            }
+            let w = o.reduction.weights();
+            let cost = |end: [u8; 3]| -> f32 {
+                let entries: Vec<[f32; 3]> = lock.iter().chain([&end]).map(|c| c.map(f32::from)).collect();
+                let near = |g: f32| entries.iter().map(|&e| dist([g; 3], e, w)).fold(f32::INFINITY, f32::min);
+                hist.iter().enumerate().filter(|(_, n)| **n > 0).map(|(g, &n)| n as f32 * near(g as f32)).sum()
+            };
+            let ends = [[0; 3], [255; 3]].into_iter().filter(|c| !lock.contains(c));
+            (ends.min_by(|a, b| cost(*a).total_cmp(&cost(*b))).into_iter().collect(), false)
+        }
         Reduction::BlackWhite => (vec![[0; 3], [255; 3]], false),
         Reduction::Gray => ((0..free).map(|i| [(i * 255 / (free - 1).max(1)) as u8; 3]).collect(), false),
         Reduction::Web => (web(opaque(), free), false),
@@ -185,50 +211,130 @@ pub fn quantize_locked(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions,
     if palette.is_empty() {
         palette.push(matte);
     }
-    finish(px, &colors, width, height, &palette, o, if exact { Dither::None } else { o.dither })
+    finish(&clear, &colors, width, height, &palette, o, if exact { Dither::None } else { o.dither })
 }
 
 /// [`quantize`] to the fixed `palette`: each pixel takes its nearest entry, with `o`'s dither,
 /// transparency and matte; `o.reduction` sets only the distance weights, and `o.colors` is not
-/// used. Only the first 255 colors of `palette` are used, leaving room for the transparent entry.
-/// Entries no pixel uses are left out.
+/// used. Only the first 256 colors of `palette` are used, or the first 255 when a pixel becomes
+/// transparent, leaving room for the transparent entry. Entries no pixel uses are left out.
 pub fn quantize_to(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions, palette: &[[u8; 3]]) -> Indexed {
     let px = rgba.as_chunks::<4>().0;
     let colors = opaque_colors(px, o, false);
-    let mut palette: Vec<[u8; 3]> = palette.iter().take(255).copied().collect();
+    let clear = clear_mask(rgba, width, o);
+    let has_clear = clear.contains(&true);
+    let mut palette: Vec<[u8; 3]> = palette.iter().take(256 - usize::from(has_clear)).copied().collect();
     if palette.is_empty() {
         palette.push(o.matte.unwrap_or([255; 3]));
     }
-    finish(px, &colors, width, height, &palette, o, o.dither)
+    finish(&clear, &colors, width, height, &palette, o, o.dither)
+}
+
+/// For each pixel of `rgba` (`width` pixels a row), the entry of `palette` nearest its color, as
+/// [`quantize_to`] measures it (the matte, transparency and `o.reduction`'s distance weights)
+/// without dither; `None` for a pixel that becomes transparent ([`clear_mask`]), and for every
+/// pixel when `palette` is empty. `f` gets each pixel's entry in pixel order, worked out one pixel
+/// at a time.
+pub fn nearest_entries(rgba: &[u8], width: u32, o: &PaletteOptions, palette: &[[u8; 3]], mut f: impl FnMut(Option<usize>)) {
+    let clear = clear_mask(rgba, width, o);
+    let pal: Vec<[f32; 3]> = palette.iter().map(|c| c.map(f32::from)).collect();
+    let index = PaletteIndex::new(&pal, o.reduction.weights());
+    for (p, &clear) in rgba.as_chunks::<4>().0.iter().zip(&clear) {
+        f(if pal.is_empty() || clear { None } else { Some(index.nearest(opaque_color(p, o, false).map(f32::from))) });
+    }
+}
+
+/// Which pixels of `rgba` (`width` pixels a row) become the transparent entry. Without
+/// `o.transparency`, none. Otherwise fully transparent pixels always do and opaque ones never; a
+/// partly transparent pixel does under half opacity with no transparency dither, and else by
+/// `o.transparency_dither`. With pattern, noise, or diffusion at amount 100, about as many of an
+/// area's pixels stay opaque as its opacity says; a lower diffusion amount moves the result toward
+/// the cut at half opacity. Diffusion spreads each partly transparent pixel's opacity error to the
+/// pixels right of it and below it (Floyd–Steinberg, scaled by `o.transparency_dither_amount`), and
+/// fully transparent and opaque pixels pass on the error they receive; pattern compares the
+/// opacity with the 8×8 ordered pattern and noise with a noise threshold. The result depends only
+/// on the pixels and the options, so exports are reproducible.
+pub fn clear_mask(rgba: &[u8], width: u32, o: &PaletteOptions) -> Vec<bool> {
+    let px = rgba.as_chunks::<4>().0;
+    if !o.transparency {
+        return vec![false; px.len()];
+    }
+    let width = (width as usize).min(px.len()).max(1);
+    let amount = f32::from(o.transparency_dither_amount.min(100)) / 100.0;
+    let dither = match o.transparency_dither {
+        Dither::Diffusion if amount == 0.0 => Dither::None,
+        d => d,
+    };
+    // Two rows of opacity error for diffusion (the current one and the next), one pixel of margin
+    // on each side.
+    let mut err = vec![0f32; if dither == Dither::Diffusion { 2 * (width + 2) } else { 0 }];
+    let half = err.len() / 2;
+    let mut out = Vec::with_capacity(px.len());
+    for (y, row) in px.chunks(width).enumerate() {
+        let (cur, next) = err.split_at_mut(half);
+        next.fill(0.0);
+        for (x, p) in row.iter().enumerate() {
+            let a = f32::from(p[3]);
+            let clear = match (p[3], dither) {
+                (0, _) => true,
+                (255, _) => false,
+                (_, Dither::None) => p[3] < 128,
+                (_, Dither::Pattern) => a < 255.0 * bayer(x % 8, y % 8),
+                // Another noise than the color dither's, so the two do not line up.
+                (_, Dither::Noise) => a < 255.0 * noise(x ^ 0x5a5a, y ^ 0xa5a5),
+                (_, Dither::Diffusion) => a + cur[x + 1] < 127.5,
+            };
+            if dither == Dither::Diffusion {
+                // A partly transparent pixel spreads its own opacity error. A fully transparent or
+                // opaque pixel keeps its state and passes on the error it received unchanged, so
+                // the partly transparent pixels around it keep their share of opacity
+                // (VectorCraft's own rule).
+                let got = cur[x + 1];
+                let e = match p[3] {
+                    0 | 255 => got,
+                    _ => (a + got - if clear { 0.0 } else { 255.0 }) * amount,
+                };
+                // 7/16 right, 3/16 below left, 5/16 below, 1/16 below right.
+                cur[x + 2] += e * 7.0 / 16.0;
+                next[x] += e * 3.0 / 16.0;
+                next[x + 1] += e * 5.0 / 16.0;
+                next[x + 2] += e / 16.0;
+            }
+            out.push(clear);
+        }
+        cur.copy_from_slice(next);
+    }
+    out
 }
 
 /// The color of each pixel when opaque: blended over the matte, and gray when `gray`.
 fn opaque_colors(px: &[[u8; 4]], o: &PaletteOptions, gray: bool) -> Vec<[u8; 3]> {
-    let matte = o.matte.unwrap_or([255; 3]);
-    let blend = o.matte.is_some() || !o.transparency;
-    px.iter()
-        .map(|p| {
-            let a = if blend { p[3] as u32 } else { 255 };
-            let c = [0, 1, 2].map(|i| ((p[i] as u32 * a + matte[i] as u32 * (255 - a) + 127) / 255) as u8);
-            if gray { [luma(c); 3] } else { c }
-        })
-        .collect()
+    px.iter().map(|p| opaque_color(p, o, gray)).collect()
 }
 
-/// Map the pixels `px` (their opaque `colors`) to `palette` with `dither`, then drop the entries
-/// no pixel uses and put the transparent entry first when a pixel is transparent.
-fn finish(px: &[[u8; 4]], colors: &[[u8; 3]], width: u32, height: u32, palette: &[[u8; 3]], o: &PaletteOptions, dither: Dither) -> Indexed {
-    let clear = |p: &[u8; 4]| o.transparency && p[3] < 128;
+/// The color of the pixel `p` when opaque, as [`opaque_colors`] gives it.
+fn opaque_color(p: &[u8; 4], o: &PaletteOptions, gray: bool) -> [u8; 3] {
     let matte = o.matte.unwrap_or([255; 3]);
-    let has_clear = px.iter().any(clear);
+    let blend = o.matte.is_some() || !o.transparency;
+    let a = if blend { p[3] as u32 } else { 255 };
+    let c = [0, 1, 2].map(|i| ((p[i] as u32 * a + matte[i] as u32 * (255 - a) + 127) / 255) as u8);
+    if gray { [luma(c); 3] } else { c }
+}
+
+/// Map the pixels (their opaque `colors`, transparent where `clear` says) to `palette` with
+/// `dither`, then drop the entries no pixel uses and put the transparent entry first when a pixel
+/// is transparent.
+fn finish(clear: &[bool], colors: &[[u8; 3]], width: u32, height: u32, palette: &[[u8; 3]], o: &PaletteOptions, dither: Dither) -> Indexed {
+    let clear = |i: usize| clear.get(i).copied().unwrap_or(false);
+    let matte = o.matte.unwrap_or([255; 3]);
+    let has_clear = (0..colors.len()).any(clear);
     let weights = o.reduction.weights();
     // (A width past the pixels there are would size the error rows from a number nothing checked.)
-    let mut indices =
-        map(colors, (width as usize).min(colors.len()), palette, weights, dither, f32::from(o.dither_amount.min(100)) / 100.0, |i| clear(&px[i]));
+    let mut indices = map(colors, (width as usize).min(colors.len()), palette, weights, dither, f32::from(o.dither_amount.min(100)) / 100.0, clear);
     // Drop the entries no pixel uses (fixed palettes), keeping the order.
     let mut used = [false; 256];
     for (i, &ix) in indices.iter().enumerate() {
-        if !clear(&px[i]) {
+        if !clear(i) {
             used[ix as usize] = true;
         }
     }
@@ -244,7 +350,7 @@ fn finish(px: &[[u8; 4]], colors: &[[u8; 3]], width: u32, height: u32, palette: 
         }
     }
     for (i, ix) in indices.iter_mut().enumerate() {
-        *ix = if clear(&px[i]) { 0 } else { remap[*ix as usize] };
+        *ix = if clear(i) { 0 } else { remap[*ix as usize] };
     }
     Indexed { width, height, palette: kept, transparent: has_clear.then_some(0), indices }
 }

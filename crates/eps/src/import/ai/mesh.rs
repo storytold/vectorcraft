@@ -25,7 +25,7 @@ const MAX_PATCHES: usize = 16_384;
 const MAX_POINTS: usize = MAX_PATCHES * 16;
 
 /// The largest grid `/Size` read as one mesh, a side.
-const MAX_SIDE: usize = 128;
+pub(crate) const MAX_SIDE: usize = 128;
 /// The most inks of an `/NChannel` colour space read.
 const MAX_INKS: usize = 32;
 /// The most rows or columns a mesh stitched from its patches may have once the lines through the
@@ -556,6 +556,14 @@ impl Path {
 
 /// `a` towards `b` by `t`, in their own colour model where they share one.
 fn mix(a: &Color, b: &Color, t: f32) -> Color {
+    // At either end, that end's own color in its own model: a mesh point of a patch whose corners
+    // differ in model keeps its color.
+    if t <= 0.0 {
+        return *a;
+    }
+    if t >= 1.0 {
+        return *b;
+    }
     let l = |x: f32, y: f32| x + (y - x) * t;
     match (a, b) {
         (Color::Rgb { r, g, b: bl }, Color::Rgb { r: r2, g: g2, b: b2 }) => Color::rgb(l(*r, *r2), l(*g, *g2), l(*bl, *b2)),
@@ -563,6 +571,51 @@ fn mix(a: &Color, b: &Color, t: f32) -> Color {
         (Color::Gray { k }, Color::Gray { k: k2 }) => Color::gray(l(*k, *k2)),
         _ => a.lerp(b, t),
     }
+}
+
+/// The most values one entry of [`mesh_reads`]' record holds (a corner of [`MAX_INKS`] inks has
+/// 41).
+const MAX_ENTRY: usize = 64;
+
+/// The gradient mesh the reader reads from `record`, a mesh's lines (`/Mesh X!` … `/End X!`,
+/// entries on `%_` lines or not), with `to_doc` taking art space to the document: one mesh, or
+/// `None` where the reader would read none or a group of its patches.
+pub(crate) fn mesh_reads(record: &[u8], to_doc: Affine) -> Option<GradientMesh> {
+    use super::lex::{Lexer, Tok};
+    let mut lex = Lexer::new(record);
+    let mut m: Option<MeshReader> = None;
+    let mut stack: Vec<V> = vec![];
+    let mut marks: Vec<usize> = vec![];
+    while let Some(t) = lex.next_token() {
+        match t.tok {
+            Tok::Num(v) => stack.push(V::Num(v)),
+            Tok::Name(n) => stack.push(V::Name(super::obj::text(n))),
+            Tok::Str(s) | Tok::Hex(s) => stack.push(V::Str(s)),
+            Tok::Word(b"[") => marks.push(stack.len()),
+            Tok::Word(b"]") => {
+                let at = marks.pop()?;
+                let items = stack.split_off(at.min(stack.len()));
+                stack.push(V::Arr(items));
+            }
+            Tok::Word(b"X!") => match (stack.last().and_then(V::text).as_deref(), m.take()) {
+                (Some("Mesh"), None) => m = Some(MeshReader::default()),
+                (Some("End"), Some(read)) => {
+                    if read.unread || read.patches.is_empty() {
+                        return None;
+                    }
+                    return read.one_mesh().ok();
+                }
+                _ => return None,
+            },
+            Tok::Word(b"X#") => m.as_mut()?.entry(&std::mem::take(&mut stack), to_doc),
+            Tok::Comment(_) => {}
+            _ => return None,
+        }
+        if stack.len() > MAX_ENTRY {
+            return None;
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -883,6 +936,51 @@ mod tests {
         let mut reader = MeshReader::default();
         square(&mut reader, [&[0.0], &[1.0], &[1.0], &[0.0]], Default::default());
         assert!(!reader.unread && reader.patches[0].points[0].color == Color::gray(1.0));
+    }
+
+    /// `/Version` and `/Data` entries, before or after the patches, are passed over: corners with
+    /// and without an opacity are read by their count of values either way.
+    #[test]
+    fn version_and_data_entries_are_passed_over() {
+        for (with_opacity, data_first) in [(true, true), (false, true), (true, false), (false, false)] {
+            let mut reader = MeshReader::default();
+            for (value, key) in [(V::Name("Cartesian".into()), "Type"), (nums(&[1.0, 1.0]), "Size")] {
+                reader.entry(&[value, V::Name(key.into())], Affine::IDENTITY);
+            }
+            if data_first {
+                reader.entry(&[V::Num(2.0), V::Name("Version".into())], Affine::IDENTITY);
+                reader.entry(&[V::Name("Data".into())], Affine::IDENTITY);
+            }
+            reader.entry(&[nums(&[0.0, 0.0]), V::Name("P".into())], Affine::IDENTITY);
+            let colors: [&[f64]; 4] =
+                if with_opacity { [&[0.5, 0.25], &[0.5, 0.25], &[0.5, 0.25], &[0.5, 0.25]] } else { [&[0.5], &[0.5], &[0.5], &[0.5]] };
+            square(&mut reader, colors, Default::default());
+            if !data_first {
+                reader.entry(&[V::Name("Data".into())], Affine::IDENTITY);
+                reader.entry(&[V::Num(1.0), V::Name("Version".into())], Affine::IDENTITY);
+            }
+            assert!(!reader.unread, "{with_opacity} {data_first}");
+            let mesh = reader.one_mesh().unwrap();
+            let want = if with_opacity { 0.25 } else { 1.0 };
+            assert!(mesh.points.iter().all(|p| p.opacity == want), "{with_opacity} {data_first}: {mesh:?}");
+        }
+    }
+
+    /// A patch whose corners differ in color space keeps each corner's color in its own model when
+    /// the patches are stitched into one mesh.
+    #[test]
+    fn stitched_corners_keep_their_own_color_models() {
+        let cs = |n: &str| (V::Name(n.into()), "CS");
+        let mut reader = MeshReader::default();
+        let first = vec![(nums(&[1.0, 1.0]), "Size"), (nums(&[0.0, 0.0]), "P"), cs("DeviceRGB")];
+        square(
+            &mut reader,
+            [&[1.0, 0.0, 0.0], &[0.25], &[0.0, 1.0, 0.0, 0.0], &[0.0, 0.0, 1.0]],
+            [first, vec![cs("DeviceGray")], vec![cs("DeviceCMYK")], vec![cs("DeviceRGB")]],
+        );
+        let mesh = reader.one_mesh().unwrap();
+        let colors: Vec<Color> = mesh.points.iter().map(|p| p.color).collect();
+        assert_eq!(colors, [Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0), Color::gray(0.75), Color::cmyk(0.0, 1.0, 0.0, 0.0)]);
     }
 
     /// A named colour (`[c m y k /DeviceCMYK (name) /Process]`) paints at each corner's tint, 1 its

@@ -16,6 +16,9 @@ impl<'a> Reader<'a> {
         if matches!(kind, Kind::Layer(_)) {
             self.ensure_space();
             self.check_symbols();
+            if self.defs_only {
+                (self.envelope_checks, self.dash_checks) = (0, 0);
+            }
         }
         let base = if matches!(kind, Kind::Obj(_)) { self.stack.len() } else { self.frames.last().map_or(0, |f| f.base) };
         self.frames.push(Frame {
@@ -120,11 +123,13 @@ impl<'a> Reader<'a> {
         }
         // A group holding only clipping paths (`q … u <path> W n U … Q`) doesn't clip on its own: `u`/`U` don't save
         // the graphics state as `q`/`Q` do, so its paths clip the clipping group around it, as the file's PDF part draws it.
+        // In a compound path (`*u u <path> W n … U *U`, possibly nested in other groups) they are the compound
+        // path's subpaths, as its other grouped paths are: the compound clipping path, their union.
         if matches!(kind, Kind::Group)
             && unread.is_empty()
             && !clips.is_empty()
             && clips.len() == kids.len()
-            && matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. }))
+            && (matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. })) || self.in_compound())
         {
             for kid in kids {
                 if let Some(parent) = self.frames.last_mut() {
@@ -134,6 +139,15 @@ impl<'a> Reader<'a> {
             }
             return Ok(());
         }
+        // A clipping group (`q` … `Q`) with no clipping path whose last object is type: that type is
+        // its clipping path, as Illustrator writes a clipping mask of type made from the text
+        // document (`/AI11Text`), which has no `W`. The slot is filled later ([`clip_by_type`]).
+        let type_clip = match kids.last() {
+            Some(last) if matches!(kind, Kind::Clip) && clips.is_empty() && !super::is_look_slot(last.name.as_deref()) => {
+                slot_of(last.name.as_deref()).map(|_| last.id)
+            }
+            _ => None,
+        };
         // A compound path of clipping paths clips its clipping group.
         let clipping = matches!(kind, Kind::Compound) && !clips.is_empty();
         self.group_ended = !matches!(kind, Kind::Compound);
@@ -179,6 +193,9 @@ impl<'a> Reader<'a> {
         if clipping && let Some(f) = self.frames.last_mut() {
             f.clips.push(f.children.len());
         }
+        if let Some(slot) = type_clip {
+            self.type_clips.insert(node.id, slot);
+        }
         if compound_members {
             self.compound_groups.insert(node.id);
         }
@@ -195,6 +212,18 @@ impl<'a> Reader<'a> {
             self.add(p, opened_hidden || hidden)?;
         }
         Ok(())
+    }
+
+    /// Is the innermost open frame a compound path (`*u`), or a group in one with only groups between them?
+    fn in_compound(&self) -> bool {
+        for f in self.frames.iter().rev() {
+            match f.kind {
+                Kind::Group => {}
+                Kind::Compound => return true,
+                _ => return false,
+            }
+        }
+        false
     }
 
     /// The compound path of `kids`, painted and made transparent as its subpaths say.
@@ -723,6 +752,8 @@ impl<'a> Reader<'a> {
         if std::mem::replace(&mut self.symbols_checked, true) {
             return;
         }
+        // The symbols are all read now: the heads of those defined after the styles.
+        self.read_arrowheads();
         // Each symbol's name in the file (none for one named as an earlier one), and the names its
         // instances use.
         let files: HashMap<&str, &str> = self.symbol_names.iter().map(|(file, named)| (named.as_str(), file.as_str())).collect();
@@ -885,6 +916,8 @@ impl<'a> Reader<'a> {
             return;
         }
         let Some(p) = self.envelopes.pop() else { return };
+        let scale = self.space_scale();
+        let pages = self.pages_in_doc();
         let drawn = self.frames.last().filter(|f| f.children.len() == p.siblings + 1).and_then(|f| f.children.last());
         let Some(drawn) = drawn else {
             self.warn(crate::import::ai::envelope::drawn_note(p.typed));
@@ -894,7 +927,7 @@ impl<'a> Reader<'a> {
             self.wait_for_type(p);
             return;
         }
-        let live = (self.envelope_checks > 0).then(|| crate::import::ai::envelope::live(&p.obj, p.before, p.inner)).flatten();
+        let live = (self.envelope_checks > 0).then(|| crate::import::ai::envelope::live(&p.obj, p.before, p.inner, scale)).flatten();
         let Some(kind) = live else {
             self.warn(crate::import::ai::envelope::DRAWN);
             return;
@@ -927,8 +960,7 @@ impl<'a> Reader<'a> {
         (shown.visible, shown.opacity) = (true, 1.0);
         let mut plain = drawn.clone();
         (plain.visible, plain.opacity) = (true, 1.0);
-        let page = self.page_in_doc();
-        let mut alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+        let mut alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, &pages, &mut self.envelope_spent);
         // In Edit Contents, a grid that draws the contents elsewhere than the drawn art is checked
         // again moved onto that art.
         if !alike
@@ -937,7 +969,7 @@ impl<'a> Reader<'a> {
         {
             self.envelope_checks -= 1;
             (envelope.kind, shown.kind) = (kind.clone(), kind);
-            alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+            alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, &pages, &mut self.envelope_spent);
         }
         if !alike {
             self.warn(crate::import::ai::envelope::DRAWN);
@@ -982,8 +1014,8 @@ impl Reader<'_> {
             self.warn(crate::import::ai::envelope::TYPE_DRAWN);
             return;
         }
-        let drawn = drawn.id;
-        self.typed_envelopes.push(crate::import::ai::envelope::TypedEnvelope { obj: p.obj, before: p.before, inner: p.inner, drawn });
+        let (drawn, scale) = (drawn.id, self.space_scale());
+        self.typed_envelopes.push(crate::import::ai::envelope::TypedEnvelope { obj: p.obj, before: p.before, inner: p.inner, drawn, scale });
     }
 }
 

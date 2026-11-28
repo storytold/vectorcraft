@@ -18,7 +18,7 @@ pub mod craft_fonts;
 pub mod edit;
 pub mod embed;
 mod features;
-mod fontconfig;
+mod file_font;
 mod fontdb;
 mod harakat;
 pub mod hyphen;
@@ -26,6 +26,7 @@ mod justify;
 mod kashida;
 mod kept;
 mod layout;
+pub mod retype;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
 mod suitcase;
@@ -36,15 +37,19 @@ pub mod thread;
 
 pub use bitmap::GlyphImage;
 pub use context_alternates::{ContextAlternate, ContextAlternates, alternate_changes, alternates_in_context, is_alternate_feature};
-pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
+pub use craft_fonts::{CRAFT_FONTS, EmbeddedFace, WEB_FONTS, WebFont};
+#[cfg(target_arch = "wasm32")]
+pub use craft_fonts::{SERVED_FONTS, ServedFace};
 pub use features::{
     EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
 };
+pub use file_font::{FILE_FONT_UPEM, FileFontInfo, FileGlyph, MAX_FILE_GLYPHS, build_file_font};
 pub use fontdb::{
-    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, GlyphOrigin, IcfMargins, JoiningPosition,
-    LentCompositeFonts, PlatformFontFiles, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file,
-    is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs,
-    user_font_dirs,
+    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, GlyphAlternate,
+    GlyphCategory, GlyphCategoryKind, GlyphOrigin, IcfMargins, InstalledFace, JoiningPosition, LentCompositeFonts, MAX_FILE_FACES, OutlineFormat,
+    PlatformFontFiles, RECENTLY_ADDED_WITHIN, RecentlyAdded, StylisticSet, Substitution, SubstitutionKind, UnloadedFile, WantedFont, WantedFonts,
+    app_font_dir, is_font_file, is_generic_family, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs,
+    set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 pub use layout::{envelope_ink, layout_inputs, register_envelope_ink};
@@ -54,7 +59,7 @@ pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
-pub use shape::{aki_space, inseparable, line_start_space, spacing_scale};
+pub use shape::{aki_space, inseparable, kinsoku_set_from, line_start_space, repeat_base, spacing_scale};
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
@@ -401,6 +406,10 @@ pub struct TextLayout {
     pub inlines: Vec<InlineGlyph>,
     /// List markers, in text order.
     pub markers: Vec<ListMarker>,
+    /// Kurikaeshi Moji Shori: the repeat marks drawn as the character they stand for, as (the
+    /// mark's byte offset in the plain text, the character drawn), in text order. Writers that put
+    /// characters in place of glyphs (live SVG text) write that character.
+    pub repeat_marks: Vec<(usize, char)>,
 }
 
 impl Default for TextLayout {
@@ -419,6 +428,7 @@ impl Default for TextLayout {
             path_fill: None,
             inlines: Vec::new(),
             markers: Vec::new(),
+            repeat_marks: Vec::new(),
         }
     }
 }

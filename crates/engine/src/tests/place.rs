@@ -20,7 +20,41 @@ fn session() -> Session {
 /// A `w`×`h` PNG of one colour (`rgba`), declaring `ppi` when given.
 fn png(w: u32, h: u32, rgba: [u8; 4], ppi: Option<f64>) -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(w, h, image::Rgba(rgba)).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(w, h, image::Rgba(rgba))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     match ppi {
         Some(r) => cmd::fileio::ppi::with_png_resolution(&out, (r, r)),
         None => out,
@@ -482,13 +516,46 @@ fn keeping_an_image_decodes_nothing() {
 }
 
 /// `w`×`h` pixels of noise, which compress little, encoded as `format`.
-fn noise(w: u32, h: u32, format: image::ImageFormat) -> Vec<u8> {
+fn noise(w: u32, h: u32, format: craft_image_codecs::Format) -> Vec<u8> {
     let img = image::RgbImage::from_fn(w, h, |x, y| {
         let v = x.wrapping_mul(2_654_435_761) ^ y.wrapping_mul(40_503).rotate_left(13);
         image::Rgb([v as u8, (v >> 8) as u8, (v >> 16) as u8])
     });
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, format, &craft_image_codecs::EncodeOptions::default()).map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -497,7 +564,7 @@ fn noise(w: u32, h: u32, format: image::ImageFormat) -> Vec<u8> {
 /// cut short still decodes, with its missing rows empty, and is placed.
 #[test]
 fn an_image_whose_pixels_cant_be_read_is_not_placed() {
-    let mut cut = noise(600, 300, image::ImageFormat::Png);
+    let mut cut = noise(600, 300, craft_image_codecs::Format::Png);
     cut.truncate(cut.len() / 2);
     let mut s = session();
     let info = s.execute("file.place.info", &file("cut.png", &cut)).unwrap();
@@ -513,7 +580,7 @@ fn an_image_whose_pixels_cant_be_read_is_not_placed() {
         assert!(top_children(&s).is_empty(), "{p}: nothing placed");
         assert_eq!((s.doc().unwrap().history.undo.len(), s.journal.len()), (undo, journal), "{p}");
     }
-    let mut jpeg = noise(600, 300, image::ImageFormat::Jpeg);
+    let mut jpeg = noise(600, 300, craft_image_codecs::Format::Jpeg);
     jpeg.truncate(jpeg.len() / 2);
     let r = place(&mut s, "cut.jpg", &jpeg, json!({}));
     assert_eq!(r["format"], "jpg");
@@ -587,6 +654,28 @@ fn pdf_pages_and_native_artboards_place_as_clipped_groups() {
         assert!((r["width"].as_f64().unwrap() - 20.0).abs() < 1.5, "{name}: the art's bounds: {r}");
         let err = s.execute("file.place", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes), "page": 3})).unwrap_err();
         assert!(err.to_string().contains("has 2"), "{name}: {err}");
+    }
+}
+
+/// Place and Set Bounds use the layout of native point type, including its alignment.
+#[test]
+fn bounding_native_placement_measures_aligned_point_type() {
+    for (justify, x) in [("center", 190), ("right", 275)] {
+        let mut src = session();
+        let square = src.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 180, "height": 180})).unwrap()["id"].clone();
+        src.execute("paint.setStroke", &json!({"id": square, "none": true})).unwrap();
+        src.execute("text.create", &json!({"text": "Sample test", "x": x, "y": 150, "size": 18, "justify": justify})).unwrap();
+        let shown = vectorcraft_render::encode::art_bounds(&src.doc().unwrap().doc).unwrap();
+        let width = node(&src, &square).geometric_bounds().unwrap().width();
+        assert!(close(shown.width(), width), "the {justify}-aligned text starts inside the square");
+        let native = serialize(&mut src, "vectorcraft");
+
+        let mut placed = session();
+        let r = place(&mut placed, "aligned.vectorcraft", &native, json!({"crop": "bounding", "link": false}));
+        assert!(close(r["width"].as_f64().unwrap(), width), "{justify}: {r}");
+        placed.execute("object.setBounds", &json!({"width": width, "proportional": true})).unwrap();
+        let after = vectorcraft_render::encode::art_bounds(&placed.doc().unwrap().doc).unwrap();
+        assert!(close(after.width(), shown.width()), "{justify}: {shown:?} became {after:?}");
     }
 }
 
@@ -894,11 +983,48 @@ fn placed_art_brings_its_brushes_renaming_on_conflict() {
 fn a_placed_brush_whose_art_uses_a_renamed_image_is_copied() {
     let file = |pixel: u8| {
         let mut png = vec![];
-        image::GrayImage::from_pixel(2, 1, image::Luma([pixel])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = (image::GrayImage::from_pixel(2, 1, image::Luma([pixel]))).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
         let mut s = session();
         s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
         s.edit("Brush", |d, _| {
-            d.images.insert("k".into(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+            d.images.insert(
+                "k".into(),
+                vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() },
+            );
             let im = vectorcraft_doc::ImageObject {
                 key: "k".into(),
                 width: 2,
@@ -942,7 +1068,41 @@ fn a_placed_brush_whose_art_uses_a_renamed_image_is_copied() {
 fn info_reports_size_resolution_colour_mode_and_link() {
     let mut s = session();
     let mut gray = vec![];
-    image::GrayImage::from_pixel(300, 150, image::Luma([128])).write_to(&mut std::io::Cursor::new(&mut gray), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::GrayImage::from_pixel(300, 150, image::Luma([128]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| gray.extend_from_slice(&__b))
+    }
+    .unwrap();
     let gray = cmd::fileio::ppi::with_png_resolution(&gray, (300.0, 300.0));
     let mut p = file("scan.png", &gray);
     p["thumbnail"] = json!(16);
@@ -950,7 +1110,23 @@ fn info_reports_size_resolution_colour_mode_and_link() {
     assert_eq!((info["colorMode"].as_str(), info["pixelWidth"].as_u64()), (Some("Grayscale"), Some(300)));
     assert_eq!(info["ppi"], json!([300.0, 300.0]));
     assert!(close(info["width"].as_f64().unwrap(), 72.0));
-    let thumb = image::load_from_memory(&vectorcraft_format::base64_decode(info["thumbnailBase64"].as_str().unwrap()).unwrap()).unwrap();
+    let thumb = craft_image_codecs::decode(&vectorcraft_format::base64_decode(info["thumbnailBase64"].as_str().unwrap()).unwrap())
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((thumb.width(), thumb.height()), (16, 8));
     assert!(top_children(&s).is_empty(), "info places nothing");
     // A path is linked by default.
@@ -1048,9 +1224,16 @@ fn a_click_of_the_place_cursor_asks_the_frontend_to_place_the_file_when_asked_to
     let reqs = s.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), view).unwrap();
     let [UiRequest::Place(p)] = &reqs[..] else { panic!("{reqs:?}") };
     assert_eq!(p["rect"], json!([10.0, 10.0, 40.0, 20.0]));
+    assert_eq!(p[vectorcraft_tools::place::SOURCE_INDEX], 0);
+    assert_eq!(p[vectorcraft_tools::place::CLICK], true);
     assert!(top_children(&s).is_empty(), "the frontend places it");
     assert_eq!(s.tool_options()["names"], json!(["b.png"]), "the cursor goes on to the next file");
-    s.execute("file.place", p).unwrap();
+    // The frontend consumes the private source identity before placing the file.
+    let mut p = p.clone();
+    for key in [vectorcraft_tools::place::SOURCE_INDEX, vectorcraft_tools::place::CLICK] {
+        p.as_object_mut().unwrap().remove(key);
+    }
+    s.execute("file.place", &p).unwrap();
     // Left out: the second each document was made in.
     let doc = |s: &Session| {
         let mut d = (*s.doc().unwrap().doc).clone();
@@ -1059,6 +1242,30 @@ fn a_click_of_the_place_cursor_asks_the_frontend_to_place_the_file_when_asked_to
     };
     assert!(doc(&s) == doc(&at_once));
     assert_eq!(s.journal.last(), at_once.journal.last());
+}
+
+/// A Shift-click of the place cursor asks the frontend for the file's import options
+/// (`showImportOptions: true`); headless, with no frontend to ask, it places the file as a click
+/// does.
+#[test]
+fn a_shift_click_of_the_place_cursor_places_headless_as_a_click_does() {
+    let view = ViewInfo::default();
+    let files: Vec<Value> = ["a.png", "b.png"].iter().map(|n| file(n, &png(40, 20, [9, 9, 9, 255], None))).collect();
+    let shift = Mods { shift: true, ..Mods::default() };
+    let (mut headless, mut app) = (session(), session());
+    app.place_cursor_requests = true;
+    let mut reqs = vec![];
+    for s in [&mut headless, &mut app] {
+        s.execute("file.place.queue", &json!({"files": files})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0).with_mods(shift), view).unwrap();
+        reqs = s.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0).with_mods(shift), view).unwrap();
+    }
+    let [UiRequest::Place(p)] = &reqs[..] else { panic!("{reqs:?}") };
+    assert_eq!(p["showImportOptions"], true);
+    let [img] = &top_children(&headless)[..] else { panic!("one image placed") };
+    let b = img.geometric_bounds().unwrap();
+    assert_eq!([b.x0, b.y0, b.width(), b.height()], [10.0, 10.0, 40.0, 20.0]);
+    assert_eq!(headless.tool_options()["names"], json!(["b.png"]));
 }
 
 /// Files read for the place cursor apart from the session ([`Session::prepare_place_queue`], then
@@ -1090,7 +1297,7 @@ fn files_read_for_the_place_cursor_apart_from_the_session_load_it_as_file_place_
 /// queue, read with the session or apart from it.
 #[test]
 fn the_place_queue_skips_an_image_whose_pixels_cant_be_read() {
-    let mut cut = noise(600, 300, image::ImageFormat::Png);
+    let mut cut = noise(600, 300, craft_image_codecs::Format::Png);
     cut.truncate(cut.len() / 2);
     let p = json!({"files": [file("a.png", &png(40, 20, [9, 9, 9, 255], None)), file("cut.png", &cut)], "link": false});
     let (mut a, mut b) = (session(), session());
@@ -1101,6 +1308,35 @@ fn the_place_queue_skips_an_image_whose_pixels_cant_be_read() {
     assert_eq!(b.place_queue_read(read).unwrap(), r);
 }
 
+/// An encrypted PDF stays in the place cursor's queue, read with the session or apart from it, at
+/// a letter page's size with `needsPassword`, so that a click in the app can ask for its password;
+/// headless, a click on it places nothing.
+#[test]
+fn the_place_queue_keeps_an_encrypted_pdf() {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let locked = pdf(&[PdfPage::new(100.0, 50.0, "0 g 0 0 10 10 re f")], Some("pw"));
+    let p = json!({"files": [file("locked.pdf", &locked), file("a.png", &png(40, 20, [9, 9, 9, 255], None))], "thumbnail": 8});
+    let (mut a, mut b) = (session(), session());
+    let r = a.execute("file.place.queue", &p).unwrap();
+    assert_eq!((&r["count"], &r["skipped"]), (&json!(2), &json!([])), "{r}");
+    assert_eq!(r["files"][0], json!({"name": "locked.pdf", "format": "pdf", "width": 612.0, "height": 792.0, "needsPassword": true}));
+    assert!(r["files"][1].get("needsPassword").is_none());
+    let read = b.prepare_place_queue(&p).unwrap().read().unwrap();
+    assert_eq!(b.place_queue_read(read).unwrap(), r);
+    let view = ViewInfo::default();
+    assert_eq!(a.tool_options()["name"], "locked.pdf");
+    let _ = a.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), view);
+    let _ = a.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), view);
+    assert_eq!((top_children(&a).len(), a.doc().unwrap().history.undo.len()), (0, 0), "nothing placed without the password");
+    // An encrypted PDF with a bad option is refused for the option, not kept.
+    let e = a.execute("file.place.queue", &json!({"files": [file("locked.pdf", &locked)], "page": 0})).unwrap_err().to_string();
+    assert!(e.contains("page must be a whole number from 1"), "{e}");
+    // A PDF that can't be read for another reason is still skipped.
+    let broken = file("broken.pdf", b"%PDF-1.7\nnot a PDF body\n");
+    let r = a.execute("file.place.queue", &json!({"files": [broken, file("b.png", &png(4, 4, [0; 4], None))]})).unwrap();
+    assert_eq!((&r["count"], &r["skipped"][0]["name"]), (&json!(1), &json!("broken.pdf")), "{r}");
+}
+
 /// The place queue's thumbnail of an image is drawn from the pixels its check decoded, so each
 /// image is decoded once.
 #[test]
@@ -1108,7 +1344,41 @@ fn the_place_queue_draws_a_thumbnail_without_decoding_the_image_again() {
     // Pixels no other test uses, since every test shares the image store.
     let img = image::RgbImage::from_fn(320, 160, |x, y| image::Rgb([(x % 251) as u8, 23, (y % 241) as u8]));
     let mut bytes = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| bytes.extend_from_slice(&__b))
+    }
+    .unwrap();
     let p = json!({"files": [file("q.png", &bytes)], "link": false, "thumbnail": 64});
     let decodes = vectorcraft_render::image_decodes();
     let r = session().execute("file.place.queue", &p).unwrap();

@@ -95,7 +95,9 @@ pub struct EnvelopeOptions {
     /// Distort Pattern Fills (with Distort Appearance): pattern tiles bend with the art.
     pub distort_pattern_fills: bool,
     /// With Distort Appearance, how far the box the content maps from reaches past its geometric
-    /// bounds at the top, bottom, left and right, as shares of their height and width. An envelope
+    /// bounds at the top, bottom, left and right, as shares of their height and width; when the
+    /// height or width is shorter than 1e-6 pt, the margins along that side are shares of the other side
+    /// ([`envelope_margin_lengths`]). An envelope
     /// opened from a `.ai` whose saved size includes its strokes has these margins. New envelopes
     /// have none. Leaving Edit Contents measures them again when the strokes reach differently.
     #[serde(skip_serializing_if = "crate::skip::is_default")]
@@ -140,7 +142,8 @@ impl EnvelopeOptions {
         if !self.distort_appearance || !self.bounds_margin.iter().all(|m| m.is_finite() && *m >= 0.0) {
             return r;
         }
-        let grown = crate::marks::outset(r, [top * r.height(), bottom * r.height(), left * r.width(), right * r.width()]);
+        let Some([v, _, h, _]) = envelope_margin_lengths(r) else { return r };
+        let grown = crate::marks::outset(r, [top * v, bottom * v, left * h, right * h]);
         if grown.is_finite() { grown } else { r }
     }
 }
@@ -316,6 +319,7 @@ fn content_hash(text: &crate::TextObject) -> Option<[u64; 2]> {
     let inline_bounds = text.runs.iter().filter_map(|r| r.inline.as_ref()).map(|i| i.bounds.map(|b| [b.x0, b.y0, b.x1, b.y1].map(f64::to_bits)));
     for h in &mut feed.0 {
         h.write_u8(u8::from(text.first_para_continues));
+        h.write_u32(text.first_para_lead.map_or(u32::MAX, u32::from));
         for b in inline_bounds.clone() {
             match b {
                 None => h.write_u8(0),
@@ -456,19 +460,28 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
     }
 }
 
-/// The [`EnvelopeOptions::bounds_margin`] of content with bounds `stroked` and `plain`. `None` for
-/// content with no width or no height, or for margins an `f32` can't hold.
+/// The lengths the top, bottom, left and right [`EnvelopeOptions::bounds_margin`] of content with
+/// geometric bounds `plain` are shares of: its height for the top and bottom and its width for the
+/// left and right. A side shorter than 1e-6 pt takes the other side's length, so a stroked straight
+/// line along an axis has margins across it. `None` when neither side has a length.
+pub fn envelope_margin_lengths(plain: Rect) -> Option<[f64; 4]> {
+    let long = |l: f64| l.is_finite() && l >= 1e-6;
+    let (h, w) = match (long(plain.height()), long(plain.width())) {
+        (true, true) => (plain.height(), plain.width()),
+        (false, true) => (plain.width(), plain.width()),
+        (true, false) => (plain.height(), plain.height()),
+        (false, false) => return None,
+    };
+    Some([h, h, w, w])
+}
+
+/// The [`EnvelopeOptions::bounds_margin`] of content with bounds `stroked` and `plain`, as shares
+/// of [`envelope_margin_lengths`]. `None` for content with neither a width nor a height, or for
+/// margins an `f32` can't hold.
 pub fn envelope_stroke_margin(stroked: Rect, plain: Rect) -> Option<[f32; 4]> {
-    if plain.width() < 1e-6 || plain.height() < 1e-6 {
-        return None;
-    }
-    let margin = [
-        (plain.y0 - stroked.y0) / plain.height(),
-        (stroked.y1 - plain.y1) / plain.height(),
-        (plain.x0 - stroked.x0) / plain.width(),
-        (stroked.x1 - plain.x1) / plain.width(),
-    ]
-    .map(|m| m as f32);
+    let [v, _, h, _] = envelope_margin_lengths(plain)?;
+    let margin =
+        [(plain.y0 - stroked.y0) / v, (stroked.y1 - plain.y1) / v, (plain.x0 - stroked.x0) / h, (stroked.x1 - plain.x1) / h].map(|m| m as f32);
     margin.iter().all(|m| m.is_finite()).then_some(margin)
 }
 

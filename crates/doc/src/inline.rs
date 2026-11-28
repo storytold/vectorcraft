@@ -117,6 +117,29 @@ impl Document {
     /// symbol that shows itself inline ([`Self::inline_art_bounds`]) is shown as an empty slot.
     /// Returns the ids of the texts in the layers that changed.
     pub fn resolve_inline_art_with(&mut self, layout: &mut dyn FnMut(&mut TextObject)) -> Vec<NodeId> {
+        self.resolve_inline_art_since(None, layout).changed
+    }
+
+    /// [`Self::resolve_inline_art_with`], given `last`: a document an earlier pass left resolved,
+    /// with the bounds that pass measured ([`InlinePass::measured`]). When this document has the
+    /// same symbols, graph designs, pattern tiles and foreign data (`unknown`, which holds the
+    /// symbols' natural sizes and 9-slice guides) as `last`, and each symbol name measured then
+    /// still measures the same, the type in the layer trees that are the same nodes as `last`'s
+    /// already has these bounds: only the other layer trees are checked, in the same order, and
+    /// the document and the ids returned are those of the full pass. Otherwise, or without `last`,
+    /// the full pass runs.
+    pub fn resolve_inline_art_since(&mut self, last: Option<(&Document, &InlineMeasured)>, layout: &mut dyn FnMut(&mut TextObject)) -> InlinePass {
+        if let Some((last, kept)) = last
+            && self.same_inline_inputs(last, kept)
+        {
+            let measured = Measured(RefCell::new(kept.0.clone()));
+            let mut changed = vec![];
+            let layers = resolve_kids(Some(&last.layers), &self.layers, &|n| measured.get(n, || self.inline_art_bounds(n)), layout, &mut changed);
+            for (i, layer) in layers {
+                self.layers[i] = layer;
+            }
+            return InlinePass { changed, measured: InlineMeasured(measured.0.into_inner()), partial: true };
+        }
         let mut out = vec![];
         let mut unused = vec![];
         let graph = InlineGraph::of(self);
@@ -147,9 +170,43 @@ impl Document {
                 }
             }
         }
-        out
+        InlinePass { changed: out, measured: InlineMeasured(measured.0.into_inner()), partial: false }
+    }
+
+    /// Whether the type in this document's layer trees that are the same nodes as `last`'s already
+    /// has the bounds a full pass would give it (see [`Self::resolve_inline_art_since`]).
+    fn same_inline_inputs(&self, last: &Document, kept: &InlineMeasured) -> bool {
+        self.symbols.len() == last.symbols.len()
+            && self.symbols.iter().zip(&last.symbols).all(|(a, b)| a.name == b.name && Arc::ptr_eq(&a.art, &b.art))
+            && self.graph_designs.len() == last.graph_designs.len()
+            && self.graph_designs.iter().zip(&last.graph_designs).all(|(a, b)| a.name == b.name && Arc::ptr_eq(&a.art, &b.art))
+            && self.patterns.len() == last.patterns.len()
+            && self
+                .patterns
+                .iter()
+                .zip(&last.patterns)
+                .all(|(a, b)| a.name == b.name && a.art.len() == b.art.len() && a.art.iter().zip(&b.art).all(|(x, y)| Arc::ptr_eq(x, y)))
+            && crate::Shared::ptr_eq(&self.unknown, &last.unknown)
+            && kept.0.iter().all(|(name, b)| self.inline_art_bounds(name) == *b)
     }
 }
+
+/// What a pass of [`Document::resolve_inline_art_since`] did.
+#[derive(Debug)]
+pub struct InlinePass {
+    /// The ids of the texts in the layers that changed, in the order the full pass finds them.
+    pub changed: Vec<NodeId>,
+    /// The bounds the pass gave the inline graphics of each symbol name, for the next pass.
+    pub measured: InlineMeasured,
+    /// Whether only the layer trees that differ from the last resolved document's were checked.
+    pub partial: bool,
+}
+
+/// The art bounds a pass of [`Document::resolve_inline_art_since`] gave the inline graphics of each
+/// symbol name it was asked for. A pass that checks only some layer trees keeps the names the
+/// pass before it measured, so the names of all the type in the document stay listed.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct InlineMeasured(HashMap<String, Option<Rect>>);
 
 /// Whether `t` has inline graphics whose bounds differ from what `bounds` gives their symbols.
 fn stale_by(t: &TextObject, bounds: &dyn Fn(&str) -> Option<Rect>) -> bool {
@@ -185,6 +242,22 @@ fn resolve_tree(
     layout: &mut dyn FnMut(&mut TextObject),
     changed: &mut Vec<NodeId>,
 ) -> bool {
+    resolve_since(None, n, bounds, layout, changed)
+}
+
+/// [`resolve_tree`], given `old`: the node `n` was before an edit, in a document whose type was
+/// resolved with the same `bounds`. The opacity mask art and children of `n` that are the same
+/// nodes as `old`'s are skipped: their type already has these bounds. Without `old`, every node
+/// of the tree is visited.
+fn resolve_since(
+    old: Option<&Node>,
+    n: &mut Arc<Node>,
+    bounds: &dyn Fn(&str) -> Option<Rect>,
+    layout: &mut dyn FnMut(&mut TextObject),
+    changed: &mut Vec<NodeId>,
+) -> bool {
+    #[cfg(test)]
+    tests::VISITS.with(|v| v.set(v.get() + 1));
     let mut copied = false;
     if matches!(&n.kind, NodeKind::Text(t) if stale_by(t, bounds)) {
         let node = Arc::make_mut(n);
@@ -196,17 +269,17 @@ fn resolve_tree(
         }
         copied = true;
     }
+    let old_mask = old.and_then(|o| o.extras().mask.as_deref()).map(|m| &m.art);
     let mask = n.extras().mask.as_deref().and_then(|m| {
-        let mut art = m.art.clone();
-        resolve_tree(&mut art, bounds, layout, changed).then_some(art)
-    });
-    let mut kids = vec![];
-    for (i, c) in n.children().into_iter().flatten().enumerate() {
-        let mut c = c.clone();
-        if resolve_tree(&mut c, bounds, layout, changed) {
-            kids.push((i, c));
+        if old_mask.is_some_and(|o| Arc::ptr_eq(o, &m.art)) {
+            return None;
         }
-    }
+        let mut art = m.art.clone();
+        let old_art = old_mask.filter(|o| o.id == art.id).map(|o| &**o);
+        resolve_since(old_art, &mut art, bounds, layout, changed).then_some(art)
+    });
+    let old_kids = old.map(|o| o.children().map_or(&[][..], Vec::as_slice));
+    let kids = resolve_kids(old_kids, n.children().map_or(&[][..], Vec::as_slice), bounds, layout, changed);
     if mask.is_none() && kids.is_empty() {
         return copied;
     }
@@ -222,6 +295,35 @@ fn resolve_tree(
         }
     }
     true
+}
+
+/// Resolves the trees `kids` as [`resolve_since`] does, each with the node of `old` (the same list
+/// before an edit) that has its id, found at the same position or else by id, and skips those that
+/// are the same nodes as theirs. Without `old`, every tree is visited. Returns the position and new
+/// node of each tree that changed.
+fn resolve_kids(
+    old: Option<&[Arc<Node>]>,
+    kids: &[Arc<Node>],
+    bounds: &dyn Fn(&str) -> Option<Rect>,
+    layout: &mut dyn FnMut(&mut TextObject),
+    changed: &mut Vec<NodeId>,
+) -> Vec<(usize, Arc<Node>)> {
+    let mut by_id: Option<HashMap<NodeId, &Arc<Node>>> = None;
+    let mut out = vec![];
+    for (i, c) in kids.iter().enumerate() {
+        let o = old.and_then(|old| match old.get(i) {
+            Some(b) if b.id == c.id => Some(b),
+            _ => by_id.get_or_insert_with(|| old.iter().map(|b| (b.id, b)).collect()).get(&c.id).copied(),
+        });
+        if o.is_some_and(|o| Arc::ptr_eq(o, c)) {
+            continue;
+        }
+        let mut c = c.clone();
+        if resolve_since(o.map(|o| &**o), &mut c, bounds, layout, changed) {
+            out.push((i, c));
+        }
+    }
+    out
 }
 
 /// The art bounds of each symbol, measured once in a pass of [`Document::resolve_inline_art_with`].
@@ -435,6 +537,112 @@ impl std::fmt::Debug for InlineCycles {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    thread_local! {
+        /// How many nodes [`resolve_since`] has visited on this thread.
+        pub(super) static VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// The nodes visited since the last call.
+    fn visits() -> usize {
+        VISITS.with(|v| v.replace(0))
+    }
+
+    /// A copy of `d` resolved by the full pass, and the ids that pass returns.
+    fn fully_resolved(d: &Document) -> (Document, Vec<NodeId>) {
+        let mut full = d.clone();
+        let ids = full.resolve_inline_art_with(&mut |_| {});
+        (full, ids)
+    }
+
+    /// The children of the layer at `i`, for an edit.
+    fn layer_kids(d: &mut Document, i: usize) -> &mut Vec<Arc<Node>> {
+        match Arc::make_mut(&mut d.layers[i]).children_mut() {
+            Some(kids) => kids,
+            None => panic!("layer {i} is a group"),
+        }
+    }
+
+    /// 50 groups of 20 squares, symbol `S`, type showing `S` in the first group, and type showing
+    /// `S` in the opacity mask of the second.
+    fn many_groups() -> Document {
+        let mut d = Document::new(500.0, 500.0);
+        let square = stroked(&mut d, Rect::new(0.0, 0.0, 10.0, 10.0));
+        symbol(&mut d, "S", vec![square]);
+        for _ in 0..50 {
+            let kids = (0..20).map(|_| stroked(&mut d, Rect::new(0.0, 0.0, 5.0, 5.0))).collect();
+            let group = Node::group(d.alloc_id(), kids);
+            d.layers.push(Arc::new(group));
+        }
+        let t = showing(&mut d, "S");
+        layer_kids(&mut d, 0).push(t);
+        let masked = showing(&mut d, "S");
+        Arc::make_mut(&mut d.layers[1]).extras_mut().mask = Some(Box::new(crate::OpacityMask::new((*masked).clone(), true)));
+        d
+    }
+
+    #[test]
+    fn a_pass_after_an_edit_checks_only_the_trees_the_edit_changed() {
+        let mut d = many_groups();
+        let first = d.resolve_inline_art_since(None, &mut |_| {});
+        assert!(!first.partial);
+        assert_eq!(first.changed.len(), 2);
+        let last = d.clone();
+        visits();
+        let _ = fully_resolved(&d);
+        let full_visits = visits();
+        // The edit moves a square in the 31st group, adds type showing S to the 41st, and gives the
+        // second group's opacity mask new type: its 20 squares stay the same nodes.
+        let moved = stroked(&mut d, Rect::new(1.0, 1.0, 6.0, 6.0));
+        layer_kids(&mut d, 30)[5] = moved;
+        let added = showing(&mut d, "S");
+        layer_kids(&mut d, 40).push(added.clone());
+        let mask_type = showing(&mut d, "S");
+        if let Some(m) = Arc::make_mut(&mut d.layers[1]).extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
+            m.art = mask_type.clone();
+        }
+        let (want, ids) = fully_resolved(&d);
+        assert_eq!(ids, [mask_type.id, added.id]);
+        visits();
+        let pass = d.resolve_inline_art_since(Some((&last, &first.measured)), &mut |_| {});
+        let partial_visits = visits();
+        assert!(pass.partial);
+        assert_eq!(pass.changed, ids);
+        assert_eq!(d, want);
+        // The three changed groups, the mask's new type, the moved square and the added type.
+        assert_eq!(partial_visits, 6);
+        assert!(full_visits > 1000, "{full_visits}");
+        assert_eq!(pass.measured, first.measured);
+    }
+
+    #[test]
+    fn changed_symbols_or_symbol_sizes_take_the_full_pass() {
+        let mut d = many_groups();
+        let mut pass = d.resolve_inline_art_since(None, &mut |_| {});
+        // A natural size for S, its art unchanged.
+        let last = d.clone();
+        d.unknown.insert(SYMBOL_SIZES.into(), serde_json::json!({ "S": [40.0, 20.0] }));
+        let (want, ids) = fully_resolved(&d);
+        assert_eq!(ids.len(), 2);
+        pass = d.resolve_inline_art_since(Some((&last, &pass.measured)), &mut |_| {});
+        assert!(!pass.partial);
+        assert_eq!((&d, &pass.changed), (&want, &ids));
+        // New art for S.
+        let last = d.clone();
+        let bigger = stroked(&mut d, Rect::new(0.0, 0.0, 30.0, 30.0));
+        d.symbols[0].art = Arc::new(Node::group(d.alloc_id(), vec![bigger]));
+        let (want, ids) = fully_resolved(&d);
+        assert_eq!(ids.len(), 2);
+        pass = d.resolve_inline_art_since(Some((&last, &pass.measured)), &mut |_| {});
+        assert!(!pass.partial);
+        assert_eq!((&d, &pass.changed), (&want, &ids));
+        // A measurement that no longer holds, with the same symbols and foreign data.
+        let last = d.clone();
+        let stale = InlineMeasured(HashMap::from([("S".to_owned(), Some(Rect::new(0.0, 0.0, 1.0, 1.0)))]));
+        pass = d.resolve_inline_art_since(Some((&last, &stale)), &mut |_| {});
+        assert!(!pass.partial);
+        assert!(pass.changed.is_empty());
+    }
 
     /// The position of each node in `order`.
     fn positions(order: &[usize]) -> Vec<usize> {

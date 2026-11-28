@@ -432,10 +432,17 @@ fn text_tag(s: &str) -> Option<ProfileText> {
     Some(ProfileText::Localizable(vec![LocalizableString::new("en".into(), "US".into(), s.into())]))
 }
 
+/// The copyright text of profiles made here: they carry no copyright claim.
+pub(super) const NO_COPYRIGHT: &str = "No copyright, use freely";
+
 /// Profiles made here carry their name and no copyright claim.
-fn labelled(mut p: ColorProfile, name: &str) -> ColorProfile {
+fn labelled(p: ColorProfile, name: &str) -> ColorProfile {
+    with_copyright(p, name, NO_COPYRIGHT)
+}
+
+fn with_copyright(mut p: ColorProfile, name: &str, copyright: &str) -> ColorProfile {
     p.description = text_tag(name);
-    p.copyright = text_tag("No copyright, use freely");
+    p.copyright = text_tag(copyright);
     p
 }
 
@@ -446,11 +453,21 @@ const B2A_GRID: usize = 17;
 const GAMUT_GRID: usize = 9;
 
 /// A CMYK output profile sampled from a conversion: `to_lab` (CMYK → media-relative Lab) in a
-/// 9⁴ table, `from_lab` (Lab → CMYK, gamut-mapped) in a 17³ table, Lab PCS (ICC v4 encoding).
+/// 9⁴ table, and Lab → CMYK in 17³ tables, Lab PCS (ICC v4 encoding): `mapped` (gamut-mapped,
+/// with black-point compensation) for the perceptual and saturation intents, `colorimetric` (the
+/// colorimetric inverse of `to_lab`) for the colorimetric intents and the gamut tag.
 /// It carries every tag ICC.1 requires of an output profile: the tables for all three intents
 /// and the gamut tag (Windows rejects a CMYK profile without them, so Photos couldn't show a CMYK
-/// TIFF that embedded one, #2707).
-pub(super) fn cmyk_profile(name: &str, to_lab: impl Fn([f32; 4]) -> lab::Lab, from_lab: impl Fn(lab::Lab) -> [f32; 4]) -> ColorProfile {
+/// TIFF that embedded one, #2707). The media white point is `paper` (absolute XYZ, D50), which
+/// the ICC-absolute colorimetric intent reproduces; the copyright tag holds `copyright`.
+pub(super) fn cmyk_profile(
+    name: &str,
+    paper: [f32; 3],
+    copyright: &str,
+    to_lab: impl Fn([f32; 4]) -> lab::Lab,
+    mapped: impl Fn(lab::Lab) -> [f32; 4],
+    colorimetric: impl Fn(lab::Lab) -> [f32; 4],
+) -> ColorProfile {
     let unit = |i: usize, n: usize| i as f32 / (n - 1) as f32;
     let q = |v: f32| (v.clamp(0.0, 1.0) * 65535.0).round() as u16;
     let mut a2b = Vec::with_capacity(A2B_GRID.pow(4) * 3);
@@ -459,17 +476,21 @@ pub(super) fn cmyk_profile(name: &str, to_lab: impl Fn([f32; 4]) -> lab::Lab, fr
         let l = to_lab(cmyk);
         a2b.extend([l.l / 100.0, (l.a + 128.0) / 255.0, (l.b + 128.0) / 255.0].map(q));
     }
-    let mut b2a = Vec::with_capacity(B2A_GRID.pow(3) * 4);
-    for i in 0..B2A_GRID.pow(3) {
-        let [l, a, b] = [2, 1, 0].map(|d| unit(i / B2A_GRID.pow(d) % B2A_GRID, B2A_GRID));
-        b2a.extend(from_lab(lab::Lab::new(l * 100.0, a * 255.0 - 128.0, b * 255.0 - 128.0)).map(q));
-    }
+    let b2a_of = |from_lab: &dyn Fn(lab::Lab) -> [f32; 4]| {
+        let mut b2a = Vec::with_capacity(B2A_GRID.pow(3) * 4);
+        for i in 0..B2A_GRID.pow(3) {
+            let [l, a, b] = [2, 1, 0].map(|d| unit(i / B2A_GRID.pow(d) % B2A_GRID, B2A_GRID));
+            b2a.extend(from_lab(lab::Lab::new(l * 100.0, a * 255.0 - 128.0, b * 255.0 - 128.0)).map(q));
+        }
+        b2a
+    };
+    let (b2a_mapped, b2a) = (b2a_of(&mapped), b2a_of(&colorimetric));
     // Gamut: 0 where a colour separates and comes back within a ΔE of 3, else out of gamut.
     let mut gamut = Vec::with_capacity(GAMUT_GRID.pow(3));
     for i in 0..GAMUT_GRID.pow(3) {
         let [l, a, b] = [2, 1, 0].map(|d| unit(i / GAMUT_GRID.pow(d) % GAMUT_GRID, GAMUT_GRID));
         let want = lab::Lab::new(l * 100.0, a * 255.0 - 128.0, b * 255.0 - 128.0);
-        gamut.push(if lab::delta_e2000(want, to_lab(from_lab(want))) <= 3.0 { 0 } else { u16::MAX });
+        gamut.push(if lab::delta_e2000(want, to_lab(colorimetric(want))) <= 3.0 { 0 } else { u16::MAX });
     }
     let identity = |n: usize| vec![ToneReprCurve::Parametric(vec![1.0]); n];
     let table = |inputs: usize, outputs: usize, grid: usize, clut: Vec<u16>| {
@@ -490,6 +511,7 @@ pub(super) fn cmyk_profile(name: &str, to_lab: impl Fn([f32; 4]) -> lab::Lab, fr
         })
     };
     let a2b = table(4, 3, A2B_GRID, a2b);
+    let b2a_mapped = table(3, 4, B2A_GRID, b2a_mapped);
     let b2a = table(3, 4, B2A_GRID, b2a);
     let gamut = table(3, 1, GAMUT_GRID, gamut);
     let mut p = ColorProfile::default();
@@ -498,15 +520,15 @@ pub(super) fn cmyk_profile(name: &str, to_lab: impl Fn([f32; 4]) -> lab::Lab, fr
     p.pcs = DataColorSpace::Lab;
     p.rendering_intent = RenderingIntent::RelativeColorimetric;
     p.white_point = moxcms::WHITE_POINT_D50.to_xyzd();
-    p.media_white_point = Some(p.white_point);
+    p.media_white_point = Some(moxcms::Xyzd::new(f64::from(paper[0]), f64::from(paper[1]), f64::from(paper[2])));
     p.lut_a_to_b_perceptual = Some(a2b.clone());
     p.lut_a_to_b_saturation = Some(a2b.clone());
     p.lut_a_to_b_colorimetric = Some(a2b);
-    p.lut_b_to_a_perceptual = Some(b2a.clone());
-    p.lut_b_to_a_saturation = Some(b2a.clone());
+    p.lut_b_to_a_perceptual = Some(b2a_mapped.clone());
+    p.lut_b_to_a_saturation = Some(b2a_mapped);
     p.lut_b_to_a_colorimetric = Some(b2a);
     p.gamut = Some(gamut);
-    labelled(p, name)
+    with_copyright(p, name, copyright)
 }
 
 /// The grey space of greyscale exports: sRGB's tone curve, D50 white.

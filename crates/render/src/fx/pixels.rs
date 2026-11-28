@@ -11,6 +11,12 @@ use super::{
     RasterFx, Rect, RenderContext, Renderer, Shape, blend_mode, effects, fill_rule, paint, peniko,
 };
 
+/// The content to filter. An inner glow's output has an enclosing clip, while a shadow can spread beyond its content.
+pub(super) enum FilterReach {
+    Clipped(Rect),
+    Spreads(Rect),
+}
+
 /// A hash of the names of `doc`'s swatches and patterns, of the paints and spot flags of its global
 /// swatches, and of the Spot Colors option those colors depend on.
 pub(crate) fn paint_names(doc: &Document) -> u64 {
@@ -95,7 +101,9 @@ impl Renderer {
         let key = content.cache.map(|slot| (content.node as *const Node as usize, slot, f.ink));
         // Made again at this zoom and rotation (after a pan), a raster cropped to the view covers a
         // margin around the view too, so that later pans within the margin draw it.
-        let again = key.and_then(|key| self.pixel_fx.get(&key)).is_some_and(|e| e.linear == linear) && content.kept.is_none() && !f.opts.dragging;
+        let again = key.and_then(|key| self.pixel_fx.get(&key)).is_some_and(|e| e.linear == linear)
+            && content.kept.is_none_or(|k| k.shared)
+            && !f.opts.dragging;
         let room = match margin {
             Some(m) if !fits && again => {
                 let e = pan_margin((screen.width(), screen.height()), m, PIXEL_BUDGET, f64::from(crate::MAX_RASTER_SIDE));
@@ -122,7 +130,7 @@ impl Renderer {
         let channels = match f.ink.base() {
             Ink::Cmy => effects::pixel::Channels::CmyPlane,
             Ink::K => effects::pixel::Channels::KPlane,
-            Ink::Display | Ink::RichBlack if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
+            Ink::Display | Ink::RichBlack | Ink::Proofed(_) if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
             _ => effects::pixel::Channels::Rgb,
         };
         // What the content reads (as the raster kept for it found it, else found now), with the
@@ -289,7 +297,7 @@ impl Renderer {
         // A raster kept for this view alone at a lower resolution than the view's is resampled to the
         // view's pixels once: each frame that draws it then copies it pixel for pixel, where sampling
         // it again across the whole view cost several times as much as a plain fill.
-        let view_raster = key.is_some() && in_view.is_some() && k < 1.0 && content.kept.is_none();
+        let view_raster = key.is_some() && in_view.is_some() && k < 1.0 && content.kept.is_none_or(|k| k.shared);
         let (image, x0, y0, k) = match view_raster.then(|| self.resampled(f, image.clone(), (x0, y0), k, screen)).flatten() {
             Some((image, x, y)) => (image, x, y, 1.0),
             None => (image, x0, y0, k),
@@ -308,8 +316,9 @@ impl Renderer {
             self.pixel_fx.insert(key, entry);
             self.trim_fx_rasters(FX_RASTER_BUDGET);
         }
-        // An image over the limits was drawn at a frame's resolution: its raster is kept.
-        match content.kept.filter(|kept| kept.image.borrow().is_none()) {
+        // An image over the limits was drawn at a frame's resolution: its raster is kept. The
+        // placements of a copied image each draw their own (`Kept::shared`).
+        match content.kept.filter(|kept| !kept.shared && kept.image.borrow().is_none()) {
             Some(kept) => {
                 let place = f.view.inverse() * Affine::translate((x0, y0)) * Affine::scale(1.0 / k);
                 *kept.image.borrow_mut() = Some(KeptImage::Raster(image.clone(), place, failed, image_left_out));
@@ -593,15 +602,25 @@ impl Renderer {
         &mut self,
         ctx: &mut RenderContext,
         f: &Frame,
-        reach: Rect,
+        reach: FilterReach,
         blur: f64,
         composite: Option<(vectorcraft_doc::color::BlendMode, f32)>,
         draw: impl FnOnce(&mut Self, &mut RenderContext, &Frame, Option<(vectorcraft_doc::color::BlendMode, f32)>),
     ) {
         // A filter layer's coarser grid starts where its context does: at the corner of a context
         // drawn single-threaded, and at the frame's edge for a region cropped to the frame.
+        let (reach, clipped) = match reach {
+            FilterReach::Clipped(rect) => (rect, true),
+            FilterReach::Spreads(rect) => (rect, false),
+        };
         let screen = Rect::new(0.0, 0.0, f64::from(ctx.width()), f64::from(ctx.height()));
-        self.stats.view_sized += usize::from(!f.mt || f.view.transform_rect_bbox(reach).union(screen) != screen);
+        if !f.mt || f.view.transform_rect_bbox(reach).union(screen) != screen {
+            if clipped {
+                self.note_view_sized_clip(f, reach);
+            } else {
+                self.stats.view_sized += 1;
+            }
+        }
         if !f.mt {
             return self.inside_layer(|r| draw(r, ctx, f, composite));
         }

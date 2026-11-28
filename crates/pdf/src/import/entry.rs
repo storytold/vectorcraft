@@ -5,9 +5,13 @@ use super::{
     ImportReport, InterpreterCache, InterpreterSettings, InterpreterWarning, LayerColor, MAX_NESTING, Mutex, Node, NodeKind, Ocgs, Ordering, Paint,
     PdfError, Rect, Shape, Swatch, all_on, contains, hides_forms, scan_page, white_cover,
 };
+use crate::import_text::keep_file_fonts;
 
 /// Mixed into an image's cache key when it is read white inside an alpha soft mask.
 pub(super) const WHITE_KEY: u128 = 0x7717_e000_a1fa;
+
+/// Mixed into an image's cache key when a DeviceCMYK image there takes the output intent's profile.
+pub(super) const INTENT_KEY: u128 = 0x1e7e_0c3c_0b5a;
 
 /// The name of the paths text imports as.
 pub(super) const TEXT_OUTLINES: &str = "<Text Outlines>";
@@ -220,11 +224,11 @@ pub(crate) fn read(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, P
 }
 
 #[cfg(test)]
-pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
+pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft::pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     vectorcraft_doc::depth::with_deep_stack(|| read_with_reader_options(bytes, opts, reader))
 }
 
-fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
+fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft::pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open_with_options(bytes, opts.password.as_deref(), reader)?;
     read_opened(bytes, opts, reader, &original)
 }
@@ -239,12 +243,74 @@ pub fn imports_of(bytes: &[u8]) -> usize {
     IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
 }
 
+/// The work the imports of each buffer took, by its address (tests): the function evaluations of
+/// its function-based shadings, and the bytes of form content its pages' scans walked.
+#[cfg(any(test, feature = "read-count"))]
+static WORK: std::sync::Mutex<std::collections::BTreeMap<usize, (usize, usize)>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// Adds `evaluations` and `form_content` to the work of the imports of `bytes` (tests).
+#[cfg(any(test, feature = "read-count"))]
+fn note_work(bytes: &[u8], evaluations: usize, form_content: usize) {
+    if let Ok(mut work) = WORK.lock() {
+        let (e, f) = work.entry(bytes.as_ptr() as usize).or_default();
+        (*e, *f) = (e.saturating_add(evaluations), f.saturating_add(form_content));
+    }
+}
+
+/// How many function evaluations the function-based shadings of `bytes`, at its address, have
+/// taken in its imports on any thread (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn function_evaluations_of(bytes: &[u8]) -> usize {
+    WORK.lock().ok().and_then(|w| w.get(&(bytes.as_ptr() as usize)).map(|w| w.0)).unwrap_or(0)
+}
+
+/// How many bytes of form content the pages of `bytes`, at its address, have walked in its imports
+/// on any thread, up to [`crate::import_scan::form_content_limit`] a page (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn form_content_of(bytes: &[u8]) -> usize {
+    WORK.lock().ok().and_then(|w| w.get(&(bytes.as_ptr() as usize)).map(|w| w.1)).unwrap_or(0)
+}
+
+/// The notes on the fonts the file draws with that aren't available: type in a font the file
+/// carries keeps its look until it is edited; the rest shows in the fallback font.
+fn warn_missing_fonts(b: &mut Builder, doc: &Document) {
+    let mut bound = std::collections::HashSet::new();
+    doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            for font in t.file_fonts_in_use() {
+                if t.file_fonts.as_ref().and_then(|fonts| fonts.face(&font.key)).is_some() {
+                    bound.insert(font.family.clone());
+                }
+            }
+        }
+    });
+    let (carried, missing): (Vec<String>, Vec<String>) = std::mem::take(&mut b.missing_fonts).into_iter().partition(|family| bound.contains(family));
+    if !carried.is_empty() {
+        b.warn(&format!(
+            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): {}",
+            carried.join(", ")
+        ));
+    }
+    if !missing.is_empty() {
+        let list = missing.join(", ");
+        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
+    }
+}
+
+/// The widest bleed of `pages` on each side (`[top, bottom, left, right]`, see [`crate::pages::bleed`]).
+fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft::pdf::syntax::page::Page<'d>>) -> [f64; 4] {
+    pages.fold([0.0; 4], |widest, page| {
+        let bleed = crate::pages::bleed(page);
+        std::array::from_fn(|i| widest[i].max(bleed[i]))
+    })
+}
+
 /// [`read_with_reader_options`] of `original`, the PDF `bytes` read with `reader`.
 fn read_opened(
     bytes: &[u8],
     opts: &ImportOptions,
-    reader: &craft_pdf::OpenOptions,
-    original: &craft_pdf::syntax::Pdf,
+    reader: &craft::pdf::OpenOptions,
+    original: &craft::pdf::syntax::Pdf,
 ) -> Result<ImportReport, PdfError> {
     #[cfg(any(test, feature = "read-count"))]
     if let Ok(mut imports) = IMPORTS.lock() {
@@ -267,12 +333,13 @@ fn read_opened(
     doc.artboards.clear();
     doc.layers.clear();
     let taken: Vec<String> = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
-    let mut b = Builder::new(doc.peek_next_id(), Colors::new(pdf, taken.clone()), opts.text_as, route);
+    let mut b = Builder::new(doc.peek_next_id(), Colors::new(pdf, taken.clone()), opts.text_as, route).with_embedded_fonts(opts.embedded_fonts);
     // The art of a group that is off (drawn as `all_on` turned it on) or doesn't print mustn't
     // show or print on its page's layer.
     b.unsure = route && ocgs.list.iter().any(|g| (all_on && !g.on) || !g.print);
     b.taken = taken;
     b.warnings = notes;
+    b.intent_cmyk = crate::import_image::output_intent_cmyk(pdf);
     b.colors.uncalibrated_rgb = opts.uncalibrated_rgb && picked.iter().filter_map(|&n| pages.get(n)).any(crate::pages::has_private_data);
     let cache = InterpreterCache::new();
     let mut x = 0.0;
@@ -286,15 +353,17 @@ fn read_opened(
     let mut nesting = Nesting::new();
     // The top-level groups in the order the pages mark them, bottom first.
     let (mut order, mut known) = (vec![], HashSet::new());
+    // Artboards on the trim boxes have the bleed boxes round them as the document's bleed, so the
+    // art there shows and prints as bleed.
+    if opts.crop == CropTo::Trim {
+        doc.setup.bleed = widest_bleed(picked.iter().filter_map(|&n| pages.get(n)));
+    }
+    // The artboards are the gap apart plus the document's bleed on both sides, which export adds
+    // round every artboard, so no page's bleed reaches into the next artboard.
+    let [_, _, bleed_left, bleed_right] = doc.setup.bleed;
+    let spacing = opts.artboard_gap + bleed_left + bleed_right;
     for (i, &number) in picked.iter().enumerate() {
         let Some(page) = pages.get(number) else { continue };
-        // Artboards on the trim boxes have the bleed boxes round them as the document's bleed
-        // (the widest of the pages' on each side), so the art there shows and prints as bleed.
-        if opts.crop == CropTo::Trim {
-            for (side, b) in doc.setup.bleed.iter_mut().zip(crate::pages::bleed(page)) {
-                *side = side.max(b);
-            }
-        }
         // The chosen box sits at (x, 0); the page draws round it.
         let (init, frame) = crate::pages::frame(page, opts.crop);
         let mut ab = Rect::new(x, 0.0, x + frame.width(), frame.height());
@@ -303,7 +372,12 @@ fn read_opened(
         b.page = ab;
         // The first id of this page's art.
         let first_id = b.next;
-        let mut scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream())?;
+        #[cfg(any(test, feature = "read-count"))]
+        crate::import_scan::FORM_CONTENT_WALKED.set(0);
+        let scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream());
+        #[cfg(any(test, feature = "read-count"))]
+        note_work(bytes, 0, crate::import_scan::FORM_CONTENT_WALKED.take());
+        let mut scan = scan?;
         // The walk's ink names pick between spaces of inks that look the same to the interpreter. A
         // page keeps them only when it uses such an ink and the interpreter draws as many paths
         // there as the walk counts.
@@ -317,7 +391,12 @@ fn read_opened(
             merge_order(&mut order, &mut known, &marked);
         }
         b.begin_page(scan);
-        craft_pdf::interpret_page(page, &mut ctx, &mut b).map_err(|e| PdfError::Parse(e.to_string()))?;
+        let drawn = craft::pdf::interpret_page(page, &mut ctx, &mut b);
+        // The page's shadings take their evaluations while it is drawn: they count even when the
+        // import stops on this page or a later one.
+        #[cfg(any(test, feature = "read-count"))]
+        note_work(bytes, b.function_budget.take_spent(), 0);
+        drawn.map_err(|e| PdfError::Parse(e.to_string()))?;
         if incomplete.load(Ordering::Relaxed) {
             return Err(crate::import_scan::incomplete_content());
         }
@@ -371,7 +450,7 @@ fn read_opened(
             right = right.max(art.x1);
             ab = art;
         }
-        x = right + opts.artboard_gap;
+        x = right + spacing;
         clear = right.max(art_right) + opts.artboard_gap;
         doc.artboards.push(Artboard {
             id: i as u32 + 1,
@@ -423,6 +502,9 @@ fn read_opened(
     // The groups' layers stack as the pages mark them (the art outside them stays where it was
     // drawn): a group that first paints on a later page doesn't go on top of the others.
     stack_groups(&mut slots, &order);
+    // The fonts the file carries for families that aren't available, kept with the document: the
+    // type set in them is drawn in them and spaced from the file's own widths.
+    let kept = std::mem::take(&mut b.file_glyphs).keep(&mut b.images);
     for (n, slot) in slots.into_iter().enumerate() {
         let mut layer = match slot {
             Slot::Page(l) => *l,
@@ -433,6 +515,7 @@ fn read_opened(
             },
         };
         if let Some(art) = layer.children_mut() {
+            keep_file_fonts(art, &b.lines, &kept, &b.images);
             crate::import_lines::rebuild(art, &b.lines);
         }
         doc.layers.push(Arc::new(layer));
@@ -460,10 +543,7 @@ fn read_opened(
     if b.colors.mixed {
         b.warn("colours mixing several inks (DeviceN) were imported as RGB");
     }
-    if !b.missing_fonts.is_empty() {
-        let list = b.missing_fonts.join(", ");
-        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
-    }
+    warn_missing_fonts(&mut b, &doc);
     // Before anything walks the tree by recursion (`fix_next_id` does): nested clips can be deeper
     // than the stack goes.
     let mut depth_notes = vec![];
@@ -472,6 +552,7 @@ fn read_opened(
     doc.reserve_ids(b.next);
 
     let mut warnings = b.warnings;
+    warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
     if let Ok(v) = sink.lock() {
         for w in v.iter() {
             if !warnings.contains(w) {
@@ -533,12 +614,12 @@ fn is_only_text(nodes: &[Arc<Node>]) -> bool {
 fn reopen_with_groups_on(
     bytes: &[u8],
     opts: &ImportOptions,
-    reader: &craft_pdf::OpenOptions,
-    original: &craft_pdf::syntax::Pdf,
+    reader: &craft::pdf::OpenOptions,
+    original: &craft::pdf::syntax::Pdf,
     picked: &[usize],
     ocgs: &mut Ocgs,
     route: bool,
-) -> Result<(Option<craft_pdf::syntax::Pdf>, bool, Vec<String>), PdfError> {
+) -> Result<(Option<craft::pdf::syntax::Pdf>, bool, Vec<String>), PdfError> {
     // Content that is off imports as hidden layers: an update of the file turns every group on
     // (unless a form is hidden by its own group: its art couldn't be told apart).
     let hide = route && ocgs.skips_any();

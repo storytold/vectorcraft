@@ -8,6 +8,11 @@ fn num(desc: &str) -> Value {
     json!({"type": "number", "description": desc})
 }
 
+/// A number or null.
+fn num_or_null(desc: &str) -> Value {
+    json!({"description": desc, "anyOf": [{"type": "number"}, {"type": "null"}]})
+}
+
 fn string(desc: &str) -> Value {
     json!({"type": "string", "description": desc})
 }
@@ -209,16 +214,17 @@ pub fn tool_definitions() -> Vec<Value> {
                             "x": num("Document x (pt)"),
                             "y": num("Document y (pt)"),
                             "mods": mods_schema(),
-                            "backquote": {"type": "boolean", "description": "Backquote held for this event: Selection and transform tool drags transform only pattern paint"},
+                            "backquote": {"type": "boolean", "description": "Backquote held for this event: Selection and transform tool drags transform only pattern paint; Rectangle, Rounded Rectangle, Ellipse, Polygon, Star and Line Segment drags leave copies of the shape being drawn"},
                             "pressure": num("Pen pressure 0..1 (default 1): the Liquify tools' intensity with Use Pressure Pen on, and the pressure the Paintbrush records"),
                             "tiltX": num("Pen tilt in degrees −90..90, positive leaning right (document axes); with tiltY, the tilt the Paintbrush records for Tilt and Bearing brushes. One without the other is 0"),
                             "tiltY": num("Pen tilt in degrees −90..90, positive leaning down the page"),
                             "rotation": num("Pen barrel rotation in degrees clockwise: the rotation the Paintbrush records for Rotation brushes"),
+                            "wheel": num("Airbrush pen finger wheel 0..1 (clamped): the wheel the Paintbrush records for Stylus Wheel brushes"),
                             "holdMs": num("Milliseconds the pointer then holds still, button down (0..60000): Twirl, Pucker and Bloat keep applying"),
                         }), &["kind", "x", "y"]),
                     },
                     "mods": mods_schema(),
-                    "backquote": {"type": "boolean", "description": "Default backquote held state for events: Selection and transform tool drags transform only pattern paint"},
+                    "backquote": {"type": "boolean", "description": "Default backquote held state for events: Selection and transform tool drags transform only pattern paint; Rectangle, Rounded Rectangle, Ellipse, Polygon, Star and Line Segment drags leave copies of the shape being drawn"},
                 }),
                 &["events"],
             ),
@@ -244,7 +250,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "draw_shape",
             "Draw shape",
-            "Create a live shape and apply optional paint. rectangle/ellipse: x, y, width, height (rectangle: radius = corner radius). polygon: cx, cy, radius, sides. star: cx, cy, radius1, radius2, points. line: x1, y1, x2, y2. Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke); lines start with no fill and a visible stroke. For a filled shape without an outline, pass an explicit fill and stroke:\"none\". Stroke dash/cap/join, opacity, name and live effects apply to the new shape as in draw_path. Returns the new object id.",
+            "Create a live shape and apply optional paint. rectangle/ellipse: x, y, width, height (rectangle: radius = corner radius; ellipse: anchors, default 4, where any other count from 2 to 1000 draws a plain path rather than a live shape). polygon: cx, cy, radius, sides. star: cx, cy, radius1, radius2, points. line: x1, y1, x2, y2. Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke); lines start with no fill and a visible stroke. For a filled shape without an outline, pass an explicit fill and stroke:\"none\". Stroke dash/cap/join, opacity, name and live effects apply to the new shape as in draw_path. Returns the new object id.",
             obj(
                 with_draw_options(json!({
                     "shape": {"type": "string", "enum": ["rectangle", "ellipse", "polygon", "star", "line"]},
@@ -253,6 +259,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "width": num("Width (rectangle/ellipse)"),
                     "height": num("Height (rectangle/ellipse)"),
                     "radius": num("Corner radius (rectangle) or radius (polygon)"),
+                    "anchors": {"type": "integer", "minimum": 2, "maximum": 1000, "description": "Ellipse anchors, spaced evenly by angle (default 4, a live ellipse; any other count draws a plain path)"},
                     "cx": num("Centre x (polygon/star)"),
                     "cy": num("Centre y (polygon/star)"),
                     "sides": {"type": "integer", "minimum": 3, "description": "Polygon sides (default 6)"},
@@ -275,7 +282,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "set_paint",
             "Set paint",
-            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art. Returns {applied, objects}: `objects` counts the objects painted, as paint.setFill, paint.setStroke and stroke.set report them (the largest of their counts); when it is 0, a `note` says that only the default for new art changed.",
+            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art. Returns {applied, objects}: `objects` counts the objects painted, as paint.setFill, paint.setStroke and stroke.set report them (the largest of their counts); when it is 0, a `note` says that only the default for new art changed, and when only some of those commands painted no object, `unpainted` lists them with a `note`.",
             obj(
                 json!({
                     "fill": paint_schema("Fill"),
@@ -307,7 +314,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "answer_dialog",
             "Answer dialog",
-            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none and answers that same dialog in the same request (ui.dialog.set with action). When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"discard\",value:true}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
+            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none and answers that same dialog in the same request (ui.dialog.set with action). When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"choice\",value:\"dontSave\"}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
             obj(
                 json!({
                     "set": {
@@ -393,14 +400,14 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "export",
             "Export",
-            "Export the active document with the engine's document.export (the same bytes in the app and headless), in any format of the `format` enum: vectors (svg/svgz with the artboard as viewBox, eps, dxf, emf, wmf, hpgl pen moves for plotters and cutters), pdf and ai (one page per artboard: all, or `artboard` / `range`; ai is the PDF-compatible .ai file that Save writes, which carries the document when every artboard is written in order), rasters (one rendered artboard: png, jpg, webp, gif, png8 as an indexed .png, tiff, bmp, tga, psd with its layers), txt (the stories, back to front), vectorcraft or template (a native copy or template; the document keeps its path). run_command document.formats lists each format's options. For SVG/SVGZ, top-level `outlineText: true` writes text as paths; DXF takes it too (its type is outlined anyway unless `preserve: editability`). PDF instead uses `options.advanced.outlineText: true`, default false (live text). `selection: true` exports only the selected objects, cropped to their bounds. Template layers are left out; live effects are kept (geometry baked, SVG filters for shadows/glows/blur). Without `path` the bytes come back as dataBase64.",
+            "Export the active document with the engine's document.export (the same bytes in the app and headless), in any format of the `format` enum: vectors (svg/svgz with the artboard as viewBox, eps, dxf, emf, wmf, hpgl pen moves for plotters and cutters, cmx exchange files of fills and strokes), pdf and ai (one page per artboard: all, or `artboard` / `range`; ai is the PDF-compatible .ai file that Save writes, which carries the document when every artboard is written in order), rasters (one rendered artboard: png, jpg, webp, gif, png8 as an indexed .png, tiff, bmp, tga, psd with its layers), txt (the stories, back to front), vectorcraft or template (a native copy or template; the document keeps its path). run_command document.formats lists each format's options. For SVG/SVGZ, top-level `outlineText: true` writes text as paths; DXF takes it too (its type is outlined anyway unless `preserve: editability`). PDF instead uses `options.advanced.outlineText: true`, default false (live text). `selection: true` exports only the selected objects, cropped to their bounds. Template layers are left out; live effects are kept (geometry baked, SVG filters for shadows/glows/blur). Without `path` the bytes come back as dataBase64.",
             obj(
                 json!({
                     "format": {"type": "string", "enum": FORMATS.iter().filter(|f| f.write).map(|f| f.id).collect::<Vec<_>>(), "description": "Default: from the path's extension"},
                     "path": string("Destination file (omit to get dataBase64)"),
                     "scale": num("Raster pixels per point (without scale or options.ppi, uses the document's raster effects resolution; options.ppi wins)"),
                     "artboard": {"type": "integer", "minimum": 0, "description": "0-based artboard (default: the first; PDF and .ai default: all)"},
-                    "range": string("1-based artboards such as \"1-3, 5\" (PDF and .ai: one page each; SVG and SVGZ: one file each; EPS: one file each, after a central file of the whole document when there are two or more and art shows; rasters, DXF, EMF, WMF and HP-GL: one, or one file each with options.useArtboards: true)"),
+                    "range": string("1-based artboards such as \"1-3, 5\" (PDF and .ai: one page each; SVG and SVGZ: one file each; EPS: one file each, after a central file of the whole document when there are two or more and art shows; rasters, DXF, EMF, WMF and HP-GL: one, or one file each with options.useArtboards: true; CMX: one, or one page each in one file with options.useArtboards: true)"),
                     "selection": {"type": "boolean", "description": "Export only the selection, cropped to it"},
                     "outlineText": {"type": "boolean", "description": "SVG/SVGZ: true writes text as outlines (viewable without the fonts). DXF takes it too (type outlined anyway unless preserve: editability). PDF uses options.advanced.outlineText instead (default false: live text)"},
                     "options": {"type": "object", "description": "More format options, passed through (see run_command document.formats), e.g. {\"quality\": 80} for jpg or {\"advanced\": {\"outlineText\": true}} for PDF text as outlines (default false: live text)"},
@@ -465,20 +472,20 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "transform",
             "Transform",
-            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. Scale and reflect act along the selection's bounding box, turned with rotated objects until Reset Bounding Box. `origin` [x,y] defaults to the selection centre; `copy` transforms a copy.",
+            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. Scale and reflect act along the selection's bounding box, turned with rotated objects until Reset Bounding Box. `origin` [x,y] defaults to the selection center; `copy` transforms a copy. A scale, reflect or shear its command refuses, or an argument of the wrong type, returns that error before any step runs, and nothing changes.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
-                    "dx": num("Move right"),
-                    "dy": num("Move down"),
-                    "rotate": num("Rotation in degrees counter-clockwise"),
-                    "scale": num("Uniform scale in %"),
-                    "scaleX": num("Horizontal scale in %"),
-                    "scaleY": num("Vertical scale in %"),
-                    "reflect": {"type": "string", "enum": ["vertical", "horizontal"]},
-                    "shear": num("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
-                    "origin": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
-                    "copy": {"type": "boolean"},
+                    "dx": num_or_null("Move right (null: 0)"),
+                    "dy": num_or_null("Move down (null: 0)"),
+                    "rotate": num_or_null("Rotation in degrees counter-clockwise"),
+                    "scale": num_or_null("Uniform scale in %"),
+                    "scaleX": num_or_null("Horizontal scale in %"),
+                    "scaleY": num_or_null("Vertical scale in %"),
+                    "reflect": {"anyOf": [{"type": "string", "enum": ["vertical", "horizontal"]}, {"type": "null"}]},
+                    "shear": num_or_null("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
+                    "origin": {"anyOf": [{"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, {"type": "null"}]},
+                    "copy": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
                 }),
                 &[],
             ),

@@ -10,7 +10,17 @@
 //! - A bitmap becomes an image (its pixels as PNG) placed where the picture draws it, turned or
 //!   skewed with it.
 //! - Text becomes point type in the font the file names, underlined or struck through as the font
-//!   is, and clipped to its rectangle when the file clips it.
+//!   is, and clipped to its rectangle when the file clips it. Characters the file gives advances
+//!   for are spaced by them: tracking on each character, with pair kerning off. On a single left
+//!   to right line, the characters after an advance that tracking can't give (further than its
+//!   range reaches, or a tab) are point type of their own, and an underline or strikethrough is carried across the space between.
+//!   It is also carried on to the end of the last character's advance. Type on more than one line
+//!   is placed a line at a time: each line is aligned by its own advances and split as a single
+//!   line is. A character cell runs from the font's OS/2 usWinAscent above the baseline to its
+//!   usWinDescent below it, and top or bottom aligned text has the top or the bottom of its cells
+//!   at the reference point. Text drawn in the opaque background mode (the mode a playback starts
+//!   in) has one rectangle of the background color behind the character cells of each line, as
+//!   far as its advances reach.
 //! - Clip regions and clip paths become clipping groups around what they clip; a rectangle around
 //!   the whole picture clips nothing and is left out.
 //!
@@ -28,169 +38,61 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::clipnest::{Clip, Drawn, MAX_NEST, deep_clips, nest};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, CharStyle, Dash, Document, FillLayer, ImageBlob, ImageObject, Justify, LayerColor, LineCap, LineJoin, Node, NodeId,
-    NodeKind, StrokeLayer, TextObject,
+    NodeKind, StrokeLayer, TextObject, TextRun,
 };
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, PathEl, Point, Rect, Shape, shapes};
 
 use super::{BAD_IMAGE, FAR_AWAY, HAIRLINE, LIMIT, MAX_NODES, around, rgb, sane};
 use crate::dib::Rgba;
-use crate::wmf::PLACEABLE_KEY;
 use crate::{Imported, Kind};
 
 const PATTERNS: &str = "hatched and pattern brushes are filled with their average color";
 const ENDS_EARLY: &str = "the file ends early: what it held was imported";
 const TOO_MANY: &str = "objects past the most one file may hold were left out";
-const AT_LIMIT: &str = "the file reached the most objects one file may hold: any after them were not read";
-
-/// The most items `craft_metafile` keeps from one file (its `MAX_ITEMS`). It stops reading at the
-/// limit and does not say whether more items followed, so a picture holding this many may have
-/// been cut short.
-const READER_ITEMS: usize = 200_000;
+const AT_LIMIT: &str = "the file or a picture inside it reached a limit on what one file may hold: what came after the limit was not read";
+const PICT_TRUNCATED: &str = "the picture is cut short or reached a limit on what one file may hold: what came after was not read";
 
 /// Points a unit of a WMF without a placeable header (1440 units an inch).
 const WMF_UNIT: f64 = 72.0 / 1440.0;
-/// The SAVEDC levels `craft_metafile` keeps; it stops reading at a SAVEDC past them.
-const SAVED_LEVELS: usize = 1024;
 /// Points a pixel at 96 pixels an inch.
 const PT_PER_PX: f64 = 72.0 / 96.0;
 /// Points a millimetre.
 const PT_PER_MM: f64 = 72.0 / 25.4;
 
-/// WMF records that draw lines and shapes, which `craft_metafile` plays only when the mix mode
-/// lets them draw.
-const WMF_SHAPES: [u16; 10] = [0x0213, 0x0324, 0x0325, 0x0418, 0x041B, 0x0538, 0x061C, 0x0817, 0x081A, 0x0830];
-/// WMF records that draw text and bitmaps, which `craft_metafile` plays whatever the mix mode.
-const WMF_DRAWS: [u16; 5] = [0x0521, 0x0940, 0x0A32, 0x0B41, 0x0F43];
-/// SETROP2 mix modes under which `craft_metafile` draws no lines, shapes or brush fills: R2_XORPEN
-/// and R2_NOP.
-const WMF_MIX_SKIPS: [u16; 2] = [7, 11];
-/// The mix mode a WMF starts in (R2_COPYPEN).
-const WMF_MIX_START: u16 = 13;
-/// PATBLT raster operations `craft_metafile` draws: PATCOPY (with the brush, as the mix mode
-/// allows), BLACKNESS and WHITENESS.
-const PATCOPY: u32 = 0x00F0_0021;
-const BLACKNESS: u32 = 0x0000_0042;
-const WHITENESS: u32 = 0x00FF_0062;
-
-/// Does a WMF draw in a metric map mode (MM_LOMETRIC to MM_TWIPS)? `craft_metafile` plays those
-/// at 96 pixels an inch, whatever the window. The mode that more drawing records are played in
-/// decides, counting only records the reader draws (not lines and shapes under R2_NOP or
-/// R2_XORPEN, nor a PATBLT it does not fill); a file that draws nothing goes by its last mode.
-/// `start` is where the standard header begins.
-fn wmf_metric(bytes: &[u8], start: usize) -> bool {
-    let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]));
-    let u32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let Some(words) = start.checked_add(2).and_then(u16_at) else { return false };
-    let mut at = start.saturating_add(usize::from(words) * 2);
-    let mut mode = 1;
-    let mut mix = WMF_MIX_START;
-    let metric = |mode: u16| (2..=6).contains(&mode);
-    // Drawing records played in a metric mode, and in any other.
-    let (mut in_metric, mut in_other) = (0usize, 0usize);
-    // The map and mix modes SAVEDC kept, which RESTOREDC brings back as the reader does.
-    let mut saved: Vec<(u16, u16)> = Vec::new();
-    // The records as the reader walks them: it stops at the end record, a record shorter than its
-    // header, one that runs past the file and a SAVEDC past its 1,024 levels.
-    while let (Some(words), Some(function)) = (u32_at(at), u16_at(at.saturating_add(4))) {
-        let size = (words as usize).saturating_mul(2);
-        let Some(next) = at.checked_add(size) else { break };
-        if function == 0 || size < 6 || next > bytes.len() {
-            break;
-        }
-        match function {
-            // SETMAPMODE, when the record holds its mode.
-            0x0103 if size >= 8 => mode = u16_at(at + 6).unwrap_or(mode),
-            // SETROP2, when the record holds its mix mode.
-            0x0104 if size >= 8 => mix = u16_at(at + 6).unwrap_or(mix),
-            // SAVEDC.
-            0x001E => {
-                if saved.len() >= SAVED_LEVELS {
-                    break;
-                }
-                saved.push((mode, mix));
-            }
-            // RESTOREDC: a negative count pops that many levels, a positive one goes back to that
-            // level. One that names no saved level changes nothing.
-            0x0127 if size >= 8 => {
-                let n = u16_at(at + 6).map_or(0, |v| i32::from(i16::from_le_bytes(v.to_le_bytes())));
-                let level = if n < 0 { saved.len().checked_sub(n.unsigned_abs() as usize) } else { (n as usize).checked_sub(1) };
-                if let Some(level) = level
-                    && let Some((m, x)) = saved.get(level).copied()
-                {
-                    mode = m;
-                    mix = x;
-                    saved.truncate(level);
-                }
-            }
-            f => {
-                let draws = match f {
-                    _ if WMF_DRAWS.contains(&f) => true,
-                    _ if WMF_SHAPES.contains(&f) => !WMF_MIX_SKIPS.contains(&mix),
-                    // PATBLT: its raster operation, when the record holds one.
-                    0x061D => match u32_at(at + 6).filter(|_| size >= 10) {
-                        Some(PATCOPY) => !WMF_MIX_SKIPS.contains(&mix),
-                        Some(rop) => rop == BLACKNESS || rop == WHITENESS,
-                        None => false,
-                    },
-                    _ => false,
-                };
-                if draws && metric(mode) {
-                    in_metric += 1;
-                } else if draws {
-                    in_other += 1;
-                }
-            }
-        }
-        at = next;
-    }
-    if in_metric == in_other { metric(mode) } else { in_metric > in_other }
-}
-
 /// Points a picture unit across and down. `craft_metafile` gives a placeable WMF with a box and an
 /// EMF with a frame in points, and other files in their logical units (WMF; pixels in a metric map
-/// mode) or device units (EMF).
-fn unit(bytes: &[u8], kind: Kind) -> (f64, f64) {
-    let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]));
-    let i16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| i16::from_le_bytes([b[0], b[1]]));
-    let u32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let i32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let positive = |v: Option<i32>| v.filter(|v| *v > 0).map(f64::from);
-    match kind {
-        Kind::Wmf => {
-            let placeable = bytes.get(..4) == Some(&PLACEABLE_KEY.to_le_bytes()[..]);
-            if placeable
-                && let (Some(l), Some(t), Some(r), Some(b)) = (i16_at(6), i16_at(8), i16_at(10), i16_at(12))
-                && r > l
-                && b > t
-            {
-                return (1.0, 1.0);
-            }
-            if wmf_metric(bytes, if placeable { 22 } else { 0 }) {
-                return (PT_PER_PX, PT_PER_PX);
-            }
-            if !placeable {
-                return (WMF_UNIT, WMF_UNIT);
-            }
-            let k = 72.0 / u16_at(14).filter(|v| *v > 0).map_or(1440.0, f64::from);
+/// mode) or device units (EMF). The file's frame and unit facts come from
+/// [`craft_metafile::unit_facts`]; the fallback scales here are VectorCraft's policy.
+fn unit(bytes: &[u8]) -> (f64, f64) {
+    use craft_metafile::{EmfPhysicalSize, UnitFacts};
+    match craft_metafile::unit_facts(bytes) {
+        Some(UnitFacts::WmfPlaceableFrame) => (1.0, 1.0),
+        // `craft_metafile` plays the metric map modes at 96 pixels an inch, whatever the window.
+        Some(UnitFacts::WmfMetricMap) => (PT_PER_PX, PT_PER_PX),
+        // Without a placeable header, or with no units an inch in it: 1440 units an inch.
+        Some(UnitFacts::WmfLogical { units_per_inch }) => {
+            let k = units_per_inch.map_or(WMF_UNIT, |inch| 72.0 / f64::from(inch));
             (k, k)
         }
-        Kind::Emf => {
-            // Device pixels a millimetre on each axis: szlDevice over szlMicrometers when the header
-            // has them, else over szlMillimeters (both sizes must be positive).
-            let device = positive(i32_at(72)).zip(positive(i32_at(76)));
-            let micro = (u32_at(4).is_some_and(|s| s >= 108))
-                .then(|| u32_at(100).zip(u32_at(104)).filter(|(w, h)| *w > 0 && *h > 0).map(|(w, h)| (f64::from(w) / 1000.0, f64::from(h) / 1000.0)))
-                .flatten();
-            let mm = micro.or_else(|| positive(i32_at(80)).zip(positive(i32_at(84))));
-            let px_mm = device.zip(mm).map(|((w, h), (mw, mh))| (w / mw, h / mh));
-            let frame = matches!((i32_at(24), i32_at(28), i32_at(32), i32_at(36)), (Some(l), Some(t), Some(r), Some(b)) if r > l && b > t);
+        Some(UnitFacts::Emf { has_frame, device }) => {
+            // Device pixels a millimetre on each axis.
+            let px_mm = device.map(|d| {
+                let (w, h) = (f64::from(d.pixels.0), f64::from(d.pixels.1));
+                let (mw, mh) = match d.physical_size {
+                    EmfPhysicalSize::Micrometres(w, h) => (f64::from(w) / 1000.0, f64::from(h) / 1000.0),
+                    EmfPhysicalSize::Millimetres(w, h) => (f64::from(w), f64::from(h)),
+                };
+                (w / mw, h / mh)
+            });
             let ok = |v: f64| v.is_finite() && v > 0.0;
             match px_mm {
-                Some(_) if frame => (1.0, 1.0),
+                Some(_) if has_frame => (1.0, 1.0),
                 Some((x, y)) if ok(x) && ok(y) => (PT_PER_MM / x, PT_PER_MM / y),
                 _ => (PT_PER_PX, PT_PER_PX),
             }
         }
+        // Not reached: `crate::sniff` accepted the file through the same shared sniff.
+        None => (PT_PER_PX, PT_PER_PX),
     }
 }
 
@@ -209,6 +111,18 @@ struct Pending {
     pen: Pen,
     clips: Vec<Arc<Clip>>,
     path: BezPath,
+}
+
+/// What `craft_metafile` counted as not read or not played as the file asks.
+struct Lost {
+    /// Records of kinds it doesn't read.
+    skipped: u32,
+    /// Images, and pattern brushes (a pen's included), whose bitmap it couldn't read.
+    images: u32,
+    /// Clip changes it didn't apply as the file sets them.
+    clips: u32,
+    /// Raster operations drawn as a plain copy or left out.
+    rops: u32,
 }
 
 /// Clip paths already made, by address (the `Arc` keeps the address from being reused); None for
@@ -255,7 +169,7 @@ fn average(rgba: &[u8]) -> Option<[u8; 4]> {
     }
     let a = sum[3];
     let alpha = (a / pixels.len().max(1) as u64) as u8;
-    (a > 0).then(|| [(sum[0] / a) as u8, (sum[1] / a) as u8, (sum[2] / a) as u8, alpha.max(1)])
+    (a > 0).then(|| [((sum[0] + a / 2) / a) as u8, ((sum[1] + a / 2) / a) as u8, ((sum[2] + a / 2) / a) as u8, alpha.max(1)])
 }
 
 impl Mapper {
@@ -524,8 +438,42 @@ impl Mapper {
     }
 
     fn text(&mut self, t: &craft_metafile::Text, chain: Vec<Arc<Clip>>) {
-        let s: String = t.text.chars().filter(|c| *c != '\0').collect();
-        if s.trim().is_empty() || t.color[3] == 0 {
+        // The characters without NULs, and each one's advance (text units) when the file gives
+        // one for every character: a NUL's advance goes to the character before it, or moves the
+        // start when the string begins with one.
+        let advances = t.dx.len() == t.text.chars().count() && t.dx.iter().all(|d| d.is_finite());
+        let (mut s, mut dx) = (String::new(), Vec::new());
+        // How far before and after its start each character's advances (its own and the NULs'
+        // after it) reach (text units): an advance may be negative. And the advance of the NULs
+        // that move the start, with how far they reach.
+        let mut reach = Vec::new();
+        let mut lead = Lead::default();
+        for (c, d) in t.text.chars().zip(t.dx.iter().map(|d| f64::from(*d)).chain(std::iter::repeat(0.0))) {
+            if c != '\0' {
+                s.push(c);
+                dx.push(d);
+                reach.push((d.min(0.0), d.max(0.0)));
+            } else if let (Some(last), Some(r)) = (dx.last_mut(), reach.last_mut()) {
+                *last += d;
+                *r = (r.0.min(*last), r.1.max(*last));
+            } else {
+                lead.by += d;
+                lead.reach = (lead.reach.0.min(lead.by), lead.reach.1.max(lead.by));
+            }
+        }
+        if !advances {
+            dx.clear();
+            reach.clear();
+            lead = Lead::default();
+        }
+        // The leading NULs, of the text or of a string of NULs alone.
+        let first = lead;
+        // Type that draws nothing still fills its character cells on an opaque background.
+        let background = t.background.filter(|c| c[3] > 0);
+        let shows = !s.trim().is_empty() && t.color[3] > 0;
+        // A string of NULs only fills the cells across its advances.
+        let nuls = s.is_empty() && first.reach.0 < first.reach.1 && background.is_some();
+        if (s.is_empty() && !nuls) || !(shows || background.is_some()) {
             return;
         }
         // Text space → document without the move: its vertical scale gives the type size, and what
@@ -537,10 +485,7 @@ impl Mapper {
         let shape = if k > 1e-12 && k.is_finite() && linear.determinant().abs() > 1e-24 { Affine::scale(1.0 / k) * linear } else { Affine::IDENTITY };
         let f = &t.font;
         let h = f64::from(f.height);
-        // A negative height is the em; a positive one the cell (the em and the internal leading).
-        let em = if h < 0.0 { -h } else { h * 0.85 };
-        let size = if em > 0.0 && (em * k).is_finite() { (em * k).clamp(0.5, 5000.0) } else { 12.0 };
-        let mut style = CharStyle { size, fill: color(t.color), stroke: Paint::None, ..CharStyle::default() };
+        let mut style = CharStyle { fill: color(t.color), stroke: Paint::None, ..CharStyle::default() };
         if !f.family.trim().is_empty() {
             style.font_family = f.family.trim().to_string();
         }
@@ -551,37 +496,290 @@ impl Mapper {
             (false, false) => "Regular",
         }
         .into();
+        // The face the font maps to (the fallback face for a font that isn't installed). Characters
+        // it has no glyph for are drawn from other faces at the same size and Horizontal Scale.
+        let face = vectorcraft_text::FontDb::global().style_face(&style);
+        // A negative height is the em. A positive height is the character cell, and the em is
+        // the cell times unitsPerEm divided by the face's OS/2 usWinAscent plus usWinDescent at
+        // its instance of a variable font (its own ascent plus descent when it has no OS/2 table).
+        let cell_em = face.as_ref().and_then(|face| {
+            let (a, d) = face.vertical_metrics();
+            Some(face.units_per_em() / face.win_cell_height().unwrap_or(a + d)).filter(|r| r.is_finite() && *r > 0.0)
+        });
+        let em = if h < 0.0 { -h } else { h * cell_em.unwrap_or(0.85) };
+        let sized = em > 0.0 && (em * k).is_finite();
+        let size = if sized { (em * k).clamp(0.5, 5000.0) } else { 12.0 };
+        style.size = size;
+        // An average character width, negative or positive, becomes Horizontal Scale: the face's
+        // own average width (OS/2 xAvgCharWidth) at the type size is stretched or narrowed to it,
+        // also when the size was held to its range. A width is ignored when the height is 0.
+        let width = f64::from(f.width).abs();
+        if width > 0.0
+            && sized
+            && let Some(avg) = face.as_ref().and_then(|face| Some(face.average_char_width()? / face.units_per_em()))
+        {
+            let h_scale = width * k / (avg * size) * 100.0;
+            if h_scale.is_finite() {
+                style.h_scale = h_scale.clamp(1.0, 10000.0);
+            }
+        }
         style.underline = f.underline;
         style.strikethrough = f.strike;
-        // Where the baseline is below the reference point.
+        let db = vectorcraft_text::FontDb::global();
+        // Characters placed by their advances take no pair kerning: the advances place them.
+        if !dx.is_empty() {
+            style.kerning = Some(0.0);
+        }
+        // The character cell above and below the baseline (points): the face's OS/2 usWinAscent
+        // and usWinDescent at the type size (its own ascent and descent when it has no OS/2
+        // table), as tall as a positive height asks.
+        let cell = face
+            .as_ref()
+            .map(|face| {
+                let (a, d) = face.win_ascent_descent().unwrap_or_else(|| face.vertical_metrics());
+                (a / face.units_per_em() * size, d / face.units_per_em() * size)
+            })
+            .filter(|(a, d)| a.is_finite() && d.is_finite() && *a >= 0.0 && *d >= 0.0 && a + d > 0.0)
+            .unwrap_or_else(|| {
+                let c = if h > 0.0 { size / 0.85 } else { size };
+                (0.8 * c, 0.2 * c)
+            });
+        // Where the baseline is below the reference point: the top or the bottom of the cell is at
+        // the reference point.
         let drop = match t.v_align {
             VAlign::Baseline => 0.0,
-            VAlign::Bottom => -0.2 * size,
-            VAlign::Top => 0.8 * size,
+            VAlign::Bottom => -cell.1,
+            VAlign::Top => cell.0,
         };
         let origin = self.xf * Point::new(t.transform[4], t.transform[5]);
-        let mut text = TextObject::point(Point::ZERO, &s, style);
-        text.xf = Affine::translate(origin.to_vec2()) * shape * Affine::translate((0.0, drop));
-        text.para.justify = match t.h_align {
+        let base = Affine::translate(origin.to_vec2()) * shape;
+        let justify = match t.h_align {
             HAlign::Center => Justify::Center,
             HAlign::Right => Justify::Right,
             HAlign::Left => Justify::Left,
         };
-        text.cached_bounds = Some(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text).bounds);
-        let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(text)));
-        n.opacity = f32::from(t.color[3]) / 255.0;
-        self.push(chain, n);
+        let point = |s: &str| {
+            let mut text = TextObject::point(Point::ZERO, s, style.clone());
+            text.para.justify = justify;
+            text
+        };
+        let whole = point(&s);
+        let opacity = f32::from(t.color[3]) / 255.0;
+        let line = Line {
+            base,
+            drop,
+            align: &t.h_align,
+            decorated: f.underline || f.strike,
+            shows,
+            color: t.color,
+            opacity,
+            background,
+            cell,
+            point: &point,
+        };
+        // The backgrounds of every line and piece, and the type added after them so that none of
+        // them covers it.
+        let mut out = TextOut::default();
+        if dx.is_empty() {
+            let mut text = whole;
+            let laid = vectorcraft_text::layout(db, &text);
+            text.xf = base * Affine::translate((0.0, drop));
+            text.cached_bounds = Some(laid.bounds);
+            if background.is_some() {
+                // How far one line's glyphs reach each way, and the sum of their advances, its
+                // trailing blanks included.
+                let along = laid.glyphs.iter().fold((f64::INFINITY, f64::NEG_INFINITY, 0.0), |(from, to, width), g| {
+                    let (a, b) = (g.origin.x, g.origin.x + g.advance);
+                    (from.min(a.min(b)), to.max(a.max(b)), width + g.advance)
+                });
+                let one = laid.lines.len() == 1 && along.0.is_finite() && along.1.is_finite() && along.2.is_finite();
+                // The cells of one line run as far as its glyphs' advances reach, or for blanks
+                // alone, which draw no type, where the alignment puts a line that long.
+                // Those of more than one line run across each line's glyphs. NULs alone span
+                // their advances, where the alignment puts them.
+                let cells = if nuls {
+                    let start = aligned(first.by * k, 0.0, &t.h_align) - first.by * k;
+                    cell_rect(start + first.reach.0 * k, start + first.reach.1 * k, 0.0, cell)
+                } else if one {
+                    let (x0, x1) = if shows {
+                        (along.0, along.1)
+                    } else {
+                        let x0 = aligned(0.0, along.2, &t.h_align);
+                        (x0, x0 + along.2)
+                    };
+                    cell_rect(x0, x1, laid.glyphs.first().map_or(0.0, |g| g.origin.y), cell)
+                } else {
+                    cells(&laid, &s, cell, &t.h_align, shows && line.decorated)
+                };
+                out.backs.extend(self.background(&line, cells, text.xf));
+            }
+            if shows {
+                let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(text)));
+                n.opacity = opacity;
+                out.texts.push(n);
+            }
+            return self.add_text(&chain, out);
+        }
+        // Text units grow by `k` along the baseline in the text object's own space.
+        let dx: Vec<f64> = dx.iter().map(|d| d * k).collect();
+        let reach: Vec<(f64, f64)> = reach.iter().map(|(lo, hi)| (lo * k, hi * k)).collect();
+        let chars: Vec<char> = s.chars().collect();
+        // Type on more than one line is placed a line at a time, each line aligned by its own
+        // advances (layout leaves the tracking after a line's last character out of the width it
+        // aligns, and each line ends with its own) and its underline carried on to its own end.
+        let laid = vectorcraft_text::layout(db, &whole);
+        if laid.lines.len() > 1 {
+            // Where each character starts (bytes): the character a byte offset starts is found by
+            // a search.
+            let starts: Vec<usize> = s.char_indices().map(|(at, _)| at).collect();
+            let count = |to: usize| starts.partition_point(|at| *at < to);
+            let top = laid.lines.first().map_or(0.0, |l| l.baseline);
+            for (n, l) in laid.lines.iter().enumerate() {
+                let (from, to) = (count(l.start), count(l.end));
+                let (Some(cs), Some(dx), Some(reach)) = (chars.get(from..to), dx.get(from..to), reach.get(from..to)) else { continue };
+                // A leading NUL's advance comes before the first line only.
+                let lead = if n == 0 { first.scaled(k) } else { Lead::default() };
+                let down = l.baseline - top;
+                self.line(&line, cs, Advances { dx, reach, lead }, if down.is_finite() { down } else { 0.0 }, &mut out);
+            }
+        } else {
+            self.line(&line, &chars, Advances { dx: &dx, reach: &reach, lead: first.scaled(k) }, 0.0, &mut out);
+        }
+        self.add_text(&chain, out);
+    }
+
+    /// Adds a text record's backgrounds and then its type, leaving out backgrounds when there is
+    /// no room for both.
+    fn add_text(&mut self, chain: &[Arc<Clip>], out: TextOut) {
+        let TextOut { mut backs, texts } = out;
+        let keep = MAX_NODES.saturating_sub(self.out.len()).saturating_sub(texts.len());
+        if backs.len() > keep {
+            backs.truncate(keep);
+            self.warn(TOO_MANY);
+        }
+        for n in backs.into_iter().chain(texts) {
+            self.push(chain.to_vec(), n);
+        }
+    }
+
+    /// Character cells `cells`, placed by `xf`, filled with the line's background when it has one.
+    fn background(&self, line: &Line, mut cells: BezPath, xf: Affine) -> Option<Node> {
+        let bg = line.background?;
+        if cells.elements().is_empty() {
+            return None;
+        }
+        cells.apply_affine(xf);
+        self.path_node(cells, Some(bg), None, false)
+    }
+
+    /// One line of text with advances `adv` (points along the baseline) for its characters
+    /// `chars`, `down` below the first line's baseline: in pieces, each a text object of its own,
+    /// a new piece after each cluster that tracking can't space by its advance.
+    fn line(&mut self, line: &Line, chars: &[char], adv: Advances, down: f64, out: &mut TextOut) {
+        let Advances { dx, reach, lead } = adv;
+        // The line's cells, one rectangle behind every piece, run as far each way as its
+        // advances reach (an advance may be negative), from where the leading NULs' advances
+        // start, which the alignment puts where it puts a line as long as its advances. A line
+        // of leading NULs alone fills the cells across their advances.
+        let start = aligned(lead.by, dx.iter().sum(), line.align);
+        if line.background.is_some() {
+            let (mut lo, mut hi, mut pos) = (lead.reach.0 - lead.by, lead.reach.1 - lead.by, 0.0f64);
+            for (d, r) in dx.iter().zip(reach) {
+                (lo, hi) = (lo.min(pos + r.0), hi.max(pos + r.1));
+                pos += d;
+            }
+            let xf = line.base * Affine::translate((0.0, line.drop + down));
+            out.backs.extend(self.background(line, cell_rect(start + lo, start + hi, 0.0, line.cell), xf));
+        }
+        let blank = |cs: &[char]| cs.iter().all(|c| c.is_whitespace());
+        // A piece's type draws when it shows: blanks only when underlined or struck through.
+        let draws = |cs: &[char]| line.shows && (!blank(cs) || line.decorated);
+        if chars.is_empty() || !draws(chars) {
+            return;
+        }
+        let db = vectorcraft_text::FontDb::global();
+        let s: String = chars.iter().collect();
+        let (pieces, text, laid) = pieces((line.point)(&s), db, dx);
+        let split = pieces.len() > 1;
+        let mut tracked = Some((text, laid));
+        // Along the baseline (the text object's own space), where the next piece starts from the
+        // reference point: the line as long as its advances (a leading NUL's included), where the
+        // alignment puts it.
+        let mut at = start;
+        let last = pieces.len().saturating_sub(1);
+        for (i, (from, to)) in pieces.into_iter().enumerate() {
+            let cs = chars.get(from..to).unwrap_or_default();
+            let piece: String = cs.iter().collect();
+            let dx = dx.get(from..to).unwrap_or_default();
+            if !draws(cs) {
+                at += dx.iter().sum::<f64>();
+                continue;
+            }
+            // The line in one piece was already tracked to its advances.
+            let (mut text, laid) = match tracked.take().filter(|_| !split) {
+                Some(done) => done,
+                None => {
+                    let mut text = (line.point)(&piece);
+                    let laid = advanced(&mut text, db, dx);
+                    (text, laid)
+                }
+            };
+            let x0 = laid.lines.first().map_or(0.0, |l| l.x0);
+            let start = if (at - x0).is_finite() { at - x0 } else { 0.0 };
+            let span: f64 = dx.iter().sum();
+            at += span;
+            text.xf = line.base * Affine::translate((start, line.drop + down));
+            text.cached_bounds = Some(laid.bounds);
+            // An underline or strikethrough runs on across the space an advance leaves before
+            // the next piece, or after the line's last character, as one bar per piece from where
+            // its own bars end.
+            let gap = if (split && i < last) || (i == last && line.decorated) { gaps(&laid, db, &text, x0 + span) } else { BezPath::new() };
+            let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(text.clone())));
+            n.opacity = line.opacity;
+            out.texts.push(n);
+            if !gap.elements().is_empty() {
+                let mut gap = gap;
+                gap.apply_affine(text.xf);
+                if let Some(n) = self.path_node(gap, Some(line.color), None, false) {
+                    out.texts.push(n);
+                }
+            }
+        }
     }
 
     /// The document: what was drawn on one layer, clipped art in clipping groups.
-    fn finish(mut self, kind: Kind, skipped: u32) -> Imported {
+    fn finish(mut self, kind: Kind, lost: Lost) -> Imported {
         self.flush();
-        if skipped > 0 {
-            let n = skipped;
+        let s = |n: u32| if n == 1 { "" } else { "s" };
+        let was = |n: u32| if n == 1 { "was" } else { "were" };
+        let n = lost.skipped;
+        if n > 0 {
+            self.warnings.push(format!("{n} record{} of kinds VectorCraft doesn't read {} skipped", s(n), was(n)));
+        }
+        let n = lost.images;
+        if n > 0 {
             self.warnings.push(format!(
-                "{n} record{} of kinds VectorCraft doesn't read {} skipped",
-                if n == 1 { "" } else { "s" },
-                if n == 1 { "was" } else { "were" }
+                "{n} image{} or pattern brush{} that couldn't be read {} left out",
+                s(n),
+                if n == 1 { "" } else { "es" },
+                was(n)
+            ));
+        }
+        let n = lost.clips;
+        if n > 0 {
+            self.warnings.push(format!(
+                "{n} clip{} couldn't be applied as the file sets {}: what is drawn after {} may show more or less than the file does",
+                s(n),
+                if n == 1 { "it" } else { "them" },
+                if n == 1 { "it" } else { "them" }
+            ));
+        }
+        let n = lost.rops;
+        if n > 0 {
+            self.warnings.push(format!(
+                "{n} raster operation{} other than a plain copy (masks, inversions) {} drawn as a plain copy or left out",
+                s(n),
+                was(n)
             ));
         }
         let out = std::mem::take(&mut self.out);
@@ -595,64 +793,313 @@ impl Mapper {
     }
 }
 
-/// Does the file stop before its end-of-file record?
-fn ends_early(bytes: &[u8], kind: Kind) -> bool {
-    let u32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]));
-    let mut at = match kind {
-        Kind::Emf => 0,
-        Kind::Wmf => {
-            let start = if u32_at(0) == Some(PLACEABLE_KEY) { 22 } else { 0 };
-            let Some(words) = u16_at(start + 2) else { return true };
-            start + usize::from(words) * 2
-        }
-    };
-    loop {
-        let size = match kind {
-            Kind::Emf => {
-                let (Some(kind), Some(size)) = (u32_at(at), u32_at(at.saturating_add(4))) else { return true };
-                if kind == 14 {
-                    return false;
-                }
-                // Records are a multiple of 4 bytes long; reading stops at one that isn't.
-                if !size.is_multiple_of(4) {
-                    return true;
-                }
-                size as usize
+/// Where a line `lead + span` long (along the baseline) starts from the reference point, as
+/// `align` puts it, and `lead` on from there: where its first character starts.
+fn aligned(lead: f64, span: f64, align: &HAlign) -> f64 {
+    let total = lead + span;
+    lead + match align {
+        HAlign::Left => 0.0,
+        HAlign::Center => -total / 2.0,
+        HAlign::Right => -total,
+    }
+}
+
+/// What every piece of a text record's lines shares: the text space (`base`, with the baseline
+/// `drop` below the reference point), the alignment, whether the type is underlined or struck
+/// through, whether the type shows, its color and opacity, its background and the character cell
+/// above and below the baseline (points), and a point type object of a string in its style.
+struct Line<'a> {
+    base: Affine,
+    drop: f64,
+    align: &'a HAlign,
+    decorated: bool,
+    shows: bool,
+    color: [u8; 4],
+    opacity: f32,
+    background: Option<[u8; 4]>,
+    cell: (f64, f64),
+    point: &'a dyn Fn(&str) -> TextObject,
+}
+
+/// What a text record draws: the backgrounds behind its character cells, and its type (with the
+/// bars that carry an underline or strikethrough on), added after them.
+#[derive(Default)]
+struct TextOut {
+    backs: Vec<Node>,
+    texts: Vec<Node>,
+}
+
+/// One line's advances (points along the baseline): each character's own, how far before and
+/// after its start the advances from it to the next character reach, and the leading NULs'.
+struct Advances<'a> {
+    dx: &'a [f64],
+    reach: &'a [(f64, f64)],
+    lead: Lead,
+}
+
+/// The NULs that move a line's start: their advance, and how far before and after the line's
+/// start they reach.
+#[derive(Clone, Copy, Default)]
+struct Lead {
+    by: f64,
+    reach: (f64, f64),
+}
+
+impl Lead {
+    /// The same NULs with their advances grown by `k`.
+    fn scaled(self, k: f64) -> Lead {
+        Lead { by: self.by * k, reach: (self.reach.0 * k, self.reach.1 * k) }
+    }
+}
+
+/// The character cell from `x0` to `x1` along a baseline at `y`, `cell.0` above and `cell.1`
+/// below it (points); empty when it has no area.
+fn cell_rect(x0: f64, x1: f64, y: f64, cell: (f64, f64)) -> BezPath {
+    let r = Rect::new(x0, y - cell.0, x1, y + cell.1).abs();
+    if r.width() > 0.0 && r.height() > 0.0 && r.is_finite() { shapes::rectangle(r).to_bezpath() } else { BezPath::new() }
+}
+
+/// The character cells of `laid` (the type `s` laid out on more than one line), `cell.0` above
+/// and `cell.1` below each baseline (points), as one rectangle a line: across the line as layout
+/// places it and across its glyphs' advances, its trailing blanks included (layout leaves them
+/// out of the width it aligns). A line of blanks alone runs across its glyphs' advances when
+/// the type draws its underline or strikethrough (`decorated`), and otherwise as wide as their
+/// advances, where `align` puts a line that long.
+fn cells(laid: &vectorcraft_text::TextLayout, s: &str, cell: (f64, f64), align: &HAlign, decorated: bool) -> BezPath {
+    // Each line's baseline, the sum of its glyphs' advances, how far before and after the
+    // reference point they reach, and whether they are all blanks. Glyphs come line by line.
+    type Row = (usize, f64, f64, (f64, f64), bool);
+    let mut lines: Vec<Row> = Vec::new();
+    for g in &laid.glyphs {
+        let blank = s.get(g.byte..).and_then(|r| r.chars().next()).is_none_or(char::is_whitespace);
+        let (from, to) = (g.origin.x.min(g.origin.x + g.advance), g.origin.x.max(g.origin.x + g.advance));
+        match lines.last_mut() {
+            Some((line, _, width, reach, all)) if *line == g.line => {
+                *width += g.advance;
+                *reach = (reach.0.min(from), reach.1.max(to));
+                *all &= blank;
             }
-            Kind::Wmf => {
-                let (Some(words), Some(function)) = (u32_at(at), u16_at(at.saturating_add(4))) else { return true };
-                if function == 0 {
-                    return false;
-                }
-                (words as usize).saturating_mul(2)
+            _ => lines.push((g.line, g.origin.y, g.advance, (from, to), blank)),
+        }
+    }
+    let mut bp = BezPath::new();
+    for (line, y, width, reach, blank) in lines {
+        let (x0, x1) = match laid.lines.get(line) {
+            Some(l) if !blank => (l.x0.min(reach.0), l.x1.max(reach.1)),
+            _ if decorated => reach,
+            _ => {
+                let x0 = aligned(0.0, width, align);
+                (x0, x0 + width)
             }
         };
-        if size < 6 {
-            return true;
-        }
-        at = at.saturating_add(size);
+        bp.extend(cell_rect(x0, x1, y, cell));
     }
+    bp
+}
+
+/// The most times [`advanced`] lays the type out again to correct its tracking.
+const ADVANCE_PASSES: usize = 3;
+
+/// Sets `t`'s tracking so that each cluster (a ligature, a letter with its marks) advances by the
+/// sum of its characters' entries of `dx` (points along the baseline), and gives its layout.
+/// Tracking can change how the type is shaped (it drops standard ligatures past a limit), so the
+/// tracking is measured against the type laid out with the last tracking and corrected, a few
+/// times at most. A tracking that would pass the attribute's range is held at its end. When the
+/// corrections still miss (a ligature that forms at one tracking and breaks at the next), standard
+/// ligatures are turned off and the tracking is corrected again.
+fn advanced(t: &mut TextObject, db: &vectorcraft_text::FontDb, dx: &[f64]) -> vectorcraft_text::TextLayout {
+    let laid = tracked(t, db, dx);
+    let (_, clusters) = clusters(t, &laid, dx);
+    let settled = clusters.iter().all(|c| (c.want - c.has).abs() <= c.em * 1e-4 || !(TRACKING.0..=TRACKING.1).contains(&c.wanted()));
+    if settled {
+        return laid;
+    }
+    for r in &mut t.runs {
+        if !r.style.features.iter().any(|f| f == "-liga") {
+            r.style.features.push("-liga".to_string());
+        }
+    }
+    tracked(t, db, dx)
+}
+
+/// `t` laid out with its tracking corrected towards `dx` at most [`ADVANCE_PASSES`] times.
+fn tracked(t: &mut TextObject, db: &vectorcraft_text::FontDb, dx: &[f64]) -> vectorcraft_text::TextLayout {
+    let mut laid = vectorcraft_text::layout(db, t);
+    for _ in 0..ADVANCE_PASSES {
+        match retracked(t, &laid, dx) {
+            Some(runs) => t.runs = runs,
+            None => break,
+        }
+        laid = vectorcraft_text::layout(db, t);
+    }
+    laid
+}
+
+/// The tracking range of a character (thousandths of an em), as the Character panel holds it.
+const TRACKING: (f64, f64) = (-1000.0, 10000.0);
+
+/// One cluster of characters (a ligature, a letter with its marks): the advance the file wants
+/// for it and its advance laid out (points, tracking included), its em as its first character's
+/// Horizontal Scale draws it (which tracking is measured in) and its tracking.
+struct Cluster {
+    want: f64,
+    has: f64,
+    em: f64,
+    tracking: f64,
+}
+
+impl Cluster {
+    /// The tracking that gives the cluster the advance the file wants, not held to the range.
+    fn wanted(&self) -> f64 {
+        self.tracking + (self.want - self.has) / self.em * 1000.0
+    }
+}
+
+/// `t`'s clusters as `laid` sets them, with the sum of their characters' entries of `dx`, and the
+/// cluster of each character.
+fn clusters(t: &TextObject, laid: &vectorcraft_text::TextLayout, dx: &[f64]) -> (Vec<usize>, Vec<Cluster>) {
+    // The advance of the cluster that starts at each byte offset.
+    let mut own: HashMap<usize, f64> = HashMap::new();
+    for g in &laid.glyphs {
+        *own.entry(g.byte).or_insert(0.0) += g.advance;
+    }
+    let mut cluster = Vec::new();
+    let mut clusters: Vec<Cluster> = Vec::new();
+    let mut byte = 0;
+    for r in &t.runs {
+        let em = (r.style.size * vectorcraft_text::spacing_scale(&r.style, false)).max(1e-3);
+        for c in r.text.chars() {
+            let want = dx.get(cluster.len()).copied().unwrap_or(0.0);
+            match (own.get(&byte), clusters.last_mut()) {
+                (None, Some(last)) => last.want += want,
+                (has, _) => clusters.push(Cluster { want, has: has.copied().unwrap_or(0.0), em, tracking: r.style.tracking }),
+            }
+            cluster.push(clusters.len().saturating_sub(1));
+            byte += c.len_utf8();
+        }
+    }
+    (cluster, clusters)
+}
+
+/// `t`'s characters in pieces (first and past the last character index) that tracking can space
+/// by their advances `dx`: a piece ends after each cluster whose advance, once tracked, still
+/// differs from the one the file gives (further than the tracking range reaches, or a tab, which
+/// layout advances to its tab stop). The clusters are the ones the type has once tracked
+/// towards its advances, so that a ligature the tracking breaks apart can split between its letters.
+/// Type laid out right to left, or on more than one line, stays in one piece: pieces are placed
+/// one after another left to right along a single line. Also gives `t` tracked to its advances and
+/// its layout, for the type that stays in one piece.
+fn pieces(mut t: TextObject, db: &vectorcraft_text::FontDb, dx: &[f64]) -> (Vec<(usize, usize)>, TextObject, vectorcraft_text::TextLayout) {
+    let laid = advanced(&mut t, db, dx);
+    let (cluster, clusters) = clusters(&t, &laid, dx);
+    let mut out = vec![];
+    let mut from = 0;
+    if laid.lines.len() <= 1 && !laid.glyphs.iter().any(|g| g.rtl) {
+        for (i, c) in cluster.iter().enumerate() {
+            let ends = cluster.get(i + 1) != Some(c);
+            if ends && clusters.get(*c).is_some_and(|c| (c.want - c.has).abs() > c.em * 1e-4) {
+                out.push((from, i + 1));
+                from = i + 1;
+            }
+        }
+    }
+    if from < cluster.len() || out.is_empty() {
+        out.push((from, cluster.len()));
+    }
+    (out, t, laid)
+}
+
+/// The underline and strikethrough of `t` (laid out as `laid`) carried on to `end` along the
+/// baseline, in text space: the runs of a piece each draw bars of their own, and only the bars
+/// that end the piece (furthest along) are carried on.
+fn gaps(laid: &vectorcraft_text::TextLayout, db: &vectorcraft_text::FontDb, t: &TextObject, end: f64) -> BezPath {
+    let bars: Vec<Rect> = vectorcraft_text::decorations(laid, db, t).iter().map(|(_, bar)| bar.bounding_box()).collect();
+    let far = bars.iter().map(|b| b.x1).fold(f64::NEG_INFINITY, f64::max);
+    let mut bp = BezPath::new();
+    for b in bars.into_iter().filter(|b| b.x1 >= far - 1e-6) {
+        // A thousandth of a point is short of anything drawn.
+        if end > b.x1 + 1e-3 && end.is_finite() {
+            bp.extend(shapes::rectangle(Rect::new(b.x1, b.y0, end, b.y1)).to_bezpath());
+        }
+    }
+    bp
+}
+
+/// `t`'s runs with each cluster's tracking corrected by how far its advance in `laid` is from the
+/// sum of its characters' entries of `dx`; None when every cluster is already within a ten
+/// thousandth of an em of it. Layout adds a cluster's tracking once, so every character of a
+/// cluster takes the same value and a cluster stays in one run. Characters with the same tracking
+/// share a run.
+fn retracked(t: &TextObject, laid: &vectorcraft_text::TextLayout, dx: &[f64]) -> Option<Vec<TextRun>> {
+    let (cluster, clusters) = clusters(t, laid, dx);
+    if clusters.iter().all(|c| (c.want - c.has).abs() <= c.em * 1e-4) {
+        return None;
+    }
+    let tracking: Vec<f64> = clusters
+        .iter()
+        .map(|c| {
+            let v = c.wanted().clamp(TRACKING.0, TRACKING.1);
+            // Hundredths of a thousandth of an em, so that characters spaced alike share a run.
+            if v.is_finite() { (v * 100.0).round() / 100.0 } else { 0.0 }
+        })
+        .collect();
+    let mut out: Vec<TextRun> = Vec::with_capacity(t.runs.len());
+    let mut i = 0;
+    for r in &t.runs {
+        for c in r.text.chars() {
+            let tracking = cluster.get(i).and_then(|k| tracking.get(*k)).copied().unwrap_or(0.0);
+            i += 1;
+            let style = CharStyle { tracking, ..r.style.clone() };
+            match out.last_mut() {
+                Some(last) if last.style == style && last.inline.is_none() && r.inline.is_none() => last.text.push(c),
+                _ => out.push(TextRun { text: c.to_string(), style, inline: r.inline.clone() }),
+            }
+        }
+    }
+    Some(out)
 }
 
 /// Read an EMF or WMF file.
 pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
     let kind = crate::sniff(bytes).ok_or("not an EMF or WMF file")?;
     let pic = craft_metafile::parse(bytes).map_err(|e| match e {
-        craft_metafile::Error::NotMetafile => "not an EMF or WMF file".to_string(),
+        craft_metafile::Error::NotMetafile | craft_metafile::Error::NotPict => "not an EMF or WMF file".to_string(),
         craft_metafile::Error::BadHeader => format!("the {} header is damaged", kind.id().to_uppercase()),
         craft_metafile::Error::NoRecords => format!("the {} file holds no records", kind.id().to_uppercase()),
     })?;
-    let k = unit(bytes, kind);
+    let k = unit(bytes);
     let mut m = Mapper::new(f64::from(pic.width), f64::from(pic.height), k);
-    if ends_early(bytes, kind) {
+    let wire_kind = match kind {
+        Kind::Emf => craft_metafile::Kind::Emf,
+        Kind::Wmf => craft_metafile::Kind::Wmf,
+    };
+    if craft_metafile::ends_early(bytes, wire_kind) {
         m.warn(ENDS_EARLY);
     }
-    if pic.items.len() >= READER_ITEMS {
+    if pic.truncated {
         m.warn(AT_LIMIT);
     }
+    let lost = Lost { skipped: pic.skipped_records, images: pic.dropped_images, clips: pic.ignored_clips, rops: pic.unplayed_raster_ops };
     for item in pic.items {
         m.item(item);
     }
-    Ok(m.finish(kind, pic.skipped_records))
+    Ok(m.finish(kind, lost))
+}
+
+/// Turn a metafile picture into a document.
+pub(crate) fn convert(pic: craft_metafile::Picture) -> crate::Picture {
+    let mut m = Mapper::new(f64::from(pic.width), f64::from(pic.height), (1.0, 1.0));
+    if pic.truncated {
+        m.warn(PICT_TRUNCATED);
+    }
+    let lost = Lost { skipped: pic.skipped_records, images: pic.dropped_images, clips: pic.ignored_clips, rops: pic.unplayed_raster_ops };
+    for item in pic.items {
+        m.item(item);
+    }
+    let imported = m.finish(Kind::Wmf, lost);
+    let mut p = crate::Picture { document: imported.document, warnings: imported.warnings };
+    if p.document.layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())) {
+        p.warnings.push("the picture draws nothing VectorCraft reads".to_string());
+    }
+    p
 }

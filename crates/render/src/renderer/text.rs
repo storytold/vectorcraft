@@ -32,14 +32,14 @@ impl Renderer {
             return;
         }
         for r in t.runs.iter().filter_map(|r| r.inline.as_ref()) {
-            if !f.doc.symbols.iter().any(|s| s.name == r.symbol) && !MISSING_INLINE_LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            if f.symbols.symbol(&r.symbol).is_none() && !MISSING_INLINE_LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
                 log::warn!("inline graphic shows symbol {:?}, which the document doesn't have: it draws nothing", r.symbol);
             }
         }
         self.inline_depth += 1;
         for ig in &g.inlines {
             let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
-            let Some(sym) = f.doc.symbols.iter().find(|s| s.name == art.symbol) else { continue };
+            let Some(sym) = f.symbols.symbol(&art.symbol) else { continue };
             // Strokes scale with the art (it is sized to the type, as in the SVG `<use>`).
             let (node, kept) = self.placed_art(&sym.art, t.xf * ig.xf * f.doc.symbol_natural_xf(&art.symbol), true, None);
             self.draw_placed_art(ctx, f, &node, kept);
@@ -327,6 +327,10 @@ impl Renderer {
     /// characters'. It also returns false for type whose offscreen drawing would be more than
     /// [`MAX_RASTER_SIDE`] pixels a side or more than [`fx::PIXEL_BUDGET`] pixels in all.
     fn draw_type_edges(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject, g: &Arc<TextGeom>, geom_kept: bool) -> bool {
+        // A smaller frame can fit the offscreen type that a full frame draws as Sharp.
+        if f.reject_patch() {
+            return true;
+        }
         if proof::overprints(f.opts) && t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke) {
             return false;
         }

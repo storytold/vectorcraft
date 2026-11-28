@@ -632,9 +632,12 @@ fn a_large_odd_sized_image_never_overshoots_its_edges() {
 fn a_hostile_palette_is_bounded_and_near_duplicates_merge() {
     let img = render(64, 64, 0.7, |x, y| ((x - 32.0).hypot(y - 32.0) <= 20.0).then_some(RED));
     let many: Vec<String> = std::iter::once("#d22832".to_string()).chain((1..200_000u32).map(|i| format!("#{:06x}", i * 37 % 0xfffff0))).collect();
-    let started = std::time::Instant::now();
+    let named = many.len();
+    super::pipeline::NAMED_COMPARISONS.with(|n| n.set(0));
     let res = trace_within(&img, &TraceParams { logo_colors: many, ..logo_params() }, 100_000);
-    assert!(started.elapsed().as_secs() < 20, "palette handling took {:?}", started.elapsed());
+    // Each named color is compared with the ten or fewer kept so far, not with every one before it.
+    let comparisons = super::pipeline::NAMED_COMPARISONS.with(|n| n.get());
+    assert!(comparisons <= 10 * named, "{comparisons} comparisons for {named} named colors");
     if let Ok(r) = res {
         assert!(r.palette.len() <= 11);
     }
@@ -966,6 +969,213 @@ fn a_gray_between_black_and_white_is_one_shape() {
     }
 }
 
+/// Flat Logo with the black of the tests below, `gray` and white named exactly.
+fn black_gray_white(gray: [u8; 3]) -> TraceParams {
+    let logo_colors = vec!["#040403".into(), format!("#{:02X}{:02X}{:02X}", gray[0], gray[1], gray[2]), "#FFFFFF".into()];
+    TraceParams { logo_colors, ..logo_params() }
+}
+
+/// A black disc and a gray square on white, blurred by 1 to 3 pixels: the edge pixels around the
+/// disc as light as the gray read as blends of black and white, so the gray is one shape (the
+/// square) and no gray lines the disc, with the colors found or named. A light gray (230) blurred by
+/// 1.5 pixels leaves at most 4 slivers of up to 3 pixels, touching the disc's edge at no more than 4
+/// of 192 samples. At a blur of 3 pixels, with the colors named, a gray of 128 is still one shape, a
+/// gray of 200 leaves 4 slivers of no area, and a light gray leaves at most 8 slivers, touching the
+/// disc's edge at no more than 4 of 192 samples. (Without named colors, an image blurred by 3 pixels
+/// traces without its gray.)
+#[test]
+fn blurred_black_edges_beside_gray_leave_no_gray_slivers() {
+    const INK: [u8; 3] = [4, 4, 3];
+    for gray in [[230u8, 230, 230], [200, 200, 200], [128, 128, 128]] {
+        for blur in [1.0, 1.5, 2.0, 3.0] {
+            let img = render(120, 60, blur, |x, y| {
+                Some(if (x - 30.0).hypot(y - 30.0) <= 20.0 {
+                    INK
+                } else if (60.0..=110.0).contains(&x) && (10.0..=50.0).contains(&y) {
+                    gray
+                } else {
+                    WHITE
+                })
+            });
+            for by_name in [false, true] {
+                if !by_name && blur > 2.0 {
+                    continue;
+                }
+                let res = trace(&img, &if by_name { black_gray_white(gray) } else { logo_params() });
+                let what = format!("gray {}, blur {blur}, named {by_name}", gray[0]);
+                let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+                assert_eq!(top_color(&res, Point::new(85.0, 30.0)), Some(gray), "{what}: the square; {paths:?}");
+                let mut rim = 0;
+                for r in [19.0, 20.0, 21.0] {
+                    for k in 0..64 {
+                        let a = f64::from(k) * std::f64::consts::TAU / 64.0;
+                        if top_color(&res, Point::new(30.0 + r * a.cos(), 30.0 + r * a.sin())) == Some(gray) {
+                            rim += 1;
+                        }
+                    }
+                }
+                let mut grays: Vec<_> = res.paths.iter().filter(|t| t.color == gray).map(|t| t.pixels).collect();
+                grays.sort_unstable();
+                grays.pop();
+                match (gray[0], blur == 3.0) {
+                    (230, false) if blur == 1.5 => {
+                        assert!(grays.len() <= 4 && grays.iter().all(|&n| n <= 3), "{what}: slivers {grays:?}");
+                        assert!(rim <= 4, "{what}: {rim} of 192 samples along the disc's edge traced gray");
+                    }
+                    (230, true) => {
+                        assert!(grays.len() <= 8, "{what}: {} slivers; {paths:?}", grays.len());
+                        assert!(rim <= 4, "{what}: {rim} of 192 samples along the disc's edge traced gray");
+                    }
+                    (200, true) => {
+                        assert!(grays.len() <= 4 && grays.iter().all(|&n| n == 0), "{what}: slivers {grays:?}");
+                        assert_eq!(rim, 0, "{what}: samples along the disc's edge traced gray");
+                    }
+                    _ => {
+                        assert!(grays.is_empty(), "{what}: slivers {grays:?}; {paths:?}");
+                        assert_eq!(rim, 0, "{what}: samples along the disc's edge traced gray");
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A soft-edged gray band lying along a black disc traces as black and white, with at most one of
+/// every 16 samples traced gray, when it is 2 to 4 pixels wide and blurred by 1.5 or 2 pixels, 2 or
+/// 3 pixels wide and blurred by 3 pixels, or 2 pixels wide and blurred by 1 pixel: its pixels are
+/// reached from the disc and from the white through pixels that keep getting darker and lighter, as
+/// across a blurred black-to-white edge. A band 8 pixels wide keeps at least half of its gray at
+/// blurs of 1 to 3 pixels. The bands 3 and 4 pixels wide of the three grays, blurred by 1 pixel,
+/// keep about 60 of their 336 samples gray, and those 4 pixels wide, blurred by 3 pixels, about 39
+/// of 192. With sharp edges every band stays gray, and with edges blurred by 0.6 pixels a band 3 to
+/// 8 pixels wide keeps at least 4 of every 5 samples gray, and the bands 2 to 4 pixels wide of the
+/// three grays keep about 306 of their 432 samples gray: beside a sharp edge, a path that comes to a
+/// pixel of the gray stops there.
+#[test]
+fn a_soft_gray_band_along_black_traces_as_black_and_white() {
+    const INK: [u8; 3] = [4, 4, 3];
+    // The samples traced gray over the three grays: of the bands 2 to 4 pixels wide blurred by 0.6
+    // pixels, of the bands 3 and 4 pixels wide blurred by 1 pixel, and of the bands 4 pixels wide
+    // blurred by 3 pixels.
+    let (mut nearly_sharp, mut blur_one, mut blur_three) = (0, 0, 0);
+    for gray in [[230u8, 230, 230], [200, 200, 200], [128, 128, 128]] {
+        for blur in [0.0, 0.6, 1.0, 1.5, 2.0, 3.0] {
+            for wide in [2u8, 3, 4, 8] {
+                let img = render(120, 60, blur, |x, y| {
+                    Some(if (x - 25.0).hypot(y - 28.0) <= 18.0 {
+                        INK
+                    } else if (40.0..43.0 + f64::from(wide)).contains(&x) && (20.0..36.0).contains(&y) {
+                        gray
+                    } else {
+                        WHITE
+                    })
+                });
+                let res = trace(&img, &black_gray_white(gray));
+                // The band's samples: 16 rows of its `wide` columns outside the disc.
+                let kept = (0..wide)
+                    .flat_map(|c| (20..36).map(move |y| Point::new(43.5 + f64::from(c), f64::from(y) + 0.5)))
+                    .filter(|&at| top_color(&res, at) == Some(gray))
+                    .count();
+                let all = 16 * usize::from(wide);
+                let what = format!("gray {}, blur {blur}, {wide} px band: {kept} of {all} samples traced gray", gray[0]);
+                let lost = if blur == 1.0 {
+                    wide <= 2
+                } else if blur == 3.0 {
+                    wide <= 3
+                } else {
+                    wide <= 4
+                };
+                if blur == 0.0 {
+                    assert_eq!(kept, all, "{what}");
+                } else if blur == 0.6 {
+                    if wide >= 3 {
+                        assert!(5 * kept >= 4 * all, "{what}");
+                    }
+                    if wide <= 4 {
+                        nearly_sharp += kept;
+                    }
+                } else if lost {
+                    assert!(16 * kept <= all, "{what}");
+                } else if wide == 8 {
+                    assert!(2 * kept >= all, "{what}");
+                } else if blur == 1.0 {
+                    blur_one += kept;
+                } else if blur == 3.0 {
+                    blur_three += kept;
+                }
+            }
+        }
+    }
+    assert!((300..=312).contains(&nearly_sharp), "bands 2 to 4 px wide blurred by 0.6 px: {nearly_sharp} of 432 samples traced gray");
+    assert!((56..=64).contains(&blur_one), "bands 3 and 4 px wide blurred by 1 px: {blur_one} of 336 samples traced gray");
+    assert!((36..=42).contains(&blur_three), "bands 4 px wide blurred by 3 px: {blur_three} of 192 samples traced gray");
+}
+
+/// A soft-edged gray spoke two or three pixels wide running straight out of a black disc, blurred
+/// by 1 or 1.5 pixels, loses 3 or 4 of its 16 samples nearest the disc and keeps the rest. Blurred
+/// by 2 pixels, a spoke three pixels wide loses 2 or 3 of them, and one two pixels wide traces as
+/// black and white along its whole length.
+#[test]
+fn a_soft_gray_spoke_loses_a_few_pixels_where_it_meets_black() {
+    const INK: [u8; 3] = [4, 4, 3];
+    for gray in [[230u8, 230, 230], [128, 128, 128]] {
+        for blur in [1.0, 1.5, 2.0] {
+            for wide in [2.0, 3.0] {
+                let img = render(120, 60, blur, |x, y| {
+                    Some(if (x - 25.0).hypot(y - 28.0) <= 18.0 {
+                        INK
+                    } else if (38.0..90.0).contains(&x) && (27.0..27.0 + wide).contains(&y) {
+                        gray
+                    } else {
+                        WHITE
+                    })
+                });
+                let res = trace(&img, &black_gray_white(gray));
+                let at = |x: i32| Point::new(f64::from(x) + 0.5, 27.0 + wide / 2.0);
+                let near = (44..60).filter(|&x| top_color(&res, at(x)) == Some(gray)).count();
+                let far = (60..86).filter(|&x| top_color(&res, at(x)) == Some(gray)).count();
+                let what = format!("gray {}, blur {blur}, {wide} px spoke", gray[0]);
+                if blur == 2.0 && wide == 2.0 {
+                    assert_eq!(near + far, 0, "{what}: {near} and {far} samples traced gray");
+                    continue;
+                }
+                let kept = if blur == 2.0 { 13..=14 } else { 12..=13 };
+                assert!(kept.contains(&near), "{what}: {near} of the 16 samples nearest the disc traced gray");
+                assert_eq!(far, 26, "{what}: the rest of the spoke");
+            }
+        }
+    }
+}
+
+/// A soft-edged light gray stroke 2 pixels wide beside a black disc, blurred by 1.5 pixels: 2
+/// pixels from the disc it keeps about 10 of its 34 samples gray, 4 pixels away about 25, and 6 or
+/// 8 pixels away all of them.
+#[test]
+fn a_soft_gray_stroke_near_black_loses_gray_by_its_distance() {
+    const INK: [u8; 3] = [4, 4, 3];
+    const GRAY: [u8; 3] = [230, 230, 230];
+    for gap in [2, 4, 6, 8] {
+        let x0 = 43.0 + f64::from(gap);
+        let img = render(120, 60, 1.5, |x, y| {
+            Some(if (x - 25.0).hypot(y - 28.0) <= 18.0 {
+                INK
+            } else if (x0..x0 + 2.0).contains(&x) && (8.0..50.0).contains(&y) {
+                GRAY
+            } else {
+                WHITE
+            })
+        });
+        let res = trace(&img, &black_gray_white(GRAY));
+        let kept = (12..46).filter(|&y| top_color(&res, Point::new(x0 + 1.0, f64::from(y) + 0.5)) == Some(GRAY)).count();
+        let what = format!("{gap} px from the disc: {kept} of 34 samples traced gray");
+        match gap {
+            2 => assert!((7..=13).contains(&kept), "{what}"),
+            4 => assert!((22..=28).contains(&kept), "{what}"),
+            _ => assert_eq!(kept, 34, "{what}"),
+        }
+    }
+}
+
 /// A one-pixel gray line between flat black and flat white, with the three colors named, stays a
 /// gray line along its whole length, beside a black disc whose edge pixels are as light as the gray.
 #[test]
@@ -1155,6 +1365,38 @@ fn a_noisy_hard_edged_gray_between_black_and_white_is_one_shape() {
             let a = f64::from(k) * std::f64::consts::TAU / 16.0;
             let at = Point::new(30.0 + 20.0 * a.cos(), 30.0 + 20.0 * a.sin());
             assert_ne!(top_color(&res, at), Some(GRAY), "named {named}: the disc's edge at {at:?}; {paths:?}");
+        }
+    }
+}
+
+#[test]
+fn a_disc_on_a_gray_panel_on_a_paler_ground_has_no_slivers_of_the_ground() {
+    // The panel's gray lies on the line from the ground's gray to the disc's charcoal, so the disc's
+    // edge pixels are also a mix of the ground and the disc.
+    let (ground, panel, disc) = ([240, 240, 240], [200, 200, 200], [60, 60, 60]);
+    for blur in [0.0, 0.7] {
+        let grays = render(150, 150, blur, move |x, y| {
+            let (cx, cy) = (x.clamp(35.0, 115.0), y.clamp(35.0, 115.0));
+            Some(if (x - 75.0).hypot(y - 75.0) < 30.0 {
+                disc
+            } else if (20.0..130.0).contains(&x) && (20.0..130.0).contains(&y) && (x - cx).hypot(y - cy) < 15.0 {
+                panel
+            } else {
+                ground
+            })
+        });
+        for named in [false, true] {
+            let logo_colors = if named { vec!["#F0F0F0".into(), "#C8C8C8".into(), "#3C3C3C".into()] } else { Vec::new() };
+            let res = trace(&grays, &TraceParams { logo_colors, ..logo_params() });
+            let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+            assert_eq!(res.paths.len(), 3, "blur {blur}, named {named}: one path per color; {paths:?}");
+            for k in 0..16 {
+                let a = f64::from(k) * std::f64::consts::TAU / 16.0;
+                let at = Point::new(75.0 + 31.0 * a.cos(), 75.0 + 31.0 * a.sin());
+                assert_eq!(top_color(&res, at), Some(panel), "blur {blur}, named {named}: beside the disc at {at:?}");
+            }
+            assert_eq!(top_color(&res, Point::new(8.0, 75.0)), Some(ground), "blur {blur}, named {named}: the ground");
+            assert_eq!(top_color(&res, Point::new(75.0, 75.0)), Some(disc), "blur {blur}, named {named}: the disc");
         }
     }
 }

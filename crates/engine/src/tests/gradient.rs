@@ -377,14 +377,15 @@ fn annotator_gestures_edit_the_gradient_as_single_undo_steps() {
     assert_eq!(stops.len(), 3);
     assert!((stops[1].offset - 0.3).abs() < 1e-6);
     assert_eq!(s.selected_stop(), Some(1));
-    // Dragging the end handle changes only the end, as one undo step.
+    // Dragging the end handle changes only the length (the end stays on the bar's line), as one
+    // undo step.
     let undo = s.doc().unwrap().history.undo.len();
     gesture(
         &mut s,
         &[(PointerKind::Down, 200.0, 150.0), (PointerKind::Drag, 210.0, 160.0), (PointerKind::Drag, 220.0, 170.0), (PointerKind::Up, 220.0, 170.0)],
     );
     let g = fill_geom(&s, id);
-    assert_eq!((g.start, g.end), (Point::new(100.0, 150.0), Point::new(220.0, 170.0)));
+    assert_eq!((g.start, g.end), (Point::new(100.0, 150.0), Point::new(220.0, 150.0)));
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     // The selected stop takes Delete ahead of edit.clear; the object stays.

@@ -2,10 +2,13 @@
 //!
 //! Flare: drag sets the center and its size and turns the rays as the pointer moves up or down
 //! (Shift holds their turn, ↑/↓ add or remove rays and Ctrl/Cmd keeps the center's size while the
-//! drag sizes the halo; click without dragging opens the Flare Tool Options), then a click sets the
+//! drag sizes the halo; click without dragging opens the Flare Tool Options, and Alt-click (Option
+//! on macOS) draws a flare there with them at once), then a click sets the
 //! end point of the rings (↑/↓ add or remove rings and ~ places them anew); Space held during
 //! either drag moves the flare. The rest comes
-//! from the tool's options (the Flare Tool Options, which last). Reshape: a click on a selected
+//! from the tool's options (the Flare Tool Options, which last). With one flare selected, the tool
+//! shows its center and end handles, and dragging either changes the flare's length and direction
+//! (`shape.editFlare`). Reshape: a click on a selected
 //! path sets a focal point (adding an anchor on a segment), Shift-click adds or removes more, and
 //! a drag from a focal point moves them all; the engine's `path.reshape` stretches the selected
 //! anchors between them and the anchors that stay.
@@ -59,6 +62,9 @@ pub struct FlareTool {
     /// The pointer at the last press or drag, from which Space held moves the flare.
     last: Point,
     began: bool,
+    /// Whether Alt (Option on macOS) was held when the button went down for the center: a release
+    /// without a drag then draws a flare with the options at once.
+    alt_press: bool,
     /// Ray count changed with ↑/↓ during the center drag (None = the options' count).
     rays: Option<u64>,
     /// Ring count changed with ↑/↓ while the rings' end point is placed (None = the options' count).
@@ -79,6 +85,40 @@ pub struct FlareTool {
     /// Whether the flare has rays and rings (the options' Rays and Rings checkboxes).
     rays_on: bool,
     rings_on: bool,
+    /// A drag of the selected flare's center or end handle.
+    handle: Option<HandleDrag>,
+}
+
+/// A drag of a selected flare's handle: the flare, whether it is the end handle (else the center),
+/// where the handle was, where it was pressed, whether Alt (Option on macOS) was held at the press
+/// and whether the drag has begun its undo step.
+#[derive(Clone, Copy, Debug)]
+struct HandleDrag {
+    id: vectorcraft_doc::NodeId,
+    end: bool,
+    from: Point,
+    at: Point,
+    alt: bool,
+    began: bool,
+}
+
+/// The flare whose handles the Flare tool shows: the one selected object, when it is a flare that
+/// can be edited, with its center and the rings' end point.
+fn selected_flare(cx: &ToolContext) -> Option<(vectorcraft_doc::NodeId, Point, Point)> {
+    let [id] = cx.selection.objects.as_slice() else { return None };
+    if !cx.doc.is_editable(*id) {
+        return None;
+    }
+    let node = cx.doc.node(*id)?;
+    let spec = node.extras().flare.as_deref().filter(|spec| spec.draws(node))?;
+    Some((*id, spec.center()?, spec.end()?))
+}
+
+/// `shape.editFlare`'s params for handle drag `h` with the pointer at `pointer`: the handle moves
+/// as far as the pointer has.
+fn handle_params(h: HandleDrag, pointer: Point) -> Value {
+    let p = h.from + (pointer - h.at);
+    if h.end { json!({ "ids": [h.id.0], "x2": p.x, "y2": p.y }) } else { json!({ "ids": [h.id.0], "cx": p.x, "cy": p.y }) }
 }
 
 impl Default for FlareTool {
@@ -89,6 +129,7 @@ impl Default for FlareTool {
             hover: Point::ZERO,
             last: Point::ZERO,
             began: false,
+            alt_press: false,
             rays: None,
             rings: None,
             ring_seed: None,
@@ -99,6 +140,7 @@ impl Default for FlareTool {
             values: FLARE_OPTIONS.map(|(_, default, _, _)| default),
             rays_on: true,
             rings_on: true,
+            handle: None,
         }
     }
 }
@@ -225,6 +267,20 @@ impl FlareTool {
     fn center_diameter(&self, dist: f64) -> f64 {
         self.held.map_or(2.0 * dist, |(d, ..)| d)
     }
+
+    /// Alt-click (Option-click on macOS) at `c`: one flare drawn with the options as they are, as one
+    /// command, so a refusal (a click beyond the plane's horizon) reaches the caller as an error.
+    /// While the perspective grid shows with an active plane, the flare goes on that plane with its
+    /// sizes in plane units from the click, as the Flare Tool Options opened by a click draw it.
+    fn click_flare(&self, cx: &ToolContext, c: Point) -> Vec<Action> {
+        let params = flare_params(&self.options(), c);
+        let grid = crate::distort::perspective::PerspectiveGrid::current(cx.doc);
+        if grid.visible && grid.plane != crate::distort::perspective::Plane::None {
+            vec![Action::Exec("perspective.draw".into(), json!({ "command": "shape.flare", "params": params, "at": [c.x, c.y] }))]
+        } else {
+            vec![Action::Exec("shape.flare".into(), params)]
+        }
+    }
 }
 
 impl Tool for FlareTool {
@@ -232,7 +288,7 @@ impl Tool for FlareTool {
         "flare"
     }
     fn busy(&self) -> bool {
-        self.drag.is_some() || self.placed.is_some()
+        self.drag.is_some() || self.placed.is_some() || self.handle.is_some()
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.hover = ev.pos;
@@ -242,8 +298,43 @@ impl Tool for FlareTool {
         if quote_pressed && self.rings_on && self.placed.is_some() && matches!(ev.kind, PointerKind::Drag | PointerKind::Move | PointerKind::Up) {
             self.ring_seed = Some(next_ring_seed(self.ring_seed, ev.pos));
         }
+        if let Some(mut h) = self.handle {
+            return match ev.kind {
+                PointerKind::Drag if h.began => vec![Action::Preview("shape.editFlare".into(), handle_params(h, ev.pos))],
+                PointerKind::Drag if ev.pos.distance(h.at) < cx.tol(3.0) => vec![],
+                PointerKind::Drag => {
+                    h.began = true;
+                    self.handle = Some(h);
+                    vec![Action::Begin("Edit Flare".into()), Action::Preview("shape.editFlare".into(), handle_params(h, ev.pos))]
+                }
+                PointerKind::Up => {
+                    self.handle = None;
+                    if h.began {
+                        vec![Action::Preview("shape.editFlare".into(), handle_params(h, ev.pos)), Action::Commit]
+                    } else if h.alt {
+                        // A click on a handle without a drag is a click with the tool.
+                        self.click_flare(cx, h.at)
+                    } else {
+                        vec![Action::Dialog("flare".into(), json!({ "x": h.at.x, "y": h.at.y }))]
+                    }
+                }
+                _ => vec![],
+            };
+        }
         match ev.kind {
             PointerKind::Down => {
+                // A press on the selected flare's center or end handle drags that handle.
+                if self.placed.is_none()
+                    && let Some((id, c, e)) = selected_flare(cx)
+                {
+                    let tol = cx.tol(4.0);
+                    let (dc, de) = (ev.pos.distance(c), ev.pos.distance(e));
+                    if dc.min(de) <= tol {
+                        let end = de < dc;
+                        self.handle = Some(HandleDrag { id, end, from: if end { e } else { c }, at: ev.pos, alt: ev.mods.alt, began: false });
+                        return vec![];
+                    }
+                }
                 if self.placed.is_none() {
                     self.drag = Some((ev.pos, ev.pos));
                     self.rays = None;
@@ -252,6 +343,7 @@ impl Tool for FlareTool {
                     self.held = None;
                     self.growth = None;
                     self.turn = 0.0;
+                    self.alt_press = ev.mods.alt;
                 }
                 self.last = ev.pos;
                 vec![]
@@ -298,6 +390,8 @@ impl Tool for FlareTool {
                     self.placed = Some((c, self.center_diameter(p.distance(c))));
                     self.held = None;
                     vec![]
+                } else if std::mem::take(&mut self.alt_press) {
+                    self.click_flare(cx, c)
                 } else {
                     vec![Action::Dialog("flare".into(), json!({ "x": c.x, "y": c.y }))]
                 }
@@ -328,6 +422,11 @@ impl Tool for FlareTool {
             };
             return vec![Action::Preview("shape.flare".into(), preview)];
         }
+        if key == ToolKey::Escape
+            && let Some(h) = self.handle.take()
+        {
+            return if h.began { vec![Action::Cancel] } else { vec![] };
+        }
         if key == ToolKey::Escape && self.busy() {
             self.rays = None;
             self.rings = None;
@@ -345,16 +444,27 @@ impl Tool for FlareTool {
         // Switching away after the centre drag keeps the flare with the rings its options give.
         self.drag = None;
         self.held = None;
+        if self.handle.take().is_some_and(|h| h.began) {
+            return vec![Action::Commit];
+        }
         if self.placed.take().is_some() && std::mem::take(&mut self.began) { vec![Action::Commit] } else { vec![] }
     }
-    fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
+    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         match (self.drag, self.placed) {
             (Some((c, p)), _) => {
                 let r = self.center_diameter(p.distance(c)) / 2.0;
                 vec![Overlay::Path { path: ellipse_path(c, r, r, 0.0), color: BLUE, width: 1.0, dashed: false }]
             }
             (_, Some((c, _))) => vec![Overlay::Line { a: c, b: self.hover, color: BLUE, dashed: true }],
-            _ => vec![],
+            // The selected flare's center and end handles.
+            _ => match selected_flare(cx) {
+                Some((_, c, e)) => vec![
+                    Overlay::Line { a: c, b: e, color: BLUE, dashed: true },
+                    Overlay::Anchor { p: c, color: BLUE, filled: self.handle.is_some_and(|h| !h.end), size: 7.0 },
+                    Overlay::Anchor { p: e, color: BLUE, filled: self.handle.is_some_and(|h| h.end), size: 7.0 },
+                ],
+                None => vec![],
+            },
         }
     }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
@@ -377,6 +487,18 @@ impl Tool for FlareTool {
                 *slot = if is_count(key) { x.round() } else { x };
             }
         }
+    }
+    /// The switches and [`FLARE_OPTIONS`] within their ranges, the counts whole.
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        if matches!(key, "raysOn" | "ringsOn") {
+            return c::boolean(key, v);
+        }
+        let Some(&(_, _, lo, hi)) = FLARE_OPTIONS.iter().find(|(k, ..)| *k == key) else { return Err(c::unknown(key)) };
+        if is_count(key) && v.as_f64().is_none_or(|n| n.fract() != 0.0) {
+            return Err(format!("`{key}` must be a whole number from {lo} to {hi}"));
+        }
+        c::number(key, v, lo, hi)
     }
 }
 
@@ -650,10 +772,6 @@ impl Tool for ShaperTool {
         use vectorcraft_geom::recognize::{Recognized, recognize};
         match ev.kind {
             PointerKind::Down => {
-                if let Some(a) = crate::shaperwidget::click(cx, ev.pos) {
-                    self.points.clear();
-                    return vec![a];
-                }
                 self.points = vec![ev.pos];
                 vec![]
             }
@@ -698,8 +816,6 @@ impl Tool for ShaperTool {
                     None => vec![],
                 }
             }
-            // The mode widget answers each click of a double-click on it.
-            PointerKind::DoubleClick if crate::shaperwidget::over_widget(cx, ev.pos) => vec![],
             PointerKind::DoubleClick => vec![
                 Action::Exec("shaper.select".into(), json!({"point": [ev.pos.x, ev.pos.y], "source": true})),
                 Action::SwitchTool("selection".into()),
@@ -855,6 +971,91 @@ mod tests {
         }
     }
 
+    /// Alt-click (Option-click on macOS): with Alt held when the button goes down, a release without
+    /// a drag draws one flare at the click with the options as they are, Rays and Rings off included,
+    /// and opens no dialog. A plain click, or Alt pressed only for the release, opens the Flare Tool
+    /// Options; an Alt drag draws the flare in two stages as any drag does; Escape drops the press.
+    #[test]
+    fn alt_click_draws_a_flare_with_the_options_at_once() {
+        use crate::testutil::*;
+        use vectorcraft_doc::Selection;
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Default::default() };
+        let click = |t: &mut FlareTool, down: Mods, up: Mods| {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 120.0, 140.0).with_mods(down));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 120.0, 140.0).with_mods(up))
+        };
+        let mut t = FlareTool::default();
+        for (k, v) in [("diameter", json!(40)), ("rays", json!(7)), ("growth", json!(80)), ("ringsOn", json!(false))] {
+            t.set_option(k, &v);
+        }
+        let options = t.options();
+        let a = click(&mut t, alt, alt);
+        let c = Point::new(120.0, 140.0);
+        let v = flare_params(&options, c);
+        assert_eq!(a, vec![Action::Exec("shape.flare".into(), v.clone())]);
+        assert_eq!(
+            (v["cx"].as_f64(), v["cy"].as_f64(), v["diameter"].as_f64(), v["rays"].as_u64(), v["growth"].as_f64(), v["rings"].as_u64()),
+            (Some(120.0), Some(140.0), Some(40.0), Some(7), Some(80.0), Some(0))
+        );
+        assert_eq!(t.options(), options, "the click leaves the options as they are");
+        assert!(!t.busy());
+        // Alt let go before the release still counts; Alt pressed only for the release does not.
+        assert_eq!(click(&mut t, alt, Mods::default()), vec![Action::Exec("shape.flare".into(), v)]);
+        let dialog = vec![Action::Dialog("flare".into(), json!({ "x": 120.0, "y": 140.0 }))];
+        assert_eq!(click(&mut t, Mods::default(), alt), dialog);
+        assert_eq!(click(&mut t, Mods::default(), Mods::default()), dialog, "a plain click after an Alt-click opens the dialog");
+        // An Alt drag places the center and waits for the rings' end point, as any drag does.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(alt));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 140.0, 100.0).with_mods(alt)).first(), Some(&Action::Begin("Flare".into())));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 140.0, 100.0).with_mods(alt)), vec![]);
+        assert!(t.placed.is_some());
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 200.0).with_mods(alt));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 200.0).with_mods(alt));
+        assert_eq!(a.last(), Some(&Action::Commit));
+        assert_eq!((flare_preview(&a)["diameter"].as_f64(), flare_preview(&a)["x2"].as_f64()), (Some(80.0), Some(300.0)));
+        // Escape before the release drops the press: no flare and no dialog.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 120.0, 140.0).with_mods(alt));
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![]);
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 120.0, 140.0).with_mods(alt)), vec![]);
+    }
+
+    /// With the perspective grid showing and a plane active, an Alt-click draws the flare on that
+    /// plane from the click (`perspective.draw` with `at`), as the click-opened dialog does.
+    #[test]
+    fn alt_click_draws_on_the_active_perspective_plane() {
+        use crate::distort::perspective::{PerspectiveGrid, Plane};
+        use crate::testutil::*;
+        use vectorcraft_doc::Selection;
+        let (mut d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let alt = Mods { alt: true, ..Default::default() };
+        let c = Point::new(300.0, 380.0);
+        let mut t = FlareTool::default();
+        PerspectiveGrid { visible: true, plane: Plane::Left, ..PerspectiveGrid::current(&d) }.store(&mut d);
+        let mut alt_click = |d: &vectorcraft_doc::Document| {
+            let cx = cx(d, &s, &p);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, c.x, c.y).with_mods(alt));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, c.x, c.y).with_mods(alt))
+        };
+        let params = flare_params(&FlareTool::default().options(), c);
+        let on_plane = json!({ "command": "shape.flare", "params": params, "at": [c.x, c.y] });
+        assert_eq!(alt_click(&d), vec![Action::Exec("perspective.draw".into(), on_plane)]);
+        // With no active plane, or the grid hidden, the flare is drawn flat.
+        for g in [
+            PerspectiveGrid { plane: Plane::None, ..PerspectiveGrid::current(&d) },
+            PerspectiveGrid { visible: false, ..PerspectiveGrid::current(&d) },
+        ] {
+            let mut d = d.clone();
+            g.store(&mut d);
+            assert_eq!(alt_click(&d), vec![Action::Exec("shape.flare".into(), params.clone())]);
+        }
+    }
+
     /// Equal vertical travel gives equal rotation, regardless of event partitioning.
     #[test]
     fn flare_drag_turns_the_rays_and_shift_holds_their_turn() {
@@ -900,6 +1101,69 @@ mod tests {
         assert_eq!(t.turn, 0.0);
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 140.0, 150.0));
         assert_eq!(t.turn, 10.0);
+    }
+
+    /// With one flare selected, the tool shows its center and end handles where the flare is now
+    /// drawn, and dragging either edits the flare (`shape.editFlare`) as one undo step; a press
+    /// away from them draws a new flare.
+    #[test]
+    fn dragging_a_selected_flares_handles_changes_its_length_and_direction() {
+        use crate::testutil::*;
+        use vectorcraft_doc::flare::{FlareSpec, part_node, parts};
+        use vectorcraft_doc::{Node, Selection};
+        let (mut d, _) = doc_with_rect();
+        let gid = d.alloc_id();
+        let v = json!({ "cx": 100.0, "cy": 100.0, "x2": 300.0, "y2": 100.0, "rays": 3, "rings": 2, "seed": 5, "diameter": 30.0,
+            "opacity": 50.0, "brightness": 30.0, "growth": 20.0, "fuzziness": 50.0, "longest": 300.0, "rayFuzziness": 100.0,
+            "rotation": 0.0, "largest": 50.0 });
+        let xf = vectorcraft_geom::Affine::translate((10.0, 20.0));
+        let children: Vec<_> = parts(&v).into_iter().map(|part| std::sync::Arc::new(part_node(d.alloc_id(), part, xf, false))).collect();
+        let edited = children[0].id;
+        let mut g = Node::group(gid, children);
+        g.extras_mut().flare = Some(Box::new(FlareSpec { params: v, transform: xf }));
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), usize::MAX, g).unwrap_or_else(|e| panic!("{e}"));
+        let s = Selection { objects: vec![gid], ..Default::default() };
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = FlareTool::default();
+        let ov = t.overlays(&cx);
+        let anchors: Vec<Point> = ov.iter().filter_map(|o| if let Overlay::Anchor { p, .. } = o { Some(*p) } else { None }).collect();
+        assert_eq!(anchors, vec![Point::new(110.0, 120.0), Point::new(310.0, 120.0)]);
+        // The end handle, grabbed 2 points off: it moves as far as the pointer.
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 312.0, 120.0)).is_empty());
+        assert!(t.busy());
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 312.0, 160.0));
+        assert_eq!(a.first(), Some(&Action::Begin("Edit Flare".into())));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 302.0, 200.0));
+        assert_eq!(a, vec![Action::Preview("shape.editFlare".into(), json!({ "ids": [gid.0], "x2": 300.0, "y2": 200.0 })), Action::Commit]);
+        // The center handle; Escape cancels its drag.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 121.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 121.0));
+        assert_eq!(a.last(), Some(&Action::Preview("shape.editFlare".into(), json!({ "ids": [gid.0], "cx": 150.0, "cy": 120.0 }))));
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+        assert!(!t.busy());
+        // A click on a handle without a drag is a click with the tool: it opens the dialog, and
+        // with Alt held it draws a flare there with the tool's options.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 120.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 110.0, 120.0));
+        assert_eq!(a, vec![Action::Dialog("flare".into(), json!({ "x": 110.0, "y": 120.0 }))]);
+        assert!(!t.busy());
+        let alt = Mods { alt: true, ..Default::default() };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 310.0, 121.0).with_mods(alt));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 310.0, 121.0).with_mods(alt));
+        assert_eq!(a, vec![Action::Exec("shape.flare".into(), flare_params(&t.options(), Point::new(310.0, 121.0)))]);
+        assert!(!t.busy());
+        // Away from the handles a drag draws a new flare.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 300.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 240.0, 300.0));
+        assert_eq!(a.first(), Some(&Action::Begin("Flare".into())));
+        // Without a flare selected, no handles show.
+        let none = Selection::default();
+        assert!(FlareTool::default().overlays(&crate::testutil::cx(&d, &none, &p)).is_empty());
+        // A flare with an edited part is no longer edited as a flare: no handles show.
+        d.node_mut(edited).unwrap_or_else(|| panic!("no part")).opacity = 0.25;
+        assert!(FlareTool::default().overlays(&crate::testutil::cx(&d, &s, &p)).is_empty());
     }
 
     /// Space held while dragging out a flare moves it at its current size and turn, in the center

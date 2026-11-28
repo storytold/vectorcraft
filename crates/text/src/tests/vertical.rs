@@ -142,6 +142,32 @@ fn fit_first_line_widens_a_vertical_frame_from_its_right_edge() {
     assert_eq!(layout(FontDb::global(), &t).lines.len(), 1);
 }
 
+/// First Baseline Em Box Height in vertical area type: the first column's em box edge touches the
+/// frame's right edge inside the inset, as far in as leading measured from em box top to top sets
+/// it.
+#[test]
+fn em_box_height_sets_a_vertical_frames_first_column_at_its_em_box() {
+    use vectorcraft_doc::{FirstBaseline, LeadingModel};
+    let first = |fb: FirstBaseline, model: LeadingModel| {
+        let mut t = vertical("§§");
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 100.0, 105.0).to_path(0.1)) };
+        t.area.first_baseline = fb;
+        t.area.inset = 5.0;
+        t.para.leading_model = model;
+        let l = layout(FontDb::global(), &t);
+        (l.lines[0].baseline, l.lines[0].first_baseline)
+    };
+    let (baseline, distance) = first(FirstBaseline::EmBoxHeight, LeadingModel::RomanBaseline);
+    let (em_top, _) = first(FirstBaseline::Ascent, LeadingModel::EmBoxTop);
+    let (ascent, ascent_distance) = first(FirstBaseline::Ascent, LeadingModel::RomanBaseline);
+    assert!((baseline - em_top).abs() < 1e-9, "{baseline} {em_top}");
+    // Measured from the edge inside the inset, where a Fixed first baseline of 0 sits.
+    let (edge, _) = first(FirstBaseline::Fixed, LeadingModel::RomanBaseline);
+    assert!((baseline - distance - edge).abs() < 1e-9, "{baseline} {distance} {edge}");
+    assert!((ascent - ascent_distance - edge).abs() < 1e-9, "{ascent} {ascent_distance} {edge}");
+    assert!((baseline - ascent).abs() > 0.1, "not the ascent: {baseline} {ascent}");
+}
+
 /// `baselines`: one per line that holds characters, along it for horizontal type and down the
 /// column's centre line for vertical type (where point type's anchor is); none on a path.
 #[test]

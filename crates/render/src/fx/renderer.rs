@@ -1,5 +1,6 @@
-use super::bounds::{cull_bounds, effected_path_carrying, node_bezpath, rasterize_stage};
-use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, Made, Reads, Shadow, ShadowEntry};
+use super::bounds::{cull_bounds, dotted, drawn_box, effected_path_carrying, node_bezpath, rasterize_stage};
+use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, KeptImage, Made, Reads, Shadow, ShadowEntry};
+use super::pixels::FilterReach;
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
     DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor,
@@ -9,6 +10,10 @@ use super::{
     Affine, Arc, BezPath, FillRule, Frame, GeomContext, Ink, Node, NodeKind, RasterFx, Rect, RenderContext, Renderer, Shape, SymbolBoxes, Vec2,
     blend_mode, effects, fill_rule, peniko,
 };
+
+/// The cache slots of placement `k` of a path's Rasterize image ([`Renderer::draw_staged`]) start
+/// at `k << PLACEMENT_SLOT_SHIFT`, past those of its effects and of its fills and strokes.
+const PLACEMENT_SLOT_SHIFT: u32 = 20;
 
 #[cfg(test)]
 thread_local! {
@@ -130,6 +135,9 @@ impl Renderer {
                 // During a drag, a larger shadow on a multithreaded context is filtered within the
                 // drag's budget (`with_filters`), and no raster is kept.
                 if f.opts.dragging && f.mt && w * h > DRAG_PIXEL_BUDGET {
+                    // The fallback can differ from a still raster (a glow blurs soft alpha here).
+                    // A patch over a still frame cannot splice these pictures together.
+                    self.stats.view_sized += 1;
                     return None;
                 }
                 let (w, h) = (w as u16, h as u16);
@@ -254,7 +262,7 @@ impl Renderer {
         let reach = reach + Vec2::new(dx, dy);
         #[cfg(test)]
         note_silhouette();
-        self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
+        self.with_filters(ctx, f, FilterReach::Spreads(reach), blur, Some((mode, opacity)), |r, c, fr, comp| {
             c.set_transform(fr.view);
             c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
             let ink = darkness.map_or(fr.ink, |d| fr.ink.darkened(d));
@@ -367,11 +375,11 @@ impl Renderer {
 
     /// [`rasterize_stage`] of `n`, kept across frames when `owner` is `n` as held in its document
     /// (then `true` in the third place: the stage is kept, and so are its caches).
-    fn rasterize_stage_of(&mut self, f: &Frame, n: &Node, owner: Option<Arc<Node>>) -> Option<(Arc<Node>, Affine, bool)> {
+    fn rasterize_stage_of(&mut self, f: &Frame, n: &Node, owner: Option<Arc<Node>>) -> Option<(Arc<Node>, Arc<[Affine]>, bool)> {
         // Checked first: this runs for every path with effects drawn.
         effects::rasterize_stage(&n.appearance.effects)?;
         let Some(owner) = owner else {
-            return rasterize_stage(f.symbols.document(), n).map(|(stage, map)| (Arc::new(stage), map, false));
+            return rasterize_stage(f.symbols.document(), n).map(|(stage, maps)| (Arc::new(stage), maps.into(), false));
         };
         let key = Arc::as_ptr(&owner) as usize;
         let stamp = self.stamp;
@@ -379,31 +387,45 @@ impl Renderer {
             && Arc::ptr_eq(&e.0, &owner)
         {
             e.3 = stamp;
-            return Some((e.1.clone(), e.2, true));
+            return Some((e.1.clone(), e.2.clone(), true));
         }
-        let (stage, map) = rasterize_stage(f.symbols.document(), n)?;
-        let stage = Arc::new(stage);
-        self.fx_stages.insert(key, (owner, stage.clone(), map, stamp));
-        Some((stage, map, true))
+        let (stage, maps) = rasterize_stage(f.symbols.document(), n)?;
+        let (stage, maps): (Arc<Node>, Arc<[Affine]>) = (Arc::new(stage), maps.into());
+        self.fx_stages.insert(key, (owner, stage.clone(), maps.clone(), stamp));
+        Some((stage, maps, true))
     }
 
     /// Draw `stage`, the node a path's Rasterize image is made from ([`rasterize_stage`]), through
-    /// `map`, the Transform effects after that Rasterize effect: its art and its image, on the
-    /// image's own pixel grid, move with the map. A map that flattens the art leaves nothing to
-    /// draw. `bp` is the path's own path; with `kept`, `stage` is kept across frames and so are
-    /// the geometry and rasters drawn for it.
-    fn draw_staged(&mut self, ctx: &mut RenderContext, f: &Frame, (stage, map, kept): (Arc<Node>, Affine, bool), bp: &BezPath, rule: FillRule) {
-        let det = map.determinant();
-        if !(det.is_finite() && det.abs() > 1e-12) {
-            return;
+    /// each of `maps`, the Transform effects after that Rasterize effect, the lowest first: its art
+    /// and its image, on the image's own pixel grid, move with each map. A map that flattens the
+    /// art leaves nothing to draw. `bp` is the path's own path; with `kept`, `stage` is kept across
+    /// frames and so are the geometry and rasters drawn for it. With more than one map, the image
+    /// is made once for all of them ([`Kept::for_placements`]), and each placement keeps its own
+    /// rasters in its own cache slots.
+    fn draw_staged(
+        &mut self,
+        ctx: &mut RenderContext,
+        f: &Frame,
+        (stage, maps, kept): (Arc<Node>, Arc<[Affine]>, bool),
+        bp: &BezPath,
+        rule: FillRule,
+    ) {
+        let shared = (maps.len() > 1).then(|| std::rc::Rc::new(Kept::for_placements()));
+        for (k, map) in maps.iter().enumerate() {
+            let det = map.determinant();
+            if !(det.is_finite() && det.abs() > 1e-12) {
+                continue;
+            }
+            // A pixel's size in document units through the view and the map, measured as a frame
+            // measures it from its view.
+            let px = f.px / det.abs().sqrt();
+            let fr = Frame { view: f.view * *map, visible: map.inverse().transform_rect_bbox(f.visible), px, output: f.output * *map, ..*f };
+            let outer = if kept { self.fx_owner.replace(stage.clone()) } else { self.fx_owner.take() };
+            self.fx_placement = shared.as_ref().map(|s| (k << PLACEMENT_SLOT_SHIFT, s.clone()));
+            self.draw_shape_fx(ctx, &fr, &stage, bp, rule);
+            self.fx_placement = None;
+            self.fx_owner = outer;
         }
-        // A pixel's size in document units through the view and the map, measured as a frame
-        // measures it from its view.
-        let px = f.px / det.abs().sqrt();
-        let fr = Frame { view: f.view * map, visible: map.inverse().transform_rect_bbox(f.visible), px, output: f.output * map, ..*f };
-        let outer = if kept { self.fx_owner.replace(stage.clone()) } else { self.fx_owner.take() };
-        self.draw_shape_fx(ctx, &fr, &stage, bp, rule);
-        self.fx_owner = outer;
     }
 
     /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry:
@@ -431,11 +453,14 @@ impl Renderer {
         let rfx = effects::raster_effects(&paints.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
-        let reach = g.bounding_box().inflate(outset, outset);
+        let reach = drawn_box(g, paints.appearance.painted_strokes().any(dotted)).unwrap_or_default().inflate(outset, outset);
         let bounds = rasterize_bounds(f.symbols, n, &rfx);
         // Under Rasterize the content reaches as far as its fills' and strokes' raster effects paint.
         let reach = bounds.map_or(reach, |b| reach.union(b));
-        let content = Content { node: n, owner: None, cache: Some(0), reach, object: reach, outline: Some((g, rule)), bounds, kept: None };
+        // One of several placements of a path's Rasterize image ([`Self::draw_staged`]).
+        let placement = self.fx_placement.take();
+        let (slot, kept) = placement.as_ref().map_or((0, None), |(slot, kept)| (*slot, Some(&**kept)));
+        let content = Content { node: n, owner: None, cache: Some(slot), reach, object: reach, outline: Some((g, rule)), bounds, kept };
         let mut items = items;
         self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, paints, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
@@ -449,7 +474,7 @@ impl Renderer {
         let opacity = self.opacity_of(a);
         if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_doc::color::BlendMode::Normal || a.isolate) {
             let blends = self.blends_through(a);
-            let bounds = if blends { self.bounds_of(f.symbols, a) } else { None };
+            let bounds = if blends { self.frame_bounds_of(f, a) } else { None };
             let comp = crate::group::Composite { blend: a.blend, opacity, isolated: a.isolate, blends, bounds, ..Default::default() };
             self.group(ctx, f, comp, &mut |r, c, fr| r.draw_object_fx_art(c, fr, a, cache));
         } else {
@@ -460,7 +485,24 @@ impl Renderer {
 
     /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
     fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
-        if !self.charge_fx_instance(f.doc, a) {
+        // A placed document whose effects make no art of their own (raster effects and color
+        // adjustments, which Outline mode does not draw) shows its box crossed as without effects
+        // ([`Self::draw_placed`]). Effects that change geometry (plug-in effects among them,
+        // [`effects::is_geometry`]), 3D and Pathfinder make art from the crossed box, which the
+        // frame gives as the placed document's art ([`Self::cross_placed`]), and that art is drawn;
+        // Crop Marks and Vector Halftone draw the placed document itself among their art.
+        if let NodeKind::PlacedDocument(p) = &a.kind
+            && self.crosses_placed(f)
+            && !effects::has_geometry(&a.appearance.effects)
+            && !effects::has_revolve(a)
+            && !effects::has_solid(a)
+            && !effects::has_pathfinder(a)
+            && !effects::has_crop_marks(a)
+            && !effects::addons::halftone::has_halftone(a)
+        {
+            return self.draw_crossed_placed(ctx, f, p);
+        }
+        if !self.charge_fx_instance(f.symbols, a) {
             return;
         }
         // A path whose Transform effects after its Rasterize effect hold options that reach its
@@ -472,7 +514,27 @@ impl Renderer {
         {
             return self.draw_staged(ctx, f, stage, &bp, *rule);
         }
-        let art = self.fx_art(f.doc, a, cache);
+        let separations = f.opts.proof.as_ref().filter(|proof| proof.separations.is_some());
+        let key = Arc::as_ptr(a) as usize;
+        let previous = (cache && separations.is_some()).then(|| self.fx_arts.get(&key, self.stamp).map(|entry| entry.1.clone())).flatten();
+        let mut art = self.fx_art(f.symbols, a, cache);
+        if let Some(proof) = separations
+            && previous.as_ref().is_none_or(|previous| !Arc::ptr_eq(previous, &art))
+        {
+            let made = crate::proof::generated_black(f.doc, proof, &art);
+            if !Arc::ptr_eq(&made, &art) {
+                if let Some((_, bounds)) = self.three_d_bounds.remove(&(Arc::as_ptr(&art) as usize)) {
+                    self.three_d_bounds.insert(Arc::as_ptr(&made) as usize, (Arc::downgrade(&made), bounds));
+                }
+                if cache
+                    && let Some((node, _, found)) =
+                        self.fx_arts.get(&key, self.stamp).filter(|entry| Arc::ptr_eq(&entry.0, a) && Arc::ptr_eq(&entry.1, &art)).cloned()
+                {
+                    self.fx_arts.insert(key, (node, made.clone(), found), crate::lru::node_bytes(&made), self.stamp);
+                }
+                art = made;
+            }
+        }
         // Art the cache did not keep is made again in the next frame.
         let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
         let outer = self.made_again;
@@ -524,9 +586,9 @@ impl Renderer {
     /// frame's symbol budget as an instance without effects is (`draw_node`): an instance whose
     /// effects reshape its art draws through here, and nested instances would otherwise expand
     /// without a limit. True for any other object.
-    pub(crate) fn charge_fx_instance(&mut self, doc: &vectorcraft_doc::Document, a: &Node) -> bool {
+    pub(crate) fn charge_fx_instance(&mut self, symbols: &SymbolBoxes, a: &Node) -> bool {
         let NodeKind::SymbolInstance { symbol, .. } = &a.kind else { return true };
-        let count = doc.symbols.iter().find(|s| &s.name == symbol).map_or(0, |s| s.art.count() as u64);
+        let count = symbols.symbol(symbol).map_or(0, |s| s.art.count() as u64);
         let mut used = self.symbol_nodes;
         let room = vectorcraft_doc::charge_symbol_art(&mut used, count, || ((), count)).is_some();
         self.symbol_nodes = used;
@@ -541,7 +603,7 @@ impl Renderer {
     /// is made from live objects it evaluated ([`evaluates_live`]), or from type, symbol art or
     /// colors shaded through the color settings ([`reads_outside`]), is kept only while what it
     /// reads from outside `a` stays the same ([`Self::live_found`]).
-    pub(super) fn fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>, cache: bool) -> Arc<Node> {
+    pub(super) fn fx_art(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>, cache: bool) -> Arc<Node> {
         let key = Arc::as_ptr(a) as usize;
         let mut kept = None;
         if cache
@@ -553,7 +615,7 @@ impl Renderer {
                 Some(was) => kept = Some((art.clone(), was.0)),
             }
         }
-        let found = (kept.is_some() || (cache && (evaluates_live(a) || reads_outside(a)))).then(|| self.live_found(doc, a));
+        let found = (kept.is_some() || (cache && (evaluates_live(a) || reads_outside(a)))).then(|| self.live_found(symbols, a));
         if let Some((art, was)) = kept
             && found.as_ref().is_some_and(|f| f.0 == was)
         {
@@ -569,11 +631,11 @@ impl Renderer {
             Some((art, was)) => {
                 let now = match &found {
                     Some(f) => Some(f.0),
-                    None => self.outside_key(doc, a),
+                    None => self.outside_key(symbols, a),
                 };
-                if was == now { art } else { self.make_fx_art(doc, a) }
+                if was == now { art } else { self.make_fx_art(symbols, a) }
             }
-            None => self.make_fx_art(doc, a),
+            None => self.make_fx_art(symbols, a),
         };
         if cache {
             let bytes = crate::lru::node_bytes(&art);
@@ -586,24 +648,24 @@ impl Renderer {
     /// held until the frame ends ([`Renderer::measured`]), for [`Self::fx_art`] to keep if `a` is
     /// drawn. What is measured but never drawn (culled, off the view) is let go, and isn't kept in
     /// place of what is drawn.
-    pub(crate) fn measured_fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Arc<Node> {
+    pub(crate) fn measured_fx_art(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Arc<Node> {
         let key = Arc::as_ptr(a) as usize;
         if let Some((node, art, found)) = self.fx_arts.get(&key, self.stamp)
             && Arc::ptr_eq(node, a)
         {
             let (art, was) = (art.clone(), found.as_ref().map(|f| f.0));
-            if was.is_none_or(|was| self.live_found(doc, a).0 == was) {
+            if was.is_none_or(|was| self.live_found(symbols, a).0 == was) {
                 return art;
             }
         }
-        let now = self.outside_key(doc, a);
+        let now = self.outside_key(symbols, a);
         if let Some((node, art, was)) = self.measured.get(&key)
             && Arc::ptr_eq(node, a)
             && *was == now
         {
             return art.clone();
         }
-        let art = self.make_fx_art(doc, a);
+        let art = self.make_fx_art(symbols, a);
         // Art held for an object before (made from what it read then) gives way.
         if let Some(old) = self.measured.remove(&key) {
             self.measured_bytes = self.measured_bytes.saturating_sub(crate::lru::node_bytes(&old.1));
@@ -636,18 +698,17 @@ impl Renderer {
 
     /// The key of what `a`'s art reads from outside it ([`Self::live_found`]), `None` when it reads
     /// nothing.
-    fn outside_key(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Option<u64> {
-        (evaluates_live(a) || reads_outside(a)).then(|| self.live_found(doc, a).0)
+    fn outside_key(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Option<u64> {
+        (evaluates_live(a) || reads_outside(a)).then(|| self.live_found(symbols, a).0)
     }
 
     /// The art [`Self::fx_art`] draws for `a`, made now.
-    fn make_fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Arc<Node> {
+    fn make_fx_art(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Arc<Node> {
+        let doc = symbols.document();
         // Whether the art is a 3D effect's ([`Self::three_d_art_bounds`]).
         let mut three_d = false;
         let symbol = match &a.kind {
-            NodeKind::SymbolInstance { symbol, .. } => {
-                doc.symbols.iter().find(|s| s.name == *symbol).map(|s| crate::brush_fx::instance_art(&s.art, a))
-            }
+            NodeKind::SymbolInstance { symbol, .. } => symbols.symbol(symbol).map(|s| crate::brush_fx::instance_art(&s.art, a)),
             _ => None,
         };
         let container = is_container(a);
@@ -759,6 +820,9 @@ impl Renderer {
         rfx: &[RasterFx],
         paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
     ) {
+        if !rfx.is_empty() && f.reject_patch() {
+            return;
+        }
         // Only the last MAX_RASTERIZE Rasterize effects are drawn.
         let count = rfx.iter().filter(|fx| matches!(fx, RasterFx::Rasterize(_))).count();
         let capped: Vec<RasterFx>;
@@ -829,7 +893,11 @@ impl Renderer {
                     w.inflate(o, o)
                 });
                 let frame = last_over.then_some((f.view, f.px));
-                let kept = (split > at).then(|| Kept { window, frame, image: std::cell::RefCell::new(None) });
+                // One of several placements of a path's Rasterize image ([`Self::draw_staged`])
+                // starts from the image on its own grid that the placements share.
+                let placements = content.kept.filter(|k| k.shared);
+                let grid = placements.and_then(|k| k.image.borrow().clone().filter(|i| matches!(i, KeptImage::Grid(..))));
+                let kept = (split > at).then(|| Kept { window, frame, image: std::cell::RefCell::new(grid), shared: false });
                 let inner = Content {
                     node: content.node,
                     owner: content.owner,
@@ -854,6 +922,13 @@ impl Renderer {
                     kept: content.kept.filter(|_| split == at),
                 };
                 self.raster_fx(ctx, f, &outer, after, &mut |r, c, fr| r.raster_fx(c, fr, &inner, before, paint));
+                // The image made on its own grid is the one the other placements draw.
+                if let (Some(shared), Some(kept)) = (placements, &kept)
+                    && shared.image.borrow().is_none()
+                    && let Some(grid @ KeptImage::Grid(..)) = kept.image.borrow().clone()
+                {
+                    *shared.image.borrow_mut() = Some(grid);
+                }
                 return;
             }
         }
@@ -927,7 +1002,7 @@ impl Renderer {
             let RasterFx::InnerGlow { mode, opacity, blur, color, center } = fx else { continue };
             let filter = shadow_filter(0.0, 0.0, *blur, pcolor(f.ink, color));
             if pixels {
-                self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |r, c, fr, comp| {
+                self.with_filters(ctx, f, FilterReach::Clipped(g.bounding_box()), *blur, Some((*mode, *opacity)), |r, c, fr, comp| {
                     if let Some((m, o)) = comp {
                         c.set_transform(Affine::IDENTITY);
                         c.push_layer(None, Some(blend_mode(m)), Some(o), None, None);
@@ -961,7 +1036,7 @@ impl Renderer {
                 });
                 continue;
             }
-            self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |_, c, fr, comp| {
+            self.with_filters(ctx, f, FilterReach::Clipped(g.bounding_box()), *blur, Some((*mode, *opacity)), |_, c, fr, comp| {
                 // The blend layer goes outside the clip: a clip layer is isolated, so a blend
                 // inside it would mix with nothing instead of the content below.
                 if let Some((m, o)) = comp {
@@ -998,7 +1073,7 @@ impl Renderer {
 /// the Transform effects the geometry pass left out hidden ([`effects::Carry::hide_skipped`]), so
 /// its raster effects and those of its fills and strokes stay with its art; `None` when it stays
 /// as it is.
-fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
+pub(super) fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
     let moves = carry.moves(&n.appearance);
     (moves || carry.skipped()).then(|| {
         let mut m = n.clone();
@@ -1060,6 +1135,7 @@ mod tests {
         let opts = RenderOptions::default();
         let frame = Frame {
             mt: false,
+            patch: None,
             doc: &doc,
             symbols: &symbols,
             view: Affine::IDENTITY,

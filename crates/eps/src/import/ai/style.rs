@@ -188,10 +188,11 @@ pub(super) struct ArtStyle {
     /// It would be [`Self::simple`] but for a Stroke Style filter's variable width written as one
     /// centered array ([`centered_widths`]): an object whose drawn look is empty takes it with its profile.
     pub uneven: bool,
-    /// It is several fills and strokes in solid colours or gradients (strokes without a brush),
-    /// each with its own visibility, opacity and blend mode but no effects of its own, under only
-    /// the effects any object takes that don't move the outline: what a path or compound path is
-    /// read with when each gradient is placed as its drawn look has it (`read::ops`' `styled`).
+    /// It is several fills and strokes in solid colours, gradients or patterns (strokes without a
+    /// brush), each with its own visibility, opacity and blend mode but no effects of its own, under
+    /// only the effects any object takes that don't move the outline, and under none when a pattern
+    /// paints: what a path or compound path is read with when each gradient and pattern is placed as
+    /// its drawn look has it (`read::ops`' `styled`).
     pub stacked: bool,
     /// It is one Warp on the whole object, under fills and strokes that paint nothing and have no
     /// effects of their own: what an image is read with when its live warp draws as its drawn look
@@ -214,6 +215,13 @@ pub(super) struct ArtStyle {
     /// paint is a pattern: its [`StyleItem::Pattern`]. A text document's characters name such
     /// styles for their fills and strokes (`ate`). `None` for any other paint or style.
     pub simple_pattern: Option<StyleItem>,
+    /// A style that is one paint, when that paint is a colour with a swatch (a spot ink or a
+    /// global process colour, `x`, `Xx`, `Xk`; Registration): the paint at its tint, linked to the
+    /// swatch, with the named colour that makes the swatch (none for Registration). Only when the
+    /// style's fill alone is on (`0 1 Xd`) and it sets no stroke colour or pattern, before or after. A text
+    /// document's characters name such styles for their fills and strokes (`ate`), and keep only
+    /// the colour's process values themselves. `None` for any other paint or style.
+    pub simple_color: Option<(Paint, Option<paint::Named>)>,
     /// A style that is one paint: its fill and stroke, bottom first, each there when its
     /// `stroke fill Xd` turns it on (none when neither is on). `Err` when it turns on a fill or
     /// stroke whose paint isn't read here (a gradient that names no swatch or isn't in a gradient
@@ -229,6 +237,8 @@ impl ArtStyle {
     }
 }
 
+// A stroke takes about 300 bytes and the other items about 100; a style holds a few of each.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum StyleItem {
     Fill(Paint),
@@ -257,8 +267,34 @@ pub(super) enum StyleItem {
         align: StrokeAlign,
         /// A brush: its name, and its settings for this object.
         brush: Option<(String, PathBrush)>,
+        /// Its arrowheads, as symbols of the file (`None`: it has none).
+        arrows: Option<Box<StrokeArrows>>,
     },
 }
+
+/// A stroke's arrowheads: each end's symbol (`/GObjRef : (name) /SymbolArt ; (BSArrowBeginSymbol)`
+/// or `(BSArrowEndSymbol)` in the stroke's dictionary) by its name in the file, with its scale in
+/// percent (`BSArrowBeginScale`, `BSArrowEndScale`; 100 without one). The symbol's art is the head
+/// and a sample of the line it ends, which `read::ops` reads into a head once the symbols are read.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct StrokeArrows {
+    pub start: Option<(String, f64)>,
+    pub end: Option<(String, f64)>,
+}
+
+impl StrokeArrows {
+    /// The names of the symbols, start first.
+    pub fn symbols(&self) -> impl Iterator<Item = &str> {
+        [&self.start, &self.end].into_iter().flatten().map(|(name, _)| name.as_str())
+    }
+}
+
+/// The arrowhead entries of a stroke's dictionary that [`stroke_arrows`] reads. Beside heads, any
+/// other entry whose key starts with `BSArrow` isn't read, so the stroke keeps its drawn look.
+const ARROW_ENTRIES: [&str; 4] = ["BSArrowBeginSymbol", "BSArrowEndSymbol", "BSArrowBeginScale", "BSArrowEndScale"];
+
+/// The scales an arrowhead takes, in percent.
+const ARROW_SCALES: std::ops::RangeInclusive<f64> = 1.0..=1000.0;
 
 /// A fill's or stroke's own state in the stack.
 #[derive(Clone, Debug, PartialEq)]
@@ -319,6 +355,9 @@ struct Filter {
     /// The plug-in object it refers to (`/GObjRef : (name) (plug-in) /PluginObject`): its name and
     /// plug-in name.
     plugin_object: Option<(String, String)>,
+    /// The symbols its dictionary refers to (`/GObjRef : (name) /SymbolArt ; (key) ,`): each one's
+    /// name, by key.
+    symbols: HashMap<String, String>,
     /// `mode opacity … Xy`.
     xy: Option<(usize, f32)>,
     /// `… isolate knockout … Xy`.
@@ -351,6 +390,7 @@ impl Default for Filter {
             pattern: None,
             fill_last: LastPaint::None,
             plugin_object: None,
+            symbols: HashMap::new(),
             xy: None,
             xy_group: None,
             data: None,
@@ -419,8 +459,16 @@ fn closes(data: &[u8]) -> bool {
     false
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`art_styles`] has parsed a section on this thread.
+    pub(crate) static ART_STYLE_PARSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// [`art_styles_in`], names read in the default encoding.
 pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
+    #[cfg(test)]
+    ART_STYLE_PARSES.set(ART_STYLE_PARSES.get() + 1);
     art_styles_in(data, &mut Names::default())
 }
 
@@ -436,16 +484,20 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
     let mut open: Vec<usize> = vec![];
     let mut pending: Option<bool> = None;
     let mut in_basic = false;
-    // A style that is one paint being read, and its pattern so far.
-    let mut simple: Option<Option<StyleItem>> = None;
+    // A style that is one paint being read, and its pattern or swatch colour so far.
+    let mut simple: Option<SimplePaint> = None;
     // The same style's paint operators so far.
     let mut one_paint: Option<OnePaint> = None;
-    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>, simple_pattern: Option<StyleItem>, one_paint: Option<OnePaint>| {
+    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>, simple: SimplePaint, one_paint: Option<OnePaint>| {
         if let Some(name) = name {
-            // Only a style that is one paint holds a pattern for type: one with filters as well
-            // paints with more than that.
-            let simple_pattern = simple_pattern.filter(|_| filters.is_empty());
-            let mut st = ArtStyle { simple_pattern, ..style(filters) };
+            // Only a style that is one paint holds a pattern or a swatch colour for type: one with
+            // filters as well paints with more than that.
+            let SimplePaint { pattern, color, stroke_painted } = if filters.is_empty() { simple } else { SimplePaint::default() };
+            // The colour is the style's one paint: only its fill is on (`0 1 Xd`) and nothing sets a
+            // stroke's colour or pattern.
+            let filled = one_paint.as_ref().is_some_and(|one| one.xd && one.paint.paints == (false, true));
+            let color = color.filter(|_| filled && !stroke_painted);
+            let mut st = ArtStyle { simple_pattern: pattern, simple_color: color, ..style(filters) };
             if let Some(one) = one_paint.filter(|_| filters.is_empty()) {
                 if let Some((mode, opacity)) = one.paint.xy {
                     let (isolate, knockout) = one.paint.xy_group.unwrap_or((false, Knockout::Off));
@@ -490,12 +542,12 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             }
             Tok::Name(n) => match n {
                 b"KnownStyle" => {
-                    finish(name.take(), &mut filters, simple.take().flatten(), one_paint.take());
+                    finish(name.take(), &mut filters, simple.take().unwrap_or_default(), one_paint.take());
                     operands.clear();
                     open.clear();
                     (pending, in_basic, style_entry, other_entry) = (None, false, None, None);
                 }
-                b"SimpleStyle" if filters.is_empty() => (simple, one_paint) = (Some(None), Some(OnePaint::default())),
+                b"SimpleStyle" if filters.is_empty() => (simple, one_paint) = (Some(SimplePaint::default()), Some(OnePaint::default())),
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(|v| names.text(v)),
@@ -524,6 +576,11 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
                     }
                 }
                 b"Array" => dict_array = Some(vec![]),
+                // A symbol the dictionary refers to: `/GObjRef : (name) /SymbolArt ; (key) ,`.
+                b"SymbolArt" => {
+                    symbol_entry(&mut lex, &mut operands, &mut other_entry, names, filters.last_mut().filter(|_| in_basic));
+                    continue;
+                }
                 b"PluginObject" if in_basic => {
                     let mut texts = operands.iter().rev().filter_map(|v| names.text(v));
                     if let (Some(plugin), Some(name), Some(f)) = (texts.next(), texts.next(), filters.last_mut()) {
@@ -607,7 +664,7 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             operands.clear();
         }
     }
-    finish(name, &mut filters, simple.take().flatten(), one_paint.take());
+    finish(name, &mut filters, simple.take().unwrap_or_default(), one_paint.take());
     styles
 }
 
@@ -768,7 +825,7 @@ fn pattern_operands(vals: &[V], names: &mut Names) -> Option<(String, Option<[f6
 /// that is one paint (`simple` and `one_paint`, while one is read).
 fn style_paint_op(
     filters: &mut [Filter],
-    simple: &mut Option<Option<StyleItem>>,
+    simple: &mut Option<SimplePaint>,
     one_paint: &mut Option<OnePaint>,
     op: &str,
     vals: &[V],
@@ -882,6 +939,7 @@ impl OnePaint {
                     profile: None,
                     align: StrokeAlign::Center,
                     brush: None,
+                    arrows: None,
                 }),
                 _ => return Err(()),
             }
@@ -890,14 +948,35 @@ impl OnePaint {
     }
 }
 
+/// What type takes from a style that is one paint ([`ArtStyle::simple_pattern`],
+/// [`ArtStyle::simple_color`]): one of them at most.
+#[derive(Default)]
+struct SimplePaint {
+    pattern: Option<StyleItem>,
+    color: Option<(Paint, Option<paint::Named>)>,
+    /// A stroke's colour or pattern was set, before or after the fill's: the style isn't one
+    /// colour, so it holds none for type (its pattern is kept as before).
+    stroke_painted: bool,
+}
+
 /// A paint operator of a style that is one paint: a pattern (`p`) is kept as its
-/// [`StyleItem::Pattern`], and any other paint after it (a colour, a stroke's pattern or a
-/// gradient) leaves the style without one.
-fn simple_paint_op(paint: &mut Option<StyleItem>, op: &str, vals: &[V], names: &mut Names) {
+/// [`StyleItem::Pattern`] and a fill colour that has a swatch as its paint and named colour. Any
+/// other paint after one of them (a colour, a stroke's colour or pattern, a gradient) leaves the
+/// style without it, and a stroke's colour or pattern anywhere is remembered
+/// ([`SimplePaint::stroke_painted`]).
+fn simple_paint_op(simple: &mut SimplePaint, op: &str, vals: &[V], names: &mut Names) {
+    let stroke_painted = simple.stroke_painted;
     match op {
-        "p" => *paint = pattern_operands(vals, names).map(|(name, matrix, controls)| StyleItem::Pattern { name, matrix, controls }),
-        "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "xa" | "xx" | "xk" | "xs"
-        | "xz" | "P" | "Bg" => *paint = None,
+        "p" => {
+            let pattern = pattern_operands(vals, names).map(|(name, matrix, controls)| StyleItem::Pattern { name, matrix, controls });
+            *simple = SimplePaint { pattern, color: None, stroke_painted };
+        }
+        "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "xa" | "xx" | "xk" | "xs" | "xz" => {
+            let color = paint::color_op_in(op, vals, names).filter(|(p, _)| matches!(p, Paint::Solid { swatch: Some(_), .. }));
+            *simple = SimplePaint { pattern: None, color, stroke_painted };
+        }
+        "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "P" => *simple = SimplePaint { stroke_painted: true, ..SimplePaint::default() },
+        "Bg" => *simple = SimplePaint { stroke_painted, ..SimplePaint::default() },
         _ => {}
     }
 }
@@ -1461,11 +1540,10 @@ fn stroke_item(f: &Filter, align: StrokeAlign) -> Result<Option<StyleItem>, ()> 
     if !f.paints.0 {
         return Ok(None);
     }
-    // Dashes aligned to corners and path ends draw as the look's pieces: a solid end at each end
-    // and the pattern, fitted, between them.
-    if f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0) {
-        return Err(());
-    }
+    // Dashes aligned to corners and path ends (the switch in the stroke's dictionary): the look
+    // draws them fitted between solid ends, which the reader checks the stroke against before it
+    // takes it.
+    let aligned = f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0);
     match &f.stroke {
         Some(p) if !f.gradient && f.pattern.is_none() => Ok(Some(StyleItem::Stroke {
             paint: p.clone(),
@@ -1473,12 +1551,69 @@ fn stroke_item(f: &Filter, align: StrokeAlign) -> Result<Option<StyleItem>, ()> 
             cap: f.cap,
             join: f.join,
             miter: f.miter,
-            dash: f.dash.clone(),
+            dash: f.dash.clone().map(|d| Dash { align_corners: aligned, ..d }),
             profile: width_profile(&f.arrays),
             align,
             brush: None,
+            arrows: stroke_arrows(f)?,
         })),
         _ => Err(()),
+    }
+}
+
+/// The arrowheads of stroke filter `f` ([`StrokeArrows`]; `None` without any). `Err` for heads
+/// beside an arrowhead entry [`ARROW_ENTRIES`] doesn't name, a scale that isn't a number in
+/// [`ARROW_SCALES`], or a symbol entry with no symbol's name.
+fn stroke_arrows(f: &Filter) -> Result<Option<Box<StrokeArrows>>, ()> {
+    let end = |symbol: &str, scale: &str| -> Result<Option<(String, f64)>, ()> {
+        if !f.kinds.contains_key(symbol) {
+            return Ok(None);
+        }
+        let name = f.symbols.get(symbol).ok_or(())?;
+        let pct = match f.kinds.get(scale) {
+            None => Some(100.0),
+            Some(Kind::Real) => entry(f, scale, Kind::Real)?,
+            Some(_) => entry(f, scale, Kind::Int)?,
+        };
+        Ok(Some((name.clone(), pct.filter(|p| ARROW_SCALES.contains(p)).ok_or(())?)))
+    };
+    let arrows = StrokeArrows { start: end("BSArrowBeginSymbol", "BSArrowBeginScale")?, end: end("BSArrowEndSymbol", "BSArrowEndScale")? };
+    if arrows.start.is_none() && arrows.end.is_none() {
+        return Ok(None);
+    }
+    // Another arrowhead entry may change how the heads draw.
+    if f.kinds.keys().any(|k| k.starts_with("BSArrow") && !ARROW_ENTRIES.contains(&k.as_str())) {
+        return Err(());
+    }
+    Ok(Some(Box::new(arrows)))
+}
+
+/// A symbol the dictionary of `filter`, the basic filter being read, refers to,
+/// `/GObjRef : (name) /SymbolArt ; (key) ,`, whose `/SymbolArt` `lex` has just read (`operands`:
+/// the values before it, read by `names`): the symbol's name by its key in [`Filter::symbols`], the
+/// key an entry of another kind. Outside a basic filter (`None`) nothing is read.
+fn symbol_entry(lex: &mut Lexer, operands: &mut Vec<V>, other_entry: &mut Option<Option<String>>, names: &mut Names, filter: Option<&mut Filter>) {
+    let Some(f) = filter else { return };
+    let symbol = operands.iter().rev().find_map(|v| names.text(v));
+    (*other_entry, *operands) = (None, vec![]);
+    let at = lex.offset();
+    // A comment line is no part of the entry.
+    let mut next = || loop {
+        match lex.next_token().map(|t| t.tok) {
+            Some(Tok::Comment(_)) => continue,
+            tok => return tok,
+        }
+    };
+    let (close, key) = (next(), next());
+    // Anything else is read as it comes (a `/KnownStyle` starting the next style, say).
+    let (Some(Tok::Word(b";")), Some(Tok::Str(key))) = (close, key) else {
+        lex.seek(at);
+        return;
+    };
+    let key = String::from_utf8_lossy(&key).into_owned();
+    f.repeated |= f.kinds.insert(key.clone(), Kind::Other).is_some();
+    if let Some(symbol) = symbol {
+        f.symbols.insert(key, symbol);
     }
 }
 
@@ -1544,6 +1679,7 @@ fn calligraphic_stroke(f: &Filter) -> Option<StyleItem> {
         profile: None,
         align: StrokeAlign::Center,
         brush: Some((name.clone(), PathBrush::Calligraphic(super::brush::calligraphic(values, variation, codes)))),
+        arrows: None,
     })
 }
 
@@ -1591,9 +1727,9 @@ const ART_SETTINGS: [(&str, Kind, Option<f64>); 14] = [
 ];
 
 /// An Art brush's filter `f` as the stroke it paints, with its settings: `None` when it isn't a
-/// stroke in a color, names no Art brush, holds an entry that isn't read or a setting that isn't a
-/// number of its kind, or tints its art with a swatch's color: its drawn look stays. Whether the
-/// brush draws as these settings is [`super::brush::draws_as`]'s to say.
+/// stroke in a color, names no Art brush, or holds an entry that isn't read or a setting that isn't
+/// a number of its kind: its drawn look stays. Whether the brush draws as these settings is
+/// [`super::brush::draws_as`]'s to say.
 fn art_stroke(f: &Filter) -> Option<StyleItem> {
     if !f.paints.0
         || f.gradient
@@ -1612,11 +1748,9 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
     for (slot, (key, kind, missing)) in settings.iter_mut().zip(ART_SETTINGS) {
         *slot = entry(f, key, kind).ok()?.or(missing)?;
     }
+    // Under Tints, a stroke color linked to a swatch tints the art in that swatch (a spot color's
+    // tints stay on its plate: `vectorcraft_brush::colorize`).
     let paint = f.stroke.clone()?;
-    // The tinted pieces are process colors, so a swatch's ink would be lost.
-    if settings[0] == 1.0 && matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
-        return None;
-    }
     Some(StyleItem::Stroke {
         paint,
         width: f.width,
@@ -1627,6 +1761,7 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
         profile: None,
         align: StrokeAlign::Center,
         brush: Some((name.clone(), PathBrush::Art(settings))),
+        arrows: None,
     })
 }
 
@@ -1736,8 +1871,9 @@ impl Builder<'_> {
 
 /// Is `e`, on the whole object, an effect any object is read with? Of the Distort & Transform
 /// effects: Transform without copies (Random is never read), Twist, a Tweak that moves nothing,
-/// Pucker & Bloat at 0, and Free Distort when its corners make a parallelogram (an affine map).
-/// Zig Zag is left to type. Which objects Transform, Twist and Free Distort are read on is
+/// Pucker & Bloat at 0, Free Distort when its corners make a parallelogram (an affine map), and Zig
+/// Zag (on objects other than type only where it draws its drawn look's outline: `read::ops`'
+/// `styled`). Which objects Transform, Twist and Free Distort are read on is
 /// `read::ops`' `moves_with`.
 fn any_object_takes(e: &Effect) -> bool {
     match e.id.as_str() {
@@ -1754,7 +1890,8 @@ fn any_object_takes(e: &Effect) -> bool {
         | "path.outlineObject"
         | "path.outlineStroke"
         | "distort.twist"
-        | "distort.tweak" => true,
+        | "distort.tweak"
+        | "distort.zigZag" => true,
         // Copies are drawn as one path, its fills under all its strokes, where the file paints each
         // copy's fill and stroke in turn.
         "distort.transform" => e.params["copies"].as_i64() == Some(0),
@@ -1853,9 +1990,15 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && st.plain
         && !st.pathfinder
         && !st.moves_outline()
-        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Stroke { brush: None, .. }))
+        && st.items.iter().all(|i| {
+            matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Pattern { .. } | StyleItem::Stroke { brush: None, .. })
+        })
         && st.looks.iter().all(|l| l.effects.is_empty())
-        && st.effects.iter().all(any_object_takes);
+        && st.effects.iter().all(any_object_takes)
+        // A pattern fill under the object's effects keeps the drawn look, a conservative rule: in
+        // one file a Scribble over a pattern fill drew unlike its look, its tiles placed as the
+        // look's are (why isn't established).
+        && (st.effects.is_empty() || !st.items.iter().any(|i| matches!(i, StyleItem::Pattern { .. })));
     st.image_warp = st.plain
         && matches!(st.effects.as_slice(), [e] if e.id.starts_with("warp."))
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(p) | StyleItem::Stroke { paint: p, .. } if p.is_none()))

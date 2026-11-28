@@ -225,7 +225,9 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             .collect();
         let refs: Vec<&TextObject> = frames.iter().collect();
         let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &refs, &story, &paras);
-        for (id, part) in live.iter().zip(parts) {
+        let texts: Vec<String> = parts.iter().map(|p| p.runs.iter().map(|r| r.text.as_str()).collect()).collect();
+        let leads = first_para_leads(&texts, &parts.iter().map(|p| p.continues).collect::<Vec<_>>());
+        for ((id, part), lead) in live.iter().zip(parts).zip(leads) {
             if let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind) {
                 let mut next = (**t).clone();
                 next.runs = part.runs;
@@ -241,6 +243,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     || part.list_count != t.list_count
                     || part.list_level_counts != t.list_level_counts
                     || continues != t.first_para_continues
+                    || lead != t.first_para_lead
                 {
                     t.runs = next.runs;
                     t.para = next.para;
@@ -250,6 +253,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     t.list_count = part.list_count;
                     t.list_level_counts = part.list_level_counts;
                     t.first_para_continues = continues;
+                    t.first_para_lead = lead;
                     refresh_bounds(t);
                 }
             }
@@ -384,15 +388,40 @@ pub(crate) fn mark_continued(doc: &mut Document) {
         let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
         let frames: Vec<&TextObject> = live.iter().filter_map(|id| text_of(doc, *id)).collect();
         let marks = vectorcraft_text::thread::continued(&frames);
-        for (id, on) in live.iter().zip(marks) {
+        let texts: Vec<String> = frames.iter().map(|t| t.plain_text()).collect();
+        let leads = first_para_leads(&texts, &marks);
+        for ((id, on), lead) in live.iter().zip(marks).zip(leads) {
             if let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind)
-                && t.first_para_continues != on
+                && (t.first_para_continues != on || t.first_para_lead != lead)
             {
                 t.first_para_continues = on;
+                t.first_para_lead = lead;
                 refresh_bounds(t);
             }
         }
     }
+}
+
+/// [`TextObject::first_para_lead`] for each frame of a thread, from the frames' plain `texts` and
+/// whether each one's first paragraph `continues` from the frame before: the last character of
+/// that paragraph in the frames before that a repeat mark could stand for, or None. One pass over
+/// the frames: each frame's lead is carried forward to the next.
+fn first_para_leads(texts: &[String], continues: &[bool]) -> Vec<Option<char>> {
+    // The lead the next frame takes when its first paragraph continues from this one.
+    let mut carry = None;
+    texts
+        .iter()
+        .enumerate()
+        .map(|(k, text)| {
+            #[cfg(test)]
+            LEAD_SCANS.with(|c| c.set(c.get() + 1));
+            let lead = carry.filter(|_| continues.get(k) == Some(&true));
+            let tail = text.rsplit('\n').next().unwrap_or(text);
+            // A paragraph break in this frame ends the paragraph the lead came from.
+            carry = vectorcraft_text::repeat_base(tail).or(lead.filter(|_| tail.len() == text.len()));
+            lead
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -402,6 +431,8 @@ thread_local! {
     static THREAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Tests: how many times [`story_in`] went through a thread's frames on this thread.
     static STORY_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many frame texts [`first_para_leads`] went through on this thread.
+    static LEAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Tests: how many times [`story_of`] and [`ThreadIndex::of`] have gone through the document's
@@ -415,6 +446,12 @@ pub(crate) fn thread_scans() -> usize {
 #[cfg(test)]
 pub(crate) fn story_builds() -> usize {
     STORY_BUILDS.with(std::cell::Cell::get)
+}
+
+/// Tests: how many frame texts [`first_para_leads`] has gone through on this thread.
+#[cfg(test)]
+pub(crate) fn lead_scans() -> usize {
+    LEAD_SCANS.with(std::cell::Cell::get)
 }
 
 /// The frames of the thread that `id` is a frame of, in thread order, each area type or type on a

@@ -11,18 +11,23 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use craft::host::PickRequest;
+use craft::ui::contract::Bind;
+use craft::ui::dialog::dialog_id;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::Label;
+use craft::ui::runtime::requests::PathKind;
 use serde_json::{Value, json};
 use vectorcraft_engine::EngineError;
 
-use super::confirm::ask;
-use super::{DialogSpec, form};
+use super::confirm::{ask, ask_in_document};
 use crate::background::{self, Writer};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, io, widgets};
+use crate::{VectorcraftApp, file_asks, io};
 
-pub(super) const KIND: &str = "package";
-const LABEL: f32 = 90.0;
+/// The key of the Package dialog on the host.
+const KEY: &str = "package";
+/// What the host remembers the folder of a Location pick under.
+const PURPOSE: &str = "package";
 /// The options: (field, label).
 const OPTIONS: [(&str, &str); 5] = [
     ("copyLinks", "Copy Links"),
@@ -31,16 +36,6 @@ const OPTIONS: [(&str, &str); 5] = [
     ("copyFonts", "Copy Fonts Used in the Document"),
     ("report", "Create Report"),
 ];
-
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Package").into(),
-    body,
-    confirm,
-    ok: Some("Package"),
-    min_width: 440.0,
-    max_width: Some(460.0),
-    ..DialogSpec::FORM
-};
 
 /// Is there no file system to write a folder to (the web downloads a zip)?
 fn downloads(app: &VectorcraftApp) -> bool {
@@ -51,7 +46,7 @@ fn downloads(app: &VectorcraftApp) -> bool {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document")?;
     let Some(path) = st.path.clone() else {
-        ask(
+        ask_in_document(
             app,
             tl!("Save the document first?"),
             tl!("Package collects a saved document with its linked files and fonts."),
@@ -60,52 +55,82 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         );
         return Ok(Value::Null);
     };
+    let document = (st.uid, st.reverts);
     let p = std::path::Path::new(&path);
     let stem = p.file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
     let folder = p.parent().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-    let mut fields = json!({ "folder": folder, "name": format!("{stem} Folder") });
+    let mut fields = DialogFields::new();
+    fields.set("folder", folder);
+    fields.set("name", format!("{stem} Folder"));
     for (k, _) in OPTIONS {
-        fields[k] = json!(true);
+        fields.set(k, true);
     }
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let params = params(downloads(app));
+    let dialog = HostedParamDialog::new(&ctx, KEY, fields, move |fields| {
+        ParamDialog::new(KEY, tl!("Package"), params.clone())
+            .values(Bind::bound(fields))
+            .ok_label(Label::from(tl!("Package")))
+            .footer_note(Label::from(tl!("Fonts whose licence doesn't allow embedding are not copied.")))
+    });
+    crate::dialogs::host::open_held(app, dialog, |app, answer| confirm(app, &answer.fields).map(|_| ())).ok_or("no window")?;
+    app.package_document = Some(document);
     Ok(Value::Null)
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    if !downloads(app) {
-        widgets::label_row(ui, tl!("Location:"), LABEL, |ui| {
-            form::text(ui, d, "folder", 230.0);
-            if app.services.pick_folder.is_some() && ui.button(tl!("Choose…")).clicked() {
-                crate::picks::folder_field(app, d, "folder");
-            }
-        });
-        ui.add_space(4.0);
+/// The rows of the dialog: Location (the web downloads a zip, so it has none), Folder Name and the options.
+fn params(web: bool) -> Vec<Param> {
+    let mut rows = Vec::new();
+    if !web {
+        rows.push(Param::new("folder", tl!("Location"), ParamKind::text("")).browse(PathKind::Folder));
     }
-    widgets::label_row(ui, tl!("Folder Name:"), LABEL, |ui| {
-        form::text(ui, d, "name", 230.0);
-    });
-    ui.add_space(10.0);
-    widgets::subheader(ui, tl!("Options"));
-    for (k, label) in OPTIONS {
+    rows.push(Param::new("name", tl!("Folder Name"), ParamKind::text("")));
+    rows.push(Param::section(tl!("Options")));
+    for (key, label) in OPTIONS {
+        let row = Param::new(key, tl!(label), ParamKind::bool(true));
         // The link options apply only when the links are copied.
-        let enabled = !matches!(k, "linksFolder" | "relink") || d.bool("copyLinks");
-        let on = d.bool(k);
-        if widgets::check(ui, label, on, enabled) {
-            d.fields.insert(k.into(), json!(!on));
-        }
+        rows.push(if matches!(key, "linksFolder" | "relink") { row.enabled_when("copyLinks", true) } else { row });
     }
-    ui.add_space(6.0);
-    ui.label(egui::RichText::new(tl!("Fonts whose licence doesn't allow embedding are not copied.")).size(11.5).color(t.text_dim));
-    false
+    rows
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut params = Value::Object(d.fields.clone());
+/// Answers the Location row's Browse: a folder pick through the file asks, whose answer goes back into the dialog.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let id = dialog_id(KEY);
+    let Some(request) = dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(HostedParamDialog::pick_path)) else {
+        app.package_document = None;
+        return;
+    };
+    if let Some(request) = request {
+        file_asks::browse(app, id, request, PickRequest::folder(PURPOSE), file_asks::answer_path);
+    }
+}
+
+fn require_package_document(app: &VectorcraftApp, (document, reverts): (u64, u64)) -> Result<(), String> {
+    let Some(active) = app.session.active().filter(|st| st.uid == document) else {
+        return Err(tl!("Package can only save and collect the document where it was opened.").to_owned());
+    };
+    if active.reverts != reverts {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+    }
+    Ok(())
+}
+
+/// What OK does: save a dirty document, then write the package (on the worker with Background Export on) or
+/// download it. `Err` refuses the OK and keeps the dialog open; the reply says whether the package is in the background.
+pub(super) fn confirm(app: &mut VectorcraftApp, fields: &DialogFields) -> Result<Value, String> {
+    let document = app.package_document.ok_or("no Package dialog open")?;
+    require_package_document(app, document)?;
+    let text = |key: &str| fields.text(key).unwrap_or_default();
+    let mut params = json!({ "folder": text("folder"), "name": text("name") });
+    for (key, _) in OPTIONS {
+        params[key] = json!(fields.bool(key).unwrap_or(true));
+    }
     let web = downloads(app);
     if web {
         params["folder"] = Value::Null;
-    } else if d.str("folder").trim().is_empty() {
+    } else if text("folder").trim().is_empty() {
         return Err("choose a location for the package".into());
     }
     // The package holds the document as saved: when the save fails, or asks a question and writes
@@ -138,8 +163,10 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             return r;
         }
     }
+    // A completed background job may have changed the active document or its loaded contents while Package waited.
+    require_package_document(app, document)?;
     let package = app.session.prepare_package(&params).map_err(|e| e.to_string()).inspect_err(|e| app.ui.status = e.clone())?;
-    let label = format!("Packaging {}", d.str("name"));
+    let label = format!("Packaging {}", text("name"));
     let later = Rc::new(Cell::new(false));
     let in_background = later.clone();
     let work = move |write: Writer| {
@@ -154,7 +181,6 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     // the save is written, with the automation roots in force at OK.
     if let Some(id) = saving.filter(|_| enabled) {
         later.set(true);
-        app.ui.dialog = None;
         let scope = vectorcraft_engine::file_access::ScopeHandle::capture();
         background::after(app, id, move |app, r| {
             if saved(r)
@@ -168,15 +194,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let r = start(app)?;
     if r["background"] == true {
         later.set(true);
-        app.ui.dialog = None;
     }
     Ok(r)
 }
 
-/// Did a save whose applied result is `r` write the document (no error, and no question asked
-/// before writing)?
+/// Did a save whose applied result is `r` write the document (no error, no question asked before
+/// writing, and not canceled by Cancel Save)?
 fn saved(r: &Result<Value, String>) -> bool {
-    r.as_ref().is_ok_and(|r| r.get("pending").is_none())
+    r.as_ref().is_ok_and(|r| r.get("pending").is_none() && r.get("cancelled").and_then(Value::as_bool) != Some(true))
 }
 
 /// Report the package `r` (`file.package`'s reply): the status bar, the web's download, and the
@@ -184,27 +209,26 @@ fn saved(r: &Result<Value, String>) -> bool {
 /// closed, and a dialog open now is another one, which stays (the status bar names the folder).
 fn packaged(app: &mut VectorcraftApp, r: Result<Value, String>, web: bool, later: bool) -> Result<Value, String> {
     let r = r.inspect_err(|e| app.ui.status = e.clone())?;
-    if !later {
-        app.ui.dialog = None;
-    }
     let n = r["files"].as_array().map_or(0, Vec::len);
     let missing = r["missingLinks"].as_array().map_or(0, Vec::len);
     // The fonts left out: their license doesn't allow it, or they aren't on this computer.
     let fonts = r["skippedFonts"].as_array().into_iter().flatten().filter_map(|f| f["font"].as_str()).collect::<Vec<_>>().join(", ");
     let n = n as u64;
     if web {
-        let (name, data) = (r["name"].as_str().unwrap_or("package.zip"), r["dataBase64"].as_str().unwrap_or_default());
-        let bytes = vectorcraft_format::base64_decode(data).ok_or("the package came back damaged")?;
-        io::write_named(app, None, name, &bytes)?;
-        // The web shows no dialog, so the status line names every font left out.
-        app.status(package_status(n, None, &package_status_note(missing, &fonts)));
-        return Ok(r);
+        let name = r["name"].as_str().unwrap_or("package.zip").to_string();
+        let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap_or_default()).ok_or("the package came back damaged")?;
+        // The web shows no dialog, so the status line names every font left out. The download runs the continuation at once.
+        let status = package_status(n, None, &package_status_note(missing, &fonts));
+        return io::write_named(app, None, &name, bytes, move |app, _path| {
+            app.status(status);
+            Ok(r)
+        });
     }
     let folder = r["folder"].as_str().unwrap_or_default().to_string();
-    // A dialog open now (another one, after a package written in the background) stays, and no
-    // dialog names the fonts left out, so the status line names every one of them. Otherwise the
-    // dialog names them all, and the status line may cut the list short.
-    let asks = app.ui.dialog.is_none();
+    // A package written at once asks, over the dialog that is still closing. A dialog open now while one written
+    // in the background ends (another one) stays, and no dialog names the fonts left out, so the status line
+    // names every one of them. Otherwise the dialog names them all, and the status line may cut the list short.
+    let asks = !later || !app.any_dialog_open();
     let listed = if asks { status_fonts(&fonts) } else { fonts.clone() };
     app.status(package_status(n, Some(&folder), &package_status_note(missing, &listed)));
     let shown_note = package_dialog_note(missing, &fonts);
@@ -251,7 +275,7 @@ pub(super) fn package_status_note(missing: usize, fonts: &str) -> String {
 }
 
 /// The most bytes of font names a package status lists next to the dialog that names them all.
-const STATUS_FONTS: usize = 500;
+pub(super) const STATUS_FONTS: usize = 500;
 
 /// `fonts` (names joined with `, `) as the desktop's status line lists them while the Package
 /// created dialog names them all: whole, or the names that fit in [`STATUS_FONTS`] bytes followed

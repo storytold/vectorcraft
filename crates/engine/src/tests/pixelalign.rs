@@ -1158,3 +1158,384 @@ fn not_aligned_to_pixel_grid_takes_a_compound_path_by_its_own_property() {
     assert!(!aligned(&s, off));
     assert_eq!(not_aligned(&mut s, &[compound]), vec![other]);
 }
+
+/// The anchors of the paths in the art of symbol instance `inst`, where its transform places them.
+fn placed_points(s: &Session, inst: u64) -> Vec<(f64, f64)> {
+    let d = &s.doc().unwrap().doc;
+    let NodeKind::SymbolInstance { symbol, xf } = &d.node(NodeId(inst)).unwrap().kind else { panic!("{inst} is not a symbol instance") };
+    let art = &d.symbols.iter().find(|x| &x.name == symbol).unwrap().art;
+    let mut out = vec![];
+    art.walk(&mut |n| {
+        if let Some(p) = n.path_data() {
+            out.extend(p.anchors().map(|(_, _, a)| {
+                let q = *xf * a.p;
+                (q.x, q.y)
+            }));
+        }
+    });
+    out
+}
+
+/// The transform of symbol instance `inst`.
+fn instance_xf(s: &Session, inst: u64) -> vectorcraft_geom::Affine {
+    match &s.doc().unwrap().doc.node(NodeId(inst)).unwrap().kind {
+        NodeKind::SymbolInstance { xf, .. } => *xf,
+        _ => panic!("{inst} is not a symbol instance"),
+    }
+}
+
+/// Symbol Options › Align to Pixel Grid on a new symbol: the instance that replaces the selection
+/// draws its art's edges on whole points, and goes back to them after a move by a fraction of a
+/// point; a symbol made without it keeps the art where it was drawn.
+#[test]
+fn a_pixel_aligned_symbol_keeps_its_instance_on_whole_points() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let r = s.execute("symbol.new", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    assert_eq!(r["alignToPixelGrid"], true);
+    let inst = r["id"].as_u64().unwrap();
+    let pts = placed_points(&s, inst);
+    assert_eq!(pts.len(), 4);
+    assert!(whole(&pts), "{pts:?}");
+    s.execute("object.move", &json!({"dx": 0.3, "dy": 0.45})).unwrap();
+    let pts = placed_points(&s, inst);
+    assert!(whole(&pts), "{pts:?}");
+    let list = s.execute("symbol.list", &json!({})).unwrap();
+    assert_eq!(list["symbols"][0]["alignToPixelGrid"], true);
+
+    path(&mut s, "M100.3 20.6 L140.7 20.6 L140.7 30.3 L100.3 30.3 Z", 2.0);
+    let plain = s.execute("symbol.new", &json!({"name": "Plain"})).unwrap();
+    assert_eq!(plain["alignToPixelGrid"], false);
+    let pts = placed_points(&s, plain["id"].as_u64().unwrap());
+    assert!(!whole(&pts), "{pts:?}");
+}
+
+/// A centered stroke of odd weight puts the art's edges on half points, so the stroke's own edges
+/// fall on the grid.
+#[test]
+fn a_pixel_aligned_symbol_with_an_odd_stroke_goes_to_half_points() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 1.0);
+    let inst = s.execute("symbol.new", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap()["id"].as_u64().unwrap();
+    let pts = placed_points(&s, inst);
+    assert!(halves(&pts), "{pts:?}");
+}
+
+/// Turning it on in Symbol Options snaps the instances placed at actual size and leaves a scaled
+/// one where it is; instances placed later land on whole points; asking again for the value the
+/// symbol has adds no undo step; a duplicate and a rename keep it, a delete clears it, and a value
+/// that is not true or false is refused.
+#[test]
+fn symbol_options_align_to_pixel_grid_snaps_instances_at_actual_size() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let a = s.execute("symbol.new", &json!({"name": "Px"})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("symbol.place", &json!({"name": "Px", "x": 100.3, "y": 200.7})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 150})).unwrap();
+    let scaled = instance_xf(&s, b);
+    assert!(!whole(&placed_points(&s, a)));
+
+    let r = s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    assert_eq!(r["alignToPixelGrid"], true);
+    let pts = placed_points(&s, a);
+    assert!(whole(&pts), "{pts:?}");
+    assert_eq!(instance_xf(&s, b), scaled);
+    let c = s.execute("symbol.place", &json!({"name": "Px", "x": 50.3, "y": 60.6})).unwrap()["id"].as_u64().unwrap();
+    let pts = placed_points(&s, c);
+    assert!(whole(&pts), "{pts:?}");
+
+    let steps = undo_len(&s);
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    assert_eq!(undo_len(&s), steps);
+
+    assert_eq!(s.execute("symbol.duplicate", &json!({"name": "Px"})).unwrap()["name"], "Px copy");
+    assert!(s.doc().unwrap().doc.symbol_pixel_aligned("Px copy"));
+    s.execute("symbol.options", &json!({"name": "Px", "newName": "Grid"})).unwrap();
+    assert!(s.doc().unwrap().doc.symbol_pixel_aligned("Grid"));
+    assert!(!s.doc().unwrap().doc.symbol_pixel_aligned("Px"));
+    s.execute("symbol.delete", &json!({"names": ["Grid", "Px copy"]})).unwrap();
+    assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_PIXEL_ALIGNED).is_none());
+
+    path(&mut s, "M10 10 L20 10 L20 20 L10 20 Z", 1.0);
+    assert!(s.execute("symbol.new", &json!({"alignToPixelGrid": "yes"})).is_err());
+    assert!(s.execute("symbol.new", &json!({"alignToPixelGrid": null})).is_err());
+    s.execute("symbol.new", &json!({"name": "Q"})).unwrap();
+    assert!(s.execute("symbol.options", &json!({"name": "Q", "alignToPixelGrid": 1})).is_err());
+    assert!(s.execute("symbol.options", &json!({"name": "Q", "alignToPixelGrid": null})).is_err());
+}
+
+/// An instance reflected across one axis goes back to whole points after a move; one turned a half
+/// turn counts as rotated and moves by exactly the amount asked.
+#[test]
+fn a_reflected_instance_snaps_and_a_half_turned_one_does_not() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let inst = s.execute("symbol.new", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    s.execute("object.move", &json!({"dx": 0.3, "dy": 0.45})).unwrap();
+    let [.., e, f] = instance_xf(&s, inst).as_coeffs();
+    assert!(whole(&[(e, f)]), "{e} {f}");
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 180})).unwrap();
+    let [.., e0, f0] = instance_xf(&s, inst).as_coeffs();
+    s.execute("object.move", &json!({"dx": 0.3, "dy": 0.45})).unwrap();
+    let [.., e1, f1] = instance_xf(&s, inst).as_coeffs();
+    assert!((e1 - e0 - 0.3).abs() < 1e-9 && (f1 - f0 - 0.45).abs() < 1e-9, "{e0} {f0} -> {e1} {f1}");
+}
+
+/// An instance of a pixel-aligned symbol attached to a path goes back to whole points each time the
+/// path places it.
+#[test]
+fn an_instance_on_a_path_stays_on_whole_points() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let inst = s.execute("symbol.new", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap()["id"].as_u64().unwrap();
+    let spine = s.execute("path.create", &json!({"d": "M 0.3 100.4 L 300.3 100.4"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.objectsOnPath.attach", &json!({"path": spine, "ids": [inst]})).unwrap();
+    let pts = placed_points(&s, inst);
+    assert!(whole(&pts), "attached: {pts:?}");
+    let anchors = json!([{"x": 0.6, "y": 120.7}, {"x": 300.6, "y": 120.7}]);
+    s.execute("path.setAnchors", &json!({"id": spine, "subpaths": [{"anchors": anchors, "closed": false}]})).unwrap();
+    let pts = placed_points(&s, inst);
+    assert!(whole(&pts), "path edited: {pts:?}");
+}
+
+/// A path in the art of an opacity mask in a pixel-aligned symbol's art snaps with the rest of
+/// the art.
+#[test]
+fn mask_art_in_a_pixel_aligned_symbol_snaps() {
+    let mut s = new_doc();
+    let r = path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let m = path(&mut s, "M12.3 22.6 L30.7 22.6 L30.7 28.3 L12.3 28.3 Z", 2.0);
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let art = d.remove(NodeId(m)).unwrap();
+        d.node_mut(NodeId(r)).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+    }
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    let inst = s.execute("symbol.new", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap()["id"].as_u64().unwrap();
+    let d = &s.doc().unwrap().doc;
+    let xf = instance_xf(&s, inst);
+    let art = &d.symbols.iter().find(|x| x.name == "Px").unwrap().art;
+    let mut pts = vec![];
+    art.walk(&mut |n| {
+        if let Some(mask) = n.extras().mask.as_ref() {
+            mask.art.walk(&mut |c| {
+                if let Some(p) = c.path_data() {
+                    pts.extend(p.anchors().map(|(_, _, a)| {
+                        let q = xf * a.p;
+                        (q.x, q.y)
+                    }));
+                }
+            });
+        }
+    });
+    assert_eq!(pts.len(), 4);
+    assert!(whole(&pts), "{pts:?}");
+}
+
+/// A path in the art of an unlinked opacity mask in a pixel-aligned symbol's art snaps as the mask
+/// is drawn at the symbol's natural size.
+#[test]
+fn unlinked_mask_art_in_a_pixel_aligned_symbol_snaps_at_natural_size() {
+    let mut s = new_doc();
+    let r = path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let m = path(&mut s, "M12.3 22.6 L30.7 22.6 L30.7 28.3 L12.3 28.3 Z", 2.0);
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let art = d.remove(NodeId(m)).unwrap();
+        d.node_mut(NodeId(r)).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), false)));
+    }
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    let inst = s.execute("symbol.new", &json!({"name": "Px"})).unwrap()["id"].as_u64().unwrap();
+    assert_ne!(s.doc().unwrap().doc.symbol_natural_xf("Px"), vectorcraft_geom::Affine::IDENTITY);
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let sym = d.symbols.iter_mut().find(|x| x.name == "Px").unwrap();
+        std::sync::Arc::make_mut(&mut sym.art).extras_mut().mask.as_mut().unwrap().linked = false;
+    }
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let xf = instance_xf(&s, inst);
+    let art = &d.symbols.iter().find(|x| x.name == "Px").unwrap().art;
+    let mut pts = vec![];
+    art.walk(&mut |n| {
+        if let Some(mask) = n.extras().mask.as_ref() {
+            mask.art.walk(&mut |c| {
+                if let Some(p) = c.path_data() {
+                    pts.extend(p.anchors().map(|(_, _, a)| {
+                        let q = xf * a.p;
+                        (q.x, q.y)
+                    }));
+                }
+            });
+        }
+    });
+    assert_eq!(pts.len(), 4);
+    assert!(whole(&pts), "{pts:?}");
+}
+
+/// A path in the art of an opacity mask on a path of a compound path in a pixel-aligned symbol's
+/// art snaps with the rest of the art.
+#[test]
+fn mask_art_on_a_compound_paths_path_in_a_pixel_aligned_symbol_snaps() {
+    let mut s = new_doc();
+    let a = path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let b = path(&mut s, "M50.3 20.6 L60.7 20.6 L60.7 30.3 L50.3 30.3 Z", 2.0);
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let m = path(&mut s, "M12.3 22.6 L30.7 22.6 L30.7 28.3 L12.3 28.3 Z", 2.0);
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let art = d.remove(NodeId(m)).unwrap();
+        let first = d.node(NodeId(c)).unwrap().children().unwrap()[0].id;
+        d.node_mut(first).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+    }
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let inst = s.execute("symbol.new", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap()["id"].as_u64().unwrap();
+    let d = &s.doc().unwrap().doc;
+    let xf = instance_xf(&s, inst);
+    let art = &d.symbols.iter().find(|x| x.name == "Px").unwrap().art;
+    let mut pts = vec![];
+    art.walk(&mut |n| {
+        if let Some(mask) = n.extras().mask.as_ref() {
+            mask.art.walk(&mut |c| {
+                if let Some(p) = c.path_data() {
+                    pts.extend(p.anchors().map(|(_, _, a)| {
+                        let q = xf * a.p;
+                        (q.x, q.y)
+                    }));
+                }
+            });
+        }
+    });
+    assert_eq!(pts.len(), 4);
+    assert!(whole(&pts), "{pts:?}");
+}
+
+/// An instance in the art of an object's opacity mask goes to whole points when its symbol is made
+/// pixel-aligned.
+#[test]
+fn an_instance_in_an_opacity_mask_snaps_with_its_symbol() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    s.execute("symbol.new", &json!({"name": "Px"})).unwrap();
+    let b = s.execute("symbol.place", &json!({"name": "Px", "x": 100.3, "y": 200.7})).unwrap()["id"].as_u64().unwrap();
+    let r = path(&mut s, "M80 180 L160 180 L160 240 L80 240 Z", 1.0);
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let inst = d.remove(NodeId(b)).unwrap();
+        d.node_mut(NodeId(r)).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*inst).clone(), true)));
+    }
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let mask = d.node(NodeId(r)).unwrap().extras().mask.clone().unwrap();
+    let NodeKind::SymbolInstance { xf, .. } = &mask.art.kind else { panic!("the mask art is not the instance") };
+    let [.., e, f] = xf.as_coeffs();
+    assert!(whole(&[(e, f)]), "{e} {f}");
+}
+
+/// An instance snapped to whole points takes the art of its linked opacity mask along by the same
+/// amount, as a move does; the art of an unlinked mask stays where it is.
+#[test]
+fn an_instance_snapped_to_the_grid_moves_its_linked_mask() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    s.execute("symbol.new", &json!({"name": "Px"})).unwrap();
+    let place = |s: &mut Session, x: f64, linked: bool| {
+        let inst = s.execute("symbol.place", &json!({"name": "Px", "x": x, "y": 200.7})).unwrap()["id"].as_u64().unwrap();
+        let m = path(s, "M80.25 180.5 L160.25 180.5 L160.25 240.5 L80.25 240.5 Z", 1.0);
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let art = d.remove(NodeId(m)).unwrap();
+        let mask = vectorcraft_doc::OpacityMask { linked, ..vectorcraft_doc::OpacityMask::new((*art).clone(), true) };
+        d.node_mut(NodeId(inst)).unwrap().extras_mut().mask = Some(Box::new(mask));
+        inst
+    };
+    let (linked, unlinked) = (place(&mut s, 100.3, true), place(&mut s, 300.3, false));
+    let mask_points = |s: &Session, inst: u64| {
+        let d = &s.doc().unwrap().doc;
+        let mask = d.node(NodeId(inst)).unwrap().extras().mask.clone().unwrap();
+        mask.art.path_data().unwrap().anchors().map(|(_, _, a)| (a.p.x, a.p.y)).collect::<Vec<_>>()
+    };
+    let (xf_before, mask_before, unlinked_before) = (instance_xf(&s, linked), mask_points(&s, linked), mask_points(&s, unlinked));
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    let [.., e0, f0] = xf_before.as_coeffs();
+    let [.., e, f] = instance_xf(&s, linked).as_coeffs();
+    assert!(whole(&[(e, f)]) && (e, f) != (e0, f0), "{e} {f}");
+    let moved: Vec<_> = mask_before.iter().map(|(x, y)| (x + e - e0, y + f - f0)).collect();
+    let after = mask_points(&s, linked);
+    assert!(moved.iter().zip(&after).all(|(a, b)| close(*a, *b)), "{after:?} != {moved:?}");
+    assert!(whole(&placed_points(&s, unlinked)));
+    assert_eq!(mask_points(&s, unlinked), unlinked_before);
+}
+
+/// While a pixel-aligned symbol is edited, the art written back from the editing layer is stored
+/// on the pixel grid, so its instances stay on it.
+#[test]
+fn art_edited_in_symbol_editing_mode_stays_on_the_pixel_grid() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let inst = s.execute("symbol.new", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.edit", &json!({"ids": [inst]})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+    let part = st.doc.node(layer).unwrap().children().unwrap()[0].id.0;
+    s.execute("select.set", &json!({"ids": [part]})).unwrap();
+    s.execute("object.move", &json!({"dx": 0.3, "dy": 0.45})).unwrap();
+    assert!(s.doc().unwrap().doc.symbol_edit.is_some());
+    let pts = placed_points(&s, inst);
+    assert!(whole(&pts), "{pts:?}");
+    // The editing layer shows the art as it is stored.
+    let shown = points(&s, part);
+    assert!(whole(&shown), "{shown:?}");
+    s.execute("symbol.exitEditing", &json!({})).unwrap();
+    let pts = placed_points(&s, inst);
+    assert!(whole(&pts), "{pts:?}");
+}
+
+/// Turning it on while the symbol is open in symbol editing mode shows its art on the pixel grid
+/// on the editing layer at once, and its instance stays on it after editing ends.
+#[test]
+fn turning_it_on_in_symbol_editing_mode_snaps_the_editing_layer() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let inst = s.execute("symbol.new", &json!({"name": "Px"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.edit", &json!({"ids": [inst]})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+    let part = st.doc.node(layer).unwrap().children().unwrap()[0].id.0;
+    let before = points(&s, part);
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let xf = d.symbol_edit.as_ref().unwrap().xf;
+    let art = &d.symbols.iter().find(|x| x.name == "Px").unwrap().art;
+    let stored: Vec<_> = art.path_data().unwrap().anchors().map(|(_, _, a)| xf * a.p).map(|p| (p.x, p.y)).collect();
+    let shown = points(&s, part);
+    assert!(shown.iter().zip(&stored).all(|(a, b)| close(*a, *b)) && shown != before, "{shown:?} != {stored:?}");
+    s.execute("symbol.exitEditing", &json!({})).unwrap();
+    let pts = placed_points(&s, inst);
+    assert!(whole(&pts), "{pts:?}");
+}
+
+/// An instance of a pixel-aligned symbol on the editing layer of another symbol is part of that
+/// symbol's art, so turning it on leaves the instance and the other symbol's art where they are.
+#[test]
+fn an_instance_on_another_symbols_editing_layer_is_left_as_it_is() {
+    let mut s = new_doc();
+    path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 2.0);
+    let a = s.execute("symbol.new", &json!({"name": "Px"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let b = s.execute("symbol.new", &json!({"name": "Outer"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.edit", &json!({"ids": [b]})).unwrap();
+    let st = s.doc().unwrap();
+    let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+    let inner = st.doc.node(layer).unwrap().children().unwrap()[0].id.0;
+    let outer_art = st.doc.symbols.iter().find(|x| x.name == "Outer").unwrap().art.clone();
+    let shown = instance_xf(&s, inner);
+    assert!(!whole(&placed_points(&s, inner)));
+    s.execute("symbol.options", &json!({"name": "Px", "alignToPixelGrid": true})).unwrap();
+    assert_eq!(instance_xf(&s, inner), shown);
+    let d = &s.doc().unwrap().doc;
+    assert!(std::sync::Arc::ptr_eq(&d.symbols.iter().find(|x| x.name == "Outer").unwrap().art, &outer_art));
+}

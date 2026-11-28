@@ -2062,8 +2062,8 @@ fn datasets_csv_export_imports_back_to_the_same_data_sets() {
 }
 
 /// The export's `warning` names the variables whose column a document without the variables
-/// refuses, so it doesn't import the file: a `%` header, a `#` header whose values aren't true or
-/// false, and a header that names a variable an earlier column defined with another kind. A
+/// refuses, so it doesn't import the file: a `%` header over values, a `#` header whose values
+/// aren't true or false, and a header that names a variable an earlier column defined with another kind. A
 /// header that names such a variable with its kind is read with that kind, and is listed as one
 /// read back with another kind.
 #[test]
@@ -2081,7 +2081,9 @@ fn datasets_csv_export_warns_of_headers_a_new_document_refuses() {
     let refuses = |names: &str| format!("a new document refuses this file because of these variables: {names}");
     let loses = |names: &str| format!("a new document won't read these variables back with their kind: {names}");
 
-    assert_eq!(export(&[("%Rate", "text"), ("Chart", "graph")], json!({})), (refuses("`%Rate`"), true));
+    // A `%` header's cells are read as paths of graph data files.
+    assert_eq!(export(&[("%Rate", "text"), ("Chart", "graph")], json!({"%Rate": "5"})), (refuses("`%Rate`"), true));
+    assert_eq!(export(&[("%Rate", "text"), ("Chart", "graph")], json!({})), (loses("`%Rate`, `Chart`"), false));
     assert_eq!(export(&[("#Tag", "text")], json!({"#Tag": "hello"})), (refuses("`#Tag`"), true));
     assert_eq!(export(&[("#Tag", "text")], json!({"#Tag": "yes"})), (loses("`#Tag`"), false));
     assert_eq!(export(&[("#Seen", "text"), ("Seen", "image")], json!({})), (refuses("`Seen`"), true));
@@ -2109,18 +2111,190 @@ fn datasets_csv_export_refuses_a_header_that_names_another_variable() {
     }
 }
 
-/// A `%` header cell that isn't a variable's name (graph data files) is refused with its column,
-/// and the import defines nothing.
+/// The data `graph.setData` reports for the graph `g`: series, categories and rows.
+fn graph_data(s: &mut Session, g: NodeId) -> Value {
+    let v = s.execute("graph.setData", &json!({"id": g.0})).unwrap();
+    json!({"series": v["series"], "categories": v["categories"], "rows": v["rows"]})
+}
+
+/// A `%` header defines a graph variable, and each of its cells is the path of a graph data file,
+/// as the set-up page's five-column example has them. A relative path is taken from the CSV file's
+/// folder. Selecting a data set gives the bound graph the data that Graph Data's Import Data and
+/// Apply give it for the same file: tab- or comma-separated, the first row the series labels and the
+/// first column the category labels, in UTF-16 too. An empty cell is no value.
 #[test]
-fn datasets_csv_refuses_graph_data_file_columns() {
+fn datasets_csv_reads_graph_data_files_in_percent_columns() {
+    let dir = Folder::new("vars-csv-graph-files");
+    let tabs: &[u8] = b"\t2024\t2025\nQ1\t3\t4\nQ2\t5\t6\n";
+    let commas: &[u8] = b",North\nJan,7\nFeb,8\n";
+    let utf16: Vec<u8> = [0xFF, 0xFE].into_iter().chain(",A\r\nX,9\r\n".encode_utf16().flat_map(u16::to_le_bytes)).collect();
+    write(&dir.file("graphs/bill.txt"), tabs);
+    write(&dir.file("dat.csv"), commas);
+    write(&dir.file("ruiz.txt"), &utf16);
+    let absolute = dir.file("dat.csv");
+    let csv = format!(
+        "Name,Age,@Photos,%Graphs,#Visibility\nBill,36,b.jpg,graphs/bill.txt,true\nDat,53,d.jpg,{absolute},true\nMaria,26,r.jpg,ruiz.txt,false\nNone,1,n.jpg,,true\n"
+    );
+    let path = dir.file("data.csv");
+    write(&path, csv.as_bytes());
+
     let mut s = session();
-    let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err().to_string();
-    let named = error(&mut s, "Name,Title,%Sales\nA,x,sales.txt");
-    assert!(named.contains("column 3:") && named.contains("`%Sales`"), "{named}");
-    let unnamed = error(&mut s, "%Sales\tTitle\nsales.txt\tx");
-    assert!(unnamed.contains("column 1:") && unnamed.contains("`%Sales`"), "{unnamed}");
+    let graph = s.execute("graph.create", &json!({"type": "column", "x": 10, "y": 10, "width": 100, "height": 80, "csv": ",B\nY,1"})).unwrap();
+    let g = NodeId(graph["id"].as_u64().unwrap());
+    let imp = s.execute("dataset.import", &json!({"path": path})).unwrap();
+    assert_eq!(imp["defined"], json!(["Name", "Age", "Photos", "Graphs", "Visibility"]));
+    assert_eq!(imp["imported"], 4);
+    let listed = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(listed["variables"][3], json!({"name": "Graphs", "kind": "graph", "bindings": 0}));
+    s.execute("variable.bind", &json!({"variable": "Graphs", "ids": [g.0]})).unwrap();
+
+    // What Import Data and Apply give the graph for each file.
+    let sheet = |bytes: &[u8]| {
+        let data = crate::cmd::graph_data_from_grid(&crate::cmd::graph_grid_from_text(&crate::cmd::graph_data_text(bytes)));
+        let mut probe = session();
+        let p = json!({"type": "column", "x": 10, "y": 10, "width": 100, "height": 80, "csv": ",B\nY,1"});
+        let id = NodeId(probe.execute("graph.create", &p).unwrap()["id"].as_u64().unwrap());
+        let mut set = data.clone();
+        set["id"] = json!(id.0);
+        probe.execute("graph.setData", &set).unwrap();
+        graph_data(&mut probe, id)
+    };
+    for (set, bytes) in ["Data Set 1", "Data Set 2", "Data Set 3"].into_iter().zip([tabs, commas, utf16.as_slice()]) {
+        s.execute("dataset.select", &json!({"name": set})).unwrap();
+        assert_eq!(graph_data(&mut s, g), sheet(bytes), "{set}");
+    }
+    assert_eq!(graph_data(&mut s, g), json!({"series": ["A"], "categories": ["X"], "rows": [[9.0]]}));
     let vars = &s.doc().unwrap().doc.variables;
-    assert!(vars.variables.is_empty() && vars.datasets.is_empty());
+    assert_eq!(vars.datasets[3].values.get("Graphs"), None, "an empty cell is no value");
+
+    // A `%` header names a graph variable the document has, and `base` sets the folder of
+    // relative paths when the CSV comes as text.
+    let mut t = session();
+    t.execute("variable.define", &json!({"name": "Sales", "kind": "graph"})).unwrap();
+    let base = dir.0.to_string_lossy().into_owned();
+    let imp = t.execute("dataset.import", &json!({"csv": "% Sales\ndat.csv", "base": base})).unwrap();
+    assert_eq!(imp["defined"], json!([]));
+    let value = t.doc().unwrap().doc.variables.datasets[0].values.get("Sales").cloned();
+    assert!(matches!(&value, Some(vectorcraft_doc::DataValue::Graph(c)) if c.contains("North") && c.contains("Feb")), "{value:?}");
+}
+
+/// A graph data file whose rows hold more values than its first row has series labels gives the
+/// bound graph the series labels that Graph Data's Import Data and Apply give it: up to the last one
+/// given, with no blank label for the series after it.
+#[test]
+fn datasets_csv_graph_data_file_keeps_the_given_series_labels() {
+    let dir = Folder::new("vars-csv-graph-wide");
+    let wide: &[u8] = b"\tA\t\nX\t1\t2\n";
+    write(&dir.file("wide.txt"), wide);
+    let path = dir.file("data.csv");
+    write(&path, b"Name,%Chart\na,wide.txt\n");
+
+    let mut s = session();
+    let p = json!({"type": "column", "x": 10, "y": 10, "width": 100, "height": 80, "csv": ",B\nY,1"});
+    let g = NodeId(s.execute("graph.create", &p).unwrap()["id"].as_u64().unwrap());
+    s.execute("dataset.import", &json!({"path": path})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Chart", "ids": [g.0]})).unwrap();
+    s.execute("dataset.select", &json!({"name": "Data Set 1"})).unwrap();
+
+    let data = crate::cmd::graph_data_from_grid(&crate::cmd::graph_grid_from_text(&crate::cmd::graph_data_text(wide)));
+    let mut probe = session();
+    let id = NodeId(probe.execute("graph.create", &p).unwrap()["id"].as_u64().unwrap());
+    let mut set = data.clone();
+    set["id"] = json!(id.0);
+    probe.execute("graph.setData", &set).unwrap();
+    assert_eq!(graph_data(&mut s, g), graph_data(&mut probe, id));
+    assert_eq!(graph_data(&mut s, g), json!({"series": ["A"], "categories": ["X"], "rows": [[1.0, 2.0]]}));
+}
+
+/// A `%` column's file that is missing, a folder, larger than 1 MB, or gives a graph value longer
+/// than 256 KB, a relative path with no
+/// folder to take it from, a `base` that isn't a folder path, and a `%` header whose name is a
+/// variable of another kind refuse the import with the line and column, and leave the variables and
+/// data sets as they were. A file of exactly 1 MB is read, and a file named by many cells is read
+/// once.
+#[test]
+fn datasets_csv_refuses_unreadable_graph_data_files() {
+    let dir = Folder::new("vars-csv-graph-refused");
+    write(&dir.file("ok.txt"), b"\tA\nX\t1\n");
+    write(&dir.file("big.txt"), &vec![b'1'; crate::cmd::MAX_GRAPH_DATA_FILE + 1]);
+    let at_limit = [b"\tA\nX\t2\n".as_slice(), &vec![b' '; crate::cmd::MAX_GRAPH_DATA_FILE - 7]].concat();
+    write(&dir.file("limit.txt"), &at_limit);
+    std::fs::create_dir_all(dir.file("folder.txt")).unwrap();
+    // 10,000 categories with long labels: under 1 MB, but a graph value over 256 KB.
+    let long: String = (0..10_000).map(|i| format!("category label number {i:05}\t{i}\n")).collect();
+    write(&dir.file("long.txt"), format!("\tA\n{long}").as_bytes());
+    let base = dir.0.to_string_lossy().into_owned();
+
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("dataset.import", &json!({"csv": "Title\nkept"})).unwrap();
+    let before = s.doc().unwrap().doc.variables.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let cases = [
+        (json!({"csv": "Name,%Chart\na,ok.txt\nb,missing.txt", "base": base}), "line 3, column 2: the graph data file for `Chart` can't be read"),
+        (json!({"csv": "Name,%Chart\na,folder.txt", "base": base}), "line 2, column 2: the graph data file for `Chart` can't be read"),
+        (json!({"csv": "%Chart\nbig.txt", "base": base}), "line 2, column 1: the graph data file `big.txt` for `Chart` is larger than 1048576 bytes"),
+        (
+            json!({"csv": "Name,%Chart\na,long.txt", "base": base}),
+            "line 2, column 2: the graph data file `long.txt` for `Chart` gives a graph value longer than 262144 bytes",
+        ),
+        (json!({"csv": "%Chart\nok.txt"}), "line 2, column 1: the graph data file `ok.txt` for `Chart` is a relative path"),
+        (json!({"csv": "%Chart\nok.txt", "base": ""}), "`base` is empty"),
+        (json!({"csv": "%Chart\nok.txt", "base": 3}), "`base` must be a string"),
+        (json!({"csv": "%Title\nok.txt", "base": base}), "column 1: `%Title` names `Title`, which is a text variable"),
+    ];
+    for (p, want) in cases {
+        let e = s.execute("dataset.import", &p).unwrap_err().to_string();
+        assert!(e.contains(want), "{p}: {e}");
+        assert_eq!(s.doc().unwrap().doc.variables, before, "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{p}");
+    }
+
+    let rows: String = (0..300).map(|_| "limit.txt\n").collect();
+    let imp = s.execute("dataset.import", &json!({"csv": format!("%Chart\n{rows}"), "base": base})).unwrap();
+    assert_eq!(imp["imported"], 300, "a 1 MB file named by 300 cells counts once against the import's limit");
+    let value = s.doc().unwrap().doc.variables.datasets[299].values.get("Chart").cloned();
+    assert!(matches!(&value, Some(vectorcraft_doc::DataValue::Graph(c)) if c.contains('2')), "{value:?}");
+}
+
+/// A `%` column's path is followed as an image variable's path is: a path on another computer (a
+/// UNC path or a `file:` URL with a host) or a URL other than `file:` refuses the import with the
+/// line and column and the reason, before any file is read, and leaves the variables and data sets
+/// as they were. A relative path inside the CSV's folder is still read, and so is a `file:` URL
+/// without a host when no folder is given.
+#[test]
+fn datasets_csv_refuses_graph_data_files_on_other_computers() {
+    let dir = Folder::new("vars-csv-graph-network");
+    write(&dir.file("sub/ok.txt"), b"\tA\nX\t1\n");
+    let path = dir.file("data.csv");
+    write(&path, b"Name,%Chart\na,sub/ok.txt\n");
+    let base = dir.0.to_string_lossy().into_owned();
+
+    let mut s = session();
+    let imp = s.execute("dataset.import", &json!({"path": path})).unwrap();
+    assert_eq!(imp["imported"], 1);
+    let value = s.doc().unwrap().doc.variables.datasets[0].values.get("Chart").cloned();
+    assert!(matches!(&value, Some(vectorcraft_doc::DataValue::Graph(c)) if c.contains('A')), "{value:?}");
+    // A `file:` URL without a host is a path on this computer, read without a folder to take it from.
+    let file = dir.file("sub/ok.txt").replace('\\', "/");
+    let url = if file.starts_with('/') { format!("file://{file}") } else { format!("file:///{file}") };
+    let imp = s.execute("dataset.import", &json!({"csv": format!("%Chart\n{url}")})).unwrap();
+    assert_eq!(imp["imported"], 1, "{url}");
+    let before = s.doc().unwrap().doc.variables.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cell, reason) in [
+        (r"\\server\share\ok.txt", "the path is on another computer"),
+        ("//server/share/ok.txt", "the path is on another computer"),
+        ("file://server/share/ok.txt", "the path is on another computer"),
+        ("https://example.com/ok.txt", "the link is not a file path"),
+    ] {
+        let want = format!("line 3, column 2: the graph data file `{cell}` for `Chart` isn't followed: {reason}");
+        let p = json!({"csv": format!("Name,%Chart\na,sub/ok.txt\nb,{cell}"), "base": base});
+        let e = s.execute("dataset.import", &p).unwrap_err().to_string();
+        assert!(e.contains(&want), "{cell}: {e}");
+        assert_eq!(s.doc().unwrap().doc.variables, before, "{cell}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{cell}");
+    }
 }
 
 /// Two header cells that name one variable, by the same name or by a name and its prefix, are
@@ -2420,6 +2594,69 @@ fn a_variable_library_defines_text_variables_and_data_sets() {
     assert_eq!(s.doc().unwrap().doc.variables.datasets.len(), 2);
 }
 
+/// The Variables panel's Import… reads a data source by its extension, in any case: a .csv, .tsv
+/// or .txt file as Import Data Sets… reads it, and an .xml file as Load Variable Library… reads it.
+/// Any other extension, or none, is refused before the file is read.
+#[test]
+fn variable_import_reads_a_data_source_by_its_extension() {
+    let dir = Folder::new("vars-import");
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+
+    for name in ["rows.csv", "rows.TSV", "rows.txt"] {
+        let path = dir.file(name);
+        write(&path, b"Name\nAnn\nBob\n");
+        let r = s.execute("variable.import", &json!({"path": path})).unwrap();
+        assert_eq!((r["format"].clone(), r["names"].clone()), (json!("csv"), json!(["Data Set 1", "Data Set 2"])), "{name}");
+    }
+    s.execute("dataset.select", &json!({"name": "Data Set 2"})).unwrap();
+    assert_eq!(plain(&s, t), "Bob");
+
+    let xml = r#"<variableSets><variableSet><variables><variable varName="Name" trait="textcontent"/></variables><sampleDataSets><sampleDataSet dataSetName="Row 1"><Name><p>Charlie</p></Name></sampleDataSet></sampleDataSets></variableSet></variableSets>"#;
+    let path = dir.file("library.Xml");
+    write(&path, xml.as_bytes());
+    let r = s.execute("variable.import", &json!({"path": path})).unwrap();
+    assert_eq!((r["format"].clone(), r["names"].clone(), r["deleted"].clone()), (json!("xml"), json!(["Row 1"]), json!([])));
+    // The library declares the bound text variable, so its binding stays.
+    s.execute("dataset.select", &json!({"name": "Row 1"})).unwrap();
+    assert_eq!(plain(&s, t), "Charlie");
+
+    // The extension picks the reader: CSV text in an .xml file goes to the library reader, which
+    // refuses it, and a library in a .csv file goes to the CSV reader.
+    let csv_in_xml = dir.file("rows.xml");
+    write(&csv_in_xml, b"Name\nAnn\n");
+    let e = s.execute("variable.import", &json!({"path": csv_in_xml})).unwrap_err().to_string();
+    assert!(e.contains("variable.loadLibrary"), "{e}");
+    let xml_in_csv = dir.file("library.csv");
+    write(&xml_in_csv, xml.as_bytes());
+    let e = s.execute("variable.import", &json!({"path": xml_in_csv})).unwrap_err().to_string();
+    assert!(e.contains("dataset.import"), "{e}");
+
+    // Other extensions, or none, are refused before the file is read, so a missing file gives the
+    // same error; the data sets stay as they were.
+    let refused = "Import reads a data source file ending in .csv, .tsv, .txt or .xml";
+    for (name, exists) in [("rows.json", true), ("rows", true), ("rows.csv.bak", true), ("missing.ai", false)] {
+        let path = dir.file(name);
+        if exists {
+            write(&path, b"Name\nAnn\n");
+        }
+        let e = s.execute("variable.import", &json!({"path": path})).unwrap_err().to_string();
+        assert!(e.contains(refused), "{name}: {e}");
+    }
+    let names: Vec<String> = s.doc().unwrap().doc.variables.datasets.iter().map(|d| d.name.clone()).collect();
+    assert_eq!(names, ["Row 1"]);
+
+    // `path` is required, and the command takes no other parameter.
+    for bad in [json!({}), json!({"path": 3})] {
+        let e = s.execute("variable.import", &bad).unwrap_err().to_string();
+        assert!(e.contains("missing `path`"), "{bad}: {e}");
+    }
+    let e = s.execute("variable.import", &json!({"path": dir.file("rows.csv"), "csv": "Name\nX\n"})).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `csv`"), "{e}");
+}
+
 /// Load Variable Library replaces the document's variables and data sets: every variable goes with
 /// its bindings and values, a variable of another kind with a library variable's name included,
 /// and every data set goes, the active one included. A text variable the library also declares
@@ -2665,6 +2902,11 @@ fn malformed_variable_libraries_are_refused() {
     let long_graph = format!("<Shown><data><values>{}</values></data></Shown>", row.repeat(2_000));
     let cases = [
         ("not well-formed XML", "<variableSets><variableSet>".to_string()),
+        ("not well-formed XML", ok.replace("<p>x</p>", "<p>A&missing;B</p>")),
+        ("not well-formed XML", ok.replace("</variableSets>", "")),
+        ("not well-formed XML", ok.replace("varName=\"Name\"", "varName=\"Name\" varName=\"Other\"")),
+        ("not well-formed XML", ok.replace("<variable ", "<variable xmlns:a=\"urn:test\" xmlns:b=\"urn:test\" a:id=\"1\" b:id=\"2\" ")),
+        ("missing `varName`", ok.replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Name\"")),
         ("no `variableSets` element", "<svg><variables/></svg>".to_string()),
         ("declares no variables", "<variableSets><variableSet><variables/></variableSet></variableSets>".to_string()),
         ("is declared twice", library(&[("Name", "textcontent"), ("Name", "textcontent")], &[])),
@@ -3469,12 +3711,12 @@ fn an_svg_without_readable_variable_data_opens_its_art() {
     // A variable without a `trait` is of unknown kind: the SVG leaves it out like the other kinds
     // that aren't text.
     let (o, warnings) = svg_opened(&untraited, "untraited.svg");
-    assert!(warnings.contains(&json!("variables that aren't text were left out: unknown (1)")), "{warnings:?}");
+    assert!(warnings.contains(&json!("variables that aren't text were left out: Unknown (1)")), "{warnings:?}");
     assert!(o.doc().unwrap().doc.variables.variables.is_empty());
     // The values of the other kinds aren't read, so one that Load Variable Library would refuse
     // leaves the text variables and their values as they open.
     let (o, warnings) = svg_opened(&relative, "relative.svg");
-    assert!(warnings.contains(&json!("variables that aren't text were left out: fileref (1)")), "{warnings:?}");
+    assert!(warnings.contains(&json!("variables that aren't text were left out: Linked File (1)")), "{warnings:?}");
     let vars = &o.doc().unwrap().doc.variables;
     assert_eq!(vars.variables.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), ["T"]);
     assert_eq!(vars.dataset("D").map(|d| d.values.clone()), Some([("T".to_string(), vectorcraft_doc::DataValue::Text("kept".into()))].into()));
@@ -3485,6 +3727,42 @@ fn an_svg_without_readable_variable_data_opens_its_art() {
     let d = &o.doc().unwrap().doc;
     assert!(d.variables.variables.is_empty());
     assert_eq!(vectorcraft_testkit::svg_shapes(&vectorcraft_svg::export(d, &Default::default())), 1, "the art opens");
+}
+
+/// The warning about an SVG's variables that aren't text names each kind once, in the order it
+/// first comes, with its count: Visibility, Linked File and Graph Data for the traits VectorCraft
+/// reads, Unknown for a variable without a `trait`, and any other `trait` as the file writes it, in
+/// backticks with each backtick in it doubled, so a `trait` that looks like a kind or a list entry
+/// stays one entry of its own.
+#[test]
+fn svg_variable_data_warning_names_each_kind_left_out() {
+    let variables = [
+        ("V1", Some("visibility")),
+        ("I1", Some("fileref")),
+        ("V2", Some("visibility")),
+        ("T", Some("textcontent")),
+        ("G1", Some("graphdata")),
+        ("U1", None),
+        ("X1", Some("unknown")),
+        ("X2", Some("a`b (1), c")),
+        ("X3", Some("Visibility")),
+        ("I2", Some("fileref")),
+        ("U2", None),
+    ];
+    let declared: String = variables
+        .iter()
+        .map(|(name, t)| match t {
+            Some(t) => format!("<variable varName=\"{name}\" trait=\"{t}\"/>"),
+            None => format!("<variable varName=\"{name}\"/>"),
+        })
+        .collect();
+    let svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\"><variableSets><variableSet><variables>{declared}</variables></variableSet></variableSets><rect x=\"1\" y=\"1\" width=\"5\" height=\"5\"/></svg>"
+    );
+    let (o, warnings) = svg_opened(&svg, "kinds.svg");
+    let warning = "variables that aren't text were left out: Visibility (2), Linked File (2), Graph Data (1), Unknown (2), `unknown` (1), `a``b (1), c` (1), `Visibility` (1)";
+    assert!(warnings.contains(&json!(warning)), "{warnings:?}");
+    assert_eq!(o.doc().unwrap().doc.variables.variables.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), ["T"]);
 }
 
 /// Five variables of three kinds, defined out of every order: `beta` (text, on type named Mike),
@@ -3543,6 +3821,17 @@ fn variable_sort_orders_the_list_by_each_column() {
         assert_eq!(listed_names(&mut s), reversed, "{by}, descending");
         assert_eq!(s.execute("variable.list", &json!({})).unwrap()["sort"], json!({"by": by, "descending": true}));
     }
+}
+
+#[test]
+fn variable_library_attributes_keep_their_namespace() {
+    let mut s = session();
+    let xml = library(&[("Name", "textcontent")], &[("A", &[("Name", &["x"])])])
+        .replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Other\" varName=\"Name\"");
+    let loaded = s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(loaded["variables"], json!(["Name"]));
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "x"}}));
 }
 
 /// The sort is panel state: it is not an undo step and does not count as a change to save, and

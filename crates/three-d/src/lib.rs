@@ -1,16 +1,20 @@
 //! Portable 3D effect geometry: Revolve, Extrude & Bevel, Inflate and Rotate. No windowing, GPU or
 //! document dependencies.
 //!
-//! Open profiles optionally close their circular ends with caps. Faces are projected and sorted back to front,
+//! Open profiles optionally close their circular ends with caps, and a partial sweep its cut sides. Faces are projected and sorted back to front,
 //! then flat or smoothly shaded with vector gradients. This preview uses a painter's algorithm, not a depth buffer:
 //! intersecting profiles can have ambiguous visibility and are not solid modelling inputs.
+//!
+//! [`fold`] finds the panels and hinges of a flat packaging blank from its fold lines.
 #![forbid(unsafe_code)]
 
+pub mod fold;
 mod solid;
 mod visibility;
 pub use solid::{
-    Bevel, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, PlanarFace, TOO_COMPLEX_SOLID, View, extrude, extrude_face_map, inflate,
-    inflate_each, inflate_together, plane, plane_face_map,
+    Bevel, BevelProfile, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, MapCell, MeshFace, PlanarFace, SolidSurface, SurfaceKind,
+    TOO_COMPLEX_SOLID, View, extrude, extrude_face_map, extrude_mesh_face, extrude_side_size, extrude_surfaces, inflate, inflate_each,
+    inflate_together, plane, plane_face_map, plane_mesh_face,
 };
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;
@@ -19,7 +23,9 @@ mod lights;
 pub use lights::{Light, Lights, MAX_LIGHTS};
 mod caps;
 mod mesh;
-pub use mesh::{Mesh, MeshedSolid, extrude_mesh, extrude_meshed, inflate_meshed, inflate_meshes, plane_mesh, revolve_mesh};
+pub use mesh::{
+    Mesh, MeshPart, MeshedSolid, extrude_mesh, extrude_meshed, inflate_meshed, inflate_meshes, plane_mesh, revolve_mesh, revolve_mesh_surface,
+};
 mod shadow;
 pub use shadow::{
     MAX_SHADOW_FACES, Shadow, ShadowCaster, ShadowPlane, ShadowPosition, SolidFaces, TOO_COMPLEX_SHADOW, extrude_shadowed, inflate_shadowed,
@@ -102,9 +108,14 @@ pub struct Revolve {
     pub shade: bool,
     /// Interpolate profile normals using vector gradients. Enabled by default.
     pub smooth_shading: bool,
-    /// Close circular endpoint rings of open profiles. Partial sweeps get sectors;
-    /// the angular cut sides are left open. Enabled by default.
+    /// Close circular endpoint rings of open profiles (sectors on a partial sweep), and the two
+    /// angular cut sides of a partial sweep: each is one flat face of the region between an open
+    /// profile and the axis, and of a closed profile's own area with its holes left open. Off, the
+    /// surface is hollow. Enabled by default.
     pub cap_ends: bool,
+    /// The profile's fill rule, which decides the holes the cut sides leave open in [`revolve`] and
+    /// [`revolve_shadowed`]. Nonzero by default.
+    pub fill_rule: FillRule,
     /// Samples for each curved profile segment, from [`revolve_curve_samples`] for the surfaces of
     /// one object. `None` plans them from the profile alone.
     pub curve_samples: Option<usize>,
@@ -140,6 +151,7 @@ impl Default for Revolve {
             shade: true,
             smooth_shading: true,
             cap_ends: true,
+            fill_rule: FillRule::NonZero,
             curve_samples: None,
             map_surface: false,
         }
@@ -380,7 +392,9 @@ pub struct Face {
     pub plane: Option<DepthPlane>,
 }
 
-/// Where a face of Revolve's swept side lies on the side surface, unrolled flat: x runs around the
+/// Where a face of a side surface lies on it unrolled flat, for the graphics mapped onto it. On
+/// Extrude & Bevel's side ([`Facet::surface`]) x runs along the outline and y from the front toward
+/// the back. On Revolve's swept side x runs around the
 /// axis and y along the profile, in points. x is the angle from the middle of the surface times the
 /// point's own distance from the axis, so a graphic keeps its size at every distance and wraps
 /// farther around the axis where the profile comes closer to it. y is the length along the profile
@@ -465,6 +479,15 @@ fn surface_span(sweep: f64, edge: Edge) -> f64 {
         Edge::Right if sweep > PI => (sweep - PI).min(PI),
         _ => sweep.min(PI),
     }
+}
+
+/// Where the four corners of the quad that the profile's edge from `a` to `b` sweeps in one step
+/// about `axis` lie on the side surface ([`SurfaceCell`]), in the quad's order (`a`, `b`, then `b`
+/// and `a` one step on): y is `along`, the surface y of each end of the edge, and x is the step's
+/// surface angle at each end, `angle`, times the corner's own distance from the axis.
+fn surface_corners(a: Point, b: Point, axis: f64, [va, vb]: [f64; 2], [t0, t1]: [f64; 2]) -> [Point; 4] {
+    let (ra, rb) = ((a.x - axis).abs(), (b.x - axis).abs());
+    [Point::new(t0 * ra, va), Point::new(t0 * rb, vb), Point::new(t1 * rb, vb), Point::new(t1 * ra, va)]
 }
 
 /// The surface y ([`SurfaceCell`]) of each end of each piece of a contour's profile `profile`
@@ -729,7 +752,7 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
 /// Evaluate a profile in document space. All subpaths share one axis from `bounds`.
 /// Invalid or excessively complex inputs return an error, never a partial surface.
 pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Face>, String> {
-    revolve_faces(path, FillRule::NonZero, bounds, options, None)
+    revolve_faces(path, options.fill_rule, bounds, options, None)
 }
 
 /// [`revolve`]'s faces as facets, back to front, for the classic surfaces: each keeps its
@@ -772,7 +795,10 @@ pub fn revolve_curve_samples<'a>(paths: impl IntoIterator<Item = &'a PathData>, 
     if lines.saturating_add(curves.saturating_mul(MIN_CURVE_SAMPLES)) > points {
         return Err(TOO_COMPLEX_PROFILE.into());
     }
-    let edges = (MAX_REVOLVE_FACES.saturating_sub(caps.saturating_mul(steps)) / per_edge).min(points);
+    // A partial sweep with caps closes each of its two cut sides with a face for each outline,
+    // planned here as one for each contour.
+    let cut_sides = if o.cap_ends && o.angle > 0.0 && o.angle < 360.0 { contours.saturating_mul(2) } else { 0 };
+    let edges = (MAX_REVOLVE_FACES.saturating_sub(caps.saturating_mul(steps)).saturating_sub(cut_sides) / per_edge).min(points);
     if curves == 0 {
         return if lines > edges { Err(TOO_COMPLEX_SURFACE.into()) } else { Ok(CURVE_SAMPLES) };
     }
@@ -966,7 +992,22 @@ fn revolve_face_limit(o: Revolve) -> usize {
 /// each turned out of the region `rule` fills.
 fn revolve_faces(path: &PathData, rule: FillRule, bounds: Rect, options: Revolve, mesh: Option<&mut Vec<solid::Face3>>) -> Result<Vec<Face>, String> {
     let draw = mesh.is_none();
-    revolve_sweep(path, rule, bounds, options, draw, mesh).map(|(faces, _)| faces)
+    revolve_sweep(path, rule, bounds, options, draw, mesh, None).map(|(faces, _)| faces)
+}
+
+/// The faces of Revolve's surface before projection, kept in `faces` as [`revolve_faces`] keeps
+/// them, and in `surface` where the corners of each face of the side lie on the side surface
+/// ([`SurfaceCell`]), as the drawn faces place them. Only a sweep with [`Revolve::map_surface`] lays
+/// out its side; only the longest contour of a compound profile has one.
+pub(crate) fn revolve_surface_faces(
+    path: &PathData,
+    rule: FillRule,
+    bounds: Rect,
+    options: Revolve,
+    faces: &mut Vec<solid::Face3>,
+    surface: &mut SurfaceQuads,
+) -> Result<(), String> {
+    revolve_sweep(path, rule, bounds, options, false, Some(faces), Some(surface)).map(|_| ())
 }
 
 #[cfg(test)]
@@ -1023,11 +1064,31 @@ fn cap_outward(profile: &[Point], index: usize, center_y: f64) -> Option<(Point,
 /// Keep for a mesh the faces of one contour's profile `s`, which runs round the region it sweeps as
 /// `turn` says (its holes' walls turned the other way): a quad for each edge at each step, then for
 /// each end in `caps` (0 the first, 1 the last) the disk, or for a sweep of less than a full turn
-/// the sector with its center on the axis. `keep` keeps one face with its outward normal; its
-/// error, or an edge with invalid coordinates, stops the faces.
-fn keep_profile(at: &Sweeping, s: &Swept, turn: f64, caps: &[usize], mut keep: impl FnMut(Vec<V3>, V3) -> Result<(), String>) -> Result<(), String> {
+/// the sector with its center on the axis. `keep` keeps one face with its outward normal and, for a
+/// quad of the side when `surface` lays it out, where each of its corners lies on the side surface
+/// ([`SurfaceCell`]); its error, or an edge with invalid coordinates, stops the faces.
+fn keep_profile(
+    at: &Sweeping,
+    s: &Swept,
+    turn: f64,
+    caps: &[usize],
+    surface: Option<SurfaceLayout<'_>>,
+    mut keep: impl FnMut(Vec<V3>, V3, Option<[Point; 4]>, MeshPart, solid::Attrs) -> Result<(), String>,
+) -> Result<(), String> {
     let (o, steps) = (at.o, at.steps);
-    for (pair, hole) in s.points.windows(2).zip(&s.holes) {
+    // For the mesh's texture, the side runs around the sweep (0 to 1 from its start) and along the
+    // profile (0 to 1 from its first point); each end cap spans its disk.
+    let mut profile = Vec::with_capacity(s.points.len());
+    let mut length = 0.0;
+    for (k, p) in s.points.iter().enumerate() {
+        if let Some(q) = k.checked_sub(1).and_then(|k| s.points.get(k)) {
+            length += q.distance(*p);
+        }
+        profile.push(length);
+    }
+    let along = |k: usize| if length > 1e-12 { (profile.get(k).copied().unwrap_or(0.0) / length).clamp(0.0, 1.0) } else { 0.5 };
+    let around = |j: usize| j as f64 / steps.max(1) as f64;
+    for (i, (pair, hole)) in s.points.windows(2).zip(&s.holes).enumerate() {
         let [a, b] = pair else { continue };
         let turn = if *hole { -turn } else { turn };
         if ![a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
@@ -1039,7 +1100,11 @@ fn keep_profile(at: &Sweeping, s: &Swept, turn: f64, caps: &[usize], mut keep: i
             // swept to the middle of the step.
             let (dr, dy) = ((b.x - a.x) * turn, (b.y - a.y) * turn);
             let (sin, cos) = (at.sweep * (j as f64 + 0.5) / steps as f64).sin_cos();
-            keep(vec![v0, v1, v2, v3], o.rotate(V3(dy * cos, -dr, dy * sin)))?;
+            // The corners on the side surface, as the drawn faces place them.
+            let uv = surface.map(|(along, angle)| surface_corners(*a, *b, at.axis, along.get(i).copied().unwrap_or_default(), angle(j)));
+            let (u0, u1, w0, w1) = (around(j), around(j + 1), along(i), along(i + 1));
+            let texture = solid::Attrs::Corners(vec![vec![([u0, w0], None), ([u0, w1], None), ([u1, w1], None), ([u1, w0], None)]]);
+            keep(vec![v0, v1, v2, v3], o.rotate(V3(dy * cos, -dr, dy * sin)), uv, MeshPart::Side, texture)?;
         }
     }
     for &index in caps {
@@ -1050,7 +1115,270 @@ fn keep_profile(at: &Sweeping, s: &Swept, turn: f64, caps: &[usize], mut keep: i
         } else {
             cap.insert(0, o.rotate(V3(0.0, end.y - at.center_y, 0.0)));
         }
-        keep(cap, o.rotate(V3(0.0, outward, 0.0)))?;
+        let r = (end.x - at.axis).abs();
+        let plane = solid::PlaneUv {
+            origin: o.rotate(V3(0.0, end.y - at.center_y, 0.0)),
+            x: o.rotate(V3(1.0, 0.0, 0.0)),
+            y: o.rotate(V3(0.0, 0.0, 1.0)),
+            area: Rect::new(-r, -r, r, r),
+        };
+        keep(cap, o.rotate(V3(0.0, outward, 0.0)), None, MeshPart::Cap, solid::Attrs::Planar(plane))?;
+    }
+    Ok(())
+}
+
+/// How a contour's side lies on the side surface ([`SurfaceCell`]): the surface y of each end of
+/// each piece of its profile ([`along_profile`]) and the surface angle at each end of a step.
+type SurfaceLayout<'a> = (&'a [[f64; 2]], &'a dyn Fn(usize) -> [f64; 2]);
+
+/// Where the corners of the faces of Revolve's mesh lie on its side surface: the index of a face
+/// among the faces kept, and the surface point of each of its four corners, in order.
+pub(crate) type SurfaceQuads = Vec<(usize, [Point; 4])>;
+
+/// Twice the signed area of the polygon `ring`.
+fn ring_area(ring: &[Point]) -> f64 {
+    ring.iter().zip(ring.iter().cycle().skip(1)).take(ring.len()).map(|(p, q)| p.x * q.y - q.x * p.y).sum()
+}
+
+/// The region a cut side of a partial sweep closes for one contour's profile `points`, in the
+/// profile's plane and in the order the profile runs: a closed contour's own area, or an open one
+/// closed along the axis at `axis` from its last end back to its first. An open contour whose ends
+/// meet is taken as closed. The region is given as the loops the nonzero rule fills, so one that
+/// crosses itself, such as a bow tie, gives a loop for each part it encloses. None when the contour
+/// encloses no area.
+fn cut_region(points: &[Point], closed: bool, axis: f64) -> Vec<Vec<Point>> {
+    let ring = cut_ring(points, closed, axis);
+    if ring.len() < 3 {
+        return vec![];
+    }
+    let crossed = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&ring, true)]);
+    // A loop thinner than 0.000001 pt is left out, as the solids' rings leave out such debris.
+    match vectorcraft_pathops::try_unite_all_with(&[(&crossed, FillRule::NonZero)], 1e-6) {
+        Ok(loops) => loops
+            .subpaths
+            .iter()
+            .map(|s| s.anchors.iter().map(|a| a.p).collect::<Vec<_>>())
+            .filter(|l| l.len() >= 3 && ring_area(l).abs() > 1e-10)
+            .collect(),
+        // Past the boolean's limits the region is kept as the profile draws it, as the solids'
+        // rings keep theirs.
+        Err(_) if ring_area(&ring).abs() > 1e-10 => vec![ring],
+        Err(_) => vec![],
+    }
+}
+
+/// The ring around the region of one contour's profile `points` ([`cut_region`]), without repeated
+/// points or a last point that repeats the first.
+fn cut_ring(points: &[Point], closed: bool, axis: f64) -> Vec<Point> {
+    let (Some(&first), Some(&last)) = (points.first(), points.last()) else { return vec![] };
+    let mut ring = points.to_vec();
+    if !closed && first.distance(last) > 1e-10 {
+        ring.extend([Point::new(axis, last.y), Point::new(axis, first.y)]);
+    }
+    ring.dedup_by(|a, b| a.distance(*b) <= 1e-10);
+    while ring.len() > 1 && ring.first().zip(ring.last()).is_some_and(|(a, b)| a.distance(*b) <= 1e-10) {
+        ring.pop();
+    }
+    ring
+}
+
+/// The steps at whose ends the two cut sides of a partial sweep lie, each with its outward normal
+/// before the view's rotation: the start faces back against the sweep, the end on along it.
+fn cut_sides(at: &Sweeping) -> [(usize, V3); 2] {
+    // The profile lies on one side of the axis: the sweep turns it forward on the left and back on
+    // the right.
+    let side = if at.o.edge == Edge::Left { 1.0 } else { -1.0 };
+    let (s, c) = at.sweep.sin_cos();
+    [(0, V3(0.0, 0.0, -side)), (at.steps, V3(-s * side, 0.0, c * side))]
+}
+
+/// Whether `p` lies inside the polygon `ring`.
+fn ring_contains(ring: &[Point], p: Point) -> bool {
+    let mut inside = false;
+    for (a, b) in ring.iter().zip(ring.iter().cycle().skip(1)).take(ring.len()) {
+        if (a.y > p.y) != (b.y > p.y) && p.x < a.x + (p.y - a.y) / (b.y - a.y) * (b.x - a.x) {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// The regions `regions` (turned as [`oriented`] gives them) grouped into the faces of one cut
+/// side: each outline, counterclockwise, first, with the holes, clockwise, that the smallest outline
+/// around them holds.
+fn cut_groups(regions: &[Vec<Point>]) -> Vec<Vec<&Vec<Point>>> {
+    let bounds = |r: &[Point]| r.iter().fold(Rect::new(f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY), |b, p| b.union_pt(*p));
+    // Each outline with its bounds and area, and the holes it holds.
+    let mut groups: Vec<(Rect, f64, Vec<&Vec<Point>>)> =
+        regions.iter().filter(|r| ring_area(r) > 0.0).map(|r| (bounds(r), ring_area(r), vec![r])).collect();
+    for hole in regions.iter().filter(|r| ring_area(r) < 0.0) {
+        let Some(&p) = hole.first() else { continue };
+        let owner =
+            groups.iter_mut().filter(|(b, _, g)| b.contains(p) && g.first().is_some_and(|o| ring_contains(o, p))).min_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((_, _, g)) = owner {
+            g.push(hole);
+        }
+    }
+    groups.into_iter().map(|(_, _, g)| g).collect()
+}
+
+/// One face of the cut side of a partial sweep at the end of step `step`: an outline among the
+/// regions ([`cut_groups`]) and its holes, turned there and drawn as one flat, evenly shaded face,
+/// filled with the nonzero rule, so its holes stay open. The outline gives the face's shading,
+/// depth and polygon. `None` when it is seen edge on.
+fn cut_face(at: &Sweeping, regions: &[&Vec<Point>], step: usize, eye: Option<f64>, light: V3) -> Result<Option<Face>, String> {
+    let origin = Point::new(at.axis, at.center_y);
+    let turned: Vec<Vec<V3>> = regions.iter().map(|r| r.iter().map(|p| at.vertex(*p, step)).collect()).collect();
+    let Some(vertices) = turned.first() else { return Ok(None) };
+    let Some(mut face) = project_face(vertices, None, at.o, origin, eye, light)? else { return Ok(None) };
+    let project = |v: &V3| {
+        let factor = perspective_scale(eye, v.2);
+        Point::new(origin.x + v.0 * factor, origin.y + v.1 * factor)
+    };
+    let drawn: Vec<Vec<Point>> = turned.iter().map(|c| c.iter().map(project).collect()).collect();
+    if drawn.iter().flatten().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
+        return Err("Revolve projection is not finite".into());
+    }
+    face.outline = Some(PathData::new(drawn.iter().map(|c| vectorcraft_geom::SubPath::polyline(c, true)).collect()));
+    Ok(Some(face))
+}
+
+/// Both cut sides of a partial sweep drawn, a face for each outline among `regions` with its holes
+/// ([`cut_face`]), those seen edge on left out; none for no regions.
+fn cut_faces(at: &Sweeping, regions: &[Vec<Point>], eye: Option<f64>, light: V3) -> Result<Vec<Face>, String> {
+    let groups = cut_groups(regions);
+    let mut out = vec![];
+    for (step, _) in cut_sides(at) {
+        for group in &groups {
+            out.extend(cut_face(at, group, step, eye, light)?);
+        }
+    }
+    Ok(out)
+}
+
+/// The profiles whose regions the cut sides of a partial sweep close, contour by contour, each with
+/// whether its contour is closed: those of the profile drawn, and those of the profile kept for a
+/// mesh. Each profile is added as its faces are swept, with any anchor [`ring_cut`] adds, so the
+/// cut sides have a corner at every corner of the edges they share with the side.
+struct CutRegions {
+    /// A partial sweep with caps: there are cut sides to close.
+    on: bool,
+    drawn: Vec<(Vec<Point>, bool)>,
+    kept: Vec<(Vec<Point>, bool)>,
+}
+
+/// The loops of one contour's region turned so the region runs counterclockwise in the profile's
+/// plane: filled with the nonzero rule, it fills. Its largest loop decides, and loops inside it that
+/// run the other way stay holes of it.
+fn outlined(mut loops: Vec<Vec<Point>>) -> Vec<Vec<Point>> {
+    let largest = loops.iter().map(|l| ring_area(l)).max_by(|a, b| a.abs().total_cmp(&b.abs())).unwrap_or_default();
+    if largest < 0.0 {
+        loops.iter_mut().for_each(|l| l.reverse());
+    }
+    loops
+}
+
+/// The regions the cut sides of a partial sweep close for the profiles `contours`, as loops that
+/// the nonzero rule fills: outlines run counterclockwise in the profile's plane and holes clockwise.
+/// Each open contour closes its own region ([`cut_region`]). The closed contours together close
+/// what `rule` fills of them, so a contour that walls a hole leaves it open, and the parts where
+/// contours overlap are filled or left open as `rule` fills them; a closed contour alone closes its
+/// own region. Every corner of the closed contours' profiles on the region's edge stays a corner
+/// of it. An error when the closed contours pass the limits of combining them.
+fn cut_loops(contours: &[(Vec<Point>, bool)], rule: FillRule, axis: f64) -> Result<Vec<Vec<Point>>, String> {
+    let mut out = vec![];
+    let mut rings = vec![];
+    for (points, closed) in contours {
+        if *closed {
+            rings.push(points);
+        } else {
+            out.extend(outlined(cut_region(points, false, axis)));
+        }
+    }
+    match rings.as_slice() {
+        [] => {}
+        [one] => out.extend(outlined(cut_region(one, true, axis))),
+        _ => {
+            let subpaths =
+                rings.iter().map(|r| cut_ring(r, true, axis)).filter(|r| r.len() >= 3).map(|r| vectorcraft_geom::SubPath::polyline(&r, true));
+            let path = PathData::new(subpaths.collect());
+            let filled = vectorcraft_pathops::try_unite_all_with(&[(&path, rule)], 1e-6).map_err(|_| TOO_COMPLEX_PROFILE.to_string())?;
+            // The union gives outlines counterclockwise and holes clockwise. A loop thinner than
+            // 0.000001 pt is left out, as in [`cut_region`].
+            out.extend(
+                filled
+                    .subpaths
+                    .iter()
+                    .map(|s| s.anchors.iter().map(|a| a.p).collect::<Vec<_>>())
+                    .filter(|l| l.len() >= 3 && ring_area(l).abs() > 1e-10),
+            );
+        }
+    }
+    Ok(out)
+}
+
+impl CutRegions {
+    /// The regions of a sweep with sanitized options `o`, none yet.
+    fn new(o: Revolve) -> Self {
+        Self { on: o.cap_ends && o.angle > 0.0 && o.angle < 360.0, drawn: vec![], kept: vec![] }
+    }
+
+    /// Add a contour's profile `s`, drawn or kept for a mesh as `kept` says.
+    fn add(&mut self, s: &Swept, closed: bool, kept: bool) {
+        if self.on {
+            let to = if kept { &mut self.kept } else { &mut self.drawn };
+            to.push((s.points.clone(), closed));
+        }
+    }
+
+    /// Close the cut sides of sweep `at` about `axis`, the holes `rule` leaves left open: keep them
+    /// for the mesh, if any, of `kept` (whether faces are drawn, the mesh, and the error that
+    /// stopped it, as [`lose_mesh`] takes them) within `face_limit` faces, and give them drawn
+    /// ([`cut_faces`]).
+    fn close(
+        &self,
+        at: &Sweeping,
+        (rule, axis): (FillRule, f64),
+        kept: (bool, &mut Option<&mut Vec<solid::Face3>>, &mut Option<String>),
+        face_limit: usize,
+        eye: Option<f64>,
+        light: V3,
+    ) -> Result<Vec<Face>, String> {
+        let (draw, mesh, lost) = kept;
+        let result = match mesh.as_deref_mut() {
+            Some(m) => cut_loops(&self.kept, rule, axis).and_then(|loops| {
+                keep_cuts(at, &loops, |contours, normal, attrs| {
+                    m.push(solid::Face3 { contours, normal, part: MeshPart::Cut, attrs });
+                    if m.len() > face_limit { Err(TOO_COMPLEX_SURFACE.to_string()) } else { Ok(()) }
+                })
+            }),
+            None => Ok(()),
+        };
+        if let Err(e) = result {
+            lose_mesh(draw, mesh, lost, e)?;
+        }
+        if !draw {
+            return Ok(vec![]);
+        }
+        cut_faces(at, &cut_loops(&self.drawn, rule, axis)?, eye, light)
+    }
+}
+
+/// Keep for a mesh the two cut sides of a partial sweep: the loops `loops` of their regions
+/// ([`cut_loops`]) turned to each side. Outlines run one way round and holes the other, so the mesh
+/// leaves the holes open. `keep` keeps one face with its outward normal and where its corners lie
+/// on its texture: each corner's profile point in the bounds of the loops.
+fn keep_cuts(at: &Sweeping, loops: &[Vec<Point>], mut keep: impl FnMut(Vec<Vec<V3>>, V3, solid::Attrs) -> Result<(), String>) -> Result<(), String> {
+    if loops.is_empty() {
+        return Ok(());
+    }
+    let area = solid::rings_bounds(loops.iter().map(Vec::as_slice));
+    for (step, normal) in cut_sides(at) {
+        let contours = loops.iter().map(|r| r.iter().map(|p| at.vertex(*p, step)).collect()).collect();
+        // A profile point goes to view space by one affine map at each step.
+        let origin = at.vertex(Point::ZERO, step);
+        let (x, y) = (at.vertex(Point::new(1.0, 0.0), step).sub(origin), at.vertex(Point::new(0.0, 1.0), step).sub(origin));
+        keep(contours, at.o.rotate(normal), solid::Attrs::Planar(solid::PlaneUv { origin, x, y, area }))?;
     }
     Ok(())
 }
@@ -1068,7 +1396,9 @@ fn lose_mesh(draw: bool, mesh: &mut Option<&mut Vec<solid::Face3>>, lost: &mut O
 /// [`revolve`]'s faces when `draw`, and with `mesh` the surface's faces before projection kept
 /// there from the same sweep, each turned out of the region `rule` fills. While faces are drawn, an
 /// error keeping faces for the mesh stops only the mesh: the error comes back beside the faces
-/// drawn, and `mesh` keeps no more faces. Without `draw` that error is the result.
+/// drawn, and `mesh` keeps no more faces. Without `draw` that error is the result. With `surface`,
+/// the faces kept of the side of the contour that carries the graphics are listed there with their
+/// corners on the side surface ([`revolve_surface_faces`]).
 fn revolve_sweep(
     path: &PathData,
     rule: FillRule,
@@ -1076,6 +1406,7 @@ fn revolve_sweep(
     options: Revolve,
     draw: bool,
     mut mesh: Option<&mut Vec<solid::Face3>>,
+    mut surface: Option<&mut SurfaceQuads>,
 ) -> Result<(Vec<Face>, Option<String>), String> {
     #[cfg(test)]
     REVOLVED.with(|n| n.set(n.get() + 1));
@@ -1096,8 +1427,8 @@ fn revolve_sweep(
     }
     let face_limit = revolve_face_limit(o);
     // A face kept for a mesh: its normal follows from its corners.
-    let keep = |mesh: &mut Vec<solid::Face3>, face: Vec<V3>, normal: V3| {
-        mesh.push((vec![face], normal));
+    let keep = |mesh: &mut Vec<solid::Face3>, face: Vec<V3>, normal: V3, part: MeshPart, attrs: solid::Attrs| {
+        mesh.push(solid::Face3 { contours: vec![face], normal, part, attrs });
         if mesh.len() > face_limit { Err(TOO_COMPLEX_SURFACE.to_string()) } else { Ok(()) }
     };
     if ![bounds.x0, bounds.y0, bounds.x1, bounds.y1].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
@@ -1152,6 +1483,9 @@ fn revolve_sweep(
     // its edges are cut into.
     let (mut count, mut kept_count) = (0, 0);
     let mut curve_budget = 0;
+    // With caps, a partial sweep closes its two cut sides: the regions of every contour drawn, and
+    // those kept for the mesh with whether each walls a hole.
+    let mut cuts = CutRegions::new(o);
     for (contour, sp) in path.subpaths.iter().enumerate() {
         let (mut drawn, mut kept) = (Swept::default(), Swept::default());
         if let Some(first) = sp.anchors.first() {
@@ -1274,8 +1608,17 @@ fn revolve_sweep(
         };
         if let Some(m) = mesh.as_deref_mut() {
             let turn = prepare(&mut kept);
+            cuts.add(&kept, sp.closed, true);
             let caps: Vec<usize> = rings.iter().enumerate().filter_map(|(i, r)| r.as_ref().map(|_| i)).collect();
-            let kept = keep_profile(&at, &kept, turn, &caps, |face, normal| keep(m, face, normal));
+            let along = (surface.is_some() && surface_contour == Some(contour)).then(|| along_profile(&kept.points, axis, sp.closed));
+            let layout = along.as_deref().map(|along| (along, &surface_angle as &dyn Fn(usize) -> [f64; 2]));
+            let kept = keep_profile(&at, &kept, turn, &caps, layout, |face, normal, uv, part, attrs| {
+                keep(m, face, normal, part, attrs)?;
+                if let (Some(uv), Some(s)) = (uv, surface.as_deref_mut()) {
+                    s.push((m.len() - 1, uv));
+                }
+                Ok(())
+            });
             if let Err(e) = kept {
                 lose_mesh(draw, &mut mesh, &mut lost, e)?;
             }
@@ -1284,12 +1627,13 @@ fn revolve_sweep(
             continue;
         }
         let turn = prepare(&mut drawn);
+        cuts.add(&drawn, sp.closed, false);
         let profile = &drawn.points;
         let along = along_profile(profile, axis, sp.closed);
         for (i, ((pair, [ta, tb]), hole)) in profile.windows(2).zip(drawn.tangents.iter().copied()).zip(drawn.holes.iter().copied()).enumerate() {
             let [a, b] = pair else { continue };
             let turn = if hole { -turn } else { turn };
-            let [va, vb] = along.get(i).copied().unwrap_or_default();
+            let ends = along.get(i).copied().unwrap_or_default();
             if ![a.x, a.y, b.x, b.y].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
                 return Err("Revolve profile contains invalid coordinates".into());
             }
@@ -1299,10 +1643,7 @@ fn revolve_sweep(
                 let last = (i + 2 == profile.len()).then(|| rings.last().and_then(Option::as_ref).and_then(|r| r.arcs.get(j))).flatten();
                 // Where the corners lie on the unrolled side surface, and whether the face shows
                 // its outside: the edge's outward normal swept to the middle of the step.
-                // x is the angle times the corner's own distance from the axis.
-                let [t0, t1] = surface_angle(j);
-                let (ra, rb) = ((a.x - axis).abs(), (b.x - axis).abs());
-                let corners = [Point::new(t0 * ra, va), Point::new(t0 * rb, vb), Point::new(t1 * rb, vb), Point::new(t1 * ra, va)];
+                let corners = surface_corners(*a, *b, axis, ends, surface_angle(j));
                 let on_surface = surface_contour == Some(contour);
                 let outward = {
                     let (dr, dy) = ((b.x - a.x) * turn, (b.y - a.y) * turn);
@@ -1344,6 +1685,7 @@ fn revolve_sweep(
             }
         }
     }
+    cuts.close(&at, (rule, axis), (draw, &mut mesh, &mut lost), face_limit, eye, light)?.into_iter().try_for_each(|face| emit(Some(face), 1))?;
     faces.sort_by(|a, b| a.depth.total_cmp(&b.depth));
     Ok((faces, lost))
 }

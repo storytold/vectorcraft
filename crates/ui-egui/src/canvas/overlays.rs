@@ -1,558 +1,423 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+//! The tools' overlay list on the canvas: the marks a tool draws (`ToolMarks`), the marquees, the settled
+//! shared outlines and the Distance Guides (framework canvas controls), and the hover tips (`HoverTips`).
+//!
+//! `show` runs once per pass from `tool_adapter::run`, after the tool host took the pass's input, so the list
+//! it shows is the one the tool just updated. None of these controls takes a press.
 
-use egui::Mesh;
-use egui::epaint::{TessellationOptions, Tessellator};
+use craft::behavior::{CanvasView, HitLevel, HitPriority, HitShape, PartKey, Sense};
+use craft::draw::ui::{HandleStyle, PathOptionsSettings};
+use craft::ui::canvas::{CanvasSpace, canvas_space, hud};
+use craft::ui::canvas_controls::{Marquee, MarqueeLook, Measure, SelectionOutline, SmartGuides, path_runs};
+use craft::ui::contract::{Common, Component, Cx, Input, MeasureCx, PaintUi, PartsCx, Role, Show as _};
+use craft::ui::primitives::{Dashes, DataWidth, Draw, PaintShape, StrokeWidth, TextRun};
+use craft::ui::runtime::env::Label;
+use craft::ui::style::{ComponentStyle, DataColor, Metrics, StyleColor, StyleCx, TypeRole, UiTokens};
+use egui::{Color32, CornerRadius, Pos2, Rect as ScreenRect, Response, Vec2};
+use vectorcraft_tools::Overlay;
 
 use super::artboards::names_an_artboard;
-use super::input::marquee_through;
-use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors};
-use super::selection_marks::{MarkOptions, SelectionMarks};
-use super::{BezPath, Color32, CornerRadius, NodeKind, Overlay, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
+use super::{VectorcraftApp, tool_adapter};
 
-pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    let Some(h) = app.hover_doc else { return };
-    // Smart Guides › Object Highlighting: a Smart Guides display option, so it needs them on and Snap to Grid and Pixel Preview off.
-    if !app.ui.view.smart_guides || !app.session.prefs.object_highlighting || app.ui.view.snap_to_grid || app.ui.view.pixel_preview {
-        return;
+/// The part key of a hover tip's disc.
+const TIP: PartKey = PartKey::new("tip");
+/// The radius of a gradient stop's chip, of its rim and of its selection ring, in points: a chip keeps one size at
+/// every zoom.
+const CHIP: f32 = 5.0;
+const CHIP_RIM: f32 = 6.0;
+const CHIP_RING: f32 = 8.0;
+/// Where the Selection tool's rule badge sits from the pointer, in points.
+const BADGE_OFFSET: Vec2 = Vec2::new(14.0, 14.0);
+
+/// Shows `overlays` (the session's list, read after the tool host ran) over `extra` (the thread and gap overlays),
+/// on the canvas of `space`. The extras lie under the tool's own marks.
+pub(super) fn show(app: &VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSpace, overlays: &[Overlay], extra: &[Overlay]) {
+    let rect = space.view.rect;
+    let options = super::selection::path_options(&app.session.prefs);
+    let quiet = tool_adapter::in_gesture(app, ui.ctx()) || tool_adapter::view_tool_held(app);
+    let lists = [extra, overlays];
+    for (i, o) in extra.iter().chain(overlays).enumerate() {
+        ui.push_id(("tool-control", i), |ui| show_control(ui, rect, o));
     }
-    if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
-        return;
+    for (i, list) in lists.into_iter().enumerate() {
+        ui.push_id(("tool-marks", i), |ui| {
+            ToolMarks { common: Common::new(), overlays: list, options }.show_at(ui, rect);
+        });
     }
-    let Some(st) = app.session.active() else { return };
-    let Some(hit) = selection_hit_at(app, h, xf.zoom) else { return };
-    let id = if app.session.tool_id() == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
-    if st.selection.contains(id) {
-        return;
-    }
-    if let Some(n) = st.doc.node(id).filter(|n| !too_many_anchors([*n])) {
-        let color = c32(st.doc.layer_color(id));
-        stroke_path(p, &node_outline(n, &st.doc.symbol_boxes()), xf, Stroke::new(1.5, color));
-    }
+    ui.push_id("tool-tips", |ui| {
+        HoverTips { common: Common::new(), lists, quiet }.show_at(ui, rect);
+    });
 }
 
-/// Draw Inside (Shift+D): while the mode lasts, a dotted open rectangle round the corners of the
-/// object drawn into, selected or not (#4319).
-pub(super) fn draw_inside_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    if app.session.draw_mode != vectorcraft_engine::DrawMode::Inside {
-        return;
-    }
-    let (Some(id), Some(st)) = (app.session.draw_inside, app.session.active()) else { return };
-    let Some(bounds) = st.doc.node(id).and_then(|n| n.visual_bounds()) else { return };
-    // A few pixels outside the object, clear of its stroke.
-    let pad = 4.0 / xf.zoom;
-    let [a, b, c, d] = xf.quad(bounds.inflate(pad, pad))[..] else { return };
-    let stroke = Stroke::new(1.0, c32(st.doc.layer_color(id)));
-    for (corner, sides) in [(a, [b, d]), (b, [c, a]), (c, [d, b]), (d, [a, c])] {
-        for next in sides {
-            // Each arm runs a third of its side at most, so the rectangle stays open.
-            let arm = ((next - corner).length() / 3.0).min(16.0);
-            p.extend(Shape::dashed_line(&[corner, corner + (next - corner).normalized() * arm], stroke, 3.0, 2.0));
+/// The framework control `o` stands for, if it is one: a marquee, a settled outline or a distance.
+fn show_control(ui: &mut egui::Ui, rect: ScreenRect, o: &Overlay) {
+    match o {
+        Overlay::Marquee(r) => {
+            Marquee::rect(name(false), *r).look(MarqueeLook::Ants).show_at(ui, rect);
         }
-    }
-}
-
-/// Selected anchors are drawn slightly deeper than the layer colour (#4f80ff → #3d82ff for Layer 1).
-pub(super) fn selected_anchor(c: Color32) -> Color32 {
-    if c == Color32::from_rgb(0x4f, 0x80, 0xff) { Color32::from_rgb(0x3d, 0x82, 0xff) } else { c }
-}
-
-/// How anchors and handles look: Selection & Anchor Display › Size and Handles.
-#[derive(Clone, Copy)]
-pub(super) struct HandleLook<'a> {
-    /// Points bigger (or smaller) than the default size 3, per step of Size (1–7).
-    pub(super) grow: f32,
-    /// `solid` (the default), `hollow` or `large`.
-    pub(super) style: &'a str,
-}
-
-impl<'a> HandleLook<'a> {
-    pub(super) fn of(prefs: &'a vectorcraft_engine::Prefs) -> Self {
-        Self { grow: prefs.anchor_size.clamp(1, 7) as f32 - 3.0, style: &prefs.handle_style }
-    }
-
-    /// A direction handle's end at `c`: a solid dot, a hollow one or a larger solid one.
-    pub(super) fn shapes(self, c: Pos2, color: Color32) -> [Option<Shape>; 2] {
-        let r = 2.75 + self.grow / 2.0;
-        let hollow = self.style == "hollow";
-        let dot = Shape::circle_filled(c, if self.style == "large" { r + 1.5 } else { r }, if hollow { Color32::WHITE } else { color });
-        [Some(dot), hollow.then(|| Shape::circle_stroke(c, r, Stroke::new(1.0, color)))]
-    }
-
-    pub(super) fn draw(self, p: &egui::Painter, c: Pos2, color: Color32) {
-        for shape in self.shapes(c, color).into_iter().flatten() {
-            p.add(shape);
+        Overlay::SelectionMarquee { rect: r, enclosed, .. } => {
+            let look = if *enclosed { MarqueeLook::Contrast(DataColor::new(Color32::WHITE)) } else { MarqueeLook::Ants };
+            Marquee::rect(name(*enclosed), *r).look(look).show_at(ui, rect);
         }
-    }
-}
-
-/// How many points bigger than the other selected anchors the key anchor's square is drawn.
-const KEY_ANCHOR_GROW: f32 = 2.0;
-/// The gap between the key anchor's square and the frame drawn around it.
-const KEY_ANCHOR_GAP: f32 = 2.0;
-
-pub(super) fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
-    let r = egui::Rect::from_center_size(c, vec2(size, size));
-    if filled {
-        p.rect_filled(r, 0.0, color);
-    } else {
-        p.rect_filled(r, 0.0, Color32::WHITE);
-        p.rect_stroke(r, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);
-    }
-}
-
-pub(super) fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
-    p.circle(c, size / 2.0, if filled { color } else { Color32::WHITE }, Stroke::new(1.0, color));
-}
-
-/// How the current tool and preferences draw the selection's marks.
-pub(super) fn mark_options(app: &VectorcraftApp, curve_points_from_tool: bool) -> MarkOptions<'_> {
-    let tool = app.session.tool_id();
-    MarkOptions {
-        direct: vectorcraft_tools::catalog::edits_anchors(tool),
-        curvature: tool == "curvature",
-        curve_points_from_tool,
-        look: HandleLook::of(&app.session.prefs),
-        all_handles: app.session.prefs.show_handles_multiple_anchors,
-    }
-}
-
-/// Draw selection marks and widgets, keeping the box but hiding dot marks during Halftone Preview.
-pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool, marks: &mut SelectionMarks) {
-    // The Selection tool's bounding box (rotated with the objects after a rotation), also shown by
-    // the shape tools that keep a shape just drawn ready to adjust while they draw none (#5477). It
-    // hides while a drag moves, rotates or resizes the selection, so only the art is seen going with
-    // the pointer (#712). A handle resize keeps it at the changing bounds (#3526). With General ›
-    // Show Bounding Box While Moving and Drawing on, a move draws it where the drag has moved the
-    // selection, and a shape tool draws it around the shape being drawn.
-    // With Real-time Drawing off the art waits for the release of a move drag. With the preference
-    // off, the box of a Selection tool move then moves with the pointer instead.
-    let resizing = app.session.tool_resizing();
-    let move_box = app.session.move_drag_box();
-    let drawing_boxed = app.session.draws_new_shape_box();
-    let follows = resizing || move_box.is_some() || drawing_boxed;
-    let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
-    // A shape tool drawing a shape shows none of its widgets; adjusting a widget, it shows the widgets.
-    let drawing = shape_tool && app.session.tool_busy() && !app.session.tool_transforming();
-    // Cmd held lends the Selection tool to a press (Direct Selection's included, #3901): its box
-    // shows while the key is down, where its handles take that press.
-    let held = super::drag::mods(p.ctx().input(|i| i.modifiers), false);
-    let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
-    let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && (!app.session.tool_busy() || follows)))
-        && (follows || !app.session.tool_transforming())
-        && app.ui.view.bounding_box;
-    let selected_whole = app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
-    // With Real-time Drawing off the document stays at the drag's snapshot, so a resize or a shape
-    // being drawn measures the box from the pending preview. A shape being drawn shows no box until
-    // a preview has made it (never the box of the selection from before the drag, which a failed
-    // preview also leaves). A move offsets the box measured at the drag's start. Otherwise each
-    // step's revision measures it once (`selection_box`).
-    let deferred = if show_box && (resizing || drawing_boxed) { app.session.deferred_transform_box() } else { None };
-    let (bbox, deferred_color) = if !show_box {
-        (None, None)
-    } else if let Some((b, color)) = deferred {
-        (Some(b), Some(color))
-    } else if !selected_whole || (drawing_boxed && app.session.interaction_unapplied()) {
-        (None, None)
-    } else if move_box.is_some() {
-        (move_box, None)
-    } else {
-        (app.selection_box(), None)
-    };
-    let st = app.session.active();
-    let show_marks = !crate::dialogs::halftone::previewing(app);
-    let big = show_marks && st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
-    let big_bounds = if big { app.selection_bounds() } else { None };
-    let app = &*app;
-    let Some(st) = app.session.active() else { return };
-    let symbols = st.doc.symbol_boxes();
-    let tool = app.session.tool_id();
-    let direct = vectorcraft_tools::catalog::edits_anchors(tool);
-    // Selection & Anchor Display › Size (1–7, 3 the default): anchors, handles and the bounding
-    // box's handles a point bigger or smaller per step.
-    let options = mark_options(app, curve_points_from_tool);
-    let grow = options.look.grow;
-    let anchor = |direct: bool| grow + if direct { 5.0 } else { 4.0 };
-    // The temporary halftone selects its dots; their marks obscure the art (#6369).
-    if show_marks {
-        // Too many paths to outline: the selection's bounds stand for them.
-        if let Some((b, id)) = big_bounds.zip(st.selection.objects.first()) {
-            stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(1.0, c32(st.doc.layer_color(*id))));
+        Overlay::SharedPath { path, color, width, dash } => {
+            let paths = std::slice::from_ref(&**path);
+            // The outline has no width prop, so `width` only keys the revision.
+            let revision = super::selection::outline_revision(paths, None, (*color, width.to_bits(), dash.map(f64::to_bits)));
+            let outline = if dash.is_some() { SelectionOutline::dashed(Label::Empty, paths) } else { SelectionOutline::solid(Label::Empty, paths) };
+            outline.color(data(*color)).revision(revision).show_at(ui, rect);
         }
-        // The key object (Align to Key Object): its outline drawn thicker, or its bounds when it has
-        // too many paths to outline.
-        let key = st.selection.key.and_then(|k| Some((k, st.doc.node(k)?)));
-        let (key_bounds, key_outline) = match key {
-            Some((k, n)) if too_many_anchors([n]) => (Some((k, n)), None),
-            Some((k, _)) => (None, Some(k)),
-            None => (None, None),
-        };
-        if let Some((k, n)) = key_bounds
-            && let Some(b) = n.geometric_bounds_with(&symbols)
-        {
-            stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
-        }
-        marks.paint(st, p, xf, &options, key_outline, if big { &[] } else { &st.selection.objects });
-        // The key anchor (Align to Key Anchor): a filled square bigger than the other anchors, in
-        // a frame as thick as a key object's outline.
-        if let Some(((k, _), q)) = st.selection.key_anchor.zip(st.selection.key_anchor_point(&st.doc)) {
-            let (c, color, size) = (xf.to_screen(q), c32(st.doc.layer_color(k)), anchor(direct) + KEY_ANCHOR_GROW);
-            anchor_square(p, c, color, true, size);
-            let frame = egui::Rect::from_center_size(c, vec2(size + 2.0 * KEY_ANCHOR_GAP, size + 2.0 * KEY_ANCHOR_GAP));
-            p.rect_stroke(frame, 0.0, Stroke::new(KEY_OUTLINE, color), StrokeKind::Outside);
-        }
-    }
-    // The spine of each selected blend (or of the blend a selected key object belongs to).
-    let mut spines = vec![];
-    for id in &st.selection.objects {
-        let is_blend = |b: &vectorcraft_doc::NodeId| st.doc.node(*b).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. }));
-        let Some(b) = [Some(*id), st.doc.parent_of(*id)].into_iter().flatten().find(is_blend).filter(|b| !spines.contains(b)) else { continue };
-        spines.push(b);
-        let Some(NodeKind::Blend { children, spec }) = st.doc.node(b).map(|n| &n.kind) else { continue };
-        let Some((path, _)) = vectorcraft_doc::live::blend_spine(children, spec) else { continue };
-        let color = c32(st.doc.layer_color(b));
-        stroke_path(p, &path.to_bezpath(), xf, Stroke::new(1.0, color));
-        for (_, _, a) in path.anchors() {
-            anchor_square(p, xf.to_screen(a.p), color, false, anchor(direct));
-        }
-    }
-    // Live Corners widgets (Selection and the shape tools on a live rectangle or polygon, Direct
-    // Selection on any path).
-    if (matches!(tool, "selection" | "directSelection") || (shape_tool && !drawing))
-        && let Some(w) = vectorcraft_tools::corners::CornerWidgets::showing(
-            &st.doc,
-            &st.selection,
-            xf.zoom,
-            tool == "directSelection",
-            app.ui.view.corner_widgets,
-            app.session.prefs.hide_corner_widget_above,
-        )
-    {
-        for (id, q) in w.visible_on() {
-            let (sp, color) = (xf.to_screen(q), c32(st.doc.layer_color(id)));
-            p.circle_filled(sp, 3.0, Color32::WHITE);
-            p.circle_stroke(sp, 3.0, Stroke::new(1.0, color));
-            p.circle_filled(sp, 1.0, color);
-        }
-    }
-    // Bounding box with handles (Selection tool).
-    // The layer color of the box's first object: with Real-time Drawing off, the shape being drawn
-    // is only in the pending preview, which gives its color.
-    let box_color = deferred_color.or_else(|| st.selection.objects.first().map(|id| st.doc.layer_color(*id)));
-    if let Some((b, color)) = bbox.zip(box_color) {
-        let color = c32(color);
-        p.add(Shape::closed_line(b.corners().iter().map(|q| xf.to_screen(*q)).collect(), Stroke::new(1.0, color)));
-        for h in vectorcraft_tools::bbox::Handle::ALL {
-            let c = xf.to_screen(b.to_doc() * h.pos(b.rect));
-            let hr = egui::Rect::from_center_size(c, vec2(6.0 + grow, 6.0 + grow));
-            p.rect_filled(hr, 0.0, Color32::WHITE);
-            p.rect_stroke(hr, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);
-        }
-        // The type widget beside it: hollow on point type, filled on area type. A shape being drawn
-        // has none (with Real-time Drawing off, the selection is still the one before the drag).
-        if !drawing_boxed && let Some(w) = vectorcraft_tools::typewidget::TypeWidget::of(&st.doc, &st.selection, &b, xf.zoom) {
-            let (c, r) = (xf.to_screen(w.at), vectorcraft_tools::typewidget::RADIUS_PX);
-            p.circle_filled(c, r, if w.area { color } else { Color32::WHITE });
-            p.circle_stroke(c, r, Stroke::new(1.0, color));
-        }
-    }
-    // Pie widgets (Selection tool, with View › Show Bounding Box, on live ellipses): each joined
-    // by a line to the outline's point at its angle. They stay while one is dragged.
-    if (tool == "selection" || (shape_tool && !drawing)) && app.ui.view.bounding_box {
-        for w in vectorcraft_tools::pie::PieWidget::of(&st.doc, &st.selection, xf.zoom) {
-            let (on, c, r, color) = (xf.to_screen(w.on), xf.to_screen(w.at), vectorcraft_tools::pie::RADIUS_PX, c32(st.doc.layer_color(w.id)));
-            p.line_segment([on, c], Stroke::new(1.0, color));
-            p.circle_filled(c, r, Color32::WHITE);
-            p.circle_stroke(c, r, Stroke::new(1.0, color));
-        }
-    }
-    rotate_all_widget(p, xf, tool, &st.doc, &st.selection);
-}
-
-/// The Appearance and Easing widgets of one selected blend (Selection and Blend tools), each joined
-/// by a line to the spine's halfway point: the Appearance widget hollow above it, the Easing widget
-/// filled below it. For a blend without a spine the line goes to the halfway point of the straight
-/// lines between its key centers, which are not drawn. Drawn with the edges hidden too, as they are
-/// controls.
-pub(super) fn blend_widgets_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    use vectorcraft_tools::blendwidget::{BlendControl, BlendWidget, RADIUS_PX};
-    if !matches!(app.session.tool_id(), "selection" | "blend") {
-        return;
-    }
-    let Some(st) = app.session.active() else { return };
-    // The screen's up in the document, with the view turned by `xf.rot`.
-    let up = vectorcraft_geom::Vec2::new(-xf.rot.sin(), -xf.rot.cos());
-    for w in BlendWidget::of(&st.doc, &st.selection, xf.zoom, up) {
-        let (on, c, color) = (xf.to_screen(w.on), xf.to_screen(w.at), c32(st.doc.layer_color(w.id)));
-        p.line_segment([on, c], Stroke::new(1.0, color));
-        let fill = if w.control == BlendControl::Easing { color } else { Color32::WHITE };
-        p.circle_filled(c, RADIUS_PX, fill);
-        p.circle_stroke(c, RADIUS_PX, Stroke::new(1.0, color));
-    }
-}
-
-/// The Select/Move, Rotate All, Space and Move All widgets (Selection and Objects on Path tools, one
-/// Objects on Path group selected). The Rotate All widget is joined by a line to the first object's
-/// attachment point. It stays while dragged.
-fn rotate_all_widget(p: &egui::Painter, xf: &Xf, tool: &str, doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) {
-    use vectorcraft_tools::objects_on_path::{ROTATE_ALL_RADIUS_PX, Widgets};
-    if !matches!(tool, "selection" | "objectsOnPath") {
-        return;
-    }
-    let widgets = Widgets::of(doc, selection, xf.zoom);
-    member_widgets(p, xf, doc, &widgets.members);
-    if let Some(w) = widgets.rotate_all {
-        let (on, c, color) = (xf.to_screen(w.pivot), xf.to_screen(w.at), c32(doc.layer_color(w.group)));
-        p.line_segment([on, c], Stroke::new(1.0, color));
-        p.circle_filled(c, ROTATE_ALL_RADIUS_PX, Color32::WHITE);
-        p.circle_stroke(c, ROTATE_ALL_RADIUS_PX, Stroke::new(1.0, color));
-    }
-    space_widget(p, xf, doc, widgets.space);
-    move_all_widget(p, xf, doc, widgets.move_all);
-}
-
-/// The Select/Move widgets: a ring on each object's attachment point, filled blue for the chosen
-/// object. They are drawn under the other widgets, which a press takes first.
-fn member_widgets(p: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document, widgets: &[vectorcraft_tools::objects_on_path::MemberWidget]) {
-    use vectorcraft_tools::objects_on_path::MEMBER_RADIUS_PX;
-    for w in widgets {
-        let c = xf.to_screen(w.at);
-        if w.chosen {
-            p.circle(c, MEMBER_RADIUS_PX, MEMBER_CHOSEN, Stroke::new(1.0, Color32::WHITE));
-        } else {
-            p.circle(c, MEMBER_RADIUS_PX, Color32::TRANSPARENT, Stroke::new(1.5, c32(doc.layer_color(w.group))));
-        }
-    }
-}
-
-/// The fill of the chosen object's Select/Move widget.
-pub(super) const MEMBER_CHOSEN: Color32 = Color32::from_rgb(0x1f, 0x6f, 0xeb);
-
-/// The Space widget (beside the Rotate All widget, with two or more objects on the path): a square
-/// joined by a line to the last object's attachment point. It stays while dragged.
-fn space_widget(p: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document, w: Option<vectorcraft_tools::objects_on_path::SpaceWidget>) {
-    use vectorcraft_tools::objects_on_path::SPACE_HALF_PX;
-    let Some(w) = w else { return };
-    let (on, c, color) = (xf.to_screen(w.last), xf.to_screen(w.at), c32(doc.layer_color(w.group)));
-    let r = egui::Rect::from_center_size(c, vec2(2.0 * SPACE_HALF_PX, 2.0 * SPACE_HALF_PX));
-    p.line_segment([on, c], Stroke::new(1.0, color));
-    p.rect_filled(r, 0.0, Color32::WHITE);
-    p.rect_stroke(r, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);
-}
-
-/// The Move All widget (beside the Rotate All widget, when the objects have room to move along the
-/// path): a diamond below the first object joined by a line to its attachment point. It stays while
-/// dragged.
-fn move_all_widget(p: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document, w: Option<vectorcraft_tools::objects_on_path::MoveAllWidget>) {
-    use vectorcraft_tools::objects_on_path::MOVE_ALL_HALF_PX;
-    let Some(w) = w else { return };
-    let (on, c, color) = (xf.to_screen(w.first), xf.to_screen(w.at), c32(doc.layer_color(w.group)));
-    let h = MOVE_ALL_HALF_PX;
-    p.line_segment([on, c], Stroke::new(1.0, color));
-    let corners = vec![c + vec2(0.0, -h), c + vec2(h, 0.0), c + vec2(0.0, h), c + vec2(-h, 0.0)];
-    p.add(Shape::convex_polygon(corners, Color32::WHITE, Stroke::new(1.0, color)));
-}
-
-/// Record where the Type tool's IME candidate window goes this pass, if it has an editor.
-///
-/// The descriptor itself is observed once at the end of the pass (`crate::ime::end_of_pass`),
-/// after dialogs, floating panels, progress windows and the palette draw: any of them can open
-/// over the canvas, take the keyboard or run a command that changes the edited text, so a
-/// descriptor written here would carry a stale owner, surrounding text or cause.
-pub(super) fn ime_geometry(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) {
-    app.ime_caret_rect = None;
-    // A hidden viewport cannot compose; the end-of-pass observation clears the owner.
-    if !app.session.tool_wants_text() || app.viewport_hidden(ctx) {
-        return;
-    }
-    let Some((a, b)) = app.session.tool_ime_caret(app.view_info()) else { return };
-    let r = egui::Rect::from_two_pos(xf.to_screen(a), xf.to_screen(b)).expand2(vec2(1.0, 0.0));
-    app.ime_caret_rect = Some((r, r));
-}
-
-/// The meshes the tools' shared paths ([`Overlay::SharedPath`]) were drawn with in the last frame
-/// ([`crate::CanvasCache::shared_paths`]). Each is kept with its path, by the path's allocation, and
-/// with the view, clip and stroke it was built for: a path that comes back unchanged at the same view
-/// is drawn with the same mesh, without flattening or tessellating it again. A frame keeps only the
-/// meshes it draws; a frame that draws no overlays drops them all ([`super::show`]).
-#[derive(Default)]
-pub struct SharedPaths {
-    pub(super) meshes: HashMap<usize, SharedMesh>,
-}
-
-pub(super) struct SharedMesh {
-    /// Held so that the allocation, the key of the map, is not reused while the mesh is kept.
-    path: Arc<BezPath>,
-    key: SharedKey,
-    pub(super) mesh: Arc<Mesh>,
-}
-
-/// What a shared path's mesh depends on besides the path.
-#[derive(Clone, Copy, PartialEq)]
-struct SharedKey {
-    /// The view's mapping onto the screen ([`Xf::affine`]).
-    view: [f64; 6],
-    /// The painter's clip: the lines of the path outside it have no triangles in the mesh.
-    clip: egui::Rect,
-    stroke: Stroke,
-    pixels_per_point: f32,
-    tessellation: TessellationOptions,
-}
-
-impl SharedPaths {
-    /// The mesh that draws `path` with `s` at the view `xf` with the painter `p`: the one kept in
-    /// this frame or in `last` (the last frame's) when it was built for the same, else a new one.
-    /// It is kept for the next frame.
-    fn mesh(&mut self, last: &mut HashMap<usize, SharedMesh>, path: &Arc<BezPath>, xf: &Xf, s: Stroke, p: &egui::Painter) -> Arc<Mesh> {
-        let ctx = p.ctx();
-        let key = SharedKey {
-            view: xf.affine().as_coeffs(),
-            clip: p.clip_rect(),
-            stroke: s,
-            pixels_per_point: ctx.pixels_per_point(),
-            tessellation: ctx.tessellation_options(|o| *o),
-        };
-        let at = Arc::as_ptr(path) as usize;
-        let fits = |m: &SharedMesh| m.key == key && Arc::ptr_eq(&m.path, path);
-        if let Some(kept) = self.meshes.get(&at).filter(|m| fits(m)) {
-            return Arc::clone(&kept.mesh);
-        }
-        let kept = match last.remove(&at).filter(|m| fits(m)) {
-            Some(kept) => kept,
-            None => {
-                let font_image_size = ctx.fonts(|f| f.font_image_size());
-                let mut tessellator = Tessellator::new(key.pixels_per_point, key.tessellation, font_image_size, vec![]);
-                tessellator.set_clip_rect(key.clip);
-                let mut mesh = Mesh::default();
-                for line in to_screen_path(path, xf) {
-                    tessellator.tessellate_shape(Shape::line(line, s), &mut mesh);
-                }
-                SharedMesh { path: Arc::clone(path), key, mesh: Arc::new(mesh) }
+        Overlay::Distance { .. } => {
+            if let Some((measure, color)) = distance_measure(o) {
+                SmartGuides::new(&[], std::slice::from_ref(&measure)).color(color).show_at(ui, rect);
             }
-        };
-        let mesh = Arc::clone(&kept.mesh);
-        self.meshes.insert(at, kept);
-        mesh
+        }
+        _ => {}
     }
 }
 
-pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, look: HandleLook, shared: &mut SharedPaths) {
-    // The meshes kept from the last frame; those this frame does not draw are dropped.
-    let mut last = std::mem::take(&mut shared.meshes);
+/// The accessible name of a selection marquee: the rule it selects by.
+fn name(enclosed: bool) -> Label {
+    Label::from(badge_rule(enclosed).0)
+}
+
+/// The measure and the colour a [`Overlay::Distance`] is shown with; `None` for any other overlay.
+fn distance_measure(o: &Overlay) -> Option<(Measure, DataColor)> {
+    let Overlay::Distance { a, b, text, color } = o else { return None };
+    Some((Measure::new(*a, *b).labelled(text.clone()), data(*color)))
+}
+
+/// The rule a selection marquee selects by and the one `E` switches to, as the badge names them.
+fn badge_rule(enclosed: bool) -> (String, String) {
+    let (current, other) = if enclosed { (tl!("Fully Enclosed"), tl!("Touching")) } else { (tl!("Touching"), tl!("Fully Enclosed")) };
+    (current.to_string(), other.to_string())
+}
+
+/// Where the rule badge of a marquee whose pointer is at `pointer` is placed: beside it, kept inside the canvas.
+fn badge_at(view: &CanvasView, pointer: vectorcraft_geom::Point) -> Pos2 {
+    let wanted = view.to_screen(pointer) + BADGE_OFFSET;
+    let rect = view.rect;
+    Pos2::new(wanted.x.clamp(rect.min.x, rect.max.x), wanted.y.clamp(rect.min.y, rect.max.y))
+}
+
+fn data(c: [u8; 3]) -> DataColor {
+    DataColor::new(Color32::from_rgb(c[0], c[1], c[2]))
+}
+
+fn data_rgba(c: [u8; 4]) -> DataColor {
+    DataColor::new(Color32::from_rgba_unmultiplied(c[0], c[1], c[2], c[3]))
+}
+
+/// The style of the tool marks.
+#[derive(Clone, Debug, PartialEq, ComponentStyle)]
+#[non_exhaustive]
+pub struct ToolMarksStyle {
+    #[style(metrics)]
+    metrics: Metrics,
+    /// A measure pill's fill and the rim of a stop chip.
+    dark: StyleColor,
+    /// Text on the pill.
+    ink: StyleColor,
+    /// The selection ring of a stop chip.
+    accent: StyleColor,
+    /// Around a measure's text.
+    pad: Vec2,
+    radius: CornerRadius,
+    /// A direction handle's end radius when the preferences give no anchor size.
+    handle: f32,
+}
+
+/// The marks a tool draws over the document: paths, lines, anchors, handles, labels, highlights, measures and stop
+/// chips ([`paint`]), and the Selection tool's rule badge.
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
+#[component(canvas_control, content_painter)]
+struct ToolMarks<'a> {
+    #[common]
+    common: Common,
+    overlays: &'a [Overlay],
+    options: PathOptionsSettings,
+}
+
+impl Component for ToolMarks<'_> {
+    const ROLE: Role = Role::None;
+    const INPUT: Input = Input::Display;
+    const PARTS: bool = false;
+    const STOPS: bool = false;
+    const SHOWS_LABEL: bool = false;
+    const OVERLAYS: bool = false;
+    type Style = ToolMarksStyle;
+    type Output = Response;
+
+    fn style(cx: &StyleCx<'_>, _: ToolMarksStyleKey) -> ToolMarksStyle {
+        let tokens = cx.tokens;
+        ToolMarksStyle {
+            metrics: Metrics::new(),
+            dark: cx.color(tokens.color.overlay.halo),
+            ink: cx.color(tokens.color.text.on_strong),
+            accent: cx.color(tokens.color.accent.solid),
+            pad: Vec2::new(tokens.space.pad.control, tokens.space.gap.tight),
+            radius: UiTokens::corner(tokens.shape.radius.control),
+            handle: tokens.space.gap.tight,
+        }
+    }
+
+    fn measure(&mut self, _: &MeasureCx<'_, Self>) -> Vec2 {
+        Vec2::ZERO
+    }
+
+    fn paint(&mut self, ui: &mut PaintUi<'_>, cx: &Cx<'_, Self>) {
+        let Some(space) = canvas_space(&cx.env) else { return };
+        let _painter = ui.content_painter(cx);
+        paint(&ui.draw(), &space.view, self.overlays, &self.options, cx.style);
+        for o in self.overlays {
+            if let Overlay::SelectionMarquee { enclosed, pointer, .. } = o {
+                let (current, other) = badge_rule(*enclosed);
+                hud(cx, badge_at(&space.view, *pointer), &[(Label::from(current), format!("E: {other}"))]);
+            }
+        }
+    }
+
+    fn finish(self, cx: Cx<'_, Self>) -> Response {
+        cx.response.clone()
+    }
+}
+
+/// Paints the marks of `overlays` through `draw` in `view`; the marquees, shared paths and distances are controls
+/// of their own and paint nothing here.
+// PLAN: contract cv.S14 gives `paint(draw, view, overlays, options)`; the pill, ink and ring colours come from the theme, so the style goes too.
+fn paint(draw: &Draw<'_>, view: &CanvasView, overlays: &[Overlay], options: &PathOptionsSettings, style: &ToolMarksStyle) {
     for o in overlays {
         match o {
-            // Where the tools select: the document rectangle, turned with the view.
-            Overlay::Marquee(r) => marquee_through(p, &xf.quad(*r)),
-            Overlay::SelectionMarquee { rect, enclosed, pointer } => {
-                let quad = xf.quad(*rect);
-                if *enclosed {
-                    let points: Vec<Pos2> = quad.iter().chain(quad.first()).copied().collect();
-                    p.add(Shape::line(points.clone(), Stroke::new(3.0, Color32::from_white_alpha(230))));
-                    p.add(Shape::line(points, Stroke::new(1.0, Color32::from_gray(40))));
-                } else {
-                    marquee_through(p, &quad);
-                }
-                let (current, other) = if *enclosed { (tl!("Fully Enclosed"), tl!("Touching")) } else { (tl!("Touching"), tl!("Fully Enclosed")) };
-                let label = format!("{current} · E: {other}");
-                let galley = p.layout(label, egui::FontId::proportional(11.0), t.text, (p.clip_rect().width() - 12.0).max(1.0));
-                let size = galley.size() + vec2(12.0, 8.0);
-                let wanted = xf.to_screen(*pointer) + vec2(14.0, 14.0);
-                let clip = p.clip_rect();
-                let min = egui::pos2(
-                    wanted.x.clamp(clip.min.x, (clip.max.x - size.x).max(clip.min.x)),
-                    wanted.y.clamp(clip.min.y, (clip.max.y - size.y).max(clip.min.y)),
-                );
-                let badge = egui::Rect::from_min_size(min, size);
-                p.rect_filled(badge, CornerRadius::same(3), t.panel);
-                p.galley(badge.min + vec2(6.0, 4.0), galley, t.text);
-            }
             Overlay::Path { path, color, width, dashed } => {
-                let s = Stroke::new(*width, c32(*color));
-                if *dashed {
-                    for line in to_screen_path(path, xf) {
-                        p.extend(Shape::dashed_line(&line, s, 4.0, 3.0));
-                    }
-                } else {
-                    stroke_path(p, path, xf, s);
+                for (points, closed) in path_runs(view, path) {
+                    stroke_run(draw, points, closed, *dashed, DataWidth::points(*width), data(*color));
                 }
             }
-            Overlay::SharedPath { path, color, width } => {
-                let mesh = shared.mesh(&mut last, path, xf, Stroke::new(*width, c32(*color)), p);
-                if !mesh.is_empty() {
-                    p.add(Shape::mesh(mesh));
+            Overlay::Line { a, b, color, dashed: true } => {
+                let pattern = draw.dashes();
+                let margin = pattern.dash + pattern.gap + draw.width(StrokeWidth::Thin);
+                if let Some((run, from)) = visible_run(view, *a, *b, view.rect.expand(margin)) {
+                    draw.dashed(&run, dashes_from(pattern, from), StrokeWidth::Thin, data(*color));
                 }
             }
-            Overlay::Line { a, b, color, dashed } => {
-                let s = Stroke::new(1.0, c32(*color));
-                let (a, b) = (xf.to_screen(*a), xf.to_screen(*b));
-                if *dashed {
-                    p.extend(Shape::dashed_line(&[a, b], s, 4.0, 3.0));
-                } else {
-                    p.line_segment([a, b], s);
-                }
+            Overlay::Line { a, b, color, dashed: false } => {
+                stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, false, StrokeWidth::Thin, data(*color));
             }
-            Overlay::Anchor { p: pt, color, filled, size } => anchor_square(p, xf.to_screen(*pt), c32(*color), *filled, *size),
-            Overlay::CurvePoint { p: pt, color, filled, size } => curve_point(p, xf.to_screen(*pt), c32(*color), *filled, *size + look.grow),
-            Overlay::Handle { p: pt, color } => look.draw(p, xf.to_screen(*pt), c32(*color)),
-            Overlay::Label { p: pt, text, color } => {
-                let sp = xf.to_screen(*pt) + vec2(8.0, -14.0);
-                p.text(
-                    sp,
-                    egui::Align2::LEFT_TOP,
-                    crate::panels::label_or_name(text, !names_an_artboard(text)),
-                    egui::FontId::proportional(11.0),
-                    c32(*color),
-                );
+            Overlay::GridLine { a, b, color } => {
+                stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, false, StrokeWidth::Thin, data_rgba(*color));
+            }
+            Overlay::Anchor { p, color, filled, size } => {
+                let size = options.anchor_size.unwrap_or(*size);
+                let shape = PaintShape::Rect(ScreenRect::from_center_size(view.to_screen(*p), Vec2::splat(size)), CornerRadius::ZERO);
+                marker(draw, &shape, data(*color), *filled);
+            }
+            Overlay::CurvePoint { p, color, filled, size } => {
+                let size = options.anchor_size.unwrap_or(*size);
+                marker(draw, &PaintShape::Circle(view.to_screen(*p), size / 2.0), data(*color), *filled);
+            }
+            Overlay::Handle { p, color } => handle_end(draw, view.to_screen(*p), data(*color), options, style),
+            // The pasteboard names an artboard, so its label is not drawn twice.
+            Overlay::Label { text, .. } if names_an_artboard(text) => {}
+            Overlay::Label { p, text, color } => {
+                let run = TextRun::new(crate::panels::label_or_name(text, true).to_string()).role(TypeRole::Caption).data_color(data(*color));
+                let layout = draw.layout(&run, f32::INFINITY);
+                draw.galley(view.to_screen(*p) + Vec2::new(8.0, -14.0), &layout);
             }
             Overlay::Highlight { quad, color } => {
-                let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
-                p.add(Shape::convex_polygon(quad.iter().map(|q| xf.to_screen(*q)).collect(), c, Stroke::NONE));
+                draw.data_fill(&PaintShape::Polygon(quad.iter().map(|q| view.to_screen(*q)).collect()), data_rgba(*color));
             }
-            Overlay::Measure { p: pt, text } => {
-                let sp = xf.to_screen(*pt) + vec2(14.0, 14.0);
-                let galley = p.layout(text.clone(), egui::FontId::proportional(11.0), Color32::WHITE, 200.0);
-                let r = egui::Rect::from_min_size(sp, galley.size() + vec2(12.0, 8.0));
-                p.rect_filled(r, CornerRadius::same(3), t.measure_bg);
-                p.galley(sp + vec2(6.0, 4.0), galley, Color32::WHITE);
+            Overlay::Measure { p, text } => {
+                let layout = draw.layout(&TextRun::new(text.as_str()).role(TypeRole::Caption).color(style.ink), f32::INFINITY);
+                let at = view.to_screen(*p) + BADGE_OFFSET;
+                draw.fill(&PaintShape::Rect(ScreenRect::from_min_size(at, layout.size() + 2.0 * style.pad), style.radius), style.dark);
+                draw.galley(at + style.pad, &layout);
             }
-            Overlay::Distance { a, b, text, color } => distance_guide(p, xf.to_screen(*a), xf.to_screen(*b), text, c32(*color)),
-            Overlay::GridLine { a, b, color } => {
-                let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
-                p.line_segment([xf.to_screen(*a), xf.to_screen(*b)], Stroke::new(1.0, c));
-            }
-            Overlay::Swatch { p: pt, color, selected } => {
-                // A white disc under the colour shows its opacity; a dark rim keeps it readable on
-                // any art, and the accent ring marks the selected stop.
-                let c = xf.to_screen(*pt);
-                p.circle_filled(c, 6.0, Color32::WHITE);
-                p.circle_filled(c, 5.0, Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]));
-                p.circle_stroke(c, 6.0, Stroke::new(1.0, Color32::from_gray(32)));
+            Overlay::Swatch { p, color, selected } => {
+                // A white disc under the colour shows its opacity; a dark rim keeps it readable on any art.
+                let c = view.to_screen(*p);
+                draw.data_fill(&PaintShape::Circle(c, CHIP_RIM), DataColor::new(Color32::WHITE));
+                draw.data_fill(&PaintShape::Circle(c, CHIP), data_rgba(*color));
+                draw.stroke(&PaintShape::Circle(c, CHIP_RIM), StrokeWidth::Thin, style.dark);
                 if *selected {
-                    p.circle_stroke(c, 8.0, Stroke::new(2.0, t.accent));
+                    draw.stroke(&PaintShape::Circle(c, CHIP_RING), StrokeWidth::Medium, style.accent);
                 }
             }
+            // Controls of their own, or a tip: nothing to paint here.
+            Overlay::Marquee(_)
+            | Overlay::SelectionMarquee { .. }
+            | Overlay::SharedPath { .. }
+            | Overlay::Distance { .. }
+            | Overlay::HoverText { .. } => {}
         }
     }
 }
 
-/// A Distance Guides measurement on screen ([`Overlay::Distance`]): the line from `a` to `b` in the
-/// smart guide colour `color` with a 4 px tick across each end, and `text` in a pill of that colour
-/// on its middle, in white or black, whichever reads on it.
-fn distance_guide(p: &egui::Painter, a: Pos2, b: Pos2, text: &str, color: Color32) {
-    let s = Stroke::new(1.0, color);
-    p.line_segment([a, b], s);
-    let along = b - a;
-    let len = along.length();
-    if len > 0.0 && len.is_finite() {
-        let across = vec2(-along.y, along.x) / len * 4.0;
-        for end in [a, b] {
-            p.line_segment([end - across, end + across], s);
+/// Strokes `points`, closed back to the first when `closed`, solid or in the theme's dashes.
+fn stroke_run(
+    draw: &Draw<'_>,
+    mut points: Vec<Pos2>,
+    closed: bool,
+    dashed: bool,
+    width: impl Into<craft::ui::primitives::DataStrokeWidth>,
+    color: DataColor,
+) {
+    if closed {
+        points.extend(points.first().copied());
+    }
+    if dashed {
+        draw.dashed(&points, draw.dashes(), width, color);
+    } else {
+        draw.stroke(&PaintShape::Path(points), width, color);
+    }
+}
+
+/// The part inside `clip` of the screen line that `view` draws from document point `a` to `b`, with how far along the
+/// whole line that part starts, in points. The line is clipped in `f64`, so a line millions of points long keeps its
+/// part on the canvas. None when no part of it is inside `clip`, or when an end does not map to a finite point.
+fn visible_run(view: &CanvasView, a: vectorcraft_geom::Point, b: vectorcraft_geom::Point, clip: ScreenRect) -> Option<([Pos2; 2], f64)> {
+    let affine = view.affine();
+    let (a, b) = (affine * a, affine * b);
+    if !(a.is_finite() && b.is_finite()) {
+        return None;
+    }
+    let screen = |p: vectorcraft_geom::Point| Pos2::new(p.x as f32, p.y as f32);
+    // Halved, so ends near the largest `f64` do not overflow.
+    let half = b.to_vec2() * 0.5 - a.to_vec2() * 0.5;
+    let length = half.hypot();
+    if length == 0.0 {
+        let c = screen(a);
+        return clip.contains(c).then_some(([c, c], 0.0));
+    }
+    let u = half / length;
+    // The run is measured from the point of the line nearest the middle of `clip`, so the clipped ends keep their
+    // precision when the line's ends are far off.
+    // That point is found from the line's distance to the middle, taken from the cross product of its ends, so a line
+    // whose ends are far off and not on one diagonal keeps its place on the canvas.
+    let c = vectorcraft_geom::Point::new(f64::from(clip.center().x), f64::from(clip.center().y));
+    let offset = (half.cross(c.to_vec2()) + 2.0 * exact_cross(a.to_vec2() * 0.5, b.to_vec2() * 0.5)) / length;
+    let origin = if offset.is_finite() { c - vectorcraft_geom::Vec2::new(-u.y, u.x) * offset } else { a + u * (c - a).dot(u) };
+    let (mut s0, mut s1) = ((a - origin).dot(u), (b - origin).dot(u));
+    let start = s0;
+    let axes = [(origin.x, u.x, f64::from(clip.left()), f64::from(clip.right())), (origin.y, u.y, f64::from(clip.top()), f64::from(clip.bottom()))];
+    for (at, step, lo, hi) in axes {
+        if step == 0.0 {
+            if at < lo || at > hi {
+                return None;
+            }
+        } else {
+            let (enter, leave) = ((lo - at) / step, (hi - at) / step);
+            s0 = s0.max(enter.min(leave));
+            s1 = s1.min(enter.max(leave));
         }
     }
-    let luma = 0.299 * f32::from(color.r()) + 0.587 * f32::from(color.g()) + 0.114 * f32::from(color.b());
-    let ink = if luma > 150.0 { Color32::BLACK } else { Color32::WHITE };
-    let galley = p.layout_no_wrap(text.to_owned(), egui::FontId::proportional(11.0), ink);
-    let r = egui::Rect::from_center_size(a + along / 2.0, galley.size() + vec2(8.0, 4.0));
-    p.rect_filled(r, CornerRadius::same(3), color);
-    p.galley(r.min + vec2(4.0, 2.0), galley, ink);
+    if s0 > s1 {
+        return None;
+    }
+    Some(([screen(origin + u * s0), screen(origin + u * s1)], s0 - start))
 }
+
+/// `p.x * q.y - p.y * q.x`, with the rounding error of the second product added back (Kahan's method), so two far-off
+/// points whose products nearly cancel keep the small difference between them.
+fn exact_cross(p: vectorcraft_geom::Vec2, q: vectorcraft_geom::Vec2) -> f64 {
+    let w = p.y * q.x;
+    let error = (-p.y).mul_add(q.x, w);
+    p.x.mul_add(q.y, -w) + error
+}
+
+/// `pattern` for a run that starts `from` points along its line, so its dashes fall where the whole line has them.
+fn dashes_from(pattern: Dashes, from: f64) -> Dashes {
+    let period = f64::from(pattern.dash) + f64::from(pattern.gap);
+    if !(period.is_finite() && period > 0.0 && from.is_finite()) {
+        return pattern;
+    }
+    let phase = (f64::from(pattern.phase) - from).rem_euclid(period);
+    pattern.phase(phase as f32)
+}
+
+/// An anchor or curve point: filled in `color` when selected, else a white body with a `color` edge.
+fn marker(draw: &Draw<'_>, shape: &PaintShape, color: DataColor, filled: bool) {
+    draw.data_fill(shape, if filled { color } else { DataColor::new(Color32::WHITE) });
+    if !filled {
+        draw.stroke(shape, StrokeWidth::Thin, color);
+    }
+}
+
+/// A direction handle's end at `c`: a solid dot, a hollow one or a larger solid one.
+fn handle_end(draw: &Draw<'_>, c: Pos2, color: DataColor, options: &PathOptionsSettings, style: &ToolMarksStyle) {
+    let r = options.anchor_size.map_or(style.handle, |size| size / 2.0);
+    match options.handles {
+        HandleStyle::Hollow => marker(draw, &PaintShape::Circle(c, r), color, false),
+        HandleStyle::Large => draw.data_fill(&PaintShape::Circle(c, r * 1.5), color),
+        _ => draw.data_fill(&PaintShape::Circle(c, r), color),
+    }
+}
+
+/// The tooltip discs of the tools' [`Overlay::HoverText`] regions on the screen under `view`, with their English
+/// text; none while `quiet`. A disc without a finite, positive size is dropped.
+fn tip_regions(lists: &[&[Overlay]], view: &CanvasView, quiet: bool) -> Vec<(HitShape, &'static str)> {
+    if quiet {
+        return vec![];
+    }
+    let discs = lists.iter().flat_map(|list| list.iter());
+    discs
+        .filter_map(|o| {
+            let Overlay::HoverText { center, radius, text } = o else { return None };
+            let (c, r) = (view.to_screen(*center), (*radius * view.zoom) as f32);
+            (r.is_finite() && r > 0.0 && c.is_finite()).then(|| (HitShape::circle(c, r), *text))
+        })
+        .collect()
+}
+
+/// The style of the hover tips: none of its own.
+#[derive(Clone, Debug, PartialEq, ComponentStyle)]
+#[non_exhaustive]
+pub struct HoverTipsStyle {
+    #[style(metrics)]
+    metrics: Metrics,
+}
+
+/// The tooltips of the tool's [`Overlay::HoverText`] regions. Each region is a hover-only part, so the tool keeps its
+/// clicks and drags, and the framework shows its text after the usual delay and not during a press. The parts lie
+/// under the artboard names of the pasteboard, which a press takes first, and are not declared while a gesture runs
+/// or Space lends a view tool, where a click does something else.
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
+#[component(canvas_control)]
+struct HoverTips<'a> {
+    #[common]
+    common: Common,
+    lists: [&'a [Overlay]; 2],
+    quiet: bool,
+}
+
+impl Component for HoverTips<'_> {
+    const ROLE: Role = Role::None;
+    const STOPS: bool = false;
+    const SHOWS_LABEL: bool = false;
+    const OVERLAYS: bool = false;
+    type Style = HoverTipsStyle;
+    type Output = Response;
+
+    fn style(_: &StyleCx<'_>, _: HoverTipsStyleKey) -> HoverTipsStyle {
+        HoverTipsStyle { metrics: Metrics::new() }
+    }
+
+    fn measure(&mut self, _: &MeasureCx<'_, Self>) -> Vec2 {
+        Vec2::ZERO
+    }
+
+    fn parts(&mut self, _: ScreenRect, cx: &mut PartsCx<'_, Self>) {
+        let Some(space) = canvas_space(&cx.env) else { return };
+        for (i, (shape, text)) in tip_regions(&self.lists, &space.view, self.quiet).into_iter().enumerate() {
+            cx.part(TIP.at(i as u64), shape)
+                .sense(Sense::HOVER)
+                .priority(HitPriority::new(HitLevel::Background, 1))
+                .tooltip(Label::from(crate::i18n::t(text).to_string()))
+                .pointer_only("a hint for the pointer; the tool's own marks carry the same facts");
+        }
+    }
+
+    fn finish(self, cx: Cx<'_, Self>) -> Response {
+        cx.response.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests;

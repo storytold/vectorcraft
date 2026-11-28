@@ -127,8 +127,39 @@ fn bad_settings_are_sanitized_and_an_empty_caster_casts_nothing() {
     let wild = Shadow { distance: f64::NAN, bounds: f64::INFINITY, ..Shadow::default() };
     assert_eq!(wild.sanitized(), Shadow { bounds: 1.0, ..Shadow::default() });
     assert_eq!(Shadow { distance: -3.0, bounds: 99.0, ..Shadow::default() }.sanitized(), Shadow { bounds: 4.0, ..Shadow::default() });
+    assert_eq!(Shadow { softness: f64::NAN, ..Shadow::default() }.sanitized(), Shadow::default());
+    assert_eq!(Shadow { softness: 7.0, ..Shadow::default() }.sanitized(), Shadow { softness: 1.0, ..Shadow::default() });
     assert_eq!(ShadowPosition::parse("below"), Some(ShadowPosition::Below));
     assert_eq!(ShadowPosition::parse("under"), None);
+}
+
+/// Softness blurs the shadow by a radius that grows with Softness and with the plane's distance
+/// from the object, and scales with the object; at 0 the shadow keeps its hard edge. The outline
+/// itself does not change.
+#[test]
+fn softness_blurs_the_shadow_more_the_farther_the_plane_is() {
+    let blur = |s: f64, shadow: Shadow| {
+        let path = square(100.0, 100.0, s);
+        let mut caster = ShadowCaster::new();
+        caster.extrude(&path, FillRule::NonZero, Rect::new(100.0, 100.0, 100.0 + s, 100.0 + s), Extrude::default(), front()).unwrap();
+        let all = 0..caster.len();
+        let all = std::slice::from_ref(&all);
+        let plane = caster.shadow_plane(shadow, all).unwrap();
+        (plane.blur(), caster.path_on(&plane, all).unwrap())
+    };
+    let (hard, hard_path) = blur(100.0, Shadow::default());
+    assert_eq!(hard, 0.0);
+    let (half, half_path) = blur(100.0, Shadow { softness: 0.5, ..Shadow::default() });
+    let (full, _) = blur(100.0, Shadow { softness: 1.0, ..Shadow::default() });
+    let (far, _) = blur(100.0, Shadow { softness: 1.0, distance: 1.0, ..Shadow::default() });
+    assert!(half > 0.0 && full > half && far > full, "{half} {full} {far}");
+    assert_eq!(half_path, hard_path, "the outline stays");
+    // Twice the object, twice the blur.
+    let (twice, _) = blur(200.0, Shadow { softness: 1.0, ..Shadow::default() });
+    assert!((twice - 2.0 * full).abs() < 1e-9, "{twice} {full}");
+    // A huge object's blur stops at the Gaussian Blur effect's limit.
+    let (huge, _) = blur(1.0e7, Shadow { softness: 1.0, distance: 1.0, ..Shadow::default() });
+    assert_eq!(huge, MAX_SHADOW_BLUR);
 }
 
 #[test]

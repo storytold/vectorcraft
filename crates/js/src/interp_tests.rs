@@ -96,6 +96,14 @@ fn variables_functions_and_closures() {
 }
 
 #[test]
+fn a_trailing_comma_adds_no_argument_or_parameter() {
+    assert_eq!(num("function f(a, b,) { return arguments.length * 10 + f.length; } f(1,)"), 12.0);
+    assert_eq!(num("function P(x,) { this.n = arguments.length; } new P(5,).n"), 1.0);
+    assert_eq!(num("var f = new Function('a,', 'return arguments.length'); f(1, 2) * 10 + f.length"), 21.0);
+    assert_eq!(num("Function('a', '', 'return a')(4)"), 4.0);
+}
+
+#[test]
 fn call_and_apply_set_this_and_arguments() {
     assert_eq!(num("function f(a, b) { return this.k + a + b; } f.call({k: 1}, 2, 3)"), 6.0);
     assert_eq!(num("function f(a, b) { return this.k + a + b; } f.apply({k: 1}, [2, 3])"), 6.0);
@@ -237,6 +245,65 @@ fn errors_carry_line_and_column() {
     assert_eq!((e.kind, e.line), (RunErrorKind::Syntax, 1));
     let e = fail("throw 42");
     assert_eq!(e.message, "42");
+}
+
+/// A run error says whether its message is the script's own text, whatever that text reads: an
+/// error the interpreter or a host function threw is not, even when a script caught it and threw
+/// it again, and a value or error the script made, or an error whose name or message it changed,
+/// is.
+#[test]
+fn script_error_origin_distinguishes_native_and_authored_values() {
+    let native = "RangeError: invalid array length";
+    for (src, message, authored) in [
+        ("new Array(-1)", native, false),
+        ("try { new Array(-1); } catch (e) { throw e; }", native, false),
+        ("try { new Array(-1); } catch (e) { e.message = 'invalid array length'; throw e; }", native, false),
+        ("nope()", "ReferenceError: nope is not defined", false),
+        ("throw new RangeError('invalid array length')", native, true),
+        ("throw new Error('invalid array length')", "Error: invalid array length", true),
+        ("throw 'invalid array length'", "invalid array length", true),
+        ("throw 17", "17", true),
+        ("throw {}", "[object Object]", true),
+        ("throw new Error()", "Error", true),
+        ("try { new Array(-1); } catch (e) { throw e.message; }", "invalid array length", true),
+        ("try { new Array(-1); } catch (e) { throw new RangeError(e.message); }", native, true),
+        ("try { new Array(-1); } catch (e) { e.message = 'mine'; throw e; }", "RangeError: mine", true),
+        ("try { nope(); } catch (e) { e.name = 'TypeError'; throw e; }", "TypeError: nope is not defined", true),
+        ("try { new Array(-1); } catch (e) { RangeError.prototype.name = 'Mine'; throw e; }", "Mine: invalid array length", true),
+        ("RangeError.prototype.name = 'Mine'; new Array(-1)", "Mine: invalid array length", true),
+        ("RangeError.prototype.name = 'RangeError'; new Array(-1)", native, false),
+    ] {
+        let e = fail(src);
+        assert_eq!((e.kind, e.message.as_str(), e.authored), (RunErrorKind::Thrown, message, authored), "{src}");
+    }
+    assert!(!fail("var x = ;").authored, "a syntax error");
+    let mut realm = Realm::new();
+    realm.define_function("add", |_| Err("add takes two numbers".into()));
+    let e = realm.run("add()").unwrap_err();
+    assert_eq!((e.message.as_str(), e.authored), ("Error: add takes two numbers", false), "a host function's error");
+    let e = realm.run("throw new Error('add takes two numbers')").unwrap_err();
+    assert_eq!((e.message.as_str(), e.authored), ("Error: add takes two numbers", true));
+}
+
+/// An error about a property of `null` or `undefined` names a computed property whose name is a
+/// primitive, and says whether the script read or set it, never naming an empty property; a
+/// member assignment, an object key and a long name leave the name out.
+#[test]
+fn errors_about_null_and_undefined_name_the_property() {
+    for (source, message) in [
+        ("null[1]", "TypeError: cannot read property '1' of null"),
+        ("var u; u['k'] += 1", "TypeError: cannot set property 'k' of undefined"),
+        ("var u; u['k']++", "TypeError: cannot read property 'k' of undefined"),
+        ("delete null[true]", "TypeError: cannot read property 'true' of null"),
+        ("var u; u['k'] = 1", "TypeError: cannot set property 'k' of undefined"),
+        ("null.x", "TypeError: cannot read property 'x' of null"),
+        ("var u; u.y = 1", "TypeError: cannot set a property of undefined"),
+        ("var u; u[{}] = 1", "TypeError: cannot set a property of undefined"),
+        ("null[new Array(300).join('a')]", "TypeError: cannot read a property of null"),
+    ] {
+        assert_eq!(fail(source).message, message, "{source}");
+    }
+    truth("var k = {toString: function () { throw 1; }}; try { null[k]; false } catch (e) { e instanceof TypeError }");
 }
 
 #[test]
@@ -544,6 +611,26 @@ fn apply_keeps_its_arguments_alive_while_a_native_function_runs() {
         get 1() { return {toString: function () { return 'return a * 2'; }}; }}; \
         Function.apply(null, list)(21)";
     assert_eq!(realm.run(src), Ok(JsValue::Number(42.0)));
+}
+
+#[test]
+fn successive_apply_expansions_keep_getter_receivers_alive() {
+    for queued in [false, true] {
+        let mut realm = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { heap_bytes: 1 << 20, ..Limits::default() });
+        let src = "var result; function callback(a) { result = this.kept + a; } \
+            var inner = {length: 1, get 0() { for (var i = 0; i < 20000; i++) ({i: i}); return 2; }}; \
+            var outer = {length: 2, get 0() { return {kept: 40}; }, get 1() { return inner; }};";
+        realm.run(src).unwrap();
+        let collections = realm.interp().heap.collections;
+        let call = if queued {
+            "Promise.resolve(outer).then(Function.prototype.apply.bind(Function.prototype.apply, callback));"
+        } else {
+            "Function.prototype.apply.apply(callback, outer);"
+        };
+        realm.run(call).unwrap();
+        assert!(realm.interp().heap.collections > collections);
+        assert_eq!(realm.run("result"), Ok(JsValue::Number(42.0)), "queued: {queued}");
+    }
 }
 
 #[test]
@@ -916,6 +1003,19 @@ fn code(ops: Vec<Op>) -> Code {
         uses_arguments: false,
         source,
         span: (0, 0),
+        scopes: Vec::new(),
+        top_scope: None,
+        templates: Vec::new(),
+        rest: None,
+        length: 0,
+        arrow: false,
+        uses_this: false,
+        param_init: false,
+        pattern_names: Vec::new(),
+        es2015: false,
+        own_name: None,
+        method: false,
+        generator: false,
     }
 }
 

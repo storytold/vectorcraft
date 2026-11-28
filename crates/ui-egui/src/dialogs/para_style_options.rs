@@ -1,32 +1,39 @@
 //! Paragraph Style Options fields shared by editing and creating a paragraph style: General, Basic
 //! Paragraph Formats (alignment, indents and spacing), Tabs (the style's tab stops), Composition
 //! (composer and Roman Hanging Punctuation), Hyphenation, Justification and East Asian Composition
-//! Settings (Bunri-Kinshi and Korean Line Break Anywhere).
+//! Settings (Bunri-Kinshi and Korean Line Break Anywhere), as the tabs of a hosted properties dialog.
 //!
-//! Each field is unset (empty, or a checkbox in its unset state) or set, and an unset field leaves
+//! Each field is unset (empty, absent, or a checkbox in its unset state) or set, and an unset field leaves
 //! its attribute out of the style. Distances are shown and typed in the General unit and kept in
 //! points. The Hyphenation and Justification options are one attribute each (`hyphenation`,
 //! `justification`): when any of their fields is set, a field left empty takes its default value.
-//! The `tabs` field is unset (null) or a list of stops, an empty list included, and is the `tabs`
+//! The `tabs` field is unset (absent) or a list of stops, an empty list included, and is the `tabs`
 //! attribute. A field still as it opened keeps the style's stored value as it is.
 //!
 //! Behavior reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/using/character-paragraph-styles.html>.
 
+use std::sync::Arc;
+
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::layout_components::Row;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesTab, PropertyRow};
+use craft::ui::runtime::env::Label;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::text::DEFAULT_TAB_INTERVAL;
 use vectorcraft_doc::{HyphenationOptions, JustificationOptions, TabAlign, TabStop, Unit};
 
-use super::{DialogSpec, form};
+use super::char_style_options::{
+    Refusals, Values, canonical_map, general_rows, pump_in_opening_document, rows, select, style_dialog, text, to_fields, tri_state, value_of,
+};
 use crate::VectorcraftApp;
-use crate::state::Dialog;
 
 pub const KIND: &str = "paraStyleOptions";
 
-/// The section ids, in the order the section list shows them.
+/// The section ids, in the order the tabs show them.
 pub(crate) const SECTIONS: [&str; 7] = ["general", "basic", "tabs", "composition", "hyphenation", "justification", "eastAsian"];
-/// The alignments of a tab stop with the names the `tabs` field gives them, in the Tabs panel's
-/// order.
+/// The alignments of a tab stop with the names the `tabs` field gives them, in the Tabs panel's order.
 const TAB_ALIGNS: [(TabAlign, &str); 4] =
     [(TabAlign::Left, "left"), (TabAlign::Center, "center"), (TabAlign::Right, "right"), (TabAlign::Decimal, "decimal")];
 /// The distance fields of Basic Paragraph Formats, which are also the attributes they set.
@@ -70,74 +77,39 @@ const JUSTIFICATION_FIELDS: [&str; 11] = [
 const JUSTIFY_VALUES: [&str; 8] = ["Auto", "Left", "Center", "Right", "JustifyLeft", "JustifyCenter", "JustifyRight", "JustifyAll"];
 /// The values of the Single Word Justification field.
 const SINGLE_WORD_VALUES: [&str; 4] = ["fullJustify", "alignLeft", "alignCenter", "alignRight"];
+/// The fields that edit the selected tab stop, with the `tabs` entry key each one shows.
+const TAB_EDITORS: [(&str, &str); 4] =
+    [("__tabAlign", "align"), ("__tabPosition", "position"), ("__tabLeader", "leader"), ("__tabAlignOn", "alignOn")];
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Paragraph Style Options").into(),
-    body,
-    confirm,
-    preview: true,
-    inputs: |_| {
-        &[
-            "name",
-            "justify",
-            "left_indent",
-            "right_indent",
-            "first_line_indent",
-            "space_before",
-            "space_after",
-            "composer",
-            "roman_hanging",
-            "hyphenate",
-            "words_longer_than",
-            "after_first",
-            "before_last",
-            "hyphen_limit",
-            "hyphenation_zone",
-            "hyphenate_capitalized",
-            "word_min",
-            "word_desired",
-            "word_max",
-            "letter_min",
-            "letter_desired",
-            "letter_max",
-            "glyph_min",
-            "glyph_desired",
-            "glyph_max",
-            "auto_leading",
-            "single_word",
-            "bunri_kinshi",
-            "korean_line_break_anywhere",
-            "tabs",
-            "section",
-        ]
-    },
-    min_width: 720.0,
-    max_width: Some(720.0),
-    ..DialogSpec::FORM
-};
-
-pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
-    crate::panels::character::end_typing(app);
-    let unit = app.session.general_unit();
-    let doc = &app.session.active().ok_or("no document open")?.doc;
-    let def = doc.para_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no style `{name}`"))?;
-    let mut fields = form_fields(&def.attrs, unit);
-    fields.insert("__vertical".into(), json!(vertical_text(app)));
-    fields.insert("name".into(), json!(name));
-    fields.insert("__style".into(), json!(name));
-    fields.insert("section".into(), json!("general"));
-    fields.insert("preview".into(), json!(true));
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
-    Ok(json!({"dialog": KIND}))
+/// What a paragraph style dialog opened with.
+pub(crate) struct Opening {
+    /// The style's name when the dialog opened; empty for a new style.
+    pub(crate) style: String,
+    /// The style's attributes when the dialog opened.
+    pub(crate) attrs: Map<String, Value>,
+    /// The unit distances are shown and typed in.
+    pub(crate) unit: Unit,
+    /// Whether the selected type is vertical, where Tabs names a stop's position Y.
+    pub(crate) vertical: bool,
 }
 
-/// The dialog fields for a style's `attrs` in `unit`, with the attributes and the unit they come
-/// from, which [`edited_attrs`] reads back.
-pub(crate) fn form_fields(attrs: &Map<String, Value>, unit: Unit) -> Map<String, Value> {
-    let mut fields = fields_from_attrs(attrs, unit);
-    fields.insert("__attrs".into(), Value::Object(attrs.clone()));
-    fields.insert("__unit".into(), json!(unit.key()));
-    fields
+impl Opening {
+    /// The opening of style `style` with `attrs`, its distances shown in `unit`.
+    pub(crate) fn new(style: &str, attrs: Map<String, Value>, unit: Unit, vertical: bool) -> Opening {
+        Opening { style: style.into(), attrs, unit, vertical }
+    }
+
+    /// The dialog's values at opening, for a style called `name`.
+    pub(crate) fn fields(&self, name: &str) -> DialogFields {
+        let mut fields = form_fields(&self.attrs, self.unit);
+        fields.set("name", FieldValue::Text(name.into()));
+        fields
+    }
+}
+
+/// The dialog's values for a style's `attrs` in `unit`.
+pub(crate) fn form_fields(attrs: &Map<String, Value>, unit: Unit) -> DialogFields {
+    to_fields(&fields_from_attrs(attrs, unit))
 }
 
 /// Whether the first selected text is vertical type, where the Tabs section names a stop's
@@ -285,13 +257,13 @@ fn label_of(key: &str) -> &'static str {
 }
 
 /// The text of field `key`, trimmed; `None` when it is empty or unset.
-fn typed<'a>(d: &'a Dialog, key: &str) -> Option<&'a str> {
-    d.fields.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty())
+fn typed<'a>(d: &'a Values, key: &str) -> Option<&'a str> {
+    d.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty())
 }
 
 /// The distance typed in field `key` (in `unit` unless it names its own), in points: `None` when
 /// the field is empty, an error when it is not a distance or is outside `lo..=hi` points.
-fn distance(d: &Dialog, key: &str, unit: Unit, lo: f64, hi: f64) -> Result<Option<f64>, String> {
+fn distance(d: &Values, key: &str, unit: Unit, lo: f64, hi: f64) -> Result<Option<f64>, String> {
     let Some(s) = typed(d, key) else { return Ok(None) };
     let label = caption(label_of(key));
     let pt = unit.parse(s).ok_or_else(|| format!("{label} must be a number"))?;
@@ -304,7 +276,7 @@ fn distance(d: &Dialog, key: &str, unit: Unit, lo: f64, hi: f64) -> Result<Optio
 
 /// The number typed in field `key`: `None` when the field is empty, an error when it is not a
 /// number or is outside `lo..=hi`.
-fn number(d: &Dialog, key: &str, lo: f64, hi: f64) -> Result<Option<f64>, String> {
+fn number(d: &Values, key: &str, lo: f64, hi: f64) -> Result<Option<f64>, String> {
     let Some(s) = typed(d, key) else { return Ok(None) };
     let label = caption(label_of(key));
     let n = vectorcraft_doc::parse_number(s.trim_end_matches('%').trim_end()).filter(|n| n.is_finite());
@@ -318,7 +290,7 @@ fn number(d: &Dialog, key: &str, lo: f64, hi: f64) -> Result<Option<f64>, String
 
 /// The whole number typed in field `key`: `None` when it is empty, an error when it is not a whole
 /// number from `lo` to `hi`.
-fn count(d: &Dialog, key: &str, lo: f64, hi: f64) -> Result<Option<u32>, String> {
+fn count(d: &Values, key: &str, lo: f64, hi: f64) -> Result<Option<u32>, String> {
     let Some(n) = number(d, key, lo, hi)? else { return Ok(None) };
     if n.fract() != 0.0 {
         let (label, min, max) = (caption(label_of(key)), format_number(lo), format_number(hi));
@@ -328,20 +300,16 @@ fn count(d: &Dialog, key: &str, lo: f64, hi: f64) -> Result<Option<u32>, String>
     Ok(Some(n as u32))
 }
 
-/// The unit the dialog shows distances in.
-fn unit_of(d: &Dialog) -> Unit {
-    d.fields.get("__unit").and_then(Value::as_str).and_then(Unit::named_east_asian).unwrap_or_default()
-}
-
-/// The style's attributes as the dialog's fields set them. A field still as it opened keeps its
+/// The style's attributes as the dialog's `fields` set them. A field still as it opened keeps its
 /// stored value without a check, so a style read from a file with a value out of range can still
-/// be renamed.
-pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
-    let original = d.fields.get("__attrs").and_then(Value::as_object).cloned().unwrap_or_default();
-    let unit = unit_of(d);
-    let original_fields = fields_from_attrs(&original, unit);
+/// be renamed; a tab that was reset writes its unset fields as unset.
+pub(crate) fn edited_attrs(fields: &DialogFields, opening: &Opening) -> Result<Map<String, Value>, String> {
+    let d = Values::new(fields);
+    let original = &opening.attrs;
+    let unit = opening.unit;
+    let original_fields = canonical_map(fields_from_attrs(original, unit));
     let mut attrs = original.clone();
-    let unchanged = |key: &str, reset: &str| !d.bool(reset) && d.fields.get(key) == original_fields.get(key);
+    let unchanged = |key: &str, tab: &str| !d.reset(tab) && d.get(key) == original_fields.get(key);
     let keep_or = |attrs: &mut Map<String, Value>, key: &str, unchanged: bool, value: Option<Value>| {
         attrs.remove(key);
         let value = if unchanged { original.get(key).cloned() } else { value };
@@ -349,43 +317,43 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
             attrs.insert(key.into(), value);
         }
     };
-    let choice = |key: &str| d.fields.get(key).filter(|v| v.is_string()).cloned();
-    let switch = |key: &str| d.fields.get(key).filter(|v| v.is_boolean()).cloned();
+    let choice = |key: &str| d.get(key).filter(|v| v.is_string()).cloned();
+    let switch = |key: &str| d.get(key).filter(|v| v.is_boolean()).cloned();
 
-    let same = unchanged("justify", "__resetBasic");
+    let same = unchanged("justify", "basic");
     keep_or(&mut attrs, "justify", same, choice("justify").filter(|v| v.as_str().is_some_and(|v| JUSTIFY_VALUES.contains(&v))));
     for key in DISTANCES {
-        let same = unchanged(key, "__resetBasic");
-        let value = if same { None } else { distance(d, key, unit, -MAX_DISTANCE, MAX_DISTANCE)?.map(Value::from) };
+        let same = unchanged(key, "basic");
+        let value = if same { None } else { distance(&d, key, unit, -MAX_DISTANCE, MAX_DISTANCE)?.map(Value::from) };
         keep_or(&mut attrs, key, same, value);
     }
 
-    let same = unchanged("composer", "__resetComposition");
+    let same = unchanged("composer", "composition");
     keep_or(
         &mut attrs,
         "composer",
         same,
         choice("composer").filter(|v| matches!(v.as_str(), Some("singleLine" | "everyLine" | "standardSingleLine" | "standardEveryLine"))),
     );
-    let same = unchanged("roman_hanging", "__resetComposition");
+    let same = unchanged("roman_hanging", "composition");
     keep_or(&mut attrs, "roman_hanging", same, switch("roman_hanging"));
 
-    let same = unchanged("hyphenate", "__resetHyphenation");
+    let same = unchanged("hyphenate", "hyphenation");
     keep_or(&mut attrs, "hyphenate", same, switch("hyphenate"));
-    let same = HYPHENATION_FIELDS.iter().all(|key| unchanged(key, "__resetHyphenation"));
-    let value = if same { None } else { hyphenation(d, &original, &original_fields, unit)? };
+    let same = HYPHENATION_FIELDS.iter().all(|key| unchanged(key, "hyphenation"));
+    let value = if same { None } else { hyphenation(&d, original, &original_fields, unit)? };
     keep_or(&mut attrs, "hyphenation", same, value);
 
-    let same = JUSTIFICATION_FIELDS.iter().all(|key| unchanged(key, "__resetJustification"));
-    let value = if same { None } else { justification(d, &original, &original_fields)? };
+    let same = JUSTIFICATION_FIELDS.iter().all(|key| unchanged(key, "justification"));
+    let value = if same { None } else { justification(&d, original, &original_fields)? };
     keep_or(&mut attrs, "justification", same, value);
 
-    let same = unchanged("tabs", "__resetTabs");
-    let value = if same { None } else { tab_stops(d, &original, unit)? };
+    let same = unchanged("tabs", "tabs");
+    let value = if same { None } else { tab_stops(&d, original, opening)? };
     keep_or(&mut attrs, "tabs", same, value);
 
     for key in ["bunri_kinshi", "korean_line_break_anywhere"] {
-        let same = unchanged(key, "__resetEastAsian");
+        let same = unchanged(key, "eastAsian");
         keep_or(&mut attrs, key, same, switch(key));
     }
     Ok(attrs)
@@ -396,8 +364,9 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
 /// is kept, else the first in the list. A stop as the style has it is kept without a check, and any
 /// other is read by [`read_stop`]. An error when the list has more than 256 stops and more than the
 /// style has.
-fn tab_stops(d: &Dialog, original: &Map<String, Value>, unit: Unit) -> Result<Option<Value>, String> {
-    let rows = match d.fields.get("tabs") {
+fn tab_stops(d: &Values, original: &Map<String, Value>, opening: &Opening) -> Result<Option<Value>, String> {
+    let unit = opening.unit;
+    let rows = match d.get("tabs") {
         None | Some(Value::Null) => return Ok(None),
         Some(Value::Array(rows)) => rows,
         Some(_) => {
@@ -411,7 +380,7 @@ fn tab_stops(d: &Dialog, original: &Map<String, Value>, unit: Unit) -> Result<Op
     if rows.len() > max.max(kept.len()) {
         return Err(format!("at most {max} tab stops"));
     }
-    let label = caption(if d.bool("__vertical") { tl!("Y:") } else { tl!("X:") });
+    let label = caption(if opening.vertical { tl!("Y:") } else { tl!("X:") });
     let kept_rows: Vec<Value> = kept.iter().map(|s| stop_field(s, unit)).collect();
     let mut stops = Vec::with_capacity(rows.len());
     for row in rows {
@@ -420,7 +389,7 @@ fn tab_stops(d: &Dialog, original: &Map<String, Value>, unit: Unit) -> Result<Op
             None => stops.push(read_stop(row, unit, label)?),
         }
     }
-    let edited = d.fields.get("__tabEdited").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
+    let edited = d.dialog.int("__tabEdited").and_then(|i| usize::try_from(i).ok());
     let mut order: Vec<usize> = (0..stops.len()).collect();
     order.sort_by(|&a, &b| stops[a].position.total_cmp(&stops[b].position).then(a.cmp(&b)));
     let mut keep: Vec<usize> = Vec::with_capacity(order.len());
@@ -441,16 +410,16 @@ fn tab_stops(d: &Dialog, original: &Map<String, Value>, unit: Unit) -> Result<Op
 /// The `hyphenation` attribute the Hyphenation fields set: none when every field is empty or
 /// unset; otherwise the style's options (or the defaults) with each changed field written over
 /// them, an empty one at its default.
-fn hyphenation(d: &Dialog, original: &Map<String, Value>, original_fields: &Map<String, Value>, unit: Unit) -> Result<Option<Value>, String> {
-    let empty = |key: &str| typed(d, key).is_none() && !d.fields.get(key).is_some_and(Value::is_boolean);
+fn hyphenation(d: &Values, original: &Map<String, Value>, original_fields: &Map<String, Value>, unit: Unit) -> Result<Option<Value>, String> {
+    let empty = |key: &str| typed(d, key).is_none() && !d.get(key).is_some_and(Value::is_boolean);
     if HYPHENATION_FIELDS.iter().all(|key| empty(key)) {
         return Ok(None);
     }
-    let reset = d.bool("__resetHyphenation");
+    let reset = d.reset("hyphenation");
     let mut h: HyphenationOptions =
         if reset { None } else { original.get("hyphenation").and_then(|v| serde_json::from_value(v.clone()).ok()) }.unwrap_or_default();
     let defaults = HyphenationOptions::default();
-    let changed = |key: &str| reset || d.fields.get(key) != original_fields.get(key);
+    let changed = |key: &str| reset || d.get(key) != original_fields.get(key);
     for (field, key, (lo, hi)) in COUNTS {
         if !changed(field) {
             continue;
@@ -474,7 +443,7 @@ fn hyphenation(d: &Dialog, original: &Map<String, Value>, original_fields: &Map<
         h.zone = distance(d, "hyphenation_zone", unit, 0.0, MAX_DISTANCE)?.unwrap_or(defaults.zone);
     }
     if changed("hyphenate_capitalized") {
-        h.capitalized = d.fields.get("hyphenate_capitalized").and_then(Value::as_bool).unwrap_or(defaults.capitalized);
+        h.capitalized = d.get("hyphenate_capitalized").and_then(Value::as_bool).unwrap_or(defaults.capitalized);
     }
     Ok(Some(serde_json::to_value(h).map_err(|e| e.to_string())?))
 }
@@ -482,15 +451,15 @@ fn hyphenation(d: &Dialog, original: &Map<String, Value>, original_fields: &Map<
 /// The `justification` attribute the Justification fields set, as [`hyphenation`] builds its
 /// own; an error when a row with a changed field has a Minimum above its Desired value or a
 /// Desired value above its Maximum. A row left as it was keeps the style's values.
-fn justification(d: &Dialog, original: &Map<String, Value>, original_fields: &Map<String, Value>) -> Result<Option<Value>, String> {
+fn justification(d: &Values, original: &Map<String, Value>, original_fields: &Map<String, Value>) -> Result<Option<Value>, String> {
     if JUSTIFICATION_FIELDS.iter().all(|key| typed(d, key).is_none()) {
         return Ok(None);
     }
-    let reset = d.bool("__resetJustification");
+    let reset = d.reset("justification");
     let mut j: JustificationOptions =
         if reset { None } else { original.get("justification").and_then(|v| serde_json::from_value(v.clone()).ok()) }.unwrap_or_default();
     let defaults = JustificationOptions::default();
-    let changed = |key: &str| reset || d.fields.get(key) != original_fields.get(key);
+    let changed = |key: &str| reset || d.get(key) != original_fields.get(key);
     for (prefix, key, (lo, hi)) in ROWS {
         let (values, default) = match key {
             "word_spacing" => (&mut j.word_spacing, defaults.word_spacing),
@@ -514,7 +483,7 @@ fn justification(d: &Dialog, original: &Map<String, Value>, original_fields: &Ma
         j.auto_leading = number(d, "auto_leading", lo, hi)?.unwrap_or(defaults.auto_leading);
     }
     if changed("single_word") {
-        let given = d.fields.get("single_word").and_then(Value::as_str).filter(|v| SINGLE_WORD_VALUES.contains(v));
+        let given = d.get("single_word").and_then(Value::as_str).filter(|v| SINGLE_WORD_VALUES.contains(v));
         j.single_word = match given {
             Some(v) => serde_json::from_value(json!(v)).map_err(|e| e.to_string())?,
             None => defaults.single_word,
@@ -523,275 +492,20 @@ fn justification(d: &Dialog, original: &Map<String, Value>, original_fields: &Ma
     Ok(Some(serde_json::to_value(j).map_err(|e| e.to_string())?))
 }
 
-/// Reset Panel in Basic Paragraph Formats: Alignment and the five indent and spacing fields become
-/// unset.
-fn reset_basic(d: &mut Dialog) {
-    d.fields.insert("__resetBasic".into(), json!(true));
-    d.fields.insert("justify".into(), Value::Null);
-    for key in DISTANCES {
-        d.fields.insert(key.into(), json!(""));
-    }
-}
-
-/// Reset Panel in Composition: the composer and Roman Hanging Punctuation become unset.
-fn reset_composition(d: &mut Dialog) {
-    d.fields.insert("__resetComposition".into(), json!(true));
-    d.fields.insert("composer".into(), Value::Null);
-    d.fields.insert("roman_hanging".into(), Value::Null);
-}
-
-/// Reset Panel in Hyphenation: Hyphenation and its options become unset.
-fn reset_hyphenation(d: &mut Dialog) {
-    d.fields.insert("__resetHyphenation".into(), json!(true));
-    d.fields.insert("hyphenate".into(), Value::Null);
-    d.fields.insert("hyphenate_capitalized".into(), Value::Null);
-    for key in HYPHENATION_FIELDS.iter().filter(|k| **k != "hyphenate_capitalized") {
-        d.fields.insert((*key).into(), json!(""));
-    }
-}
-
-/// Reset Panel in Justification: the Justification options become unset.
-fn reset_justification(d: &mut Dialog) {
-    d.fields.insert("__resetJustification".into(), json!(true));
-    d.fields.insert("single_word".into(), Value::Null);
-    for key in JUSTIFICATION_FIELDS.iter().filter(|k| **k != "single_word") {
-        d.fields.insert((*key).into(), json!(""));
-    }
-}
-
-/// Reset Panel in Tabs: the tab stops become unset, which leaves `tabs` out of the style.
-fn reset_tabs(d: &mut Dialog) {
-    d.fields.insert("__resetTabs".into(), json!(true));
-    d.fields.insert("tabs".into(), Value::Null);
-    d.fields.remove("__tabEdited");
-    d.fields.insert("__tabSel".into(), json!(0));
-}
-
-/// Reset Panel in East Asian Composition Settings: Bunri-Kinshi and Korean Line Break Anywhere
-/// become unset.
-fn reset_east_asian(d: &mut Dialog) {
-    d.fields.insert("__resetEastAsian".into(), json!(true));
-    d.fields.insert("bunri_kinshi".into(), Value::Null);
-    d.fields.insert("korean_line_break_anywhere".into(), Value::Null);
-}
-
-/// Whether the section `d` shows has a Reset Panel: every section but General.
-pub(crate) fn can_reset(d: &Dialog) -> bool {
-    ["basic", "tabs", "composition", "hyphenation", "justification", "eastAsian"].contains(&d.str("section").as_str())
-}
-
-/// Reset Panel: clear the settings of the section `d` shows.
-pub(crate) fn reset_section(d: &mut Dialog) {
-    match d.str("section").as_str() {
-        "basic" => reset_basic(d),
-        "tabs" => reset_tabs(d),
-        "composition" => reset_composition(d),
-        "hyphenation" => reset_hyphenation(d),
-        "justification" => reset_justification(d),
-        "eastAsian" => reset_east_asian(d),
-        _ => {}
-    }
-}
-
-/// Whether `d` is Paragraph Style Options or New Paragraph Style.
-pub(crate) fn is_paragraph_dialog(d: &Dialog) -> bool {
-    d.kind == KIND || (d.kind == super::new_text_style::KIND && d.bool("__para"))
-}
-
-pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let d = app.ui.dialog.as_mut().ok_or("no dialog open")?;
-    if !is_paragraph_dialog(d) || !can_reset(d) {
-        return Err("the open dialog has no Reset".into());
-    }
-    reset_section(d);
-    Ok(json!({"dialog": d.kind}))
-}
-
-/// The section list of Paragraph Style Options and New Paragraph Style.
-pub(crate) fn section_list(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.vertical(|ui| {
-        let labels = [
-            tl!("General"),
-            tl!("Basic Paragraph Formats"),
-            tl!("Tabs"),
-            tl!("Composition"),
-            tl!("Hyphenation"),
-            tl!("Justification"),
-            tl!("East Asian Composition Settings"),
-        ];
-        for (id, label) in SECTIONS.into_iter().zip(labels) {
-            if ui.selectable_label(d.str("section") == id, label).clicked() {
-                d.fields.insert("section".into(), json!(id));
-            }
-        }
-    });
-}
-
-/// The Reset Panel button, enabled on every section but General.
-pub(crate) fn reset_button(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.add_enabled_ui(can_reset(d), |ui| {
-        if ui.button(tl!("Reset Panel")).clicked() {
-            reset_section(d);
-        }
-    });
-}
-
-/// A menu whose first entry leaves field `key` unset.
-fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(&str, &str)], enabled: bool) {
-    let selected = d.fields.get(key).and_then(Value::as_str).unwrap_or("").to_string();
-    let shown = options.iter().find(|(value, _)| *value == selected).map_or("", |(_, label)| *label);
-    let labels: Vec<&str> = std::iter::once(" ").chain(options.iter().map(|(_, label)| *label)).collect();
-    ui.add_enabled_ui(enabled, |ui| {
-        // shortcut: 7 pt per character approximates the widest label; measure the text when a label wraps.
-        let width = (labels.iter().map(|l| l.chars().count()).max().unwrap_or(0) as f32 * 7.0).max(190.0);
-        if let Some(i) = crate::widgets::dropdown(ui, (KIND, key), shown, &labels, width) {
-            d.fields.insert(key.into(), if i == 0 { Value::Null } else { options.get(i - 1).map_or(Value::Null, |(value, _)| json!(value)) });
-        }
-    });
-}
-
-/// An on, off or unset checkbox in its own grid row: a click on unset turns it on, on turns it
-/// off, and off makes it unset.
-fn switch(ui: &mut egui::Ui, d: &mut Dialog, key: &str, caption: &str, enabled: bool) {
-    ui.label("");
-    let value = d.fields.get(key).and_then(Value::as_bool);
-    if crate::widgets::check3(ui, caption, value, enabled) {
-        let next = match value {
-            None => json!(true),
-            Some(true) => json!(false),
-            Some(false) => Value::Null,
-        };
-        d.fields.insert(key.into(), next);
-    }
-    ui.end_row();
-}
-
-/// A text field in its own grid row, with what follows the number, enabled or not.
-fn field_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, caption: &str, suffix: &str, enabled: bool) {
-    let row = ui.label(caption);
-    if d.fields.get(key).is_none_or(Value::is_null) {
-        d.fields.insert(key.into(), json!(""));
-    }
-    ui.add_enabled_ui(enabled, |ui| {
-        ui.horizontal(|ui| {
-            ui.label_inputs_by(row.id, |ui| form::text(ui, d, key, 160.0));
-            if !suffix.is_empty() {
-                ui.label(suffix);
-            }
-        });
-    });
-    ui.end_row();
-}
-
-/// Basic Paragraph Formats: Alignment, the left, right and first-line indents, and the space
-/// before and after the paragraph.
-pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    egui::Grid::new("paragraph-style-basic").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        let alignments: Vec<(&str, &str)> = std::iter::once(("Auto", tl!("Auto")))
-            .chain(JUSTIFY_VALUES[1..].iter().copied().zip(crate::panels::paragraph::ALIGNMENTS.iter().map(|(_, _, label, _)| tl!(*label))))
-            .collect();
-        let row = ui.label(tl!("Alignment:"));
-        ui.label_inputs_by(row.id, |ui| choice(ui, d, "justify", &alignments, true));
-        ui.end_row();
-        for key in DISTANCES {
-            field_row(ui, d, key, label_of(key), "", true);
-        }
-    });
-}
-
-/// The editing fields of the selected tab stop, with the `tabs` entry key each one shows.
-const TAB_EDITORS: [(&str, &str); 3] = [("__tabPosition", "position"), ("__tabLeader", "leader"), ("__tabAlignOn", "alignOn")];
-
-/// Tabs: the selected stop's Alignment, X (Y in vertical type), Leader and Align On, which only a
-/// decimal stop uses; Add ([`add_tab`]), Delete Tab ([`delete_tab`]) and Clear All Tabs
-/// ([`clear_tabs`]); and the list of stops, one row each, a click on which selects its stop, which
-/// scrolls when it is taller than 160 points. A change to a field makes its stop the one edited last.
-pub(crate) fn tabs_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    let vertical = d.bool("__vertical");
-    let (mut rows, mut sel, _) = tab_rows(d);
-    let mut changed = false;
-    let has = sel < rows.len();
-    let shown = TAB_EDITORS.map(|(_, key)| rows.get(sel).and_then(|r| r.get(key)).and_then(Value::as_str).unwrap_or("").to_string());
-    for ((field, _), text) in TAB_EDITORS.iter().zip(&shown) {
-        d.fields.insert((*field).into(), json!(text));
-    }
-    let align = rows.get(sel).and_then(|r| r.get("align")).and_then(Value::as_str).unwrap_or("left").to_string();
-    egui::Grid::new("paragraph-style-tabs").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        let row = ui.label(tl!("Alignment:"));
-        let names: Vec<&str> = TAB_ALIGNS.iter().map(|(a, _)| crate::panels::tabs::align_name(*a, vertical)).collect();
-        let shown = TAB_ALIGNS.iter().position(|(_, key)| *key == align).and_then(|i| names.get(i).copied()).unwrap_or("");
-        ui.add_enabled_ui(has, |ui| {
-            ui.label_inputs_by(row.id, |ui| {
-                if let Some(i) = crate::widgets::dropdown(ui, (KIND, "tab_align"), shown, &names, 190.0)
-                    && let (Some(r), Some((_, key))) = (rows.get_mut(sel).and_then(Value::as_object_mut), TAB_ALIGNS.get(i))
-                {
-                    r.insert("align".into(), json!(key));
-                    changed = true;
-                }
-            });
-        });
-        ui.end_row();
-        field_row(ui, d, "__tabPosition", if vertical { tl!("Y:") } else { tl!("X:") }, "", has);
-        field_row(ui, d, "__tabLeader", tl!("Leader:"), "", has);
-        field_row(ui, d, "__tabAlignOn", tl!("Align On:"), "", has && align == "decimal");
-    });
-    for ((field, key), was) in TAB_EDITORS.iter().zip(&shown) {
-        let typed = d.str(field);
-        if let Some(r) = rows.get_mut(sel).and_then(Value::as_object_mut)
-            && typed != *was
-        {
-            r.insert((*key).into(), json!(typed));
-            changed = true;
-        }
-    }
-    if changed {
-        d.fields.insert("tabs".into(), Value::Array(rows.clone()));
-        d.fields.insert("__tabEdited".into(), json!(sel));
-    }
-    ui.add_space(6.0);
-    let (mut add, mut delete, mut clear) = (false, false, false);
-    let can_add = new_tab_position(&rows, unit_of(d)).is_some();
-    ui.horizontal(|ui| {
-        add = ui.add_enabled(can_add, egui::Button::new(tl!("Add"))).clicked();
-        delete = ui.add_enabled(has, egui::Button::new(tl!("Delete Tab"))).clicked();
-        clear = ui.add_enabled(!rows.is_empty(), egui::Button::new(tl!("Clear All Tabs"))).clicked();
-    });
-    ui.add_space(4.0);
-    let reveal = d.fields.remove("__tabScroll").is_some();
-    egui::ScrollArea::vertical().id_salt("paragraph-style-tab-list").max_height(160.0).auto_shrink([false, true]).show(ui, |ui| {
-        for (i, r) in rows.iter().enumerate() {
-            let a = r.get("align").and_then(Value::as_str).and_then(|key| TAB_ALIGNS.iter().find(|(_, k)| *k == key)).map(|(a, _)| *a);
-            let name = a.map_or("", |a| crate::panels::tabs::align_name(a, vertical));
-            let mut text = format!("{}    {name}", r.get("position").and_then(Value::as_str).unwrap_or(""));
-            if let Some(leader) = r.get("leader").and_then(Value::as_str).filter(|l| !l.is_empty()) {
-                text += &format!("    {leader}");
-            }
-            let row = ui.selectable_label(i == sel, text);
-            if reveal && i == sel {
-                ui.scroll_to_rect_animation(row.rect, None, egui::style::ScrollAnimation::none());
-            }
-            if row.clicked() {
-                sel = i;
-            }
-        }
-    });
-    d.fields.insert("__tabSel".into(), json!(sel));
-    if add {
-        add_tab(d);
-    } else if delete {
-        delete_tab(d);
-    } else if clear {
-        clear_tabs(d);
-    }
-}
-
-/// The `tabs` entries of `d` (none while unset), the selected one's index (`__tabSel`, at most the
+/// The `tabs` entries of `fields` (none while unset), the selected one's index (`__tabSel`, at most the
 /// last) and the index of the one edited last (`__tabEdited`).
-fn tab_rows(d: &Dialog) -> (Vec<Value>, usize, Option<usize>) {
-    let rows: Vec<Value> = d.fields.get("tabs").and_then(Value::as_array).cloned().unwrap_or_default();
-    let index = |key: &str| d.fields.get(key).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
-    let sel = index("__tabSel").unwrap_or(0).min(rows.len().saturating_sub(1));
-    (rows, sel, index("__tabEdited"))
+fn tab_rows(fields: &DialogFields) -> (Vec<Value>, usize, Option<usize>) {
+    let rows: Vec<Value> = fields.get("tabs").map(value_of).as_ref().and_then(Value::as_array).cloned().unwrap_or_default();
+    let sel = fields.text("__tabSel").and_then(|s| s.parse::<usize>().ok()).unwrap_or(0).min(rows.len().saturating_sub(1));
+    (rows, sel, fields.int("__tabEdited").and_then(|i| usize::try_from(i).ok()))
+}
+
+/// Writes the stops and the selected one. The editors are seeded again from the selected stop at the
+/// next draw of the Tabs row.
+fn put_tabs(fields: &mut DialogFields, rows: Vec<Value>, sel: usize) {
+    fields.set("tabs", FieldValue::Json(Value::Array(rows)));
+    fields.set("__tabSel", FieldValue::Text(sel.to_string()));
+    fields.remove("__tabShown");
 }
 
 /// The position (pt) Add gives a new stop among `rows`: half an inch past the furthest stop that
@@ -807,131 +521,191 @@ fn new_tab_position(rows: &[Value], unit: Unit) -> Option<f64> {
     (!positions.iter().any(|pt| (pt - position).abs() < 1e-6)).then_some(position)
 }
 
-/// Add in Tabs: a left stop at [`new_tab_position`], which becomes the selected and last edited
-/// stop and is scrolled into view in the list. Nothing when that gives no position.
-pub(crate) fn add_tab(d: &mut Dialog) {
-    let unit = unit_of(d);
-    let (mut rows, _, _) = tab_rows(d);
+/// Add in Tabs: a left stop at [`new_tab_position`], which becomes the selected and last edited stop.
+/// Nothing when that gives no position.
+pub(crate) fn add_tab(fields: &mut DialogFields, unit: Unit) {
+    let (mut rows, _, _) = tab_rows(fields);
     let Some(position) = new_tab_position(&rows, unit) else { return };
     rows.push(stop_field(&TabStop { position, align: TabAlign::Left, leader: String::new(), align_on: '.' }, unit));
     let at = rows.len() - 1;
-    d.fields.insert("tabs".into(), Value::Array(rows));
-    d.fields.insert("__tabSel".into(), json!(at));
-    d.fields.insert("__tabEdited".into(), json!(at));
-    d.fields.insert("__tabScroll".into(), json!(true));
+    put_tabs(fields, rows, at);
+    fields.set("__tabEdited", FieldValue::Int(at as i64));
 }
 
 /// Delete Tab in Tabs: remove the selected stop; the next one (or the last) becomes selected.
-pub(crate) fn delete_tab(d: &mut Dialog) {
-    let (mut rows, sel, edited) = tab_rows(d);
+pub(crate) fn delete_tab(fields: &mut DialogFields) {
+    let (mut rows, sel, edited) = tab_rows(fields);
     if sel >= rows.len() {
         return;
     }
     rows.remove(sel);
     match edited {
         Some(e) if e == sel => {
-            d.fields.remove("__tabEdited");
+            fields.remove("__tabEdited");
         }
-        Some(e) if e > sel => {
-            d.fields.insert("__tabEdited".into(), json!(e - 1));
-        }
+        Some(e) if e > sel => fields.set("__tabEdited", FieldValue::Int(e as i64 - 1)),
         _ => {}
     }
-    d.fields.insert("__tabSel".into(), json!(sel.min(rows.len().saturating_sub(1))));
-    d.fields.insert("tabs".into(), Value::Array(rows));
-    d.fields.insert("__tabScroll".into(), json!(true));
+    let at = sel.min(rows.len().saturating_sub(1));
+    put_tabs(fields, rows, at);
 }
 
 /// Clear All Tabs in Tabs: an empty list of stops, which the style then sets.
-pub(crate) fn clear_tabs(d: &mut Dialog) {
-    d.fields.insert("tabs".into(), json!([]));
-    d.fields.insert("__tabSel".into(), json!(0));
-    d.fields.remove("__tabEdited");
+pub(crate) fn clear_tabs(fields: &mut DialogFields) {
+    put_tabs(fields, vec![], 0);
+    fields.remove("__tabEdited");
 }
 
-/// Composition: the Middle Eastern & South Asian or Standard, Single-line or Every-line Composer, and Roman Hanging Punctuation.
-pub(crate) fn composition_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    egui::Grid::new("paragraph-style-composition").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        let row = ui.label(tl!("Composition"));
-        let composers = [
-            ("singleLine", tl!("Middle Eastern & South Asian Single-line Composer")),
-            ("everyLine", tl!("Middle Eastern & South Asian Every-line Composer")),
-            ("standardSingleLine", tl!("Standard Single-line Composer")),
-            ("standardEveryLine", tl!("Standard Every-line Composer")),
-        ];
-        ui.label_inputs_by(row.id, |ui| choice(ui, d, "composer", &composers, true));
-        ui.end_row();
-        switch(ui, d, "roman_hanging", tl!("Roman Hanging Punctuation"), true);
-    });
-}
-
-/// Hyphenation: the Hyphenation checkbox and its options, which are inactive while it is off or
-/// unset; Hyphenation Zone is also inactive with the Every-line Composer, which does not use it.
-pub(crate) fn hyphenation_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    let on = d.fields.get("hyphenate").and_then(Value::as_bool) == Some(true);
-    let single_line = matches!(d.fields.get("composer").and_then(Value::as_str), Some("singleLine" | "standardSingleLine"));
-    egui::Grid::new("paragraph-style-hyphenation").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        switch(ui, d, "hyphenate", tl!("Hyphenation"), true);
-        for (key, suffix) in [
-            ("words_longer_than", tl!("letters")),
-            ("after_first", tl!("letters")),
-            ("before_last", tl!("letters")),
-            ("hyphen_limit", tl!("hyphens")),
-        ] {
-            field_row(ui, d, key, label_of(key), suffix, on);
+/// Copies what the editors show into the selected stop when they were seeded from it.
+fn sync_editors(fields: &mut DialogFields) {
+    let (mut rows, sel, _) = tab_rows(fields);
+    if fields.int("__tabShown") != i64::try_from(sel).ok() {
+        return;
+    }
+    let Some(stop) = rows.get_mut(sel).and_then(Value::as_object_mut) else { return };
+    let mut changed = false;
+    for (field, key) in TAB_EDITORS {
+        let typed = fields.text(field).unwrap_or_default();
+        if stop.get(key).and_then(Value::as_str).unwrap_or_default() != typed {
+            stop.insert(key.into(), json!(typed));
+            changed = true;
         }
-        field_row(ui, d, "hyphenation_zone", label_of("hyphenation_zone"), "", on && single_line);
-        switch(ui, d, "hyphenate_capitalized", tl!("Hyphenate Capitalized Words"), on);
-    });
+    }
+    if changed {
+        fields.set("tabs", FieldValue::Json(Value::Array(rows)));
+        fields.set("__tabEdited", FieldValue::Int(sel as i64));
+    }
 }
 
-/// Justification: Word Spacing, Letter Spacing and Glyph Scaling (Minimum, Desired and Maximum),
-/// Auto Leading and Single Word Justification.
-pub(crate) fn justification_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    egui::Grid::new("paragraph-style-justification").num_columns(4).spacing([10.0, 8.0]).show(ui, |ui| {
-        ui.label("");
-        for heading in [tl!("Minimum"), tl!("Desired"), tl!("Maximum")] {
-            ui.label(heading);
+/// Shows the selected stop in the editors, writing only what differs so a settled pass edits nothing.
+fn seed_editors(fields: &mut DialogFields) {
+    let (rows, sel, _) = tab_rows(fields);
+    for (field, key) in TAB_EDITORS {
+        let shown = rows.get(sel).and_then(|r| r.get(key)).and_then(Value::as_str).unwrap_or_default();
+        if fields.text(field).unwrap_or_default() != shown {
+            fields.set(field, FieldValue::Text(shown.into()));
         }
-        ui.end_row();
-        for (prefix, _, _) in ROWS {
-            let row_label = label_of(prefix);
-            ui.label(row_label);
-            for column in COLUMNS {
-                let key = format!("{prefix}_{column}");
-                if d.fields.get(&key).is_none_or(Value::is_null) {
-                    d.fields.insert(key.clone(), json!(""));
-                }
-                ui.horizontal(|ui| {
-                    let name = format!("{} {}", caption(row_label), column_name(column));
-                    form::text_named(ui, d, &key, &name, 60.0);
-                    ui.label("%");
-                });
+    }
+    let selected = sel.to_string();
+    if !rows.is_empty() && fields.text("__tabSel") != Some(selected.as_str()) {
+        fields.set("__tabSel", FieldValue::Text(selected));
+    }
+    let shown = i64::try_from(sel).ok().filter(|_| sel < rows.len());
+    if fields.int("__tabShown") != shown {
+        match shown {
+            Some(at) => fields.set("__tabShown", FieldValue::Int(at)),
+            None => {
+                fields.remove("__tabShown");
             }
-            ui.end_row();
         }
-    });
-    ui.add_space(8.0);
-    egui::Grid::new("paragraph-style-justification-more").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        field_row(ui, d, "auto_leading", label_of("auto_leading"), "%", true);
-        let row = ui.label(tl!("Single Word Justification:"));
-        let choices: Vec<(&str, &str)> =
-            SINGLE_WORD_VALUES.into_iter().zip([tl!("Full Justify"), tl!("Align left"), tl!("Align center"), tl!("Align right")]).collect();
-        ui.label_inputs_by(row.id, |ui| choice(ui, d, "single_word", &choices, true));
-        ui.end_row();
-    });
+    }
 }
 
-/// East Asian Composition Settings: Bunri-Kinshi, and Korean Composition Settings › Korean Line
-/// Break Anywhere.
-pub(crate) fn east_asian_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    egui::Grid::new("paragraph-style-bunri-kinshi").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        switch(ui, d, "bunri_kinshi", tl!("Bunri-Kinshi"), true);
-    });
-    ui.strong(tl!("Korean Composition Settings"));
-    egui::Grid::new("paragraph-style-east-asian").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        switch(ui, d, "korean_line_break_anywhere", tl!("Korean Line Break Anywhere"), true);
-    });
+/// The Add, Delete Tab and Clear All Tabs buttons, which also keep the editors and the stop they edit in step.
+fn tabs_buttons(unit: Unit) -> Param {
+    Param::custom("tabs", tl!("Tabs"), move |ui, fields, _| {
+        sync_editors(fields);
+        let (rows, _, _) = tab_rows(fields);
+        let can_add = new_tab_position(&rows, unit).is_some();
+        let (mut add, mut delete, mut clear) = (false, false, false);
+        let line = Row::new().wrap(true).show(ui, |ui, _| {
+            add = clicked(&Button::new(tl!("Add")).enabled(can_add).show(ui));
+            delete = clicked(&Button::new(tl!("Delete Tab")).enabled(!rows.is_empty()).show(ui));
+            clear = clicked(&Button::new(tl!("Clear All Tabs")).enabled(!rows.is_empty()).show(ui));
+        });
+        if add {
+            add_tab(fields, unit);
+        } else if delete {
+            delete_tab(fields);
+        } else if clear {
+            clear_tabs(fields);
+        }
+        seed_editors(fields);
+        line.output
+    })
+    .companions(["__tabSel", "__tabEdited", "__tabShown", "__tabAlign", "__tabPosition", "__tabLeader", "__tabAlignOn"])
+}
+
+fn tabs_rows(fields: &DialogFields, o: &Opening) -> Vec<PropertyRow> {
+    let aligns: Vec<(String, Label)> =
+        TAB_ALIGNS.iter().map(|(a, key)| ((*key).to_string(), crate::panels::tabs::align_name(*a, o.vertical).into())).collect();
+    let (stops, _, _) = tab_rows(fields);
+    let listed: Vec<(String, Label)> = stops
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let name = r
+                .get("align")
+                .and_then(Value::as_str)
+                .and_then(|key| TAB_ALIGNS.iter().find(|(_, k)| *k == key))
+                .map_or("", |(a, _)| crate::panels::tabs::align_name(*a, o.vertical));
+            let mut line = format!("{}    {name}", r.get("position").and_then(Value::as_str).unwrap_or_default());
+            if let Some(leader) = r.get("leader").and_then(Value::as_str).filter(|l| !l.is_empty()) {
+                line += &format!("    {leader}");
+            }
+            (i.to_string(), line.into())
+        })
+        .collect();
+    rows(vec![
+        Param::new("__tabAlign", tl!("Alignment:"), ParamKind::choice(aligns, None)),
+        text("__tabPosition", if o.vertical { tl!("Y:") } else { tl!("X:") }),
+        text("__tabLeader", tl!("Leader:")),
+        text("__tabAlignOn", tl!("Align On:")).enabled_when("__tabAlign", FieldValue::Text("decimal".into())),
+        tabs_buttons(o.unit),
+        Param::new("__tabSel", tl!("Tab Stops"), ParamKind::choice(listed, None)),
+    ])
+}
+
+fn basic_rows() -> Vec<PropertyRow> {
+    let alignments: Vec<(&'static str, &'static str)> = std::iter::once(("Auto", tl!("Auto")))
+        .chain(JUSTIFY_VALUES[1..].iter().copied().zip(crate::panels::paragraph::ALIGNMENTS.iter().map(|(_, _, label, _)| tl!(*label))))
+        .collect();
+    let mut params = vec![select("justify", tl!("Alignment:"), &alignments)];
+    params.extend(DISTANCES.iter().map(|key| text(*key, label_of(key))));
+    rows(params)
+}
+
+fn composition_rows() -> Vec<PropertyRow> {
+    let composers = [
+        ("singleLine", tl!("Middle Eastern & South Asian Single-line Composer")),
+        ("everyLine", tl!("Middle Eastern & South Asian Every-line Composer")),
+        ("standardSingleLine", tl!("Standard Single-line Composer")),
+        ("standardEveryLine", tl!("Standard Every-line Composer")),
+    ];
+    rows(vec![select("composer", tl!("Composition"), &composers), tri_state("roman_hanging", tl!("Roman Hanging Punctuation"))])
+}
+
+// PLAN: Hyphenation Zone is gated on Hyphenation alone; the Single-line Composer condition needs a gate on two keys.
+fn hyphenation_rows() -> Vec<PropertyRow> {
+    let on = FieldValue::Bool(true);
+    let mut params = vec![tri_state("hyphenate", tl!("Hyphenation"))];
+    params.extend(COUNTS.iter().map(|(key, _, _)| text(*key, label_of(key)).enabled_when("hyphenate", on.clone())));
+    params.push(text("hyphenation_zone", label_of("hyphenation_zone")).enabled_when("hyphenate", on.clone()));
+    params.push(tri_state("hyphenate_capitalized", tl!("Hyphenate Capitalized Words")).enabled_when("hyphenate", on));
+    rows(params)
+}
+
+fn justification_rows() -> Vec<PropertyRow> {
+    let mut params = vec![];
+    for (prefix, _, _) in ROWS {
+        let row_label = label_of(prefix);
+        for column in COLUMNS {
+            params.push(text(format!("{prefix}_{column}"), format!("{} {}", caption(row_label), column_name(column))));
+        }
+    }
+    params.push(text("auto_leading", label_of("auto_leading")));
+    let choices: Vec<(&'static str, &'static str)> =
+        SINGLE_WORD_VALUES.into_iter().zip([tl!("Full Justify"), tl!("Align left"), tl!("Align center"), tl!("Align right")]).collect();
+    params.push(select("single_word", tl!("Single Word Justification:"), &choices));
+    rows(params)
+}
+
+fn east_asian_rows() -> Vec<PropertyRow> {
+    vec![
+        PropertyRow::field(tri_state("bunri_kinshi", tl!("Bunri-Kinshi"))),
+        PropertyRow::heading(tl!("Korean Composition Settings")),
+        PropertyRow::field(tri_state("korean_line_break_anywhere", tl!("Korean Line Break Anywhere"))),
+    ]
 }
 
 /// The heading of a spacing column, for the accessible name of its field.
@@ -943,88 +717,114 @@ fn column_name(column: &str) -> &'static str {
     }
 }
 
-/// The General section: the style's name and every attribute it sets.
-pub(crate) fn general_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.horizontal(|ui| {
-        let row = ui.label(tl!("Style Name:"));
-        ui.label_inputs_by(row.id, |ui| form::text(ui, d, "name", 190.0));
+/// The seven tabs of Paragraph Style Options and New Paragraph Style over the dialog's current values.
+/// Every tab but General has a Reset Panel.
+pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTab> {
+    let titles = [
+        tl!("General"),
+        tl!("Basic Paragraph Formats"),
+        tl!("Tabs"),
+        tl!("Composition"),
+        tl!("Hyphenation"),
+        tl!("Justification"),
+        tl!("East Asian Composition Settings"),
+    ];
+    let bodies = [
+        general_rows(edited_attrs(fields, opening)),
+        basic_rows(),
+        tabs_rows(fields, opening),
+        composition_rows(),
+        hyphenation_rows(),
+        justification_rows(),
+        east_asian_rows(),
+    ];
+    SECTIONS
+        .into_iter()
+        .zip(titles)
+        .zip(bodies)
+        .map(|((id, title), rows)| {
+            let tab = PropertiesTab::new(title, rows).key(id);
+            if id == "general" { tab } else { tab.resettable() }
+        })
+        .collect()
+}
+
+/// The dialog of style `name` over `opening`, which `title` heads, kept open by a held OK.
+pub(crate) fn hosted(key: &'static str, title: &'static str, opening: &Arc<Opening>, name: &str) -> HostedPropertiesDialog {
+    let rows_of = Arc::clone(opening);
+    HostedPropertiesDialog::new(key, opening.fields(name), move |values| {
+        let now = values.value().cloned().unwrap_or_else(DialogFields::new);
+        craft::ui::patterns::form_dialogs::PropertiesDialog::new(key, title, tabs(&now, &rows_of), values)
+            .tab_layout(craft::ui::patterns::form_dialogs::TabLayout::List)
+    })
+    .held_ok()
+}
+
+/// The open Paragraph Style Options dialog.
+pub(crate) struct ParaStyleOptions {
+    inner: HostedPropertiesDialog,
+    opening: Arc<Opening>,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
+}
+
+impl ParaStyleOptions {
+    /// The style's attributes as the dialog's values set them, or why they are refused.
+    pub(crate) fn edited(&self) -> Result<Map<String, Value>, String> {
+        edited_attrs(self.inner.fields(), &self.opening)
+    }
+
+    fn command(&self, attrs: Map<String, Value>) -> Value {
+        let to = self.inner.fields().text("name").unwrap_or_default();
+        json!({"name": self.opening.style, "to": to, "attrs": attrs})
+    }
+}
+style_dialog!(ParaStyleOptions, KIND);
+
+pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
+    crate::panels::character::end_typing(app);
+    let unit = app.session.general_unit();
+    let state = app.session.active().ok_or("no document open")?;
+    let (document, doc) = ((state.uid, state.reverts), &state.doc);
+    let def = doc.para_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no style `{name}`"))?;
+    let opening = Arc::new(Opening::new(name, def.attrs.clone(), unit, vertical_text(app)));
+    let dialog = ParaStyleOptions { inner: hosted(KIND, tl!("Paragraph Style Options"), &opening, name).previews(), opening, document };
+    app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
+    Ok(json!({"dialog": KIND}))
+}
+
+/// Reset Panel: clears the settings of the tab the open Paragraph Style Options or New Paragraph Style
+/// dialog shows.
+pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let dialogs = app.dialogs().ok_or("no dialog open")?;
+    let reset = dialogs.with(|host| {
+        let options = host.get_mut::<ParaStyleOptions>().map(|d| (KIND, d.hosted_mut().reset_tab()));
+        options.or_else(|| {
+            let new = host.get_mut::<super::new_text_style::NewTextStyle>().filter(|d| d.para);
+            new.map(|d| (super::new_text_style::KIND, d.hosted_mut().reset_tab()))
+        })
     });
-    ui.separator();
-    if let Ok(attrs) = edited_attrs(d) {
-        for (key, value) in attrs {
-            ui.label(format!("{}: {}", super::humanize(&key), value));
-        }
+    match reset {
+        Some((kind, true)) => Ok(json!({"dialog": kind})),
+        _ => Err("the open dialog has no Reset".into()),
     }
 }
 
-/// The content of the section `d` shows.
-pub(crate) fn section_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    match d.str("section").as_str() {
-        "basic" => basic_body(ui, d),
-        "tabs" => tabs_body(ui, d),
-        "composition" => composition_body(ui, d),
-        "hyphenation" => hyphenation_body(ui, d),
-        "justification" => justification_body(ui, d),
-        "eastAsian" => east_asian_body(ui, d),
-        _ => general_body(ui, d),
-    }
-}
-
-/// The key under which the dialog keeps the height its section content was drawn at, for the next
-/// frame.
-fn content_id(ui: &egui::Ui) -> egui::Id {
-    ui.layer_id().id.with("para-style-content")
-}
-
-/// The dialog's body: the section list beside the selected section's content, and below them
-/// Reset Panel, the Preview checkbox and an invalid value's error. The content is at most 420 points
-/// tall, and scrolls when it is taller than that or than the screen less the rest of the window
-/// (as drawn last frame). The section list stays put while the content scrolls. Returns whether
-/// the dialog asks to be canceled (never: Cancel comes from the button row in `dialogs::show`).
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let window = ui.ctx().memory(|m| m.area_rect(ui.layer_id().id)).map_or(0.0, |r| r.height());
-    let content = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui))).unwrap_or(0.0);
-    let rest = (window - content).max(0.0);
-    let room = (ui.ctx().content_rect().height() - rest - 2.0 * super::EDGE_GAP).clamp(0.0, 420.0);
-    let drawn = ui.horizontal(|ui| {
-        section_list(ui, d);
-        ui.separator();
-        let section = d.str("section");
-        let content_w = ui.available_width();
-        let shown = egui::ScrollArea::both()
-            .id_salt(("para-style-sections", section))
-            .max_height(room)
-            .min_scrolled_height(room)
-            .max_width(content_w)
-            .auto_shrink([false, true])
-            .show(ui, |ui| {
-                ui.vertical(|ui| section_body(ui, d));
-            });
-        // `inner_rect` is the height offered before a short section shrinks the area to its content.
-        shown.inner_rect.height().min(shown.content_size.y)
-    });
-    let content_h = drawn.inner;
-    let was = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui)));
-    ui.ctx().data_mut(|m| m.insert_temp(content_id(ui), content_h));
-    // A new height lays the frame out again before it is shown, so the window is placed at its new
-    // size and OK and Cancel stay on the screen in the frame of a section switch.
-    if was.is_none_or(|was| (was - content_h).abs() > 0.5) {
-        ui.ctx().request_discard("paragraph style content height changed");
-    }
-    reset_button(ui, d);
-    match edited_attrs(d) {
-        Ok(attrs) => {
-            let params = json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs});
-            form::preview(app, ui, d, tl!("Paragraph Style Options"), "paraStyle.edit", params);
-        }
-        Err(why) => super::char_style_options::attrs_error(ui, &why),
-    }
-    false
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let attrs = edited_attrs(d)?;
-    form::commit_preview(app, "paraStyle.edit", json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs}))
+/// The dialog's frame work: previews the values, commits at OK, and rolls the preview back at Cancel.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let refusals = Refusals {
+        busy: "finish the active edit before applying Paragraph Style Options",
+        elsewhere: "switch back to the document where Paragraph Style Options was opened",
+        closed: "the document where Paragraph Style Options was opened has closed",
+    };
+    pump_in_opening_document::<ParaStyleOptions>(
+        app,
+        |app| &mut app.para_style_preview,
+        |d| (d.document, d.frame()),
+        ParaStyleOptions::hosted_mut,
+        (tl!("Paragraph Style Options"), "paraStyle.edit"),
+        &refusals,
+    );
 }
 
 #[cfg(test)]

@@ -152,7 +152,26 @@ fn a_placed_document_is_vectors_in_every_output() {
     assert_eq!(images, 0, "no image in the PDF");
     assert!(paths > 0);
     let png = decode(&s.execute("document.serialize", &json!({"format": "png"})).unwrap());
-    let [r, g, b, _] = image::load_from_memory(&png).unwrap().to_rgba8().get_pixel(200, 150).0;
+    let [r, g, b, _] = craft_image_codecs::decode(&png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
+        .get_pixel(200, 150)
+        .0;
     assert!(near([r, g, b], RED), "{:?}", [r, g, b]);
     for format in ["eps", "emf", "dxf"] {
         let out = s.execute("document.serialize", &json!({"format": format})).unwrap();
@@ -160,6 +179,33 @@ fn a_placed_document_is_vectors_in_every_output() {
     }
     let info = s.execute("document.info", &json!({})).unwrap();
     assert!(info.to_string().contains("\"placedDocuments\""), "{info}");
+}
+
+#[test]
+fn a_placed_documents_spot_color_stays_a_spot_color_in_a_cmx_file() {
+    let dir = Folder::new("placed-cmx-spot");
+    let src = dir.file("logo.vectorcraft");
+    let mut d = Document::new(100.0, 50.0);
+    let gold = Color::cmyk(0.0, 0.2, 0.8, 0.1);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Gold".into(), paint: Paint::solid(gold), global: true, spot: true });
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let paint = Paint::Solid { color: gold, swatch: Some("Gold".into()), tint: 1.0 };
+    let look = Appearance::basic(paint, Paint::None, 0.0);
+    d.insert(Some(layer), 0, Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), look)).unwrap();
+    write(&src, &vectorcraft_format::save_file(&d));
+    let mut s = session();
+    place(&mut s, &src);
+    assert!(s.doc().unwrap().doc.swatch("Gold").is_none(), "the placing document has no swatch of that name");
+    let bytes = decode(&s.execute("document.serialize", &json!({"format": "cmx"})).unwrap());
+    let drawing = craft_cdr::read_cmx(&bytes, craft_cdr::Limits::default()).unwrap();
+    let mut fills = Vec::new();
+    for o in drawing.pages.iter().flat_map(|p| &p.layers).flat_map(|l| &l.objects) {
+        if let craft_cdr::model::Object::Shape(shape) = o {
+            fills.extend(shape.fill.clone());
+        }
+    }
+    assert!(fills.iter().any(|c| matches!(c, craft_cdr::model::Color::Spot { name, .. } if name == "Gold")), "{fills:?}");
 }
 
 #[test]
@@ -192,7 +238,26 @@ fn the_preview_is_saved_so_the_document_shows_it_without_its_file() {
     // Output with the file gone: the preview, with a warning.
     let png = s.execute("document.serialize", &json!({"format": "png"})).unwrap();
     assert!(png["warnings"].to_string().contains("1 placed document output as its preview"), "{png}");
-    let [r, g, b, _] = image::load_from_memory(&decode(&png)).unwrap().to_rgba8().get_pixel(200, 150).0;
+    let [r, g, b, _] = craft_image_codecs::decode(&decode(&png))
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
+        .get_pixel(200, 150)
+        .0;
     assert!(near([r, g, b], RED), "{:?}", [r, g, b]);
     // Saved for older apps: the art it shows (here its preview), as plain objects.
     let old: Value =
@@ -869,6 +934,127 @@ fn an_ai_file_that_places_itself_opens() {
     assert_eq!(found, [at], "{r}");
 }
 
+/// A placed EPS file whose bytes a `.ai` file's editing data includes (between `%%BeginDocument:`
+/// and `%%EndDocument`) opens as a placed document of those bytes: it draws its art with its file
+/// missing, and its file found unchanged is neither missing nor modified. A native save keeps the
+/// bytes, so the copy reopens and draws without the file.
+#[test]
+fn a_placed_eps_file_included_in_an_ai_files_editing_data_draws_without_its_file() {
+    use vectorcraft_testkit::ai;
+    let dir = Folder::new("placed-eps-in-ai");
+    // The file draws red and the page blue, so each check shows which one drew.
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n1 0 0 setrgbcolor\n0 0 60 60 rectfill\n%%EOF\n";
+    let (red, blue) = ([255, 0, 0], [0, 0, 255]);
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 0\n[1 0 0 1 20 20] 0 0 60 60 4 4 0\n(/no/such/folder/src/shape.eps)`\n\
+         %%BeginDocument: /no/such/folder/src/shape.eps\n{eps}\n%%EndDocument\n%AI17_Begin_Content_if_version_gt:24 12\n\
+         %AI28_BeginPlacedRelativePath\n(src/)\n%AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n"
+    );
+    let doc_path = dir.file("poster.ai");
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &place));
+    write(&doc_path, &ai::ai(data.as_bytes(), "0 0 1 rg 20 20 60 60 re f"));
+    let shown = |s: &Session| {
+        let img = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0, true);
+        let [r, g, b, _] = img.pixel(50, 50);
+        [r, g, b]
+    };
+    let one = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let mut found = vec![];
+        d.visit_placed(|n, p| found.push((n.id, p.clone())));
+        let [(id, p)] = &found[..] else { panic!("one placed document: {found:?}") };
+        (*id, p.clone(), d.images[&p.key].clone())
+    };
+    let mut s = session();
+
+    let r = open(&mut s, &doc_path);
+    assert_eq!(r["missingLinks"][0]["name"].as_str(), Some("shape.eps"), "{r}");
+    let (id, p, blob) = one(&s);
+    assert_eq!((blob.bytes.as_slice(), blob.mime.as_str()), (eps.as_bytes(), "application/postscript"));
+    assert_eq!(p.link.relative.as_deref(), Some("src/shape.eps"));
+    let at = bounds(&s, id);
+    assert!((at.x0 - 20.0).abs() < 0.01 && (at.y0 - 20.0).abs() < 0.01 && (at.width() - 60.0).abs() < 0.01, "{at:?}");
+    assert!(near(shown(&s), red), "its art draws: {:?}", shown(&s));
+
+    write(&dir.file("src/shape.eps"), eps.as_bytes());
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    assert!(near(shown(&s), red));
+
+    let copy = dir.file("copy.vectorcraft");
+    save(&mut s, &copy);
+    std::fs::remove_file(dir.file("src/shape.eps")).unwrap();
+    open(&mut s, &copy);
+    let (_, _, blob) = one(&s);
+    assert_eq!(blob.bytes.as_slice(), eps.as_bytes(), "the bytes are saved");
+    assert!(near(shown(&s), red), "and draw: {:?}", shown(&s));
+
+    // A file named as PostScript of another kind, or with a name that doesn't say, draws the same.
+    for name in ["shape.ps", "shape", "shape.dat"] {
+        let named = place.replace("shape.eps", name);
+        write(&doc_path, &ai::ai(ai::editing_data(200.0, 100.0, &ai::layer("Art", &named)).as_bytes(), "0 0 1 rg 20 20 60 60 re f"));
+        open(&mut s, &doc_path);
+        let (_, p, blob) = one(&s);
+        assert_eq!((p.link.name(), blob.mime.as_str()), (name, "application/postscript"));
+        assert!(near(shown(&s), red), "{name} draws: {:?}", shown(&s));
+    }
+
+    // Bytes that can't be read leave the placed file unread: the file is read from its PDF part,
+    // and the object comes in as what the page draws there.
+    let broken = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n0 0 60 60 nosuchoperator\n%%EOF\n";
+    write(&doc_path, &ai::ai(ai::editing_data(200.0, 100.0, &ai::layer("Art", &place.replace(eps, broken))).as_bytes(), "0 0 1 rg 20 20 60 60 re f"));
+    let r = open(&mut s, &doc_path);
+    assert!(near(shown(&s), blue), "the page's art: {:?} {r}", shown(&s));
+}
+
+/// A synthetic EPS file that includes another placed EPS file, `depth` levels deep.
+fn nested_included_eps(depth: usize) -> String {
+    let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /` {gsave 5 {pop} repeat concat} def /~ {grestore} def";
+    let mut eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n1 0 0 setrgbcolor\n10 20 40 30 rectfill\n%%EOF\n".to_string();
+    for _ in 0..depth {
+        eps = format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: VectorCraft\n%AI5_FileFormat 4.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n\
+             %%BeginProlog\n{prolog}\n%%EndProlog\n%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Back) Ln\n0 A\n\
+             [1 0 0 1 0 0] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}%%EndDocument\n~\nLB\n%AI5_EndLayer--\nshowpage\n%%EOF\n"
+        );
+    }
+    eps
+}
+
+/// Open checks and drawing must not recursively multiply each other's work.
+#[test]
+fn placed_eps_files_included_open_work_is_bounded() {
+    let dir = Folder::new("placed-eps-open-work");
+    let path = dir.file("deep.eps");
+    write(&path, nested_included_eps(12).as_bytes());
+    let mut s = session();
+    let drawings = crate::cmd::place::document::DOCUMENT_READS.with(std::cell::Cell::get);
+    let checks = vectorcraft_eps::included_eps_reads();
+    open(&mut s, &path);
+    let drawings = crate::cmd::place::document::DOCUMENT_READS.with(std::cell::Cell::get) - drawings;
+    let checks = vectorcraft_eps::included_eps_reads() - checks;
+    eprintln!("included EPS work: {drawings} drawing reads, {checks} open checks");
+    // At most 8 drawing loads, each with at most 8 parses for checks, plus the outer import's 8.
+    // Repeated structural reads share completed checks within each chain.
+    assert!(drawings <= 8, "{drawings} drawing reads, {checks} open checks");
+    assert!(checks <= 8 * 8 + 8, "{drawings} drawing reads, {checks} open checks");
+    assert!(drawings > 0 && checks > 0, "both read paths were exercised");
+}
+
+/// A legacy-format file (version 7 specification §16) placing an EPS file whose bytes it includes,
+/// which is such a file in turn, 300 deep: it opens, reading a bounded number of them.
+#[test]
+fn placed_eps_files_included_300_deep_open() {
+    let dir = Folder::new("placed-eps-300-deep");
+    let path = dir.file("deep.eps");
+    write(&path, nested_included_eps(300).as_bytes());
+    let mut s = session();
+    open(&mut s, &path);
+    let mut placed = 0;
+    s.doc().unwrap().doc.visit_placed(|_, _| placed += 1);
+    assert_eq!(placed, 1);
+}
+
 #[test]
 fn a_pdf_compatible_ai_file_places_linked_like_a_pdf() {
     let dir = Folder::new("placed-ai-linked");
@@ -886,6 +1072,190 @@ fn a_pdf_compatible_ai_file_places_linked_like_a_pdf() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
     let (images, _) = pdf_contents(&decode(&s.execute("document.serialize", &json!({"format": "pdf"})).unwrap()));
     assert_eq!(images, 0);
+}
+
+/// An EPS file written by hand at `path`: a 100×50 bounding box holding a 40×20 rectangle of `rgb`
+/// from (20, 10), and `extra` comment lines (which change the file's size).
+fn eps_source(path: &str, rgb: [u8; 3], extra: usize) {
+    let [r, g, b] = rgb.map(|c| c as f64 / 255.0);
+    let mut ps = format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n{r} {g} {b} setrgbcolor\nnewpath 20 10 moveto 60 10 lineto 60 30 lineto 20 30 lineto closepath fill\n"
+    );
+    for i in 0..extra {
+        ps.push_str(&format!("% line {i}\n"));
+    }
+    ps.push_str("showpage\n%%EOF\n");
+    write(path, ps.as_bytes());
+}
+
+/// An EPS file at `path` written by VectorCraft's EPS export: a 100×50 artboard filled with `rgb`
+/// (`extra` more rectangles change the file's size).
+fn exported_eps(path: &str, rgb: [u8; 3], extra: usize) {
+    let mut d = Document::new(100.0, 50.0);
+    let layer = d.layers[0].id;
+    for _ in 0..=extra {
+        let id = d.alloc_id();
+        d.insert(Some(layer), usize::MAX, Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), look(rgb))).unwrap();
+    }
+    write(path, &cmd::fileio::encode_all(&d, "eps", &json!({})).unwrap().files[0].1);
+}
+
+/// The kinds of `n` and everything inside it, in order.
+fn kinds(n: &Node) -> Vec<&'static str> {
+    let mut k = vec![];
+    n.walk(&mut |c| k.push(c.kind_label()));
+    k
+}
+
+#[test]
+fn with_link_an_eps_file_places_linked_framed_as_without_link() {
+    let dir = Folder::new("placed-eps-linked");
+    let src = dir.file("badge.eps");
+    eps_source(&src, RED, 0);
+    let mut s = session();
+    let embedded = |s: &mut Session, crop: &str| {
+        let r = s.execute("file.place", &json!({"path": src, "link": false, "crop": crop, "at": [200, 150]})).unwrap();
+        assert_eq!(r["linked"], false, "{r}");
+        let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        n
+    };
+    let copy = embedded(&mut s, "crop");
+    let id = place(&mut s, &src);
+    let p = placed(&s, id);
+    assert_eq!((p.link.path.as_str(), p.link.page, p.bounding), (src.as_str(), Some(1), false), "{p:?}");
+    assert!((p.width - 100.0).abs() < 1e-6 && (p.height - 50.0).abs() < 1e-6, "{p:?}");
+    assert_eq!(Some(bounds(&s, id)), copy.geometric_bounds(), "the bounding box, as without Link");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    let row = &s.execute("links.list", &json!({})).unwrap()["links"][0];
+    assert_eq!((row["format"].as_str(), row["document"].as_bool(), row["status"].as_str()), (Some("EPS"), Some(true), Some("ok")), "{row}");
+    assert_eq!(s.doc().unwrap().doc.images[&p.key].mime, "application/postscript");
+    // Break Link gives the group placing it without Link gives.
+    let r = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(r["embedded"], json!([id.0]), "{r}");
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert_eq!((kinds(&n), n.geometric_bounds()), (kinds(&copy), copy.geometric_bounds()));
+    assert!(!s.doc().unwrap().doc.has_placed() && near(centre_colour(&s.doc().unwrap().doc), RED));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Bounding Box: the art's bounds, as without Link.
+    let copy = embedded(&mut s, "bounding");
+    let r = s.execute("file.place", &json!({"path": src, "crop": "bounding", "at": [200, 150]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let p = placed(&s, id);
+    assert!(p.bounding && (p.width - 40.0).abs() < 1e-6 && (p.height - 20.0).abs() < 1e-6, "{p:?}");
+    assert_eq!(Some(bounds(&s, id)), copy.geometric_bounds());
+    // Object › Expand gives it too (the placed object is selected).
+    let r = s.execute("object.expand", &json!({})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert_eq!((kinds(&n), n.geometric_bounds()), (kinds(&copy), copy.geometric_bounds()), "{r}");
+    // Placed from its bytes, it is embedded.
+    let data = vectorcraft_format::base64_encode(&std::fs::read(&src).unwrap());
+    let r = s.execute("file.place", &json!({"name": "badge.eps", "dataBase64": data})).unwrap();
+    assert_eq!(r["linked"], false, "{r}");
+}
+
+#[test]
+fn a_changed_eps_file_is_modified_and_update_links_reads_it_again() {
+    let dir = Folder::new("placed-eps-update");
+    let src = dir.file("flyer.eps");
+    exported_eps(&src, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    exported_eps(&src, BLUE, 1);
+    assert_eq!(s.execute("links.check", &json!({})).unwrap()["links"][0]["status"], "modified");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED), "shows the file as it read it");
+    let u = s.execute("links.update", &json!({})).unwrap();
+    assert_eq!(u["updated"], json!([id.0]), "{u}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    assert_eq!(s.execute("links.check", &json!({})).unwrap()["modified"], 0);
+    // Relinked to another EPS file, it shows that file's art.
+    let other = dir.file("other.eps");
+    eps_source(&other, RED, 0);
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other})).unwrap();
+    assert_eq!(r["relinked"], json!([id.0]), "{r}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    // A file it can't show is refused.
+    let notes = dir.file("notes.txt");
+    write(&notes, b"not a page");
+    let e = s.execute("links.relink", &json!({"ids": [id.0], "path": notes})).unwrap_err().to_string();
+    assert!(e.contains("isn't a VectorCraft document"), "{e}");
+    assert_eq!(placed(&s, id).link.path, other);
+    // Its file replaced by one that isn't PostScript: updating keeps the art it shows.
+    write(&other, b"not a page");
+    let _ = s.execute("links.update", &json!({}));
+    assert_eq!(placed(&s, id).link.path, other);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+#[test]
+fn a_linked_eps_file_outputs_as_vectors_and_shows_its_preview_without_its_file() {
+    let dir = Folder::new("placed-eps-outputs");
+    let src = dir.file("seal.eps");
+    // Content of its own: files read are cached by content, and this one is removed.
+    eps_source(&src, RED, 3);
+    let bytes = std::fs::read(&src).unwrap();
+    let mut s = session();
+    let id = place(&mut s, &src);
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    // Without its file: missing, shown and output as its preview, and not embedded.
+    std::fs::remove_file(&src).unwrap();
+    open(&mut s, &doc_path);
+    let key = placed(&s, id).key;
+    assert!(s.doc().unwrap().doc.images[&key].is_proxy(), "opened with the preview only");
+    let row = &s.execute("links.list", &json!({})).unwrap()["links"][0];
+    assert_eq!((row["format"].as_str(), row["status"].as_str()), (Some("EPS"), Some("missing")), "{row}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED), "the preview");
+    let pdf = s.execute("document.serialize", &json!({"format": "pdf"})).unwrap();
+    assert!(pdf["warnings"].to_string().contains("1 placed document output as its preview"), "{}", pdf["warnings"]);
+    let r = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!((r["embedded"].clone(), r["missing"].clone()), (json!([]), json!([id.0])), "{r}");
+    assert!(s.doc().unwrap().doc.has_placed());
+    // The file back: output reads it again, its paths and not the preview.
+    write(&src, &bytes);
+    assert_eq!(s.execute("links.check", &json!({})).unwrap()["links"][0]["status"], "ok");
+    let pdf = s.execute("document.serialize", &json!({"format": "pdf"})).unwrap();
+    assert_eq!(pdf["warnings"], json!([]), "{}", pdf["warnings"]);
+    let (images, paths) = pdf_contents(&decode(&pdf));
+    assert_eq!(images, 0, "no image in the PDF");
+    assert!(paths > 0);
+    // Include Linked Files keeps the EPS file itself.
+    let full = file_json(&decode(&s.execute("document.serialize", &json!({"format": "vectorcraft", "includeLinked": true})).unwrap()));
+    assert_eq!((full["images"][&key]["proxy"].clone(), full["images"][&key]["mime"].as_str()), (Value::Null, Some("application/postscript")));
+}
+
+#[test]
+fn a_postscript_ai_file_places_linked_like_an_eps_file() {
+    let dir = Folder::new("placed-ps-ai-linked");
+    let src = dir.file("badge.ai");
+    eps_source(&src, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    assert_eq!(placed(&s, id).link.path, src);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    let row = &s.execute("links.list", &json!({})).unwrap()["links"][0];
+    assert_eq!(row["format"], "PostScript", "{row}");
+    eps_source(&src, BLUE, 5);
+    let u = s.execute("links.update", &json!({})).unwrap();
+    assert_eq!(u["updated"], json!([id.0]), "{u}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    // Saved with its preview only and reopened without its file, it is still listed as PostScript.
+    let bytes = std::fs::read(&src).unwrap();
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&src).unwrap();
+    open(&mut s, &doc_path);
+    assert!(s.doc().unwrap().doc.images[&placed(&s, id).key].is_proxy(), "opened with the preview only");
+    let row = &s.execute("links.list", &json!({})).unwrap()["links"][0];
+    assert_eq!((row["format"].as_str(), row["status"].as_str()), (Some("PostScript"), Some("missing")), "{row}");
+    write(&src, &bytes);
+    // The same bytes named .eps are read as an EPS file: a file of their own, not the .ai's art.
+    let eps = dir.file("badge.eps");
+    write(&eps, &std::fs::read(&src).unwrap());
+    let other = place(&mut s, &eps);
+    assert_ne!(placed(&s, other).key, placed(&s, id).key);
 }
 
 #[test]

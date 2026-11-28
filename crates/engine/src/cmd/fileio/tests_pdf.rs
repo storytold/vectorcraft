@@ -2,7 +2,8 @@
 
 use serde_json::{Value, json};
 
-use super::pdf::DEFAULT_PRESET;
+use vectorcraft_pdf::{APP, default_preset_name};
+
 use super::*;
 
 fn session(artboards: usize) -> Session {
@@ -310,7 +311,7 @@ fn bad_options_are_refused() {
 #[test]
 fn options_apply_over_the_preset() {
     let mut s = session(1);
-    let a = b64(&export(&mut s, json!({"preset": DEFAULT_PRESET, "compression": {"compressText": false}})));
+    let a = b64(&export(&mut s, json!({"preset": default_preset_name(APP), "compression": {"compressText": false}})));
     let b = b64(&export(&mut s, json!({"preset": "default"})));
     assert!(a.len() > b.len(), "content streams left uncompressed");
     assert!(String::from_utf8_lossy(&a).contains(" re") || String::from_utf8_lossy(&a).contains(" l"));
@@ -375,7 +376,41 @@ fn a_16_bit_png_is_written_at_8_bits_before_pdf_1_5() {
     let mut s = session(1);
     let deep = image::ImageBuffer::from_fn(8, 8, |x, y| image::Rgb([x as u16 * 8000, y as u16 * 8000, 40000]));
     let mut png = vec![];
-    image::DynamicImage::ImageRgb16(deep).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = image::DynamicImage::ImageRgb16(deep);
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.execute("file.place", &json!({"name": "deep.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [50, 40]})).unwrap();
     let readable = json!({"compressText": false});
     for (cmd, p, depth) in [
@@ -465,7 +500,7 @@ fn pdf_settings_summarise_changes_and_warnings() {
     let mut s = Session::new();
     let v = s.execute("document.pdfSettings", &json!({})).unwrap();
     assert_eq!(v["settings"]["compatibility"], "1.7");
-    assert_eq!(v["presets"][0], DEFAULT_PRESET);
+    assert_eq!(v["presets"][0], default_preset_name(APP));
     assert_eq!(v["changed"], json!([]));
     assert_eq!(v["warnings"], json!([]));
     let p = json!({"compatibility": "1.5", "compression": {"compressText": false}, "createLayers": true, "security": {"copy": false, "openPassword": ""}});
@@ -510,5 +545,5 @@ fn formats_list_the_pdf_options() {
         assert!(pdf["options"].get(k).is_some(), "{k}");
     }
     assert_eq!(pdf["options"]["compatibility"]["default"], "1.7");
-    assert_eq!(pdf["options"]["preset"]["default"], DEFAULT_PRESET);
+    assert_eq!(pdf["options"]["preset"]["default"], default_preset_name(APP));
 }

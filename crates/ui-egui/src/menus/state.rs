@@ -1,6 +1,9 @@
-use super::run::normalize_panel;
+use super::run::{normalize_panel, toolbar_double, toolbar_panel};
 use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::{Brightness, Value, VectorcraftApp};
+use crate::i18n::LangExt as _;
+use craft::keymap::{Chord, CommandRef};
+use craft::ui::runtime::commands;
 
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
@@ -61,6 +64,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         // A View › Rotate View item is checked when the active view is turned to its angle; without
         // a document no item is checked.
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
+        // Object › Align's Align To items: the choice the Align panel shows.
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::shown_align_to(app) == v,
         "window.control" => app.ui.control_bar,
         "window.helpBar" => app.ui.help_bar,
         "view.statusBarShow" => p.get("show").and_then(Value::as_str) == Some(app.ui.status_bar_show.param()),
@@ -69,42 +74,56 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             .get("group")
             .and_then(Value::as_str)
             .is_some_and(|g| crate::chrome::CONTROL_BAR_GROUPS.contains(&g) && !app.ui.control_bar_hidden_groups.contains(g)),
-        "window.toolbar" => app.ui.toolbar,
+        "window.toolbar" => crate::toolbar::shown(&app.ui),
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
-        "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
-        "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
-            None => app.ui.toolbar_double,
-            Some(name) => crate::custom_toolbars::find(&app.ui, name).is_some_and(|b| b.double),
-        },
+        "window.toolbarCompact" => app.ui.toolbar_compact,
+        "window.toolbarColumns" => toolbar_panel(&app.ui, p).is_ok_and(|panel| toolbar_double(&app.ui, &panel)),
         "window.editToolbar" => {
             app.ui.tools_drawer
                 && crate::custom_toolbars::drawer_target(&app.ui).map(crate::custom_toolbars::key)
                     == p.get("toolbar").and_then(Value::as_str).map(crate::custom_toolbars::key)
         }
-        "window.toolbar.custom" => {
-            p.get("name").and_then(Value::as_str).and_then(|name| crate::custom_toolbars::find(&app.ui, name)).is_some_and(|b| b.shown)
-        }
+        "window.toolbar.custom" => p
+            .get("name")
+            .and_then(Value::as_str)
+            .and_then(|name| crate::custom_toolbars::find(&app.ui, name))
+            .is_some_and(|b| crate::custom_toolbars::is_on(&app.ui, b)),
         "window.floatTools" => {
             let tool = p.get("tool").and_then(Value::as_str).unwrap_or("");
             let toolbar = p.get("toolbar").and_then(Value::as_str);
-            crate::toolbar::strips(&app.ui, toolbar).iter().any(|f| f.tools.iter().any(|id| id == tool))
+            crate::toolbar::strips(app, toolbar).iter().any(|strip| strip.contains(&tool))
         }
         "window.taskBar" => app.ui.task_bar,
         "window.pathfinder.compoundShapes" => app.ui.shape_modes_compound,
-        "window.taskBar.pin" => app.ui.task_bar_place.pinned,
-        "window.learn" => crate::panels::learn::visible(&app.ui),
+        "window.taskBar.pin" => app.ui.task_bar_place.place.pinned,
+        "window.taskBar.actions" => p
+            .get("action")
+            .and_then(Value::as_str)
+            .is_some_and(|a| crate::canvas::is_task_bar_action(a) && !app.ui.task_bar_hidden_actions.contains(a)),
+        "window.quickPenToolbar" => app.ui.quick_pen_bar,
+        "window.quickPenToolbar.pin" => app.ui.quick_pen_bar_place.place.pinned,
+        "window.learn" => crate::panels::learn::visible(app),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
-            normalize_panel(panel).is_some_and(|id| crate::panel_docking::visible(&app.ui, id))
+            normalize_panel(panel).is_some_and(|id| crate::panel_docking::visible(app, id))
         }
         "window.collapseDock" => crate::panel_docking::dock_collapsed(&app.ui),
-        "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
+        "window.workspace" => p.get("name").and_then(Value::as_str).is_some_and(|name| crate::workspaces::is_current(&app.ui, name)),
+        // The Tile layout the panes show.
+        "window.arrange.tile" => app.ui.tiled && crate::canvas::TileLayout::from_params(p) == Ok(app.ui.tile_layout),
         "window.brightness" => p.get("brightness").and_then(Value::as_str).and_then(Brightness::parse) == Some(app.ui.brightness),
         "view.slices.lock" => app.session.slices_locked(),
         "object.slice.clipToArtboard" => app.session.active().is_some_and(|d| d.doc.slices_clip_to_artboard),
         "view.proofColors" => vectorcraft_render::proof::view().proof_colors,
         "view.overprintPreview" => vectorcraft_render::proof::view().overprint,
         "view.proofSetup" => p.get("target").and_then(Value::as_str) == Some(vectorcraft_render::proof::view().setup.target.id().as_str()),
+        // Customize… is checked while the proof simulates a profile it chose.
+        "ui.proofSetupDialog" => {
+            matches!(
+                vectorcraft_render::proof::view().setup.target,
+                vectorcraft_color::cms::ProofTarget::Cmyk(_) | vectorcraft_color::cms::ProofTarget::Rgb(_)
+            )
+        }
         "perspective.grid.snap" => perspective_grid(app).is_some_and(|g| g.snap),
         "perspective.grid.lockStation" => perspective_grid(app).is_some_and(|g| g.lock_station),
         "file.documentColorMode" | "object.convertDocumentColorMode" => {
@@ -144,9 +163,9 @@ fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
 }
 
 /// Menu items shown only with Preferences › Type › Show East Asian Options on: Type › Composite
-/// Fonts….
+/// Fonts… and Type › Kinsoku Shori Settings….
 fn east_asian_hidden(app: &VectorcraftApp, id: &str) -> bool {
-    id == crate::dialogs::composite_fonts::COMMAND && !app.session.prefs.show_east_asian_options
+    [crate::dialogs::composite_fonts::COMMAND, crate::dialogs::kinsoku_sets::COMMAND].contains(&id) && !app.session.prefs.show_east_asian_options
 }
 
 /// How the menus show item `id` (params `p`) now: (enabled, checked: `Some` for an item that is on
@@ -167,9 +186,37 @@ pub fn plugin_revision() -> u64 {
     vectorcraft_plugins::registry::revision()
 }
 
-/// Effective shortcut of a command: the user's override (Edit → Keyboard Shortcuts) or the default.
-pub fn shortcut_of(id: &str) -> Option<&'static str> {
-    crate::shortcut_editor::command_shortcut(id)
+/// The shortcut entry `key` ([`crate::keymap`]'s entry keys) shows: its first single-press binding in
+/// the window's keymap, under the user's set in use (Edit → Keyboard Shortcuts). `None` before the
+/// window's first frame.
+pub fn shortcut_of(app: &VectorcraftApp, key: &str) -> Option<Chord> {
+    command_shortcuts(app)(&crate::keymap::command_of(key))
+}
+
+/// The shortcut each command shows, as [`shortcut_of`] reads it, for a caller that asks for many: the
+/// keymap is read once. `None` for every command before the window's first frame.
+pub(crate) fn command_shortcuts(app: &VectorcraftApp) -> impl Fn(&CommandRef) -> Option<Chord> + '_ {
+    let ctx = app.ui_ctx.as_ref();
+    let window = ctx.and_then(commands::keymap);
+    // The window's keymap takes a change of the set (`shortcuts.set`) from its next frame; the set is read until then.
+    let pending = window.as_ref().and_then(|window| {
+        let (now, built) = (&*app.shortcut_overrides, window.overrides());
+        if now.len() == built.len() && now.iter().all(|(k, texts)| built.get(k) == Some(texts)) {
+            return None;
+        }
+        let mut keymap = (**window).clone();
+        keymap.set_overrides(now.clone());
+        Some(keymap)
+    });
+    move |command| {
+        let ctx = ctx.filter(|_| window.is_some())?;
+        match &pending {
+            None => commands::chord(ctx, command),
+            Some(keymap) => {
+                keymap.bindings(command).into_iter().find(|b| b.trigger.press == craft::keymap::PressKind::Single).map(|b| b.trigger.chord)
+            }
+        }
+    }
 }
 
 /// Is a command currently enabled?
@@ -200,39 +247,71 @@ pub(super) fn has_subject(app: &VectorcraftApp) -> bool {
 /// Can command `id` run now? An engine command asks the engine, a UI command the app's state;
 /// none that would act on text an input method is still composing.
 pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
+    why_off(app, id).is_none()
+}
+
+/// Why command `id` can't run now ([`enabled`]): `None` while it can, else `Some` with the
+/// engine's reason when the engine's check of an engine command fails, and with the reason of
+/// [`crate::panels::align::why_off`] for an Align panel button. The engine's check runs at most
+/// once.
+pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> {
     if waits_for_ime(app, id) {
-        return false;
+        return Some(None);
     }
     if SUBJECT_COMMANDS.contains(&id) {
-        return has_subject(app);
+        return (!has_subject(app)).then_some(None);
     }
     // The Artboard tool's canvas menu measured this when it opened.
     if id == "artboard.deleteEmpty"
         && let Some(facts) = crate::panels::artboards::open_menu_facts(app)
     {
-        return facts.any_empty;
+        return (!facts.any_empty).then_some(None);
+    }
+    if let Some(b) = crate::panels::align::button(id) {
+        return crate::panels::align::why_off(app, &b);
     }
     if let Some(c) = vectorcraft_engine::find_command(id) {
-        // The system clipboard's contents can be pasted with an empty internal clipboard.
-        return (c.enabled)(&app.session).is_ok() || app.system_paste && id.starts_with("edit.paste");
+        return match (c.enabled)(&app.session) {
+            Ok(()) => None,
+            // The system clipboard's contents can be pasted into an open document with an empty
+            // internal clipboard.
+            Err(_) if app.system_paste && app.session.active().is_some() && id.starts_with("edit.paste") => None,
+            Err(why) => Some(Some(why)),
+        };
     }
+    (!ui_enabled(app, id)).then_some(None)
+}
+
+/// Can UI command `id` run now?
+fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
+        // Presentation Mode shows no panel.
+        "window.panel" => app.ui.screen_mode < 3,
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
-        "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" => {
-            crate::panels::character::text_style(app).is_some()
-        }
+        "type.bold"
+        | "type.italic"
+        | "type.underline"
+        | "type.superscript"
+        | "type.subscript"
+        | "type.lineComposer"
+        | "type.hyphenate"
+        | "type.highlightFontSize" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
-        id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command_now(app)),
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::can_choose(app, v),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
-        "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
+        "file.cancelExport" | "file.exportInBackground" => app.background.running(crate::background::Kind::Export),
+        "file.cancelSave" | "file.saveInBackground" => app.background.running(crate::background::Kind::Save),
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
+        "file.cancelPlace" => crate::placing::can_cancel(app),
+        crate::dialogs::failed_plugins::COMMAND => vectorcraft_engine::cmd::plugin::failed_load_count(&app.session) > 0,
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
         "imageTrace.hideRuns" => crate::trace_runs::any_shown(app),
+        "retype.cancelSearch" => crate::retype_runs::any_running(app),
         "file.place"
         | "file.export.svg"
         | "file.export.png"
@@ -249,6 +328,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.rotateToSelection" | crate::addons::arrange::ZOOM => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
         "file.clearRecent" => !app.ui.recent_files.is_empty(),
+        "help.clearRecentCommands" => !app.ui.recent_commands.is_empty() || !app.ui.command_uses.is_empty(),
         id if id.starts_with("type.recentFont") => {
             id["type.recentFont".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.recent_fonts().len()) && app.session.active().is_some()
         }
@@ -264,28 +344,21 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" | "ui.svgFilterDialog" => {
             app.session.active().is_some()
         }
-        "ui.importSvgFilter" => {
-            app.session.active().is_some() && crate::picks::can(app, &crate::picks::PickRequest::Open(crate::dialogs::svg_filter::pick()))
-        }
+        "ui.importSvgFilter" => app.session.active().is_some(),
+        crate::dialogs::save_pdf::SAVE_SUMMARY => crate::dialogs::save_pdf::summary_open(app),
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
-        "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
-        "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
+        "ui.findFontsInFolder" => app.session.active().is_some(),
+        "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" | "ui.colorGroupOptions" => app.session.active().is_some(),
         "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.paraStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => {
             app.session.active().is_some()
         }
-        "ui.charStyleOptions.resetPanel" => app.ui.dialog.as_ref().is_some_and(|d| {
-            (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
-                && crate::dialogs::char_style_options::can_reset(d)
-        }),
-        "ui.paraStyleOptions.resetPanel" => app
-            .ui
-            .dialog
-            .as_ref()
-            .is_some_and(|d| crate::dialogs::para_style_options::is_paragraph_dialog(d) && crate::dialogs::para_style_options::can_reset(d)),
+        "ui.charStyleOptions.resetPanel" => style_tab_resets(app, false),
+        "ui.paraStyleOptions.resetPanel" => style_tab_resets(app, true),
         "ui.newArtboard" | "artboard.selectAll" | crate::dialogs::check_spelling::COMMAND => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
+        "ui.brushObjectOptions" => crate::dialogs::brush_options::object_available(app),
         "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" | "ui.warichuSettings" => {
             crate::panels::character::text_style(app).is_some()
         }
@@ -307,26 +380,38 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.simplifyAuto" | "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::showing(app),
         "ui.smoothAuto" => crate::dialogs::smooth_slider::showing(app),
-        "ui.dialogReset" => crate::dialogs::can_reset(app),
+        "ui.recolorUndo" => crate::dialogs::recolor::can_step(app, true),
+        "ui.recolorRedo" => crate::dialogs::recolor::can_step(app, false),
+        "ui.dialogReset" => crate::dialogs::host::can_reset_top(app),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "links.copyInfo" => !crate::panels::links::selected_rows_of_app(app).is_empty(),
-        "ui.relinkDialog" => app.services.pick_open.is_some() && (selected_image(app, |_| true) || selected_placed(app)),
-        "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
+        "ui.relinkDialog" => crate::file_asks::can(app, craft::host::PickKind::Open) && (selected_image(app, |_| true) || selected_placed(app)),
+        "ui.findLinksInFolder" => app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
-        "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),
-        "ui.epsOptionsDialog" => app.session.active().is_some(),
-        "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
+        "ui.batchDialog" => !app.ui.actions.actions().is_empty(),
+        "ui.epsOptionsDialog" | "ui.hpglOptionsDialog" => app.session.active().is_some(),
+        "file.saveForWeb" => app.session.active().is_some(),
+        // A browser preview opens a file, and the web build has none to open.
+        "file.saveForWeb.browser" | "file.export.svg.browser" => app.session.active().is_some() && !crate::io::is_web(app),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
+        // Trim View hides the guides and the grid while it is on, so their Show/Hide items wait
+        // until it is off (#8363).
+        "view.guides" | "view.grid" => !app.ui.view.trim_view,
+        "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
+        // A filter may take no objects and add new ones, so no selection is needed.
+        crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => {
+            app.session.active().is_some() && crate::dialogs::plugin::last_filter(app).is_some()
+        }
         "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),
         id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
         }
-        "ui.perspectivePlane" => app.session.active().is_some(),
+        "ui.perspectivePlane" | "ui.findAndReplace" | "ui.retype" => app.session.active().is_some(),
         "window.newWindow" => app.session.active().is_some(),
         // Tile and Cascade with two windows or more (documents, or views of one from New Window);
         // Float in Window for a current window under the tabs; Float All in Windows while a window
@@ -354,5 +439,23 @@ fn selected_placed(app: &VectorcraftApp) -> bool {
 pub(super) fn selected_image(app: &VectorcraftApp, keep: impl Fn(&vectorcraft_doc::ImageObject) -> bool) -> bool {
     app.session.active().is_some_and(|st| {
         st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(|n| matches!(&n.kind, vectorcraft_doc::NodeKind::Image(im) if keep(im))))
+    })
+}
+
+/// Whether the open paragraph (`para`) or character style dialog, its options or a new style, has settings on its
+/// shown tab for Reset Panel to clear.
+fn style_tab_resets(app: &VectorcraftApp, para: bool) -> bool {
+    use crate::dialogs::char_style_options::CharStyleOptions;
+    use crate::dialogs::new_text_style::NewTextStyle;
+    use crate::dialogs::para_style_options::ParaStyleOptions;
+    app.dialogs().is_some_and(|dialogs| {
+        dialogs.with(|host| {
+            let options = if para {
+                host.get_mut::<ParaStyleOptions>().map(|d| d.hosted_mut().can_reset_tab())
+            } else {
+                host.get_mut::<CharStyleOptions>().map(|d| d.hosted_mut().can_reset_tab())
+            };
+            options.or_else(|| host.get_mut::<NewTextStyle>().filter(|d| d.para == para).map(|d| d.hosted_mut().can_reset_tab())).unwrap_or(false)
+        })
     })
 }

@@ -3,6 +3,7 @@ use super::kind::NodeKind;
 use super::live_shape::LiveShape;
 use super::opacity::OpacityMask;
 use super::{Node, PathData};
+use vectorcraft_geom::Point;
 
 /// The parts of a [`Node`] that few objects have: kept out of line, so that the nodes without
 /// them stay small ([`Node::extras`]).
@@ -10,8 +11,9 @@ use super::{Node, PathData};
 pub struct NodeExtras {
     /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
     pub mask: Option<Box<OpacityMask>>,
-    /// Image Trace object: `{preset, params, view?}` it was traced with (the Image Trace panel shows
-    /// them; `view` is its [`crate::TraceView`] id, absent for the tracing result).
+    /// Image Trace object: `{preset, params, view?, split?}` it was traced with (the Image Trace
+    /// panel shows them; `view` is its [`crate::TraceView`] id, absent for the tracing result, and
+    /// `split` the Split view's divider, [`crate::TraceView::split_of`]).
     pub trace: Option<Box<serde_json::Value>>,
     /// Object → Text Wrap: area type below this object (in the same layer) flows around it.
     pub wrap: Option<crate::text::TextWrap>,
@@ -41,6 +43,9 @@ pub struct NodeExtras {
     /// Dimension object: the live measurement it draws; its ordinary group children hold its
     /// exportable appearance (Object › Dimensions, the Dimension tool).
     pub dimension: Option<Box<crate::dimension::Dimension>>,
+    /// Flare object: the settings its group was drawn with (the Flare tool); its ordinary group
+    /// children hold its art.
+    pub flare: Option<Box<crate::flare::FlareSpec>>,
     /// Object › Intertwine: as a member of an Intertwine group, the area (document coordinates,
     /// filled non-zero) where this object is drawn over the group's other members.
     pub intertwine: Option<Box<PathData>>,
@@ -58,6 +63,10 @@ pub struct NodeExtras {
     /// colorizes it. Each pixel is drawn in this color, as opaque as the pixel is dark, so white
     /// pixels are transparent. `None`: the image shows its own pixels.
     pub colorize: Option<Box<vectorcraft_color::Paint>>,
+    /// Attributes panel › Overprint Fill on a colorized image: its color prints over the inks
+    /// below instead of knocking them out. It counts only while [`Self::colorize`] is set
+    /// ([`crate::Node::colorize_overprints`]).
+    pub colorize_overprint: bool,
     /// Pathfinder panel › Make Compound Shape: this group is a compound shape
     /// ([`Node::is_compound_shape`], [`crate::compound_shape`]).
     pub compound_shape: bool,
@@ -83,6 +92,10 @@ pub struct NodeExtras {
     /// are applied, one path or compound path per fill and stroke: as the clipping path of a clip group it paints
     /// those pieces as the path paints its fills and strokes ([`Node::clip_paint`]).
     pub clip_pieces: bool,
+    /// As an image after Perspective Distort or Free Distort, where its pixel rectangle's corners
+    /// (top left, top right, bottom right, bottom left in pixel space) stand on the page when they
+    /// do not make a parallelogram, which its transform alone could place ([`crate::image_quad`]).
+    pub image_quad: Option<Box<[Point; 4]>>,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -100,11 +113,13 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     slice: None,
     perspective: None,
     dimension: None,
+    flare: None,
     intertwine: None,
     intertwine_tiers: Vec::new(),
     live_paint_gaps: None,
     objects_on_path: None,
     colorize: None,
+    colorize_overprint: false,
     compound_shape: false,
     shape_mode: crate::ShapeMode::Add,
     symbol_overrides: Vec::new(),
@@ -113,6 +128,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     color_mask: None,
     warp_piece: false,
     clip_pieces: false,
+    image_quad: None,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal

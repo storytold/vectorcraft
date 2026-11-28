@@ -312,6 +312,36 @@ impl Carry {
         }
     }
 
+    /// Undo the actual maps of already placed gradients. Failure only changes this temporary
+    /// appearance; callers retain the stored row unchanged when a map cannot be inverted.
+    pub(crate) fn unapply_placed(&self, ap: &mut Appearance) -> Option<()> {
+        for step in self.0.iter().rev() {
+            for item in &mut ap.items {
+                if !matches!(item.paint(), vectorcraft_doc::color::Paint::Gradient(_)) {
+                    continue;
+                }
+                let map = match *step {
+                    CarryStep::Affine { m, .. } => m,
+                    CarryStep::Boxes { from, to } => match item {
+                        AppearanceItem::Fill(_) => crate::reshape::box_map(from, to),
+                        AppearanceItem::Stroke(s) => crate::reshape::box_map(s.paint_bounds(from), s.paint_bounds(to)),
+                    },
+                };
+                if vectorcraft_doc::node::flattens(map) {
+                    return None;
+                }
+                let inverse = map.inverse();
+                if !inverse.is_finite() {
+                    return None;
+                }
+                if let vectorcraft_doc::color::Paint::Gradient(g) = item.paint_mut() {
+                    g.transform(inverse);
+                }
+            }
+        }
+        Some(())
+    }
+
     pub(crate) fn push(&mut self, more: Carry) {
         self.0.extend(more.0);
         self.1.extend(more.1);
@@ -417,6 +447,12 @@ pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &Geo
     budget.fits(Budget::of(&out)).then_some(out)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The subpaths the Offset Path effect has offset on this thread.
+    pub(crate) static OFFSET_SUBPATHS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Does geometry effect `id` build within the anchors it is given?
 fn builds_within(id: &str) -> bool {
     matches!(id, "distort.freeDistort" | "distort.roughen" | "distort.transform" | "distort.twist" | "distort.zigZag") || id.starts_with("warp.")
@@ -426,6 +462,7 @@ fn builds_within(id: &str) -> bool {
 fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext, max: usize) -> PathData {
     use util::{join, num};
     if let Some(plugin) = vectorcraft_plugins::effect::plugin_id(id) {
+        crate::params::check_returned_effects();
         let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item, at: ctx.stage };
         return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints, ctx.doc).unwrap_or_else(|| path.clone());
     }
@@ -442,6 +479,8 @@ fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomCont
             if off.abs() < 1e-9 {
                 return path.clone();
             }
+            #[cfg(test)]
+            OFFSET_SUBPATHS.with(|n| n.set(n.get() + path.subpaths.len()));
             vectorcraft_pathops::offset_path(path, off, join(p, "joins"), num(p, "miterLimit", 4.0).clamp(1.0, 500.0))
         }
         // Outline Object returns the geometry unchanged. Type reaches every geometry effect as its

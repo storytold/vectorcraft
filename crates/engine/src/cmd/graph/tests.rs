@@ -333,6 +333,66 @@ fn an_item_opacity_on_a_series_mark_survives_regeneration() {
     assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), None));
 }
 
+/// `paint.setFill {opacity}` and `paint.setStroke {opacity}` on one series mark are kept by the graph as the transparency
+/// commands' item opacity is: every path of that series has them after the graph is drawn again.
+#[test]
+fn a_paint_opacity_on_a_series_mark_survives_regeneration() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = graph(&mut s, "column");
+    let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.execute("paint.setFill", &json!({"ids": [bar.0], "opacity": 40})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [bar.0], "color": "#ff0000", "opacity": 60})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), Some(0.6)));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let marks = series(&n, 0).children().unwrap().to_vec();
+    let opacities: Vec<(f32, f32)> = marks.iter().map(|m| (m.appearance.fill().unwrap().opacity, m.appearance.stroke().unwrap().opacity)).collect();
+    assert!(opacities.iter().all(|o| *o == (0.4, 0.6)), "{opacities:?}");
+}
+
+/// `paint.setFill {opacity}` and `paint.setStroke {opacity}` with the opacity a mark already shows replace the opacity
+/// another mark of the series left on the graph, as an explicit 100% does.
+#[test]
+fn a_paint_opacity_a_series_mark_already_shows_replaces_the_kept_opacity() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "opacity": 40})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [marks[0].0], "opacity": 60})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), Some(0.6)));
+    // The second mark is opaque already: its row comes out as it was.
+    s.execute("paint.setFill", &json!({"ids": [marks[1].0], "color": "#ff0000", "opacity": 100})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (None, Some(0.6)));
+    s.execute("paint.setStroke", &json!({"ids": [marks[1].0], "opacity": 100})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (None, None));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let opacities: Vec<(f32, f32)> =
+        series(&n, 0).children().unwrap().iter().map(|m| (m.appearance.fill().unwrap().opacity, m.appearance.stroke().unwrap().opacity)).collect();
+    assert!(opacities.iter().all(|o| *o == (1.0, 1.0)), "{opacities:?}");
+}
+
+/// The same for a graph's axis lines: a stroke opacity set on an opaque line replaces the one its kind keeps from another
+/// line.
+#[test]
+fn a_stroke_opacity_an_axis_line_already_shows_replaces_the_kept_opacity() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "opacity": 40})).unwrap();
+    let kept = |s: &Session| spec(s, id).label_styles.axis_rows.and_then(|r| r.paint.stroke_opacity);
+    assert_eq!(kept(&s), Some(0.4));
+    s.execute("paint.setStroke", &json!({"ids": [lines[1].id.0], "opacity": 100})).unwrap();
+    assert_eq!(kept(&s), None);
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let opacities: Vec<f32> = line_nodes(&s, id).iter().map(|n| n.appearance.stroke().map_or(1.0, |st| st.opacity)).collect();
+    assert!(opacities.iter().all(|o| *o == 1.0), "{opacities:?}");
+}
+
 /// Clear Appearance and Reduce to Basic Appearance on a series mark take its fill and stroke opacity away, and the
 /// graph keeps none, so the series stays opaque when it is drawn again.
 #[test]
@@ -454,7 +514,7 @@ fn an_edit_of_a_graph_designs_art_is_lost_when_the_graph_is_drawn_again() {
 /// it, and edit the other objects they are given.
 #[test]
 fn paint_commands_leave_a_graph_designs_art_out() {
-    let (mut s, _, copy, art, mark) = design_art();
+    let (mut s, graph, copy, art, mark) = design_art();
     let fill = top_row(&s, art, true);
     let commands = [
         ("stroke.set", json!({"weight": 5})),
@@ -466,6 +526,7 @@ fn paint_commands_leave_a_graph_designs_art_out() {
         ("paint.swap", json!({})),
         ("paint.default", json!({})),
         ("paint.invert", json!({"item": fill, "stroke": false})),
+        ("paint.invert", json!({})),
     ];
     let (copy_was, art_was) = (look(&s, copy), look(&s, art));
     for (cmd, p) in &commands {
@@ -489,6 +550,11 @@ fn paint_commands_leave_a_graph_designs_art_out() {
     s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
     s.execute("stroke.set", &json!({"weight": 5})).unwrap();
     assert_eq!(look(&s, art), art_was);
+    // Given the whole graph, Invert recolors the marks and leaves the art.
+    let mark_was = look(&s, mark);
+    s.execute("paint.invert", &json!({"ids": [graph.0]})).unwrap();
+    assert_eq!(look(&s, art), art_was);
+    assert_ne!(look(&s, mark), mark_was);
     // A freeform gradient point is refused on the art alone.
     refused_on_design_art(&mut s, "paint.freeform.addPoint", json!({"ids": [art.0], "at": [0, 0]}));
 }
@@ -515,6 +581,182 @@ fn stroke_edits_of_selected_design_art_leave_the_new_art_stroke() {
     let mode = s.new_art_stroke().gradient_mode;
     s.execute("paint.editGradient", &json!({"kind": "linear", "stroke": true, "strokeMode": "along"})).unwrap();
     assert_eq!(s.new_art_stroke().gradient_mode, mode, "paint.editGradient");
+}
+
+/// With only the art of a graph design given or selected, the gradient, swap, default and recolor commands leave the
+/// paint for new art and the remembered colors as they are.
+#[test]
+fn paint_edits_of_design_art_alone_leave_the_defaults() {
+    let (mut s, _, _, art, _) = design_art();
+    let fill = top_row(&s, art, true);
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let defaults = |s: &Session| format!("{:?}", (&s.paint, s.last_solid, &s.last_gradient, &s.recent_colors));
+    let commands = [
+        ("paint.editGradient", json!({"kind": "linear"})),
+        ("paint.editGradient", json!({"kind": "radial", "stroke": true})),
+        ("paint.swap", json!({})),
+        ("paint.default", json!({})),
+        ("paint.invert", json!({"item": fill, "stroke": false})),
+        ("paint.complement", json!({"item": fill, "stroke": false})),
+        ("paint.invert", json!({})),
+        ("paint.complement", json!({"stroke": true})),
+        ("stroke.set", json!({"weight": 7})),
+        ("stroke.weightUp", json!({})),
+    ];
+    for (cmd, p) in &commands {
+        let was = defaults(&s);
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        s.execute(cmd, &q).unwrap();
+        assert_eq!(defaults(&s), was, "{cmd}, given");
+        // Selecting the art makes the defaults take its paint.
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        let was = defaults(&s);
+        s.execute(cmd, p).unwrap();
+        assert_eq!(defaults(&s), was, "{cmd}, selected");
+        s.execute("select.set", &json!({"ids": []})).unwrap();
+    }
+    // A bad `item`, `aligned` or `target` is still an error with only design art given.
+    for bad in [
+        json!({"ids": [art.0], "item": "top"}),
+        json!({"ids": [art.0], "item": fill, "aligned": "yes"}),
+        json!({"ids": [art.0], "item": fill, "target": "nowhere"}),
+        json!({"ids": [art.0], "target": "nowhere"}),
+    ] {
+        assert!(s.execute("paint.invert", &bad).is_err(), "{bad}");
+        assert!(s.execute("paint.complement", &bad).is_err(), "{bad}");
+    }
+    // So is an `item` the art has no row for, in each command that leaves the art out.
+    let steps = s.doc().unwrap().history.undo.len();
+    for (cmd, p) in [
+        ("paint.invert", json!({})),
+        ("stroke.set", json!({"weight": 2})),
+        ("stroke.weightUp", json!({})),
+        ("stroke.setAdvanced", json!({"swapArrows": true})),
+        ("paint.editGradient", json!({"kind": "linear"})),
+        ("paint.setGradientGeom", json!({"start": [0, 0], "end": [50, 50]})),
+        ("object.setOverprint", json!({"fill": true})),
+    ] {
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        q["item"] = json!(99);
+        assert!(s.execute(cmd, &q).is_err(), "{cmd}");
+    }
+    // The art's stroke row named without `stroke` is a stroke row: the gradient commands succeed and change nothing.
+    let stroke_row = top_row(&s, art, false);
+    for p in [json!({"kind": "linear"}), json!({"start": [0, 0], "end": [50, 50]})] {
+        let cmd = if p.get("kind").is_some() { "paint.editGradient" } else { "paint.setGradientGeom" };
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        q["item"] = json!(stroke_row);
+        s.execute(cmd, &q).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // With nothing selected, the swap still swaps the defaults.
+    let was = defaults(&s);
+    s.execute("paint.swap", &json!({})).unwrap();
+    assert_ne!(defaults(&s), was);
+}
+
+/// A spread or a negative aspect for the art of a graph design alone changes nothing, whatever kind of gradient the
+/// default fill is; a bad value is still an error.
+#[test]
+fn gradient_edits_of_design_art_alone_skip_the_default_kind_checks() {
+    let (mut s, _, _, art, _) = design_art();
+    for (default, p) in [("freeform", json!({"spread": "repeat"})), ("linear", json!({"aspect": -50}))] {
+        s.execute("select.set", &json!({"ids": []})).unwrap();
+        s.execute("paint.editGradient", &json!({"kind": default})).unwrap();
+        let (was, art_was, steps) = (format!("{:?}", s.paint), look(&s, art), s.doc().unwrap().history.undo.len());
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        s.execute("paint.editGradient", &q).unwrap_or_else(|e| panic!("{q}: {e}"));
+        assert_eq!(format!("{:?}", s.paint), was, "{default}");
+        assert_eq!(look(&s, art), art_was, "{default}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{default}");
+    }
+    assert!(s.execute("paint.editGradient", &json!({"ids": [art.0], "spread": "sideways"})).is_err());
+}
+
+/// Invert given a group around a graph recolors the group's own fill and the series marks, and leaves the art of a
+/// graph design as it is. With `target: "contents"` the group's own fill stays as it is.
+#[test]
+fn invert_of_a_group_recolors_its_own_fill_and_leaves_design_art() {
+    let (mut s, graph, _, art, mark) = design_art();
+    s.execute("select.set", &json!({"ids": [graph.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.addFill", &json!({"ids": [group.0]})).unwrap();
+    let row = top_row(&s, group, true);
+    s.execute("paint.setFill", &json!({"ids": [group.0], "item": row, "color": "#ff0000"})).unwrap();
+    let own = |s: &Session| format!("{:?}", s.doc().unwrap().doc.node(group).unwrap().appearance.items);
+    let (own_was, art_was, mark_was) = (own(&s), look(&s, art), look(&s, mark));
+    s.execute("paint.invert", &json!({"ids": [group.0]})).unwrap();
+    assert_ne!(own(&s), own_was, "the group's own fill");
+    assert_ne!(look(&s, mark), mark_was);
+    assert_eq!(look(&s, art), art_was);
+    // The color remembered is the group's own new fill, which the Fill proxy shows.
+    let Some(Paint::Solid { color, .. }) = s.doc().unwrap().doc.node(group).unwrap().proxy_paint_only(false, None).cloned() else {
+        panic!("the group's fill is not a solid color")
+    };
+    assert_eq!((s.last_solid, s.recent_colors.first().copied()), (color, Some(color)));
+    let (own_was, mark_was) = (own(&s), look(&s, mark));
+    s.execute("paint.invert", &json!({"ids": [group.0], "target": "contents"})).unwrap();
+    assert_eq!(own(&s), own_was, "target: contents");
+    assert_ne!(look(&s, mark), mark_was);
+    assert_eq!(look(&s, art), art_was);
+}
+
+/// Invert and Complement given a series group that holds only a graph design's art recolor the group's own fill and
+/// remember that color, as the last color and the newest recent color. With several such groups the color remembered
+/// is that of the first group whose fill changed.
+#[test]
+fn recoloring_a_group_of_design_art_alone_remembers_its_own_fill() {
+    // A fill of its own for `group`, painted `hex` (the color of a rectangle painted with it).
+    let paint_own = |s: &mut Session, group: NodeId, hex: &str| {
+        s.execute("appearance.addFill", &json!({"ids": [group.0]})).unwrap();
+        let t = NodeId(s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 5, "height": 5})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setFill", &json!({"ids": [t.0], "color": hex})).unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let paint = d.node(t).unwrap().proxy_paint_only(false, None).unwrap().clone();
+        d.node_mut(group).unwrap().appearance.fill_at_mut(None).unwrap().paint = paint;
+    };
+    // Series 0's group with its own fill painted `hex`.
+    let painted_series = |hex: &str| {
+        let (mut s, graph, _, art, _) = design_art();
+        let group = series(s.doc().unwrap().doc.node(graph).unwrap(), 0).id;
+        paint_own(&mut s, group, hex);
+        (s, group, art)
+    };
+    for cmd in ["paint.invert", "paint.complement"] {
+        let (mut s, group, art) = painted_series("#ff0000");
+        let fill = |s: &Session| s.doc().unwrap().doc.node(group).unwrap().proxy_paint_only(false, None).unwrap().clone();
+        let (art_was, fill_was) = (look(&s, art), fill(&s));
+        s.execute(cmd, &json!({"ids": [group.0]})).unwrap();
+        assert_eq!(look(&s, art), art_was, "{cmd}");
+        assert_ne!(fill(&s), fill_was, "{cmd}: the group's fill is recolored");
+        let Paint::Solid { color, .. } = fill(&s) else { panic!("{cmd}: the group's fill is not a solid color") };
+        assert_eq!((s.last_solid, s.recent_colors.first().copied()), (color, Some(color)), "{cmd}");
+    }
+    // A gray fill is its own complement: nothing changes, and the remembered colors stay as they were.
+    let (mut s, group, _) = painted_series("#808080");
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let remembered = |s: &Session| format!("{:?}", (s.last_solid, &s.recent_colors));
+    let was = remembered(&s);
+    assert_eq!(s.execute("paint.complement", &json!({"ids": [group.0]})).unwrap()["changed"], json!(0));
+    assert_eq!(remembered(&s), was);
+    // Both series groups hold only the design's art: a gray one first and a red one, given together.
+    let (mut s, graph, _, _, _) = design_art();
+    s.execute("graph.column", &json!({"id": graph.0, "seriesIndexes": [1], "design": "Square"})).unwrap();
+    let groups = [0, 1].map(|i| series(s.doc().unwrap().doc.node(graph).unwrap(), i).id);
+    paint_own(&mut s, groups[0], "#808080");
+    paint_own(&mut s, groups[1], "#ff0000");
+    s.execute("paint.complement", &json!({"ids": [groups[0].0, groups[1].0]})).unwrap();
+    let Some(Paint::Solid { color, .. }) = s.doc().unwrap().doc.node(groups[1]).unwrap().proxy_paint_only(false, None).cloned() else {
+        panic!("the red group's fill is not a solid color")
+    };
+    assert_eq!((s.last_solid, s.recent_colors.first().copied()), (color, Some(color)));
 }
 
 /// `transparency.set` without `item` refuses the art of a graph design in a series, and given it with other objects
@@ -594,6 +836,81 @@ fn expand_appearance_leaves_a_graph_designs_art() {
     s.execute("effect.expandAppearance", &json!({})).unwrap();
     assert_eq!(look(&s, art), art_was);
     assert!(s.doc().unwrap().doc.node(NodeId(other)).is_none_or(|m| m.appearance.effects.is_empty()));
+}
+
+/// `effect` with `params`, as `effect.apply` gives it to an object.
+fn an_effect(s: &mut Session, effect: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
+    let r = s.execute("shape.rectangle", &json!({"x": 700, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": effect, "ids": [r], "params": params})).unwrap();
+    s.doc().unwrap().doc.node(NodeId(r)).unwrap().appearance.effects[0].clone()
+}
+
+/// Expand Appearance of a graph neither lists the art of a design in a series whose own effect it leaves, nor adds an
+/// image of that effect to the document.
+#[test]
+fn expand_appearance_lists_no_design_art_and_rasterizes_none() {
+    let (mut s, id, copy, _, mark) = design_art();
+    let shadow = an_effect(&mut s, "stylize.dropShadow", json!({}));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(copy).unwrap().appearance.effects.push(shadow);
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0]})).unwrap();
+    let copy_was = look(&s, copy);
+    let images = |s: &Session| s.doc().unwrap().doc.images.len();
+    let before = images(&s);
+    s.execute("select.set", &json!({"ids": [mark.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    let per_mark = images(&s) - before;
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let expanded = s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(expanded["ids"], json!([mark.0]));
+    assert_eq!(look(&s, copy), copy_was);
+    assert_eq!(images(&s) - before, per_mark, "only the mark's shadow becomes an image");
+}
+
+/// A geometry effect of a series group that Expand Appearance bakes moves the art of a design in that series with the
+/// marks.
+#[test]
+fn expand_appearance_moves_design_art_with_its_series_groups_effect() {
+    let (mut s, id, copy, _, _) = design_art();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let group = series(&n, 0).id;
+    let shift = an_effect(&mut s, "distort.transform", json!({"moveH": 50}));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(group).unwrap().appearance.effects.push(shift);
+    let left = |s: &Session| {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        series(&n, 0).children().unwrap()[0].geometric_bounds().unwrap().x0
+    };
+    let was = left(&s);
+    assert_eq!(series(&n, 0).children().unwrap()[0].id, copy);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert!((left(&s) - was - 50.0).abs() < 1e-6, "{} then {}", was, left(&s));
+}
+
+/// The copies that a Transform effect of a series group makes of a design's art keep their own effects when Expand
+/// Appearance bakes the series group's effect, as the art they copy does.
+#[test]
+fn expand_appearance_leaves_the_effects_of_design_art_copies() {
+    let (mut s, id, copy, _, _) = design_art();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let group = series(&n, 0).id;
+    let shadow = an_effect(&mut s, "stylize.dropShadow", json!({}));
+    let copies = an_effect(&mut s, "distort.transform", json!({"moveH": 50, "copies": 2}));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(copy).unwrap().appearance.effects.push(shadow);
+    doc.node_mut(group).unwrap().appearance.effects.push(copies);
+    let shadows = |s: &Session| {
+        let mut count = 0;
+        s.doc().unwrap().doc.node(id).unwrap().walk(&mut |m| count += m.appearance.effects.iter().filter(|e| e.id == "stylize.dropShadow").count());
+        count
+    };
+    let images = |s: &Session| s.doc().unwrap().doc.images.len();
+    let before = images(&s);
+    assert_eq!(shadows(&s), 1);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(shadows(&s), 3, "the art and its two copies keep their shadows");
+    assert_eq!(images(&s), before, "no shadow becomes an image");
 }
 
 /// The commands that give rows, effects or graphic styles refuse the art of a graph design inside a series, given by
@@ -1165,6 +1482,27 @@ fn paint_targets_leave_a_graph_designs_copy_out() {
     let (s, _, copy, art, mark) = design_art();
     let d = &s.doc().unwrap().doc;
     assert_eq!(super::paint_targets(d, &[copy, art, mark]), [mark]);
+}
+
+/// The fill opacity the proxies show leaves out the art of a column or marker design in a series, which
+/// `paint.setFill {opacity}` leaves out too: with only that art selected there is none, also with a row of the art
+/// active, and with a mark selected after it the mark's.
+#[test]
+fn proxy_opacity_leaves_a_graph_designs_art_out() {
+    let (mut s, _, _, art, mark) = design_art();
+    let (mut m, _, marker_art) = marker_design_art();
+    for (s, art) in [(&mut s, art), (&mut m, marker_art)] {
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        assert_eq!(s.proxy_opacity(false), None);
+        assert!(s.execute("paint.setFill", &json!({"opacity": 50})).is_err());
+        let fill = top_row(s, art, true);
+        s.execute("appearance.setActiveItem", &json!({"index": fill})).unwrap();
+        assert_eq!(s.proxy_opacity(false), None, "with the art's fill row active");
+        assert!(s.execute("paint.setFill", &json!({"opacity": 50})).is_err());
+    }
+    s.execute("paint.setFill", &json!({"ids": [mark.0], "opacity": 40})).unwrap();
+    s.execute("select.set", &json!({"ids": [art.0, mark.0]})).unwrap();
+    assert!((s.proxy_opacity(false).unwrap() - 0.4).abs() < 1e-6, "the mark's fill opacity");
 }
 
 /// The art of a marker design in series 1 of a line graph: the design's copy and a path inside it.
@@ -3198,6 +3536,145 @@ fn redefining_a_graphic_style_keeps_an_edited_mark_of_a_linked_series_group() {
     assert!(marks[1..].iter().all(|m| d.node(*m).unwrap().extras().graphic_style == Some(style.id)));
 }
 
+/// A column graph whose series 0 group is linked to style "Blue" (as a file can hold it) and whose first path directly
+/// inside that group is linked to style "Green" and has its look: the session, the graph, the group, series 0's paths,
+/// and the ids of "Blue" and "Green".
+fn linked_group_with_a_green_mark() -> (Session, NodeId, NodeId, Vec<NodeId>, u32, u32) {
+    let (mut s, id, _, marks) = column_marks();
+    let (group, _) = series_0_group(&s, id);
+    let (blue, green) = blue_and_green_styles(&mut s);
+    link_group_and_member(&mut s, group, &blue, marks[0], &green);
+    (s, id, group, marks, blue.id, green.id)
+}
+
+/// Graphic styles "Blue" (a blue fill at 50% opacity) and "Green" (a green fill at full opacity), made from one new
+/// rectangle that is linked to neither.
+fn blue_and_green_styles(s: &mut Session) -> (vectorcraft_doc::GraphicStyle, vectorcraft_doc::GraphicStyle) {
+    let (rect, _) = blue_style(s, "Blue", false);
+    s.execute("appearance.setItem", &json!({"ids": [rect.0], "index": top_row(s, rect, true), "color": "#00ff00", "opacity": 100})).unwrap();
+    s.execute("graphicStyle.new", &json!({"id": rect.0, "name": "Green"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    (d.graphic_style("Blue").unwrap().clone(), d.graphic_style("Green").unwrap().clone())
+}
+
+/// Links `group` to `outer` with its look and `member` to `inner` with its look, as a file can hold them.
+fn link_group_and_member(
+    s: &mut Session,
+    group: NodeId,
+    outer: &vectorcraft_doc::GraphicStyle,
+    member: NodeId,
+    inner: &vectorcraft_doc::GraphicStyle,
+) {
+    s.edit("Link", |d, _| {
+        let g = d.node_mut(group).unwrap();
+        g.appearance = outer.appearance.clone().into();
+        g.extras_mut().graphic_style = Some(outer.id);
+        let m = d.node_mut(member).unwrap();
+        m.appearance = inner.appearance.clone().into();
+        m.extras_mut().graphic_style = Some(inner.id);
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Asserts that `d` holds what `was` holds for a redefinition of style "Blue": its definition, the link of `group`, the
+/// look and link of each of `members`, and everything graph `id` stores (series paints and label rows included).
+fn assert_same_redefine_state(
+    d: &vectorcraft_doc::Document,
+    was: &vectorcraft_doc::Document,
+    id: NodeId,
+    group: NodeId,
+    members: &[NodeId],
+    when: &str,
+) {
+    assert_eq!(d.graphic_style("Blue"), was.graphic_style("Blue"), "{when}: the definition of Blue");
+    assert_eq!(d.node(group).unwrap().extras().graphic_style, was.node(group).unwrap().extras().graphic_style, "{when}: the group's link");
+    for m in members {
+        let (a, b) = (d.node(*m).unwrap(), was.node(*m).unwrap());
+        assert_eq!((&a.appearance, a.extras().graphic_style), (&b.appearance, b.extras().graphic_style), "{when}: member {m:?}");
+    }
+    assert_eq!(d.node(id).unwrap().extras().graph, was.node(id).unwrap().extras().graph, "{when}: what the graph stores");
+}
+
+/// Redefine Graphic Style with another style's look (`from`) on a linked series group leaves a path of the group that is
+/// linked to that other style linked to it, and restyles and links the group's other paths; one undo takes the
+/// redefinition back and redo makes it again.
+#[test]
+fn redefining_a_graphic_style_from_another_style_keeps_a_mark_linked_to_it() {
+    let (mut s, id, group, marks, blue, green) = linked_group_with_a_green_mark();
+    let own = s.doc().unwrap().doc.node(marks[0]).unwrap().appearance.clone();
+    let look = s.doc().unwrap().doc.graphic_style("Green").unwrap().appearance.fill_paint();
+    let was = s.doc().unwrap().doc.clone();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "from": "Green"})).unwrap();
+    let after = s.doc().unwrap().doc.clone();
+    let first = after.node(marks[0]).unwrap();
+    assert_eq!((&first.appearance, first.extras().graphic_style), (&own, Some(green)), "the mark keeps its own style");
+    assert!(marks[1..].iter().all(|m| after.node(*m).unwrap().appearance.fill_paint() == look));
+    assert!(marks[1..].iter().all(|m| after.node(*m).unwrap().extras().graphic_style == Some(blue)));
+    assert_eq!(after.node(group).unwrap().extras().graphic_style, None);
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(look), "the graph stores the new look");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &was, id, group, &marks, "after one undo");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &after, id, group, &marks, "after redo");
+}
+
+/// Redefine Graphic Style from an object on a linked series group leaves a path of the group that is linked to another
+/// style as it is, restyles and links the group's other paths; one undo takes the redefinition back and redo makes it
+/// again.
+#[test]
+fn redefining_a_graphic_style_from_an_object_keeps_a_mark_linked_to_another_style() {
+    let (mut s, id, group, marks, blue, green) = linked_group_with_a_green_mark();
+    let own = s.doc().unwrap().doc.node(marks[0]).unwrap().appearance.clone();
+    let red = NodeId(s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.setItem", &json!({"ids": [red.0], "index": top_row(&s, red, true), "color": "#ff0000", "opacity": 100})).unwrap();
+    let look = s.doc().unwrap().doc.node(red).unwrap().appearance.fill_paint();
+    let was = s.doc().unwrap().doc.clone();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "id": red.0})).unwrap();
+    let after = s.doc().unwrap().doc.clone();
+    let first = after.node(marks[0]).unwrap();
+    assert_eq!((&first.appearance, first.extras().graphic_style), (&own, Some(green)), "the mark keeps its own style");
+    assert!(marks[1..].iter().all(|m| after.node(*m).unwrap().appearance.fill_paint() == look));
+    assert!(marks[1..].iter().all(|m| after.node(*m).unwrap().extras().graphic_style == Some(blue)));
+    assert_eq!(after.node(group).unwrap().extras().graphic_style, None);
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(look), "the graph stores the new look");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &was, id, group, &marks, "after one undo");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &after, id, group, &marks, "after redo");
+}
+
+/// Redefine Graphic Style on a graph's Legend group linked to the style leaves a label of the group that is linked to
+/// another style with its look and its link, restyles and links the group's other label, and clears and unlinks the
+/// group; one undo takes the redefinition back and redo makes it again.
+#[test]
+fn redefining_a_graphic_style_keeps_a_legend_label_linked_to_another_style() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let legend = group(s.doc().unwrap().doc.node(id).unwrap(), "Legend").id;
+    let labels = [text_id(&s, id, "Legend", "2024"), text_id(&s, id, "Legend", "2025")];
+    let (blue, green) = blue_and_green_styles(&mut s);
+    link_group_and_member(&mut s, legend, &blue, labels[0], &green);
+    let own = s.doc().unwrap().doc.node(labels[0]).unwrap().appearance.clone();
+    let red = NodeId(s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.setItem", &json!({"ids": [red.0], "index": top_row(&s, red, true), "color": "#ff0000", "opacity": 100})).unwrap();
+    let look = s.doc().unwrap().doc.node(red).unwrap().appearance.fill_paint();
+    let was = s.doc().unwrap().doc.clone();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "id": red.0})).unwrap();
+    let after = s.doc().unwrap().doc.clone();
+    let kept = after.node(labels[0]).unwrap();
+    assert_eq!((&kept.appearance, kept.extras().graphic_style), (&own, Some(green.id)), "the label keeps its own style");
+    let other = after.node(labels[1]).unwrap();
+    assert_eq!((other.appearance.fill_paint(), other.extras().graphic_style), (look, Some(blue.id)), "the other label follows");
+    let g = after.node(legend).unwrap();
+    assert_eq!((g.appearance.items.is_empty(), g.extras().graphic_style), (true, None), "the group is cleared and unlinked");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &was, id, legend, &labels, "after one undo");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &after, id, legend, &labels, "after redo");
+}
+
 /// Series `index`'s group: its object opacity and blend mode, and those of each path directly inside it.
 fn group_transparency(s: &Session, id: NodeId, index: u32) -> ((f32, BlendMode), Vec<(f32, BlendMode)>) {
     let n = s.doc().unwrap().doc.node(id).unwrap().clone();
@@ -5212,6 +5689,1016 @@ fn graph_designs_are_saved_pasted_and_deleted() {
     assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
 }
 
+/// Graph design "Coin" in the active document: a 10 × 10 rectangle filled with global swatch "Gold".
+fn save_coin_design(s: &mut Session) {
+    s.execute("swatch.new", &json!({"name": "Gold", "color": "#d4a017", "global": true})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Gold", "ids": [r]})).unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("graph.design", &json!({"new": "Coin"})).unwrap();
+}
+
+/// Load a saved document holding [`save_coin_design`]'s design as a swatch library (Other
+/// Library…) → its id.
+fn load_coin_library(s: &mut Session) -> String {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut src);
+    let bytes = vectorcraft_format::save_file(&src.doc().unwrap().doc);
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "Coins.vectorcraft"});
+    let r = s.execute("swatch.library.load", &p).unwrap();
+    assert_eq!(r["graphDesigns"], 1);
+    r["library"].as_str().unwrap().to_string()
+}
+
+fn undo_len(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+/// Whether some object of `n` is filled with a colour linked to swatch `name`.
+fn paints_with_swatch(n: &vectorcraft_doc::Node, name: &str) -> bool {
+    let mut found = false;
+    n.walk(&mut |m| found |= m.appearance.items.iter().any(|it| matches!(it.paint(), Paint::Solid { swatch: Some(w), .. } if w == name)));
+    found
+}
+
+#[test]
+fn designs_of_a_document_loaded_as_a_swatch_library_come_in_when_applied() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    // The Column dialog's list: none of the document's, Coin from the library.
+    let q = s.execute("graph.column", &json!({})).unwrap();
+    assert_eq!((q["designs"].clone(), q["libraries"][0]["library"].clone()), (json!([]), json!(lib)));
+    assert_eq!(q["libraries"][0]["designs"], json!(["Coin"]));
+    assert!(s.execute("graph.column", &json!({"design": "Coin"})).is_err(), "not the document's");
+    let steps = undo_len(&s);
+    s.execute("graph.column", &json!({"design": "Coin", "library": lib})).unwrap();
+    assert_eq!(undo_len(&s), steps + 1, "one undo step");
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.graph_designs.iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Coin"]);
+    assert!(d.swatch("Gold").is_some_and(|w| w.global), "the swatch the design's art uses comes along");
+    assert!(paints_with_swatch(&d.graph_designs[0].art, "Gold"));
+    assert!(paints_with_swatch(series(d.node(id).unwrap(), 0), "Gold"), "the columns draw the design");
+    // Undo takes the design, its swatch and the columns' design out together.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.graph_designs.is_empty() && d.swatch("Gold").is_none() && spec(&s, id).series_columns.is_empty());
+    // Marker takes them too.
+    let line = graph(&mut s, "line");
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    s.execute("graph.marker", &json!({"design": "Coin", "library": lib})).unwrap();
+    assert_eq!(spec(&s, line).series_markers, [Some("Coin".to_string()), Some("Coin".to_string())]);
+    assert!(s.doc().unwrap().doc.swatch("Gold").is_some());
+    // An unknown library or design, and a library that is not a string, are refused.
+    for p in [json!({"design": "Coin", "library": "Nope"}), json!({"design": "Nope", "library": lib}), json!({"design": "Coin", "library": 3})] {
+        assert!(s.execute("graph.column", &p).is_err(), "{p}");
+    }
+}
+
+#[test]
+fn a_library_design_applied_to_a_moved_graph_that_names_it_keeps_the_graph_in_place() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    // A library's name works in any case, as swatch library names do.
+    assert_eq!(s.execute("graph.design", &json!({"library": "COINS"})).unwrap(), json!({"designs": ["Coin"]}));
+    for (kind, cmd) in [("line", "graph.marker"), ("column", "graph.column")] {
+        // The graph names design "Coin", which the document no longer has, and is moved after.
+        save_design(&mut s, "Coin");
+        let id = graph(&mut s, kind);
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute(cmd, &json!({"design": "Coin"})).unwrap();
+        s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+        let rect = spec(&s, id).rect;
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 40, "dy": -10})).unwrap();
+        s.execute(cmd, &json!({"id": id.0, "design": "Coin", "library": lib})).unwrap();
+        let now = spec(&s, id).rect;
+        assert!((now.x0 - (rect.x0 + 40.0)).abs() < 1e-6 && (now.y0 - (rect.y0 - 10.0)).abs() < 1e-6, "{cmd}: {now:?}");
+        assert!((now.width() - rect.width()).abs() < 1e-6 && (now.height() - rect.height()).abs() < 1e-6, "{cmd}: {now:?}");
+        s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    }
+}
+
+#[test]
+fn a_design_the_document_has_under_the_same_name_stays_as_it_is() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    let own = s.doc().unwrap().doc.graph_designs[0].art.clone();
+    assert_eq!(s.execute("graph.design", &json!({"library": lib})).unwrap(), json!({"designs": ["Coin"]}));
+    let steps = undo_len(&s);
+    let r = s.execute("graph.design", &json!({"library": lib, "add": ["Coin", "Coin"]})).unwrap();
+    assert_eq!(r, json!({"added": [], "existing": ["Coin"]}));
+    assert_eq!(undo_len(&s), steps, "nothing changed: no undo step");
+    // Applying it with the library draws with the document's own design.
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin", "library": lib})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.graph_designs.len() == 1 && std::sync::Arc::ptr_eq(&d.graph_designs[0].art, &own));
+    assert!(d.swatch("Gold").is_none());
+    assert!(s.execute("graph.design", &json!({"add": "Coin"})).is_err(), "no library");
+    assert!(s.execute("graph.design", &json!({"library": lib, "add": "Nope"})).is_err());
+    assert!(s.execute("graph.design", &json!({"library": lib, "add": 4})).is_err());
+    // The document without it takes it as one undo step.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let r = s.execute("graph.design", &json!({"library": "Coins", "add": "Coin"})).unwrap();
+    assert_eq!(r, json!({"added": ["Coin"], "existing": []}));
+    assert!(s.doc().unwrap().doc.swatch("Gold").is_some());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.graph_designs.is_empty());
+}
+
+#[test]
+fn a_pasted_graph_brings_the_designs_its_series_draw_with() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.graph_designs.iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Coin"]);
+    assert!(paints_with_swatch(&d.graph_designs[0].art, "Gold") && d.swatch("Gold").is_some());
+    // A data edit redraws the pasted graph with the design.
+    let pasted = s.doc().unwrap().selection.objects.to_vec()[0];
+    s.execute("graph.setData", &json!({"id": pasted.0, "csv": ",A\nQ1,4\nQ2,6"})).unwrap();
+    assert!(paints_with_swatch(series(s.doc().unwrap().doc.node(pasted).unwrap(), 0), "Gold"));
+    // A document with its own design of that name keeps it.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    let own = s.doc().unwrap().doc.graph_designs[0].art.clone();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.graph_designs.len() == 1 && std::sync::Arc::ptr_eq(&d.graph_designs[0].art, &own));
+    // The pasted graph is drawn with that design straight away.
+    let pasted = s.doc().unwrap().selection.objects.to_vec()[0];
+    // The document's design is a rectangle and an ellipse, the pasted one a rectangle alone: each
+    // column and the legend swatch hold two paths.
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let columns: Vec<usize> = series(d.node(pasted).unwrap(), 0).children().unwrap().iter().map(|n| paths(n)).collect();
+    assert_eq!(columns, [2, 2, 2, 2], "drawn with the document's design");
+}
+
+#[test]
+fn a_design_the_document_keeps_brings_none_of_the_pasted_designs_resources() {
+    // A column graph whose spec names marker design "Coin", which only line series draw: the
+    // graph's own art does not use the design's swatch.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.marker", &json!({"design": "Coin"})).unwrap();
+    assert!(spec(&s, id).series_markers.iter().any(|m| m.as_deref() == Some("Coin")));
+    assert!(!paints_with_swatch(s.doc().unwrap().doc.node(id).unwrap(), "Gold"));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    // A document with its own "Coin" keeps it and takes nothing the pasted design's art uses.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    s.execute("edit.paste", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.swatch("Gold").is_none());
+    // A document without one takes the design and its swatch.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.swatch("Gold").is_some());
+}
+
+#[test]
+fn a_pasted_graph_naming_a_deleted_design_draws_with_the_documents_design_of_that_name() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    assert!(spec(&s, id).series_columns.iter().flatten().any(|c| c.design == "Coin"), "the graph still names it");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    s.execute("edit.paste", &json!({})).unwrap();
+    let pasted = s.doc().unwrap().selection.objects.to_vec()[0];
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let d = &s.doc().unwrap().doc;
+    let columns: Vec<usize> = series(d.node(pasted).unwrap(), 0).children().unwrap().iter().map(|n| paths(n)).collect();
+    assert_eq!(columns, [2, 2, 2, 2], "drawn with the document's design");
+}
+
+#[test]
+fn a_pasted_graph_keeps_its_art_when_only_a_resource_its_design_does_not_use_comes_in_renamed() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#ff0000", "global": true})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Ink", "ids": [r]})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    // An edit of the graph's art that drawing the graph again would not keep.
+    let mark = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.edit("Name", |d, _| {
+        if let Some(n) = d.node_mut(mark) {
+            n.name = Some("Mine".into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    // A copy of the document holds the same design; its "Ink" is another color, so the pasted
+    // rectangle's swatch takes the document's color, or with "add" comes in renamed.
+    let saved = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&s.doc().unwrap().doc));
+    s.execute("select.set", &json!({"ids": [id.0, r]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("document.open", &json!({"name": "b.vectorcraft", "dataBase64": saved})).unwrap();
+    s.execute("swatch.edit", &json!({"name": "Ink", "color": "#0000ff"})).unwrap();
+    for conflict in ["merge", "add"] {
+        let r = s.execute("edit.paste", &json!({"swatchConflict": conflict})).unwrap();
+        let ink_renamed = r["renamed"].as_array().is_some_and(|a| a.iter().any(|x| x["from"] == "Ink"));
+        let expected = if conflict == "merge" { (json!(1), false) } else { (json!(0), true) };
+        assert_eq!((r["merged"].clone(), ink_renamed), expected, "{conflict}: {r}");
+        let st = s.doc().unwrap();
+        let d = &st.doc;
+        let pasted = st.selection.objects.iter().copied().find(|i| d.node(*i).is_some_and(|n| n.extras().graph.is_some())).unwrap();
+        let names: Vec<Option<String>> = series(d.node(pasted).unwrap(), 0).children().unwrap().iter().map(|n| n.name.clone()).collect();
+        assert_eq!(names[0].as_deref(), Some("Mine"), "{conflict}: not drawn again: {names:?}");
+    }
+}
+
+#[test]
+fn a_pasted_graph_is_drawn_again_when_its_designs_svg_filter_comes_in_under_another_name() {
+    const SHIFT: &str = r#"<filter id="Shift"><feOffset dx="3" dy="3"/></filter>"#;
+    const SHIFT_MORE: &str = r#"<filter id="Shift"><feOffset dx="9" dy="9"/></filter>"#;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    s.execute("svgFilter.define", &json!({"xml": SHIFT})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("svgFilter.apply", &json!({"name": "Shift", "ids": [r]})).unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("graph.design", &json!({"new": "Coin"})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    let mark = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.edit("Name", |d, _| {
+        if let Some(n) = d.node_mut(mark) {
+            n.name = Some("Mine".into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    // A copy of the document holds the same design, but its "Shift" filter draws otherwise, so the
+    // pasted graph's filter keeps its own definition under another name.
+    let saved = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&s.doc().unwrap().doc));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("document.open", &json!({"name": "b.vectorcraft", "dataBase64": saved})).unwrap();
+    s.execute("svgFilter.define", &json!({"xml": SHIFT_MORE, "replace": "Shift"})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let pasted = st.selection.objects.to_vec()[0];
+    let names: Vec<Option<String>> = series(st.doc.node(pasted).unwrap(), 0).children().unwrap().iter().map(|n| n.name.clone()).collect();
+    assert_ne!(names[0].as_deref(), Some("Mine"), "drawn again with the document's design: {names:?}");
+}
+
+#[test]
+fn a_symbol_pasted_with_a_graph_inside_draws_it_with_the_documents_design_of_that_name() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Chart"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [instance]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    // A document whose "Coin" is a rectangle and an ellipse: the symbol's graph draws with it.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    s.execute("edit.paste", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let art = &d.symbols.iter().find(|x| x.name == "Chart").expect("the symbol came in").art;
+    let mut graphs = vec![];
+    art.walk(&mut |m| {
+        if m.extras().graph.is_some() {
+            graphs.push(m.clone());
+        }
+    });
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let columns: Vec<usize> = series(&graphs[0], 0).children().unwrap().iter().map(|n| paths(n)).collect();
+    assert_eq!(columns, [2, 2, 2, 2], "drawn with the document's design");
+}
+
+/// A symbol a loaded look or text style brings, through the pattern it paints with, draws its
+/// graph with the document's design of that name, as a pasted one does.
+#[test]
+fn a_symbol_a_loaded_look_or_text_style_brings_draws_its_graph_with_the_documents_design() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut src);
+    let id = graph(&mut src, "column");
+    src.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    src.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    src.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let instance = src.execute("symbol.new", &json!({"name": "Chart"})).unwrap()["id"].clone();
+    src.execute("object.pattern.make", &json!({"name": "Charts", "edit": false, "ids": [instance]})).unwrap();
+    let r = src.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Charts", "ids": [r]})).unwrap();
+    let t = src.execute("text.create", &json!({"x": 10, "y": 80, "text": "Charts"})).unwrap()["id"].clone();
+    src.execute("paint.setFill", &json!({"swatch": "Charts", "ids": [t]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Charted", "id": t})).unwrap();
+    let source = (*src.doc().unwrap().doc).clone();
+    let look = source.node(NodeId(r)).unwrap().appearance.clone();
+    assert!(source.pattern("Charts").is_some());
+
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let columns = |d: &vectorcraft_doc::Document| -> Vec<usize> {
+        let art = &d.symbols.iter().find(|x| x.name == "Chart").expect("the symbol came in").art;
+        let mut graphs = vec![];
+        art.walk(&mut |m| {
+            if m.extras().graph.is_some() {
+                graphs.push(m.clone());
+            }
+        });
+        series(&graphs[0], 0).children().unwrap().iter().map(|n| paths(n)).collect()
+    };
+    for styles in [false, true] {
+        // A document whose "Coin" is a rectangle and an ellipse.
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Coin");
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        if styles {
+            crate::cmd::clipboard::resources::import_text_styles(&source, d, true, false).unwrap();
+        } else {
+            crate::cmd::clipboard::resources::import_looks(&source, d, &look, &serde_json::Map::new()).unwrap();
+        }
+        assert_eq!(columns(d), [2, 2, 2, 2], "styles {styles}: drawn with the document's design");
+    }
+}
+
+#[test]
+fn a_design_brought_in_from_a_library_redraws_the_graphs_in_symbols_that_name_it() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    // A graph that names "Coin", which the document no longer has, kept as a symbol's art.
+    save_design(&mut s, "Coin");
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Chart", "ids": [id.0]})).unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Coin"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let art = &d.symbols.iter().find(|x| x.name == "Chart").unwrap().art;
+    let mut graphs = vec![];
+    art.walk(&mut |m| {
+        if m.extras().graph.is_some() {
+            graphs.push(m.clone());
+        }
+    });
+    assert!(paints_with_swatch(series(&graphs[0], 0), "Gold"), "drawn with the library's design");
+}
+
+#[test]
+fn a_design_brought_in_from_a_library_leaves_a_scatter_graph_that_names_it_for_a_slot_it_does_not_plot() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    // Four data columns plot two series, so marker slot 2 is never drawn.
+    let id = make(&mut s, "scatter", ",y1,x1,y2,x2\nP,1,10,2,20\nQ,3,11,4,22");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    assert!(spec(&s, id).mark_points, "Mark Data Points is on");
+    s.execute("graph.marker", &json!({"design": "Coin", "library": lib, "seriesIndexes": [2]})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    assert_eq!(spec(&s, id).series_markers.get(2).cloned().flatten().as_deref(), Some("Coin"));
+    // An edit of the graph's art that drawing the graph again would not keep.
+    let mark = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.edit("Name", |d, _| {
+        if let Some(n) = d.node_mut(mark) {
+            n.name = Some("Mine".into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Coin"})).unwrap();
+    let names: Vec<Option<String>> = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap().iter().map(|n| n.name.clone()).collect();
+    assert_eq!(names[0].as_deref(), Some("Mine"), "not drawn again: {names:?}");
+}
+
+#[test]
+fn a_symbol_a_library_design_brings_draws_its_graph_with_the_documents_design_it_keeps() {
+    // The library's design "A" holds an instance of symbol "Chart", whose graph draws columns with
+    // the library's "B": a rectangle and an ellipse.
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut src, "B");
+    let id = graph(&mut src, "column");
+    src.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    src.execute("graph.column", &json!({"design": "B"})).unwrap();
+    let instance = src.execute("symbol.new", &json!({"name": "Chart", "ids": [id.0]})).unwrap()["id"].as_u64().unwrap();
+    src.execute("select.set", &json!({"ids": [instance]})).unwrap();
+    src.execute("graph.design", &json!({"new": "A"})).unwrap();
+    let bytes = vectorcraft_format::save_file(&src.doc().unwrap().doc);
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "Lib.vectorcraft"});
+    let lib = s.execute("swatch.library.load", &p).unwrap()["library"].as_str().unwrap().to_string();
+    // The document's own "B" is a single rectangle, and stays.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("graph.design", &json!({"new": "B"})).unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "A"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.graph_designs.len(), 2, "A came in and B stayed");
+    let art = &d.symbols.iter().find(|x| x.name == "Chart").expect("the symbol came in").art;
+    let mut graphs = vec![];
+    art.walk(&mut |m| {
+        if m.extras().graph.is_some() {
+            graphs.push(m.clone());
+        }
+    });
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let columns: Vec<usize> = series(&graphs[0], 0).children().unwrap().iter().map(|n| paths(n)).collect();
+    assert_eq!(columns, [1, 1, 1, 1], "drawn with the document's B");
+}
+
+#[test]
+fn a_design_brought_in_from_a_library_redraws_a_graph_in_an_opacity_mask() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    let r = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 300, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    s.execute("select.set", &json!({"ids": [r, id.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Coin"})).unwrap();
+    let mut graphs = vec![];
+    vectorcraft_doc::swatches::walk_with_masks(s.doc().unwrap().doc.node(NodeId(r)).unwrap(), &mut |m| {
+        if m.extras().graph.is_some() {
+            graphs.push(m.clone());
+        }
+    });
+    assert!(paints_with_swatch(series(&graphs[0], 0), "Gold"), "drawn with the library's design");
+}
+
+#[test]
+fn an_instance_drops_its_changes_to_graph_parts_a_design_change_redraws() {
+    use vectorcraft_doc::symbol_overrides::SymbolOverride;
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Chart", "ids": [id.0], "type": "dynamic"})).unwrap()["id"].as_u64().unwrap();
+    let instance = NodeId(instance);
+    // A change to the graph itself, and one to a part of it that drawing it again replaces.
+    let changes = vec![
+        SymbolOverride { path: vec![], opacity: Some(0.5), ..Default::default() },
+        SymbolOverride { path: vec![0], opacity: Some(0.25), ..Default::default() },
+    ];
+    s.edit("Change", |d, _| {
+        if let Some(n) = d.node_mut(instance) {
+            n.extras_mut().symbol_overrides = changes;
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Coin"})).unwrap();
+    let kept = s.doc().unwrap().doc.node(instance).unwrap().extras().symbol_overrides.clone();
+    assert_eq!(kept.iter().map(|o| o.path.clone()).collect::<Vec<_>>(), [Vec::<u32>::new()], "{kept:?}");
+}
+
+#[test]
+fn a_graph_in_an_opacity_mask_draws_with_the_documents_design_when_pasted() {
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let mask_graph = |n: &vectorcraft_doc::Node| {
+        let mut graphs = vec![];
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+            if m.extras().graph.is_some() {
+                graphs.push(m.clone());
+            }
+        });
+        graphs.into_iter().next().expect("the masked graph")
+    };
+    // In a symbol's art and among the pasted objects.
+    for in_symbol in [true, false] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_coin_design(&mut s);
+        let r = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 300, "height": 200})).unwrap()["id"].as_u64().unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+        s.execute("select.set", &json!({"ids": [r, id.0]})).unwrap();
+        s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+        let copied = if in_symbol { s.execute("symbol.new", &json!({"name": "Masked", "ids": [r]})).unwrap()["id"].as_u64().unwrap() } else { r };
+        s.execute("select.set", &json!({"ids": [copied]})).unwrap();
+        s.execute("edit.copy", &json!({})).unwrap();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Coin");
+        s.execute("edit.paste", &json!({})).unwrap();
+        let st = s.doc().unwrap();
+        let g = if in_symbol {
+            mask_graph(&st.doc.symbols.iter().find(|x| x.name == "Masked").expect("the symbol came in").art)
+        } else {
+            mask_graph(st.doc.node(st.selection.objects.to_vec()[0]).unwrap())
+        };
+        let columns: Vec<usize> = series(&g, 0).children().unwrap().iter().map(|n| paths(n)).collect();
+        assert_eq!(columns, [2, 2, 2, 2], "in a symbol: {in_symbol}");
+    }
+}
+
+#[test]
+fn a_graph_pasted_back_after_its_design_was_made_again_draws_with_the_new_design() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    // Made again under the same name as a rectangle and an ellipse.
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    save_design(&mut s, "Coin");
+    s.execute("edit.paste", &json!({})).unwrap();
+    let pasted = s.doc().unwrap().selection.objects.to_vec()[0];
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let d = &s.doc().unwrap().doc;
+    let columns: Vec<usize> = series(d.node(pasted).unwrap(), 0).children().unwrap().iter().map(|n| paths(n)).collect();
+    assert_eq!(columns, [2, 2, 2, 2], "drawn with the design the document has now");
+}
+
+/// The graphs in `n`'s subtree, those in opacity-mask art included.
+fn graphs_in(n: &vectorcraft_doc::Node) -> Vec<vectorcraft_doc::Node> {
+    let mut graphs = vec![];
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+        if m.extras().graph.is_some() {
+            graphs.push(m.clone());
+        }
+    });
+    graphs
+}
+
+/// Load a saved document holding [`save_coin_design`]'s "Coin" and design "Chart", an instance of
+/// symbol "Plot" whose column graph names "Coin" as its columns (`columns`) or only as a marker
+/// its columns do not draw, as a swatch library → its id.
+fn load_chart_library(s: &mut Session, columns: bool) -> String {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut src);
+    let id = graph(&mut src, "column");
+    src.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    src.execute(if columns { "graph.column" } else { "graph.marker" }, &json!({"design": "Coin"})).unwrap();
+    let instance = src.execute("symbol.new", &json!({"name": "Plot", "ids": [id.0]})).unwrap()["id"].as_u64().unwrap();
+    src.execute("select.set", &json!({"ids": [instance]})).unwrap();
+    src.execute("graph.design", &json!({"new": "Chart"})).unwrap();
+    let bytes = vectorcraft_format::save_file(&src.doc().unwrap().doc);
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "Charts.vectorcraft"});
+    s.execute("swatch.library.load", &p).unwrap()["library"].as_str().unwrap().to_string()
+}
+
+#[test]
+fn a_library_design_brings_none_of_the_resources_of_a_design_the_document_keeps() {
+    let mut s = Session::new();
+    let lib = load_chart_library(&mut s, false);
+    // The document keeps its own "Coin": nothing the library's "Coin" uses comes in.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    s.execute("graph.design", &json!({"library": lib, "add": "Chart"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.symbols.iter().any(|x| x.name == "Plot"), "the design's symbol came in");
+    assert!(d.swatch("Gold").is_none());
+    // A document without one takes the design and its swatch.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Chart"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.graph_designs.iter().any(|x| x.name == "Coin") && d.swatch("Gold").is_some());
+}
+
+#[test]
+fn a_design_a_library_design_brings_along_redraws_the_graphs_that_name_it() {
+    let mut s = Session::new();
+    let lib = load_chart_library(&mut s, true);
+    // A graph that names "Coin", which the document no longer has.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    let r = s.execute("graph.design", &json!({"library": lib, "add": "Chart"})).unwrap();
+    assert_eq!(r, json!({"added": ["Chart"], "existing": []}));
+    let d = &s.doc().unwrap().doc;
+    assert!(paints_with_swatch(series(d.node(id).unwrap(), 0), "Gold"), "drawn with the library's Coin");
+}
+
+#[test]
+fn a_paste_that_adds_a_design_redraws_the_documents_graphs_that_name_it_and_not_the_pasted_ones() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    // An edit of the copied graph's art that drawing it again would not keep.
+    let mark = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.edit("Name", |d, _| {
+        if let Some(n) = d.node_mut(mark) {
+            n.name = Some("Mine".into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    // A document whose graph names "Coin", which it no longer has.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    let own = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [own.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert!(paints_with_swatch(series(st.doc.node(own).unwrap(), 0), "Gold"), "drawn with the pasted Coin");
+    let pasted = st.selection.objects.to_vec()[0];
+    let first = series(st.doc.node(pasted).unwrap(), 0).children().unwrap()[0].name.clone();
+    assert_eq!(first.as_deref(), Some("Mine"), "the pasted graph is not drawn again");
+}
+
+#[test]
+fn a_paste_that_adds_a_marker_design_a_graph_does_not_show_leaves_that_graph_as_it_is() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    // A line graph whose series name "Coin", which the document no longer has, as a marker that
+    // Mark Data Points does not show, with no legend or with a legend that has no entry for them.
+    for (legend, csv) in [(false, ",2024,2025\nQ1,3,2\nQ2,5,4"), (true, ",,\nQ1,3,2\nQ2,5,4")] {
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Coin");
+        let p = json!({"type": "line", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv});
+        let own = NodeId(s.execute("graph.create", &p).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.set", &json!({"ids": [own.0]})).unwrap();
+        s.execute("graph.marker", &json!({"design": "Coin"})).unwrap();
+        s.execute("graph.setType", &json!({"id": own.0, "markPoints": false, "legend": legend})).unwrap();
+        s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+        let mark = series(s.doc().unwrap().doc.node(own).unwrap(), 0).children().unwrap()[0].id;
+        s.edit("Name", |d, _| {
+            if let Some(n) = d.node_mut(mark) {
+                n.name = Some("Mine".into());
+            }
+            Ok(())
+        })
+        .unwrap();
+        s.execute("edit.paste", &json!({})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        assert!(d.graph_designs.iter().any(|x| x.name == "Coin"), "legend {legend}: the paste added Coin");
+        let first = series(d.node(own).unwrap(), 0).children().unwrap()[0].name.clone();
+        assert_eq!(first.as_deref(), Some("Mine"), "legend {legend}: not drawn again");
+    }
+}
+
+#[test]
+fn a_symbol_pasted_twice_with_a_graph_the_document_draws_again_is_added_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Chart", "ids": [id.0]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [instance]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    // A document whose "Coin" is other art: the first paste draws the symbol's graph with it.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    // The paths of each column of the symbol's graph: 2 for the document's Coin, 1 for the copied one.
+    let columns = |s: &Session| {
+        let art = s.doc().unwrap().doc.symbols.iter().find(|x| x.name == "Chart").unwrap().art.clone();
+        let graph = graphs_in(&art).remove(0);
+        let paths = |n: &vectorcraft_doc::Node| {
+            let mut count = 0;
+            n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+            count
+        };
+        series(&graph, 0).children().unwrap().iter().map(|n| paths(n)).collect::<Vec<usize>>()
+    };
+    s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(columns(&s), [2, 2, 2, 2], "the first paste draws with the document's Coin");
+    s.execute("edit.paste", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let names: Vec<&str> = d.symbols.iter().map(|x| x.name.as_str()).filter(|n| n.starts_with("Chart")).collect();
+    assert_eq!(names, ["Chart"]);
+    assert_eq!(columns(&s), [2, 2, 2, 2], "drawn with the document's Coin");
+}
+
+#[test]
+fn a_symbol_pasted_twice_whose_designs_swatch_takes_the_documents_color_is_added_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    // A copy of the document holds the same "Coin"; its "Gold" is another color.
+    let saved = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&s.doc().unwrap().doc));
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Chart", "ids": [id.0]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [instance]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    for conflict in ["merge", "add"] {
+        s.execute("document.open", &json!({"name": format!("{conflict}.vectorcraft"), "dataBase64": saved})).unwrap();
+        s.execute("swatch.edit", &json!({"name": "Gold", "color": "#0000ff"})).unwrap();
+        let r = s.execute("edit.paste", &json!({"swatchConflict": conflict})).unwrap();
+        let gold_renamed = r["renamed"].as_array().is_some_and(|a| a.iter().any(|x| x["from"] == "Gold"));
+        let expected = if conflict == "merge" { (json!(1), false) } else { (json!(0), true) };
+        assert_eq!((r["merged"].clone(), gold_renamed), expected, "{conflict}: {r}");
+        s.execute("edit.paste", &json!({"swatchConflict": conflict})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        let names: Vec<&str> = d.symbols.iter().map(|x| x.name.as_str()).filter(|n| n.starts_with("Chart")).collect();
+        assert_eq!(names, ["Chart"], "{conflict}");
+    }
+}
+
+#[test]
+fn a_pasted_graph_that_only_names_a_kept_design_as_an_undrawn_marker_keeps_its_art() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    // A column graph whose series name "Coin" as a marker, which columns do not draw.
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.marker", &json!({"design": "Coin"})).unwrap();
+    let mark = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.edit("Name", |d, _| {
+        if let Some(n) = d.node_mut(mark) {
+            n.name = Some("Mine".into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    s.execute("edit.paste", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let pasted = st.selection.objects.to_vec()[0];
+    let first = series(st.doc.node(pasted).unwrap(), 0).children().unwrap()[0].name.clone();
+    assert_eq!(first.as_deref(), Some("Mine"), "not drawn again");
+}
+
+#[test]
+fn renaming_a_design_renames_it_in_the_graphs_of_symbols_and_opacity_masks() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let in_symbol = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [in_symbol.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Chart", "ids": [in_symbol.0]})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 300, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    let masked = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [masked.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("select.set", &json!({"ids": [r, masked.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let before = graphs_in(&s.doc().unwrap().doc.symbols.iter().find(|x| x.name == "Chart").unwrap().art);
+    s.execute("graph.design", &json!({"rename": "Coin", "to": "Medal"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let symbol = graphs_in(&d.symbols.iter().find(|x| x.name == "Chart").unwrap().art);
+    let mask = graphs_in(d.node(NodeId(r)).unwrap());
+    for (where_, g) in [("symbol", &symbol[0]), ("mask", &mask[0])] {
+        let designs: Vec<String> = g.extras().graph.as_deref().unwrap().series_columns.iter().flatten().map(|c| c.design.clone()).collect();
+        assert!(!designs.is_empty() && designs.iter().all(|n| n == "Medal"), "{where_}: {designs:?}");
+    }
+    assert_eq!(symbol[0].children(), before[0].children(), "the symbol's graph keeps its art");
+}
+
+#[test]
+fn a_design_only_a_graph_in_a_symbol_or_a_mask_draws_with_is_not_unused() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    save_design(&mut s, "Pill");
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Chart", "ids": [id.0]})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 300, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    let masked = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [masked.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Pill"})).unwrap();
+    s.execute("select.set", &json!({"ids": [r, masked.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    assert_eq!(s.execute("graph.design", &json!({})).unwrap()["unused"], json!([]));
+}
+
+#[test]
+fn a_library_copied_to_user_defined_keeps_its_graph_designs_under_the_loaded_id() {
+    let dir = vectorcraft_testkit::TempDir::new("graph-design-library-user");
+    let mut s = Session::new();
+    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let loaded = load_coin_library(&mut s);
+    // The User Defined copy is a swatch file: it holds the swatches alone.
+    let copy = s.execute("swatch.library.copyToUser", &json!({"library": loaded})).unwrap()["library"].as_str().unwrap().to_string();
+    assert_ne!(copy, loaded);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let libraries = s.execute("graph.design", &json!({})).unwrap()["libraries"].clone();
+    assert_eq!(libraries, json!([{"library": loaded, "name": libraries[0]["name"], "designs": ["Coin"]}]));
+    assert_eq!(s.execute("graph.design", &json!({"library": loaded})).unwrap(), json!({"designs": ["Coin"]}));
+    assert!(s.execute("graph.design", &json!({"library": copy})).is_err());
+}
+
+#[test]
+fn a_swatch_library_file_over_the_size_limit_is_refused_before_it_is_read() {
+    let dir = vectorcraft_testkit::TempDir::new("graph-design-library-size");
+    let path = dir.join("big.vectorcraft");
+    let f = std::fs::File::create(&path).unwrap();
+    f.set_len(((256 << 20) + 1) as u64).unwrap();
+    let mut s = Session::new();
+    let e = s.execute("swatch.library.load", &json!({"path": path})).unwrap_err().to_string();
+    assert!(e.contains("larger than 256 MB"), "{e}");
+}
+
+#[test]
+fn a_document_with_graph_designs_and_no_swatches_loads_for_its_designs() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut src, "Pill");
+    let mut d = (*src.doc().unwrap().doc).clone();
+    d.swatches.clear();
+    d.swatch_groups.clear();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d)), "name": "Pills.vectorcraft"});
+    let mut s = Session::new();
+    let r = s.execute("swatch.library.load", &p).unwrap();
+    assert_eq!((r["count"].clone(), r["graphDesigns"].clone()), (json!(0), json!(1)));
+    // Without graph designs it has nothing to offer.
+    d.graph_designs.clear();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d)), "name": "Bare.vectorcraft"});
+    let e = s.execute("swatch.library.load", &p).unwrap_err().to_string();
+    assert!(e.contains("has no swatches of its own"), "{e}");
+}
+
+#[test]
+fn a_design_library_keeps_the_sources_color_for_a_default_swatch_name() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    // A default swatch the source made global and gave another color, used by a design.
+    let name = src.doc().unwrap().doc.swatches.iter().find(|w| !w.name.starts_with('[')).unwrap().name.clone();
+    let mine = Paint::solid(vectorcraft_color::Color::rgb(0.1, 0.7, 0.3));
+    let (n, p) = (name.clone(), mine.clone());
+    src.edit("Change", move |d, _| {
+        if let Some(w) = d.swatches.iter_mut().find(|w| w.name == n) {
+            w.paint = p;
+            w.global = true;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let r = src.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": name, "ids": [r]})).unwrap();
+    src.execute("select.set", &json!({"ids": [r]})).unwrap();
+    src.execute("graph.design", &json!({"new": "Green"})).unwrap();
+    let lib = crate::cmd::clipboard::resources::graph_design_library(&src.doc().unwrap().doc).unwrap();
+    let named: Vec<_> = lib.swatches.iter().filter(|w| w.name == name).collect();
+    assert_eq!(named.len(), 1, "one swatch named {name}");
+    assert_eq!(named[0].paint, mine);
+    // And one named like a swatch in a default group.
+    let grouped = src.doc().unwrap().doc.swatch_groups.iter().flat_map(|g| g.swatches.iter()).next().unwrap().name.clone();
+    let (n, p) = (grouped.clone(), mine.clone());
+    src.edit("Change", move |d, _| {
+        if let Some(w) = d.swatch_groups.iter_mut().flat_map(|g| g.swatches.iter_mut()).find(|w| w.name == n) {
+            w.paint = p;
+            w.global = true;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let r = src.execute("shape.rectangle", &json!({"x": 650, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": grouped, "ids": [r]})).unwrap();
+    src.execute("select.set", &json!({"ids": [r]})).unwrap();
+    src.execute("graph.design", &json!({"new": "Grouped"})).unwrap();
+    let lib = crate::cmd::clipboard::resources::graph_design_library(&src.doc().unwrap().doc).unwrap();
+    let all: Vec<_> = lib.swatches.iter().chain(lib.swatch_groups.iter().flat_map(|g| g.swatches.iter())).filter(|w| w.name == grouped).collect();
+    assert_eq!(all.len(), 1, "one swatch named {grouped}");
+}
+
+#[test]
+fn inline_swatch_library_data_over_the_size_limit_is_refused_before_it_is_read() {
+    // With a limit of 3 bytes: text and base64 of 3 bytes pass, and of 4 bytes are refused.
+    let too_big = |p: serde_json::Value| crate::cmd::swatchlib::library_too_big(&p, "swatch.library.load", 3).unwrap();
+    assert!(!too_big(json!({"data": "abc"})));
+    assert!(too_big(json!({"data": "abcd"})));
+    let b64 = |n: usize| vectorcraft_format::base64_encode(&vec![7u8; n]);
+    assert!(!too_big(json!({"dataBase64": b64(3)})));
+    assert!(too_big(json!({"dataBase64": b64(4)})));
+}
+
+#[test]
+fn a_swatch_library_file_is_read_no_further_than_the_size_limit() {
+    let dir = vectorcraft_testkit::TempDir::new("graph-design-library-bound");
+    let path = dir.join("grown.gpl");
+    std::fs::write(&path, [b'a'; 9]).unwrap();
+    let mut s = Session::new();
+    let p = json!({"path": path});
+    let parsed = |_: &[u8], _: &str| Err(crate::EngineError::Other("parsed".into()));
+    // A file that grew past the limit after the size check is refused when it is read.
+    let e = s.swatch_libraries.load_within(&p, "swatch.library.load", Some(8), parsed).unwrap_err().to_string();
+    assert!(e.contains("larger than"), "{e}");
+    let e = s.swatch_libraries.load_within(&p, "swatch.library.load", Some(9), parsed).unwrap_err().to_string();
+    assert!(e.contains("parsed"), "{e}");
+}
+
+#[test]
+fn reading_the_head_of_a_swatch_library_file_stops_at_the_limit() {
+    let dir = vectorcraft_testkit::TempDir::new("graph-design-library-head");
+    let path = dir.join("long.gpl");
+    std::fs::write(&path, vec![b'a'; 1 << 20]).unwrap();
+    // The read the limit check relies on returns the bytes up to one past the limit, not the file.
+    let head = crate::cmd::fileio::read_file_head(&path.to_string_lossy(), 9).unwrap();
+    assert_eq!(head.len(), 9);
+}
+
+#[test]
+fn a_library_design_brings_its_symbols_with_their_symbol_options() {
+    // The source design is an instance of symbol "Corner" with 9-slice scaling, a top-left
+    // registration point and the Graphic export type.
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap();
+    src.execute("select.all", &json!({})).unwrap();
+    let opts = json!({"name": "Corner", "nineSlice": true, "registration": 0, "exportType": "graphic"});
+    let inst = src.execute("symbol.new", &opts).unwrap()["id"].as_u64().unwrap();
+    src.execute("select.set", &json!({"ids": [inst]})).unwrap();
+    src.execute("graph.design", &json!({"new": "Corner Mark"})).unwrap();
+    let bytes = vectorcraft_format::save_file(&src.doc().unwrap().doc);
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "Corners.vectorcraft"});
+    let lib = s.execute("swatch.library.load", &p).unwrap()["library"].as_str().unwrap().to_string();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Corner Mark"})).unwrap();
+    let (from, to) = (&src.doc().unwrap().doc, &s.doc().unwrap().doc);
+    assert!(from.symbol_nine_slice("Corner").is_some());
+    assert_eq!(to.symbol_nine_slice("Corner"), from.symbol_nine_slice("Corner"));
+    assert_eq!(to.symbol_registration("Corner"), from.symbol_registration("Corner"));
+    assert_eq!(to.symbol_export_type("Corner"), from.symbol_export_type("Corner"));
+}
+
 #[test]
 fn designs_and_markers_survive_save_and_open() {
     let mut s = Session::new();
@@ -6443,6 +7930,54 @@ fn filled_lines_keep_the_line_colour_and_fall_back_to_thin_lines() {
     assert!(series_parts(&s, big, 0)[0].appearance.fill_paint().is_none());
 }
 
+/// Line Width sets how wide Draw Filled Lines draws the bands and is kept through save and open. A width outside 0.01
+/// to 1000 pt is refused, the same width again records no undo step, and the default 3 pt is stored as no width.
+#[test]
+fn filled_lines_take_a_line_width() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = make(&mut s, "line", ",a\nQ1,2\nQ2,2\nQ3,2");
+    s.execute("graph.setType", &json!({"id": id.0, "filledLines": true})).unwrap();
+    let height = |s: &Session| series_parts(s, id, 0)[0].geometric_bounds().unwrap().height();
+    assert!((height(&s) - 3.0).abs() < 1e-6, "3 pt by default: {}", height(&s));
+    assert_eq!(s.execute("graph.setType", &json!({"id": id.0})).unwrap()["lineWidth"], json!(3.0));
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 8})).unwrap();
+    assert!((height(&s) - 8.0).abs() < 1e-6, "{}", height(&s));
+    assert_eq!(s.execute("graph.setType", &json!({"id": id.0})).unwrap()["lineWidth"], json!(8.0));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    for p in [json!({"id": id.0, "lineWidth": 8}), json!({"id": id.0, "lineWidth": 8.0, "filledLines": true}), json!({"id": id.0, "lineWidth": null})]
+    {
+        s.execute("graph.setType", &p).unwrap();
+        assert_eq!(steps(&s), before, "nothing changed: {p}");
+    }
+    for w in [json!(0), json!(-2), json!(0.005), json!(1000.5)] {
+        let e = s.execute("graph.setType", &json!({"id": id.0, "lineWidth": w})).unwrap_err().to_string();
+        assert!(e.contains(&format!("`lineWidth` must be from 0.01 to 1000 pt, not {}", w.as_f64().unwrap())), "{e}");
+        assert_eq!((steps(&s), spec(&s, id).line_width), (before, Some(8.0)), "{w}");
+    }
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 0.01})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(0.01));
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 1000})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(1000.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(8.0));
+    // Kept through save and open.
+    let dir = vectorcraft_testkit::TempDir::new("graph-line-width");
+    let path = dir.join("width.vectorcraft");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(8.0));
+    assert!((height(&s) - 8.0).abs() < 1e-6, "{}", height(&s));
+    // The default width is stored as no width, so the file keeps no `lineWidth`.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 3})).unwrap();
+    assert_eq!(spec(&s, id).line_width, None);
+    assert!(serde_json::to_value(spec(&s, id)).unwrap().get("lineWidth").is_none());
+    assert!((height(&s) - 3.0).abs() < 1e-6, "{}", height(&s));
+}
+
 #[test]
 fn overlapping_columns_keep_clear_of_the_legend_and_options_follow_the_graph_type() {
     let mut s = Session::new();
@@ -7101,6 +8636,81 @@ fn the_last_label_of_a_kind_edited_together_sets_what_it_keeps() {
     assert_eq!(kept(&s), "#ff0000");
 }
 
+/// A column graph, a 10 pt square with one red fill row, and the category labels Q1, Q2 and Q3: Q1 and Q3 have one red
+/// fill row, Q2 a hidden red fill row under a green one, and Q1's row is then painted blue, which the kind keeps.
+/// Returns the graph, the square and the three labels.
+fn labels_with_hidden_and_shown_rows(s: &mut Session) -> (NodeId, NodeId, [NodeId; 3]) {
+    use vectorcraft_doc::{AppearanceItem, FillLayer};
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(s, "column");
+    let square = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    let labels = ["Q1", "Q2", "Q3"].map(|t| text_id(s, id, "Axes", t));
+    let fill = |hex: &str, visible: bool| {
+        AppearanceItem::Fill(FillLayer { visible, ..FillLayer::new(Paint::solid(vectorcraft_color::Color::from_hex(hex).unwrap())) })
+    };
+    s.edit("Rows", |d, _| {
+        for (l, items) in [
+            (square, vec![fill("#ff0000", true)]),
+            (labels[0], vec![fill("#ff0000", true)]),
+            (labels[1], vec![fill("#ff0000", false), fill("#00ff00", true)]),
+            (labels[2], vec![fill("#ff0000", true)]),
+        ] {
+            d.node_mut(l).unwrap().appearance.items = items;
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [labels[0].0], "index": 0, "color": "#0000ff"})).unwrap();
+    assert_eq!(kept_category_fill(s, id), Some("#0000ff".into()));
+    (id, square, labels)
+}
+
+/// The fill of the category label rows graph `id` keeps, as a hex color.
+fn kept_category_fill(s: &Session, id: NodeId) -> Option<String> {
+    spec(s, id).label_styles.categories_rows.and_then(|r| r.paint.fill).and_then(|p| p.color()).map(|c| c.to_hex())
+}
+
+/// Row edits on several labels at once, with a plain object among them, keep for the kind what the last label whose shown
+/// row the edit wrote shows, also when that row comes out as it was; a label whose hidden row the edit wrote is left out.
+/// One undo takes it back. Covers `appearance.setItem`, `appearance.duplicateItem` and `paint.setFill` with `item`.
+#[test]
+fn row_edits_on_several_labels_keep_the_last_written_shown_row() {
+    let edits = [
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000"})),
+        ("appearance.duplicateItem", json!({"index": 0})),
+        ("paint.setFill", json!({"item": 0, "color": "#ff0000"})),
+    ];
+    for (cmd, mut p) in edits {
+        let mut s = Session::new();
+        let (id, square, [_, q2, q3]) = labels_with_hidden_and_shown_rows(&mut s);
+        // Q3 shows red before and after the edit; Q2 shows green over the hidden row the edit writes.
+        p["ids"] = json!([q3.0, square.0, q2.0]);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#ff0000".into()), "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#0000ff".into()), "{cmd}: undo");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#ff0000".into()), "{cmd}: redo");
+        s.execute("edit.undo", &json!({})).unwrap();
+        // Only the hidden row of a label: the kind keeps blue.
+        let steps = s.doc().unwrap().history.undo.len();
+        p["ids"] = json!([square.0, q2.0]);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#0000ff".into()), "{cmd}: hidden row only");
+        while s.doc().unwrap().history.undo.len() > steps {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        // Q2's shown green row, written as it was: the kind keeps green.
+        p["ids"] = json!([q2.0]);
+        p[if cmd == "paint.setFill" { "item" } else { "index" }] = json!(1);
+        if cmd != "appearance.duplicateItem" {
+            p["color"] = json!("#00ff00");
+        }
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#00ff00".into()), "{cmd}: the shown row written as it was");
+    }
+}
+
 /// A label's object opacity and blend mode set without a row (`transparency.set` without `item`) are kept for its kind.
 #[test]
 fn a_labels_object_opacity_and_blend_mode_are_kept_for_its_kind() {
@@ -7503,6 +9113,1031 @@ fn a_recolor_leaves_wedge_legend_labels_their_contrast() {
     s.execute("edit.colors.invert", &json!({"ids": [text_id(&s, id, "Legend", "a").0]})).unwrap();
     let kept = spec(&s, id).label_styles.legend.map(|st| st.fill);
     assert_eq!(kept.and_then(|f| f.color()).map(|c| c.to_hex()).as_deref(), Some("#ffffff"));
+}
+
+/// A recolor of the whole graph that turns every wedge legend label the same color (one series) still leaves them to
+/// the graph's black or white, so a label stays readable when its wedge is painted light again.
+#[test]
+fn a_recolor_of_a_one_series_pie_leaves_its_wedge_label_its_contrast() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = make(&mut s, "pie", ",a\nP1,1");
+    s.execute("graph.setType", &json!({"id": id.0, "pieLegend": "wedges"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [series_0_group(&s, id).0.0], "color": "#ffffff"})).unwrap();
+    // The white wedge turns black and its black label white.
+    s.execute("edit.colors.invert", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.legend, None);
+    s.execute("paint.setFill", &json!({"ids": [series_0_group(&s, id).0.0], "color": "#ffffff"})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1]]})).unwrap();
+    let NodeKind::Text(t) = label_node(&s, id, "Legend", "a").kind else { panic!("a is not type") };
+    assert_eq!(t.runs[0].style.fill.color().map(|c| c.to_hex()).as_deref(), Some("#000000"));
+}
+
+/// The lines in graph `id`'s Axes group (axis lines, tick marks and a radar graph's rings), in paint order.
+fn line_nodes(s: &Session, id: NodeId) -> Vec<vectorcraft_doc::Node> {
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    group(&n, "Axes").children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Text(_))).map(|c| (**c).clone()).collect()
+}
+
+/// How line `n` looks: its stroke color (empty without one), stroke weight and object opacity.
+fn line_look(n: &vectorcraft_doc::Node) -> (String, f64, f32) {
+    let stroke = n.appearance.stroke_paint().color().map(|c| c.to_hex()).unwrap_or_default();
+    (stroke, n.appearance.stroke_width(), n.opacity)
+}
+
+/// The looks of graph `id`'s lines after it is drawn again.
+fn redrawn_line_looks(s: &mut Session, id: NodeId) -> Vec<(String, f64, f32)> {
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    line_nodes(s, id).iter().map(line_look).collect()
+}
+
+/// A stroke, a weight, no stroke or an opacity given to one axis line is kept for every axis line and tick mark when the
+/// graph is drawn again, and undo takes it back with its edit.
+#[test]
+fn paint_set_on_one_axis_line_is_kept_for_every_line() {
+    let cases = [
+        ("paint.setStroke", json!({"color": "#ff0000"}), ("#ff0000", 0.5, 1.0)),
+        ("stroke.set", json!({"weight": 2}), ("#000000", 2.0, 1.0)),
+        ("paint.setStroke", json!({"none": true}), ("", 0.0, 1.0)),
+        ("appearance.clear", json!({}), ("", 0.0, 1.0)),
+        ("transparency.set", json!({"opacity": 40}), ("#000000", 0.5, 0.4)),
+    ];
+    every_case(cases, |(cmd, params, (hex, width, opacity))| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        assert!(lines.len() > 2, "{lines:?}");
+        let mut p = params.clone();
+        p["ids"] = json!([lines[0].id.0]);
+        s.execute(cmd, &p).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        let want = (hex.to_string(), *width, *opacity);
+        assert!(looks.iter().all(|l| (&l.0, (l.1 - want.1).abs() < 1e-9, (l.2 - want.2).abs() < 1e-6) == (&want.0, true, true)), "{cmd}: {looks:?}");
+        // Undo takes back the redraw, then the edit and what the graph keeps.
+        for _ in 0..2 {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert_eq!(spec(&s, id).label_styles.axis_rows, None, "{cmd}");
+    });
+}
+
+/// A recolor of the whole graph, or Swap Fill and Stroke on its axis lines, is kept for its axis lines, and the labels'
+/// paint stays its own.
+#[test]
+fn recoloring_a_graph_keeps_its_axis_lines_paint() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("edit.colors.invert", &json!({"ids": [id.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ffffff"), "inverted black lines are white");
+    let ids: Vec<u64> = line_nodes(&s, id).iter().map(|n| n.id.0).collect();
+    s.execute("paint.swap", &json!({"ids": ids})).unwrap();
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap();
+    assert_eq!((kept.paint.fill.and_then(|p| p.color()).map(|c| c.to_hex()), kept.paint.stroke), (Some("#ffffff".into()), Some(Paint::None)));
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0.is_empty()), "the lines have no stroke after the swap");
+    // The value labels keep their inverted fill, not the lines' swapped paint.
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let label_paint: Vec<(String, bool)> = group(&n, "Axes")
+        .children()
+        .unwrap()
+        .iter()
+        .filter_map(|c| match &c.kind {
+            NodeKind::Text(t) => Some((t.runs[0].style.fill.color().map(|c| c.to_hex()).unwrap_or_default(), t.runs[0].style.stroke.is_none())),
+            _ => None,
+        })
+        .collect();
+    assert!(!label_paint.is_empty() && label_paint.iter().all(|l| *l == ("#ffffff".to_string(), true)), "{label_paint:?}");
+}
+
+/// Swap Fill and Stroke on an axis line keeps the swapped paint for every axis line and leaves the fill opacity the axis
+/// lines keep from another line, though the line swapped still shows 100%.
+#[test]
+fn swapping_an_axis_lines_paint_keeps_the_fill_opacity_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    let (first, second) = (lines[0].id, lines[1].id);
+    s.execute("paint.setFill", &json!({"ids": [first.0], "color": "#00ff00"})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [first.0], "item": top_row(&s, first, true), "opacity": 40})).unwrap();
+    let shown = s.doc().unwrap().doc.node(second).unwrap().appearance.fill().map(|f| f.opacity);
+    assert!(shown.is_none_or(|o| o == 1.0), "the other lines show 100% until the graph is drawn again: {shown:?}");
+    s.execute("paint.swap", &json!({"ids": [second.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    for n in line_nodes(&s, id) {
+        let fill = n.appearance.fill().map(|f| (f.paint.color().map(|c| c.to_hex()), f.opacity));
+        assert!(fill.as_ref().is_some_and(|(c, o)| c.as_deref() == Some("#000000") && (*o - 0.4).abs() < 1e-6), "{fill:?}");
+        assert!(n.appearance.stroke_paint().is_none(), "the swapped line had no fill, so the lines have no stroke");
+    }
+}
+
+/// A stroke given the whole graph, or its Axes group, is kept for its axis lines.
+#[test]
+fn a_stroke_given_the_whole_graph_or_its_axes_group_is_kept_for_its_axis_lines() {
+    for axes in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let target = if axes { group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").id } else { id };
+        s.execute("paint.setStroke", &json!({"ids": [target.0], "color": "#ff0000"})).unwrap();
+        assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ff0000"), "axes: {axes}");
+    }
+}
+
+/// A radar graph's rings keep what is set on one of them, apart from its spokes.
+#[test]
+fn a_radar_graphs_rings_keep_their_paint_apart_from_its_spokes() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "radar");
+    let lines = line_nodes(&s, id);
+    // Three categories: three spokes, then the rings.
+    assert_eq!(line_look(&lines[3]), ("#999999".into(), 0.25, 1.0));
+    s.execute("paint.setStroke", &json!({"ids": [lines[3].id.0], "color": "#00ff00"})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks[..3].iter().all(|l| l.0 == "#000000" && l.1 == 0.5), "{looks:?}");
+    assert!(looks[3..].iter().all(|l| l.0 == "#00ff00" && l.1 == 0.25), "{looks:?}");
+    s.execute("paint.setStroke", &json!({"ids": [line_nodes(&s, id)[0].id.0], "color": "#0000ff"})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks[..3].iter().all(|l| l.0 == "#0000ff") && looks[3..].iter().all(|l| l.0 == "#00ff00"), "{looks:?}");
+}
+
+/// When an edit gives axis lines different paint, the frontmost one sets what they keep, whatever order `ids` are in.
+#[test]
+fn the_frontmost_axis_line_sets_what_its_recolor_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    let (back, front) = (lines[0].id, lines[lines.len() - 1].id);
+    s.execute("paint.setStroke", &json!({"ids": [front.0], "color": "#ff0000"})).unwrap();
+    s.execute("edit.colors.invert", &json!({"ids": [front.0, back.0]})).unwrap();
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap().paint.stroke.and_then(|p| p.color()).map(|c| c.to_hex());
+    assert_eq!(kept.as_deref(), Some("#00ffff"), "the inverted red of the frontmost line");
+}
+
+/// An appearance moved from an axis line to one behind it is kept for every axis line, not the cleared source's.
+#[test]
+fn an_appearance_moved_to_an_axis_line_behind_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    let (back, front) = (lines[0].id, lines[lines.len() - 1].id);
+    s.execute("paint.setStroke", &json!({"ids": [front.0], "color": "#ff0000"})).unwrap();
+    s.execute("appearance.transfer", &json!({"source": front.0, "target": back.0})).unwrap();
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap().paint.stroke.and_then(|p| p.color()).map(|c| c.to_hex());
+    assert_eq!(kept.as_deref(), Some("#ff0000"), "the moved red, not the cleared source");
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ff0000"));
+}
+
+/// A radar graph's spoke brought in front of its rings is still a spoke: what is set on it is kept for the spokes.
+#[test]
+fn a_radar_spoke_moved_in_front_of_the_rings_keeps_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "radar");
+    let spoke = line_nodes(&s, id)[0].id;
+    s.execute("object.arrange.bringToFront", &json!({"ids": [spoke.0]})).unwrap();
+    assert_eq!(line_nodes(&s, id).last().map(|n| n.id), Some(spoke), "the spoke is in front of the rings");
+    s.execute("paint.setStroke", &json!({"ids": [spoke.0], "color": "#0000ff"})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks[..3].iter().all(|l| l.0 == "#0000ff") && looks[3..].iter().all(|l| l.0 == "#999999"), "{looks:?}");
+}
+
+/// A graphic style linked to an axis line passes a redefinition on to every axis line.
+#[test]
+fn a_redefined_graphic_style_on_an_axis_line_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+    s.execute("graphicStyle.new", &json!({"id": rect.0, "name": "Axis"})).unwrap();
+    let line = line_nodes(&s, id)[0].id;
+    s.execute("graphicStyle.apply", &json!({"name": "Axis", "ids": [line.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#00ff00"})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Axis", "id": rect.0})).unwrap();
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap().paint.stroke.and_then(|p| p.color()).map(|c| c.to_hex());
+    assert_eq!(kept.as_deref(), Some("#00ff00"));
+}
+
+/// An Eyedropper pick and Apply Stroke to Fill on an axis line are kept for every axis line.
+#[test]
+fn an_eyedropper_pick_and_stroke_to_fill_on_an_axis_line_are_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [rect.0], "none": true})).unwrap();
+    let line = line_nodes(&s, id)[0].id;
+    s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [line.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ff0000" && l.1 == 1.0), "the picked 1 pt red stroke");
+    let line = line_nodes(&s, id)[1].id;
+    s.execute("addon.color.strokeToFill", &json!({"ids": [line.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let fills: Vec<String> = line_nodes(&s, id).iter().map(|n| n.appearance.fill_paint().color().map(|c| c.to_hex()).unwrap_or_default()).collect();
+    assert!(fills.iter().all(|f| f == "#ff0000"), "{fills:?}");
+}
+
+/// Setting a line to the paint it is drawn with by default keeps nothing, and is no edit.
+#[test]
+fn axis_lines_given_their_default_paint_keep_nothing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let line = line_nodes(&s, id)[0].id;
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("paint.setStroke", &json!({"ids": [line.0], "color": "#000000"})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.axis_rows, None);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+}
+
+/// `object.setProps` and `transparency.set` without an `item` keep only a line's object opacity: the stroke its kind
+/// keeps from another line stays, though the line they are given still shows the default stroke.
+#[test]
+fn an_object_opacity_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
+    for (cmd, params) in [("object.setProps", json!({"opacity": 50})), ("transparency.set", json!({"opacity": 50}))] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+        let mut p = params.clone();
+        p["ids"] = json!([lines[1].id.0]);
+        s.execute(cmd, &p).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.5).abs() < 1e-6), "{cmd}: {looks:?}");
+    }
+}
+
+/// A stroke painted on an axis line after another axis line's stroke was set to None is kept for every axis line with
+/// the painted line's weight, not the zero weight the unpainted stroke left on its kind.
+#[test]
+fn a_stroke_painted_after_an_axis_line_lost_its_stroke_keeps_a_weight() {
+    let cases = ["paint.setStroke", "addon.color.fillToStroke", "appearance.setItem"];
+    every_case(cases, |cmd| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        let weight = line_look(&lines[1]).1;
+        assert!(weight > 0.0, "{cmd}: the line has a stroke weight: {weight}");
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "none": true})).unwrap();
+        let b = lines[1].id.0;
+        match *cmd {
+            "paint.setStroke" => s.execute(cmd, &json!({"ids": [b], "color": "#ff0000"})).unwrap(),
+            "addon.color.fillToStroke" => {
+                s.execute("paint.setFill", &json!({"ids": [b], "color": "#ff0000"})).unwrap();
+                s.execute(cmd, &json!({"ids": [b]})).unwrap()
+            }
+            _ => s.execute(cmd, &json!({"ids": [b], "index": top_row(&s, lines[1].id, false), "color": "#ff0000"})).unwrap(),
+        };
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.1 - weight).abs() < 1e-9), "{cmd}: {looks:?}");
+    });
+}
+
+/// A zero stroke weight set together with a stroke color on an axis line is kept for every axis line as set, also when
+/// a stroke is painted on another axis line before the graph is drawn again.
+#[test]
+fn a_zero_weight_set_with_a_stroke_color_on_an_axis_line_is_kept() {
+    every_case([false, true], |repaint| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "none": true})).unwrap();
+        let at = top_row(&s, lines[1].id, false);
+        s.execute("appearance.setItem", &json!({"ids": [lines[1].id.0], "index": at, "color": "#ff0000", "weight": 0})).unwrap();
+        let color = if *repaint {
+            s.execute("paint.setStroke", &json!({"ids": [lines[2].id.0], "color": "#0000ff"})).unwrap();
+            "#0000ff"
+        } else {
+            "#ff0000"
+        };
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == color && l.1 == 0.0), "repaint {repaint}: {looks:?}");
+    });
+}
+
+/// A reorder that leaves an axis line's rows as they were keeps what its kind keeps from another line and is no edit.
+#[test]
+fn a_reorder_that_changes_nothing_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+    let stroke = top_row(&s, lines[1].id, false);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("appearance.moveItem", &json!({"ids": [lines[1].id.0], "from": stroke, "to": stroke})).unwrap();
+    s.execute("appearance.moveItem", &json!({"ids": [lines[1].id.0], "indices": [stroke], "to": stroke})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0 == "#ff0000"), "{looks:?}");
+}
+
+/// An Eyedropper pick that applies only the object's transparency to an axis line keeps the stroke its kind keeps, though
+/// the line it is applied to still shows the default stroke.
+#[test]
+fn a_transparency_only_pick_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("transparency.set", &json!({"ids": [rect.0], "opacity": 50})).unwrap();
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+    let fill = json!({"color": false, "transparency": false, "overprint": false});
+    let stroke = json!({"color": false, "transparency": false, "overprint": false, "weight": false, "cap": false, "join": false, "miter": false, "dash": false});
+    let apply = json!({"appearance": {"transparency": true, "fill": fill, "stroke": stroke}, "character": false, "paragraph": false});
+    s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [lines[1].id.0], "apply": apply})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.5).abs() < 1e-6), "{looks:?}");
+}
+
+/// The Eyedropper Options that apply every fill and stroke attribute but not the object's transparency.
+fn every_row_attribute_without_transparency() -> serde_json::Value {
+    let fill = json!({"color": true, "transparency": true, "overprint": true});
+    let stroke =
+        json!({"color": true, "transparency": true, "overprint": true, "weight": true, "cap": true, "join": true, "miter": true, "dash": true});
+    json!({"appearance": {"transparency": false, "fill": fill, "stroke": stroke}, "character": false, "paragraph": false})
+}
+
+/// An Eyedropper pick of every fill and stroke attribute without the object's transparency, with or without `append`,
+/// keeps the object opacity the axis lines keep from another line, though the line it is applied to still shows 100%.
+#[test]
+fn a_pick_without_transparency_on_an_axis_line_keeps_the_opacity_its_kind_keeps() {
+    for append in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [rect.0], "none": true})).unwrap();
+        let lines = line_nodes(&s, id);
+        s.execute("transparency.set", &json!({"ids": [lines[0].id.0], "opacity": 40})).unwrap();
+        assert_eq!(line_look(&line_nodes(&s, id)[1]).2, 1.0, "append {append}: the other lines show 100% until the graph is drawn again");
+        let pick = json!({"source": rect.0, "ids": [lines[1].id.0], "apply": every_row_attribute_without_transparency(), "append": append});
+        s.execute("appearance.copyFrom", &pick).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.4).abs() < 1e-6), "append {append}: {looks:?}");
+    }
+}
+
+/// A graphic style added on top of a graph label's or axis line's appearance keeps the object opacity its kind keeps
+/// from another label or line, though the one it is added to still shows 100%.
+#[test]
+fn a_graphic_style_added_to_a_label_or_axis_line_keeps_the_opacity_its_kind_keeps() {
+    for label in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [rect.0], "none": true})).unwrap();
+        s.execute("graphicStyle.new", &json!({"id": rect.0, "name": "Red"})).unwrap();
+        let (first, second) = if label {
+            (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"))
+        } else {
+            let lines = line_nodes(&s, id);
+            (lines[0].id, lines[1].id)
+        };
+        s.execute("transparency.set", &json!({"ids": [first.0], "opacity": 40})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.node(second).unwrap().opacity, 1.0, "label {label}: 100% until the graph is drawn again");
+        s.execute("graphicStyle.apply", &json!({"name": "Red", "ids": [second.0], "add": true})).unwrap();
+        if label {
+            let looks = redrawn_label_rows(&mut s, id);
+            for q in ["Q1", "Q2", "Q3"] {
+                let (rows, opacity) = rows_of(&looks, q);
+                assert!((opacity - 0.4).abs() < 1e-6 && rows.iter().any(|r| !r.0 && r.1 == "#ff0000"), "{q}: {rows:?} {opacity}");
+            }
+        } else {
+            let looks = redrawn_line_looks(&mut s, id);
+            assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.4).abs() < 1e-6), "{looks:?}");
+        }
+    }
+}
+
+/// A fill-only graphic style added on top of a graph label or axis line, or a fill-only source appended to one with the
+/// Eyedropper, keeps the stroke its kind keeps from another label or line, though the one it is added to still shows its
+/// own.
+#[test]
+fn a_fill_added_to_a_label_or_axis_line_keeps_the_stroke_its_kind_keeps() {
+    let cases = [(false, false), (false, true), (true, false), (true, true)];
+    every_case(cases, |&(label, append)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let (rect, _) = blue_style(&mut s, "Blue", false);
+        let (first, second) = if label {
+            (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"))
+        } else {
+            let lines = line_nodes(&s, id);
+            (lines[0].id, lines[1].id)
+        };
+        if label {
+            s.execute("appearance.addStroke", &json!({"ids": [first.0]})).unwrap();
+            s.execute("appearance.setItem", &json!({"ids": [first.0], "index": top_row(&s, first, false), "color": "#ff0000"})).unwrap();
+        } else {
+            s.execute("paint.setStroke", &json!({"ids": [first.0], "color": "#ff0000"})).unwrap();
+        }
+        if append {
+            let pick = json!({"source": rect.0, "ids": [second.0], "apply": every_row_attribute_without_transparency(), "append": true});
+            s.execute("appearance.copyFrom", &pick).unwrap();
+        } else {
+            s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [second.0], "add": true})).unwrap();
+        }
+        if label {
+            let looks = redrawn_label_rows(&mut s, id);
+            for q in ["Q1", "Q2", "Q3"] {
+                let (rows, _) = rows_of(&looks, q);
+                let shows = |fill: bool, hex: &str| rows.iter().any(|r| r.0 == fill && r.1 == hex);
+                assert!(shows(false, "#ff0000") && shows(true, "#0000ff"), "{q}: {rows:?}");
+            }
+        } else {
+            let looks = redrawn_line_looks(&mut s, id);
+            assert!(looks.iter().all(|l| l.0 == "#ff0000"), "{looks:?}");
+        }
+    });
+}
+
+/// A stroke a label's kind keeps below the characters stays below them when a fill-only graphic style is added on top of
+/// another label of the kind, or a fill-only source appended to it, and the new fill paints above the characters.
+#[test]
+fn a_fill_added_to_a_label_keeps_the_kept_stroke_below_the_characters() {
+    every_case([false, true], |&append| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let (rect, _) = blue_style(&mut s, "Blue", false);
+        let (q1, q2) = (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"));
+        s.execute("appearance.addStroke", &json!({"ids": [q1.0]})).unwrap();
+        s.execute("appearance.moveItem", &json!({"ids": [q1.0], "from": "contents", "to": 1})).unwrap();
+        if append {
+            let pick = json!({"source": rect.0, "ids": [q2.0], "apply": every_row_attribute_without_transparency(), "append": true});
+            s.execute("appearance.copyFrom", &pick).unwrap();
+        } else {
+            s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [q2.0], "add": true})).unwrap();
+        }
+        redrawn_label_rows(&mut s, id);
+        let look = |ap: &vectorcraft_doc::Appearance| (ap.contents_at(), ap.items.iter().map(|it| it.is_fill()).collect::<Vec<_>>());
+        for q in ["Q1", "Q2", "Q3"] {
+            assert_eq!(look(&label_node(&s, id, "Axes", q).appearance), (1, vec![false, true]), "append {append}: {q}");
+        }
+    });
+}
+
+/// A Contents (Characters) row move that leaves a graph label as it was keeps the rows its kind keeps from another label
+/// and is no edit.
+#[test]
+fn a_contents_move_that_changes_nothing_on_a_label_keeps_the_rows_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let (q1, q2) = (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"));
+    s.execute("appearance.addStroke", &json!({"ids": [q1.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [q1.0], "index": top_row(&s, q1, false), "color": "#ff0000"})).unwrap();
+    let at = s.doc().unwrap().doc.node(q2).unwrap().appearance.contents_at();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("appearance.moveItem", &json!({"ids": [q2.0], "from": "contents", "to": at})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+    let looks = redrawn_label_rows(&mut s, id);
+    for q in ["Q1", "Q2", "Q3"] {
+        let (rows, _) = rows_of(&looks, q);
+        assert!(rows.iter().any(|r| !r.0 && r.1 == "#ff0000"), "{q}: {rows:?}");
+    }
+}
+
+/// An Eyedropper pick with `append` and without the object's transparency on a graph label keeps the object opacity its
+/// kind keeps from another label, though the label it is applied to still shows 100%.
+#[test]
+fn an_appended_pick_without_transparency_on_a_label_keeps_the_opacity_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [rect.0], "none": true})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [text_id(&s, id, "Axes", "Q1").0], "opacity": 40})).unwrap();
+    let q2 = text_id(&s, id, "Axes", "Q2");
+    assert_eq!(s.doc().unwrap().doc.node(q2).unwrap().opacity, 1.0, "Q2 shows 100% until the graph is drawn again");
+    let pick = json!({"source": rect.0, "ids": [q2.0], "apply": every_row_attribute_without_transparency(), "append": true});
+    s.execute("appearance.copyFrom", &pick).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    for q in ["Q1", "Q2", "Q3"] {
+        let (rows, opacity) = rows_of(&looks, q);
+        assert!((opacity - 0.4).abs() < 1e-6, "{q}: {opacity}");
+        assert!(rows.iter().any(|r| !r.0 && r.1 == "#ff0000"), "{q}: {rows:?}");
+    }
+}
+
+/// An edit of some attributes on an axis line that still shows the default stroke keeps what it changes, and the stroke
+/// its kind keeps from another line stays: a cap is not kept, so it changes nothing the kind keeps.
+#[test]
+fn an_edit_of_some_attributes_on_an_axis_line_keeps_the_rest_its_kind_keeps() {
+    let cases = [
+        ("stroke.set", json!({"cap": "round"}), ""),
+        ("paint.setFill", json!({"color": "#0000ff"}), "#0000ff"),
+        ("appearance.setItem", json!({"index": 0, "color": "#00ff00"}), "#00ff00"),
+    ];
+    for (cmd, params, fill) in cases {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "{cmd}: the other lines show black until the graph is drawn again");
+        let mut p = params.clone();
+        p["ids"] = json!([lines[1].id.0]);
+        s.execute(cmd, &p).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| *l == ("#ff0000".into(), 0.5, 1.0)), "{cmd}: {looks:?}");
+        let fills: Vec<String> =
+            line_nodes(&s, id).iter().map(|n| n.appearance.fill_paint().color().map(|c| c.to_hex()).unwrap_or_default()).collect();
+        assert!(fills.iter().all(|f| f == fill), "{cmd}: {fills:?}");
+    }
+}
+
+/// An opacity and a stroke weight given to a radar graph's ring are kept for its rings, and its spokes keep their own.
+#[test]
+fn transparency_and_stroke_weight_on_a_radar_ring_are_kept_for_its_rings() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "radar");
+    let ring = line_nodes(&s, id)[3].id;
+    s.execute("transparency.set", &json!({"ids": [ring.0], "opacity": 40})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [ring.0], "weight": 1})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks[..3].iter().all(|l| *l == ("#000000".into(), 0.5, 1.0)), "{looks:?}");
+    assert!(looks[3..].iter().all(|l| l.0 == "#999999" && l.1 == 1.0 && (l.2 - 0.4).abs() < 1e-6), "{looks:?}");
+}
+
+/// A placed gradient on an axis line's stroke is kept for every axis line without its placement.
+#[test]
+fn a_gradient_on_an_axis_line_is_kept_without_its_placement() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let line = line_nodes(&s, id)[0].id;
+    s.execute("paint.editGradient", &json!({"ids": [line.0], "kind": "linear", "stroke": true})).unwrap();
+    let placement = json!({"ids": [line.0], "stroke": true, "start": [100, 100], "end": [200, 100], "aspect": 50});
+    s.execute("paint.setGradientGeom", &placement).unwrap();
+    let shown = line_nodes(&s, id)[0].appearance.stroke_paint().clone();
+    assert!(matches!(&shown, Paint::Gradient(g) if g.geom.is_some()), "the line's gradient is placed: {shown:?}");
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap().paint.stroke;
+    assert!(matches!(&kept, Some(Paint::Gradient(g)) if g.geom.is_none() && g.freeform.is_none()), "{kept:?}");
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    assert!(line_nodes(&s, id).iter().all(|n| matches!(n.appearance.stroke_paint(), Paint::Gradient(_))));
+}
+
+/// Default Fill and Stroke and Apply Fill to Stroke on an axis line are kept for every axis line.
+#[test]
+fn default_fill_and_stroke_and_fill_to_stroke_on_an_axis_line_are_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let line = line_nodes(&s, id)[0].id;
+    s.execute("paint.setStroke", &json!({"ids": [line.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.default", &json!({"ids": [line.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| *l == ("#000000".into(), 1.0, 1.0)), "the 1 pt black default stroke");
+    let fills: Vec<String> = line_nodes(&s, id).iter().map(|n| n.appearance.fill_paint().color().map(|c| c.to_hex()).unwrap_or_default()).collect();
+    assert!(fills.iter().all(|f| f == "#ffffff"), "{fills:?}");
+    let line = line_nodes(&s, id)[1].id;
+    s.execute("paint.setFill", &json!({"ids": [line.0], "color": "#0000ff"})).unwrap();
+    s.execute("addon.color.fillToStroke", &json!({"ids": [line.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#0000ff"), "the blue fill on the stroke");
+}
+
+/// The Appearance commands and `graphicStyle.apply` given a graph's Axes group or Legend group edit the lines and labels
+/// directly in it, as given a series group they edit its paths: every line and label of each kind keeps what they set
+/// when the graph is drawn again, and the groups keep no rows of their own.
+#[test]
+fn appearance_commands_given_the_axes_or_legend_group_edit_its_lines_and_labels() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let part = |s: &Session, name: &str| group(s.doc().unwrap().doc.node(id).unwrap(), name).clone();
+    s.execute("appearance.clear", &json!({"ids": [part(&s, "Axes").id.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0.is_empty()), "the cleared lines have no stroke");
+    let (_, blue) = blue_style(&mut s, "Blue", false);
+    for name in ["Axes", "Legend"] {
+        s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [part(&s, name).id.0]})).unwrap();
+    }
+    let kept = spec(&s, id).label_styles;
+    let fill = |rows: Option<vectorcraft_doc::LabelRows>| rows.and_then(|r| r.paint.fill);
+    assert_eq!(fill(kept.axis_rows), Some(blue.clone()), "axis lines");
+    assert_eq!(fill(kept.values_rows), Some(blue.clone()), "value labels");
+    assert_eq!(fill(kept.legend_rows), Some(blue.clone()), "legend labels");
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    for name in ["Axes", "Legend"] {
+        let g = part(&s, name);
+        assert!(g.appearance.items.is_empty(), "{name} keeps no rows of its own");
+        let members: Vec<Paint> = g.children().unwrap().iter().map(|c| c.appearance.fill_paint()).collect();
+        assert!(!members.is_empty() && members.iter().all(|p| *p == blue), "{name}: {members:?}");
+    }
+}
+
+/// Aligned rows copied to `to` given the Legend group, whose labels have the same rows, go to `to` in every label.
+#[test]
+fn aligned_copies_given_the_legend_group_go_to_to_when_its_labels_have_the_same_rows() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let labels = |s: &Session| -> Vec<vectorcraft_doc::Appearance> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, "Legend").children().unwrap().iter().map(|c| (*c.appearance).clone()).collect()
+    };
+    let legend = group(s.doc().unwrap().doc.node(id).unwrap(), "Legend").id;
+    s.execute("appearance.addFill", &json!({"ids": [legend.0]})).unwrap();
+    s.execute("appearance.addStroke", &json!({"ids": [legend.0]})).unwrap();
+    let was = labels(&s);
+    assert!(was.len() >= 2 && was.iter().all(|a| *a == was[0]) && was[0].items.len() >= 2, "{was:?}");
+    let top = was[0].items.len() - 1;
+    s.execute("appearance.duplicateItem", &json!({"ids": [legend.0], "index": top, "to": 0, "aligned": true})).unwrap();
+    for a in labels(&s) {
+        assert_eq!(a.items.len(), was[0].items.len() + 1);
+        assert_eq!(a.items[0], was[0].items[top], "the copy is at the bottom");
+    }
+}
+
+/// A row index given the Axes group, whose lines and labels have different rows, is refused unless it is `aligned`, a row
+/// of the backmost member's stack: then the members that share that row change, the labels keep theirs, and the graph
+/// keeps the change when it is drawn again.
+#[test]
+fn a_row_index_given_the_axes_group_is_a_row_of_its_backmost_member_with_aligned() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let axes = group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").clone();
+    let back = axes.children().unwrap()[0].id;
+    assert!(line_nodes(&s, id).iter().any(|l| l.id == back), "the backmost member is a line");
+    let stroke = top_row(&s, back, false);
+    for (cmd, p) in [
+        ("appearance.setItem", json!({"ids": [axes.id.0], "index": stroke, "color": "#ff0000"})),
+        ("appearance.removeItem", json!({"ids": [axes.id.0], "index": stroke})),
+        ("appearance.duplicateItem", json!({"ids": [axes.id.0], "index": stroke})),
+        ("appearance.moveItem", json!({"ids": [axes.id.0], "from": stroke, "to": 0})),
+        ("transparency.set", json!({"ids": [axes.id.0], "item": stroke, "opacity": 40})),
+    ] {
+        let err = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(err.contains("aligned"), "{cmd}: {err}");
+    }
+    let labels = |s: &Session| -> Vec<vectorcraft_doc::Appearance> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, "Axes").children().unwrap().iter().filter(|c| matches!(c.kind, NodeKind::Text(_))).map(|c| (*c.appearance).clone()).collect()
+    };
+    let was = labels(&s);
+    s.execute("appearance.setItem", &json!({"ids": [axes.id.0], "index": stroke, "color": "#ff0000", "aligned": true})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [axes.id.0], "item": stroke, "opacity": 40, "aligned": true})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0 == "#ff0000"), "{looks:?}");
+    let rows = spec(&s, id).label_styles.axis_rows.unwrap();
+    assert_eq!(rows.paint.stroke.and_then(|p| p.color()).map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
+    let now = labels(&s);
+    assert!(!now.is_empty() && now.iter().all(|a| *a == was[0]), "the labels keep their rows");
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let l = &group(&n, "Axes").children().unwrap()[0];
+    assert!((l.appearance.items[top_row(&s, l.id, false)].opacity() - 0.4).abs() < 1e-6, "the stroke row's opacity is kept");
+}
+
+/// An aligned row edit given the Axes group leaves alone what a kind of label keeps from a label without that row: the
+/// category labels keep the orange fill row of one of them through an edit of the lines' stroke rows.
+#[test]
+fn an_aligned_row_edit_given_the_axes_group_keeps_the_rows_of_labels_it_did_not_reach() {
+    let cases = [("appearance.setItem", json!({"color": "#0000ff"})), ("appearance.duplicateItem", json!({})), ("appearance.removeItem", json!({}))];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let c = text_id(&s, id, "Axes", "Q2");
+        s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff8000"})).unwrap();
+        let kept = spec(&s, id).label_styles.categories_rows;
+        assert!(kept.is_some(), "the category labels keep the orange row");
+        let axes = group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").clone();
+        let back = axes.children().unwrap()[0].id;
+        let mut p = params.clone();
+        p["ids"] = json!([axes.id.0]);
+        p["index"] = json!(top_row(&s, back, false));
+        p["aligned"] = json!(true);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(spec(&s, id).label_styles.categories_rows, kept, "{cmd}");
+    });
+}
+
+/// An edit of a hidden row of an axis line leaves what its kind keeps from another line: the line's visible rows did not
+/// change.
+#[test]
+fn an_edit_of_a_hidden_row_of_an_axis_line_keeps_what_its_kind_keeps() {
+    let cases = [
+        ("appearance.setItem", json!({"color": "#0000ff"})),
+        ("appearance.duplicateItem", json!({})),
+        ("appearance.removeItem", json!({})),
+        ("transparency.set", json!({"opacity": 40})),
+        ("paint.setStroke", json!({"color": "#0000ff"})),
+    ];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        let line = lines[1].id;
+        s.execute("appearance.addStroke", &json!({"ids": [line.0]})).unwrap();
+        let hidden = top_row(&s, line, false);
+        s.execute("appearance.setItem", &json!({"ids": [line.0], "index": hidden, "visible": false})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        let kept = spec(&s, id).label_styles.axis_rows;
+        let mut p = params.clone();
+        p["ids"] = json!([line.0]);
+        p[if cmd.starts_with("appearance.") { "index" } else { "item" }] = json!(hidden);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(spec(&s, id).label_styles.axis_rows, kept, "{cmd}");
+    });
+}
+
+/// An Eyedropper pick of only the object's opacity, or of only stroke options the graph does not keep, on an axis line
+/// keeps the stroke its kind keeps from another line, though the line it is given still shows the default stroke.
+#[test]
+fn an_eyedropper_pick_of_only_the_opacity_keeps_the_stroke_its_kind_keeps() {
+    let fill = json!({"color": false, "transparency": false, "overprint": false});
+    let stroke = |dash: bool| json!({"color": false, "transparency": false, "overprint": false, "weight": false, "cap": false, "join": false, "miter": false, "dash": dash});
+    let cases = [
+        (json!({"appearance": {"transparency": true, "fill": fill, "stroke": stroke(false)}}), 0.5),
+        (json!({"appearance": {"transparency": false, "fill": fill, "stroke": stroke(true)}}), 1.0),
+    ];
+    every_case(cases, |(pick, opacity)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("object.setProps", &json!({"ids": [rect.0], "opacity": 50})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [rect.0], "dash": [4, 2]})).unwrap();
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [lines[1].id.0], "pickUp": pick})).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - *opacity).abs() < 1e-6), "{pick}: {looks:?}");
+    });
+}
+
+/// Default Fill and Stroke on a label or an axis line that already shows the default paint is kept for its kind, in
+/// place of the paint the kind keeps from another label or line.
+#[test]
+fn default_fill_and_stroke_on_a_label_or_line_that_shows_it_is_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("paint.setFill", &json!({"ids": [text_id(&s, id, "Axes", "4").0], "color": "#ff0000"})).unwrap();
+    let hex = |st: &CharStyle| st.fill.color().map(|c| c.to_hex());
+    assert_eq!(hex(&label_run_style(&s, id, "Axes", "0")).as_deref(), Some("#000000"), "the other labels show black until the graph is drawn again");
+    s.execute("paint.default", &json!({"ids": [text_id(&s, id, "Axes", "0").0]})).unwrap();
+    label_looks(&mut s, id);
+    let st = label_run_style(&s, id, "Axes", "4");
+    assert_eq!((hex(&st).as_deref(), st.stroke.is_none()), (Some("#000000"), true));
+    let lines = line_nodes(&s, id);
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [lines[1].id.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| *l == ("#000000".into(), 1.0, 1.0)), "the 1 pt black default stroke");
+}
+
+/// Default Fill and Stroke on a label of a kind that keeps no style, which already shows the default paint, is no edit.
+#[test]
+fn default_fill_and_stroke_on_a_label_that_shows_it_is_no_edit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("paint.default", &json!({"ids": [text_id(&s, id, "Axes", "4").0]})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.values, None);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+}
+
+/// Redefine Graphic Style on an Axes group linked to the style with rows of its own (as a file can hold it) restyles and
+/// links the lines and labels in it, and clears and unlinks the group; Break Link given the group unlinks them. A style
+/// applied through the group links its lines and labels, and the graph keeps their look, not the link, when it is drawn
+/// again.
+#[test]
+fn graphic_style_links_given_the_axes_group() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let axes = group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").id;
+    let (rect, _) = blue_style(&mut s, "Blue", false);
+    let style = s.doc().unwrap().doc.graphic_style("Blue").unwrap().clone();
+    s.edit("Link", |d, _| {
+        let g = d.node_mut(axes).unwrap();
+        g.appearance = style.appearance.clone().into();
+        g.extras_mut().graphic_style = Some(style.id);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [rect.0], "index": top_row(&s, rect, true), "color": "#00ff00", "opacity": 100})).unwrap();
+    let green = s.doc().unwrap().doc.node(rect).unwrap().appearance.fill_paint();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "id": rect.0})).unwrap();
+    let axes_now = |s: &Session| group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").clone();
+    let members = |s: &Session| -> Vec<(Paint, Option<u32>)> {
+        axes_now(s).children().unwrap().iter().map(|c| (c.appearance.fill_paint(), c.extras().graphic_style)).collect()
+    };
+    let g = axes_now(&s);
+    assert!(g.appearance.items.is_empty() && g.extras().graphic_style.is_none(), "the group is cleared and unlinked");
+    assert!(members(&s).iter().all(|m| *m == (green.clone(), Some(style.id))), "{:?}", members(&s));
+    s.execute("graphicStyle.breakLink", &json!({"ids": [axes_now(&s).id.0]})).unwrap();
+    assert!(members(&s).iter().all(|m| m.1.is_none()), "unlinked");
+    s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [axes_now(&s).id.0]})).unwrap();
+    assert!(members(&s).iter().all(|m| m.1 == Some(style.id)), "linked");
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    assert!(members(&s).iter().all(|m| *m == (green.clone(), None)), "{:?}", members(&s));
+}
+
+/// The Appearance commands given a radar graph's Axes group reach its spokes and rings, which keep the edit apart.
+#[test]
+fn a_style_given_a_radar_graphs_axes_group_is_kept_for_spokes_and_rings() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "radar");
+    let axes = group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").id;
+    let (_, blue) = blue_style(&mut s, "Blue", false);
+    s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [axes.0]})).unwrap();
+    let kept = spec(&s, id).label_styles;
+    let fill = |rows: Option<vectorcraft_doc::LabelRows>| rows.and_then(|r| r.paint.fill);
+    assert_eq!(fill(kept.axis_rows), Some(blue.clone()), "spokes");
+    assert_eq!(fill(kept.ring_rows), Some(blue.clone()), "rings");
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0.is_empty()), "the style has no stroke: {looks:?}");
+}
+
+/// Default Fill and Stroke on an axis line that already shows the default paint is kept for every axis line, in place of
+/// the stroke the kind keeps from another line, and leaves the object opacity the kind keeps from another line.
+#[test]
+fn default_fill_and_stroke_on_an_axis_line_that_shows_it_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [lines[1].id.0], "color": "#ff0000"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [lines[1].id.0], "opacity": 50})).unwrap();
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| (l.0.as_str(), l.1) == ("#000000", 1.0)), "the 1 pt black default stroke: {looks:?}");
+    assert!(looks.iter().all(|l| (l.2 - 0.5).abs() < 1e-6), "the kind keeps its 50% opacity: {looks:?}");
+}
+
+/// A stroke paint written to an axis line that already shows it is kept for every axis line, in place of the stroke the
+/// kind keeps from another line.
+#[test]
+fn a_stroke_written_to_an_axis_line_that_shows_it_is_kept() {
+    let cases = [("paint.setStroke", json!({"color": "#000000"})), ("addon.color.fillToStroke", json!({}))];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setFill", &json!({"ids": [lines[1].id.0], "color": "#000000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "{cmd}: the other lines show black until the graph is drawn again");
+        let mut p = params.clone();
+        p["ids"] = json!([lines[1].id.0]);
+        s.execute(cmd, &p).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#000000"), "{cmd}: {looks:?}");
+    });
+}
+
+/// A stroke added to an axis line whose stroke shows the paint the new one takes is kept for every axis line, in place of
+/// the stroke the kind keeps from another line.
+#[test]
+fn a_stroke_added_to_an_axis_line_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+    s.execute("appearance.addStroke", &json!({"ids": [lines[1].id.0]})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| (l.0.as_str(), l.1) == ("#000000", 1.0)), "the added 1 pt black stroke: {looks:?}");
+}
+
+/// An Eyedropper pick of the stroke color, weight or transparency alone onto an axis line that already shows what it
+/// writes is kept for every axis line, in place of what the kind keeps from another line.
+#[test]
+fn an_eyedropper_pick_an_axis_line_already_shows_is_kept() {
+    let stroke_row = |n: &vectorcraft_doc::Node| n.appearance.items.iter().rposition(|it| !it.is_fill()).unwrap();
+    let cases = [("color", json!({"color": "#ff0000"})), ("weight", json!({"weight": 2})), ("transparency", json!({"opacity": 40}))];
+    every_case(cases, |(attr, edit)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#000000"})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [rect.0], "weight": 0.5})).unwrap();
+        let lines = line_nodes(&s, id);
+        let mut p = edit.clone();
+        p["ids"] = json!([lines[0].id.0]);
+        match *attr {
+            "color" => s.execute("paint.setStroke", &p),
+            "weight" => s.execute("stroke.set", &p),
+            _ => {
+                p["index"] = json!(stroke_row(&lines[0]));
+                s.execute("appearance.setItem", &p)
+            }
+        }
+        .unwrap();
+        let shown = line_nodes(&s, id)[1].clone();
+        assert_eq!(line_look(&shown), ("#000000".into(), 0.5, 1.0), "{attr}: the other lines show the default until the graph is drawn again");
+        let fill = json!({"color": false, "transparency": false, "overprint": false});
+        let mut stroke = json!({"color": false, "transparency": false, "overprint": false, "weight": false, "cap": false, "join": false, "miter": false, "dash": false});
+        stroke[*attr] = json!(true);
+        let apply = json!({"appearance": {"transparency": false, "fill": fill, "stroke": stroke}, "character": false, "paragraph": false});
+        s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [lines[1].id.0], "apply": apply})).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| *l == ("#000000".into(), 0.5, 1.0)), "{attr}: {looks:?}");
+        let opacities: Vec<f32> = line_nodes(&s, id).iter().map(|n| n.appearance.items[stroke_row(n)].opacity()).collect();
+        assert!(opacities.iter().all(|o| *o == 1.0), "{attr}: {opacities:?}");
+    });
+}
+
+/// A stroke color, weight or opacity set with `appearance.setItem`, or a weight set with `stroke.set`, on an axis line
+/// that already shows it is kept for every axis line, in place of what the kind keeps from another line.
+#[test]
+fn a_row_attribute_set_on_an_axis_line_that_shows_it_is_kept() {
+    let stroke_row = |n: &vectorcraft_doc::Node| n.appearance.items.iter().rposition(|it| !it.is_fill()).unwrap();
+    let cases = [
+        ("appearance.setItem", json!({"color": "#ff0000"}), json!({"color": "#000000"})),
+        ("appearance.setItem", json!({"weight": 2}), json!({"weight": 0.5})),
+        ("appearance.setItem", json!({"opacity": 40}), json!({"opacity": 100})),
+        ("stroke.set", json!({"weight": 2}), json!({"weight": 0.5})),
+    ];
+    every_case(cases, |(cmd, kept, shown)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        for (line, values) in [(&lines[0], kept), (&lines[1], shown)] {
+            let mut p = values.clone();
+            p["ids"] = json!([line.id.0]);
+            if *cmd == "appearance.setItem" {
+                p["index"] = json!(stroke_row(line));
+            }
+            s.execute(cmd, &p).unwrap();
+        }
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| *l == ("#000000".into(), 0.5, 1.0)), "{cmd} {shown}: {looks:?}");
+        let opacities: Vec<f32> = line_nodes(&s, id).iter().map(|n| n.appearance.items[stroke_row(n)].opacity()).collect();
+        assert!(opacities.iter().all(|o| *o == 1.0), "{cmd} {shown}: {opacities:?}");
+    });
+}
+
+/// `appearance.setItem` of a row's opacity alone on an axis line keeps the blend mode the kind keeps from another line,
+/// and of its blend mode alone the opacity; a null weight or opacity writes nothing and adds no undo step.
+#[test]
+fn a_row_attribute_set_on_an_axis_line_keeps_the_others_its_kind_keeps() {
+    let stroke_row = |n: &vectorcraft_doc::Node| n.appearance.items.iter().rposition(|it| !it.is_fill()).unwrap();
+    let row = |n: &vectorcraft_doc::Node| {
+        let it = &n.appearance.items[stroke_row(n)];
+        (it.opacity(), it.blend())
+    };
+    let cases = [
+        (json!({"blend": "multiply"}), json!({"opacity": 100}), (1.0, BlendMode::Multiply)),
+        (json!({"opacity": 40}), json!({"blend": "normal"}), (0.4, BlendMode::Normal)),
+    ];
+    every_case(cases, |(kept, shown, want)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        for (line, values) in [(&lines[0], kept), (&lines[1], shown)] {
+            let mut p = values.clone();
+            p["ids"] = json!([line.id.0]);
+            p["index"] = json!(stroke_row(line));
+            s.execute("appearance.setItem", &p).unwrap();
+        }
+        redrawn_line_looks(&mut s, id);
+        let rows: Vec<(f32, BlendMode)> = line_nodes(&s, id).iter().map(row).collect();
+        assert!(rows.iter().all(|r| *r == *want), "{shown}: {rows:?}");
+    });
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    for key in ["weight", "opacity"] {
+        let mut p = json!({"ids": [lines[1].id.0], "index": stroke_row(&lines[1])});
+        p[key] = serde_json::Value::Null;
+        s.execute("appearance.setItem", &p).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "a null value adds no undo step");
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ff0000"));
 }
 
 #[test]
@@ -8029,6 +10664,7 @@ fn graph_commands_refuse_params_of_the_wrong_type() {
         ("firstRowInFront", json!("yes"), "`firstRowInFront` must be true or false"),
         ("firstColumnInFront", json!(0), "`firstColumnInFront` must be true or false"),
         ("filledLines", json!("on"), "`filledLines` must be true or false"),
+        ("lineWidth", json!("4"), "`lineWidth` must be a number, not \"4\""),
         ("dropShadow", json!(1), "`dropShadow` must be true or false"),
         ("legendAcrossTop", json!("x"), "`legendAcrossTop` must be true or false"),
         ("type", json!(5), "`type` must be a string"),
@@ -8192,7 +10828,154 @@ fn a_drawn_graph_saved_as_ai_opens_as_a_graph_unless_the_save_warns() {
             }
         }
     }
-    assert!(live.contains(&"column v7.ai".to_string()) && live.contains(&"column pdf.ai".to_string()), "{live:?}");
+    for ty in ["column", "stackedColumn", "area"] {
+        assert!(live.contains(&format!("{ty} v7.ai")) && live.contains(&format!("{ty} pdf.ai")), "{ty}: {live:?}");
+    }
+}
+
+/// A line graph the graph tools draw with Draw Filled Lines, saved as `.ai` in either form, opens again as the same graph
+/// with its filled lines and Line Width, the default 3 pt included, and without a warning about graphs. A Line Width past
+/// the records' 100 pt is saved as the graph's art, with the warning.
+#[test]
+fn a_drawn_graph_with_filled_lines_saved_as_ai_opens_with_them() {
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-filled");
+    for (width, live) in [(None, true), (Some(8.0), true), (Some(150.0), false)] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,1,6";
+        let id = s.execute("graph.create", &json!({"type": "line", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let mut options = json!({"id": id, "filledLines": true});
+        if let Some(w) = width {
+            options["lineWidth"] = json!(w);
+        }
+        s.execute("graph.setType", &options).unwrap();
+        let written = spec(&s, NodeId(id));
+        assert_eq!((written.filled_lines, written.line_width), (true, width));
+        for (name, version) in [("v7.ai", Some("7")), ("pdf.ai", None)] {
+            let path = dir.join(format!("{width:?}-{name}"));
+            let mut p = json!({"path": path, "format": "ai"});
+            if let Some(v) = version {
+                p["aiVersion"] = json!(v);
+            }
+            let r = s.execute("file.saveAs", &p).unwrap();
+            let notes = r["warnings"].as_array().cloned().unwrap_or_default();
+            let warned = notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art")));
+            assert_eq!(warned, !live, "{width:?} {name}: {r}");
+            let mut again = Session::new();
+            again.execute("document.open", &json!({"path": path})).unwrap();
+            let mut graphs = vec![];
+            again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().map(|g| (n.id, g.clone()))));
+            assert_eq!(graphs.len(), usize::from(live), "{width:?} {name}");
+            if let Some((gid, g)) = graphs.first() {
+                assert_eq!((g.kind, g.cells(), g.filled_lines, g.line_width), (written.kind, written.cells(), true, width), "{width:?} {name}");
+                assert_eq!(g.filled_line_width(), written.filled_line_width(), "{width:?} {name}");
+                // With Draw Filled Lines turned off, each series draws its thin 1 pt line again.
+                again.execute("select.set", &json!({"ids": [gid.0]})).unwrap();
+                again.execute("graph.setType", &json!({"id": gid.0, "filledLines": false})).unwrap();
+                for series in 0..2 {
+                    let line = series_parts(&again, *gid, series)
+                        .into_iter()
+                        .any(|p| p.appearance.fill_paint().is_none() && !p.appearance.stroke_paint().is_none() && p.appearance.stroke_width() == 1.0);
+                    assert!(line, "{width:?} {name}: series {series} draws no thin line");
+                }
+            }
+        }
+    }
+}
+
+/// A default legend swatch has the stroke paint and weight of its series' marks, beside the plot or across the top: the
+/// thin white line of stacked columns and bars, areas and pie wedges, and none on columns and bars. A stroke color kept
+/// on the series, with or without a weight of its own, is on the swatch too.
+#[test]
+fn a_legend_swatch_has_the_stroke_of_its_series_marks() {
+    let white = |w: f64| (Paint::solid(vectorcraft_color::Color::WHITE), w);
+    let cases = [
+        ("stackedColumn", white(0.25)),
+        ("stackedBar", white(0.25)),
+        ("area", white(0.25)),
+        ("pie", white(0.5)),
+        ("column", (Paint::None, 0.0)),
+        ("bar", (Paint::None, 0.0)),
+    ];
+    for (ty, stroke) in cases {
+        for across_top in [false, true] {
+            let mut s = Session::new();
+            s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+            let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,1,6";
+            let id = NodeId(
+                s.execute("graph.create", &json!({"type": ty, "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+            s.execute("graph.setType", &json!({"id": id.0, "legendAcrossTop": across_top})).unwrap();
+            for i in 0..2 {
+                let marks = marks_of(&s, id, i);
+                assert!(marks.len() > 1, "{ty} {i}: marks and a swatch");
+                assert!(marks.iter().all(|m| (m.1.clone(), m.2) == stroke), "{ty} across top {across_top}, series {i}: {marks:?}");
+            }
+            // A stroke color kept on series 0 without a weight keeps the default weight, then with one.
+            let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].clone();
+            let row = bar.appearance.items.iter().rposition(|it| !it.is_fill());
+            let Some(row) = row else { continue };
+            s.execute("appearance.setItem", &json!({"ids": [bar.id.0], "index": row, "color": "#ff0000"})).unwrap();
+            s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+            let marks = marks_of(&s, id, 0);
+            assert!(marks.iter().all(|m| *m == marks[0]) && marks[0].1 != stroke.0, "{ty} across top {across_top}, red: {marks:?}");
+            let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+            s.execute("appearance.setItem", &json!({"ids": [bar.0], "index": row, "weight": 3})).unwrap();
+            s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+            let marks = marks_of(&s, id, 0);
+            assert!(marks.iter().all(|m| *m == marks[0]) && marks[0].2 == 3.0, "{ty} across top {across_top}, 3 pt: {marks:?}");
+        }
+    }
+}
+
+/// A stacked column graph the graph tools draw, saved as `.ai` in either form, opens again as the same graph without a
+/// warning, and its data can be edited there.
+#[test]
+fn a_drawn_stacked_column_graph_saved_as_ai_opens_as_a_graph_that_takes_new_data() {
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-stacked");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,1,6";
+    let id = s.execute("graph.create", &json!({"type": "stackedColumn", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let written = spec(&s, NodeId(id));
+    for (name, version) in [("v7.ai", Some("7")), ("pdf.ai", None)] {
+        let path = dir.join(name);
+        let mut p = json!({"path": path, "format": "ai"});
+        if let Some(v) = version {
+            p["aiVersion"] = json!(v);
+        }
+        let r = s.execute("file.saveAs", &p).unwrap();
+        let notes = r["warnings"].as_array().cloned().unwrap_or_default();
+        assert!(!notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
+        let mut again = Session::new();
+        again.execute("document.open", &json!({"path": path})).unwrap();
+        let mut found = vec![];
+        again.doc().unwrap().doc.walk(|n| {
+            if n.extras().graph.is_some() {
+                found.push(n.id);
+            }
+        });
+        assert_eq!(found.len(), 1, "{name}");
+        let g = spec(&again, found[0]);
+        assert_eq!((g.kind, g.cells()), (written.kind, written.cells()), "{name}");
+        assert_eq!((g.series.as_slice(), g.categories.as_slice()), (&written.series[..], &written.categories[..]), "{name}");
+        again.execute("select.set", &json!({"ids": [found[0].0]})).unwrap();
+        again.execute("graph.setData", &json!({"id": found[0].0, "csv": ",2024,2025\nQ1,8,1\nQ2,2,7"})).unwrap();
+        let after = spec(&again, found[0]);
+        assert_eq!((after.kind, after.rows.as_slice()), (written.kind, &[vec![8.0, 1.0], vec![2.0, 7.0]][..]), "{name}");
+        // Each series keeps one fill and the thin white stroke on its marks and its swatch.
+        for i in 0..2 {
+            let marks = marks_of(&again, found[0], i);
+            let white = Paint::solid(vectorcraft_color::Color::WHITE);
+            assert!(marks.len() > 1 && marks.iter().all(|m| *m == marks[0] && (&m.1, m.2) == (&white, 0.25)), "{name} series {i}: {marks:?}");
+        }
+    }
 }
 
 /// A graph opened from a `.ai` keeps the bounds of its art without type, so moving one of its labels on its own

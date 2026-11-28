@@ -1,5 +1,6 @@
 # Development
 
+> **Last updated:** 2026-11-24 · **Change:** Fonts: the interface font stack is the framework's, set up by `ui_fonts()` and installed by `embed::install`; `theme::install_fonts` is gone and the `interface-fonts` feature changes nothing.
 > **Last updated:** 2026-11-12 · **Change:** Tests canonicalize temporary roots and normalize Windows verbatim prefixes before comparing preset refusal paths or probing a case-variant script folder (#6860); production access checks unchanged.
 > **Last updated:** 2026-11-12 · **Change:** minor (clipboard failure helper follows its Linux/BSD and test callers; previously: Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending).
 > **Last updated:** 2026-11-01 · **Change:** Linux: Automatic Linux Display Server opens the window through XWayland when a pen is attached on a Wayland session, so the pen draws (#4967); `VECTORCRAFT_NATIVE_WAYLAND=1` keeps Wayland.
@@ -83,6 +84,8 @@ The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (
   - `WGPU_VALIDATION_INDIRECT_CALL=1`: turns wgpu's check of indirect draw arguments back on. VectorCraft draws nothing indirectly and turns it off, since the compute shader it needs fails to compile on some drivers (#651).
   - On Linux with Mesa, `MESA_VK_DEVICE_SELECT=10de:2f04!` (vendor:device as `vulkaninfo --summary` or `lspci -nn` show it) leaves only that GPU to Vulkan, and `DRI_PRIME=1` picks the other GPU.
 - Help › About and the control channel's `ui.inspect` (`graphicsAdapter`) show the adapter in use, and the app logs it at startup.
+- **How frames reach the display.** By default the window presents with `autovsync` and lets the display queue one frame. With `autovsync`, wgpu uses relaxed vsync (FifoRelaxed, which tears a frame that arrives late) where the driver offers it, else vsync (Fifo). For a launch, `--present-mode` (or `VECTORCRAFT_PRESENT_MODE`) sets the present mode to `fifo` (vsync), `autovsync` or `novsync` (wgpu uses Immediate, else Mailbox, else Fifo, whichever the driver offers), and `--frame-latency` (or `VECTORCRAFT_FRAME_LATENCY`) sets the frames the display may queue, `1` to `3`. A flag overrides its variable, and a value that is not one of these stops the app with a message. On Windows and Linux, a launch with either one set opens its files in a new window, as with `--new-instance`, instead of handing them to a running VectorCraft. At startup the log records what the app asks the window surface for, for example `requested window surface: autovsync, frame latency 2 (override)`. The driver chooses the mode that `autovsync` and `novsync` resolve to and may clamp the latency, and on macOS egui uses at least 2 frames while the window is being resized. The code is `apps/vectorcraft/src/presentation.rs`.
+- **Preferences › Performance › Low-Latency Drawing** (`lowLatencyDrawing`, off by default) presents with `novsync` and is read when the app starts, so a change applies after a restart. The present mode comes from `--present-mode` first, then `VECTORCRAFT_PRESENT_MODE`, then this preference, then the default (`autovsync`); `--frame-latency` and `VECTORCRAFT_FRAME_LATENCY` still set the latency with it on. The log names where the mode came from: `requested window surface: novsync (preference), frame latency 1`. Whenever the window presents without vsync (`novsync`, from the preference or an override), frames start at most 240 times a second (about 4.17 ms apart); with vsync the display paces them and no cap applies.
 
 ## Logs
 
@@ -98,6 +101,8 @@ When the interface thread stays in one part of a frame for 3 s (VectorCraft's ow
 |---|---|
 | `VECTORCRAFT_CONTROL_PORT` | Same as `--control <port>`, which overrides it; a value that isn't a port from 1 to 65535 stops the app |
 | `VECTORCRAFT_IN_WINDOW_MENUS` | Any value but empty or `0`: same as `--in-window-menus` (see [macOS: the menu bar](#macos-the-menu-bar)) |
+| `VECTORCRAFT_PRESENT_MODE` | Same as `--present-mode`, which overrides it: `fifo`, `autovsync` or `novsync`; any other value stops the app (see [Desktop graphics processor](#desktop-graphics-processor)) |
+| `VECTORCRAFT_FRAME_LATENCY` | Same as `--frame-latency`, which overrides it: `1` to `3` frames; any other value stops the app (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `VECTORCRAFT_NO_PREFS` | No preferences read or written, no default Data Recovery folder and no log file, and no saved PDF presets or loaded ICC profiles kept (agents' test runs; also for `vectorcraft-cli`) |
 | `VECTORCRAFT_CONFIG_DIR` | The folder for the preferences and the folders next to them (`PDF Presets`, `Color Profiles`, …), for the app and `vectorcraft-cli` (see `docs/control-protocol.md`) |
 | `WGPU_POWER_PREF` | Graphics adapter: `low`, `high` or `none` (see [Desktop graphics processor](#desktop-graphics-processor)) |
@@ -108,7 +113,7 @@ When the interface thread stays in one part of a frame for 3 s (VectorCraft's ow
 
 ## macOS: the menu bar
 
-On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search icon and the workspace switcher next to the traffic lights, centred on the bar by `apps/vectorcraft/src/mac_window.rs`). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
+On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search field and the workspace switcher next to the traffic lights, centred on the bar by `apps/vectorcraft/src/mac_window.rs`). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
 
 - **One menu model.** `crates/ui-egui/src/native_menu.rs` (platform-free, tested on every platform) builds the menu bar from the in-window menus (`menus::menu_tree`, each item through `menus::entry`, which the in-window menus draw too) and lays it out the Mac way: the VectorCraft menu holds About, Settings ▸ (one item per Preferences page, General… ⌘K), Language ▸, Appearance ▸ (UI brightness), Services, Hide VectorCraft ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All and Quit ⌘Q (the app's own `app.quit`, so unsaved documents are asked about); those leave Edit and Help. The in-window bar itself never shows the VectorCraft menu (it starts at File, as in Illustrator, on every platform): Language and Appearance have no in-window menu and are synthesized in `mac_layout`, and Quit is File › Exit in the window, relabelled to Quit in the App menu. Window starts with Minimize ⌃⌘M and Zoom and ends with Bring All to Front, and Help is the system's Help menu (its search field). A system key a command (or a user's shortcut) already has stays the command's, and the log says so.
 - **The native side** is `apps/vectorcraft/src/mac_menu.rs`: muda (`=0.21.1`, default features off, macOS only, no `unsafe`) builds the `NSMenu`s. Labels, enabled and checked are updated in place when anything they show may have changed (a command ran, the document, its history or selection changed, a click or a key press); a change of structure (a recent file, the language, a shortcut) rebuilds the menus. While an interaction is open (for example a move, scale or shape drag, a dialog's preview or the font menu's preview), the app updates them for the document's changes only when the interaction begins and when it ends.
@@ -166,10 +171,18 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   All other supplied faces follow those existing document fallbacks in manifest order, so they
   can also be selected by family name. This does not change which faces the web build embeds
   or fetches, and no craft-fonts faces are registered when the optional input is absent.
-- UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first, then
-  Noto Sans Georgian for the Georgian interface), after the UI fonts and before the installed fonts
-  `ui_fonts.rs` discovers for other scripts. On the web, Noto Sans Georgian is fetched at startup
-  and reaches the UI through `ui_fonts.rs`.
+- UI: `ui_fonts()` (`crates/ui-egui/src/ui_fonts.rs`) hands them to the framework's interface font
+  stack, which puts the UI language's faces after the interface face (ahead of it for a script
+  that face lacks and that doesn't fit a Latin row, such as Georgian), then the other scripts'
+  faces, then the installed fonts it finds for other scripts on the desktop. On the web the
+  `startup` and `demand` faces of `crates/text/web-fonts.txt` are served under `fonts/ui/`
+  instead: the stack fetches the UI language's at once and the others the first time text needs
+  them.
+- Document tab titles: desktop builds also embed the Noto Sans Condensed SemiBold row of the
+  checkout's opt-in `fonts/latin-manifest.txt` (`Embed::tab_face` in `crates/text/build.rs`).
+  The interface font stack draws document tab titles in it, scaled to the x-height of the
+  semibold face; the document font list leaves it out. Without `CRAFT_FONTS_DIR`, on the web, or
+  with a checkout that lacks the row (a build warning), tab titles draw in the semibold face.
 - Tests that need Japanese or Georgian glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
@@ -187,18 +200,18 @@ and text has no glyphs until a font is added.
 
 An embedder that also hosts the egui panels depends on `vectorcraft-ui-egui` with
 `default-features = false` as well: its own `bundled-fonts` feature, on by default, turns the
-engine's on; `vectorcraft-mcp` has the same feature. The panels' interface faces (Source Sans 3
-Regular and Semibold, Inter Regular and SemiBold, JetBrains Mono, about 2 MB: `theme.rs`) are
-`vectorcraft-ui-egui`'s `interface-fonts` feature, also on by default; without it the panels draw in
-egui's built-in fonts, which lack some symbols they show (→ ▾ ● ✓), so such an embedder adds a
-font that has them to each of the families below (`ctx.add_font` with an `InsertFontFamily` per
-family).
+engine's on; `vectorcraft-mcp` has the same feature. The panels' interface faces come from the
+framework, with or without these features: Inter Regular and SemiBold (cut to Latin, Greek and
+Cyrillic) and egui's Hack for monospace, which craft-fonts' monospace face leads when the build
+embeds it. `vectorcraft-ui-egui`'s `interface-fonts` feature is still declared but changes nothing.
 
-The panels and dialogs draw in their own egui families (`theme::FONT_UI`, `FONT_UI_SEMIBOLD`,
-`FONT_MONO`), and egui panics drawing text in a family no font is bound to. `VectorcraftApp::logic`
-binds them on its first frame; an embedder that draws the panels or dialogs without it calls
-`theme::install_fonts` once on its context, with or without `interface-fonts`. It replaces the
-context's font definitions, so the embedder's own fonts are added after it.
+The panels and dialogs draw in egui's proportional and monospace families and the framework's
+semibold family (`craft::ui::fonts::SEMIBOLD`), and egui panics drawing text in a family no font is
+bound to. `embed::install(ctx, spec, &vectorcraft_ui_egui::ui_fonts())` binds them; the desktop and
+web apps call it once when they create the app (the web app adds `.fetcher(BrowserFetcher)` so the
+served faces are fetched), and an embedder that draws the panels or dialogs calls it once on its
+context. It replaces the context's font definitions, so an embedder's own faces go into the stack
+(`ui_fonts().app_face(…)`) before it is installed.
 
 - The workspace declares `vectorcraft-text` and `vectorcraft-engine` without default features, so
   each crate that wants the fonts asks for them (the apps, and `vectorcraft-testkit` for tests);
@@ -211,9 +224,9 @@ context's font definitions, so the embedder's own fonts are added after it.
   see that configuration, since their dev-dependencies turn the fonts on.
 - `cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts` checks the
   configuration without them, and `cargo test -p vectorcraft-ui-egui --no-default-features --test
-  install_fonts` that the panels without their interface faces still bind every family; the same
-  step lints `vectorcraft-ui-egui` without its default features. Of the crate's other tests, those
-  about the interface faces need them.
+  install_fonts` that the fonts `embed::install` sets up bind the proportional, monospace and
+  semibold families, so an effect dialog draws; the same step lints `vectorcraft-ui-egui` without
+  its default features.
 
 ### Arabic fonts and the web build
 
@@ -294,13 +307,17 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). A value that starts with
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). A template needs text
+  between any two placeholders, since the catalog cannot tell where `{a}{b}` splits: make the message with the
+  side-by-side values joined into one (`unknown parameter `{key}``, where `key` is `marks.ofset`). The catalog
+  leaves out a row whose template has two placeholders in a row or no text; `i18n::tests` fails on such a row
+  and on such a message, and the untranslated report counts it as missing. A value that starts with
   `{` is translated only when it has an exact row, so a JSON object stays as it is; a value that starts with `[` is
   also matched against a template that starts with `[` and an index of digits, such as an effect's refusal
   ``[{j}] `{_1}`: {why}``, so its reason is translated while a JSON array stays as it is. A literal brace in a
   row is written `{{` or `}}`, in the English and in the translation: a message made with `format!` keeps the
   doubled braces of its format string, and a plain string literal has each of its braces doubled, so the row for
-  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch and Danish
+  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch, Danish, Indonesian and Bulgarian
   translate status and error messages (`COMPLETE_MESSAGES` in `i18n::tests`); the untranslated report lists the
   message literals the scan finds, and the phrases a parameter schema's error builds at run time
   (`SCHEMA_PHRASES`), that one of them has no row for. The scan covers the crates in `MESSAGE_CRATES`, the
@@ -322,7 +339,11 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
 
 ## Cursors
 
-`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (CLAUDE.md › Adding a cursor). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (see Adding a cursor below). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+
+### Adding a cursor
+
+The app decides which cursors exist; whoever draws them works from the list. For a new tool state with a cursor of its own: add the `Cursor` variant (`crates/tools/src/lib.rs`, with a doc comment), return it from the tool's `cursor()` with a tool test, map it in `cursors::tool_cursor` (`crates/ui-egui/src/cursors.rs`), using a catalog icon or an SVG in `assets/cursors/` (with its `ASSETS.md` row and `CURSOR_ICONS` entry), or give it a stand-in in `Cursor::stand_in()` until it is drawn, and add its `[[cursor]]` entry to `crates/tools/src/cursors.toml` (when it shows, in plain behaviour terms, and its hotspot). A missing entry only warns (`cargo xtask cursors`): the cursor still works.
 
 ## Vendor names gate
 
@@ -494,7 +515,36 @@ to the source tab resumes a move (Alt copies). Escape or release outside the can
 Changing the source revision or unexpectedly changing/closing the destination cancels a stale
 transfer; focus loss, touch cancellation and multitouch cancel too. Moving tabs under a stationary
 pointer does not activate further tabs until the pointer moves. The close icon does not activate a tab during a drag. Overflow-menu hover activation and
-cross-window dragging remain outside this change.
+dragging into a floating document window that is an OS window of its own remain outside this change.
+
+Under Window › Arrange › Tile, a Selection move released over another document's pane copies the
+artwork into that document through `edit.dropSelection`, with no tab hover first. The pane becomes
+the current window, the grab point lands under the pointer in that pane's own zoom and rotation, and
+the source move is rolled back, including when the pointer enters the pane and the button is released
+in the same frame. A release over another view of the source document (Window › New Window) moves the
+artwork there with `object.move`, and Alt copies it. While the artwork is held over a pane, the cursor
+shows a copy or a move. A release over a pane's rulers or scroll bars, or after Escape, changes
+neither document. A press in another pane with no artwork carried still only makes its document
+current. Page 14 of [the help page](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf)
+describes documents arranged side by side, with items dragged from one document into another.
+Evidence: the `canvas::panes` tests drive real pointer frames from the current pane into another
+document's pane, back the other way, into another view, through a tab into a third document's pane,
+and off a pane's art area.
+
+The same release works for documents in floating windows (Window › Arrange › Float in Window) where
+those windows are drawn inside the main window: on the web, on Wayland and with a control channel
+attached. A Selection move released over the art area of another document's floating window copies
+the artwork into that document, and one released over the pane the main window draws while the
+current document floats copies it into the main window's document. A floating window that shows
+another view of the source document takes a move, and Alt copies. The release is taken at the start
+of the frame, before any canvas sees it, so a release in the first frame over a window still drops the
+artwork. A release on a window's title bar, rulers or scroll bars, or after Escape, changes neither
+document. A floating window that is an OS window of its own, the default on Windows, macOS and X11,
+does not take the artwork: its pointer positions are in that window's points, not the main window's.
+Evidence: the `doc_windows` tests drive real pointer frames from the main window's canvas into a
+floating window (rotated and zoomed, and in the frame the pointer arrives), from a floating window
+into the main window's pane, into a floating view of the same document, and onto a title bar and
+after Escape, and check that no OS window's pane is noted.
 The cited regressions assert the internal clipboard; they do not exercise the native
 system-clipboard adapter. Tab activation resets the Selection tool through
 `Session::set_active`; gesture regressions verify it is idle after switching, dropping
@@ -523,6 +573,7 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-24 | minor | Fonts: the interface font stack is the framework's, set up by `ui_fonts()` and installed by `embed::install` (craft-fonts faces, the web's served faces, embedders); `theme::install_fonts` is gone and `interface-fonts` changes nothing. |
 | 2026-11-12 | minor | Tests (#6860): compare preset refusal roots after canonicalization and Windows display normalization; canonicalize the script fixture base before constructing `MAIN`. This keeps macOS `/var` → `/private/var` aliases from masking the case-sensitivity checks; no production-code change. |
 | 2026-11-12 | minor | Compile the clipboard failure helper only for Linux/BSD worker callers and unit tests; keep production macOS free of the unused helper without suppressing workspace dead-code warnings. |
 | 2026-11-06 | minor | Localisation: Hindi catalog, zero/one plurals, desktop and web font requirements; AI/MT draft, native review pending. |

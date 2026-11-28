@@ -7,6 +7,9 @@ pub struct CharStyle {
     pub font_family: String,
     #[serde(default = "regular")]
     pub font_style: String,
+    /// Internal layout selection from a validated file-font binding, never read from a file.
+    #[serde(skip)]
+    pub file_font_id: Option<u32>,
     /// Which installed version of the font (its version string) when several versions of the
     /// family and style are installed and the text was set in one the family and style alone
     /// wouldn't pick (an imported file's type matched to it); None = the one they pick.
@@ -48,8 +51,10 @@ pub struct CharStyle {
     /// of the character's ink, inside its own width, that is taken away, 0 to [`MAX_TSUME`]. 50
     /// halves that space and 100 sets the ink edge to edge; the glyph itself is not scaled. A
     /// cluster takes the value of its first character. Tracking, kerning and Insert Aki are added
-    /// after it. Horizontal type only.
+    /// after it. In vertical type an upright character is measured above and below its ink, inside
+    /// its cell down the column.
     /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/format-east-asian-characters-in-vertical-text.html>
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub tsume: f64,
     /// Use glyph shapes for automatic pair spacing; false uses font metrics.
@@ -654,6 +659,7 @@ impl Default for CharStyle {
         Self {
             font_family: "Source Sans 3".into(),
             font_style: "Regular".into(),
+            file_font_id: None,
             font_version: None,
             font_axes: std::collections::BTreeMap::new(),
             size: 12.0,

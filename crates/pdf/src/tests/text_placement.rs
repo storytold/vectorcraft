@@ -592,8 +592,8 @@ fn vertical_type_takes_the_fonts_position_vectors() {
 /// (whose charset maps them) take /DW's.
 #[test]
 fn vertical_font_metrics_are_read_from_w2_w_and_dw() {
-    use craft_pdf::syntax::Pdf;
-    use craft_pdf::syntax::object::{Dict, ObjectIdentifier};
+    use craft::pdf::syntax::Pdf;
+    use craft::pdf::syntax::object::{Dict, ObjectIdentifier};
     let n = first_extra(1);
     // CID → glyph: 10 → 5, 20 → 6, 30 → 7, 31 → 9, 40 → 8 (others 0).
     let mut map = [0u16; 41];
@@ -756,5 +756,21 @@ fn perf_text_heavy_open() {
         let start = std::time::Instant::now();
         let _ = open_as(&bytes, TextAs::Outlines);
         println!("4000 lines: {n} text objects in {took:?} (as outlines: {:?})", start.elapsed());
+    }
+}
+
+/// Vertical type filled, then stroked (fill and stroke rendering draws a whole operator's glyphs
+/// filled before it strokes them): one column, each glyph filled and stroked (#8015).
+#[test]
+fn a_vertical_column_filled_then_stroked_is_one_filled_and_stroked_type() {
+    for mode in ["2", "6"] {
+        let content = format!("0 0 1 RG 1 0 0 rg 2 w BT {mode} Tr /F6 24 Tf 150 180 Td {} Tj 0 Tr ET", gids("§±×"));
+        let t = texts(&open_as(&page(&content, ""), TextAs::Text));
+        assert_eq!(t.len(), 1, "{content}: {t:#?}");
+        assert_eq!(t[0].plain_text(), "§±×");
+        for r in &t[0].runs {
+            assert!(!r.style.fill.is_none() && !r.style.stroke.is_none(), "{content}: {:?}", t[0].runs);
+            assert!((r.style.stroke_width - 2.0).abs() < 1e-6, "{content}");
+        }
     }
 }

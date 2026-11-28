@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ShapeMode};
+use vectorcraft_geom::{FillRule, PathData, SubPath};
+use vectorcraft_pathops as po;
 use vectorcraft_render::effects;
 
 use super::edit::{roots_of, selected_roots};
@@ -16,6 +18,10 @@ use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_multi};
 
 const MODE_NAMES: [&str; 4] = ["add", "subtract", "intersect", "exclude"];
 
+/// Make Compound Shape's warning, which the status bar shows, when a member holds a line or another
+/// open path that encloses no area once closed, and so contributes no area to the shape.
+pub const OPEN_PATHS_ADD_NO_AREA: &str = "a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first";
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -23,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make Compound Shape",
             ["Window", "Pathfinder"],
             None,
-            "{ids?: [id…] (selected first; default: the selection), mode?: \"add\"|\"subtract\"|\"intersect\"|\"exclude\" (default add; Alt-clicking a Shape Mode button gives its mode)} the two or more selected objects (paths, compound paths, groups, compound shapes, type, blends, envelopes) become the members of one compound shape, each with the shape mode, in their stacking order where the frontmost was: it draws as the area they make from the backmost up (open paths closed; a blend as its steps, an envelope as its distorted art, an object with a warp or other geometry effect as it draws), painted with the appearance and transparency of the topmost member in Add, Intersect or Exclude mode (with every member in Subtract, the backmost), and the members stay editable (Direct Selection, Layers panel, isolation mode) → {id}",
+            "{ids?: [id…] (selected first; default: the selection), mode?: \"add\"|\"subtract\"|\"intersect\"|\"exclude\" (default add; Alt-clicking a Shape Mode button gives its mode)} the two or more selected objects (paths, compound paths, groups, compound shapes, type, blends, envelopes) become the members of one compound shape, each with the shape mode, in their stacking order where the frontmost was: it draws as the area they make from the backmost up (open paths closed; a blend as its steps, an envelope as its distorted art, an object with a warp or other geometry effect as it draws), painted with the appearance and transparency of the topmost member in Add, Intersect or Exclude mode (with every member in Subtract, the backmost), and the members stay editable (Direct Selection, Layers panel, isolation mode) → {id, warning?: when a member is or holds a line or another open path that encloses no area once closed, and so contributes no area}",
             has_multi,
             make
         ),
@@ -157,6 +163,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
     // all have `mode`, the topmost, or the backmost when they all subtract.
     let order: Vec<&Node> = if mode == ShapeMode::Subtract { members } else { members.into_iter().rev().collect() };
     let hook = |c: &Node| effects::outline_object(Some(d), c);
+    let no_area = order.iter().any(|n| adds_no_area(d, n, &hook));
     let style = order.into_iter().find_map(|n| top_style(d, n, &hook));
     let id = s.edit("Make Compound Shape", |d, sel| {
         let gid = d.alloc_id();
@@ -179,7 +186,44 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([id]);
         Ok(id)
     })?;
-    Ok(json!({ "id": id.0 }))
+    let mut out = json!({ "id": id.0 });
+    if no_area {
+        out["warning"] = json!(OPEN_PATHS_ADD_NO_AREA);
+    }
+    Ok(out)
+}
+
+/// Member `n` holds an open path that adds no area to a compound shape: one of the paths it takes
+/// part as ([`effects::member_leaves`]), inside a group or a compound path too, has an open subpath
+/// that encloses no area once closed (a straight line, or an evenodd contour traced twice), or it
+/// has an open subpath and its subpaths, all closed, enclose no area together (open evenodd
+/// subpaths that cancel one another or a closed subpath). The area is the one the path's fill rule
+/// gives, which also keeps a self-crossing path whose signed area is zero (a bow tie) from the
+/// warning, as Divide measures it. An area that can't be measured gives no warning.
+fn adds_no_area(d: &Document, n: &Node, hook: effects::OutlineHook) -> bool {
+    effects::member_leaves(Some(d), n, Some(hook)).iter().any(|leaf| {
+        let (paths, rule): (Vec<&PathData>, FillRule) = match &leaf.kind {
+            NodeKind::Compound { children, rule } => (children.iter().filter_map(|c| c.path_data()).collect(), *rule),
+            NodeKind::Path { path, rule, .. } => (vec![path], *rule),
+            _ => return false,
+        };
+        let subpaths: Vec<&SubPath> = paths.iter().flat_map(|p| &p.subpaths).collect();
+        if subpaths.iter().all(|sp| sp.closed) {
+            return false;
+        }
+        let closed = |sp: &SubPath| {
+            let mut sp = sp.clone();
+            sp.closed = true;
+            sp
+        };
+        // An area that can't be measured counts as an area, so a failed measurement gives no warning.
+        let no_area = |p: PathData| po::try_area(&p, rule).is_ok_and(|a| a <= 0.0);
+        subpaths.iter().filter(|sp| !sp.closed).any(|sp| {
+            // The signed-area test alone only holds for nonzero: evenodd can fill nothing where
+            // the signed area is not zero (a contour traced twice).
+            !(rule == FillRule::NonZero && po::encloses_area(sp)) && no_area(PathData::single(closed(sp)))
+        }) || (subpaths.len() > 1 && no_area(PathData::new(subpaths.iter().map(|sp| closed(sp)).collect())))
+    })
 }
 
 /// The paint and transparency of the frontmost shape `n` adds to a compound shape's area, from the

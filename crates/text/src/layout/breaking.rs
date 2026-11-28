@@ -1,10 +1,75 @@
 use super::region::Region;
 use super::vertical::stands_upright;
 use super::{
-    Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, KinsokuShoriType, LeadingModel, SGlyph,
-    hyphen_glyph, is_cjk, no_line_end, no_line_start, points_for, soft_line_start,
+    Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, KinsokuShoriType, LeadingModel, ParaStyle,
+    SGlyph, hyphen_glyph, is_cjk, no_line_end, no_line_start, points_for, soft_line_start,
 };
 use crate::justify::is_format_control;
+
+/// The kinsoku rules a paragraph is composed with: a built-in Kinsoku Set (None, Hard or Soft), or
+/// a custom set (Type › Kinsoku Shori Settings…).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum KinsokuRules<'a> {
+    BuiltIn(Kinsoku),
+    Custom(&'a vectorcraft_doc::KinsokuSet),
+}
+
+impl<'a> KinsokuRules<'a> {
+    /// The rules of paragraph `para`: its custom set when it has one, else its Kinsoku Set.
+    pub(crate) fn of(para: &'a ParaStyle) -> Self {
+        match &para.kinsoku_set {
+            Some(set) => Self::Custom(set),
+            None => Self::BuiltIn(para.kinsoku),
+        }
+    }
+
+    /// Kinsoku None: no character is kept off a line's ends, and Bunri-Kinshi has no effect.
+    pub(crate) fn is_none(self) -> bool {
+        matches!(self, Self::BuiltIn(Kinsoku::None))
+    }
+
+    /// May `c` not start a line? Hard: every character of [`no_line_start`]; Soft: those
+    /// [`soft_line_start`] doesn't let start one; a custom set: its Cannot Start Line characters.
+    pub(crate) fn cannot_start(self, c: char) -> bool {
+        match self {
+            Self::BuiltIn(Kinsoku::None) => false,
+            Self::BuiltIn(Kinsoku::Hard) => no_line_start(c),
+            Self::BuiltIn(Kinsoku::Soft) => no_line_start(c) && !soft_line_start(c),
+            Self::Custom(set) => set.cannot_start(c),
+        }
+    }
+
+    /// May `c` not end a line? Hard and Soft: an opening bracket ([`no_line_end`]); a custom set:
+    /// its Cannot End Line characters.
+    pub(crate) fn cannot_end(self, c: char) -> bool {
+        match self {
+            Self::BuiltIn(Kinsoku::None) => false,
+            Self::BuiltIn(Kinsoku::Hard | Kinsoku::Soft) => no_line_end(c),
+            Self::Custom(set) => set.cannot_end(c),
+        }
+    }
+
+    /// May `c` hang outside a line's end with Burasagari? An East Asian comma or full stop (、。，．
+    /// and the half-width ､｡), or a custom set's Hanging Punctuation characters.
+    pub(crate) fn hangs(self, c: char) -> bool {
+        match self {
+            Self::BuiltIn(_) => is_hanging_punctuation(c),
+            Self::Custom(set) => set.hangs(c),
+        }
+    }
+}
+
+impl From<Kinsoku> for KinsokuRules<'_> {
+    fn from(k: Kinsoku) -> Self {
+        Self::BuiltIn(k)
+    }
+}
+
+/// The punctuation Burasagari hangs with the built-in Kinsoku Sets: the East Asian comma and full
+/// stop, full width and half width.
+pub(crate) fn is_hanging_punctuation(c: char) -> bool {
+    matches!(c, '、' | '。' | '，' | '．' | '､' | '｡')
+}
 
 /// Vertical metrics of a line: (ascent, descent, leading, cap height, x height).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -47,6 +112,7 @@ impl Metrics {
             FirstBaseline::CapHeight => self.cap,
             FirstBaseline::XHeight => self.xh,
             FirstBaseline::Leading => self.lead,
+            FirstBaseline::EmBoxHeight => self.top,
             FirstBaseline::Fixed => 0.0,
         };
         v.max(min)
@@ -350,12 +416,13 @@ pub(super) fn leader_outline(db: &FontDb, g: &SGlyph, leader: &str, origin: f64,
 /// Width of the word starting at glyph `i`: its advances up to the first place a line may break
 /// (spaces left out, the hyphen of a soft hyphen in), the least room a line needs not to break
 /// inside it. As in [`break_line`], kinsoku keeps a character that may not end a line with the one
-/// after it, a No Break run (its spaces inside it included) is one word up to a forced line break,
+/// after it, spaces between them included, a No Break run (its spaces inside it included) is one word up to a forced line break,
 /// and a cluster is never split. A soft hyphen just before a forced line break adds no hyphen. A list marker at `i` (glyphs of length 0) counts whole, with the word after it. A word
 /// that ends where a line may end is measured as the line is set: without the spaces at its end,
 /// and with its last glyph as narrow as `line_end` sets it; one that ends at a soft hyphen or past
-/// the measured glyphs is not.
-pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kinsoku) -> f64 {
+/// the measured glyphs is not. With `burasagari`, the word may end after hanging punctuation.
+pub(super) fn word_width<'k>(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: impl Into<KinsokuRules<'k>>, burasagari: Burasagari) -> f64 {
+    let kinsoku = kinsoku.into();
     /// Glyphs measured at most: a word wrapped over many lines is measured again from each line's
     /// start, and one this long is broken inside whatever cell it meets.
     const MAX_GLYPHS: usize = 1024;
@@ -374,7 +441,15 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
             return set(w, trailing, ink);
         }
         if gl.is_space() && (end == start || !splits_no_break(g, end)) {
-            return set(w, trailing, ink);
+            // A line breaks after one of these spaces only where kinsoku allows it, as in
+            // [`break_line`]; where it allows none (after 「, or before 」), the word goes on past them.
+            let run = end + g[end..].iter().take(start + MAX_GLYPHS - end).take_while(|h| h.is_space()).count();
+            if end == start || (end..run).any(|k| g[k].break_after() && g[k].len > 0 && kinsoku_allows(g, k, kinsoku) && !splits_no_break(g, k + 1)) {
+                return set(w, trailing, ink);
+            }
+            let spaces: f64 = g[end..run].iter().map(|h| h.adv).sum();
+            (w, trailing, end) = (w + spaces, trailing + spaces, run);
+            continue;
         }
         let forced_next = g.get(end + 1).is_some_and(|n| n.ch == '\u{2028}');
         if gl.is_soft_hyphen() && !forced_next && kinsoku_allows(g, end, kinsoku) && !splits_no_break(g, end + 1) {
@@ -388,7 +463,10 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
             (trailing, ink) = (0.0, end);
         }
         let cluster_ends = g.get(end).is_none_or(|next| next.byte != gl.byte);
-        if gl.break_after() && cluster_ends && kinsoku_allows(g, end - 1, kinsoku) && !splits_no_break(g, end) {
+        // Hanging punctuation of one glyph may end the line with Burasagari, as in [`break_line`].
+        let alone = cluster_ends && end.checked_sub(2).and_then(|k| g.get(k)).is_none_or(|p| p.byte != gl.byte);
+        let hang_break = burasagari != Burasagari::None && alone && hangs(gl, kinsoku);
+        if (gl.break_after() || hang_break) && cluster_ends && kinsoku_allows(g, end - 1, kinsoku) && !splits_no_break(g, end) {
             return set(w, trailing, ink);
         }
     }
@@ -441,7 +519,7 @@ fn drawn_last(g: &[SGlyph], i: usize, j: usize, end: usize) -> bool {
 /// end in the visual order of the line's levels ([`drawn_last`]) and the line before the mark fits
 /// as drawn.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn break_line(
+pub(super) fn break_line<'k>(
     text: &str,
     g: &[SGlyph],
     i: usize,
@@ -450,31 +528,16 @@ pub(super) fn break_line(
     x_start: f64,
     hyphenate: Option<(&HyphenationOptions, f64)>,
     burasagari: Burasagari,
-    kinsoku: Kinsoku,
+    kinsoku: impl Into<KinsokuRules<'k>>,
     kinsoku_type: KinsokuShoriType,
     hanging: bool,
     vertical: bool,
     line_end: &[f64],
     fits: Option<&dyn Fn(usize, bool) -> bool>,
 ) -> (usize, bool) {
-    // The line ending at `chosen`, once it holds a tab, when it fits as drawn; otherwise the latest
-    // of the legal `breaks` before it that fits as drawn, measuring at most `checks` of them from
-    // the latest back and bisecting the earlier ones without a hyphen; the first of them when none
-    // of those measured fits.
-    let settle = |tabbed: bool, checks: usize, chosen: (usize, bool), breaks: &[(usize, bool)]| -> (usize, bool) {
-        let Some(fits) = fits.filter(|_| tabbed) else { return chosen };
-        if fits(chosen.0, chosen.1) {
-            return chosen;
-        }
-        let earlier = breaks.get(breaks.partition_point(|b| b.0 <= i)..breaks.partition_point(|b| b.0 < chosen.0)).unwrap_or_default();
-        if let Some(&b) = earlier.iter().rev().take(checks).find(|b| fits(b.0, b.1)) {
-            return b;
-        }
-        // Without a hyphen, a line that ends later is drawn no narrower, so those breaks bisect.
-        let rest = earlier.get(..earlier.len().saturating_sub(checks)).unwrap_or_default();
-        let plain: Vec<&(usize, bool)> = rest.iter().filter(|b| !b.1).collect();
-        let fitting = plain.partition_point(|b| fits(b.0, b.1));
-        fitting.checked_sub(1).and_then(|k| plain.get(k).copied()).or(earlier.first()).copied().unwrap_or(chosen)
+    let kinsoku = kinsoku.into();
+    let settle = |tabbed: bool, checks: usize, chosen: (usize, bool), breaks: &[(usize, bool)]| {
+        craft::font_catalog::settle_line_break(tabbed, checks, i, chosen, breaks, fits)
     };
     // How many breaks a line measures as drawn one by one.
     let checks = |back: f64| if back > 0.0 { MAX_DRAWN_CHECKS_STEPPING_BACK } else { MAX_DRAWN_CHECKS };
@@ -519,6 +582,8 @@ pub(super) fn break_line(
     let first = i + g.get(i..).unwrap_or_default().iter().take_while(|h| h.len == 0).count();
     let mut j = i;
     while j < g.len() {
+        #[cfg(test)]
+        super::count_layout_work(1);
         let gl = &g[j];
         let mut cluster_end = j + 1;
         while g.get(cluster_end).is_some_and(|next| next.byte == gl.byte && (next.len == 0) == (gl.len == 0)) {
@@ -566,13 +631,14 @@ pub(super) fn break_line(
         let measured = if tabbed && fits.is_some() { (ink + cluster_ink).max(stops_reached) } else { x + cluster_width };
         overflowed |= tabbed && fits.is_some() && j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS;
         if j > first && !gl.is_space() && measured - end_credit > width + EPS {
-            // It ends the line with the spaces after it, when the mark is all the characters kept
-            // together (the line's last character is the mark, which is what hangs). Once the line
-            // holds a tab and is measured as drawn, the mark hangs only where it is drawn at the
-            // line's right end (its cluster is last in the line's visual order, [`drawn_last`]) and
-            // the line before it fits as drawn with no line-end trim on its last glyph; otherwise the
-            // line ends at a legal break that fits as drawn.
-            let alone = g[j..cluster_end].iter().all(|h| h.byte == gl.byte);
+            // It ends the line with the spaces after it, when it hangs alone: not with the rest of a
+            // No Break run or an inseparable sequence it starts, and only as one glyph, the one the
+            // line's geometry hangs. Once the line holds a tab and is measured as drawn, the mark
+            // hangs only where it is drawn at the line's right end (its cluster is last in the
+            // line's visual order, [`drawn_last`]) and the line before it fits as drawn with no
+            // line-end trim on its last glyph; otherwise the line ends at a legal break that fits as
+            // drawn.
+            let alone = cluster_end == j + 1;
             let hangs_as_drawn = || match fits.filter(|_| tabbed) {
                 None => true,
                 Some(fits) => {
@@ -583,7 +649,7 @@ pub(super) fn break_line(
                     drawn_last(g, i, j, cluster_end) && line_end_credit(g, line_end, body) == 0.0 && fits(j, false)
                 }
             };
-            if burasagari != Burasagari::None && hangs(gl) && alone && kinsoku_allows(g, cluster_end - 1, kinsoku) && hangs_as_drawn() {
+            if burasagari != Burasagari::None && alone && hangs(gl, kinsoku) && kinsoku_allows(g, cluster_end - 1, kinsoku) && hangs_as_drawn() {
                 let mut end = cluster_end;
                 while g.get(end).is_some_and(SGlyph::is_space) {
                     end += 1;
@@ -601,7 +667,10 @@ pub(super) fn break_line(
         ink += cluster_ink;
         back += cluster_back;
         let last = &g[cluster_end - 1];
-        if last.break_after() && last.len > 0 && kinsoku_allows(g, cluster_end - 1, kinsoku) && !splits_no_break(g, cluster_end) {
+        // Hanging punctuation that would hang alone where it overflows may end the line where it
+        // fits too: a custom set's may be a character no other rule breaks after.
+        let hang_break = burasagari != Burasagari::None && cluster_end == j + 1 && hangs(last, kinsoku);
+        if (last.break_after() || hang_break) && last.len > 0 && kinsoku_allows(g, cluster_end - 1, kinsoku) && !splits_no_break(g, cluster_end) {
             // Once the line holds a tab, whether a break fits as drawn is settled when the line ends.
             let hyphenated = last.is_soft_hyphen();
             if !hyphenated || (tabbed && fits.is_some()) || x + hyphen_glyph(last).adv <= width + EPS {
@@ -676,11 +745,12 @@ pub(super) fn break_line(
 }
 
 /// Can glyph `g` hang outside the line (burasagari)? An East Asian comma or full stop, full width
-/// (、。，．) or half width (､｡); not a closing bracket, nor Latin punctuation (Latin text keeps
-/// its line breaks and composer). Never an inline graphic (U+FFFC), nor a character of a
-/// tate-chu-yoko or warichu block.
-pub(super) fn hangs(g: &SGlyph) -> bool {
-    g.inline.is_none() && matches!(g.ch, '、' | '。' | '，' | '．' | '､' | '｡') && g.tcy.is_none() && g.wari.is_none()
+/// (、。，．) or half width (､｡), or with a custom set a character of its Hanging Punctuation
+/// ([`KinsokuRules::hangs`]); with the built-in sets not a closing bracket, nor Latin punctuation
+/// (Latin text keeps its line breaks and composer). Never an inline graphic (U+FFFC), nor a
+/// character of a tate-chu-yoko or warichu block.
+pub(super) fn hangs(g: &SGlyph, kinsoku: KinsokuRules<'_>) -> bool {
+    g.inline.is_none() && kinsoku.hangs(g.ch) && g.tcy.is_none() && g.wari.is_none()
 }
 
 /// Optical Margin Alignment: the share of glyph `g`'s advance that hangs outside the margin when
@@ -770,7 +840,7 @@ fn line_end_credit(g: &[SGlyph], line_end: &[f64], end: usize) -> f64 {
 
 /// May [`break_line`] end a line after glyph `end - 1` (and the spaces after it)? At the paragraph's
 /// end or a forced line break, and where it records a break without a hyphen.
-fn may_end_after(g: &[SGlyph], end: usize, kinsoku: Kinsoku) -> bool {
+fn may_end_after(g: &[SGlyph], end: usize, kinsoku: KinsokuRules<'_>) -> bool {
     let mut e = end;
     while g.get(e).is_some_and(SGlyph::is_space) {
         e += 1;
@@ -790,20 +860,25 @@ fn splits_no_break(g: &[SGlyph], end: usize) -> bool {
 
 /// Does kinsoku allow a line break after glyph `j`? Not after an opening bracket, nor before a
 /// closing one, a comma, a full stop, a small kana… (the character is pushed to the next line
-/// with the one before it).
-fn kinsoku_allows(g: &[SGlyph], j: usize, kinsoku: Kinsoku) -> bool {
-    g.get(j).is_some_and(|gl| kinsoku_between(gl.ch, g.get(j + 1).map(|n| n.ch), kinsoku))
+/// with the one before it). A line that breaks after spaces is drawn without them, so the
+/// character before them is the one that ends it: up to [`KINSOKU_SPACES_BACK`] spaces are looked
+/// past, and after a longer run of spaces the space itself counts.
+fn kinsoku_allows(g: &[SGlyph], j: usize, kinsoku: KinsokuRules<'_>) -> bool {
+    let Some(gl) = g.get(j) else { return false };
+    let before = if gl.is_space() { g[..j].iter().rev().take(KINSOKU_SPACES_BACK).find(|h| !h.is_space()).map_or(gl.ch, |h| h.ch) } else { gl.ch };
+    kinsoku_between(before, g.get(j + 1).map(|n| n.ch), kinsoku)
 }
+
+/// The most spaces [`kinsoku_allows`] looks past for the character that ends a line, so a long run
+/// of spaces is not read again at each of its breaks.
+const KINSOKU_SPACES_BACK: usize = 64;
 
 /// Kinsoku for a break between `before` and `after` (none: the end of the paragraph): Hard keeps
 /// every character of the set off the line start and end, Soft lets 々, ー and small kana start a
-/// line, None allows the break.
-fn kinsoku_between(before: char, after: Option<char>, kinsoku: Kinsoku) -> bool {
-    match kinsoku {
-        Kinsoku::None => true,
-        Kinsoku::Hard => !no_line_end(before) && after.is_none_or(|c| !no_line_start(c)),
-        Kinsoku::Soft => !no_line_end(before) && after.is_none_or(|c| !no_line_start(c) || soft_line_start(c)),
-    }
+/// line, a custom set keeps its own characters off them ([`KinsokuRules`]), and None allows the
+/// break.
+fn kinsoku_between(before: char, after: Option<char>, kinsoku: KinsokuRules<'_>) -> bool {
+    !kinsoku.cannot_end(before) && after.is_none_or(|c| !kinsoku.cannot_start(c))
 }
 
 /// The share of an em by which a push-in ([`push_in`]) may close each gap next to a CJK character
@@ -838,13 +913,13 @@ fn push_in(
     x: f64,
     width: f64,
     pushed_out: Option<usize>,
-    kinsoku: Kinsoku,
+    kinsoku: KinsokuRules<'_>,
     kinsoku_type: KinsokuShoriType,
     hanging: bool,
     vertical: bool,
     line_end: &[f64],
 ) -> Option<usize> {
-    if kinsoku == Kinsoku::None || kinsoku_type == KinsokuShoriType::PushOutOnly {
+    if kinsoku.is_none() || kinsoku_type == KinsokuShoriType::PushOutOnly {
         return None;
     }
     let before = g.get(j.checked_sub(1)?)?;
@@ -948,13 +1023,30 @@ pub(super) fn squeeze_em(g: &SGlyph, vertical: bool) -> f64 {
 #[cfg(test)]
 #[test]
 fn kinsoku_keeps_closing_marks_off_line_starts_and_opening_ones_off_line_ends() {
+    let hard = KinsokuRules::BuiltIn(Kinsoku::Hard);
     for (a, b) in [('字', '。'), ('弧', '」'), ('」', '、'), ('ャ', 'ー'), ('カ', 'ッ'), ('「', 'か'), ('（', '雅')] {
-        assert!(!kinsoku_between(a, Some(b), Kinsoku::Hard), "{a}{b}");
+        assert!(!kinsoku_between(a, Some(b), hard), "{a}{b}");
     }
     for (a, b) in [('。', '雅'), ('」', 'は'), ('字', '「'), ('の', '演')] {
-        assert!(kinsoku_between(a, Some(b), Kinsoku::Hard), "{a}{b}");
+        assert!(kinsoku_between(a, Some(b), hard), "{a}{b}");
     }
-    assert!(kinsoku_between('。', None, Kinsoku::Hard));
+    assert!(kinsoku_between('。', None, hard));
+}
+
+/// A custom set keeps its own characters off a line's ends, and nothing else: here 字 may not
+/// start a line and 弧 may not end one, while 。 and 「 may.
+#[cfg(test)]
+#[test]
+fn a_custom_kinsoku_set_keeps_its_own_characters_off_line_ends() {
+    let mut set = vectorcraft_doc::KinsokuSet { name: "Custom".into(), cannot_start: vec!['字'], cannot_end: vec!['弧'], ..Default::default() };
+    set.normalize();
+    let custom = KinsokuRules::Custom(&set);
+    assert!(!kinsoku_between('の', Some('字'), custom));
+    assert!(!kinsoku_between('弧', Some('の'), custom));
+    for (a, b) in [('字', '。'), ('「', 'か'), ('字', 'の')] {
+        assert!(kinsoku_between(a, Some(b), custom), "{a}{b}");
+    }
+    assert!(!custom.is_none());
 }
 
 /// Soft kinsoku lets 々, ー and small kana (JLREQ cl-09's 々, cl-10, cl-11) start a line and keeps
@@ -962,13 +1054,14 @@ fn kinsoku_keeps_closing_marks_off_line_starts_and_opening_ones_off_line_ends() 
 #[cfg(test)]
 #[test]
 fn soft_kinsoku_lets_small_kana_and_the_prolonged_sound_mark_start_a_line() {
+    let [none, hard, soft] = [Kinsoku::None, Kinsoku::Hard, Kinsoku::Soft].map(KinsokuRules::BuiltIn);
     for (a, b) in [('ャ', 'ー'), ('カ', 'ッ'), ('時', '々'), ('ト', 'ㇰ'), ('か', 'ゃ')] {
-        assert!(!kinsoku_between(a, Some(b), Kinsoku::Hard), "{a}{b}");
-        assert!(kinsoku_between(a, Some(b), Kinsoku::Soft), "{a}{b}");
+        assert!(!kinsoku_between(a, Some(b), hard), "{a}{b}");
+        assert!(kinsoku_between(a, Some(b), soft), "{a}{b}");
     }
     for (a, b) in [('字', '。'), ('弧', '」'), ('「', 'か'), ('ｶ', 'ｯ'), ('ｶ', 'ｰ'), ('字', 'ゝ')] {
-        assert!(!kinsoku_between(a, Some(b), Kinsoku::Soft), "{a}{b}");
-        assert!(kinsoku_between(a, Some(b), Kinsoku::None), "{a}{b}");
+        assert!(!kinsoku_between(a, Some(b), soft), "{a}{b}");
+        assert!(kinsoku_between(a, Some(b), none), "{a}{b}");
     }
 }
 
@@ -1016,7 +1109,13 @@ fn word_hyphen_breaks(text: &str, g: &[SGlyph], ws: usize, we: usize, opts: &Hyp
 /// paragraph's Hyphenation options) when it is given. No break comes before a space: a line that
 /// may end after a dash, a Thai word or a space ends after the spaces that follow it, as in
 /// [`break_line`].
-pub(super) fn candidates(text: &str, g: &[SGlyph], hyphenate: Option<&HyphenationOptions>, kinsoku: Kinsoku) -> Vec<Breakpoint> {
+pub(super) fn candidates<'k>(
+    text: &str,
+    g: &[SGlyph],
+    hyphenate: Option<&HyphenationOptions>,
+    kinsoku: impl Into<KinsokuRules<'k>>,
+) -> Vec<Breakpoint> {
+    let kinsoku = kinsoku.into();
     let mut v = vec![];
     let mut ws = 0;
     for (j, gl) in g.iter().enumerate() {

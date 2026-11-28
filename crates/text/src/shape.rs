@@ -8,7 +8,7 @@ use unicode_bidi::Level;
 use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 
-use harfrust::{BufferClusterLevel, Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
+use harfrust::{Direction, Feature, Tag};
 use kurbo::Shape;
 use skrifa::MetadataProvider;
 use skrifa::charmap::Charmap;
@@ -438,6 +438,89 @@ pub(crate) fn keep_inseparable_pairs(text: &str, sg: &mut [SGlyph]) {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many texts [`keep_inseparable_sequences`] has compared with a set's sequences on this
+    /// thread.
+    pub(crate) static SEQUENCE_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Bunri-Kinshi with a custom Kinsoku Shori set: as [`keep_inseparable_pairs`], for the set's
+/// inseparable `sequences` (each [`vectorcraft_doc::text::KINSOKU_SEQUENCE`] characters): a line
+/// never breaks between two characters of one occurrence of a sequence in the paragraph's text.
+/// Occurrences may overlap. The text is read once; at each place that starts a sequence, only the
+/// text of each sequence length (at most [`vectorcraft_doc::text::KINSOKU_SEQUENCE`]'s end) is
+/// looked up, however many sequences share a first character: at most 15 lookups for each
+/// character of the paragraph. A sequence longer than a set can hold is never found.
+pub(crate) fn keep_inseparable_sequences(text: &str, sg: &mut [SGlyph], sequences: &[String]) {
+    let (Some(first), Some(last)) = (sg.iter().map(|g| g.byte).min(), sg.iter().map(|g| g.byte + g.len).max()) else { return };
+    let Some(longest) = sequences.iter().map(|s| s.chars().count()).max() else { return };
+    let longest = longest.min(*vectorcraft_doc::text::KINSOKU_SEQUENCE.end());
+    let known: std::collections::HashSet<&str> = sequences.iter().map(String::as_str).collect();
+    let starts: std::collections::HashSet<char> = sequences.iter().filter_map(|s| s.chars().next()).collect();
+    let Some(para) = text.get(first..last) else { return };
+    // The bytes (of `text`) where a character inside an occurrence starts, after its first.
+    let mut inside = std::collections::HashSet::new();
+    for (at, c) in para.char_indices() {
+        if !starts.contains(&c) {
+            continue;
+        }
+        let rest = &para[at..];
+        // Every sequence found here is the start of the longest one found here, so that one marks
+        // the characters of them all.
+        let mut found = None;
+        for end in rest.char_indices().take(longest).map(|(k, ch)| k + ch.len_utf8()).skip(1) {
+            #[cfg(test)]
+            SEQUENCE_LOOKUPS.with(|n| n.set(n.get() + 1));
+            if known.contains(&rest[..end]) {
+                found = Some(end);
+            }
+        }
+        if let Some(end) = found {
+            inside.extend(rest[..end].char_indices().skip(1).map(|(k, _)| first + at + k));
+        }
+    }
+    if inside.is_empty() {
+        return;
+    }
+    for k in 1..sg.len() {
+        let (a, b) = (&sg[k - 1], &sg[k]);
+        if a.byte == b.byte || a.inline.is_some() || b.inline.is_some() || a.byte + a.len != b.byte {
+            continue;
+        }
+        if inside.contains(&b.byte) {
+            sg[k - 1].keeps_next = true;
+        }
+    }
+}
+
+/// The characters, hanging punctuation and inseparable sequences of a built-in Kinsoku Set
+/// (`base`), as a custom set named `name` holds them: New Set's starting point. A set made from
+/// Hard or Soft breaks lines as that set does; one made from None is empty.
+pub fn kinsoku_set_from(base: vectorcraft_doc::Kinsoku, name: &str) -> vectorcraft_doc::KinsokuSet {
+    use vectorcraft_doc::Kinsoku;
+    let mut set = vectorcraft_doc::KinsokuSet { name: name.to_string(), ..Default::default() };
+    if base == Kinsoku::None {
+        return set;
+    }
+    // Every character the built-in sets name is in the Basic Multilingual Plane.
+    for c in (0..=0xFFFF_u32).filter_map(char::from_u32) {
+        if no_line_start(c) && !(base == Kinsoku::Soft && soft_line_start(c)) {
+            set.cannot_start.push(c);
+        }
+        if no_line_end(c) {
+            set.cannot_end.push(c);
+        }
+        if crate::layout::is_hanging_punctuation(c) {
+            set.hanging.push(c);
+        }
+    }
+    let pairs = [('\u{2014}', '\u{2014}'), ('\u{2026}', '\u{2026}'), ('\u{2025}', '\u{2025}'), ('\u{3033}', '\u{3035}'), ('\u{3034}', '\u{3035}')];
+    set.inseparable = pairs.iter().filter(|&&(a, b)| inseparable(a, b)).map(|&(a, b)| [a, b].iter().collect()).collect();
+    set.normalize();
+    set
+}
+
 /// Is `a` followed by `b` an inseparable pair that Bunri-Kinshi keeps on one line? VectorCraft's
 /// set is the pairs W3C JLREQ lists for its class cl-08 (https://www.w3.org/TR/jlreq/#cl-08): two
 /// em dashes, two horizontal ellipses, two two-dot leaders, and the upper half of a vertical kana
@@ -448,6 +531,79 @@ pub fn inseparable(a: char, b: char) -> bool {
         (a, b),
         ('\u{2014}', '\u{2014}') | ('\u{2026}', '\u{2026}') | ('\u{2025}', '\u{2025}') | ('\u{3033}', '\u{3035}') | ('\u{3034}', '\u{3035}')
     )
+}
+
+/// Kurikaeshi Moji Shori: the last character of `text` that a repeat mark after it could stand for:
+/// the last one that is neither a repeat mark, a soft return (U+2028) nor a combining voicing mark
+/// (U+3099, U+309A), or None when there is none. The engine gives a threaded frame whose first
+/// paragraph continues from the frame before the result for the text before it
+/// (`TextObject::first_para_lead`).
+pub fn repeat_base(text: &str) -> Option<char> {
+    #[cfg(test)]
+    REPEAT_SCANNED.with(|c| c.set(c.get() + text.len()));
+    text.chars().rev().find(|&c| !matches!(c, '々' | 'ゝ' | 'ゞ' | 'ヽ' | 'ヾ' | '\u{2028}' | '\u{3099}' | '\u{309A}'))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many bytes of text [`repeat_base`] was given on this thread.
+    static REPEAT_SCANNED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: how many bytes of text [`repeat_base`] has been given on this thread.
+#[cfg(test)]
+pub(crate) fn repeat_scanned() -> usize {
+    REPEAT_SCANNED.get()
+}
+
+/// Kurikaeshi Moji Shori: the character the repeat mark `mark` stands for after the text `before`
+/// it, or None when `mark` is not a repeat mark or nothing before it fits. `lead` stands before
+/// `before` (the text of a threaded paragraph in the frames before). VectorCraft's rules: the
+/// repeated character is the last one before the mark that is neither a repeat mark, a soft return
+/// (U+2028) nor a combining voicing mark ([`repeat_base`]); 々 repeats a Han ideograph, ゝ and ゞ a
+/// hiragana and ヽ and ヾ a katakana. ゝ and ヽ give the kana without its voicing marks, and ゞ and
+/// ヾ its voiced form, or the plain kana when it has none.
+pub(crate) fn repeated_char(lead: Option<char>, before: &str, mark: char) -> Option<char> {
+    let script = match mark {
+        '々' => Script::Han,
+        'ゝ' | 'ゞ' => Script::Hiragana,
+        'ヽ' | 'ヾ' => Script::Katakana,
+        _ => return None,
+    };
+    let base = repeat_base(before).or(lead)?;
+    if base.script() != script || (script != Script::Han && !matches!(base as u32, 0x3041..=0x3096 | 0x30A1..=0x30F6)) {
+        return None;
+    }
+    if script == Script::Han {
+        return Some(base);
+    }
+    // Katakana from U+30A1 to U+30F6 lie 0x60 past their hiragana, so one table serves both.
+    let shift = if script == Script::Katakana { 0x60 } else { 0 };
+    let plain = unvoiced(base as u32 - shift);
+    let kana = if matches!(mark, 'ゞ' | 'ヾ') { voiced(plain).unwrap_or(plain) } else { plain };
+    char::from_u32(kana + shift)
+}
+
+/// The hiragana `h` (a code point) without its dakuten or handakuten.
+fn unvoiced(h: u32) -> u32 {
+    match h {
+        0x304C..=0x3062 if h.is_multiple_of(2) => h - 1,
+        0x3065 | 0x3067 | 0x3069 => h - 1,
+        0x3070..=0x307D => h - (h - 0x306F) % 3,
+        0x3094 => 0x3046,
+        _ => h,
+    }
+}
+
+/// The voiced form (with dakuten) of the plain hiragana `h`, if it has one.
+fn voiced(h: u32) -> Option<u32> {
+    match h {
+        0x304B..=0x3061 if !h.is_multiple_of(2) => Some(h + 1),
+        0x3064 | 0x3066 | 0x3068 => Some(h + 1),
+        0x306F..=0x307B if (h - 0x306F).is_multiple_of(3) => Some(h + 1),
+        0x3046 => Some(0x3094),
+        _ => None,
+    }
 }
 
 /// Is `c` Hangul: a syllable, a jamo or a compatibility jamo (full or half width)?
@@ -563,6 +719,8 @@ pub(crate) fn shape_runs(
         if rr.start >= range.end {
             break;
         }
+        #[cfg(test)]
+        crate::layout::count_paragraph_run();
         let a = rr.start.max(range.start);
         let b = rr.end.min(range.end);
         if a >= b || text.get(a..b).is_none() {
@@ -598,9 +756,9 @@ pub(crate) fn shape_runs(
         // Synthesized Small Caps shape lowercase letters separately (as smaller capitals).
         let small_caps = st.small_caps.is_some() && !st.all_caps;
         // Split into segments by font coverage (and case, for Small Caps).
-        let mut seg = Segment { range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
+        let mut seg = Segment { db, range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
         let mut cache: std::collections::HashMap<&str, Arc<FontFace>> = std::collections::HashMap::new();
-        let mut script = Script::Common;
+        let mut boundary = craft::font_catalog::SegmentBoundary::new(primary.id(), level_at(a));
         // A grapheme cluster (a letter and its marks, an emoji sequence) is set in one face.
         for (i, cluster) in text[a..b].grapheme_indices(true) {
             let i = a + i;
@@ -620,19 +778,15 @@ pub(crate) fn shape_runs(
             };
             let small = small_caps && c.is_lowercase();
             let next_script = shaping_script(c);
-            let strong_script = !matches!(next_script, Script::Common | Script::Inherited);
-            let script_change = strong_script && script != Script::Common && script != next_script;
+            let strong_script = (!matches!(next_script, Script::Common | Script::Inherited)).then_some(next_script);
             // Combining marks, zero width joiners and non-joiners, and variation selectors stay
             // with the character before them.
-            if (face.id() != seg.face.id() || small != seg.small || level != seg.level || script_change) && !is_mark(c) {
+            if boundary.advance(face.id(), level, small, strong_script, is_mark(c)) {
                 if i > seg.range.start {
                     seg.range.end = i;
                     shape_segment(text, &range, &seg, feats, out);
                 }
                 seg = Segment { range: i..i, face, small, level, ..seg };
-            }
-            if strong_script {
-                script = next_script;
             }
         }
         if b > seg.range.start {
@@ -1006,6 +1160,7 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
     let CharStyle {
         font_family,
         font_style,
+        file_font_id,
         font_version,
         font_axes,
         size,
@@ -1074,6 +1229,7 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         && offsets == other_offsets
         && font_family == &b.font_family
         && font_style == &b.font_style
+        && file_font_id == &b.file_font_id
         && font_version == &b.font_version
         && font_axes == &b.font_axes
         && size == &b.size
@@ -1140,6 +1296,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
     let CharStyle {
         font_family,
         font_style,
+        file_font_id,
         font_version,
         font_axes,
         size,
@@ -1203,6 +1360,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
     *font_family == b.font_family
         && warichu_alike(a, b)
         && *font_style == b.font_style
+        && *file_font_id == b.file_font_id
         && *font_version == b.font_version
         && *font_axes == b.font_axes
         && *size == b.size
@@ -1228,10 +1386,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
 /// `digits`: not what the layout handles itself (tab, line and paragraph breaks), joiners or
 /// variation selectors.
 fn drawn_chars(cluster: &str, digits: Digits) -> impl Iterator<Item = char> + '_ {
-    cluster
-        .chars()
-        .map(move |c| digits.map(c))
-        .filter(|&c| !(c.is_control() || matches!(c, '\u{200C}' | '\u{200D}' | '\u{2028}' | '\u{FE00}'..='\u{FE0F}' | '\u{E0100}'..='\u{E01EF}')))
+    craft::font_catalog::drawable_characters(cluster, move |c| digits.map(c))
 }
 
 /// Does the face with charmap `map` have a glyph for `c` (any face does when it has no charmap)?
@@ -1243,11 +1398,14 @@ fn in_face(map: Option<&Charmap<'_>>, c: char) -> bool {
 /// first fallback face with all of them, so that a letter's marks are shaped with it and attach to
 /// it (#4491); when there is none, the face its first character takes on its own.
 fn fallback_face(db: &FontDb, primary: &Arc<FontFace>, pmap: Option<&Charmap<'_>>, cluster: &str, digits: Digits) -> Arc<FontFace> {
-    let fallback = |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic);
-    drawn_chars(cluster, digits)
-        .find_map(|c| fallback(c).filter(|f| drawn_chars(cluster, digits).all(|c| f.covers(c))))
-        .or_else(|| drawn_chars(cluster, digits).next().filter(|&c| !in_face(pmap, c)).and_then(fallback))
-        .unwrap_or_else(|| primary.clone())
+    craft::font_catalog::cluster_face(
+        cluster,
+        primary,
+        |c| digits.map(c),
+        |c| in_face(pmap, c),
+        |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic),
+        |face, c| face.covers(c),
+    )
 }
 
 /// The script `c` is shaped in: Japanese and Chinese text mixes Han, Hiragana, Katakana and
@@ -1354,6 +1512,7 @@ fn inline_glyph(
 /// alike ([`shapes_alike`]).
 #[derive(Clone)]
 struct Segment<'a> {
+    db: &'a FontDb,
     range: Range<usize>,
     /// All the runs, and the indices of those the piece's shaping span takes in.
     runs: &'a [(Range<usize>, &'a CharStyle)],
@@ -1413,8 +1572,10 @@ fn is_mark(c: char) -> bool {
 /// SS). A cluster that would take in characters of runs with different drawing attributes (a
 /// ligature, a base with its marks) is not formed, except for paint-only harakat differences.
 fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
-    let Segment { range, runs, source_runs, st, face, small, level } = seg;
+    let Segment { db, range, runs, source_runs, st, face, small, level } = seg;
     let (range, small) = (range.clone(), *small);
+    #[cfg(test)]
+    crate::layout::count_layout_work(range.len());
     // The source runs the segment's bytes lie in (a span can hold many segments).
     let span = runs.get(source_runs.clone()).unwrap_or_default();
     let first = span.partition_point(|(r, _)| r.end <= range.start);
@@ -1507,8 +1668,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         }
         ranged
     };
-    // Horizontal type with Tsume on any of the segment's characters.
-    let tsume_here = !feats.vertical && runs.get(source_runs.clone()).unwrap_or_default().iter().any(|(_, s)| s.tsume > 0.0);
+    // Tsume on any of the segment's characters.
+    let tsume_here = runs.get(source_runs.clone()).unwrap_or_default().iter().any(|(_, s)| s.tsume > 0.0);
     // Shape the segment as if all of it were in `st`, with the features `more` on top.
     let shape_in = |st: &CharStyle, more: &[Feature]| {
         // A BCP 47 tag is short ASCII; anything else (a file may hold anything) is shaped without one.
@@ -1532,46 +1693,28 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             let along_features = with_more(&|s| feats.resolve(s));
             // gid, cluster, x and y advance, x and y offset.
             let shape = |feats: &[Feature], direction: Direction| {
-                let mut buf = UnicodeBuffer::new();
-                for (i, c) in text_seg.char_indices() {
-                    let cl = (range.start + i) as u32;
-                    let c = st.digits.map(c);
-                    if upper {
-                        for u in c.to_uppercase() {
-                            buf.add(u, cl);
-                        }
-                    } else {
-                        buf.add(c, cl);
-                    }
-                }
-                buf.set_direction(direction);
-                buf.guess_segment_properties();
-                if char_level.get() {
-                    buf.set_cluster_level(BufferClusterLevel::Characters);
-                }
-                // The characters' language picks the font's forms for it (`locl`: Turkish keeps fi
-                // apart and the dot on its i).
-                if let Some(l) = &language {
-                    buf.set_language(l.clone());
-                }
-                // Harfrust keeps this Unicode context for joining/positional shaping, but does not emit
-                // glyphs for it. This retains context at real style/font segmentation boundaries without
-                // shaping across those boundaries or claiming cross-style ligatures/mark attachment.
-                if let Some(pre) = text.get(context.start..range.start) {
-                    buf.set_pre_context(pre);
-                }
-                if let Some(post) = text.get(range.end..context.end) {
-                    buf.set_post_context(post);
-                }
-                // A buffer whose characters name no script reads as `UNKNOWN`: its plan has none.
-                let script = Some(buf.script()).filter(|s| *s != harfrust::script::UNKNOWN);
-                let plan = face.shape_plan(&shaper, buf.direction(), script, language.as_ref(), feats);
-                let gb = shaper.shape(buf, ShapeOptions::new().features(feats).plan(Some(&plan)));
-                gb.glyph_infos()
-                    .iter()
-                    .zip(gb.glyph_positions())
-                    .map(|(info, pos)| (info.glyph_id, info.cluster, pos.x_advance, pos.y_advance, pos.x_offset, pos.y_offset))
-                    .collect::<Vec<_>>()
+                let input = craft::font_catalog::RunInput {
+                    text: text_seg,
+                    source_start: range.start,
+                    pre_context: text.get(context.start..range.start).unwrap_or_default(),
+                    post_context: text.get(range.end..context.end).unwrap_or_default(),
+                    direction,
+                    language: language.as_ref(),
+                    features: feats,
+                    character_clusters: char_level.get(),
+                    uppercase: upper,
+                };
+                craft::font_catalog::shape_run(
+                    &shaper,
+                    &input,
+                    |c| st.digits.map(c),
+                    |shaper, direction, script, language, features| face.shape_plan(shaper, direction, script, language, features),
+                )
+                // HarfRust clusters are u32; a run beyond that source offset cannot be represented.
+                .unwrap_or_default()
+                .into_iter()
+                .map(|g| (g.glyph_id, g.cluster, g.x_advance, g.y_advance, g.x_offset, g.y_offset))
+                .collect::<Vec<_>>()
             };
             let along = if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight };
             *raw = shape(&along_features, along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
@@ -1888,10 +2031,11 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             hyphen_language: crate::hyphen::Language::from_tag(gst.language.as_deref()),
         });
         // Tsume takes its share of the blank space beside the cluster's ink once the cluster is
-        // complete, in horizontal type.
-        if last_in_cluster && !invisible && !feats.vertical && gst.tsume > 0.0 {
+        // complete, along the line. In vertical type a glyph that stands upright is measured down
+        // the column instead, once its cell is known ([`crate::layout`]).
+        if last_in_cluster && !invisible && gst.tsume > 0.0 {
             let first = out.iter().rposition(|g| g.byte != cl).map_or(0, |i| i + 1);
-            tighten(out.get_mut(first..).unwrap_or_default(), own, gst.tsume);
+            tighten(db, out.get_mut(first..).unwrap_or_default(), own, gst.tsume);
         }
     }
 }
@@ -1902,25 +2046,20 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
 /// and its ink, on each side, comes out of the cluster's advance, and its glyphs are drawn the
 /// left side's share earlier ([`SGlyph::tsume`] and [`SGlyph::tsume_shift`] hold both, for Optical
 /// kerning to measure the pair without them). A cluster without ink, such as a space, or with a
-/// width that is not positive, keeps its place and width.
-fn tighten(glyphs: &mut [SGlyph], own: f64, tsume: f64) {
+/// width that is not positive, keeps its place and width. The ink is what the glyph paints
+/// ([`painted_box`]): its color art or bitmap when it has one, else its outline.
+fn tighten(db: &FontDb, glyphs: &mut [SGlyph], own: f64, tsume: f64) {
     let Some(last) = glyphs.len().checked_sub(1) else { return };
-    let share = if tsume.is_nan() { 0.0 } else { tsume.clamp(0.0, MAX_TSUME) / 100.0 };
     let (mut pen, mut ink): (f64, Option<(f64, f64)>) = (0.0, None);
     for (i, g) in glyphs.iter().enumerate() {
-        if let Some((a, b)) = ink_across(&g.face, g.gid) {
-            let (a, b) = (pen + g.dx + a * g.sx, pen + g.dx + b * g.sx);
+        if let Some(b) = painted_box(db, g) {
+            let (a, b) = (pen + g.dx + b.x0 * g.sx, pen + g.dx + b.x1 * g.sx);
             let (lo, hi) = (a.min(b), a.max(b));
             ink = Some(ink.map_or((lo, hi), |(l, h)| (l.min(lo), h.max(hi))));
         }
         pen += if i == last { own } else { g.adv };
     }
-    let Some((lo, hi)) = ink.filter(|(lo, hi)| lo.is_finite() && hi.is_finite()) else { return };
-    if !(pen.is_finite() && pen > 0.0) {
-        return;
-    }
-    let left = lo.clamp(0.0, pen) * share;
-    let right = (pen - hi).clamp(0.0, pen) * share;
+    let Some((left, right)) = ink.and_then(|ink| tsume_shares(ink, pen, tsume)) else { return };
     for g in glyphs.iter_mut() {
         g.dx -= left;
         g.tsume_shift = left;
@@ -1931,18 +2070,38 @@ fn tighten(glyphs: &mut [SGlyph], own: f64, tsume: f64) {
     }
 }
 
-/// The left and right edges of glyph `gid`'s outline in `face`, in font units; `None` for a glyph
-/// without an outline (a space, or a bitmap or color glyph without one).
-fn ink_across(face: &FontFace, gid: u32) -> Option<(f64, f64)> {
-    let font = face.skrifa()?;
-    let glyph = font.outline_glyphs().get(skrifa::GlyphId::new(gid))?;
-    let mut pen = crate::fontdb::FlipPen(kurbo::BezPath::new());
-    glyph.draw(skrifa::outline::DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen).ok()?;
-    if pen.0.elements().is_empty() {
+/// What Tsume `tsume` (percent) takes off before and after ink running from `lo` to `hi` along a
+/// cell running from 0 to `length`: its share of the blank space on each side, inside the cell.
+/// `None` when the ink or the cell is not finite, or the cell's length is not positive.
+pub(crate) fn tsume_shares((lo, hi): (f64, f64), length: f64, tsume: f64) -> Option<(f64, f64)> {
+    let share = if tsume.is_nan() { 0.0 } else { tsume.clamp(0.0, MAX_TSUME) / 100.0 };
+    if !(lo.is_finite() && hi.is_finite() && length.is_finite() && length > 0.0) {
         return None;
     }
-    let b = pen.0.bounding_box();
-    Some((b.x0, b.x1))
+    Some((lo.clamp(0.0, length) * share, (length - hi).clamp(0.0, length) * share))
+}
+
+/// The box of what glyph `g` paints, in font units (y down, as outlines are), as the layout draws
+/// it: its COLR or SVG art, else its color bitmap, else its outline. `None` for a glyph that paints
+/// nothing: a space, a control or format character, or art, an image or an outline that is empty
+/// or not finite.
+pub(crate) fn painted_box(db: &FontDb, g: &SGlyph) -> Option<kurbo::Rect> {
+    if g.inline.is_some() || g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}' || crate::justify::is_format_control(g.ch) {
+        return None;
+    }
+    let image_box = |image: &crate::GlyphImage| image.xf.transform_rect_bbox(image.rect());
+    let b = match db.glyph_colour(&g.face, g.gid, vectorcraft_doc::color::Color::BLACK, None) {
+        Some(crate::colr::ColourContent::Art(art)) => art.geometric_bounds(),
+        Some(crate::colr::ColourContent::Image(image)) => Some(image_box(&image)),
+        None => match db.glyph_image(&g.face, g.gid) {
+            Some(image) => Some(image_box(&image)),
+            None => {
+                let outline = db.outline(&g.face, g.gid);
+                (!outline.elements().is_empty()).then(|| outline.bounding_box())
+            }
+        },
+    };
+    b.filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()) && (b.width() > 0.0 || b.height() > 0.0))
 }
 
 #[cfg(test)]

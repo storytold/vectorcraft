@@ -2,6 +2,9 @@ use super::*;
 use crate::{Gradient, GradientPaint, GradientStop};
 use proptest::prelude::*;
 
+const ASE_COLOR: u16 = 0x0001;
+const ASE_GROUP_END: u16 = 0xC002;
+
 #[test]
 fn gpl_blank_name_keeps_fallback() {
     let blank = "GIMP Palette\nName: \nColumns: 0\n#\n  1   2   3\tx\n";
@@ -282,6 +285,99 @@ fn css_writes_spread_gradient_swatches_with_their_stops_repeated() {
         let text = written(&lib, PaletteFormat::Css);
         assert!(text.contains(&format!("--bands: linear-gradient(90deg, {want});")), "{spread:?}: {text}");
     }
+}
+
+/// The color and opacity a written CSS gradient value has at `p` (0..1 along its stops), by the
+/// CSS rule (https://www.w3.org/TR/css-images-3/#coloring-gradient-line): between two stops the
+/// color mixes evenly with premultiplied alpha, in sRGB for hex colors
+/// (https://www.w3.org/TR/css-color-4/#interpolation-space); before the first stop and after the
+/// last the end colors hold.
+fn css_gradient_at(value: &str, p: f64) -> ([f64; 3], f64) {
+    let list = value.split_once(", ").map_or("", |(_, rest)| rest).trim_end_matches(')');
+    let stops: Vec<([f64; 3], f64, f64)> = list
+        .split(", ")
+        .map(|stop| {
+            let (hex, at) = stop.split_once(' ').unwrap_or_else(|| panic!("stop {stop:?}"));
+            let byte = |i: usize| hex.get(1 + 2 * i..3 + 2 * i).map_or(255.0, |h| f64::from(u8::from_str_radix(h, 16).unwrap()));
+            let at: f64 = at.trim_end_matches('%').parse().unwrap();
+            ([byte(0), byte(1), byte(2)].map(|v| v / 255.0), byte(3) / 255.0, at / 100.0)
+        })
+        .collect();
+    let p = p.clamp(stops[0].2, stops[stops.len() - 1].2);
+    let i = stops.windows(2).position(|w| p <= w[1].2).unwrap_or(0);
+    let ((c0, a0, p0), (c1, a1, p1)) = (stops[i], stops[i + 1]);
+    let w = if p1 > p0 { (p - p0) / (p1 - p0) } else { 1.0 };
+    let a = a0 + (a1 - a0) * w;
+    let c = std::array::from_fn(|k| if a > 0.0 { (c0[k] * a0 + (c1[k] * a1 - c0[k] * a0) * w) / a } else { 0.0 });
+    (c, a)
+}
+
+/// A gradient swatch's CSS draws, by the CSS rule, the colors and opacity the swatch has: an
+/// off-center midpoint and the curve of a Perceptual or hue gradient are written as stops of their
+/// own, also on a reflected and a mirrored conic swatch.
+#[test]
+fn css_gradient_swatches_draw_their_midpoints_and_curves() {
+    let check = |label: &str, gp: GradientPaint, at: &dyn Fn(f64) -> f64| {
+        let lib = SwatchLibrary {
+            name: "x".into(),
+            swatches: vec![Swatch { name: "x".into(), paint: Paint::Gradient(Box::new(gp.clone())), global: false, spot: false }],
+            groups: vec![],
+        };
+        let text = written(&lib, PaletteFormat::Css);
+        let value = text.lines().find_map(|l| l.trim().strip_prefix("--x: ")).unwrap_or_else(|| panic!("{text}")).trim_end_matches(';');
+        for i in 0..64 {
+            let p = (f64::from(i) + 0.5) / 64.0;
+            let (css, css_alpha) = css_gradient_at(value, p);
+            let (color, opacity) = gp.gradient.sample(at(p) as f32);
+            let want = color.to_rgb();
+            let off = (0..3).map(|k| (css[k] - f64::from(want[k])).abs()).fold((css_alpha - f64::from(opacity)).abs(), f64::max);
+            assert!(off < 2.0 / 255.0, "{label} at {p}: {css:?} {css_alpha} vs {want:?} {opacity}: {value}");
+        }
+    };
+    let ramp = |method| Gradient {
+        method,
+        ..Gradient::new(
+            GradientKind::Linear,
+            vec![GradientStop { midpoint: 0.25, ..GradientStop::new(0.0, Color::rgb8(255, 0, 0)) }, GradientStop::new(1.0, Color::rgb8(0, 0, 255))],
+        )
+    };
+    for method in crate::GradientMethod::ALL {
+        check(&format!("{method:?}"), GradientPaint::new(ramp(method)), &|p| p);
+    }
+    // Opacity through an off-center midpoint, on one color so premultiplying does not change it.
+    let fade = Gradient::new(
+        GradientKind::Linear,
+        vec![
+            GradientStop { midpoint: 0.25, ..GradientStop::new(0.0, Color::BLACK) },
+            GradientStop { opacity: 0.0, ..GradientStop::new(1.0, Color::BLACK) },
+        ],
+    );
+    check("fade", GradientPaint::new(fade), &|p| p);
+    let reflected = Gradient { spread: crate::GradientSpread::Reflect, repeats: 2, ..ramp(crate::GradientMethod::Classic) };
+    let spread = reflected.spreader();
+    check("reflect", GradientPaint::new(reflected), &spread);
+    let mut conic = GradientPaint::new(Gradient { kind: GradientKind::Conic, ..ramp(crate::GradientMethod::HueClockwise) });
+    conic.geom = Some(crate::GradientGeom { start: kurbo::Point::ZERO, end: kurbo::Point::new(0.0, -10.0), aspect: -1.0, focal: None });
+    check("mirrored conic", conic, &|p| 1.0 - p);
+}
+
+/// A gradient swatch whose curve would need more than `MAX_SPREAD_STOPS` stops is written with its
+/// own stops.
+#[test]
+fn css_gradient_swatches_keep_their_stop_count_bounded() {
+    let n = 4000;
+    let stops = (0..n)
+        .map(|i| GradientStop::new(i as f32 / (n - 1) as f32, if i % 2 == 0 { Color::rgb8(255, 0, 0) } else { Color::rgb8(0, 255, 255) }))
+        .collect();
+    let g = Gradient { method: crate::GradientMethod::HueClockwise, ..Gradient::new(GradientKind::Linear, stops) };
+    assert!(g.expanded().nth(crate::gradient::MAX_SPREAD_STOPS).is_some(), "the curve needs more stops than allowed");
+    let lib = SwatchLibrary {
+        name: "x".into(),
+        swatches: vec![Swatch { name: "x".into(), paint: Paint::Gradient(Box::new(GradientPaint::new(g))), global: false, spot: false }],
+        groups: vec![],
+    };
+    let text = written(&lib, PaletteFormat::Css);
+    assert_eq!(text.matches('%').count(), n, "one stop for each of the gradient's own");
 }
 
 #[test]
@@ -606,4 +702,53 @@ proptest! {
             prop_assert_eq!(back.len(), lib.iter().filter(|w| f.holds(&w.paint)).count(), "{:?}", f);
         }
     }
+}
+
+#[test]
+fn shared_gpl_adapter_uses_app_color_conversion() {
+    let colors = [Color::cmyk(0.2, 0.4, 0.6, 0.1), Color::lab(55.0, 30.0, -25.0), Color::gray(0.3)];
+    let lib = SwatchLibrary {
+        name: "Managed".into(),
+        swatches: colors
+            .iter()
+            .enumerate()
+            .map(|(i, &color)| Swatch { name: format!("Color {i}"), paint: Paint::solid(color), global: false, spot: false })
+            .collect(),
+        groups: vec![],
+    };
+    let mut expected = String::from("GIMP Palette\nName: Managed\nColumns: 0\n#\n");
+    for (i, color) in colors.iter().enumerate() {
+        let [r, g, b, _] = color.to_rgba8(1.0);
+        expected.push_str(&format!("{r:3} {g:3} {b:3}\tColor {i}\n"));
+    }
+    assert_eq!(write(&lib, PaletteFormat::Gpl).unwrap(), expected.as_bytes());
+    assert!(to_cms_palette(&lib, true).swatches.iter().all(|w| matches!(w.color, PaletteColor::Rgb { .. })));
+    assert!(matches!(to_cms_palette(&lib, false).swatches[0].color, PaletteColor::Cmyk { .. }));
+    assert!(matches!(to_cms_palette(&lib, false).swatches[1].color, PaletteColor::Lab { .. }));
+}
+
+#[test]
+fn typed_palette_errors_keep_app_wording() {
+    let cases = [
+        (PaletteError::UnsupportedFormat, "not a supported palette (.gpl, .ase, or .acb)"),
+        (PaletteError::TruncatedAse, "the swatch exchange file is cut short"),
+        (PaletteError::TruncatedAcb, "the color book is cut short"),
+        (
+            PaletteError::AseWriteEntryLimit { limit: 3, entries: 4 },
+            "VectorCraft reads at most 3 colors and groups from a swatch exchange file, and this library has 4",
+        ),
+        (PaletteError::AseReadEntryLimit { limit: 3 }, "the swatch exchange file holds more than 3 colors and groups"),
+        (PaletteError::AseBlockCount, "too many swatch exchange blocks"),
+        (PaletteError::AseBlockLength, "a swatch exchange block is too long"),
+        (PaletteError::AseNameLength, "a swatch exchange name is too long"),
+        (PaletteError::AseVersion { major: 2, minor: 3 }, "swatch exchange version 2.3 isn't supported (only 1.x)"),
+        (PaletteError::AcbVersion { version: 2 }, "color book version 2 isn't supported (only 1)"),
+        (PaletteError::AcbEntryLimit { limit: 3 }, "the color book holds more than 3 colors"),
+        (PaletteError::AcbColorSpace { space: 5 }, "color books in color space 5 aren't supported (only RGB, CMYK and Lab)"),
+        (PaletteError::AcbNameBytes { limit: 64 << 20 }, "the color book's names take more than 64 MB"),
+    ];
+    for (error, expected) in cases {
+        assert_eq!(palette_error(error), expected);
+    }
+    assert_eq!(read_bytes(b"8BCB\0\x01\0\0\0\0\0\x03\0x", "fallback").unwrap_err(), "the color book is cut short");
 }

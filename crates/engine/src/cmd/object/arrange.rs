@@ -80,11 +80,16 @@ pub(super) fn send_to_current_layer(s: &mut Session, _: &Value) -> Result<Value>
     if st.doc.children(Some(layer)).is_some_and(|c| c.iter().rev().filter(art).map(|n| n.id).take(ids.len()).eq(ids.iter().rev().copied())) {
         return ok();
     }
-    s.edit("Send to Current Layer", |d, _| {
+    let placed: Vec<(NodeId, Option<NodeId>)> = ids.iter().map(|i| (*i, st.doc.parent_of(*i))).collect();
+    let left = crate::cmd::intertwine::groups_of(&st.doc, &ids);
+    s.edit("Send to Current Layer", |d, sel| {
         let moved = d.remove_many(&ids)?;
         let ch = d.children_mut(Some(layer))?;
         let at = Node::guide_run_start(ch);
         ch.splice(at..at, moved);
+        // Members sent out of an Intertwine group leave it as ordinary art.
+        crate::cmd::intertwine::settle_members(d, &placed, &left)?;
+        sel.prune(d);
         Ok(())
     })?;
     ok()
@@ -329,6 +334,9 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
         if matches!(st.doc.node(id).ok_or(EngineError::NoNode(id))?.kind, NodeKind::Text(_)) {
             return Err(bad("object.isolate", "type objects can't be isolated"));
         }
+        if st.doc.node(id).is_some_and(|n| n.is_ruler_guide()) {
+            return Err(bad("object.isolate", "ruler guides can't be isolated"));
+        }
         let isolation =
             st.doc.node(id).filter(|n| n.extras().shaper.is_some()).and_then(|n| n.children()).and_then(|c| c.first()).map_or(id, |n| n.id);
         // A hidden or locked object, one in a hidden or locked group or layer, and a guide path while
@@ -352,6 +360,7 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
         && prev != isolation
     {
         crate::cmd::settle_interaction(s)?;
+        add_drawn_live_paint(s, prev, Some(isolation))?;
         let st = s.doc_mut()?;
         crate::cmd::distortcmds::finish_edit_text(st, prev);
     }
@@ -364,7 +373,30 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// Leaving isolation mode in `isolated` for `next` (None: out of isolation mode) adds the paths drawn
+/// in each Live Paint group that is `isolated` or holds it to that group, as `livePaint.merge` does,
+/// innermost group first, one undo step per group ([`crate::cmd::buildcmds::merge_drawn_in_isolation`]).
+/// A group that `next` is or is inside is skipped, since isolation stays in it. → the outermost group
+/// that paths were added to.
+fn add_drawn_live_paint(s: &mut Session, isolated: NodeId, next: Option<NodeId>) -> Result<Option<NodeId>> {
+    let d = &s.doc()?.doc;
+    let stays = next.and_then(|n| d.ancestry(n)).unwrap_or_default();
+    let left: Vec<NodeId> = crate::cmd::buildcmds::isolated_live_paints(d, isolated).into_iter().filter(|g| !stays.contains(g)).collect();
+    let mut added = None;
+    for g in left {
+        if crate::cmd::buildcmds::merge_drawn_in_isolation(s, g)? {
+            added = Some(g);
+        }
+    }
+    Ok(added)
+}
+
 pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
+    let key = "all";
+    let all = match p.get(key) {
+        None => false,
+        Some(v) => v.as_bool().ok_or_else(|| bad("object.exitIsolation", format!("`{key}` must be true or false")))?,
+    };
     // Opacity mask editing, pattern editing and symbol editing isolate their editing layer. Leaving
     // isolation mode then leaves that mode, as Stop Editing Opacity Mask and the isolation bar's
     // Done do. A group isolated inside the symbol's art goes back to the symbol's layer.
@@ -373,10 +405,11 @@ pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
         && let Some(inner) = st.isolation.filter(|i| *i != layer && st.doc.ancestry(*i).is_some_and(|a| a.contains(&layer)))
     {
         crate::cmd::settle_interaction(s)?;
+        let left = add_drawn_live_paint(s, inner, Some(layer))?.unwrap_or(inner);
         let st = s.doc_mut()?;
         crate::cmd::distortcmds::finish_edit_text(st, inner);
         st.isolation = Some(layer);
-        st.selection.set([inner]);
+        st.selection.set([left]);
         st.revision += 1;
         return ok();
     }
@@ -391,19 +424,28 @@ pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
     };
     if let Some(leave_mode) = leave_mode {
         if let Some(i) = st.isolation {
+            crate::cmd::settle_interaction(s)?;
+            add_drawn_live_paint(s, i, None)?;
             crate::cmd::distortcmds::finish_edit_text(s.doc_mut()?, i);
         }
         leave_mode(s, p)?;
         return ok();
     }
     let menu = s.menu.clone();
-    let prev = s.active().and_then(|d| d.isolation);
+    let prev = st.isolation;
+    // An isolated sublayer goes up to its parent layer, which stays isolated, unless `all` is true or
+    // that layer is hidden or locked; anything else leaves isolation mode.
+    let up = prev
+        .filter(|i| !all && st.doc.node(*i).is_some_and(Node::is_layer))
+        .and_then(|i| st.doc.parent_of(i))
+        .filter(|parent| st.doc.is_editable(*parent));
     if let Some(i) = prev {
         crate::cmd::settle_interaction(s)?;
+        let left = add_drawn_live_paint(s, i, up)?.unwrap_or(i);
         let st = s.doc_mut()?;
-        st.isolation = None;
+        st.isolation = up;
         crate::cmd::distortcmds::finish_edit_text(st, i);
-        let target = st.doc.parent_of(i).filter(|p| st.doc.node(*p).is_some_and(|n| n.extras().shaper.is_some())).unwrap_or(i);
+        let target = st.doc.parent_of(left).filter(|p| st.doc.node(*p).is_some_and(|n| n.extras().shaper.is_some())).unwrap_or(left);
         st.selection.set([target]);
         // A guide path isolated while Lock Guides is on isn't selected (#1534).
         crate::deselect_hidden(&menu, &st.doc, &mut st.selection);

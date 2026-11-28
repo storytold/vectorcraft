@@ -245,6 +245,42 @@ fn crossings_are_found_on_both_paths() {
 }
 
 #[test]
+fn a_shallow_crossing_is_placed_where_the_curves_meet() {
+    // Lines square to the middle of a quarter circle of radius 100, just inside it: each crosses the
+    // arc twice, at under a degree for the nearest one.
+    let arc = PathData::single(quarter());
+    let k = std::f64::consts::FRAC_1_SQRT_2;
+    for gap in [0.5, 0.05, 0.005, 0.0005] {
+        let mid = pt((100.0 - gap) * k, (100.0 - gap) * k);
+        let (from, to) = (mid + Vec2::new(-k, k) * 60.0, mid + Vec2::new(k, -k) * 60.0);
+        let across = PathData::single(line(&[(from.x, from.y), (to.x, to.y)], false));
+        let exact: Vec<Point> = kurbo::PathSeg::Cubic(arc.subpaths[0].segment(0))
+            .intersect_line(kurbo::Line::new(from, to))
+            .iter()
+            .map(|x| from.lerp(to, x.line_t))
+            .collect();
+        assert_eq!(exact.len(), 2, "{gap}");
+        let on = |p: &PathData, other: &PathData| -> Vec<Point> {
+            crossings_on(p, &[other]).unwrap().iter().map(|q| p.subpaths[0].segment(q.1).eval(q.2)).collect()
+        };
+        let both = crossings(&[&arc, &across], false).unwrap();
+        let found = [
+            on(&arc, &across),
+            on(&across, &arc),
+            both[0].iter().map(|q| arc.subpaths[0].segment(q.1).eval(q.2)).collect(),
+            both[1].iter().map(|q| across.subpaths[0].segment(q.1).eval(q.2)).collect(),
+        ];
+        for places in found {
+            assert_eq!(places.len(), 2, "{gap}: {places:?}");
+            for x in &exact {
+                let off = places.iter().map(|p| p.distance(*x)).fold(f64::INFINITY, f64::min);
+                assert!(off < 1e-6, "{gap}: {off} pt from {x:?}");
+            }
+        }
+    }
+}
+
+#[test]
 fn insert_at_keeps_the_shape_and_names_the_new_anchors() {
     let sp = line(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)], false);
     let (out, marks) = insert_at(&sp, &[(1, 0.5), (0, 0.25), (0, 0.75), (1, 1.0), (7, 0.5)]);
@@ -516,6 +552,29 @@ fn one_work_budget_bounds_several_calls_together() {
 }
 
 #[test]
+fn work_done_once_can_be_drawn_again_from_another_budget() {
+    let row: Vec<(f64, f64)> = (0..=1000).map(|i| (i as f64, 0.0)).collect();
+    let path = PathData::single(line(&row, false));
+    let start = Work::default();
+    let mut work = start;
+    crossings_on_within(&path, &[], &mut work).unwrap();
+    let cost = work.spent_since(start);
+    // Drawing a call's cost leaves what the call itself leaves, 120 times and no more.
+    let mut again = Work::default();
+    assert_eq!(again.draw(cost), Some(()));
+    assert_eq!(again, work);
+    let draws = (1..200).take_while(|_| again.draw(cost).is_some()).count();
+    assert_eq!(draws, 119);
+    let left = again;
+    assert_eq!(again.draw(cost), None);
+    assert_eq!(again, left, "a draw that fails takes nothing");
+    // A twentieth of the budget pays for the call 6 times.
+    assert_eq!((Work::share(0), Work::share(1)), (Work::default(), Work::default()));
+    let mut part = Work::share(20);
+    assert_eq!((0..200).take_while(|_| part.draw(cost).is_some()).count(), 6);
+}
+
+#[test]
 fn a_segment_that_loops_over_itself_crosses_itself() {
     // One cubic that meets itself at t = 0.25 and t = 0.75.
     let looped = PathData::single(SubPath::new(
@@ -665,4 +724,59 @@ fn a_slice_of_a_curve_keeps_its_shape_and_the_anchors_it_runs_through() {
     assert!(slice(&circle, (1.0, 1.0)).anchors.is_empty());
     assert!(slice(&circle, (2.0, 1.0)).anchors.is_empty());
     assert!(slice(&circle, (f64::NAN, 1.0)).anchors.is_empty());
+}
+
+#[test]
+fn an_open_end_a_hair_off_another_path_still_meets_it() {
+    // A bow from (0, 0) to (100, 100), and where a line across at y = 50 crosses it.
+    let bow = PathData::single(SubPath::new(
+        vec![Anchor { h_out: pt(0.0, 55.0), ..Anchor::corner(pt(0.0, 0.0)) }, Anchor { h_in: pt(45.0, 100.0), ..Anchor::corner(pt(100.0, 100.0)) }],
+        false,
+    ));
+    let across = PathData::single(line(&[(-50.0, 50.0), (150.0, 50.0)], false));
+    let at = crossings_on(&across, &[&bow]).unwrap();
+    assert_eq!(at.len(), 1);
+    let p = across.subpaths[0].segment(0).eval(at[0].2);
+    // A line ending 0.00005 pt short of the bow, or past it, as a line cut where the bow crosses it
+    // can: the bow is crossed there, on both searches.
+    let on_bow = |l: &PathData| crossings_on(&bow, &[l]).unwrap().iter().map(|q| bow.subpaths[0].segment(q.1).eval(q.2)).collect::<Vec<_>>();
+    for off in [-5e-5, 5e-5] {
+        let stub = PathData::single(line(&[(-50.0, 50.0), (p.x + off, 50.0)], false));
+        let found = on_bow(&stub);
+        assert!(found.len() == 1 && found[0].distance(p) < 1e-3, "{off}: {found:?}");
+        let both = crossings(&[&stub, &bow], false).unwrap();
+        assert_eq!((both[0].len(), both[1].len()), (1, 1), "{off}: {both:?}");
+    }
+    // 0.01 pt short is not on it.
+    assert!(on_bow(&PathData::single(line(&[(-50.0, 50.0), (p.x - 0.01, 50.0)], false))).is_empty());
+    // The bow's own open end 0.00005 pt short of an upright meets it there.
+    let upright = PathData::single(line(&[(100.00005, 50.0), (100.00005, 150.0)], false));
+    let found = crossings_on(&upright, &[&bow]).unwrap();
+    assert!(found.len() == 1 && near(upright.subpaths[0].segment(0).eval(found[0].2).y, 100.0, 1e-3), "{found:?}");
+    // Two ends that each stop 0.0009 pt short of a corner lie 0.0013 pt apart: they don't meet.
+    let flat = PathData::single(line(&[(0.0, 0.0), (99.9991, 0.0)], false));
+    let post = PathData::single(line(&[(100.0, 0.0009), (100.0, 50.0)], false));
+    assert!(crossings_on(&flat, &[&post]).unwrap().is_empty() && crossings_on(&post, &[&flat]).unwrap().is_empty());
+    // Two ends that each stop 0.0004 pt short of a corner lie 0.0006 pt apart: they meet.
+    let flat = PathData::single(line(&[(0.0, 0.0), (99.9996, 0.0)], false));
+    let post = PathData::single(line(&[(100.0, 0.0004), (100.0, 50.0)], false));
+    assert_eq!((crossings_on(&flat, &[&post]).unwrap().len(), crossings_on(&post, &[&flat]).unwrap().len()), (1, 1));
+    // A level line that crosses a quarter circle near its top, where the two meet at under 3
+    // degrees, cut 0.0015 pt short along its length: its end lies under 0.0001 pt from the arc and
+    // meets it there.
+    use kurbo::ParamCurveNearest;
+    let arc = PathData::single(quarter());
+    let level = PathData::single(line(&[(50.0, 99.9), (-50.0, 99.9)], false));
+    let at = crossings_on(&level, &[&arc]).unwrap();
+    assert_eq!(at.len(), 1);
+    let end = level.subpaths[0].segment(0).eval(at[0].2) + Vec2::new(0.0015, 0.0);
+    assert!(arc.subpaths[0].segment(0).nearest(end, 1e-12).distance_sq.sqrt() < 1e-4);
+    let stub = PathData::single(line(&[(50.0, 99.9), (end.x, end.y)], false));
+    let found = crossings_on(&arc, &[&stub]).unwrap();
+    assert!(found.len() == 1 && arc.subpaths[0].segment(0).eval(found[0].2).distance(end) < 1e-3, "{found:?}");
+    assert_eq!(crossings(&[&stub, &arc], false).unwrap().iter().map(Vec::len).collect::<Vec<_>>(), [1, 1]);
+    // A corner of a closed path as near a line is not an open end: it doesn't reach the line.
+    let wedge = PathData::single(line(&[(180.0, 0.0), (220.0, 0.0), (200.0, 49.99995)], true));
+    let floor = PathData::single(line(&[(150.0, 50.0), (250.0, 50.0)], false));
+    assert!(crossings_on(&floor, &[&wedge]).unwrap().is_empty() && crossings_on(&wedge, &[&floor]).unwrap().is_empty());
 }

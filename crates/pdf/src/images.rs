@@ -12,7 +12,9 @@
 //! conversion leaves unchanged (an sRGB profile) keeps its JPEG data. A black-and-white image whose
 //! converted levels are grey is compressed as greyscale. A colour image the Output settings also
 //! convert to their destination ([`Pixels`]) goes from its profile to sRGB, then to the
-//! destination; a grey one keeps its profile there, as grey pixels are not converted.
+//! destination, and so does one converted from its profile to an RGB destination whose untagged
+//! images keep their numbers (Preserve Numbers); a grey one keeps its profile there, as grey
+//! pixels are not converted.
 //!
 //! CMYK images ([`ImageBlob::cmyk`]) stay CMYK: a CMYK JPEG already as asked is embedded as it is
 //! when its numbers are kept; the others' ink amounts are resampled, converted when the Output
@@ -27,7 +29,7 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use craft_pdf::write::backend as krilla;
+use craft::pdf::write::backend as krilla;
 use image::imageops::FilterType;
 use image::{DynamicImage, ExtendedColorType, ImageDecoder, ImageFormat, ImageReader};
 use krilla::image::{BitsPerComponent, CustomImage, Image, ImageColorspace};
@@ -320,17 +322,28 @@ pub(crate) struct Recoded {
     /// Set when the image's colors are converted to the destination without its ICC profile,
     /// which can't be read.
     pub note: Option<&'static str>,
+    /// Set when the colors were to be converted but the image couldn't be decoded within the
+    /// allowance or written with them: the source image, kept as it is, would be in its own colors.
+    pub unconverted: bool,
 }
 
-/// How [`recode`] converts a gray or RGB image that carries an ICC profile to sRGB (Convert to
-/// Destination, [`crate::output::ColorOut::image_srgb_intent`]): the destination when it is sRGB,
-/// else the step before the image's [`Pixels`] conversion.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct ToSrgb {
+/// How [`recode`] converts a gray or RGB image that carries an ICC profile to sRGB
+/// ([`crate::output::ColorOut::image_srgb_intent`]): the destination when it is sRGB, else the
+/// step before the image's [`Pixels`] conversion.
+#[derive(Clone, Copy)]
+pub(crate) struct ToSrgb<'a> {
     /// The rendering intent of the conversion.
     pub intent: Intent,
     /// 16-bit samples may be written (PDF 1.5 and later).
     pub sixteen_bit: bool,
+    /// The colour output whose [`crate::output::ColorOut::tagged_pixels`] then convert a colour
+    /// image converted from its profile, when other colour images are not converted (`recode`'s
+    /// `convert`): to an RGB destination whose untagged images keep their numbers (Preserve
+    /// Numbers). Its table is built when the first such image needs it.
+    pub then: Option<&'a crate::output::ColorOut>,
+    /// Gray images are converted too: with an sRGB destination
+    /// ([`crate::output::ColorOut::converts_grey_images`]). In the others they keep their profile.
+    pub grey: bool,
 }
 
 /// What happens to the ICC profile a gray or RGB image carries
@@ -515,13 +528,34 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
     }
 }
 
+/// Are samples of type `t` grey (with or without alpha)? [`recode`] keeps such pixels grey.
+fn grey_type(t: ExtendedColorType) -> bool {
+    use ExtendedColorType as T;
+    matches!(t, T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16)
+}
+
+/// Does the image in `bytes` hold grey samples, which [`recode`] keeps grey whatever the Output
+/// settings? Reads only its header; `false` for one that can't be read.
+pub(crate) fn is_grey(bytes: &[u8]) -> bool {
+    ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()
+        .and_then(|r| r.into_decoder().ok())
+        .is_some_and(|d| grey_type(d.original_color_type()))
+}
+
 /// Encoded image `bytes` placed `size` points wide and high, as the Compression settings `c` ask:
 /// resampled when its resolution is above the threshold, compressed with ZIP or JPEG, its colours
 /// converted by `convert` (colour images). Pixels that keep their colours keep the ICC profile
-/// they carry when `profiles` keeps it ([`SourceProfiles::Keep`]); with `to_srgb`, pixels in a gray or RGB profile other than sRGB are converted from it to sRGB
-/// instead ([`ToSrgb`]), and colour ones then by `convert`; grey ones that `convert` leaves as
-/// they are keep their profile. `interpolate` lets viewers smooth it. An image that can't be
-/// decoded is kept as it is, with a warning when its pixels were to be converted to sRGB.
+/// they carry when `profiles` keeps it ([`SourceProfiles::Keep`]); with `to_srgb`, pixels in a
+/// gray or RGB profile other than sRGB are converted from it to sRGB instead ([`ToSrgb`]), and
+/// colour ones then by `convert`, or without it by the conversion `to_srgb` gives
+/// ([`ToSrgb::then`]); grey ones keep their profile unless the destination is sRGB
+/// ([`ToSrgb::grey`]). `interpolate` lets viewers smooth it. An image that can't be decoded is
+/// kept as it is, with a warning when its pixels were to be converted to sRGB. When `convert`
+/// was to convert its colors, it is [`Recoded::unconverted`] if its header can't be read (it may
+/// be in color) or its pixels are beyond the decode allowance; a color image whose pixel data
+/// can't be read is not.
 pub(crate) fn recode(
     bytes: &[u8],
     size: (f64, f64),
@@ -531,16 +565,16 @@ pub(crate) fn recode(
     profiles: SourceProfiles,
     to_srgb: Option<ToSrgb>,
 ) -> Recoded {
-    let keep = Recoded { image: None, warning: None, note: None };
+    let keep = Recoded { image: None, warning: None, note: None, unconverted: convert.is_some() };
     let Ok(reader) = ImageReader::new(Cursor::new(bytes)).with_guessed_format() else { return keep };
     let jpeg = reader.format() == Some(ImageFormat::Jpeg);
     let Ok(mut decoder) = reader.into_decoder() else { return keep };
     let dims = decoder.dimensions();
-    use ExtendedColorType as T;
-    let grey = matches!(decoder.original_color_type(), T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16);
+    let grey = grey_type(decoder.original_color_type());
     // Pixels in a profile they are converted from are decoded, whatever the Compression settings.
-    // Grey pixels, which `convert` leaves as they are, keep their profile when it converts.
-    let to_srgb = to_srgb.filter(|_| !(grey && convert.is_some()));
+    // Grey pixels keep their profile unless the destination is sRGB ([`ToSrgb::grey`]).
+    let then = to_srgb.and_then(|t| t.then);
+    let to_srgb = to_srgb.filter(|t| !grey || t.grey);
     // Converted to the destination as sRGB, as before, when the profile can't be read.
     let mut note = None;
     let source = match to_srgb.and_then(|t| Some((source_profile(bytes, if grey { *b"GRAY" } else { *b"RGB " })?, t))) {
@@ -549,23 +583,25 @@ pub(crate) fn recode(
             note = Some(CONVERTED_AS_SRGB);
             None
         }
-        Some((None, _)) => return Recoded { image: None, warning: Some(UNCONVERTED), note: None },
+        Some((None, _)) => return Recoded { image: None, warning: Some(UNCONVERTED), note: None, unconverted: false },
         None => None,
     };
     // Pixels that can't be decoded are kept as they are, with a warning when they were to be
     // converted.
-    let keep = if source.is_some() { Recoded { image: None, warning: Some(UNDECODED), note: None } } else { keep };
+    let keep = if source.is_some() { Recoded { warning: Some(UNDECODED), ..keep } } else { keep };
     // What the header declares is decoded within the image allowance, not whatever it asks for.
+    // Grey pixels aren't converted.
     if decoder.set_limits(limits()).is_err() {
-        return keep;
+        return Recoded { unconverted: convert.is_some() && !grey, ..keep };
     }
     let (mut kind, pixels) = if grey {
         // Only the pixels tell monochrome images from greyscale ones: decoded unless both keep it.
         let (g, m) = (rule(c, Kind::Gray), rule(c, Kind::Mono));
         if source.is_none() && kept(&g, dims, size, jpeg) && kept(&m, dims, size, jpeg) && g.instead == m.instead {
-            return Recoded { image: None, warning: g.instead, note: None };
+            return Recoded { image: None, warning: g.instead, note: None, unconverted: false };
         }
-        let Ok(img) = DynamicImage::from_decoder(decoder) else { return keep };
+        // Grey pixels aren't converted.
+        let Ok(img) = DynamicImage::from_decoder(decoder) else { return Recoded { unconverted: false, ..keep } };
         (if bilevel(&img) { Kind::Mono } else { Kind::Gray }, Some(img))
     } else {
         (Kind::Color, None)
@@ -573,9 +609,16 @@ pub(crate) fn recode(
     let mut rule = rule(c, kind);
     let convert = convert.filter(|_| kind == Kind::Color);
     if kept(&rule, dims, size, jpeg) && convert.is_none() && source.is_none() {
-        return Recoded { image: None, warning: rule.instead, note: None };
+        return Recoded { image: None, warning: rule.instead, note: None, unconverted: false };
     }
-    let Some(mut img) = pixels.or_else(|| decoded(bytes)) else { return keep };
+    // Pixels that can't be read can't be written in their own colors either; ones beyond the
+    // allowance can.
+    let mut img = match pixels.map_or_else(|| decoded_within(bytes), Ok) {
+        Ok(img) => img,
+        Err(limited) => return Recoded { unconverted: limited && convert.is_some(), ..keep },
+    };
+    // Converted from its profile: then by `convert`, else by the conversion `to_srgb` gives.
+    let mut from_profile = false;
     if let Some((p, t)) = &source {
         let srgb = match into_srgb(img, p, t.intent) {
             Some(s) => Some(s),
@@ -585,7 +628,7 @@ pub(crate) fn recode(
                 note = Some(CONVERTED_AS_SRGB);
                 None
             }
-            None => return Recoded { image: None, warning: Some(UNCONVERTED), note: None },
+            None => return Recoded { image: None, warning: Some(UNCONVERTED), note: None, unconverted: false },
         };
         img = match srgb {
             Some((srgb, changed)) => {
@@ -593,8 +636,9 @@ pub(crate) fn recode(
                 if kind == Kind::Mono && !bilevel(&srgb) {
                     (kind, rule) = (Kind::Gray, self::rule(c, Kind::Gray));
                 }
+                from_profile = true;
                 // Written as it is only when nothing converts it further.
-                let as_is = kept(&rule, dims, size, jpeg) && convert.is_none();
+                let as_is = kept(&rule, dims, size, jpeg) && convert.is_none() && then.is_none();
                 // A JPEG kept as JPEG whose samples the conversion leaves unchanged (an sRGB
                 // profile): its JPEG data, without the profile (and, with `Remove`, without its
                 // segments: encoded again when those can't be taken out).
@@ -604,20 +648,22 @@ pub(crate) fn recode(
                     && let Some(data) = jpeg_data(bytes, profiles == SourceProfiles::Remove)
                 {
                     let image = Image::from_jpeg_with_icc(data.into(), None, interpolate).ok();
-                    return Recoded { image, warning: rule.instead, note: None };
+                    return Recoded { image, warning: rule.instead, note: None, unconverted: false };
                 }
                 // Not resampled and lossless: written at its own depth.
                 if as_is && jpeg_quality(&rule, jpeg).is_none() {
-                    return Recoded { image: from_decoded(srgb, None, interpolate, t.sixteen_bit), warning: rule.instead, note: None };
+                    let image = from_decoded(srgb, None, interpolate, t.sixteen_bit);
+                    return Recoded { image, warning: rule.instead, note: None, unconverted: false };
                 }
                 srgb
             }
-            None => {
-                let Some(img) = decoded(bytes) else { return keep };
-                img
-            }
+            None => match decoded_within(bytes) {
+                Ok(img) => img,
+                Err(limited) => return Recoded { unconverted: limited && convert.is_some(), ..keep },
+            },
         };
     }
+    let convert = if from_profile { convert.or_else(|| then.and_then(crate::output::ColorOut::tagged_pixels)) } else { convert };
     // Pixels that keep their colours keep the profile they are in; converted ones are in the
     // destination's.
     let want = if kind == Kind::Color { *b"RGB " } else { *b"GRAY" };
@@ -650,14 +696,21 @@ pub(crate) fn recode(
         to_jpeg(&samples, space, width, height, q, interpolate, icc.as_deref().map(Vec::as_slice))
     });
     let image = jpeg.or_else(|| from_rgba(rgba.as_raw(), width, height, interpolate, convert, icc));
-    Recoded { image, warning: rule.instead, note }
+    let unconverted = image.is_none() && convert.is_some();
+    Recoded { image, warning: rule.instead, note, unconverted }
+}
+
+/// Whether coverage `cover` (one byte a pixel) only covers or doesn't, as a 1-bit image mask's
+/// does: what the Monochrome settings resample, and kept so.
+pub(crate) fn bilevel_coverage(cover: &[u8]) -> bool {
+    cover.iter().all(|v| *v == 0 || *v == 255)
 }
 
 /// A colorized image's coverage (one sample a pixel, `w` × `h`, see
 /// [`ImageBlob::coverage`]) placed `size` points wide and high, resampled as the Compression
 /// settings `c` ask for monochrome images (when every sample is 0 or 255) or grayscale ones.
 pub(crate) fn coverage_sized(w: u32, h: u32, cover: Vec<u8>, size: (f64, f64), c: &CompressionSettings) -> Option<(u32, u32, Vec<u8>)> {
-    let mono = cover.iter().all(|v| *v == 0 || *v == 255);
+    let mono = bilevel_coverage(&cover);
     let rule = rule(c, if mono { Kind::Mono } else { Kind::Gray });
     let to = sized(&rule, (w, h), size);
     if to == (w, h) {
@@ -681,6 +734,7 @@ pub(crate) fn coverage_sized(w: u32, h: u32, cover: Vec<u8>, size: (f64, f64), c
 /// [`mask_alpha`]) the image is lossless and carries it as its soft mask; `None` then when its
 /// inks can't be read. When its numbers are kept, the image is tagged as `tag` says, and is
 /// untagged without a profile; converted pixels are never tagged with it.
+/// With `convert`, an image whose inks can't be read or written is [`Recoded::unconverted`].
 pub(crate) fn recode_cmyk(
     blob: &ImageBlob,
     size: (f64, f64),
@@ -704,16 +758,22 @@ pub(crate) fn recode_cmyk(
             let image = (u64::from(w) * u64::from(h) <= MAX_EMBED_PIXELS)
                 .then(|| Image::from_jpeg_with_icc(data.into(), icc.map(|i| i.to_vec().into()), interpolate).ok())
                 .flatten();
-            return Recoded { image, warning: rule.instead, note: None };
+            return Recoded { image, warning: rule.instead, note: None, unconverted: false };
         }
     }
+    // Inks that can't be read can't be converted: the image is not to be kept as it is.
+    let unconverted = Recoded { image: None, warning: None, note: None, unconverted: true };
     let Some(inks) = blob.cmyk() else {
-        return Recoded { image: None, warning: Some(if jpeg { CMYK_KEPT } else { CMYK_RGB }), note: None };
+        if convert.is_some() {
+            return unconverted;
+        }
+        return Recoded { image: None, warning: Some(if jpeg { CMYK_KEPT } else { CMYK_RGB }), note: None, unconverted: false };
     };
     let (width, height) = sized(&rule, (inks.width, inks.height), size);
     let (inks, alpha) = match resampled_inks(inks, alpha, &rule, (width, height)) {
         Ok(r) => r,
-        Err(warning) => return Recoded { image: None, warning, note: None },
+        Err(_) if convert.is_some() => return unconverted,
+        Err(warning) => return Recoded { image: None, warning, note: None, unconverted: false },
     };
     let (samples, space) = match convert {
         Some(p) => p.convert(&inks),
@@ -722,7 +782,8 @@ pub(crate) fn recode_cmyk(
     // JPEG needs opaque pixels.
     let image = jpeg_quality(&rule, jpeg).filter(|_| alpha.is_none()).and_then(|q| to_jpeg(&samples, space, width, height, q, interpolate, icc));
     let image = image.or_else(|| lossless(samples, alpha, space, width, height, interpolate, icc));
-    Recoded { image, warning: rule.instead, note: None }
+    let unconverted = image.is_none() && convert.is_some();
+    Recoded { image, warning: rule.instead, note: None, unconverted }
 }
 
 /// Ink amounts (four bytes a pixel) and their alpha (one byte a pixel), if any.
@@ -767,9 +828,15 @@ fn limits() -> image::Limits {
 
 /// `bytes` decoded within [`limits`]: an image whose header asks for more is not decoded.
 fn decoded(bytes: &[u8]) -> Option<DynamicImage> {
-    let mut r = ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    decoded_within(bytes).ok()
+}
+
+/// `bytes` decoded like [`decoded`]; on failure, whether the decoder stopped at [`limits`]
+/// (`true`) rather than at data it can't read (`false`).
+fn decoded_within(bytes: &[u8]) -> Result<DynamicImage, bool> {
+    let mut r = ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(|_| false)?;
     r.limits(limits());
-    r.decode().ok()
+    r.decode().map_err(|e| matches!(e, image::ImageError::Limits(_)))
 }
 
 /// The alpha an opacity mask whose art is greyscale image `blob` alone gives the image of
@@ -792,6 +859,21 @@ pub(crate) fn mask_alpha(blob: &ImageBlob, width: u32, height: u32, clip: bool) 
     }
     let back = if clip { 0 } else { 255 };
     Some(img.pixels().map(|p| ((u32::from(p[0]) * u32::from(p[3]) + back * (255 - u32::from(p[3])) + 127) / 255) as u8).collect())
+}
+
+/// The alpha of each pixel of image `blob` (255 for an image without alpha), when it is `width` ×
+/// `height` pixels. `None` for a CMYK image, another size, or one too large to hold as RGBA or
+/// that can't be decoded; as in [`mask_alpha`], the size is read from the header first.
+pub(crate) fn image_alpha(blob: &ImageBlob, width: u32, height: u32) -> Option<Vec<u8>> {
+    if blob.is_cmyk() {
+        return None;
+    }
+    let reader = ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?;
+    if reader.into_dimensions().ok()? != (width, height) || u64::from(width) * u64::from(height) * 4 > MAX_DECODE {
+        return None;
+    }
+    let img = decoded(&blob.bytes)?.into_rgba8();
+    (img.dimensions() == (width, height)).then(|| img.pixels().map(|p| p[3]).collect())
 }
 
 /// Opaque colour `samples` (grey, RGB, or CMYK ink amounts, as `space` says) as a JPEG at

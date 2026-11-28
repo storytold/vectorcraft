@@ -5,7 +5,8 @@
 //! Contents (`AIDeformEditModeKey`), a warp's style, bend, distortions and orientation
 //! (`DeformStyle`, `DeformValue`, `DeformHoriz`, `DeformVert`, `Rotate`), with Distort Appearance
 //! the size of the box the contents map from (`AIDeformArtWidthKey`, `AIDeformArtHeightKey`), the
-//! contents in an `X=` … `X+` block (while they are edited, the grid) as `AIDeformArtKey`, and the
+//! contents in an `X=` … `X+` block (in a symbol's art, in the canvas's space with y down; while
+//! they are edited, the grid) as `AIDeformArtKey`, and the
 //! kind (`AIDeformStyle`: 1 a warp, 2 a mesh, 3 a top object); then the distorted art on plain
 //! lines, and the plugin's `XP` after it. A top object's outline is the edge of the grid written
 //! for it, one grid edge to each segment of its sides, a side with fewer segments than the side
@@ -27,7 +28,7 @@ use super::{MAX_NEST, Writer, Xy, hide};
 use crate::import::{DEFORM_PLUGIN, EnvelopeGridPoint as GridPoint, envelope_outline, envelope_upright, warp_number};
 use crate::ps;
 
-pub(in crate::ai_editing) const ENVELOPES: &str = "envelopes whose type is threaded, has text wrap options or is written as its outlines, envelopes without contents, envelopes in opacity masks, pattern tiles, art cut to a clipping object or other envelopes' contents, envelopes on the layers of a large canvas or in a turned or mirrored frame, warps drawn without their style's net, meshes and top objects that the data would open in another shape, envelopes with a Fidelity that isn't a whole number, envelopes that map from a box other than their contents' bounds with or without strokes or keep bounds margins with Distort Appearance off, envelopes after the first 256 envelopes and images with a Warp, and envelopes nested more than 8 deep are written as their art in the editing data for other apps";
+pub(in crate::ai_editing) const ENVELOPES: &str = "envelopes whose type is threaded, has text wrap options or is written as its outlines, envelopes without contents, envelopes in opacity masks, pattern tiles, art cut to a clipping object or other envelopes' contents, envelopes in a turned or mirrored frame, warps drawn without their style's net, meshes and top objects that the data would open in another shape, envelopes with a Fidelity that isn't a whole number, envelopes that map from a box other than their contents' bounds with or without strokes or keep bounds margins with Distort Appearance off, envelopes after the first 256 envelopes and images with a Warp, and envelopes nested more than 8 deep are written as their art in the editing data for other apps";
 
 /// The most rows or columns of an envelope's grid written (Make with Mesh's own limit, and the
 /// reader's).
@@ -356,15 +357,17 @@ fn top_object_grid(path: &PathData, corners: Option<[u32; 4]>) -> Option<(usize,
 
 impl Writer<'_> {
     /// Envelope `n`, of transparency `xy`, as a live envelope (see the module's form), outside opacity
-    /// masks' art, pattern tiles, art cut to a clipping object and the layers of a large canvas. Type
-    /// in its contents is written as type, which the reader makes the envelope's contents again.
+    /// masks' art, pattern tiles and art cut to a clipping object. On a large canvas it is written at
+    /// the document's reduced size, its saved box size included, which the reader reads at the
+    /// declared scale. Type in its contents is written as type, which the reader makes the
+    /// envelope's contents again.
     /// False, writing nothing, where it is written as its art instead: where the reader would open it
     /// in another shape, or with its type as drawn art (threaded type, type with text wrap options,
     /// type written as its outlines), or some of it is left out for the object limit
     /// ([`Self::take_objects`]).
     pub(super) fn envelope(&mut self, n: &Node, xy: Xy) -> bool {
         let NodeKind::Envelope { content, kind, fidelity, editing, options, frame } = &n.kind else { return false };
-        if self.hidden > 0 || self.clip.is_some() || self.nest >= MAX_NEST || !self.symbols_live || self.checks_left == 0 {
+        if self.hidden > 0 || self.clip.is_some() || self.nest >= MAX_NEST || self.checks_left == 0 {
             return false;
         }
         if content.iter().any(|c| holds_type(c)) && !content.iter().all(|c| type_reads_back(c, self.doc)) {
@@ -399,7 +402,13 @@ impl Writer<'_> {
         if *editing {
             self.grid(record.grid.as_ref());
         } else if self.open_group("u") {
+            // In a symbol's art, the contents in the dictionary are in the canvas's space, y down.
+            let to_art = self.to_art;
+            if self.in_symbol {
+                self.to_art = Affine::translate(self.canvas_origin) * to_art;
+            }
             self.contents(content, true);
+            self.to_art = to_art;
             self.end_group("U", Xy::PLAIN);
         }
         let block = std::mem::replace(&mut self.body, outer);
@@ -446,15 +455,17 @@ impl Writer<'_> {
     /// An envelope's grid, when it has one, as a gray gradient mesh (`/Mesh X!` … `/End X!`): its
     /// size (`[cols rows] /Size`), then each patch's place (`[col row] /P`), its four corners
     /// (`/N`: gray, opacity, the point, the handle towards the next corner and a weight, the handle
-    /// towards the previous one and a weight, in art space), from its top left one down, across and
-    /// up, and `/E`. One object.
+    /// towards the previous one and a weight, in art space; in a symbol's art, in the space a
+    /// gradient mesh's corners are written in there), from its top left one down, across and up,
+    /// and `/E`. One object.
     fn grid(&mut self, grid: Option<&(usize, usize, Vec<GridPoint>)>) {
         let Some((rows, cols, pts)) = grid else { return };
         if !self.take_objects(1) {
             return;
         }
         let (rows, cols, width) = (*rows, *cols, cols + 1);
-        let to_art = self.to_art;
+        // In a symbol's art, corners are written in the space a gradient mesh's are written in there.
+        let to_art = if self.in_symbol { self.instance_space } else { self.to_art };
         let s = &mut self.body;
         let _ = writeln!(s, "/Mesh X!\n2 /Version X#\n/Cartesian /Type X#\n[{cols} {rows}] /Size X#\n/Data X#\n/DeviceGray /CS X#");
         let num = |s: &mut String, v: f64| {

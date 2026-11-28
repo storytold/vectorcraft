@@ -8,6 +8,7 @@ pub mod arrowheads;
 mod artboardalign;
 mod assets;
 mod attributes;
+pub mod bevels;
 pub mod brushlib;
 mod brushsym;
 mod buildcmds;
@@ -32,6 +33,7 @@ pub mod expand;
 pub(crate) mod fileinfo;
 pub mod fileio;
 pub mod findfiles;
+pub mod flare;
 pub mod flatten;
 pub mod fontfiles;
 mod fonts;
@@ -47,6 +49,7 @@ mod info;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
+pub mod kinsokusets;
 pub(crate) mod layer;
 mod layerpanel;
 pub mod library;
@@ -74,6 +77,7 @@ pub mod perspgrid;
 pub mod place;
 pub mod plugin;
 pub(crate) mod plugin_call;
+mod preflight;
 pub mod prefscmds;
 pub mod print;
 pub(crate) mod printadvanced;
@@ -90,18 +94,24 @@ pub(crate) mod slices;
 pub mod spelling;
 mod stroke;
 mod style;
+pub use style::styled_node;
 pub mod stylelib;
 mod svgfilter;
+pub use svgfilter::MAX_IMPORT_BYTES as MAX_SVG_FILTER_IMPORT_BYTES;
 mod swatch;
 pub mod swatchlib;
 pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
+pub(crate) mod tags;
 mod textedit;
+
 pub use textedit::effective_kerning;
+mod retype;
 pub mod textstyles;
 pub(crate) mod textwrap;
 pub(crate) mod threads;
+pub mod toast;
 pub(crate) mod typecmd;
 mod typemenu;
 mod variablecmds;
@@ -233,11 +243,7 @@ pub fn has_multi(s: &Session) -> std::result::Result<(), String> {
 /// editing and symbol editing mode isolate their own layer, which does not count here; an object
 /// isolated inside them counts.
 pub(crate) fn ordinary_isolation(st: &crate::DocState) -> Option<vectorcraft_doc::NodeId> {
-    st.isolation.filter(|l| {
-        !st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
-    })
+    vectorcraft_tools::ordinary_isolation(&st.doc, st.isolation)
 }
 /// Objects are selected ([`has_selection`]), and in isolation mode ([`ordinary_isolation`]) at
 /// least one of them is inside the isolated object: Object › Lock's and Object › Hide's items.
@@ -319,10 +325,13 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(draw2::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
+        v.extend(bevels::specs());
         v.extend(wireframe::specs());
         v.extend(pathops::specs());
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
+        v.extend(retype::specs());
+        v.extend(retype::fonts::specs());
         v.extend(menucmds::specs());
         v.extend(live::specs());
         v.extend(colorcmds::specs());
@@ -333,8 +342,10 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
         v.extend(compositefonts::specs());
+        v.extend(kinsokusets::specs());
         v.extend(fontfiles::specs());
         v.extend(help::specs());
+        v.extend(toast::specs());
         v.extend(threads::specs());
         v.extend(textwrap::specs());
         v.extend(graph::specs());
@@ -367,6 +378,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(library::specs());
         v.extend(expand::specs());
         v.extend(attributes::specs());
+        v.extend(tags::specs());
         v.extend(interactivity::specs());
         v.extend(spelling::specs());
         v.extend(svgfilter::specs());
@@ -384,6 +396,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(package::specs());
         v.extend(slices::specs());
         v.extend(print::specs());
+        v.extend(preflight::specs());
         v.extend(recovery::specs());
         v.extend(fileio::dxfimport::specs());
         v.extend(webexport::specs());
@@ -409,7 +422,18 @@ pub fn command_specs() -> &'static [CommandSpec] {
 /// The command `id`: a built-in one, or a command an installed plug-in adds
 /// ([`plugin::command_specs`]).
 pub fn find_command(id: &str) -> Option<&'static CommandSpec> {
-    command_specs().iter().find(|c| c.id == id).or_else(|| plugin::find_spec(id))
+    static INDEX: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static CommandSpec>> = std::sync::OnceLock::new();
+    INDEX.get_or_init(|| index_by_id(command_specs())).get(id).copied().or_else(|| plugin::find_spec(id))
+}
+
+/// `specs` by id. An id that more than one spec has names the first of them, as a search of
+/// `specs` in order finds.
+pub(crate) fn index_by_id(specs: &[CommandSpec]) -> std::collections::HashMap<&'static str, &CommandSpec> {
+    let mut index = std::collections::HashMap::with_capacity(specs.len());
+    for spec in specs {
+        index.entry(spec.id).or_insert(spec);
+    }
+    index
 }
 
 /// Runs command `spec`'s implementation with `p`. A plug-in command's runs the plug-in
@@ -823,15 +847,25 @@ pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<
 pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use addons::{DecodedImages, refresh_color_masks};
-/// Document Info's category titles and the Objects category's count labels.
-pub use docinfo::{CATEGORIES, OBJECT_LABELS};
+/// Packaging Tools' blanks and the objects their print leaves out, for the Fold Preview window.
+pub use addons::{FoldAngles, fold_source, print_hidden, selection_fold_angles, selection_fold_lines};
+/// Document Info's category titles, the Objects category's count labels, and how its image rows
+/// write a resolution and a number of bytes.
+pub use docinfo::{CATEGORIES, OBJECT_LABELS, byte_size, ppi_number};
 pub use docmenu::guide_indexes;
-pub(crate) use edit::{settle_interaction, typing_in_progress};
+pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
+/// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.
+pub use object::{reflect_axis, scale_factors, shear_tangent};
+pub(crate) use paint::{asks_defaults_only, painting_tool_of};
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
+
+/// What the fill and stroke proxies read from the selected objects, kept with the selection
+/// ([`crate::doc_state::SelectionRecord`]).
+pub(crate) use paint::SelectionPaints;
 
 /// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see
 /// [`clock_date`]), `Some(None)` for null (no date), else `Some(Some(seconds))`.
@@ -861,10 +895,17 @@ pub use xform::{AppearanceAttrs, EyedropperAttrs, EyedropperOptions, FillAttrs, 
 /// The shape modes of the selected compound-shape members (the Pathfinder panel lights theirs).
 pub use compoundshape::selected_member_modes;
 
+/// Make Compound Shape's warning when a member is an open path that encloses no area.
+pub use compoundshape::OPEN_PATHS_ADD_NO_AREA;
+
 /// Pathfinder Options (`Prefs::pathfinder`).
 pub use pathops::{PATHFINDER_PRECISION_RANGE, PathfinderOptions};
 
-/// The Attributes panel's state ([`Session::attributes_info`]).
+/// The Pathfinder Options a new Pathfinder effect takes (`effect.apply`).
+pub use effectcmd::pathfinder_effect_options;
+
+/// The Attributes panel's state ([`Session::attributes_info`]) and how many recent URLs it keeps.
+pub use attributes::RECENT_URLS;
 pub use overprint::AttributesInfo;
 
 /// Object → Flatten Transparency settings (`object.flattenTransparency`).
@@ -879,14 +920,26 @@ pub use gradpresets::{GradientPreset, GradientPresetEntry};
 /// A saved Image Trace preset ([`crate::Prefs::trace_presets`]), and a change to the saved presets.
 pub use buildcmds::{TracePreset, TracePresetChange};
 
+/// The `format`, extensions and largest size of the tracing presets files
+/// `imageTrace.presets.export` writes and `imageTrace.presets.import` reads.
+pub use buildcmds::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES};
+
 /// An Image Trace made off the UI thread, and what it traced (#3098).
-pub use buildcmds::{TraceRun, Traced};
+pub use buildcmds::{TraceRun, Traced, image_trace_target};
+
+/// Retype's search of the installed fonts, made off the UI thread.
+pub use retype::{RetypeFound, RetypeRun, RetypeSearch};
 
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;
 
 /// The shapes a group selected alone gives the Pathfinder panel.
 pub use pathops::shape_count;
+
+/// The tile counts Create Object Mosaic would use (the dialog's Use Ratio button sets them).
+pub use menucmds::mosaic_counts;
+/// The Shape Mode commands' warning when a selected open path encloses no area.
+pub use pathops::SHAPE_MODE_OPEN_PATH_NO_AREA;
 
 /// The gaps View › Show Live Paint Gaps shows on a Live Paint group.
 pub use buildcmds::live_paint_gaps;
@@ -895,10 +948,24 @@ pub use buildcmds::live_paint_gaps;
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
 
+/// Whether an object is a symbol set (the Symbolism Tools Options' Symbol Set Density applies to
+/// the selected ones).
+pub use brushsym::is_symbol_set;
+
+/// The Symbols panel's current symbol, as `symbol.list` answers it (the panel reads it on every
+/// frame without running the command).
+pub use brushsym::current_symbol;
+
 /// The byte order of UTF-16 text without a byte-order mark, by Import Data Sets' rule (the Graph
 /// Data window reads files by it too).
 pub use variablecmds::utf16_order_without_mark;
 
+/// How the Graph Data window's Import Data and Import Data Sets' `%` columns read a graph data
+/// file: its size limit, its text, its cells and the data `graph.setData` takes from them.
+pub use graph::{MAX_GRAPH_DATA_FILE, graph_cell_text, graph_data_from_grid, graph_data_text, graph_grid_from_text};
+
+/// The kind of variable that drives an object's content (`variable.setBinding`).
+pub(crate) use variablecmds::content_kind;
 /// The Variables panel's sort (`variable.sort`) and its rows in that order.
 pub use variablecmds::{VariableSort, VariableSortKey, variable_order};
 

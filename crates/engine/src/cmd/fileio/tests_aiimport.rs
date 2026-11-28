@@ -413,6 +413,114 @@ fn a_swatch_library_in_a_ai_file_without_layers_loads_its_palette() {
     assert!(matches!(sky, Some(vectorcraft_color::Paint::Gradient(_))), "{sky:?}");
 }
 
+/// A `.ai` swatch library (a palette and no layers) holding White, the gradient Sky and, in the
+/// color group Textures, the swatch Tiles of the 4 pt pattern Dots, whose square is painted with
+/// `square` (a color operator), a color the palette doesn't list.
+fn textures_library(square: &str) -> Vec<u8> {
+    let dots = format!("%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_{square}\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n");
+    let gradient =
+        "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_0 0 0 0 1 1 1 2 1 6 50 0 Bs\n%_0 0 0 1 0 0 0 2 0.5 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\n\
+                   1 (Textures) 1 Pg\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Tiles)\nPc\nPB\n%AI5_EndPalette\n";
+    let data = ai::editing_data(200.0, 100.0, &format!("{dots}{gradient}{palette}"));
+    ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f")
+}
+
+/// `swatch.library.load` of `file` named `name` → its library id.
+fn load_library(s: &mut Session, name: &str, file: &[u8]) -> Value {
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(file), "name": name});
+    s.execute("swatch.library.load", &p).unwrap()["library"].clone()
+}
+
+/// Other Library… on a `.ai` swatch library lists its colors, gradients and pattern swatches in its
+/// order and color groups, and adding the pattern swatch makes a pattern swatch with the pattern's
+/// tile and art in the document, in the library's color group, not the pattern's colors.
+#[test]
+fn a_swatch_library_in_a_ai_file_lists_and_adds_its_pattern_swatches() {
+    let mut s = Session::new();
+    let id = load_library(&mut s, "textures.ai", &textures_library("0 0 0 1 k"));
+    let lib = s.execute("swatch.library.get", &json!({"library": id})).unwrap();
+    let kinds: Vec<(&str, &str, Option<&str>)> =
+        lib["swatches"].as_array().unwrap().iter().map(|w| (w["name"].as_str().unwrap(), w["kind"].as_str().unwrap(), w["group"].as_str())).collect();
+    assert_eq!(kinds, [("White", "color", None), ("Sky", "gradient", None), ("Tiles", "pattern", Some("Textures"))], "{lib}");
+    assert_eq!(lib["swatches"][2]["pattern"], json!("Dots"), "{lib}");
+    // The library panel draws the pattern from the file it came from; a copy of the swatch isn't its own.
+    let (_, library) = crate::cmd::swatchlib::library(&s, id.as_str().unwrap()).unwrap();
+    let tiles = library.iter().find(|w| w.name == "Tiles").unwrap();
+    assert!(crate::cmd::swatchlib::pattern_source(&s, tiles).is_some_and(|d| d.pattern("Dots").is_some()));
+    assert!(crate::cmd::swatchlib::pattern_source(&s, &tiles.clone()).is_none());
+
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let r = s.execute("swatch.library.add", &json!({"library": id, "names": ["Textures"]})).unwrap();
+    assert_eq!(r["added"], json!(["Tiles"]), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let dots = doc.pattern("Dots").expect("the pattern comes with its swatch");
+    assert_eq!((dots.tile.width(), dots.tile.height()), (4.0, 4.0));
+    assert_eq!(dots.art.len(), 1, "{:?}", dots.art);
+    let textures = doc.swatch_groups.iter().find(|g| g.name == "Textures").expect("the color group comes too");
+    let tiles: Vec<_> = textures.swatches.iter().map(|w| (w.name.as_str(), &w.paint)).collect();
+    assert!(matches!(tiles[..], [("Tiles", vectorcraft_color::Paint::Pattern { pattern, .. })] if pattern == "Dots"), "{tiles:?}");
+    // Added again, the swatch the document has is used.
+    let again = s.execute("swatch.library.add", &json!({"library": id, "names": ["Tiles"]})).unwrap();
+    assert_eq!((again["added"].clone(), again["existing"].clone()), (json!([]), json!(["Tiles"])), "{again}");
+}
+
+/// A pattern swatch of a `.ai` library whose pattern paints with a color the library doesn't list
+/// still comes in with that color in its art.
+#[test]
+fn a_pattern_from_a_ai_library_keeps_a_color_the_library_lacks() {
+    let mut s = Session::new();
+    let id = load_library(&mut s, "textures.ai", &textures_library("0 0.5 1 0 k"));
+    let lib = s.execute("swatch.library.get", &json!({"library": id})).unwrap();
+    let names: Vec<&str> = lib["swatches"].as_array().unwrap().iter().map(|w| w["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["White", "Sky", "Tiles"], "the pattern's color isn't listed: {lib}");
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("swatch.library.add", &json!({"library": id, "names": ["Tiles"]})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let art = &doc.pattern("Dots").unwrap().art;
+    let fill = art.first().and_then(|n| n.appearance.fill()).map(|f| f.paint.color());
+    assert_eq!(fill, Some(Some(vectorcraft_color::Color::cmyk(0.0, 0.5, 1.0, 0.0))), "{art:?}");
+    // Copy to User Defined would write a .vcswatches file, which can't hold the pattern swatch: it is
+    // refused, writes nothing and leaves the library loaded.
+    let dir = std::env::temp_dir().join(format!("vc-pattern-copy-{}", std::process::id()));
+    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let e = s.execute("swatch.library.copyToUser", &json!({"library": id})).unwrap_err().to_string();
+    assert!(e.contains("`textures` has pattern swatches"), "{e}");
+    assert!(!dir.exists() || std::fs::read_dir(&dir).unwrap().next().is_none(), "nothing written");
+    assert!(s.execute("swatch.library.get", &json!({"library": id})).is_ok());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A `.ai` file without a palette of its own, and a document with no swatches, are refused as
+/// swatch libraries with a message, not listed as the default swatches or as an empty library. A
+/// damaged `.ai` is refused with the reader's error, and none of them is listed. A library file
+/// with no swatches loads as an empty library.
+#[test]
+fn swatch_library_documents_without_swatches_or_damaged_are_refused() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.edit("Clear", |d, _| {
+        d.swatches.clear();
+        d.swatch_groups.clear();
+        Ok(())
+    })
+    .unwrap();
+    let b64 = s.execute("document.serialize", &json!({})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    let e = s.execute("swatch.library.load", &json!({"dataBase64": b64, "name": "Bare.vectorcraft"})).unwrap_err().to_string();
+    assert!(e.contains("`Bare.vectorcraft` has no swatches of its own"), "{e}");
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &format!("0 0 0 1 k\n{}f\n", ai::rect(10.0, 50.0, 40.0, 90.0))));
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f")), "name": "art.ai"});
+    let e = s.execute("swatch.library.load", &p).unwrap_err().to_string();
+    assert!(e.contains("`art.ai` has no swatches of its own"), "{e}");
+    let damaged = json!({"data": "%PDF-1.4\n%damaged\n", "name": "damaged.ai"});
+    assert!(s.execute("swatch.library.load", &damaged).is_err());
+    let list = s.execute("swatch.library.list", &json!({})).unwrap();
+    assert!(list["libraries"].as_array().unwrap().iter().all(|l| l["category"] != "loaded"), "{list}");
+    // A library file without swatches still loads, as an empty library.
+    let r = s.execute("swatch.library.load", &json!({"data": "GIMP Palette\nName: Empty\n#\n", "name": "Empty.gpl"})).unwrap();
+    assert_eq!(r["count"], json!(0), "{r}");
+}
+
 /// Other Library… on a `.ai` graphic style library (art styles, their list and no layers) gives the
 /// library the styles of its list, in the list's order, not the default styles; the file opens with
 /// them too.
@@ -571,7 +679,24 @@ fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
     assert_eq!(names(&doc.layers), ["Art"], "{r}");
     let mut found = vec![];
     doc.visit_images(|_, im| {
-        let img = image::load_from_memory(&doc.images[&im.key].bytes).unwrap().to_rgb8();
+        let img = craft_image_codecs::decode(&doc.images[&im.key].bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgb8();
         found.push(img.pixels().map(|p| p.0).collect::<Vec<_>>());
     });
     assert_eq!(found, [[[255, 0, 0], [0, 255, 0], [0, 0, 255]]], "{r}");
@@ -589,7 +714,27 @@ fn a_zero_width_stroke_in_the_editing_data_draws_a_hairline() {
         assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
         let v = s.execute("document.export", &json!({"format": "png", "background": "transparent"})).unwrap();
         let png = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
-        image::load_from_memory(&png).unwrap().to_rgba8().pixels().filter(|p| p.0[3] > 0).count()
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .pixels()
+            .filter(|p| p.0[3] > 0)
+            .count()
     };
     assert!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nS\n") > 0, "the hairline draws");
     assert_eq!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nN\n"), 0, "the unstroked path draws nothing");
@@ -762,7 +907,7 @@ fn unread_pdf_part(e: &str) -> String {
 
 /// #4366: a `.ai`, or a PDF saved with the editing data, whose PDF part can't be read opens from
 /// its editing data, with a first note saying why. Pages picked, layers off or the editing data
-/// off keep the error, and so does editing data that can't be read.
+/// off keep the error. Editing data that can't be read keeps it too, followed by why.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     let mut s = Session::new();
@@ -780,8 +925,23 @@ fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     }
     for (name, file) in refused_files(b"%AI12_CompressedData not zlib", ai::page_pdf()) {
         let plain = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
-        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), plain, "{name}");
+        let both = format!("{plain}; its editing data couldn't be read either (its zlib compression is damaged)");
+        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), both, "{name}");
+        for p in [json!({"pages": "1"}), json!({"layers": false})] {
+            assert_eq!(open(&mut s, name, &file, p.clone()).unwrap_err().to_string(), plain, "{name}: {p}");
+        }
     }
+}
+
+/// #4366: editing data stored in a form the reader doesn't take, beside a PDF part that can't be
+/// read, is named in the error.
+#[test]
+fn the_error_says_why_the_editing_data_couldnt_be_read() {
+    let mut s = Session::new();
+    let file = ai::ai_with_private_streams(&compressed(&ai::sample_data()), ai::page_pdf(), REFUSED_CONTENT, "/Filter /Bogus ");
+    let plain = open(&mut s, "art.ai", &file, json!({"editingData": false})).unwrap_err().to_string();
+    let e = open(&mut s, "art.ai", &file, json!({})).unwrap_err().to_string();
+    assert_eq!(e, format!("{plain}; its editing data couldn't be read either (it is stored in a form that isn't read)"));
 }
 
 /// A file saved in units of 10 points (`/UserUnit 10`, as in

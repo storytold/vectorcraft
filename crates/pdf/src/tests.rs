@@ -20,6 +20,7 @@ mod dashalign;
 mod diamond;
 mod editing;
 mod encrypt;
+mod file_fonts;
 mod file_info;
 mod focal;
 mod fx;
@@ -38,7 +39,6 @@ mod mesh_export;
 mod output;
 mod pdf13;
 mod pdfx;
-mod presets;
 mod print;
 mod printadvanced;
 mod reader_compat;
@@ -98,7 +98,7 @@ fn uncompressed(d: &Document) -> String {
 }
 
 fn page_count(bytes: &[u8]) -> usize {
-    craft_pdf::syntax::Pdf::new(bytes.to_vec()).expect("parse").pages().len()
+    craft::pdf::syntax::Pdf::new(bytes.to_vec()).expect("parse").pages().len()
 }
 
 #[test]
@@ -150,7 +150,7 @@ fn one_page_per_artboard_with_sizes() {
         guide_label: None,
     });
     let bytes = export(&d, &PdfOptions::default()).unwrap();
-    let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
     let sizes: Vec<(f32, f32)> = pdf.pages().iter().map(|p| p.render_dimensions()).collect();
     assert_eq!(sizes, vec![(200.0, 100.0), (100.0, 400.0), (612.0, 792.0)]);
 }
@@ -171,7 +171,7 @@ fn artboard_range_and_bad_index() {
         guide_label: None,
     });
     let bytes = export(&d, &PdfOptions { artboards: Some(vec![1]), ..Default::default() }).unwrap();
-    let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
     assert_eq!(pdf.pages().len(), 1);
     assert_eq!(pdf.pages()[0].render_dimensions(), (100.0, 400.0));
     assert_eq!(export(&d, &PdfOptions { artboards: Some(vec![5]), ..Default::default() }), Err(PdfError::BadArtboard(5)));
@@ -221,6 +221,60 @@ fn an_instance_whose_art_reaches_the_page_is_written() {
     add(&mut d, group);
     let fills: Vec<[u8; 4]> = leaves(&roundtrip(&d)).iter().filter_map(|n| Some(n.appearance.fill_paint().color()?.to_rgba8(1.0))).collect();
     assert!(fills.contains(&[255, 0, 0, 255]) && fills.contains(&[0, 0, 255, 255]), "{fills:?}");
+}
+
+/// 2,000 symbols, then two named "Mark" (a red square, then a blue one), with an instance of
+/// "Mark" at (25, 25) and, in a knockout group above a green square, a half-opaque one at (70, 70).
+/// With `second` the blue square's symbol is named that instead.
+fn marks(second: &str) -> Document {
+    let mut d = doc(100.0, 100.0);
+    for i in 0..2000 {
+        let art = rect_node(Rect::new(0.0, 0.0, 1.0, 1.0), Color::BLACK);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+    }
+    for (name, color) in [("Mark", Color::rgb(1.0, 0.0, 0.0)), (second, Color::rgb(0.0, 0.0, 1.0))] {
+        let art = rect_node(Rect::new(-10.0, -10.0, 10.0, 10.0), color);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((25.0, 25.0)) }));
+    let green = rect_node(Rect::new(60.0, 60.0, 80.0, 80.0), Color::rgb(0.0, 1.0, 0.0));
+    let mut above = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((70.0, 70.0)) });
+    above.opacity = 0.5;
+    let mut group = Node::group(NodeId(0), vec![Arc::new(green), Arc::new(above)]);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    d
+}
+
+/// Instances among many symbols are written with the first symbol of their name, the same bytes
+/// as when no other symbol has that name.
+#[test]
+fn instances_are_written_with_the_first_symbol_of_their_name() {
+    let d = marks("Mark");
+    assert!(uncompressed(&d) == uncompressed(&marks("Other")), "the files differ");
+    let fills: Vec<[u8; 4]> = leaves(&roundtrip(&d)).iter().filter_map(|n| Some(n.appearance.fill_paint().color()?.to_rgba8(1.0))).collect();
+    assert!(fills.contains(&[255, 0, 0, 255]) && !fills.contains(&[0, 0, 255, 255]), "{fills:?}");
+}
+
+/// An export of 300 instances with drop shadows, among 2,000 symbols, reads the symbol list once
+/// to find their symbols.
+#[test]
+fn an_export_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 5.0, f64::from(i / 20) * 5.0)) * Affine::scale(0.2);
+        let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        add(&mut d, n);
+    }
+    let before = vectorcraft_doc::symbols_read();
+    export(&d, &PdfOptions::default()).expect("export");
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
 }
 
 #[test]
@@ -834,7 +888,41 @@ fn tiny_png() -> Vec<u8> {
         *p = image::Rgba([if x < 2 { 255 } else { 0 }, 0, 0, 255]);
     }
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -859,7 +947,24 @@ fn image_roundtrip() {
     assert_eq!((im.width, im.height), (4, 2));
     assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(20.0, 30.0, 60.0, 50.0), 0.01), "{:?}", l[0].geometric_bounds());
     let blob = &out.images[&im.key];
-    let decoded = image::load_from_memory(&blob.bytes).unwrap().to_rgba8();
+    let decoded = craft_image_codecs::decode(&blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(decoded.get_pixel(0, 0).0, [255, 0, 0, 255]);
     assert_eq!(decoded.get_pixel(3, 0).0, [0, 0, 0, 255]);
 }
@@ -891,9 +996,42 @@ fn a_pixelated_image_asks_viewers_not_to_smooth_it() {
 
 /// A 4 × 2 red image encoded as `format`, cut short `keep` bytes past the first `tag` in it: its
 /// header reads, and its pixel data can't be decoded.
-fn cut_image(format: image::ImageFormat, tag: &[u8], keep: usize) -> Vec<u8> {
+fn cut_image(format: craft_image_codecs::Format, tag: &[u8], keep: usize) -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, format, &craft_image_codecs::EncodeOptions::default()).map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     let at = out.windows(tag.len()).position(|w| w == tag).expect("tag");
     out.truncate(at + tag.len() + keep);
     out
@@ -908,10 +1046,10 @@ fn an_image_whose_pixels_cant_be_decoded_is_left_out_with_one_note() {
     let mut d = doc(200.0, 300.0);
     let blobs = [
         ("good", ImageBlob::new("image/png", tiny_png())),
-        ("png", ImageBlob::new("image/png", cut_image(image::ImageFormat::Png, b"IDAT", 4))),
-        ("png2", ImageBlob::new("image/png", cut_image(image::ImageFormat::Png, b"IDAT", 6))),
-        ("gif", ImageBlob::new("image/gif", cut_image(image::ImageFormat::Gif, b"GIF89a", 7))),
-        ("webp", ImageBlob::new("image/webp", cut_image(image::ImageFormat::WebP, b"VP8L", 9))),
+        ("png", ImageBlob::new("image/png", cut_image(craft_image_codecs::Format::Png, b"IDAT", 4))),
+        ("png2", ImageBlob::new("image/png", cut_image(craft_image_codecs::Format::Png, b"IDAT", 6))),
+        ("gif", ImageBlob::new("image/gif", cut_image(craft_image_codecs::Format::Gif, b"GIF89a", 7))),
+        ("webp", ImageBlob::new("image/webp", cut_image(craft_image_codecs::Format::WebP, b"VP8L", 9))),
     ];
     for (i, (key, blob)) in blobs.into_iter().enumerate() {
         d.images.insert(key.into(), blob);
@@ -1309,6 +1447,41 @@ fn empty_and_populated_file_info_preserve_key_presence() {
     }
     assert!(s.contains("Synthetic title") && s.contains("Test author") && s.contains("test keyword"));
     assert!(s.contains("/ViewerPreferences<</DisplayDocTitle true>>"), "viewers should show the document title (#3646)");
+}
+
+/// The text of the `/Lang` entry of the catalog of `pdf` (a literal string), if any.
+fn catalog_lang(pdf: &[u8]) -> Option<String> {
+    let xref = crate::patch::Xref::read(pdf).expect("a cross-reference table");
+    let root = xref.trailer_ref(pdf, b"/Root").expect("a catalog");
+    let (start, end) = xref.dict(pdf, root).expect("the catalog's dictionary");
+    let catalog = String::from_utf8_lossy(&pdf[start..end]).into_owned();
+    let at = catalog.find("/Lang")? + "/Lang".len();
+    let rest = catalog[at..].trim_start().strip_prefix('(').expect("a literal string");
+    Some(rest[..rest.find(')').expect("a closed string")].to_string())
+}
+
+/// The catalog gives the document language chosen in Document Setup as its BCP 47 tag, in
+/// exported and printed PDFs, and the XMP packet says it too (#3644).
+#[test]
+fn the_catalog_gives_the_document_language() {
+    let mut d = doc(100.0, 100.0);
+    for (language, tag) in [(None, "en-US"), (Some("French"), "fr"), (Some("German: Swiss"), "de-CH")] {
+        if let Some(language) = language {
+            d.setup.language = language.into();
+        }
+        for opts in [PdfOptions::uncompressed(), PdfOptions::default()] {
+            let bytes = export(&d, &opts).unwrap();
+            assert_eq!(catalog_lang(&bytes).as_deref(), Some(tag), "{language:?}");
+        }
+        // Print to PDF writes its file with the same writer.
+        let printed = print(&d, &PrintOptions { created: Some(1_700_000_000), ..Default::default() }).unwrap();
+        assert_eq!(catalog_lang(&printed.bytes).as_deref(), Some(tag), "{language:?}: printed");
+        let s = uncompressed(&d);
+        assert!(s.contains(&format!("<dc:language><rdf:Bag><rdf:li>{tag}</rdf:li></rdf:Bag></dc:language>")), "{language:?}: {s}");
+    }
+    // A language without a tag (from a file) writes none rather than a guess.
+    d.setup.language = "Klingon".into();
+    assert_eq!(catalog_lang(&export(&d, &PdfOptions::uncompressed()).unwrap()), None);
 }
 
 /// A function or colour space built on itself is refused before the interpreter builds it (by

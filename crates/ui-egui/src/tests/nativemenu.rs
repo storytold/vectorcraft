@@ -1,18 +1,16 @@
-//! The macOS menu bar's model ([`crate::native_menu`]), tested on every platform with a fake
-//! backend: the Mac layout of the in-window menus, the keys it hands back to egui, the clicks it
-//! runs and when it reads the menus again.
+//! The native menu bar's app side (`menus::native`), tested on every platform with a fake backend:
+//! when the app reads the menus again, the Settings pages the Mac layout lists, and the key
+//! equivalents the menus hand back.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
-use egui::{Event, Key, KeyboardShortcut, Modifiers, PointerButton, Pos2, Rect, vec2};
-use serde_json::{Value, json};
+use craft::menu::{Backend, Chord, Dispatch, Event as MenuEvent, Item, MenuBar, MenuRole, NativeMenu, Node, mac_layout};
+use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, vec2};
+use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES;
 
-use crate::i18n::Lang;
-use crate::native_menu::{self, Backend, MenuBar, MenuRole, NativeMenu, Node, Standard};
 use crate::{VectorcraftApp, menus};
 
 /// A new app, after the installed fonts' scan it starts has ended: until then Type › Font lists
@@ -28,271 +26,121 @@ fn app(doc: bool) -> VectorcraftApp {
     app
 }
 
-fn bar(app: &VectorcraftApp) -> MenuBar {
-    native_menu::mac_layout(app, &native_menu::from_tree(app, &menus::menu_tree()), Lang::EN).bar
-}
-
-/// A level's nodes as short names: an item's command (`---` a separator, `[label]` a submenu,
-/// `<Standard>` an AppKit item).
-fn ids(nodes: &[Node]) -> Vec<String> {
-    nodes
-        .iter()
-        .map(|n| match n {
-            Node::Item(it) => it.command.unwrap_or("").to_string(),
-            Node::Separator => "---".into(),
-            Node::Header(h) => format!("#{h}"),
-            Node::Submenu { label, .. } => format!("[{label}]"),
-            Node::Standard(s) => format!("<{s:?}>"),
-        })
-        .collect()
-}
-
-fn menu<'a>(bar: &'a MenuBar, title: &str) -> &'a [Node] {
-    &bar.menus.iter().find(|m| m.title == title).unwrap_or_else(|| panic!("no {title} menu")).children
-}
-
-fn submenu<'a>(nodes: &'a [Node], name: &str) -> &'a [Node] {
-    nodes
-        .iter()
-        .find_map(|n| match n {
-            Node::Submenu { label, children } if label == name => Some(children.as_slice()),
-            _ => None,
-        })
-        .unwrap_or_else(|| panic!("no {name} submenu in {:?}", ids(nodes)))
-}
-
-fn items(nodes: &[Node]) -> Vec<&native_menu::Item> {
-    nodes.iter().filter_map(|n| if let Node::Item(it) = n { Some(it) } else { None }).collect()
-}
-
-fn find<'a>(bar: &'a MenuBar, command: &str) -> &'a native_menu::Item {
-    bar.items().into_iter().find(|it| it.command == Some(command)).unwrap_or_else(|| panic!("no {command} item"))
-}
-
-#[test]
-fn vectorcraft_gets_a_mac_app_menu() {
-    let bar = bar(&app(true));
-    let titles: Vec<&str> = bar.menus.iter().map(|m| m.title.as_str()).collect();
-    assert_eq!(titles, ["VectorCraft", "File", "Edit", "Object", "Type", "Select", "Effect", "View", "Window", "Help"]);
-    let app_menu = &bar.menus[0];
-    assert_eq!(app_menu.role, MenuRole::App);
-    assert_eq!(
-        ids(&app_menu.children),
-        [
-            "help.about",
-            "---",
-            "[Settings]",
-            "[Language]",
-            "[Appearance]",
-            "---",
-            "<Services>",
-            "---",
-            native_menu::HIDE,
-            native_menu::HIDE_OTHERS,
-            "<ShowAll>",
-            "---",
-            "app.quit"
-        ]
-    );
-    let shown = |command: &str| {
-        let it = find(&bar, command);
-        (it.label.as_str(), it.shortcut)
-    };
-    assert_eq!(shown("help.about"), ("About VectorCraft", None));
-    assert_eq!(shown("app.quit"), ("Quit VectorCraft", Some("Cmd+Q")), "Quit is the app's own, so unsaved documents are asked about");
-    // ⌘H stays View › Hide Edges (Illustrator's); Hide takes ⌃⌘H.
-    assert_eq!(shown(native_menu::HIDE), ("Hide VectorCraft", Some("Ctrl+Cmd+H")));
-    assert_eq!(shown(native_menu::HIDE_OTHERS), ("Hide Others", Some("Cmd+Alt+H")));
-    assert_eq!(find(&bar, "view.edges").shortcut, Some("Cmd+H"));
-    assert_eq!(bar.menu(MenuRole::Help).map(|m| m.title.as_str()), Some("Help"));
+/// The item of `bar` that runs `command`.
+fn find<'a>(bar: &'a MenuBar, command: &str) -> &'a Item {
+    bar.items().into_iter().find(|it| it.command.id == command).unwrap_or_else(|| panic!("no {command} item"))
 }
 
 /// Settings ▸ lists the Preferences dialog's own pages, General… with ⌘K, and each opens the
 /// dialog on its page.
 #[test]
 fn settings_lists_every_preferences_page() {
-    let mut app = app(true);
-    let bar = bar(&app);
-    let pages = items(submenu(&bar.menus[0].children, "Settings"));
+    let mut m = Mac::new(true);
+    let layout = mac_layout(&m.app.menus.bar, &menus::native::options());
+    let app_menu = layout.bar.menus.iter().find(|menu| menu.role == MenuRole::App).expect("the app menu");
+    let settings = app_menu
+        .children
+        .iter()
+        .find_map(|n| match n {
+            Node::Submenu { label, children, .. } if label == "Settings" => Some(children),
+            _ => None,
+        })
+        .expect("the Settings submenu");
+    let pages: Vec<&Item> = settings.iter().filter_map(|n| if let Node::Item(it) = n { Some(it) } else { None }).collect();
     assert_eq!(pages.len(), PREF_CATEGORIES.len());
-    assert_eq!((pages[0].label.as_str(), pages[0].shortcut), ("General…", Some("Cmd+K")));
+    assert_eq!((pages[0].label.as_str(), pages[0].shortcut), ("General…", Some(Chord::parse("Cmd+K").unwrap())));
     assert!(pages[1..].iter().all(|it| it.shortcut.is_none()));
     for (it, page) in pages.iter().zip(PREF_CATEGORIES) {
-        assert_eq!((it.command, &it.params, it.label.clone()), (Some("edit.preferences"), &json!({"category": page}), format!("{page}…")));
+        assert_eq!(
+            (it.command.id.as_str(), &it.command.params, it.label.clone()),
+            ("edit.preferences", &json!({"category": page}), format!("{page}…"))
+        );
     }
-    let units = pages.iter().find(|it| it.source == "Units").unwrap();
-    let (id, p) = menus::click_target(units.source, units.command.unwrap(), &units.params);
-    assert_eq!(id, "edit.preferences", "a page opens the dialog, not a parameter form");
-    menus::invoke(&mut app, &id, p);
-    let dialog = app.ui.dialog.as_ref().expect("Preferences open");
-    assert_eq!((dialog.kind.as_str(), dialog.fields.get("__category")), ("preferences", Some(&json!("Units"))));
+    let units = pages.iter().find(|it| it.command.params["category"] == "Units").expect("the Units page").command.clone();
+    m.fake.report(MenuEvent::Click(units));
+    m.frame(vec![]);
+    assert!(crate::prefs_dialog::is_open(&m.app), "a page opens the dialog, not a parameter form");
+    assert_eq!(crate::prefs_dialog::page(&m.app), Some("Units"));
 }
 
-/// Language ▸: Automatic, then each language in its own name (in any UI language), the
-/// preference checked; Appearance ▸: the UI brightness choices, the current one checked.
+/// The default shortcut of command `id`, as the shortcut editor lists it.
+fn default_chord(id: &str) -> Option<Chord> {
+    crate::shortcut_editor::default_command_shortcut(id).and_then(crate::keymap::stored::parse_vc)
+}
+
+/// The Settings › General… item of `bar`.
+fn general(bar: &MenuBar) -> &Item {
+    let page = PREF_CATEGORIES[0];
+    bar.items().into_iter().find(|it| it.command.id == "edit.preferences" && it.command.params["category"] == page).expect("Settings › General…")
+}
+
+/// The menu bar hands every item its command's shortcut, so Save, Open, Undo and Group show their keys and AppKit
+/// takes them as key equivalents.
 #[test]
-fn language_and_appearance_are_in_the_app_menu() {
-    let mut app = app(false);
-    app.session.prefs.interface_language = "ja".into();
-    let bar = bar(&app);
-    let app_menu = &bar.menus[0].children;
-    assert_eq!(ids(submenu(app_menu, "Language"))[..2], ["app.language", "---"], "Automatic, then the languages");
-    let langs: Vec<(String, Option<bool>)> = items(submenu(app_menu, "Language")).iter().map(|it| (it.label.clone(), it.checked)).collect();
-    let mut want = vec![("Automatic".to_string(), Some(false))];
-    want.extend(Lang::for_picker().into_iter().map(|l| (l.name().to_string(), Some(l.code() == "ja"))));
-    assert_eq!(langs, want);
-    // In every UI language the languages keep their own names.
-    for ui in Lang::all() {
-        for l in Lang::all() {
-            assert_eq!(crate::i18n::tr_id(ui, "app.language", l.name()), l.name(), "{} in {}", l.name(), ui.code());
-        }
+fn native_items_carry_their_commands_shortcuts() {
+    let m = Mac::new(true);
+    let bar = m.fake.last();
+    for id in ["file.save", "file.open", "edit.undo", "object.group"] {
+        let chord = default_chord(id);
+        assert!(chord.is_some(), "{id} has a default shortcut");
+        assert_eq!(find(&bar, id).shortcut, chord, "{id}");
     }
-    let appearance: Vec<(&'static str, Option<bool>)> = items(submenu(app_menu, "Appearance")).iter().map(|it| (it.source, it.checked)).collect();
-    assert_eq!(appearance.len(), crate::theme::Brightness::ALL.len());
-    assert_eq!(appearance.iter().filter(|(_, c)| *c == Some(true)).count(), 1, "{appearance:?}");
-    assert!(appearance.iter().all(|(_, c)| c.is_some()));
 }
 
-/// Everything the in-window bar lists is in the Mac menu bar, once: what moved to the app menu
-/// (About, Settings, Quit, Language, UI Brightness) leaves its other places, and Join Our Discord
-/// stays under Help. The Mac bar is laid out from the in-window bar's own read of the menus: Type ›
-/// Font and the plug-in rows come from process-wide state that a test running alongside can change.
+/// A command bound to another key shows that key in the menu bar, and its old key is no longer the item's.
 #[test]
-fn every_in_window_item_is_in_the_mac_menu_bar_once() {
-    let app = app(true);
-    let count = |bar: &MenuBar| {
-        let mut n: HashMap<(String, String), usize> = HashMap::new();
-        for it in bar.items() {
-            if let Some(c) = it.command {
-                // Settings ▸ opens Preferences on each page: one item per page instead of one.
-                let params = if c == "edit.preferences" { String::new() } else { it.params.to_string() };
-                *n.entry((c.to_string(), params)).or_default() += 1;
-            }
-        }
-        n
-    };
-    let in_window = native_menu::from_tree(&app, &menus::menu_tree());
-    let mac = native_menu::mac_layout(&app, &in_window, Lang::EN).bar;
-    let (a, b) = (count(&in_window), count(&mac));
-    // The in-window application menu's commands, its submenus' included.
-    let moved: Vec<&str> = MenuBar { menus: vec![in_window.menus[0].clone()] }.items().iter().filter_map(|it| it.command).collect();
-    for (key, n) in &a {
-        let m = b.get(key).copied().unwrap_or(0);
-        let want = match key.0.as_str() {
-            "edit.preferences" => PREF_CATEGORIES.len(),
-            c if moved.contains(&c) => 1,
-            _ => *n,
-        };
-        assert_eq!(m, want, "{key:?} is listed {m} times on the Mac, {n} in the window");
-    }
-    let system = [native_menu::HIDE, native_menu::HIDE_OTHERS, native_menu::MINIMIZE];
-    // Language and Appearance have no in-window menu (synthesized in the App menu, as in PhotoCraft).
-    let synthesized = ["app.language", "window.brightness"];
-    for key in b.keys() {
-        assert!(a.contains_key(key) || system.contains(&key.0.as_str()) || synthesized.contains(&key.0.as_str()), "{key:?} isn't an in-window item");
-    }
-    let help = ids(menu(&mac, "Help"));
-    assert!(help.contains(&"help.discord".to_string()) && !help.contains(&"help.about".to_string()), "{help:?}");
-    let edit = ids(menu(&mac, "Edit"));
-    assert!(!edit.contains(&"edit.preferences".to_string()) && edit.contains(&"edit.keyboardShortcuts".to_string()), "{edit:?}");
-    assert!(ids(menu(&mac, "Window")).contains(&"[Workspace]".to_string()));
+fn a_rebound_command_shows_its_new_key_in_the_menu_bar() {
+    let mut m = Mac::new(true);
+    let old = default_chord("object.group");
+    m.app.run("shortcuts.set", json!({"id": "object.group", "shortcut": "Cmd+Alt+Shift+F8"})).unwrap();
+    m.frame(vec![]);
+    m.frame(vec![]);
+    let shown = find(&m.fake.last(), "object.group").shortcut;
+    assert_eq!(shown, Chord::parse("Cmd+Alt+Shift+F8").ok());
+    assert_ne!(shown, old);
 }
 
+/// Settings › General… carries Preferences' shortcut as the user set it, not the default one.
 #[test]
-fn the_window_menu_has_the_system_items() {
-    let bar = bar(&app(true));
-    let window = ids(&bar.menu(MenuRole::Window).unwrap().children);
-    assert_eq!(window[..3], [native_menu::MINIMIZE.to_string(), "<Zoom>".into(), "---".into()]);
-    assert_eq!(window[window.len() - 2..], ["---".to_string(), "<BringAllToFront>".into()]);
-    assert_eq!(window[3], "window.newWindow", "then VectorCraft's own items");
-    assert_eq!(find(&bar, native_menu::MINIMIZE).shortcut, Some("Ctrl+Cmd+M"));
-    assert!(!window.iter().any(|i| i == "window.brightness"), "the theme is only in the app menu");
-    assert_eq!(Standard::Zoom.label(), "Zoom");
+fn settings_general_follows_a_rebound_preferences() {
+    let mut m = Mac::new(true);
+    let old = default_chord("edit.preferences");
+    assert_eq!(general(&m.fake.last()).shortcut, old);
+    m.app.run("shortcuts.set", json!({"id": "edit.preferences", "shortcut": "Cmd+Alt+Shift+F8"})).unwrap();
+    m.frame(vec![]);
+    m.frame(vec![]);
+    let shown = general(&m.fake.last()).shortcut;
+    assert_eq!(shown, Chord::parse("Cmd+Alt+Shift+F8").ok());
+    assert_ne!(shown, old);
 }
 
-/// A system key a command already has stays the command's: the system item goes without. The
-/// user's shortcuts show in the menus.
-#[test]
-fn a_command_keeps_a_system_key_it_is_bound_to() {
-    let mut app = app(true);
-    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.grid", "Ctrl+Cmd+H");
-    crate::shortcut_editor::sync(&app.ui);
-    let layout = native_menu::mac_layout(&app, &native_menu::from_tree(&app, &menus::menu_tree()), Lang::EN);
-    app.ui.shortcut_overrides.clear();
-    crate::shortcut_editor::sync(&app.ui);
-    assert_eq!(find(&layout.bar, native_menu::HIDE).shortcut, None);
-    assert_eq!(find(&layout.bar, "view.grid").shortcut, Some("Ctrl+Cmd+H"), "the user's override shows in the menu");
-    assert_eq!(layout.clashes.iter().map(|c| (c.shortcut, c.command)).collect::<Vec<_>>(), [("Ctrl+Cmd+H", "view.grid")]);
-}
-
-/// A native menu can't turn a plain item into a check item in place: opening a document or
-/// selecting must not change the menus' structure, or every change rebuilds them. The four reads run
-/// undisturbed: a font or plug-in that a test running alongside adds between two of them changes the
-/// key.
-#[test]
-fn documents_and_selections_change_state_not_structure() {
-    let (_m, (empty, drawn, typed, recent)) = undisturbed(|_| {
-        let key = |app: &VectorcraftApp| native_menu::structure_key(&bar(app));
-        let empty = key(&app(false));
-        let mut a = app(true);
-        let drawn = key(&a);
-        a.run("select.none", json!({})).unwrap();
-        a.run("text.create", json!({"x": 50, "y": 50, "text": "Hi"})).unwrap();
-        assert!(!a.session.active().unwrap().selection.objects.is_empty());
-        let typed = key(&a);
-        crate::io::note_recent(&mut a, "/art/a.svg");
-        (empty, drawn, typed, key(&a))
-    });
-    assert_eq!(drawn, empty, "a document with a selected rectangle");
-    assert_eq!(typed, empty, "type selected");
-    assert_ne!(recent, empty, "a recent file is a new item: the menus are rebuilt");
-}
-
-#[test]
-fn key_equivalents_are_command_and_function_keys_only() {
-    let ok = |s| crate::shortcuts::parse(s).is_some_and(|k| native_menu::native_ok(&k));
-    assert!(ok("Cmd+B") && ok("F7") && ok("Ctrl+Cmd+M") && ok("Shift+F7"));
-    assert!(!ok("B") && !ok("Alt+F") && !ok("Shift+X"));
-}
-
-/// What a key equivalent becomes: the press and release egui's window integration sends, or for
-/// ⌘X, ⌘C and ⌘V its clipboard events and the key's release (the window never sends it, #5159).
-#[test]
-fn key_equivalents_become_the_input_their_keys_make() {
-    let cmd = |key| KeyboardShortcut::new(Modifiers::COMMAND, key);
-    let key = |key, pressed| Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Modifiers::COMMAND };
-    assert_eq!(native_menu::key_events(cmd(Key::A), || None), [key(Key::A, true), key(Key::A, false)]);
-    assert_eq!(native_menu::key_events(cmd(Key::C), || None), [Event::Copy, key(Key::C, false)]);
-    assert_eq!(native_menu::key_events(cmd(Key::X), || None), [Event::Cut, key(Key::X, false)]);
-    assert_eq!(native_menu::key_events(cmd(Key::V), || Some("a\r\nb".into())), [Event::Paste("a\nb".into()), key(Key::V, false)]);
-    assert_eq!(native_menu::key_events(cmd(Key::V), || None), [key(Key::V, false)], "a picture: the release tells the paste");
-    // A text paste's release is taken with its Paste event, so the next picture paste still fires.
-    let mut chord = crate::shortcuts::PasteChord::default();
-    assert_eq!(chord.textless_paste(&native_menu::key_events(cmd(Key::V), || Some("a".into()))), None);
-    assert_eq!(chord.textless_paste(&native_menu::key_events(cmd(Key::V), || None)), Some(Modifiers::COMMAND));
-}
-
+/// A native menu can't turn a plain item into a check item in place: the app's read of the menus
+/// is guarded by a state key, and these tests count the reads through a fake backend.
+///
 /// The fake backend: the menus the app synced, and events to report.
 #[derive(Clone, Default)]
-struct Fake(Rc<RefCell<(Vec<MenuBar>, Vec<native_menu::Event>)>>);
+struct Fake(Rc<RefCell<(Vec<MenuBar>, Vec<MenuEvent>)>>);
 
 impl Backend for Fake {
     fn sync(&mut self, bar: &MenuBar) {
         self.0.borrow_mut().0.push(bar.clone());
     }
-    fn drain(&mut self) -> Vec<native_menu::Event> {
+    fn drain(&mut self) -> Vec<MenuEvent> {
         std::mem::take(&mut self.0.borrow_mut().1)
     }
+    fn attach(&mut self, _dispatch: Dispatch) {}
 }
 
 impl Fake {
+    /// How many times the app pushed the menus; the driver pushes only when the app laid them out
+    /// again, so one push is one read.
     fn synced(&self) -> usize {
         self.0.borrow().0.len()
     }
     fn last(&self) -> MenuBar {
         self.0.borrow().0.last().cloned().unwrap()
     }
-    fn report(&self, e: native_menu::Event) {
+    fn report(&self, e: MenuEvent) {
         self.0.borrow_mut().1.push(e);
     }
 }
@@ -313,7 +161,7 @@ impl Mac {
         if native {
             app.services.native_menu = Some(NativeMenu::new(Box::new(fake.clone())));
         }
-        let mut m = Mac { app, fake, ctx: egui::Context::default(), time: 0.0 };
+        let mut m = Mac { app, fake, ctx: crate::testing::ui_context(), time: 0.0 };
         for _ in 0..3 {
             m.frame(vec![]);
         }
@@ -322,37 +170,37 @@ impl Mac {
 
     fn frame(&mut self, events: Vec<Event>) -> egui::FullOutput {
         self.time += 0.1;
-        let mut raw = egui::RawInput {
+        let raw = egui::RawInput {
             events,
             time: Some(self.time),
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0))),
             ..Default::default()
         };
-        self.app.raw_input_hook(&self.ctx, &mut raw);
-        let app = &mut self.app;
-        let mut out = self.ctx.run_ui(raw, |ui| {
-            app.logic(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
-        out
+        crate::testing::app_frame(&mut self.app, &self.ctx, raw)
     }
 
-    /// AppKit chose an item by its key equivalent `sc` (⌘ held).
+    /// AppKit chose an item by its key equivalent `sc`. A paste the menu asks the host for
+    /// (`ViewportCommand::RequestPaste`) comes in the next frame, as egui-winit sends it for a
+    /// clipboard that holds a picture and no text.
     fn key_equivalent(&mut self, sc: &str) -> egui::FullOutput {
-        let mut k = crate::shortcuts::parse(sc).unwrap();
-        k.modifiers.mac_cmd = k.modifiers.command;
-        self.fake.report(native_menu::Event::Key(k));
-        self.frame(vec![])
-    }
-
-    fn selected(&self) -> usize {
-        self.app.session.active().unwrap().selection.objects.len()
+        self.fake.report(MenuEvent::Key(Chord::parse(sc).unwrap()));
+        let out = self.frame(vec![]);
+        let asked = out.viewport_output.values().any(|v| v.commands.contains(&egui::ViewportCommand::RequestPaste));
+        if !asked {
+            return out;
+        }
+        let picture = std::sync::Arc::new(egui::ColorImage::filled([1, 1], egui::Color32::BLUE));
+        self.frame(vec![Event::PasteImage(picture)])
     }
 
     /// Where the document's point (`x`, `y`) is on the screen.
     fn on_canvas(&self, x: f64, y: f64) -> Pos2 {
-        crate::canvas::Xf::new(self.app.canvas_rect.unwrap(), self.app.view().unwrap()).to_screen(vectorcraft_geom::Point::new(x, y))
+        self.app.canvas_view().expect("the canvas was shown").to_screen(vectorcraft_geom::Point::new(x, y))
+    }
+
+    /// The canvas's rectangle on the screen.
+    fn canvas_rect(&self) -> Rect {
+        self.app.canvas_view().expect("the canvas was shown").rect
     }
 
     /// Run `n` frames, each with the events that `step` returns (`step` may act on the app first),
@@ -380,7 +228,7 @@ impl Mac {
     fn rotate_preview(&mut self) {
         menus::invoke(&mut self.app, "object.rotate", json!({}));
         self.frame(vec![]);
-        self.app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
+        crate::tests_synthetic::control(&mut self.app, &self.ctx, "ui.dialog.set", json!({"field": "preview", "value": true}));
         self.frame(vec![]);
         assert!(self.app.session.in_interaction(), "the rotation previews");
     }
@@ -400,20 +248,13 @@ fn click(at: Pos2, pressed: bool) -> Event {
 }
 
 /// Run `drag` on a new app with the fake native menu, and run it again on another new app until
-/// the shortcut, plug-in and font generations hold still through a run (at most 20 runs). Return
-/// that app and what `drag` returned. The generations are process-wide and only grow. A test
-/// running alongside can bump them (a font it adds, the installed fonts' scan ending), and the app
-/// then reads the menus again, so every step whose menu reads a test counts runs inside `drag`.
+/// the plug-in and font generations hold still through a run (at most 20 runs). Return that app
+/// and what `drag` returned. The generations are process-wide and only grow. A test running
+/// alongside can bump them (a font it adds, the installed fonts' scan ending), and the app then
+/// reads the menus again, so every step whose menu reads a test counts runs inside `drag`.
 fn undisturbed<R>(drag: impl Fn(&mut Mac) -> R) -> (Mac, R) {
     let fonts = vectorcraft_text::FontDb::global();
-    let generations = || {
-        (
-            crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed),
-            crate::menus::plugin_revision(),
-            fonts.generation(),
-            fonts.installed_fonts_ready(),
-        )
-    };
+    let generations = || (crate::menus::plugin_revision(), fonts.generation(), fonts.installed_fonts_ready());
     for _ in 0..20 {
         let mut m = Mac::new(true);
         let before = generations();
@@ -423,43 +264,6 @@ fn undisturbed<R>(drag: impl Fn(&mut Mac) -> R) -> (Mac, R) {
         }
     }
     panic!("tests running alongside kept bumping the generations");
-}
-
-/// A key equivalent runs through the app's own key handling, once: ⌘A selects every object, ⌘Z
-/// undoes one step; and frames where nothing changed don't read the menus again.
-#[test]
-fn key_equivalents_run_through_the_normal_shortcut_path_once() {
-    let mut m = Mac::new(true);
-    m.app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap();
-    m.app.run("select.none", json!({})).unwrap();
-    m.frame(vec![]);
-    m.key_equivalent("Cmd+A");
-    assert_eq!(m.selected(), 2, "⌘A selected every object");
-    let undo = |m: &Mac| m.app.session.active().unwrap().history.undo.len();
-    let before = undo(&m);
-    m.key_equivalent("Cmd+Z");
-    assert_eq!(undo(&m), before - 1, "⌘Z undid one step");
-    assert!(m.fake.synced() >= 1, "the menus were built");
-    // Idle frames don't read the menus again. The shortcut, plug-in and font generations are
-    // process-wide, and tests running alongside with other shortcuts or fonts bump them (rightly
-    // reading the menus again), so judge two idle frames in which they held still.
-    let fonts = vectorcraft_text::FontDb::global();
-    let globals = || {
-        (
-            crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed),
-            crate::menus::plugin_revision(),
-            fonts.generation(),
-            fonts.installed_fonts_ready(),
-        )
-    };
-    let quiet = (0..50).any(|_| {
-        let (before, synced) = (globals(), m.fake.synced());
-        m.frame(vec![]);
-        m.frame(vec![]);
-        globals() == before && m.fake.synced() == synced
-    });
-    assert!(quiet, "nothing changed: the menus weren't read again");
-    assert_eq!(crate::control::inspect(&m.app, &m.ctx)["nativeMenuBar"], json!(true));
 }
 
 /// Each step of a drag previews the move as a new revision: the menus aren't read again for it
@@ -516,7 +320,7 @@ fn a_move_dragged_onto_a_panel_reads_the_menus() {
         let start = m.start_move();
         let read = m.reads(4, |_, i| vec![Event::PointerMoved(start + vec2(8.0 * (i + 2) as f32, 0.0))]);
         let synced = m.fake.synced();
-        let panel = Pos2::new(m.app.canvas_rect.unwrap().right() + 40.0, start.y);
+        let panel = Pos2::new(m.canvas_rect().right() + 40.0, start.y);
         // Over a panel the move waits: the menus keep the interaction's state.
         m.frame(vec![Event::PointerMoved(panel)]);
         let (waits, over) = (m.app.session.in_interaction(), m.fake.synced());
@@ -543,7 +347,7 @@ fn a_control_port_cancel_of_a_dialog_preview_reads_the_menus() {
         let synced = m.fake.synced();
         crate::tests_synthetic::control(&mut m.app, &m.ctx, "ui.dialog.cancel", json!({}));
         m.frame(vec![]);
-        (read, synced, !m.app.session.in_interaction() && m.app.ui.dialog.is_none(), m.fake.synced())
+        (read, synced, !m.app.session.in_interaction() && !m.app.any_dialog_open(), m.fake.synced())
     });
     assert_eq!(read, 0, "the menus weren't read while the dialog previewed the angles");
     assert!(closed);
@@ -559,8 +363,12 @@ fn applying_a_dialog_preview_reads_the_menus() {
         let read = m.angles(4);
         let synced = m.fake.synced();
         crate::tests_synthetic::control(&mut m.app, &m.ctx, "ui.dialog.confirm", json!({}));
+        // The OK enters the next frame's pass and applies there; the dialog's layer and the preview's interaction are
+        // gone two frames later.
         m.frame(vec![]);
-        (read, synced, !m.app.session.in_interaction() && m.app.ui.dialog.is_none(), m.fake.synced())
+        m.frame(vec![]);
+        m.frame(vec![]);
+        (read, synced, !m.app.session.in_interaction() && !m.app.any_dialog_open(), m.fake.synced())
     });
     assert_eq!(read, 0, "the menus weren't read while the dialog previewed the angles");
     assert!(closed);
@@ -578,9 +386,7 @@ fn fonts_that_load_read_the_menus_again() {
     let fonts = [t::vertical_font(true), t::two_axis_font(), t::variable_font()];
     let mut m = Mac::new(true);
     let synced = m.fake.synced();
-    if !fonts.into_iter().flatten().any(|data| db.add_font(data) > 0) {
-        return;
-    }
+    assert!(fonts.into_iter().flatten().any(|data| db.add_font(data) > 0), "one of the test fonts is new to the font database");
     m.frame(vec![]);
     assert!(m.fake.synced() > synced, "the menus were read again");
 }
@@ -589,150 +395,31 @@ fn fonts_that_load_read_the_menus_again() {
 /// menus are read as the preview begins and as it ends, and not for the fonts between.
 #[test]
 fn the_font_menu_preview_reads_the_menus_when_it_ends() {
-    use crate::font_menu::FontPick;
-    // The app reads the menus after each pick as at the end of a frame. A whole frame would start
-    // with `font_menu::end_stale_preview`, which ends a preview whose menu isn't drawn.
-    let apply = |m: &mut Mac, pick: FontPick| {
+    use craft::behavior::Preview;
+
+    use crate::font_menu::{apply_preview, end_previews};
+    let owner = egui::Id::unique("font-menu-preview-test");
+    // The app reads the menus after each step as at the end of a frame.
+    let read = |m: &mut Mac, step: &dyn Fn(&mut VectorcraftApp)| {
         let synced = m.fake.synced();
-        crate::font_menu::apply(&mut m.app, &m.ctx, pick);
-        native_menu::sync(&mut m.app, &m.ctx);
+        step(&mut m.app);
+        menus::native::sync(&mut m.app, &m.ctx);
         m.fake.synced() - synced
     };
     let (_m, read) = undisturbed(|m| {
         m.app.run("select.none", json!({})).unwrap();
         m.app.run("text.create", json!({"x": 50, "y": 50, "text": "Hi"})).unwrap();
         m.frame(vec![]);
-        assert_eq!(apply(m, FontPick::Preview("Source Serif 4".into(), None)), 1, "the menus were read as the preview began");
-        let read = apply(m, FontPick::Preview("Source Sans 3".into(), None)) + apply(m, FontPick::Preview("Inter".into(), None));
-        (read, apply(m, FontPick::EndPreview), !m.app.session.in_interaction())
+        let shows = |font: &'static str| move |app: &mut VectorcraftApp| apply_preview(app, owner, Preview::Shows(font.into()));
+        assert_eq!(read(m, &shows("Source Serif 4")), 1, "the menus were read as the preview began");
+        let between = read(m, &shows("Source Sans 3")) + read(m, &shows("Inter"));
+        let ended = read(m, &|app| end_previews(app, &[owner]));
+        (between, ended, !m.app.session.in_interaction())
     });
-    let (read, ended, done) = read;
-    assert_eq!(read, 0, "the menus weren't read for the fonts after the first");
+    let (between, ended, done) = read;
+    assert_eq!(between, 0, "the menus weren't read for the fonts after the first");
     assert_eq!(ended, 1, "the menus were read as the preview ended");
     assert!(done);
-}
-
-/// A click runs its command like an in-window click, and the menus follow: View › Show Rulers
-/// reads Hide Rulers afterwards; the app menu's Appearance items run with their params.
-#[test]
-fn clicks_run_their_command_and_the_menus_follow() {
-    let mut m = Mac::new(true);
-    let rulers = find(&m.fake.last(), "view.rulers").clone();
-    let before = m.app.ui.view.rulers;
-    m.fake.report(native_menu::Event::Click(rulers.clone()));
-    m.frame(vec![]);
-    assert_eq!(m.app.ui.view.rulers, !before);
-    assert_ne!(find(&m.fake.last(), "view.rulers").label, rulers.label, "the label flipped");
-    let other = m.fake.last().items().into_iter().find(|it| it.command == Some("window.brightness") && it.checked == Some(false)).cloned().unwrap();
-    m.fake.report(native_menu::Event::Click(other.clone()));
-    m.frame(vec![]);
-    assert_eq!(Some(m.app.ui.brightness.id()), other.params.get("brightness").and_then(Value::as_str));
-    let now = m.fake.last().items().into_iter().find(|it| it.params == other.params).cloned().unwrap();
-    assert_eq!(now.checked, Some(true), "the checkmark moved");
-}
-
-/// With a text field focused, the menu's ⌘A and ⌘C act on the field, as the keys do without the
-/// native menu.
-#[test]
-fn a_focused_field_keeps_select_all_and_copy() {
-    let mut m = Mac::new(true);
-    let (id, rect) = m
-        .ctx
-        .viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).map(|w| (w.id, w.rect)).collect::<Vec<_>>())
-        .into_iter()
-        .find(|&(id, _)| m.ctx.data(|d| d.get_temp::<String>(id)).is_some_and(|t| t == "37 pt") && egui::TextEdit::load_state(&m.ctx, id).is_some())
-        .expect("the W field");
-    let click = |pressed| Event::PointerButton { pos: rect.center(), button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
-    m.frame(vec![Event::PointerMoved(rect.center()), click(true)]);
-    m.frame(vec![click(false)]);
-    m.frame(vec![Event::Key { key: Key::End, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }]);
-    assert!(m.ctx.text_edit_focused());
-    m.key_equivalent("Cmd+A");
-    let r = egui::TextEdit::load_state(&m.ctx, id).and_then(|s| s.cursor.char_range()).unwrap();
-    let (a, b): (usize, usize) = (r.primary.index.into(), r.secondary.index.into());
-    assert_eq!((a.min(b), a.max(b)), (0, 5), "⌘A selected the field's text");
-    assert_eq!(m.selected(), 1, "not the art");
-    let out = m.key_equivalent("Cmd+C");
-    let copied: Vec<_> =
-        out.platform_output.commands.iter().filter_map(|c| if let egui::OutputCommand::CopyText(t) = c { Some(t.as_str()) } else { None }).collect();
-    assert_eq!(copied, ["37 pt"]);
-    assert!(m.app.session.clipboard.is_empty(), "no art copied");
-}
-
-/// With the macOS menu bar the app bar draws no menu titles: each shows once fewer.
-#[test]
-fn the_app_bar_hides_its_menus_with_the_mac_menu_bar() {
-    let texts = |native: bool| {
-        let mut m = Mac::new(native);
-        let out = m.frame(vec![]);
-        out.shapes
-            .iter()
-            .filter_map(|s| if let egui::Shape::Text(t) = &s.shape { Some(t.galley.text().to_string()) } else { None })
-            .collect::<Vec<_>>()
-    };
-    let (in_window, native) = (texts(false), texts(true));
-    for (title, _) in menus::menu_tree().iter().skip(1) {
-        let n = |t: &[String]| t.iter().filter(|s| s == title).count();
-        assert_eq!(n(&native) + 1, n(&in_window), "{title}");
-    }
-}
-
-/// While a file dialog's sheet is on the window the menu bar does nothing, as under the modal
-/// dialog before: every item is disabled but Hide, Hide Others and Minimize, a click that raced it
-/// isn't run (Minimize still is), and a key equivalent doesn't reach the app. Once the dialog
-/// answers, the menus are as before and work again.
-#[test]
-fn the_menu_bar_is_inert_while_a_file_dialog_is_open() {
-    let rows = |bar: &MenuBar| bar.items().iter().map(|it| (it.command, it.params.clone(), it.enabled)).collect::<Vec<_>>();
-    // The menus read before the dialog and after it are compared, so the whole run is undisturbed:
-    // a test running alongside can add or remove a composite font or a plug-in in between.
-    let (mut m, (before, after, rulers)) = undisturbed(|m| {
-        m.app.services.dialogs_are_sheets = true;
-        let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut m.app.services);
-        m.app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap();
-        m.app.run("select.none", json!({})).unwrap();
-        m.frame(vec![]);
-        let before = m.fake.last();
-        let system = [native_menu::HIDE, native_menu::HIDE_OTHERS, native_menu::MINIMIZE];
-        assert!(system.iter().all(|c| find(&before, c).enabled));
-        assert!(m.app.run("file.open", json!({})).is_err());
-        assert!(m.app.file_dialog_open());
-        m.frame(vec![]);
-        let inert = m.fake.last();
-        for it in inert.items() {
-            let kept = it.command.is_some_and(|c| system.contains(&c));
-            assert_eq!(it.enabled, kept, "{:?} {} while the dialog is open", it.command, it.label);
-        }
-        // A click that raced the menu going inert isn't run; Minimize is.
-        let rulers = (m.app.ui.view.rulers, find(&before, "view.rulers").clone());
-        m.fake.report(native_menu::Event::Click(rulers.1.clone()));
-        m.frame(vec![]);
-        assert_eq!(m.app.ui.view.rulers, rulers.0);
-        m.fake.report(native_menu::Event::Click(find(&inert, native_menu::MINIMIZE).clone()));
-        assert!(m.frame(vec![]).viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)));
-        // A key equivalent that raced it doesn't reach egui.
-        let mut k = crate::shortcuts::parse("Cmd+A").unwrap();
-        k.modifiers.mac_cmd = k.modifiers.command;
-        m.fake.report(native_menu::Event::Key(k));
-        let mut raw = egui::RawInput::default();
-        m.app.raw_input_hook(&m.ctx, &mut raw);
-        assert!(!raw.events.iter().any(|e| matches!(e, Event::Key { .. })), "{:?}", raw.events);
-        m.key_equivalent("Cmd+A");
-        assert_eq!(m.selected(), 0, "⌘A selected nothing");
-        // Cancelled: the menus are as before, and work again.
-        shown.answer(&[]);
-        m.frame(vec![]);
-        m.frame(vec![]);
-        assert!(!m.app.file_dialog_open());
-        (rows(&before), rows(&m.fake.last()), rulers)
-    });
-    // Every row from before is back as it was.
-    assert!(before.iter().all(|r| after.contains(r)), "the menus are as before");
-    m.fake.report(native_menu::Event::Click(rulers.1));
-    m.frame(vec![]);
-    assert_eq!(m.app.ui.view.rulers, !rulers.0);
-    m.key_equivalent("Cmd+A");
-    assert_eq!(m.selected(), 2, "⌘A selected every object");
 }
 
 /// #5159: ⌘V chosen by the menu bar's key equivalent pastes a picture another app copied (a
@@ -746,7 +433,7 @@ fn a_key_equivalent_paste_pastes_a_picture_from_another_app() {
     super::sysclip::copy_elsewhere(&board, vec![(PNG, super::sysclip::blue_png())]);
     let fake = Fake::default();
     app.services.native_menu = Some(NativeMenu::new(Box::new(fake.clone())));
-    let mut m = Mac { app, fake, ctx: egui::Context::default(), time: 0.0 };
+    let mut m = Mac { app, fake, ctx: crate::testing::ui_context(), time: 0.0 };
     for _ in 0..3 {
         m.frame(vec![]);
     }

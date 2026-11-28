@@ -15,6 +15,7 @@
 	Anchors:	앵커:
 	Any Kind	모든 종류
 	Font Technology	글꼴 기술
+@id	language.name	한국어
 font-technology	Variable	가변
 	Ascender	어센더
 	Baseline	기준선
@@ -43,6 +44,13 @@ font-technology	Variable	가변
 	Cap Height	대문자 높이
 	x-Height	x 높이
 	ICF Box	ICF 박스
+	Ascent	어센트
+	x Height	x 높이
+	Em Box Height	엠 박스 높이
+	Show Sample	샘플 표시
+	Hide Sample	샘플 숨기기
+	Max Ascent/Descent	최대 어센트/디센트
+	Max Ascender	최대 어센더
 	Proportional Metrics	비례 메트릭
 	H or V Style	가로 또는 세로 스타일
 	Roman Italics	로마자 이탤릭
@@ -81,6 +89,15 @@ digits	Malayalam	말라얄람어
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	긴소쿠 세트
 	Kinsoku Shori Type	긴소쿠 처리 유형
+	Kinsoku Shori Settings…	긴소쿠 처리 설정…
+	Kinsoku Shori Settings	긴소쿠 처리 설정
+	Kinsoku Sets	긴소쿠 세트 목록
+	Kinsoku Set Base	긴소쿠 세트 기준
+	Based on:	기준:
+	Cannot Start Line	행 시작 금지 문자
+	Cannot End Line	행 끝 금지 문자
+	Hanging Punctuation	매달림 문장 부호
+	Inseparable Characters	분리 금지 문자
 	Push In First	밀어 넣기 우선
 	Push Out First	밀어내기 우선
 	Push Out Only	밀어내기만
@@ -160,6 +177,19 @@ digits	Malayalam	말라얄람어
 	Paste without Formatting	서식 없이 붙여넣기
 	Clear	지우기
 	Find and Replace…	찾기 및 바꾸기…
+	Find and Replace	찾기 및 바꾸기
+	Find:	찾기:
+	Replace With:	바꿀 내용:
+	Replace & Find	바꾼 후 찾기
+	Replace All	모두 바꾸기
+	Match Case	대/소문자 구분
+	Find Whole Word	단어 단위로 찾기
+	Search Backwards	역방향 검색
+	Check Hidden Layers	숨겨진 레이어 확인
+	Check Locked Layers	잠긴 레이어 확인
+@msg	No matches found	일치하는 항목이 없습니다
+@msg	Matches replaced: {n}	바꾼 일치 항목: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	개체 {_3}의 바이트 {_1}..{_2}에 `find`와 일치하는 항목이 없습니다
 	Find Next	다음 찾기
 	Find Objects	개체 찾기
 	Compare with Image	이미지와 비교
@@ -206,6 +236,8 @@ digits	Malayalam	말라얄람어
 	Shear…	기울이기…
 	Transform Each…	각각 변형…
 	Reset Bounding Box	경계 상자 재설정
+	Rotate Bounding Box	경계 상자 회전
+	Rotate Bounding Box…	경계 상자 회전…
 	Arrange	정렬 순서
 	Bring to Front	맨 앞으로 가져오기
 	Bring Forward	앞으로 가져오기
@@ -257,7 +289,20 @@ digits	Malayalam	말라얄람어
 	Mask	마스크
 	Rasterize…	래스터화…
 	Create Gradient Mesh…	그레이디언트 메시 만들기…
+	Flat	평면
+	To Center	가운데로
+	To Edge	가장자리로
 	Create Object Mosaic…	개체 모자이크 만들기…
+	Create Object Mosaic	개체 모자이크 만들기
+	Current Size:	현재 크기:
+	New Size:	새 크기:
+	Tile Spacing:	타일 간격:
+	Number of Tiles:	타일 수:
+	Constrain Ratio:	비율 제한:
+	Result:	결과:
+	Resize Using Percentages	백분율로 크기 조정
+	Delete Raster	래스터 이미지 삭제
+	Use Ratio	비율 사용
 	Vector Halftone…	벡터 하프톤…
 	Create Trim Marks	트림 마크 만들기
 	Flatten Transparency…	투명도 병합…
@@ -348,6 +393,10 @@ digits	Malayalam	말라얄람어
 	Rename Preset	프리셋 이름 바꾸기
 	Save Image Trace Preset	이미지 추적 프리셋 저장
 	Delete Image Trace Preset	이미지 추적 프리셋 삭제
+	Tracing Presets…	추적 프리셋…
+	Import Image Trace Presets	이미지 추적 프리셋 가져오기
+	Export Image Trace Presets	이미지 추적 프리셋 내보내기
+	Replace the saved presets that have these names?	이 이름을 가진 저장된 프리셋을 대체하시겠습니까?
 	Text Wrap	문자 감싸기
 	Text Wrap Options…	문자 감싸기 옵션…
 	Clipping Mask	클리핑 마스크
@@ -357,6 +406,9 @@ digits	Malayalam	말라얄람어
 	Artboards	아트보드
 	Convert to Artboards	아트보드로 변환
 	Rearrange All Artboards…	모든 아트보드 재정렬…
+	Rearrange…	재정렬…
+	Selected Artboards: {n}	선택한 아트보드: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	캔버스를 클릭하여 아트보드를 배치하세요(Esc로 취소)
 	Fit to Artwork Bounds	아트워크 경계에 맞추기
 	Fit to Selected Art	선택한 아트에 맞추기
 	Graph	그래프
@@ -450,10 +502,26 @@ digits	Malayalam	말라얄람어
 	Reset Tracking and Kerning	자간 및 커닝 재설정
 	Reset Horizontal Scale	가로 비율 재설정
 	Highlight Font Name	글꼴 이름 강조 표시
+	Highlight Font Size	글꼴 크기 강조 표시
+	Other…	기타…
 	Highlight Kerning	커닝 강조 표시
 	Highlight Tracking	자간 강조 표시
 	Step Type	단계별 문자
 	Find Font…	글꼴 찾기…
+	Retype	리타입
+	Find Matching Fonts	일치하는 글꼴 찾기
+	Find more font matches	일치하는 글꼴 더 찾기
+	Type your text to preview	미리 볼 텍스트 입력
+	Select outlined text, then Find Matching Fonts.	윤곽선으로 만든 텍스트를 선택한 다음 일치하는 글꼴 찾기를 누르세요.
+	No font matches the selected shapes.	선택한 모양과 일치하는 글꼴이 없습니다.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	처음 2,048개 이후의 모양이나 16단계보다 깊은 그룹 안의 모양은 비교하지 않았습니다.
+	Reset Retype Panel	리타입 패널 재설정
+	List Matching Fonts	일치하는 글꼴 목록
+	Retype Preview	리타입 패널 미리 보기
+@msg	`count` must be a whole number from 1 to 96	`count`는 1에서 96 사이의 정수여야 합니다
+@msg	`size` must be small, medium or large	`size`는 small, medium 또는 large여야 합니다
+@msg	`text` must be a string of at most 100 characters	`text`는 최대 100자의 문자열이어야 합니다
+@msg	Retype: select outlined text (paths or compound paths)	리타입: 윤곽선으로 만든 텍스트(패스 또는 컴파운드 패스)를 선택하세요
 	Change Case	대소문자 변경
 	UPPERCASE	대문자
 	lowercase	소문자
@@ -511,6 +579,7 @@ digits	Malayalam	말라얄람어
 	Side Length:	변 길이:
 	Make Sides Equal	변 길이 같게
 	Opacity	불투명도
+	Show Opacity	불투명도 표시
 	Pie End Angle:	파이 끝 각도:
 	Pie Start Angle:	파이 시작 각도:
 	Stroke Color	선 색상
@@ -572,7 +641,17 @@ digits	Malayalam	말라얄람어
 	Highlight Size	하이라이트 크기
 	Blend Steps	혼합 단계
 	Shading Color	셰이딩 색상
+	Black Overprint	검정 겹쳐찍기
 	Draw Hidden Faces	숨겨진 면 그리기
+	Map Art…	아트 매핑…
+	Map Art	아트 매핑
+	First Surface	첫 번째 표면
+	Previous Surface	이전 표면
+	Next Surface	다음 표면
+	Last Surface	마지막 표면
+	Scale to Fit	크기에 맞게 조절
+	Shade Artwork	아트워크 음영 처리
+	Invisible Geometry	보이지 않는 형상
 	Revolve…	회전체…
 	Inflate…	부풀리기…
 	Materials…	재질…
@@ -616,7 +695,7 @@ digits	Malayalam	말라얄람어
 	Feather…	페더…
 	SVG Filters	SVG 필터
 	Apply SVG Filter…	SVG 필터 적용…
-	Warp	왜곡
+	Warp	뒤틀기
 	Arc…	호…
 	Arc Lower…	아래쪽 호…
 	Arc Upper…	위쪽 호…
@@ -650,6 +729,11 @@ digits	Malayalam	말라얄람어
 	Color blindness – Protanopia-type	색맹 – 적색맹 유형
 	Color blindness – Deuteranopia-type	색맹 – 녹색맹 유형
 	Color blindness – Tritanopia-type	색맹 – 청색맹 유형
+	Show Color Vision Preview	색각 미리 보기 표시
+	Protanopia	적색맹
+	Deuteranopia	녹색맹
+	Tritanopia	청색맹
+	Achromatopsia	전색맹
 	Customize…	사용자 지정…
 	Proof Colors	교정 색상
 	Zoom In	확대
@@ -678,6 +762,8 @@ digits	Malayalam	말라얄람어
 	Hide Text Threads	문자 연결선 숨기기
 	Hide Gradient Annotator	그레이디언트 주석 숨기기
 	Hide Corner Widget	모퉁이 위젯 숨기기
+	Hide Shape Widgets	모양 위젯 숨기기
+	Show Shape Widgets	모양 위젯 표시
 	Guides	안내선
 	Hide Guides	안내선 숨기기
 	Lock Guides	안내선 잠그기
@@ -735,6 +821,13 @@ digits	Malayalam	말라얄람어
 	Previous Document	이전 문서
 	Cascade	계단식 배열
 	Tile	바둑판식 배열
+	Tile All Vertically	모두 세로로 바둑판식 배열
+	Tile All Horizontally	모두 가로로 바둑판식 배열
+	2-Up Layout	2분할 레이아웃
+	3-Up Layout	3분할 레이아웃
+	4-Up Layout	4분할 레이아웃
+	6-Up Layout	6분할 레이아웃
+	Arrange Documents	문서 정렬
 	Float in Window	창에 플로팅
 	Float All in Windows	모두 창에 플로팅
 	Consolidate All Windows	모든 창 통합
@@ -755,6 +848,8 @@ digits	Malayalam	말라얄람어
 	Contextual Task Bar	상황별 작업 표시줄
 	Pin Bar Position	표시줄 위치 고정
 	Reset Bar Position	표시줄 위치 재설정
+	Bar Actions	표시줄 동작
+	Reset Bar Actions	표시줄 동작 재설정
 	Resize	크기 조절
 	Tools	도구
 	Toolbars	도구 모음
@@ -763,7 +858,7 @@ digits	Malayalam	말라얄람어
 	Keep Tools Beside the Canvas	캔버스 옆에 도구 배치
 	Actions	액션
 	Asset Export	에셋 내보내기
-	Attributes	속성
+	Attributes	특성
 	Brushes	브러시
 	Color	색상
 	Color Guide	색상 가이드
@@ -773,6 +868,19 @@ digits	Malayalam	말라얄람어
 	Saturation and brightness	채도 및 밝기
 	Color field	색상 필드
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	휠 보기
+	Box View	상자 보기
+	Show Out-of-Gamut Colors	색상 범위를 벗어난 색상 표시
+	Box Channel	상자 채널
+	Color box	색상 상자
+	Color Wheel Options	색상환 옵션
+	Show Document Colors	문서 색상 표시
+	Document Colors	문서 색상
+	Selection Colors	선택 영역 색상
+@plural	Used {n} time|Used {n} times	{n}회 사용
+	Show Harmony	하모니 표시
+	Harmony Rule	하모니 규칙
+	Harmony color	하모니 색상
 	CSS Properties	CSS 속성
 	Document Info	문서 정보
 	Flattener Preview	병합 미리 보기
@@ -786,6 +894,9 @@ digits	Malayalam	말라얄람어
 	Magic Wand	마술봉
 	Navigator	내비게이터
 	Navigator Panel Options	내비게이터 패널 옵션
+	Attributes Panel Options	속성 패널 옵션
+	Number of Recent URLs:	최근 URL 수:
+@msg	`count` must be a whole number from 1 to 30	`count`은(는) 1에서 30 사이의 정수여야 합니다
 	Draw Dashed Lines as Solid Lines	점선을 실선으로 그리기
 	Pattern Options	패턴 옵션
 	Properties	속성
@@ -938,6 +1049,7 @@ digits	Malayalam	말라얄람어
 	Auto Color	자동 색상
 	Automatic	자동
 	Isolate Selected Group	선택한 그룹 격리
+	Isolate Selected Path	선택한 패스 격리
 	Isolate Selected Object	선택한 개체 격리
 	Exit Isolation Mode	격리 모드 종료
 	Make Clipping Mask	클리핑 마스크 만들기
@@ -1034,6 +1146,7 @@ digits	Malayalam	말라얄람어
 	Add Anchor (Pen)	앵커 추가(펜)
 	Add Anchor Point	앵커 포인트 추가
 	Add Anchor Point Tool	앵커 포인트 추가 도구
+	Add Around	개체 주위에 추가
 	Add Effect	효과 추가
 	Add Freeform Line	자유형 선 추가
 	Add Freeform Point	자유형 점 추가
@@ -1048,14 +1161,19 @@ digits	Malayalam	말라얄람어
 	Add Selected Artwork as One Asset	선택한 아트워크를 하나의 에셋으로 추가
 	Add Spine Point	스파인 포인트 추가
 	Add Used Colors	사용한 색상 추가
+	Add Selected Colors	선택한 색상 추가
 	Add to Graphic Styles	그래픽 스타일에 추가
 	Add to Profiles	프로필에 추가
 	Add to Profiles…	프로필에 추가…
 	Add to Selection	선택 영역에 추가
 	Add to Swatches	견본에 추가
 	Additional Plug-ins Folder	추가 플러그인 폴더
+	Plug-in Instruction Budget	플러그인 명령어 예산
 	Additional Fonts Folder	추가 글꼴 폴더
 	Adjust Adjoining Width Points	인접한 너비 점 조정
+	Incoming	들어오는 쪽
+	Outgoing	나가는 쪽
+	Single Width Only	한 너비만
 	Adjust Colors	색상 조정
 	Adjust Options:	조정 옵션:
 	Advanced Options	고급 옵션
@@ -1095,6 +1213,7 @@ digits	Malayalam	말라얄람어
 	Angle:	각도:
 	Angles	각도
 	Animated Zoom	애니메이션 확대/축소
+	Anti Alias	안티 앨리어싱
 	Anti-Alias	안티 앨리어싱
 	Anti-alias	안티 앨리어싱
 	Anti-alias Rasters	래스터 안티 앨리어싱
@@ -1104,6 +1223,8 @@ antiAlias	Sharp	날카롭게
 	Crisp	또렷하게
 	Strong	강하게
 	Anti-aliasing:	안티 앨리어싱:
+	Art Optimized	아트에 최적화
+	Type Optimized	문자에 최적화
 	Appearance Item	모양새 항목
 	Appearance Panel	모양새 패널
 	Appearance of Black	검정 표시 방식
@@ -1121,6 +1242,10 @@ antiAlias	Sharp	날카롭게
 @plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	모두에 적용(누락 {n}개 더 있음)
 	Arc	호
 	Arc Tool	호 도구
+	Three-Point Arc Tool	3점 호 도구
+	Three-Point Arc	3점 호
+	Arc too large	호가 너무 큽니다
+	Third Point Sets Direction	세 번째 점으로 방향 지정
 	Area / Path Type	영역/패스 문자
 	Area Graph Tool	영역 그래프 도구
 	Area Type Tool	영역 문자 도구
@@ -1194,6 +1319,12 @@ antiAlias	Sharp	날카롭게
 	Brush Affects:	브러시 적용 대상:
 	Brush Definition	브러시 정의
 	Brush Options…	브러시 옵션…
+	Options of Selected Object…	선택한 오브젝트 옵션…
+	Options of Selected Object	선택한 오브젝트 옵션
+@msg	no path painted with a brush is selected	브러시로 칠한 패스가 선택되지 않았습니다
+@msg	the selected paths are painted with brushes of different types	선택한 패스가 서로 다른 유형의 브러시로 칠해져 있습니다
+@msg	give `params` or `reset`, not both	`params`와 `reset` 중 하나만 지정하세요
+@msg	a bristle brush has no options of its own on a path	강모 브러시는 패스별 옵션이 없습니다
 	Built-in presets are read-only: New… starts an editable copy.	기본 제공 프리셋은 읽기 전용입니다. 새로 만들기…를 누르면 편집 가능한 복사본이 만들어집니다.
 	Built-in presets don't change: New makes a copy you can edit.	기본 제공 프리셋은 변경되지 않습니다. 새로 만들기를 누르면 편집 가능한 복사본이 만들어집니다.
 	Built-in presets don't change: New… starts an editable copy.	기본 제공 프리셋은 변경되지 않습니다. 새로 만들기…를 누르면 편집 가능한 복사본이 만들어집니다.
@@ -1217,6 +1348,12 @@ antiAlias	Sharp	날카롭게
 	Channel	채널
 	Character / Paragraph	문자 / 단락
 	Character Rotation	문자 회전
+	Chinese Big 5	중국어 Big 5
+	Cyrillic	키릴 자모
+	Greek	그리스어
+	Turkish	터키어
+	Baltic	발트어
+	Central European	중앙 유럽어
 	Character Set:	문자 집합:
 	Character Style Options	문자 스타일 옵션
 	Check Links	링크 확인
@@ -1276,6 +1413,16 @@ antiAlias	Sharp	날카롭게
 	Choose a folder	폴더 선택
 	Choose…	선택…
 	Circle	원
+	Circle Tool	점 기준 원 도구
+	Curvature Circle Tool	곡률원 도구
+	Cusp	뾰족점
+	Straight segment	직선 세그먼트
+	Circle too large	원이 너무 큽니다
+	Show Radii	반지름 표시
+	Show Diameter	지름 표시
+	Anchors at Standard Positions	표준 위치에 앵커 포인트
+	Third Point by Dragging	드래그로 세 번째 점 지정
+	Gray	회색
 	Clear All Tabs	모든 탭 지우기
 	Above Text	문자 위
 	Position Panel Above Text	패널을 문자 위에 배치
@@ -1317,6 +1464,7 @@ antiAlias	Sharp	날카롭게
 	Color Guide Options…	색상 가이드 옵션…
 	Color Mode	색상 모드
 	Color Mode:	색상 모드:
+	Color Model	색상 모델
 	Color Model:	색상 모델:
 	Color Models	색상 모델
 	Color Picker	색상 피커
@@ -1335,6 +1483,7 @@ antiAlias	Sharp	날카롭게
 	Colors	색상
 	Colors:	색상:
 	Column Graph Tool	세로 막대 그래프 도구
+	Columns	열
 	Columns:	열:
 	Coming soon — tracked in the parity plan	곧 제공 예정 — 기능 동등성 계획에서 관리 중
 	Command Click to Select Objects Behind	Command-클릭으로 뒤쪽 개체 선택
@@ -1353,10 +1502,13 @@ antiAlias	Sharp	날카롭게
 	Conflict {n} of {count}	충돌 {n}/{count}
 	Constrain Angle	각도 제한
 	Constrain Width and Height Proportions	너비와 높이 비율 고정
+	Copy Width to Height	너비를 높이로 복사
 	Construction Guides	작도 안내선
 	Contextual Alternates	문맥 대체 글자
 	Convert	변환
 	Convert All Spot Colors to Process	모든 별색을 프로세스 색상으로 변환
+	Convert {name} to process	{name}을(를) 프로세스 색상으로 변환
+	Keep {name} as spot	{name}을(를) 별색으로 유지
 	Convert All Strokes to Outlines	모든 선을 윤곽선으로 변환
 	Convert All Text to Outlines	모든 문자를 윤곽선으로 변환
 	Convert Anchor Point	앵커 포인트 변환
@@ -1376,6 +1528,18 @@ antiAlias	Sharp	날카롭게
 	Copy Width Point	너비 점 복사
 	Copyright	저작권
 	Copyright Info URL:	저작권 정보 URL:
+	Save Metadata Template…	메타데이터 템플릿 저장…
+	Import Options	가져오기 옵션
+	Clear existing fields and use the template's	기존 필드를 지우고 템플릿의 필드 사용
+	Keep existing fields, but replace those the template has	기존 필드를 유지하되 템플릿에 있는 필드 바꾸기
+	Keep existing fields, but append those the template has	기존 필드를 유지하되 템플릿에 있는 필드 추가
+@msg	the template name can't be empty	템플릿 이름은 비워 둘 수 없습니다
+@msg	the template name isn't usable as a file name	템플릿 이름은 파일 이름으로 사용할 수 없습니다
+@msg	no metadata templates folder here	여기에는 메타데이터 템플릿 폴더가 없습니다
+@msg	give `name` or `path`, not both	`name` 또는 `path` 중 하나만 지정하세요
+@msg	give one of `path`, `name` and `data`	`path`, `name`, `data` 중 하나를 지정하세요
+@msg	mode must be replace, keep or append	모드는 replace, keep 또는 append여야 합니다
+@msg	the file is not an XMP metadata template	파일이 XMP 메타데이터 템플릿이 아닙니다
 	Copyright Notice:	저작권 고지:
 	Copyright Status:	저작권 상태:
 	Corner Point Angle Threshold:	모퉁이 포인트 각도 임계값:
@@ -1421,10 +1585,25 @@ antiAlias	Sharp	날카롭게
 	Cut Path at Selected Anchor Points	선택한 앵커 포인트에서 패스 자르기
 	Dim Images to:	이미지 흐리게:
 	Duplicate Selection	선택 항목 복제
+	PSD Import Options	PSD 가져오기 옵션
+	Place PSD	PSD 가져오기
+	Convert Layers to Objects	레이어를 오브젝트로 변환
+	Import Hidden Layers	숨겨진 레이어 가져오기
+	Flatten Layers to a Single Image	레이어를 단일 이미지로 병합
+	Import Slices	분할 영역 가져오기
 	DXF Import Options	DXF 가져오기 옵션
 	DXF Info	DXF 정보
 	DXF Options	DXF 옵션
 	DXF Options Dialog	DXF 옵션 대화상자
+	HP-GL Options	HP-GL 옵션
+	HP-GL Options Dialog	HP-GL 옵션 대화상자
+	Curve Tolerance:	곡선 허용치:
+	Origin:	원점:
+	Pens:	펜:
+	One Pen per Color	색상마다 펜 하나
+	Pen Table	펜 테이블
+	Draw the Nearest Path Next	가장 가까운 패스를 다음에 그리기
+	Draw Inner Paths First	안쪽 패스를 먼저 그리기
 	Darken	어둡게
 	Darkness	어둡기
 	Dashed	점선
@@ -1443,6 +1622,9 @@ antiAlias	Sharp	날카롭게
 	Delete Artboard	아트보드 삭제
 	Delete Artboards	아트보드 삭제
 	Delete Brush	브러시 삭제
+	Delete Color	색상 삭제
+	Restore Generated Table	생성된 표 복원
+	Unshift All Colors	모든 색상 이동 취소
 	Delete Character Style	문자 스타일 삭제
 	Delete Empty Artboards	빈 아트보드 삭제
 	Delete Freeform Point	자유 형태 포인트 삭제
@@ -1485,6 +1667,7 @@ antiAlias	Sharp	날카롭게
 	Duplicate Action or Action Set	액션 또는 액션 세트 복제
 	Delete the action set “{name}” and its actions?	액션 세트 “{name}”과(와) 해당 액션을 삭제하시겠습니까?
 	Delete the selected action sets and their actions?	선택한 액션 세트와 해당 액션을 삭제하시겠습니까?
+	Delete all action sets and their actions?	모든 액션 세트와 해당 액션을 삭제하시겠습니까?
 	Delete theme	테마 삭제
 	Delete this saved preset	저장된 이 프리셋 삭제
 	Delete {kind} Style	{kind} 스타일 삭제
@@ -1505,6 +1688,8 @@ antiAlias	Sharp	날카롭게
 	Dimensions	치수
 	Direct Selection Tool	직접 선택 도구
 	Disable Auto Add/Delete	자동 추가/삭제 사용 안 함
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete로 고정점을 제거하고 패스를 연결된 상태로 유지
+	Interpolate Control Points When Moving Anchors	앵커 포인트 이동 시 방향 핸들 보간
 	Disable Opacity Mask	불투명 마스크 사용 안 함
 	Discard	삭제
 	Preserve	보존
@@ -1594,6 +1779,8 @@ antiAlias	Sharp	날카롭게
 	Drawing Mode	그리기 모드
 	Duplicate	복제
 	Duplicate Artboard	아트보드 복제
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	클릭하여 이쪽에 아트보드 추가, Alt-클릭하여 이 아트보드를 아트워크와 함께 복제
+	Click to add an artboard on this side	클릭하여 이쪽에 아트보드 추가
 	Copy Artboard	아트보드 복사
 	Cut Artboard	아트보드 잘라내기
 	Rename Artboards	아트보드 이름 바꾸기
@@ -1658,6 +1845,7 @@ antiAlias	Sharp	날카롭게
 	Enable Rubber Band for	러버 밴드 사용 대상
 	Enable Touch Gestures	터치 제스처 사용
 	Switch Selection and Drawing Modes	선택 모드와 그리기 모드 전환
+	Select Last Selection Tool	마지막으로 사용한 선택 도구로 전환
 	Enable Touch Workspace	터치 작업 영역 사용
 	Enable copying of text, images and other content	텍스트, 이미지 및 기타 콘텐츠 복사 허용
 	Enable in-menu font previews	메뉴에서 글꼴 미리 보기 사용
@@ -1793,6 +1981,8 @@ antiAlias	Sharp	날카롭게
 	Files	파일
 	Files of a PDF standard can't be password-protected.	PDF 표준 파일은 암호로 보호할 수 없습니다.
 	Files of this standard tag their colours with ICC profiles.	이 표준의 파일은 ICC 프로파일로 색상을 태그합니다.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	이 표준의 파일은 ICC 프로파일로 색상을 태그합니다. 단, 출력 의도 프로파일의 CMYK 색상은 DeviceCMYK로 기록됩니다.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	'프로파일 포함 안 함'과 CMYK 출력 의도를 사용하면, 다른 프로파일의 CMYK 대상으로 변환되지 않는 한 모든 CMYK 색상이 DeviceCMYK로 기록됩니다.
 	Fill	칠
 	Fill New Type Objects With Placeholder Text	새 문자 개체를 대체 텍스트로 채우기
 	Start Lists From Typed Markers	입력한 기호로 목록 시작
@@ -1823,6 +2013,7 @@ antiAlias	Sharp	날카롭게
 	Fit in Window	창에 맞추기
 	Fit on Screen	화면에 맞추기
 	Flare	플레어
+	Edit Flare	플레어 편집
 	Flare Tool	플레어 도구
 	Flat Image	단일 이미지
 	Flatness:	평탄도:
@@ -1839,6 +2030,12 @@ antiAlias	Sharp	날카롭게
 	Folder	폴더
 	Folder Name:	폴더 이름:
 	Font List	글꼴 목록
+	Show Similar Fonts	유사한 글꼴 표시
+	Clear Similar Fonts	유사한 글꼴 지우기
+	Fonts used in this document	이 문서에서 사용된 글꼴
+	This document uses no available fonts	이 문서는 사용 가능한 글꼴을 사용하지 않습니다
+	Recently Added	최근 추가됨
+	Fonts added in the last 30 days	최근 30일 동안 추가된 글꼴
 	Font Preview Size	글꼴 미리 보기 크기
 	Font:	글꼴:
 	Fonts	글꼴
@@ -1930,6 +2127,15 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Show brightness and hue on wheel	색상환에 밝기 및 색조 표시
+	Show saturation and hue on wheel	색상환에 채도 및 색조 표시
+	Add Color Tool	색상 추가 도구
+	Remove Color Tool	색상 제거 도구
+	Remove Color	색상 제거
+	Set As Base Color	기본 색상으로 설정
+	Select Shade	음영 선택
+	Add New Color	새 색상 추가
+	Set Current Color As Base Color	현재 색상을 기본 색상으로 설정
 	Find the selected colors in the artwork	선택한 색상을 아트웍에서 찾기
 	Height	높이
 	Height:	높이:
@@ -2137,8 +2343,8 @@ antiAlias	Sharp	날카롭게
 	Import Matches	가져오기 대응
 	Remember Import Matches	가져오기 대응 기억
 	Forget Import Matches	가져오기 대응 지우기
-@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	기본 단축키 {n}개와 일치|기본 단축키 {n}개와 일치
-@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	읽지 않은 파일 부분 {n}개|읽지 않은 파일 부분 {n}개
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	기본 단축키 {n}개와 일치
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	읽지 않은 파일 부분 {n}개
 	Import Transparency Flattener Presets	투명도 병합 프리셋 가져오기
 	Import…	가져오기…
 	In Tangent Handles	안쪽 접선 핸들
@@ -2201,6 +2407,8 @@ antiAlias	Sharp	날카롭게
 	Lasso Tool	올가미 도구
 	Enclosing Lasso Tool	둘러싸기 올가미 도구
 	Enclosing Lasso	둘러싸기 올가미
+	Polygonal Lasso Tool	다각형 올가미 도구
+	Polygonal Lasso	다각형 올가미
 	Last Effect: {name}	마지막 효과: {name}
 	Last Page	마지막 페이지
 	Layer Options…	레이어 옵션…
@@ -2267,6 +2475,8 @@ antiAlias	Sharp	날카롭게
 	List View	목록 보기
 	List Workspaces	작업 영역 목록
 	Live Paint Bucket	라이브 페인트 통
+	Fill Area	영역 채우기
+	Fill Area Tool	영역 채우기 도구
 	Live Paint Bucket (Stroke)	라이브 페인트 통 (선)
 	Live Paint Info	라이브 페인트 정보
 	Live Paint Selection Tool	라이브 페인트 선택 도구
@@ -2284,12 +2494,14 @@ antiAlias	Sharp	날카롭게
 	Load SVG into Clipboard	SVG를 클립보드로 불러오기
 	Load Text into Clipboard	텍스트를 클립보드로 불러오기
 	Local Libraries	로컬 라이브러리
+	Locate Layer	레이어 찾기
 	Locate Object	개체 찾기
 	Locate Selected Objects	선택한 개체 찾기
 	Location	위치
 	Location:	위치:
 	Lock (⌘2)	잠금 (⌘2)
-	Lossless (lossy WebP isn't available yet)	무손실 (손실 WebP는 아직 지원되지 않음)
+	Lossless	무손실
+	Lossy	손실
 	Lossy:	손실 압축:
 	Luminosity	광도
 	Magic Wand Options	마술봉 옵션
@@ -2404,6 +2616,7 @@ antiAlias	Sharp	날카롭게
 	Scatter:	흩뿌림:
 	Rotation:	회전:
 	Rotation relative to:	회전 기준:
+	Hue Jitter:	색조 변화:
 	Brush Scale Options	브러시 크기 조절 옵션
 	Scale Proportionately	비율에 맞게 크기 조절
 	Stretch to Fit Stroke Length	선 길이에 맞게 늘이기
@@ -2440,11 +2653,13 @@ antiAlias	Sharp	날카롭게
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	검정은 선 색상이 되고 흰색은 흰색으로 남습니다. 다른 색상은 선 색상의 틴트가 되며, 색상이 밝을수록 틴트도 밝아집니다.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	검정은 검정으로 남고 흰색은 흰색으로 남습니다. 다른 색상은 어두우면 선 색상의 셰이드가 되고 밝으면 틴트가 됩니다.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	키 색상은 선 색상이 됩니다. 다른 색상은 키 색상과 같은 만큼 색상환에서 이동하며 채도와 밝기를 유지합니다.
+	Roundness	원형률
 	Roundness:	원형률:
 	Fixed	고정
 	Pressure	필압
 	Tilt	기울기
 	Bearing	방위
+	Stylus Wheel	스타일러스 휠
 	Shape:	모양:
 	Bristle Length:	강모 길이:
 	Bristle Density:	강모 밀도:
@@ -2475,12 +2690,21 @@ antiAlias	Sharp	날카롭게
 	embedding for preview and print	미리 보기 및 인쇄용 포함
 	embedding allowed	포함 허용
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	알 수 없는 유형
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n}회 사용
 	substituted: shown in {family} {style} ({detail})	대체됨: {family} {style}(으)로 표시({detail})
 	missing: shown in {family} {style}	없음: {family} {style}(으)로 표시
 	missing	없음
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	해상도를 알 수 없음
+	estimated memory {memory}	예상 메모리 {memory}
+	memory unavailable	메모리를 알 수 없음
+	Unknown format	알 수 없는 형식
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2676,6 +2900,11 @@ antiAlias	Sharp	날카롭게
 	Overprint Stroke	선 오버프린트
 	Overprint and Transparency Flattener	오버프린트 및 투명도 병합
 	Overprint and Transparency Flattener Options	오버프린트 및 투명도 병합 옵션
+	Custom…	사용자 지정…
+	Custom Transparency Flattener Options	사용자 지정 투명도 병합 옵션
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF 사전 설정에는 병합 사전 설정이 저장되지만 사용자 지정… 설정은 저장되지 않습니다.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 파일은 래스터화된 영역을 해당 영역의 모양으로 클립하며, 오버프린트 설정에 따라 오버프린트 유지 여부가 결정됩니다.
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS에는 알파 투명도가 없으며, 오버프린트 설정에 따라 오버프린트 유지 여부가 결정됩니다.
 	Overprint:	오버프린트:
 	Overprints:	오버프린트:
 	Override Character Color	문자 색상 덮어쓰기
@@ -2713,10 +2942,26 @@ antiAlias	Sharp	날카롭게
 	Pathfinders:	패스파인더:
 	Paths	패스
 	Path Length	패스 길이
+	Grid Size	격자 크기
+	Grid Colors	격자 색상
+	Flattener Preset	병합 프리셋
+	X	X
+	Y	Y
+	Orange	주황
+	Purple	보라
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	패스: {paths}    앵커: {anchors}    색상: {colors}
 	Pattern Editing	패턴 편집
 	Pattern options are available in pattern editing mode.	패턴 옵션은 패턴 편집 모드에서 사용할 수 있습니다.
 	Pen Tool	펜 도구
+	Quick Pen Tool	빠른 펜 도구
+	Quick Pen	빠른 펜
+	Quick Pen Toolbar	빠른 펜 도구 모음
+	Continuous Arc	연속 호
+	Sharp Corner Arc	뾰족한 모서리 호
+	Flip Arc	호 뒤집기
+	Hide Toolbar	도구 모음 숨기기
+	Pin Toolbar Position	도구 모음 위치 고정
+	Reset Toolbar Position	도구 모음 위치 재설정
 	Pencil	연필
 	Pencil Tool	연필 도구
 	Percent:	퍼센트:
@@ -2750,6 +2995,12 @@ diagnostics	ui	UI
 	Play Current Selection	현재 선택 항목 재생
 	Save Actions…	액션 저장…
 	Load Actions…	액션 불러오기…
+	Replace Actions…	액션 바꾸기…
+	Clear Actions	액션 지우기
+	Reset Actions	액션 재설정
+	Replace the current actions with the default set?	현재 액션을 기본 세트로 바꾸시겠습니까?
+	Append adds the default set after the current sets instead.	추가를 누르면 대신 기본 세트를 현재 세트 뒤에 추가합니다.
+	Append	추가
 	Plug-in Info	플러그인 정보
 	Plug-in…	플러그인…
 	Points	포인트
@@ -2758,6 +3009,10 @@ diagnostics	ui	UI
 	Polar Grid Tool	극좌표 격자 도구
 	Polygon	다각형
 	Polygon Properties:	다각형 속성:
+	Line Properties:	선 속성:
+	Line Length:	선 길이:
+	Line Angle:	선 각도:
+	Constrain Pie Angle	파이 각도 고정
 	Polygon Tool	다각형 도구
 	Portrait	세로
 	Portuguese	Português
@@ -2767,6 +3022,11 @@ diagnostics	ui	UI
 	Preserve Alpha Transparency	알파 투명도 보존
 	Preserve Appearance and Overprints	모양 및 오버프린트 보존
 	Preserve CMYK Numbers	CMYK 수치 보존
+	Preserve RGB Numbers	RGB 수치 보존
+	Device to Simulate:	시뮬레이션할 장치:
+	Simulate Paper Color	용지 색상 시뮬레이션
+	Simulate Black Ink	검정 잉크 시뮬레이션
+	Load…	불러오기…
 	Preserve Editing Capabilities	편집 기능 보존
 	Preserve Lightness	명도 보존
 	Preserve Overprints and Spot Colors	오버프린트 및 별색 보존
@@ -2786,6 +3046,18 @@ diagnostics	ui	UI
 	Preview All Layers	모든 레이어 미리 보기
 	Preview Mode	미리 보기 모드
 	Preview in Browser	브라우저에서 미리 보기
+	Optimize to File Size…	파일 크기에 맞게 최적화…
+	Optimize to File Size	파일 크기에 맞게 최적화
+	Desired File Size:	원하는 파일 크기:
+	Start With:	시작 설정:
+	Use:	사용:
+	Current Settings	현재 설정
+	Auto Select GIF/JPEG	GIF/JPEG 자동 선택
+	Total of All Slices	모든 분할 합계
+	Each Slice	각 분할
+	Current Slice	현재 분할
+	{size}, within {target}	{size}, {target} 이내
+	No setting tried fits in {target}; the smallest is {size}	시도한 설정 중 {target}에 맞는 것이 없습니다. 가장 작은 크기는 {size}
 	Preview the document as it is now	문서를 현재 상태로 미리 보기
 	Previous	이전
 	Previous Library	이전 라이브러리
@@ -2847,6 +3119,9 @@ mark-style	Japanese	일본식
 	Real World:	실제 크기:
 	Real-time Drawing and Editing	실시간 그리기 및 편집
 	Use Monitor Profile for Canvas	캔버스에 모니터 프로필 사용
+	Refresh Monitor Profile	모니터 프로필 새로 고침
+@msg	turn on Use Monitor Profile for Canvas first	먼저 "캔버스에 모니터 프로필 사용"을 켜세요
+@msg	this build doesn't read display profiles	이 빌드는 디스플레이 프로필을 읽지 않습니다
 	The canvas is drawn in sRGB.	캔버스는 sRGB로 그려집니다.
 	Canvas display profile:	캔버스 디스플레이 프로필:
 	The system matches the window to the display's colors.	시스템이 창을 디스플레이 색상에 맞춥니다.
@@ -3018,8 +3293,16 @@ mark-style	Japanese	일본식
 	Edit Arrowheads	화살촉 편집
 	Edit Arrowheads…	화살촉 편집…
 	Reload Arrowheads	화살촉 다시 불러오기
+	Bevels	베벨 목록
+	Edit Bevels	베벨 편집
+	Edit Bevels…	베벨 편집…
+	{name} (document)	{name}(문서)
+	Reload Bevels	베벨 다시 불러오기
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Color Theme Picker	색상 테마 피커
+	Undo Changes	변경 내용 실행 취소
+	Redo Changes	변경 내용 다시 실행
+@msg	Recolor Artwork is not open	아트웍 색상 재지정이 열려 있지 않습니다
 	Click or drag across the art to pick its colors; Shift adds more	아트웍을 클릭하거나 드래그하여 색상을 가져옵니다. Shift 키로 더 추가합니다
 	Prominent Colors	주요 색상
 	Save All Colors	모든 색상 저장
@@ -3031,11 +3314,186 @@ mark-style	Japanese	일본식
 	Reshape Segment	세그먼트 모양 다듬기
 	Reshape Tool	모양 다듬기 도구
 	Reshape Type Area	문자 영역 모양 다듬기
+	Resolution	해상도
 	Resolution:	해상도:
 	Responsive	반응형
 	Restore	복원
 	Restore Recovered Documents	복구된 문서 복원
 	Restore every preference to its default (applied on OK)	모든 환경 설정을 기본값으로 복원(확인 시 적용)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	캔버스에 선택 영역이나 도구에 맞는 명령 막대를 표시합니다. 드래그하는 동안과 프레젠테이션 모드에서는 숨겨집니다.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	화살표 키로 선택 영역을 이동하는 거리입니다. Shift 키를 누르면 10배 멀리 이동합니다.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	화살표 키로 이동하는 축과 Shift 키로 그리기와 이동을 고정하는 축의 각도입니다.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	둥근 사각형 도구로 그릴 때 쓰는 모퉁이 반지름입니다. 그리는 동안 반지름을 바꾸면 이 값도 바뀝니다.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	스크립트에서처럼 위치가 지정되지 않았을 때 붙여넣기가 사본을 오른쪽과 아래로 옮기는 거리입니다. 앱에서 붙여넣기를 하면 사본이 보기의 가운데에 놓입니다.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	펜 도구가 선택한 패스에서 클릭한 고정점을 삭제하거나 세그먼트를 클릭한 위치에 고정점을 추가하지 않게 합니다.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	그리기 도구의 포인터를 아이콘 대신 십자선으로 표시합니다. Caps Lock이 켜져 있는 동안에도 같습니다.
+	Shows a tip when the pointer rests on a button or field that has one.	도움말이 있는 버튼이나 필드에 포인터를 올려 두면 도움말을 표시합니다.
+	Shows a warning before a script you choose runs.	선택한 스크립트를 실행하기 전에 경고를 표시합니다.
+	Smooths the edges of artwork on the canvas.	캔버스에 있는 아트웍의 가장자리를 매끄럽게 표시합니다.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	선택 › 동일 › 칠 색상, 선 색상, 칠 및 선은 전역 또는 별색 견본의 같은 색조만 찾고, 다른 색조는 찾지 않습니다.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	열린 문서가 없을 때 홈 화면을 표시합니다. 끄면 홈을 클릭할 때까지 창이 비어 있습니다.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	크기, 위치, 정렬을 위해 선과 모양을 바꾸는 효과를 포함하여 개체를 측정합니다. 그림자, 광선, 흐림 효과는 측정하지 않습니다.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% 확대/축소에서 문서의 1인치가 디스플레이의 1인치를 채우며, 시스템이 사용할 수 있는 디스플레이 크기를 알려 주지 않으면 96 화면 포인트를 차지합니다.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	선택 도구로 그룹, 패스 또는 이미지를 두 번 클릭하면 격리 모드로 엽니다.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	변형 명령이나 변형 패널의 메뉴에서 달리 선택하지 않는 한, 패턴 칠과 선이 아트웍과 함께 변형됩니다.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 라이브 모퉁이 반지름이 아트웍과 함께 크기 조정됩니다.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 선 두께, 대시, 효과 거리가 아트웍과 함께 크기 조정됩니다.
+	The mouse wheel zooms the canvas instead of scrolling it.	마우스 휠로 캔버스를 스크롤하지 않고 확대/축소합니다.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl 키를 누른 채 마우스 휠을 돌리면 캔버스가 가로로 스크롤됩니다.
+	Dragging sideways on a numeric field's label changes the field's value.	숫자 필드의 레이블을 옆으로 드래그하면 필드 값이 바뀝니다.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	키를 누르고 있으면 키보드 단축키의 누르고 있기 열에 있는 도구나 명령이 실행되고, 짧게 누르면 평소 단축키가 실행됩니다.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	평소 단축키 대신 길게 누르기 단축키가 실행되기 전까지 키를 누르고 있어야 하는 시간(초)입니다.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete는 선택한 고정점을 제거하고 각 점 주위의 곡선을 다시 맞추며, 그 위치에서 패스를 열지 않습니다.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	고정점을 이동하면 한쪽 끝이 이동한 각 곡선은 양 끝을 기준으로 모양을 유지합니다.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
+	Shows the bounding box while you move the selection or draw a shape.	선택 영역을 이동하거나 모양을 그리는 동안 테두리 상자를 표시합니다.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	트림 마크 만들기에서 서양식 대신 일본식 표시를 그립니다.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	새 아트웍이 선택 영역의 칠과 선만 가져옵니다. 끄면 선택한 개체의 모양 전체를 가져옵니다.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	변형 패널, 속성 패널 또는 컨트롤 패널에서 폭이나 높이를 바꾸면 다른 값도 비율에 맞게 바뀝니다.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	라이브 사각형의 속성에 네 모퉁이 모두에 쓰는 모퉁이 반지름 필드 하나를 표시합니다. 끄면 모퉁이마다 필드가 따로 있습니다.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	변형 패널에서 편집할 때 변형되는 대상으로, 개체, 패턴 타일 또는 둘 다입니다. 기본값은 패턴 타일 변형을 따릅니다.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	심볼 인스턴스 하나를 선택하면 변형 패널은 심볼의 등록 지점을 참조점으로 사용합니다.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	사각형, 타원, 다각형, 별 또는 선을 그리면 변형 패널이 닫혀 있을 때 열립니다.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	아트보드 도구를 사용하는 동안 아트보드 바깥의 캔버스를 어둡게 표시합니다.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	아트보드 외부 영역 어둡게 표시가 켜져 있으면 아트보드 도구로 드래그하는 동안에도 아트보드 바깥 영역이 어둡게 유지됩니다.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	클릭으로 개체, 고정점 또는 핸들을 선택하려면 포인터가 얼마나 가까이(픽셀) 있어야 하는지입니다.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	선택 도구의 상자가 닿은 개체를 선택할지, 완전히 안에 있는 개체만 선택할지입니다. 드래그 방향은 오른쪽으로 드래그하면 안쪽 개체를 선택합니다. 드래그 중 E를 누르면 규칙이 반대로 바뀝니다.
+	A click selects a filled object only on its path, not inside its fill.	칠이 있는 개체를 칠 안쪽이 아니라 패스를 클릭할 때만 선택합니다.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	포인트에 스냅이 점을 스냅하려면 점이 고정점이나 눈금자 안내선에 얼마나 가까이(픽셀) 와야 하는지입니다. 스마트 안내선이 켜져 있으면 대신 스마트 안내선의 스냅 허용 오차를 씁니다.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	선택 도구에서 Cmd/Ctrl-클릭하면 포인터 위치에서 선택한 개체 아래의 개체를 선택하며, 클릭할 때마다 한 개체씩 더 아래로 내려갑니다.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	확대와 축소가 선택 영역의 중심을 보기의 가운데로 가져옵니다.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	아트보드 안의 잠긴 아트워크와 숨겨진 아트워크도 다른 아트워크처럼 아트보드와 함께 이동, 크기 조정, 복사됩니다.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	캔버스에 표시되는 고정점과 방향 핸들 끝의 크기입니다. 고정점이 클수록 더 먼 곳에서도 잡을 수 있습니다.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	방향 핸들 끝을 채워진 점, 속이 빈 점 또는 더 큰 채워진 점으로 그립니다.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	직접 선택 도구에서 포인터 아래의 고정점을 강조 표시합니다.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	고정점을 둘 이상 선택했을 때 방향 핸들을 표시합니다. 끄면 고정점을 하나만 선택했을 때만 표시됩니다.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	각도가 이 값(도)보다 큰 모퉁이에서는 모퉁이 위젯을 숨깁니다.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	펜 도구가 클릭하기 전에 마지막 고정점에서 포인터까지 다음 세그먼트를 미리 보여 줍니다.
+	The Curvature tool previews the curve to the pointer before you place the next point.	곡률 도구가 다음 점을 놓기 전에 포인터까지 곡선을 미리 보여 줍니다.
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	픽셀 크기가 아닌 기본 제공 크기의 새 문서와 단위가 기록되지 않은 열린 파일에 쓰는 단위이며, 여기서 고르고 확인을 누르면 활성 문서의 단위도 바뀝니다.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	선 두께, 대시, 간격이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	글자 크기, 행간, 기준선 이동이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
+	The unit for East Asian type measurements, which no field uses yet.	동아시아 문자 측정에 쓰는 단위로, 아직 이 단위를 쓰는 필드는 없습니다.
+	When on, a number typed without a unit into a field in picas is read in points.	켜면 파이카 필드에 단위 없이 입력한 숫자를 포인트로 읽습니다.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID를 고르면 레이어, 변수, 레이어 옵션에서 개체 이름이 XML ID로 표시됩니다.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	문자 크기와 행간의 단계입니다. Cmd/Ctrl+Shift+. 와 Cmd/Ctrl+Shift+, 는 크기를 한 단계, Alt도 누르면 다섯 단계 바꿉니다. 가로 문자에서 Alt와 위쪽 또는 아래쪽 화살표는 행간을 한 단계, Cmd/Ctrl도 누르면 다섯 단계 바꿉니다.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	자간과 커닝의 단계로, 단위는 1/1000 em입니다. 가로 문자에서 Alt와 왼쪽 또는 오른쪽 화살표는 캐럿 위치의 커닝이나 선택한 텍스트의 자간을 한 단계, Cmd/Ctrl도 누르면 다섯 단계 바꿉니다.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	기준선 이동의 단계입니다. 가로 문자에서 Alt, Shift와 위쪽 또는 아래쪽 화살표는 기준선을 한 단계, Cmd/Ctrl도 누르면 다섯 단계 옮깁니다.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	문자, 단락, OpenType, 글리프 패널에 일본어 등 동아시아 문자의 옵션을 표시하고 합성 글꼴 명령도 표시합니다.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	문자 패널과 단락 패널에 단락 방향, 카시다, 숫자 등 아랍어, 히브리어, 인도계 문자의 옵션을 표시합니다.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	선택 도구는 문자를 기준선, 영역 문자의 프레임 또는 패스에서만 선택하며 상자 안의 아무 곳에서나 선택하지 않습니다.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	글꼴 메뉴에 각 글꼴을 영어 이름으로 표시합니다. 끄면 자국어 이름도 있는 글꼴은 그 이름으로 표시됩니다.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	새 영역 문자는 자동 크기가 켜진 상태로 시작하므로 가로 문자의 직사각형 프레임이 텍스트에 맞게 높이가 늘거나 줄어듭니다.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	글꼴 목록과 글꼴 메뉴에 각 글꼴 이름 옆에 그 글꼴의 견본을 표시합니다.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	글꼴 견본을 인터페이스 밝기와 관계없이 흰 바탕에 어두운 글자로 그립니다. 메뉴의 글꼴 미리 보기가 켜져 있을 때만 적용됩니다.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	문자 패널 같은 글꼴 필드의 목록에서 각 행의 높이이며, 따라서 각 견본의 크기입니다.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	최근 글꼴과 글꼴 목록에 마지막으로 사용한 글꼴을 최신순으로 몇 개 표시할지입니다(1~15).
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	텍스트의 글꼴이나 글꼴 스타일을 바꿀 때 새 글꼴에 글리프가 없는 문자는 원래 글꼴을 유지합니다.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	OpenType 기능이 대체한 합자 등의 글리프를 캔버스에서 분홍색 강조로 표시합니다. 인쇄나 내보내기에는 포함되지 않습니다.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	문자 도구로 한 글자를 선택하면 캔버스에서 그 옆에 고를 수 있는 대체 글리프 줄이 표시됩니다.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	글꼴이 없어 대체 글꼴로 그려진 텍스트를 캔버스에서 분홍색 강조로 표시합니다. 인쇄나 내보내기에는 포함되지 않습니다.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	문자 도구로 만든 새 문자는 선택된 자리 표시자 텍스트로 시작하며, 입력하면 그 텍스트가 바뀝니다.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	단락 시작에서 1. 또는 * 같은 목록 기호와 공백을 입력하면 그 단락이 목록이 됩니다.
+	Fonts in this folder show in the font menus and can be used without being installed.	이 폴더의 글꼴은 글꼴 메뉴에 표시되며 설치하지 않고 사용할 수 있습니다.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	문자에 그래픽 스타일을 적용하면 스타일에 칠이나 선이 있는 곳에서 문자 자체의 칠이나 선이 제거되어 스타일의 페인트가 보입니다.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	정렬과 분포는 포인트 문자를 em 상자 대신 글리프의 잉크로 측정합니다.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	정렬과 분포는 영역 문자를 프레임 대신 글리프의 잉크로 측정합니다.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	테두리 상자와 변형 패널은 포인트 문자를 em 상자 대신 글리프의 잉크로 측정합니다.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	격자가 숨겨져 있어도 그리기, 이동, 크기 조절을 격자의 세분 위치에 스냅합니다. 켜져 있는 동안에는 픽셀에 스냅이 적용되지 않습니다.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	선택되지 않은 안내선의 색상입니다. 안내선 레이블이 있는 아트보드는 자신의 안내선을 레이블 색상으로 그립니다.
+	Draws guides as solid lines or as dots, including the guides already in the document.	문서에 이미 있는 안내선을 포함해 안내선을 실선 또는 점으로 그립니다.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	켜면 VectorCraft가 시작될 때 안내선이 잠깁니다. 이 옵션을 바꾸면 즉시 잠기거나 잠금이 풀리며, 보기 › 안내선 › 안내선 잠그기로도 계속 잠금을 바꿀 수 있습니다.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	켜면 눈금자에서 드래그를 시작할 때 Cmd/Ctrl을 누르고 있으면 활성 아트보드에만 안내선을 만들고, 아트보드 도구에서는 캔버스 전체의 안내선을 만듭니다.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	격자의 색상입니다. 주 격자선 사이의 선은 이 색상의 더 옅은 색조로 그려집니다.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	격자를 선으로, 또는 주 격자선을 따라 각 세분 위치에 점으로 그립니다.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	열려 있는 모든 문서와 새 문서의 주 격자선 간격입니다. VectorCraft 문서는 저장할 때의 격자로 열립니다.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	각 주 격자 칸을 나누는 수입니다. 확대/축소로 선이 숨겨져도 격자에 스냅은 이 위치에 스냅합니다.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	격자를 아트워크 뒤에 그립니다. 끄면 격자를 아트워크 위에 그립니다.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	픽셀 미리 보기에서 600% 이상으로 확대하면 활성 보기에서 아트워크 위에 문서의 각 픽셀 경계마다 선이 표시됩니다.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	패턴을 편집하는 동안 표시되는 타일 가장자리와 점선 견본 경계의 색상입니다.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	그리기, 이동, 변형을 가까운 아트에 스냅하고 안내선과 레이블을 표시합니다. 픽셀 미리 보기에서는 꺼지며, 격자에 스냅이 켜져 있으면 대신 격자에 스냅합니다.
+	The color of Smart Guide lines and labels.	스마트 안내선의 선과 레이블 색상입니다.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	아트가 맞춰지는 가장자리나 중심을 따라 선을 표시합니다. 끄면 선 없이도 맞춰지며, 글리프에 스냅은 적용되지 않습니다.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	선택 도구로 드래그하지 않는 동안 포인터 아래의 선택되지 않은 개체 윤곽을 레이어 색상으로 표시합니다.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	아트의 크기를 조절하거나 회전하거나 기울이거나 반사하는 동안 포인터 옆에 크기나 각도를 표시합니다.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	그리는 동안 점이 세그먼트나 모양의 시작점을 지나는 선택한 각도의 선에 스냅됩니다.
+	The set of angles the construction guides follow while Construction Guides is on.	작도 안내선이 켜져 있을 때 작도 안내선이 따르는 각도 세트입니다.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	앵커, 패스, 정렬처럼 점이 스냅되는 대상의 이름을 표시합니다. 끄면 이름 없이 같은 방식으로 스냅됩니다.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	그리거나 이동하는 동안 포인터 옆에 거리, 각도, 아트가 이동한 거리를 표시합니다.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	이동하거나 크기를 조절한 아트를 가까운 개체 사이와 같은 간격에 스냅하고 같은 간격을 표시합니다.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	무언가를 선택한 상태에서 다른 개체나 아트보드 위에서 Alt/Option 키를 누르고 있으면 그것과 선택 영역 사이의 거리를 표시합니다.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	드래그를 시작한 위치에서 스냅 허용 오차 이내로 다시 드래그한 선택 영역은 정확히 그 위치로 돌아갑니다. 복사본은 돌아가지 않습니다.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	스마트 안내선이 스냅하려면 포인터나 드래그한 점이 화면에서 아트에 얼마나 가까이 와야 하는지입니다. 이 거리는 모든 확대/축소에서 같습니다.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	선 세그먼트의 끝이나 중심에서 그린 원을 가까운 곡선에 닿도록 스냅합니다.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	선 세그먼트의 끝을 가까운 직선 세그먼트와 직각으로 만나도록 스냅합니다.
+	Edit type set in fonts that aren't available?	사용할 수 없는 글꼴로 설정된 문자를 편집하시겠습니까?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	캔버스에서 각 슬라이스의 번호를 왼쪽 위의 상자에 표시합니다. 끄더라도 슬라이스 윤곽선은 계속 표시됩니다.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	사용자 슬라이스와 개체 슬라이스의 윤곽선 및 번호 상자의 색상입니다. 자동 슬라이스에는 이 색상의 더 흐린 색조가 사용됩니다.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	하이픈 넣기가 켜진 단락에서는 목록의 단어에 입력한 하이픈 위치에서만 하이픈이 들어가며, 하이픈이 없으면 하이픈이 들어가지 않습니다. 언어나 대소문자는 상관없습니다.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	데스크톱 버전에서는 이 폴더의 .wasm 플러그인이 시작할 때와 확인으로 새 폴더를 설정할 때 로드됩니다(안전 모드 제외). 권한을 요청하는 플러그인은 권한을 허용한 뒤에만 로드됩니다. 웹 버전은 로드하지 않습니다.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	크게는 필터 또는 명령 플러그인의 각 실행에 같은 시간 제한으로 최소 2억 5천만 개의 명령어를 줍니다. 표준은 플러그인 자체의 예산을 유지합니다. 라이브 효과, 내보내기와 가져오기는 각자의 예산을 유지합니다.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국인 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국이고 [기본 문자 스타일]이 언어를 지정하지 않는 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 언어나 대소문자는 상관없습니다.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	데스크톱 버전에서는 이 폴더의 .wasm 플러그인이 시작할 때와 여기에 새 폴더를 지정하고 확인을 클릭할 때 로드됩니다(안전 모드 제외). 웹 버전은 로드하지 않습니다.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	표준은 각 플러그인 자체의 제한을 유지합니다. 크게에서는 플러그인 필터나 명령이 입력에 필요한 명령어 외에 최소 2억 5천만 개의 명령어를 실행할 수 있습니다. 시간 제한은 그대로입니다.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	플러그인의 개체 필터를 한 번 실행할 때 쓸 수 있는 명령어 수입니다. 크게는 표준보다 많이 허용하며 60초 제한은 같습니다. 무거운 필터는 자체 예산을 유지합니다.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	첫 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	두 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
+	How light or dark the interface is.	인터페이스를 얼마나 밝게 또는 어둡게 표시할지입니다.
+	The set of colors the interface is drawn in.	인터페이스를 그리는 색의 조합입니다.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	켜져 있거나 선택되었거나 포커스가 있는 컨트롤의 색입니다. 색 구성표에 자체 강조 색상이 있는 동안에는 메뉴가 흐리게 표시됩니다.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	아트보드 주변 캔버스의 색입니다. 사용자 인터페이스 밝기에 맞춤은 밝기에서 색을 가져옵니다. 윤곽선 보기에서는 항상 흰색으로 표시됩니다.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	아이콘에서 연 패널은 Esc 키를 누르거나 패널 바깥을 클릭하면 닫힙니다. 끄면 아이콘을 클릭할 때까지 열려 있습니다.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	도구 모음에서 각 도구 그룹의 이름을 해당 도구 위에 표시합니다. 끄면 그룹 사이에 아무것도 없이 이어집니다.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	지금부터 열거나 만드는 문서는 탭으로 열립니다. 끄면 각 문서가 플로팅 창에서 열립니다. 이미 열린 문서는 그대로 있습니다.
+	Makes the document tabs taller and their names larger.	문서 탭을 더 높게, 이름을 더 크게 표시합니다.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	다음 시작부터는 VectorCraft가 자체 제목 표시줄을 그렸을 곳에서 시스템이 창의 제목 표시줄을 그립니다. Linux와 BSD에서는 VECTORCRAFT_TITLEBAR 변수가 우선합니다.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	다음 시작부터는 데스크톱이 제목 표시줄을 그리는 곳에서도 VectorCraft가 창의 제목 표시줄을 그립니다. 단, 시스템 제목 표시줄이 켜져 있거나 VECTORCRAFT_TITLEBAR 변수가 선택하면 그렇지 않습니다.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	인터페이스를 크게 또는 작게 만듭니다. 같은 확대/축소에서 캔버스의 아트는 크기가 그대로입니다.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft가 그리는 도구 포인터가 UI 배율에 따라 커지고 작아집니다. 끄면 크기가 그대로 유지됩니다.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	인터페이스의 언어입니다. 자동은 시스템 언어를 사용합니다. 언어를 고르면 대화 상자가 바로 그 언어로 바뀝니다.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	애니메이션 확대/축소는 이 옵션이 켜져 있을 때만 작동합니다. 끄면 애니메이션 확대/축소가 흐리게 표시되고 확대/축소에 애니메이션이 없습니다.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	휠로 확대/축소하면 부드럽게 움직이고, 확대/축소 도구는 옆으로 드래그하거나 누르고 있으면 확대/축소합니다. 끄면 확대/축소 도구는 드래그한 영역으로 확대합니다.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	다음 시작부터 데스크톱 버전은 이 종류의 그래픽 프로세서를 통해 캔버스를 표시합니다. 아트워크는 항상 CPU에서 그려집니다. 자동은 Windows와 macOS에서 내장 프로세서를 우선합니다. 웹 버전은 사용하지 않습니다.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	다음 시작부터 그래픽 드라이버가 허용하는 경우 창은 디스플레이 새로 고침을 기다리지 않고 각 프레임을 표시하며, 초당 최대 240프레임입니다.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	다음 시작부터 데스크톱 버전은 이 종류의 그래픽 프로세서로 그립니다. 자동은 디스플레이를 구동하는 프로세서를 우선합니다. 웹 버전은 사용하지 않습니다.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	다음 시작부터 창은 디스플레이 새로 고침을 기다리지 않고 프레임을 표시하며, 초당 최대 240프레임입니다. 끄면 디스플레이가 프레임 속도를 정합니다. 시작할 때 지정한 표시 모드가 우선합니다.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	각 문서가 보관하는 실행 취소 단계의 최대 수입니다. 낮추면 확인을 클릭할 때 가장 오래된 단계가 삭제됩니다. 메모리를 너무 많이 쓰면 단계가 더 일찍 삭제될 수도 있습니다.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	드래그하는 동안 아트가 바뀌는 모습을 보여 줍니다. 끄면 윤곽선이 드래그를 따라가고 놓을 때 아트가 바뀝니다. 눈금자 안내선은 드래그하는 동안 항상 움직입니다.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	아트를 그리는 작업자 스레드 수입니다. -1은 VectorCraft가 쓸 수 있는 코어보다 하나 적게(최대 8개) 쓰고, 0은 하나도 쓰지 않습니다. 웹 버전은 항상 쓰지 않습니다.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	다음 시작부터 Wayland 데스크톱에서 X11 (XWayland)은 창을 XWayland를 통해 엽니다. 다른 선택은 펜이 연결되어 있을 때만 그렇게 합니다.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	다음 시작부터 데스크톱 버전은 디스플레이 새로 고침을 기다리지 않고 초당 최대 240프레임까지 표시합니다. 끄면 디스플레이가 프레임 간격을 정합니다.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	더 큰 예산은 오브젝트 필터 실행마다 기본 명령 수를 5배로 늘리고 입력 바이트당 추가분은 그대로 둡니다. 무거운 필터, 라이브 효과, 내보내기 도구와 가져오기 도구는 각자의 한도를 유지합니다.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	시스템이 아직 하지 않는 경우 캔버스의 아트와 아트보드를 디스플레이의 색상 프로필로 변환합니다. 끄면 캔버스는 sRGB로 그려집니다.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	데스크톱 버전에서는 파일 저장이 계속 편집하는 동안 백그라운드에서 기록됩니다. 끄면 기록이 끝날 때까지 기다립니다.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	데스크톱 버전에서는 파일로 내보내기와 패키지가 계속 편집하는 동안 백그라운드에서 기록됩니다(3D 내보내기 제외). 끄면 끝날 때까지 기다립니다.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	몇 분마다 마지막 복사본 이후 저장하지 않은 변경이 있는 각 문서의 복구 복사본을 만듭니다. 끄면 정기 복사본을 만들지 않습니다.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	복구 데이터 자동 저장이 켜져 있는 동안 복구 복사본 사이의 간격(분)입니다.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	데스크톱 버전에서 복구 복사본을 보관하는 폴더입니다. 비워 두면 VectorCraft 자체 폴더를 사용합니다. 웹 버전은 브라우저에 보관합니다.
+	No timed recovery copies are made of documents with more than 20,000 objects.	개체가 20,000개를 넘는 문서는 정기 복구 복사본을 만들지 않습니다.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	최근 파일 열기와 홈 화면에 표시하는 최근 파일의 최대 개수입니다. 0이면 표시하지 않지만 VectorCraft는 여전히 최대 30개를 기억합니다.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	문서를 열 때 저장된 미리 보기를 표시하는 연결된 EPS 이미지는 EPS 파일을 다시 읽지 않고 그 미리 보기를 유지합니다. 변경된 파일은 계속 링크 업데이트 설정을 따릅니다.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	픽셀 미리 보기에서 이미지를 매끄럽게 그립니다. 끄면 픽셀 가장자리가 선명하게 보입니다. 픽셀 미리 보기 밖에서는 이미지가 항상 매끄럽습니다.
+	PDF Text	PDF 텍스트
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	열거나 포함하는 PDF의 텍스트를 편집 가능한 텍스트로, 또는 글꼴이 없는 컴퓨터에서도 똑같이 보이는 윤곽선으로 가져옵니다.
+	Linked pages show the file's own text.	연결된 페이지는 파일 자체의 텍스트를 표시합니다.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	연결된 파일이 바뀌면 자동으로는 다시 읽고, 수정 시 확인은 먼저 묻고, 수동은 그대로 두고 상태 표시줄에 메모를 표시합니다.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	데스크톱 버전에서 템플릿에서 새로 만들기…와 템플릿으로 저장…이 처음 여는 폴더입니다. 비워 두면 문서 폴더의 VectorCraft Templates를 사용합니다.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	원본 편집은 연결된 파일을 해당 유형에 대한 시스템 기본 앱에서 엽니다. 끄면 연결된 래스터 이미지는 PhotoCraft가 설치되어 있을 때 PhotoCraft에서 열립니다.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	이전 버전의 VectorCraft로 저장한 파일은 이름 뒤에 [Converted]가 붙어 열리고, 저장은 저장할 위치를 묻습니다. 끄면 저장이 파일을 바꿉니다.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft 파일과 템플릿은 저장에서 달리 지정하지 않는 한 압축되어 더 작게 저장됩니다. 압축 파일을 열 수 없는 버전용으로 저장하면 압축하지 않습니다.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	복사와 잘라내기는 아트의 SVG 코드도 다른 앱에 전달합니다. 데스크톱에서는 아트에 1 MiB가 넘는 이미지가 포함되면 코드가 텍스트로 복사되지 않습니다.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows에서는 복사와 잘라내기가 아트의 PDF도 다른 앱에 전달합니다. 다른 플랫폼은 아직 PDF를 복사하지 않습니다.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft는 이 선택을 저장하지만 복사와 잘라내기는 아직 레거시 벡터 클립보드 형식을 사용하지 않습니다.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	레거시 벡터 클립보드의 패스 보존 또는 모양 및 오버프린트 보존입니다. VectorCraft는 선택을 저장하지만 아직 사용하지 않습니다.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	서식 유지는 VectorCraft 텍스트 개체에서 복사한 텍스트를 텍스트 개체에 붙여넣을 때 스타일을 유지하고, 일반 텍스트 유지는 붙여넣은 위치의 스타일을 적용합니다.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	모든 검정을 리치 블랙으로 표시는 순수 CMYK 검정(검정 잉크만 100%)을 캔버스에서 RGB 검정으로 표시하고, 모든 검정 정확히 표시는 작업용 CMYK 공간을 통해 변환합니다.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	모든 검정을 리치 블랙으로 출력은 RGB 및 그레이스케일 래스터 내보내기와 비트맵으로 인쇄에서 순수 CMYK 검정을 RGB 검정으로 그리며, 벡터 내보내기, CMYK JPEG, TIFF 및 PSD, 기타 인쇄는 바꾸지 않습니다.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	터치 스크린에서는 터치 작업 영역으로 전환합니다. 이 설정을 끄거나 터치 스크린이 사라지면 전환하기 전의 작업 영역으로 돌아갑니다.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	캔버스를 두 손가락으로 탭하면 실행 취소하거나 터치 작업 영역에서 선택 도구와 그리기 도구를 전환하고, 세 손가락으로 탭하면 다시 실행합니다. 프레젠테이션 모드에서는 둘 다 작동하지 않습니다.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 대소문자는 상관없습니다. 한국어 단어에는 하이픈이 붙지 않으며, 인도 언어의 단어는 문자 묶음 안에서 나뉘지 않습니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
@@ -3056,6 +3514,7 @@ mark-style	Japanese	일본식
 	Roman Hanging Punctuation	로마자 걸림 문장 부호
 	Korean Line Break Anywhere	한글 어디서나 줄 바꿈
 	Bunri-Kinshi	분리 금지
+	Kurikaeshi Moji Shori	반복 문자 처리
 	East Asian Composition Settings	동아시아 조판 설정
 	Korean Composition Settings	한글 조판 설정
 	Rotate	회전
@@ -3070,6 +3529,7 @@ mark-style	Japanese	일본식
 	Rounded Rectangle	둥근 사각형
 	Rounded Rectangle Tool	둥근 사각형 도구
 	Row Size:	행 크기:
+	Rows	행
 	Rows:	행:
 	Rule:	규칙:
 	Rulers & Grids	눈금자 및 격자
@@ -3098,6 +3558,7 @@ mark-style	Japanese	일본식
 	Save Document Preset	문서 사전 설정 저장
 	Preset {number}	사전 설정 {number}
 	Save Preset…	사전 설정 저장…
+	Save Summary…	요약 저장…
 	Save Print Preset	인쇄 사전 설정 저장
 	Save Recovery Data	복구 데이터 저장
 	Save Save for Web Preset	웹용 저장 사전 설정 저장
@@ -3162,8 +3623,25 @@ mark-style	Japanese	일본식
 	Filter Layers Panel Rows	레이어 패널 행 필터링
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom`은 변경된 설정을 나타냅니다. 프리셋을 다른 이름으로 저장하세요
 @msg	`{key}` must be an array of these names: {_1}	`{key}`은(는) 다음 이름의 배열이어야 합니다: {_1}
-	Search commands and tools	명령 및 도구 검색
-	Search commands and tools…	명령 및 도구 검색…
+	Search commands, tools, panels and effects	명령, 도구, 패널 및 효과 검색
+	Search commands, tools, panels and effects…	명령, 도구, 패널 및 효과 검색…
+	No commands match	일치하는 명령이 없습니다
+	{pos} of {total}: {name}	{total}개 중 {pos}번째: {name}
+	No menu item	메뉴 항목 없음
+	Toolbar	도구 모음
+	{toolbar}, in the {tool} group	{toolbar}, {tool} 그룹
+	In the menu bar: {path}	메뉴 막대: {path}
+	In the {group} group: press and hold to open it	{group} 그룹: 길게 눌러 여세요
+	{home}, not shown now	{home}, 지금 표시되지 않음
+	Tool	도구
+	Command	명령
+@plural	{n} result|{n} results	결과 {n}개
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	결과 {n}개 중 {shown}개. 계속 입력하여 범위를 좁히세요.
+	Recent Commands	최근 명령
+	No recent commands	최근 명령 없음
+	Type to search commands, tools, panels and effects	입력하여 명령, 도구, 패널 및 효과 검색
+	Clear Recent Commands	최근 명령 목록 지우기
+	Search commands	명령 검색
 	Secondary	보조
 	Select All Art on Layer	레이어의 모든 아트웍 선택
 	Select All Assets	모든 에셋 선택
@@ -3216,6 +3694,7 @@ mark-style	Japanese	일본식
 	Set Text	문자 설정
 	Set Zoom	확대/축소 설정
 	Set base color to the current color	기준 색상을 현재 색상으로 설정
+	Set the current fill or stroke to the selected color	현재 칠 또는 선을 선택한 색상으로 설정
 	Set the selected color to the current color	선택한 색상을 현재 색상으로 설정
 	Setup…	설정…
 	Shape Builder	모양 빌더
@@ -3237,6 +3716,7 @@ mark-style	Japanese	일본식
 	Show Brush Size	브러시 크기 표시
 	Show Center	중심 표시
 	Show Code	코드 표시
+	Show in Browser	브라우저에서 보기
 	Show East Asian Options	동아시아 옵션 표시
 	Show Find Field	찾기 필드 표시
 	Show Font Names in English	글꼴 이름을 영어로 표시
@@ -3247,6 +3727,7 @@ mark-style	Japanese	일본식
 	Show List View	목록 보기 표시
 	Show Note	메모 표시
 	Show Options	옵션 표시
+	Show on Shape Creation	모양 생성 시 표시
 	Show Recent Colors	최근 색상 표시
 	Toggle RGB Percent	RGB 백분율 표시 전환
 	Show Original Path	원래 패스 표시
@@ -3268,13 +3749,14 @@ mark-style	Japanese	일본식
 	Show Thumbnails	축소판 표시
 	Show Tile Edge	타일 가장자리 표시
 	Show Tints/Shades	밝은/어두운 색조 표시
+	Show Tool Cards	도구 카드 표시
 	Show Tool Tips	도구 설명 표시
 	Show Vivid/Muted	선명/탁한 색상 표시
 	Show Warm/Cool	따뜻한/차가운 색상 표시
 	Show all plates	모든 분판 표시
 	Show handles when multiple anchors are selected	여러 앵커 선택 시 핸들 표시
 	Show {kind} Brushes	{kind} 브러시 표시
-	Show/hide plate (Alt-click: only this plate)	분판 표시/숨기기(Alt 클릭: 이 분판만)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	분판 표시/숨기기(Alt 클릭: 이 분판만, 다시 Alt 클릭: 모든 분판)
 	Show:	표시:
 	Shown with the optimised preview.	최적화된 미리 보기와 함께 표시됩니다.
 	Side 1:	면 1:
@@ -3317,6 +3799,8 @@ mark-style	Japanese	일본식
 	Outlines	윤곽선
 	Outlines with Source Image	원본 이미지 포함 윤곽선
 	Source Image	원본 이미지
+	Split View	분할 보기
+	Divider	구분선
 	Press and hold to view the source image	누르고 있는 동안 원본 이미지 보기
 	Image Trace View	이미지 추적 보기
 	Snap Options	스냅 옵션
@@ -3401,6 +3885,9 @@ mark-style	Japanese	일본식
 	Swap Fill and Stroke	칠과 선 바꾸기
 	Swap start and end arrowheads	시작과 끝 화살촉 바꾸기
 	Stylistic Alternates	스타일 대체 글자
+	Ligatures	합자
+	Ornaments	장식
+	Figures	숫자
 	Swash	스워시
 	Swatch Conflict	견본 충돌
 	Swatch Conflicts	견본 충돌
@@ -3567,6 +4054,8 @@ mark-style	Japanese	일본식
 	Unembed	포함 해제
 	Unembed…	포함 해제…
 	Ungroup Color Group	색상 그룹 해제
+	Color Group Options	색상 그룹 옵션
+	Color Group Options…	색상 그룹 옵션…
 	Uniform	균일
 	Unite	합치기
 	Units	단위
@@ -3626,6 +4115,8 @@ mark-style	Japanese	일본식
 	User Swatch Library 9	사용자 견본 라이브러리 9
 	V Spacing:	세로 간격:
 	Variable Width Profile	가변 너비 프로파일
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	선의 브러시는 고유한 크기를 유지하므로 너비 프로파일로 바뀌지 않습니다. 프로파일을 사용하려면 브러시를 제거하세요.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	선의 브러시는 고유한 크기를 유지하므로 너비 프로파일로 바뀌지 않습니다. 프로파일을 사용하려면 브러시를 제거하세요.
 	Variation:	변형:
 	Vector Halftone	벡터 하프톤
 	Vector illustration — fast, open, scriptable.	벡터 일러스트레이션 — 빠르고 개방적이며 스크립트 지원.
@@ -3639,7 +4130,7 @@ mark-style	Japanese	일본식
 	Vertical Type Tool	세로 문자 도구
 	Vertical Type on a Path Tool	패스 상의 세로 문자 도구
 	Vertical:	세로:
-	View Artboard Only	아트보드만 보기
+	View Artboard Contents Only	아트보드 내용만 보기
 	View Opacity Mask	불투명 마스크 보기
 	View PDF after saving	저장 후 PDF 보기
 	Viewing Angle:	시야각:
@@ -3838,6 +4329,17 @@ gradient-kind	Radial	방사형
 	Largest:	최대:
 	Direction:	방향:
 	Symbolism Tools Options	심볼 도구 옵션
+	Tool:	도구:
+	Symbol Set Density	심볼 세트 밀도
+	Symbol Sprayer Options	심볼 분무기 옵션
+	Scrunch:	스크런치:
+	Spin:	회전:
+	Screen:	스크린:
+	Stain:	염색:
+	Symbol Sizer Options	심볼 크기 조절기 옵션
+	Proportional Resizing	비율에 맞게 크기 조정
+	Resizing Affects Density	크기 조정이 밀도에 영향
+	Show Brush Size and Intensity	브러시 크기 및 강도 표시
 	Symbol Set Density:	심볼 세트 밀도:
 	Flattener presets	병합 프리셋
 file-filter	All readable files	읽을 수 있는 모든 파일
@@ -3846,6 +4348,9 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Tracing presets	추적 프리셋
+file-filter	Action sets	액션 세트
+file-filter	Composite fonts	합성 글꼴
 file-filter	Preferences	환경 설정
 file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG
@@ -3862,6 +4367,8 @@ file-filter	Templates	템플릿
 	Gradient (. or Shift+.)	그레이디언트 (. 또는 Shift+.)
 	Graph Data	그래프 데이터
 	Graph Type	그래프 유형
+	Graph Type…	그래프 유형…
+	Graph Data…	그래프 데이터…
 	Graph Options	그래프 옵션
 	Left Axis	왼쪽 축
 	Right Axis	오른쪽 축
@@ -3879,6 +4386,7 @@ file-filter	Templates	템플릿
 	Connect Data Points	데이터 요소 연결
 	Edge-to-Edge Lines	가장자리 간 선
 	Draw Filled Lines	채워진 선 그리기
+	Line Width	선 너비
 	Tick Values	눈금 값
 	Override Calculated Values	계산된 값 재정의
 	Divisions	구간
@@ -3925,6 +4433,17 @@ file-filter	Templates	템플릿
 	Stacked	누적
 	Graphic Style Libraries Menu	그래픽 스타일 라이브러리 메뉴
 	Graphics	그래픽
+	Show Contrast	대비 표시
+	Contrast For	대비 기준
+	Normal Text	일반 텍스트
+	Large Text	큰 텍스트
+	Contrast Background	대비 배경
+	Behind Selection	선택 영역 뒤
+	Current Color	현재 색상
+	Pass	통과
+	Fail	실패
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 최소 대비: 일반 텍스트 AA 4.5:1 (1.4.3) 및 AAA 7:1 (1.4.6), 큰 텍스트 AA 3:1 및 AAA 4.5:1, 그래픽과 컨트롤 AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	배경은 선택 영역의 중앙에서 읽습니다.
 	Greek & Cyrillic	그리스어 및 키릴 문자
 	Hex by Column	열 기준 육각형
 	Hex by Row	행 기준 육각형
@@ -3954,6 +4473,11 @@ file-filter	Templates	템플릿
 	Keep the pasted color as a new swatch with a numbered name.	붙여넣은 색상을 번호가 붙은 이름의 새 견본으로 보관합니다.
 	Keep:	유지:
 	Lab	Lab
+	OKLCH Sliders	OKLCH 슬라이더
+	HSL Sliders	HSL 슬라이더
+	Chroma	크로마
+	The largest chroma sRGB holds at this lightness and hue	이 명도와 색조에서 sRGB가 담을 수 있는 최대 크로마
+	OKLCH needs sRGB as the working RGB space	OKLCH를 사용하려면 작업 RGB 공간이 sRGB여야 합니다
 	Lab Values	Lab 값
 	Large List View	큰 목록 보기
 	Large Thumbnail View	큰 축소판 보기
@@ -4116,7 +4640,7 @@ file-filter	Templates	템플릿
 	Composite Fonts	합성 글꼴
 	Export Composite Fonts	합성 글꼴 내보내기
 	Import Composite Fonts	합성 글꼴 가져오기
-@msg	each font must be {name, parts}	각 글꼴은 {name, parts} 형식이어야 합니다
+@msg	each font must be {{name, parts}}	각 글꼴은 {{name, parts}} 형식이어야 합니다
 @msg	unknown key `{k}`; a font takes name and parts	알 수 없는 키 `{k}`: 글꼴에는 name과 parts만 쓸 수 있습니다
 @msg	each font needs a name	각 글꼴에는 이름이 필요합니다
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}`은(는) 합성 글꼴 이름으로 쓸 수 없습니다(1~{COMPOSITE_NAME_MAX}자, 제어 문자 없음)
@@ -4129,7 +4653,7 @@ file-filter	Templates	템플릿
 @msg	two composite fonts are named `{_1}`	이름이 `{_1}`인 합성 글꼴이 두 개 있습니다
 @msg	`{_1}` is the name of an installed font	`{_1}`은(는) 설치된 글꼴의 이름입니다
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2}이(가) 합성 글꼴인 `{font}`(으)로 설정되어 있습니다
-@msg	give fonts: [{name, parts}…]	fonts를 지정하세요: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	fonts를 지정하세요: [{{name, parts}}…]
 @msg	path is empty	path가 비어 있습니다
 @msg	fonts must be a list of composite fonts	fonts는 합성 글꼴 목록이어야 합니다
 @msg	names must be strings	names는 문자열이어야 합니다
@@ -4216,21 +4740,21 @@ file-filter	Templates	템플릿
 	[Normal Character Style]	[기본 문자 스타일]
 	[Normal Paragraph Style]	[기본 단락 스타일]
 imageTrace	Outline	윤곽선
-@plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)|색상 표 ({n}색)
-@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?|그래픽 스타일 {n}개를 삭제하시겠습니까?
-@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?|브러시 {n}개를 삭제하시겠습니까?
+@plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)
+@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?
 @plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	견본과 그룹 {n}개를 삭제하시겠습니까?
-@plural	{n} Layer|{n} Layers	레이어 {n}개|레이어 {n}개
-@plural	{n} Object|{n} Objects	개체 {n}개|개체 {n}개
-@plural	{n} area highlighted|{n} areas highlighted	강조된 영역 {n}개|강조된 영역 {n}개
-@plural	{n} color|{n} colors	색상 {n}개|색상 {n}개
-@plural	{n} fill|{n} fills	칠 {n}개|칠 {n}개
-@plural	{n} glyph|{n} glyphs	글리프 {n}개|글리프 {n}개
-@plural	{n} item|{n} items	항목 {n}개|항목 {n}개
-@plural	{n} object highlighted|{n} objects highlighted	강조된 개체 {n}개|강조된 개체 {n}개
-@plural	{n} star|{n} stars	별 {n}개|별 {n}개
-@plural	{n} step|{n} steps	단계 {n}개|단계 {n}개
-@plural	{n} stroke|{n} strokes	선 {n}개|선 {n}개
+@plural	{n} Layer|{n} Layers	레이어 {n}개
+@plural	{n} Object|{n} Objects	개체 {n}개
+@plural	{n} area highlighted|{n} areas highlighted	강조된 영역 {n}개
+@plural	{n} color|{n} colors	색상 {n}개
+@plural	{n} fill|{n} fills	칠 {n}개
+@plural	{n} glyph|{n} glyphs	글리프 {n}개
+@plural	{n} item|{n} items	항목 {n}개
+@plural	{n} object highlighted|{n} objects highlighted	강조된 개체 {n}개
+@plural	{n} star|{n} stars	별 {n}개
+@plural	{n} step|{n} steps	단계 {n}개
+@plural	{n} stroke|{n} strokes	선 {n}개
 	Delete Anchor Points	앵커 포인트 삭제
 	Edit Selection	선택 영역 편집
 	Saved Selection 1	저장된 선택 영역 1
@@ -4274,8 +4798,8 @@ imageTrace	Outline	윤곽선
 	Merged PRs	병합된 PR
 	PRs	PR
 	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, 줄 +{added} / −{deleted} (Δ {delta}), 바이너리 에셋 +{binary_added} / −{binary_deleted}, {first} – {last}
-@plural	{n} PR|{n} PRs	PR {n}개|PR {n}개
-@plural	{n} commit|{n} commits	커밋 {n}개|커밋 {n}개
+@plural	{n} PR|{n} PRs	PR {n}개
+@plural	{n} commit|{n} commits	커밋 {n}개
 	Commits	커밋
 	Lines added	추가된 줄
 	Lines deleted	삭제된 줄
@@ -4298,6 +4822,7 @@ imageTrace	Outline	윤곽선
 	Bevel	베벨
 	Offset	오프셋
 	Axis	축
+	Axis Angle	축 각도
 axis	Horizontal	가로
 axis	Vertical	세로
 axis	Both	양쪽
@@ -4454,10 +4979,13 @@ theme	Appearance	외관
 @msg	the art has no bounds	아트웍에 경계가 없습니다
 @msg	Image Trace: the traced image is missing	이미지 추적: 추적한 이미지가 없습니다
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	라이브 페인트 병합: 라이브 페인트 그룹과 추가할 패스를 선택하세요
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face`와 `Edge`는 라이브 페인트 그룹의 면과 가장자리 이름입니다: 패스에 다른 이름을 지정하세요
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	라이브 페인트는 패스와 컴파운드 패스만 사용할 수 있습니다: 텍스트, 이미지 및 기타 개체를 먼저 패스로 변환하세요
 @msg	Live Paint: select paths or compound paths	라이브 페인트: 패스 또는 컴파운드 패스를 선택하세요
 @msg	Live Paint: these paths are too degenerate to paint	라이브 페인트: 이 패스는 퇴화되어 칠할 수 없습니다
 @msg	Shape Builder: no region under the pointer	모양 빌더: 포인터 아래에 영역이 없습니다
+@msg	Fill Area: no enclosed area under the pointer	영역 채우기: 포인터 아래에 닫힌 영역이 없습니다
+@msg	Shape Builder: select all paths you want to merge	모양 빌더: 병합할 패스를 모두 선택하세요
 @msg	Shape Builder: select paths or compound paths	모양 빌더: 패스 또는 컴파운드 패스를 선택하세요
 @msg	image data `{_1}` is missing	이미지 데이터 `{_1}`이(가) 없습니다
 @msg	no Live Paint edge near that point	그 지점 근처에 라이브 페인트 가장자리가 없습니다
@@ -4493,6 +5021,13 @@ theme	Appearance	외관
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	데이터 세트가 {MAX_CSV_ROWS}개보다 많습니다: 데이터 세트 가져오기는 최대 {MAX_CSV_ROWS}개를 읽습니다
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	변수가 {MAX_CSV_COLS}개보다 많습니다: 데이터 세트 가져오기는 최대 {MAX_CSV_COLS}개를 읽습니다
 @msg	variables that aren't text were left out: {kinds}	텍스트가 아닌 변수는 제외되었습니다: {kinds}
+variable-kind	Visibility	가시성
+variable-kind	Linked File	연결된 파일
+variable-kind	Graph Data	그래프 데이터
+variable-kind	Unknown	알 수 없음
+variable-list-two	{0}, {1}	{0} 및 {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	a new document won't read these variables back with their kind: {names}	새 문서는 이 변수들을 원래 종류로 다시 읽지 않습니다: {names}
 @msg	a new document refuses this file because of these variables: {names}	새 문서는 이 변수들 때문에 이 파일을 거부합니다: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}`의 머리글 `{header}`은(는) 변수 `{other}`(으)로 다시 읽힙니다: 둘 중 하나의 이름을 바꾸십시오
@@ -4510,8 +5045,13 @@ theme	Appearance	외관
 @msg	no such spine point	해당 스파인 포인트가 없습니다
 @msg	`with` must be a list of at most 10000 spine point indexes	`with`는 스파인 포인트 인덱스 최대 10000개의 목록이어야 합니다
 @msg	`with` moves points, not a handle	`with`는 포인트를 이동하며 핸들에는 쓸 수 없습니다
+@msg	`link` and `independent` cannot both be true	`link`와 `independent`를 동시에 true로 지정할 수 없습니다
+@msg	`link` places a handle: give `handle`	`link`는 핸들을 배치합니다. `handle`을 지정하십시오
 @msg	no such spine segment	해당 스파인 세그먼트가 없습니다
 @msg	no such subpath	해당 하위 패스가 없습니다
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces`는 최대 10000개 조각의 목록이어야 합니다
+@msg	give either `start` for a new path or `id`, not both	새 패스의 `start`와 `id` 중 하나만 지정하세요
+@msg	`subpath` and `keep` need `id`	`subpath`와 `keep`에는 `id`가 필요합니다
 @msg	object {id} is not a path	개체 {id}은(는) 패스가 아닙니다
 @msg	object {id} is not a selected top-level object	개체 {id}은(는) 선택된 최상위 개체가 아닙니다
 @msg	nothing to redo	다시 실행할 항목이 없습니다
@@ -4519,11 +5059,13 @@ theme	Appearance	외관
 @msg	no history to clear	지울 히스토리가 없습니다
 @msg	no history state {v}	히스토리 상태 {v}이(가) 없습니다
 @msg	Expand Appearance: the selection has a basic appearance	모양새 확장: 선택 항목은 기본 모양새입니다
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	일부 래스터 효과는 이미지로 만들지 않았습니다: 이미지 1,024개 또는 총 256메가픽셀을 넘기 때문입니다
 @msg	select (or target) objects whose appearance isn't basic	모양새가 기본이 아닌 개체를 선택(또는 대상 지정)하세요
 @msg	{C}: no effect at index {from}	{C}: 인덱스 {from}에 효과가 없습니다
 @msg	Expand: no gradient fills	확장: 그레이디언트 칠이 없습니다
 @msg	Expand: nothing to expand	확장: 확장할 항목이 없습니다
 @msg	batch step {_1} (`{id}`) failed: {e}	일괄 처리 단계 {_1}(`{id}`) 실패: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	액션 단계 {_1}(`{id}`) 실패: {reason}
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP 파일은 RGB 또는 그레이스케일입니다: colorModel rgb 또는 gray
 @msg	Targa files are RGB: colorModel rgb	Targa 파일은 RGB입니다: colorModel rgb
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art 또는 type이어야 합니다
@@ -4620,6 +5162,18 @@ theme	Appearance	외관
 @msg	image would be too large; lower the resolution	이미지가 너무 커집니다. 해상도를 낮추세요
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
+@msg	`points` must be two or three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 두 개 또는 세 개여야 합니다
+@msg	direct-select two or three anchor points, or give `points`	앵커 포인트 두 개 또는 세 개를 직접 선택하거나 `points`를 지정하세요
+@msg	the path is straight there, so no circle matches its curvature	패스가 그 위치에서 직선이므로 곡률에 맞는 원이 없습니다
+@msg	the path has a cusp there, so it has no single curvature	패스가 그 위치에서 뾰족하므로 곡률이 하나로 정해지지 않습니다
+@msg	the path has a corner there, so it has no single curvature	패스가 그 위치에서 모서리를 이루므로 곡률이 하나로 정해지지 않습니다
+@msg	a guide has no curvature circle	안내선에는 곡률원이 없습니다
+@msg	the circle that matches the path there would reach past the canvas	그 위치에서 패스에 맞는 원이 캔버스를 벗어납니다
+@msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
+@msg	`at` must be "start" or "end"	`at`은(는) "start" 또는 "end"여야 합니다
+@msg	give exactly one of `through` and `toward`	`through`와 `toward` 중 정확히 하나만 지정하세요
+@msg	no arc fits these points: two are the same or all three lie on one line	이 점들에 맞는 호가 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
+@msg	give `at` only with `toward`	`at`은(는) `toward`와 함께만 지정하세요
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
 @msg	no saved presets	저장된 프리셋이 없습니다
@@ -4627,9 +5181,11 @@ theme	Appearance	외관
 @msg	no bounds	경계가 없습니다
 @msg	no current layer	현재 레이어가 없습니다
 @msg	no key object	키 개체가 없습니다
+@msg	Align to Key Object isn't available with the Artboard tool	아트보드 도구에서는 키 개체에 정렬을 사용할 수 없습니다
 @msg	no previous transform	이전 변형이 없습니다
 @msg	nothing to align	정렬할 항목이 없습니다
 @msg	select a clip group	클립 그룹을 선택하세요
+@msg	select a flare	플레어를 선택하세요
 @msg	select two or more objects to distribute	분포할 개체를 두 개 이상 선택하세요
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis는 "vertical", "horizontal" 또는 도 단위 각도여야 합니다: `{v}`
 @msg	give horizontal or vertical	horizontal 또는 vertical을 지정하세요
@@ -4660,8 +5216,11 @@ theme	Appearance	외관
 @msg	{label}: lost track of a shape's style	{label}: 모양의 스타일을 잃었습니다
 @msg	{label}: select paths	{label}: 패스를 선택하세요
 @msg	{label}: select paths, compound paths, groups or text	{label}: 패스, 컴파운드 패스, 그룹 또는 텍스트를 선택하세요
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	영역을 둘러싸지 않는 선이나 기타 열린 패스는 결과의 모양을 바꾸지 않습니다. 포함하려면 먼저 개체 › 패스 › 선 윤곽선화를 적용하세요
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label}의 결과가 비어 있습니다. 선이나 기타 열린 패스가 영역을 둘러싸지 않습니다. 포함하려면 먼저 개체 › 패스 › 선 윤곽선화를 적용하세요
 @msg	already editing a pattern	이미 패턴을 편집 중입니다
 @msg	no pattern `{name}`	`{name}` 패턴이 없습니다
+@msg	art painted with `{name}` can't be its tile	`{name}` 패턴으로 칠한 아트웍은 그 타일이 될 수 없습니다
 @msg	not in pattern editing mode	패턴 편집 모드가 아닙니다
 @msg	finish editing the pattern first	먼저 패턴 편집을 마치세요
 @msg	pattern missing	패턴이 없습니다
@@ -4729,6 +5288,7 @@ theme	Appearance	외관
 @msg	select a stroke with a variable width	가변 너비 선을 선택하세요
 @msg	the selected stroke's profile is already listed as {_1}	선택한 선의 프로파일이 이미 {_1}(으)로 등록되어 있습니다
 @msg	a graphic style named `{to}` already exists	`{to}` 그래픽 스타일이 이미 있습니다
+@msg	a swatch or color group named `{name}` already exists	`{name}` 견본 또는 색상 그룹이 이미 있습니다
 @msg	a key object sits on that point	그 포인트에 키 개체가 있습니다
 @msg	no graphic style `{name}`	`{name}` 그래픽 스타일이 없습니다
 @msg	node {_1} is not text	노드 {_1}은(는) 텍스트가 아닙니다
@@ -4741,6 +5301,8 @@ theme	Appearance	외관
 @msg	Create Outlines: select text objects	윤곽선 만들기: 텍스트 개체를 선택하세요
 @msg	paste unavailable	붙여넣을 수 없습니다
 @msg	Save for Web: the image is empty	웹용으로 저장: 이미지가 비어 있습니다
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: 색상 표에 색상이 하나 이상 남아 있어야 합니다
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}`이(가) 다른 키와 같은 색상을 가리킵니다
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`은(는) "#ff8800" 같은 색상이 아닙니다
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: 색상은 최대 {MAX_TABLE}개입니다
 @msg	no artboard {i} (0-based; the document has {_1})	아트보드 {i}이(가) 없습니다(0부터 시작, 문서의 아트보드 수: {_1})
@@ -4988,6 +5550,12 @@ theme	Appearance	외관
 @msg	no preset editor	프리셋 편집기가 없습니다
 @msg	no perspective grid preset named `{name}`	`{name}`이라는 원근 격자 프리셋이 없습니다
 @msg	no active perspective plane	활성 원근 평면이 없습니다
+@msg	the perspective grid is hidden	원근 격자가 숨겨져 있습니다
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	자동 평면 배치가 꺼져 있습니다: anchorPoint 또는 gridlineIntersection을 켜세요 (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint는 true 또는 false여야 합니다
+@msg	gridlineIntersection must be true or false	gridlineIntersection은 true 또는 false여야 합니다
+@msg	tolerance must be 0 or more	tolerance는 0 이상이어야 합니다
+@msg	give `at` or `clear`, not both	`at`과 `clear` 중 하나만 지정하세요
 @msg	plane must be left, right or ground	plane은 left, right 또는 ground여야 합니다
 @msg	missing `id` (see plugin.list)	`id`가 없습니다(plugin.list 참조)
 @msg	no plug-in {id} is installed	플러그인 {id}이(가) 설치되어 있지 않습니다
@@ -5014,6 +5582,11 @@ theme	Appearance	외관
 @msg	1 hidden object	숨겨진 개체 1개
 @msg	{n} hidden objects	숨겨진 개체 {n}개
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일을 다운로드합니다)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK`에 원하는 파일 크기를 K(1024바이트) 단위로 지정하세요: 0보다 크고 1048576 이하인 숫자
+@msg	`startWith` is `current` or `auto`	`startWith`는 `current` 또는 `auto`입니다
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use`는 `allSlices`, `eachSlice` 또는 `currentSlice`입니다
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice`는 `slice.list`의 분할 번호이며 `use: currentSlice`와 함께 씁니다
+@msg	Optimize to File Size: there is no image to measure	파일 크기에 맞게 최적화: 측정할 이미지가 없습니다
 @msg	no file system here	여기에는 파일 시스템이 없습니다
 @msg	nothing to preview	미리 볼 항목이 없습니다
 @msg	Saved {n} files beside {path}	{path} 옆에 파일 {n}개를 저장했습니다
@@ -5033,11 +5606,17 @@ theme	Appearance	외관
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}`은(는) 색상이 아닙니다(#rrggbb 또는 프리셋 이름)
 @msg	give the path `id` and the width point `index`	패스 `id`와 너비 점 `index`를 지정하세요
 @msg	no such width point	해당 너비 점이 없습니다
+@msg	`single` must be `incoming` or `outgoing`	`single`은 `incoming` 또는 `outgoing`이어야 합니다
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index`와 `outIndex`는 하나의 불연속 너비 점의 두 절반이어야 합니다
+@msg	a discontinuous width point keeps its place	불연속 너비 점은 위치를 유지합니다
 @msg	onto must name a panel floating in another group	onto는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	below and above must name a panel floating in another group	below와 above는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
+@msg	give only one of `index`, `indices` and `t`	`index`, `indices`, `t` 중 하나만 지정하세요
 @msg	column must be true or a number from 1	column은 true이거나 1 이상의 숫자여야 합니다
 @msg	unknown panel `{raw}`	알 수 없는 패널 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}`에는 전환할 표시 크기가 없습니다
+@msg	the panels are not shown	패널이 표시되지 않습니다
 @msg	panels can't be shown in Presentation Mode	프레젠테이션 모드에서는 패널을 표시할 수 없습니다
 @msg	x and y must both be numbers	x와 y는 모두 숫자여야 합니다
 @msg	Downloaded {what}	{what}을(를) 다운로드했습니다
@@ -5050,6 +5629,7 @@ theme	Appearance	외관
 @msg	no file manager here	여기에는 파일 관리자가 없습니다
 @msg	no revert command	되돌리기 명령이 없습니다
 @msg	the Save PDF dialog didn't open	PDF 저장 대화상자가 열리지 않았습니다
+@msg	the Save PDF dialog is not open	PDF 저장 대화상자가 열려 있지 않습니다
 @msg	the document has never been saved	문서가 저장된 적이 없습니다
 @msg	the export returned unreadable data	내보내기가 읽을 수 없는 데이터를 반환했습니다
 @msg	{status} ({e})	{status}({e})
@@ -5060,6 +5640,10 @@ theme	Appearance	외관
 @msg	No saved views (View → New View…)	저장된 보기가 없습니다(보기 → 새 보기…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command`는 메뉴 항목이 대화상자를 여는 명령이어야 합니다(ui.menuDialog 참조)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`은(는) grayscale, rgb, hsb, cmyk, websafe 중 하나여야 합니다
+@msg	`view` must be wheel or box	`view`은(는) wheel, box 중 하나여야 합니다
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`은(는) hue, saturation, brightness, red, green, blue 중 하나여야 합니다
+@msg	`sliders` must be none, oklch or hsl	`sliders`는 none, oklch 또는 hsl이어야 합니다
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH를 사용하려면 작업 RGB 공간이 sRGB여야 합니다
 @msg	`{key}` must be true or false	`{key}`은(는) true 또는 false여야 합니다
 @msg	`top` and `below` can't both be true	`top`과 `below`를 동시에 true로 지정할 수 없습니다
 @msg	`select` must be true or false	`select`은(는) true 또는 false여야 합니다
@@ -5094,6 +5678,10 @@ theme	Appearance	외관
 @msg	no such view	해당 보기가 없습니다
 @msg	printing isn't available here	여기서는 인쇄할 수 없습니다
 @msg	select an image	이미지를 선택하세요
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	개체 {_1}은(는) 원근 왜곡 또는 자유 왜곡으로 변경된 이미지이므로 이 명령을 사용할 수 없습니다
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	이미지 {_1}을(를) 이렇게 왜곡할 수 없습니다: 모서리가 볼록한 모양을 이루지 않습니다
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	이미지 {_1}을(를) 이렇게 왜곡할 수 없습니다: 모서리가 왜곡의 지평선을 넘습니다
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	이미지 {_1}을(를) 이렇게 왜곡할 수 없습니다: 모서리가 원근 매핑을 하기에 너무 가깝습니다
 @msg	`background` must be edges, corners or colors	`background`는 edges, corners 또는 colors여야 합니다
 @msg	`match` must be distance or channels	`match`는 distance 또는 channels여야 합니다
 @msg	`{key}` must be from 0 to 100	`{key}`는 0에서 100 사이여야 합니다
@@ -5141,6 +5729,21 @@ theme	Appearance	외관
 	Show External Script Warning	외부 스크립트 경고 표시
 	A Script Is Running	스크립트 실행 중
 	Script Alert	스크립트 알림
+	Script File Access	스크립트 파일 접근
+	The script asks to read a file you choose.	스크립트가 선택한 파일을 읽도록 요청합니다.
+	The script asks to read and write a file you choose.	스크립트가 선택한 파일을 읽고 쓰도록 요청합니다.
+	The script asks to read and write a folder you choose, with everything in it.	스크립트가 선택한 폴더와 그 안의 모든 항목을 읽고 쓰도록 요청합니다.
+	Allow Once	한 번 허용
+	Always Allow This Script	이 스크립트 항상 허용
+	No script has kept file access.	파일 접근을 유지한 스크립트가 없습니다.
+	Read file	파일 읽기
+	Read and write file	파일 읽기 및 쓰기
+	Read and write folder	폴더 읽기 및 쓰기
+	Revoke	권한 취소
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	권한 취소는 스크립트의 모든 버전에 유지된 접근을 제거합니다. 폴더 접근에는 폴더 안의 모든 항목이 포함됩니다.
+@msg	Script file access revoked	스크립트 파일 접근 권한을 취소했습니다
+@msg	The script file access was already revoked	스크립트 파일 접근 권한이 이미 취소되었습니다
+	Deny	거부
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
 	Do not show this warning again	이 경고를 다시 표시하지 않음
 	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
@@ -5157,6 +5760,8 @@ theme	Appearance	외관
 @msg	the script is no longer in the Scripts folder	스크립트가 더 이상 Scripts 폴더에 없습니다
 	Some scripts were not listed	일부 스크립트가 나열되지 않았습니다
 	The Scripts folder cannot be read	Scripts 폴더를 읽을 수 없습니다
+	Loading scripts…	스크립트 불러오는 중…
+	The Scripts folder is still being read	Scripts 폴더를 아직 읽는 중입니다
 @msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
 @msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다
@@ -5169,8 +5774,6 @@ theme	Appearance	외관
 @msg	Script file could not be read	스크립트 파일을 읽을 수 없습니다
 @msg	Script folder has more than 2,048 entries	스크립트 폴더의 항목이 2,048개를 초과합니다
 @msg	Script file open mode must be r, w, e or a	스크립트 파일 열기 모드는 r, w, e 또는 a여야 합니다
-@msg	Script file writing is not available	스크립트 파일 쓰기를 사용할 수 없습니다
-@msg	Script file dialogs are not available	스크립트 파일 대화 상자를 사용할 수 없습니다
 @msg	Script files cannot be opened in another application	스크립트 파일을 다른 응용 프로그램에서 열 수 없습니다
 @msg	Script file access is unavailable on the web	웹에서는 스크립트 파일에 접근할 수 없습니다
 @msg	Script has 256 files open	스크립트가 파일 256개를 열고 있습니다
@@ -5185,6 +5788,31 @@ theme	Appearance	외관
 @msg	$.evalFile requires a file path	$.evalFile에는 파일 경로가 필요합니다
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: 시간 제한은 0 이상의 유한한 밀리초 수여야 합니다
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: 파일 경로와 시간 제한을 받습니다
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident}이(가) 정의되지 않았습니다
+@msg	cannot read property '{key}' of {base}	{base}의 속성 '{key}'을(를) 읽을 수 없습니다
+@msg	cannot set property '{key}' of {base}	{base}의 속성 '{key}'을(를) 설정할 수 없습니다
+@msg	cannot read a property of {base}	{base}의 속성을 읽을 수 없습니다
+@msg	cannot set a property of {base}	{base}의 속성을 설정할 수 없습니다
+@msg	cannot define property '{key}': {why}	속성 '{key}'을(를) 정의할 수 없습니다: {why}
+@msg	cannot assign to property '{key}': {why}	속성 '{key}'에 대입할 수 없습니다: {why}
+@msg	cannot delete property '{key}'	속성 '{key}'을(를) 삭제할 수 없습니다
+@msg	cannot declare function {ident}	함수 {ident}을(를) 선언할 수 없습니다
+@msg	invalid assignment target	대입 대상이 잘못되었습니다
+@msg	the array's length is read-only	배열의 길이는 읽기 전용입니다
+@msg	the property cannot be redefined	속성을 다시 정의할 수 없습니다
+@msg	the object is not extensible	객체를 확장할 수 없습니다
+@msg	the length cannot be redefined	길이를 다시 정의할 수 없습니다
+@msg	it is read-only	읽기 전용입니다
+@msg	an element cannot be deleted	요소를 삭제할 수 없습니다
+@msg	it has only a getter	getter만 있습니다
+@msg	the value is a primitive	값이 원시 값입니다
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}의 {line}행 {column}열: {e} (발생)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}행 {column}열: {e} (발생)
 @msg	{name}: {e} (thrown)	{name}: {e} (발생)
@@ -5225,6 +5853,27 @@ theme	Appearance	외관
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 기본 제공 함수의 콜백, getter, 변환 또는 $.evalFile이 실행하는 파일 안에서는 대화 상자를 열 수 없습니다. 스크립트 자체 코드에서 호출하세요
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers`의 다음 답은 {name}이(가) 아니라 {_1}에 대한 것입니다
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`에 이 대화 상자에 대한 답이 남아 있지 않습니다
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`에 스크립트가 사용하지 않은 답이 {n}개 있습니다
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}은(는) 브러시 아래의 개체 {n}개를 변경하지 않았습니다({_2}). 패스만 변형합니다
+liquify-tool	Warp	왜곡
+liquify-tool	Twirl	돌리기
+liquify-tool	Pucker	오므리기
+liquify-tool	Bloat	부풀리기
+liquify-tool	Scallop	스캘럽
+liquify-tool	Crystallize	결정화
+liquify-tool	Wrinkle	주름
+liquify-kind	graphs	그래프
+liquify-kind	type	문자
+liquify-kind	symbols	심볼
+liquify-kind	images	이미지
+liquify-kind	meshes	메시
+liquify-kind	envelopes	엔벨로프
+liquify-kind	repeats	반복
+liquify-kind	placed documents	가져온 문서
+liquify-kind	blends	블렌드
+liquify-list-two	{0}, {1}	{0} 및 {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	vc.document{place} is too large for a script	vc.document{place}이(가) 스크립트에 비해 너무 큽니다
 @msg	vc.log: the log of this run is full	vc.log: 이 실행의 로그가 가득 찼습니다
 @msg	this function's script run has ended	이 함수의 스크립트 실행이 끝났습니다
@@ -5240,8 +5889,38 @@ theme	Appearance	외관
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel`은(는) 1에서 {_1} 사이의 정수여야 합니다
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}`이(가) 64단계보다 깊게 중첩되어 있습니다
+@msg	`args` must be an object	`args`은(는) 개체여야 합니다
+@msg	`args` is larger than 1 MiB	`args`이(가) 1 MiB보다 큽니다
+@msg	`path` is empty	`path`이(가) 비어 있습니다
+@msg	`installed` takes a `path`, not a `source`	`installed`에는 `source`가 아니라 `path`를 지정하세요
+@msg	`path` must name a .js or .jsx file	`path`은(는) .js 또는 .jsx 파일을 가리켜야 합니다
+@msg	give exactly one of `path` and `source`	`path`, `source` 중 정확히 하나를 지정하세요
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
+@msg	Script file access denied: {path}	스크립트 파일 접근이 거부되었습니다: {path}
+@msg	Script file access to the app's own folders is not allowed	스크립트는 앱 자체 폴더에 접근할 수 없습니다
+@msg	Script file cannot encode the text	스크립트 파일이 텍스트를 인코딩할 수 없습니다
+@msg	Script file could not be written	스크립트 파일을 쓸 수 없습니다
+@msg	Script file dialogs need a person to answer them	스크립트 파일 대화 상자에는 응답할 사람이 필요합니다
+@msg	Script file is not open for writing	스크립트 파일이 쓰기용으로 열려 있지 않습니다
+@msg	Script file name is already in use	스크립트 파일 이름이 이미 사용 중입니다
+@msg	Script file name must be a name without a folder	스크립트 파일 이름은 폴더 없는 이름이어야 합니다
+@msg	Script file permission can be kept only for a script run from a file	파일 권한은 파일에서 실행한 스크립트에만 유지할 수 있습니다
+@msg	Script file permission could not be saved	스크립트 파일 권한을 저장할 수 없습니다
+@msg	Script folder is not empty	스크립트 폴더가 비어 있지 않습니다
+@msg	Script files cannot make aliases	스크립트 파일은 별칭을 만들 수 없습니다
+@msg	Script file hidden setting cannot be changed	스크립트 파일의 숨김 설정을 변경할 수 없습니다
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 기본 제공 함수, getter, 변환 또는 $.evalFile이 실행하는 파일의 콜백 안에서는 파일 대화 상자를 열 수 없습니다. 스크립트 자체 코드에서 호출하세요
+@msg	the script wrote more file data than one run may write (32 MiB)	스크립트가 한 번의 실행에서 쓸 수 있는 것보다 많은 파일 데이터를 썼습니다(32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	스크립트 파일 대화 상자의 `answer`는 once, always, deny, stop 중 하나여야 합니다
+@msg	choose a file or folder first, or deny	먼저 파일이나 폴더를 선택하거나 거부하세요
+@msg	the script file permissions could not be saved: {e}	스크립트 파일 권한을 저장할 수 없습니다: {e}
+@msg	the script file permissions could not be read: {e}	스크립트 파일 권한을 읽을 수 없습니다: {e}
+@msg	this script's file access can be allowed only once	이 스크립트의 파일 접근은 한 번만 허용할 수 있습니다
+@msg	Only the person at the keyboard can allow a script's file access	스크립트의 파일 접근은 키보드 앞에 있는 사람만 허용할 수 있습니다
+@msg	A script is given at most 2,048 files: the files picked after them were left out	스크립트에는 파일이 최대 2,048개까지 전달됩니다: 그 뒤에 고른 파일은 제외되었습니다
 @msg	Copied the link info	링크 정보를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
@@ -5268,6 +5947,7 @@ theme	Appearance	외관
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	링크된 이미지 {n}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	디스크에서 바뀐 링크된 파일 {n}개를 업데이트했습니다
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	문서에 설정된 도련이 이 PDF/X 파일에서 빠집니다: "문서 도련 설정 사용"을 켜세요
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	객체 {n}개가 재단선에 닿지만 도련까지 이어지지 않습니다
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	참고 {n}건과 함께 {what}을(를) 내보냈습니다: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
@@ -5278,6 +5958,8 @@ theme	Appearance	외관
 @msg	All colors are within the CMYK gamut	모든 색상이 CMYK 색상 범위 안에 있습니다
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	색상 {n}개가 CMYK 색상 범위를 벗어났습니다
 @msg	Unembedded to {_1}	{_1}에 포함 해제했습니다
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	이미지 {n}개를 {folder}에 포함 해제했습니다
+@msg	every numbered name for {name} is taken in that folder	해당 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	no swatch library `{l}` (see swatch.library.list)	견본 라이브러리 `{l}`이(가) 없습니다(swatch.library.list 참조)
 @msg	no user library folder here	여기에는 사용자 라이브러리 폴더가 없습니다
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name}을(를) 가져올 수 없습니다: 놓은 문서가 닫혔습니다
@@ -5303,6 +5985,9 @@ theme	Appearance	외관
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	복구된 문서 {n}개를 삭제했습니다
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	복구된 문서 {n}개를 복원했습니다: 보관하려면 저장하세요
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	참고 {n}건과 함께 열었습니다: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	참고 {n}건과 함께 복사했습니다: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	참고 {n}건과 함께 잘라냈습니다: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	참고 {n}건과 함께 이미지를 추적했습니다: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. 참고 {n}건과 함께 열었습니다: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	참고 {n}건과 함께 {path}을(를) 저장했습니다: {first}
 @msg	Saving recovery data for {_1}	{_1}의 복구 데이터를 저장하는 중
@@ -5327,10 +6012,18 @@ theme	Appearance	외관
 @msg	Couldn't paste from the clipboard: {e}	클립보드에서 붙여넣을 수 없습니다: {e}
 @msg	Couldn't paste: the document it was pasted in was closed	붙여넣을 수 없습니다: 붙여넣던 문서가 닫혔습니다
 @msg	nothing selected	선택된 항목이 없습니다
+@msg	`{key}` must be a color or {_1}	`{key}`은(는) 색상 또는 {_1}이어야 합니다
+@msg	the selected objects' colors differ: give `color`	선택한 개체의 색상이 서로 다릅니다: `color`를 지정하세요
+@msg	the selected objects' colors differ: give `opacity` or `color`	선택한 개체의 색상이 서로 다릅니다: `opacity` 또는 `color`를 지정하세요
+@msg	the active fill or stroke has no color: give `color`	활성 칠 또는 획에 색상이 없습니다: `color`를 지정하세요
+@msg	the active fill or stroke is hidden: give `color`	활성 칠 또는 획이 숨겨져 있습니다: `color`를 지정하세요
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	활성 칠 또는 획이 불투명 마스크를 통해 그려집니다: `color`를 지정하세요
 @msg	nothing selected is in a group	선택한 항목 중 그룹에 속한 항목이 없습니다
 @msg	the {tool} tool has no options	{tool} 도구에는 옵션이 없습니다
 @msg	unknown tool `{tool}`	알 수 없는 도구 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool}은(는) 여러 도구가 있는 도구 모음 그룹에 속하지 않습니다
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	프레젠테이션 모드에서는 도구 모음이 숨겨집니다: 표시하려면 화면 모드를 변경하세요
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab으로 도구 모음이 숨겨졌습니다: 표시하려면 Tab을 누르세요
 @msg	no such document	해당 문서가 없습니다
 @msg	{_1}: not saved, so not closed	{_1}: 저장되지 않아 닫지 않았습니다
 @msg	`{name}` is a built-in workspace; choose another name	`{name}`은(는) 기본 제공 작업 영역입니다: 다른 이름을 선택하세요
@@ -5380,6 +6073,9 @@ theme	Appearance	외관
 @msg	automation path rejected: outside the read root {root}: {path}	자동화 경로가 거부되었습니다: 읽기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	자동화 경로가 거부되었습니다: 읽기 루트 {roots} 밖입니다: {path}
 @msg	a linked JavaScript file is outside the read roots	연결된 JavaScript 파일이 읽기 루트 밖에 있습니다
+@msg	a linked image file is outside the read roots	연결된 이미지 파일이 읽기 루트 밖에 있습니다
+@msg	a linked file's export folder is outside the read roots	연결된 파일의 내보내기 폴더가 읽기 루트 밖에 있습니다
+@msg	a linked file's editing data can't be read to check it against the read roots	연결된 파일의 편집 데이터를 읽을 수 없어 읽기 루트와 대조할 수 없습니다
 @msg	automation path rejected: outside the write root {root}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {roots} 밖입니다: {path}
 @msg	automation path rejected: path is empty	자동화 경로가 거부되었습니다: 경로가 비어 있습니다
@@ -5402,6 +6098,26 @@ theme	Appearance	외관
 @msg	the HEIC or HEIF file can't be read	HEIC 또는 HEIF 파일을 읽을 수 없습니다
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 또는 HEIF 파일에 읽을 수 없는 종류의 이미지가 있습니다
 @msg	HEIC and HEIF images can't be opened in this build	이 빌드에서는 HEIC 및 HEIF 이미지를 열 수 없습니다
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	CDR {version} 도면을 열 수 없습니다: VectorCraft는 버전 1~27을 읽습니다
+@msg	this CDR drawing can't be read ({why})	이 CDR 도면을 읽을 수 없습니다 ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	VectorCraft가 아직 읽지 못하는 CDR 텍스트, 비트맵, 블렌드, 윤곽 효과, 브러시 획 및 기타 개체는 제외했습니다
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR 그라디언트, 패턴, 텍스처 및 PostScript 칠은 제외했습니다
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft가 읽지 못하는 CDR 색상 모델의 색상은 검정으로 열었습니다
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	도면이 번호로만 저장한 CDR 라이브러리 색상은 검정 별색으로 열었습니다
+@msg	CDR outline arrowheads were left out	CDR 외곽선의 화살촉은 제외했습니다
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR 엔벨로프는 적용하지 않았으며, 그 아래의 도형은 원래 외곽선을 유지합니다
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR 렌즈와 개체 투명도는 적용하지 않았으며, 해당 개체는 불투명하게 표시됩니다
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	너무 깊이 중첩되었거나 가져오기 한도를 넘은 도면 부분은 제외했습니다
+@msg	damaged parts of the drawing were left out	도면의 손상된 부분은 제외했습니다
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830pt보다 긴 CDR 페이지는 그 길이로 열었으며, 가장자리 근처의 아트는 아트보드 밖에 있습니다
+@msg	this CMX file can't be read ({why})	이 CMX 파일을 읽을 수 없습니다 ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	VectorCraft가 아직 읽지 못하는 CMX 텍스트, 이미지, 사각형, 타원, 클리핑 패스 및 기타 개체는 제외했습니다
+@msg	CMX fills other than uniform colors were left out	균일한 색상이 아닌 CMX 칠은 제외했습니다
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	VectorCraft가 읽지 못하는 CMX 색상 모델의 색상은 검정으로 열었습니다
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	파일이 번호로만 저장한 CMX 라이브러리 색상은 검정 별색으로 열었습니다
+@msg	CMX outline arrowheads were left out	CMX 외곽선의 화살촉은 제외했습니다
+@msg	CMX lenses were not applied	CMX 렌즈는 적용하지 않았습니다
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830pt보다 긴 CMX 페이지는 그 길이로 열었으며, 가장자리 근처의 아트는 아트보드 밖에 있습니다
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 이미지가 너무 커서 읽을 수 없습니다({_1} × {_2}픽셀)
 @msg	zipped 1-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 1비트 PSD 이미지 데이터는 읽을 수 없습니다
 @msg	the PSD file's layer data uses an unknown compression ({m})	PSD 파일의 레이어 데이터가 알 수 없는 압축({m})을 사용합니다
@@ -5409,6 +6125,49 @@ theme	Appearance	외관
 @msg	the PSD file's layer groups are nested too deeply	PSD 파일의 레이어 그룹이 너무 깊이 중첩되어 있습니다
 @msg	a layer of the PSD file is too large to read	PSD 파일의 레이어가 너무 커서 읽을 수 없습니다
 @msg	the PSD file's layers take more memory to read than allowed	PSD 파일의 레이어를 읽는 데 허용된 것보다 많은 메모리가 필요합니다
+@msg	the file is no longer loaded	파일이 더 이상 로드되어 있지 않습니다
+@msg	the layers can't be read ({e}): the file was placed as its merged image	레이어를 읽을 수 없습니다({e}): 파일이 병합된 이미지로 가져와졌습니다
+@msg	1 type layer came in as pixels: the text isn't editable	문자 레이어 1개가 픽셀로 들어왔습니다: 텍스트를 편집할 수 없습니다
+@msg	{n} type layers came in as pixels: the text isn't editable	문자 레이어 {n}개가 픽셀로 들어왔습니다: 텍스트를 편집할 수 없습니다
+@msg	1 adjustment layer was not applied	조정 레이어 1개가 적용되지 않았습니다
+@msg	{n} adjustment layers were not applied	조정 레이어 {n}개가 적용되지 않았습니다
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	칠 레이어 1개가 그려지지 않았습니다(그레이디언트 또는 패턴 칠, 읽을 수 없는 색상, 또는 픽셀을 저장하지 않는 모양)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	칠 레이어 {n}개가 그려지지 않았습니다(그레이디언트 또는 패턴 칠, 읽을 수 없는 색상, 또는 픽셀을 저장하지 않는 모양)
+@msg	the layer effects of 1 layer weren't drawn	레이어 1개의 레이어 효과가 그려지지 않았습니다
+@msg	the layer effects of {n} layers weren't drawn	레이어 {n}개의 레이어 효과가 그려지지 않았습니다
+@msg	the vector masks of 1 layer weren't applied	레이어 1개의 벡터 마스크가 적용되지 않았습니다
+@msg	the vector masks of {n} layers weren't applied	레이어 {n}개의 벡터 마스크가 적용되지 않았습니다
+@msg	the knockout of 1 layer wasn't applied	레이어 1개의 녹아웃이 적용되지 않았습니다
+@msg	the knockout of {n} layers wasn't applied	레이어 {n}개의 녹아웃이 적용되지 않았습니다
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	레이어 1개를 제외했습니다(숨겨진 레이어와 그에 클리핑된 레이어)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	레이어 {n}개를 제외했습니다(숨겨진 레이어와 그에 클리핑된 레이어)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	그려지지 않은 칠 레이어에 클리핑된 레이어 1개를 제외했습니다
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	그려지지 않은 칠 레이어에 클리핑된 레이어 {n}개를 제외했습니다
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	VectorCraft에 없는 혼합 모드({modes})의 레이어를 아래 레이어와 병합했습니다
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft에 없는 혼합 모드의 레이어 1개가 표준으로 들어왔습니다: 병합에 허용된 것보다 많은 메모리가 필요합니다
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft에 없는 혼합 모드의 레이어 {n}개가 표준으로 들어왔습니다: 병합에 허용된 것보다 많은 메모리가 필요합니다
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	아래 레이어에 클리핑된 레이어 1개가 클리핑 없이 들어왔습니다: 병합에 허용된 것보다 많은 메모리가 필요합니다
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	아래 레이어에 클리핑된 레이어 {n}개가 클리핑 없이 들어왔습니다: 병합에 허용된 것보다 많은 메모리가 필요합니다
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers는 layers: true로 가져오는 PSD 파일에 적용됩니다
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: 연결된 PSD 파일은 평면 이미지로 가져옵니다. 분할 영역과 함께 포함하려면 link: false를 지정하세요
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: 연결된 PSD 파일은 평면 이미지로 가져옵니다. link를 생략하거나 link: false를 지정하세요
+@msg	the slices can't be read ({e}) and were left out	분할 영역을 읽을 수 없어({e}) 제외했습니다
+@msg	1 slice lies outside the canvas or has no size and was left out	분할 영역 1개가 캔버스 밖에 있거나 크기가 없어 제외했습니다
+@msg	{n} slices lie outside the canvas or have no size and were left out	분할 영역 {n}개가 캔버스 밖에 있거나 크기가 없어 제외했습니다
+@msg	1 slice would lie outside the canvas and was left out	분할 영역 1개가 캔버스 밖에 놓이게 되어 제외했습니다
+@msg	{n} slices would lie outside the canvas and were left out	분할 영역 {n}개가 캔버스 밖에 놓이게 되어 제외했습니다
+@msg	the slices' descriptor holds too many values	분할 영역 설명자에 값이 너무 많습니다
+@msg	the slices' descriptor has a version other than 16	분할 영역 설명자의 버전이 16이 아닙니다
+@msg	the slices are stored in version {v}, which isn't read	분할 영역이 읽지 않는 버전 {v}(으)로 저장되어 있습니다
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	파일의 분할 영역이 {count}개로, 읽는 {MAX_SLICES}개보다 많습니다
+@msg	the slices' descriptor has no list of slices	분할 영역 설명자에 분할 영역 목록이 없습니다
+@msg	the slices' descriptor lists something other than a slice	분할 영역 설명자에 분할 영역이 아닌 항목이 있습니다
+@msg	a slice in the slices' descriptor has no bounds	분할 영역 설명자의 분할 영역에 경계가 없습니다
+@msg	a slice's bounds in the slices' descriptor aren't numbers	분할 영역 설명자의 분할 영역 경계가 숫자가 아닙니다
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	분할 영역의 텍스트가 읽는 {MAX_TEXT}자를 넘습니다
+@msg	the slices' descriptor nests too deep	분할 영역 설명자가 너무 깊게 중첩되어 있습니다
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	분할 영역 설명자에 알 수 없는 종류의 참조가 있습니다({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	분할 영역 설명자에 알 수 없는 유형의 값이 있습니다({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	레이어를 읽을 수 없습니다({e}): 파일이 병합된 이미지로 열렸습니다
 @msg	{depth}-bit PSD files in this colour mode can't be read	이 색상 모드의 {depth}비트 PSD 파일은 읽을 수 없습니다
 @msg	the PSD file is cut short	PSD 파일이 잘려 있습니다
@@ -5436,6 +6195,25 @@ theme	Appearance	외관
 	Preserve Embedded Profiles	포함된 프로필 유지
 	Convert to Working Space	작업 공간으로 변환
 	Preserve Numbers	숫자 유지
+	Profile Mismatches:	프로필 불일치:
+	Ask When Opening	열 때 묻기
+	Ask When Pasting	붙여넣을 때 묻기
+	Missing Profiles:	누락된 프로필:
+	Embedded Profile Mismatch	포함된 프로필 불일치
+	Missing Profile	프로필 없음
+	Paste Profile Mismatch	붙여넣기 프로필 불일치
+	“{name}” is not tagged with a {model} profile.	“{name}”에 {model} 프로필이 없습니다.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}”의 {model} 프로필은 “{profile}”이며, {model} 작업 공간 “{working}”이(가) 아닙니다.
+	Use the embedded profile	포함된 프로필 사용
+	Convert the colors to the working space	색상을 작업 공간으로 변환
+	Discard the embedded profile	포함된 프로필 버리기
+	Leave as is	그대로 두기
+	Assign the working space	작업 공간 지정
+	Assign profile:	프로필 지정:
+	Preserve the color numbers	색상 값 유지
+	Convert to keep the colors' appearance	색상의 모양을 유지하도록 변환
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}`은(는) `{key}`: "assign"일 때만 씁니다
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	붙여넣은 색상은 {model} 프로필이 “{from}”인 문서에서 왔습니다. 이 문서의 프로필은 “{to}”입니다.
 	Texture	텍스처
 	Craquelure…	크랙…
 	Grain…	그레인…
@@ -5519,6 +6297,7 @@ effect	Vertical	세로
 	Change Panel Layout	패널 레이아웃 변경
 	Close Panel	패널 닫기
 	Collapse Panel Group	패널 그룹 접기
+	Cycle Display Sizes	표시 크기 전환
 	Move Panel	패널 이동
 	Group with	함께 그룹화
 	Resize panels	패널 크기 조절
@@ -5603,6 +6382,7 @@ lighting	Light	광원
 @msg	missing panel layout	패널 레이아웃이 없습니다
 @msg	unsupported native docking operation	지원되지 않는 기본 도킹 작업
 	Linux Display Server	Linux 디스플레이 서버
+	Low-Latency Drawing	저지연 그리기
 	X11 (XWayland) When a Pen Is Attached	펜 연결 시 X11 (XWayland)
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	드로잉 태블릿의 펜으로 그려지지 않으면 X11 (XWayland) 옵션을 선택하세요.
 	X11 (XWayland)	X11 (XWayland)
@@ -5655,6 +6435,7 @@ lighting	Light	광원
 	Cove	오목
 	Depth	깊이
 	Front	앞면
+	Side	옆면
 	Isometric Bottom	등각 밑면
 	Isometric Left	등각 왼쪽
 	Isometric Right	등각 오른쪽
@@ -5705,10 +6486,32 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 개체의 메시가 불완전하거나 숫자가 아닌 값을 포함합니다
+@msg	the <filter> element needs an id, the filter's name	<filter> 요소에는 필터 이름인 id가 필요합니다
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 필터의 id는 최대 {MAX_NAME}자입니다
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}>은(는) SVG 필터의 요소가 아닙니다
+@msg	an SVG filter has no event attributes such as {_1}	SVG 필터에는 {_1} 같은 이벤트 속성이 없습니다
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 필터의 이미지는 PNG, JPEG, GIF 또는 WebP data: URL입니다
+@msg	the SVG filter isn't valid XML: {e}	SVG 필터가 올바른 XML이 아닙니다: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence의 numOctaves는 최대 {MAX_OCTAVES}입니다
+@msg	{what} is at most {max}	{what}은(는) 최대 {max}입니다
+@msg	feConvolveMatrix's order	feConvolveMatrix의 order
+@msg	feMorphology's radius	feMorphology의 radius
+@msg	a blur's stdDeviation	흐림 효과의 stdDeviation
+@msg	the SVG filter has no primitives	SVG 필터에 프리미티브가 없습니다
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 필터의 프리미티브는 최대 {MAX_PRIMITIVES}개입니다
+@msg	the SVG filter is too large once its attributes are written out	속성을 모두 쓰면 SVG 필터가 너무 커집니다
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 필터의 이미지는 모두 합쳐 최대 {MAX_IMAGE_PIXELS}픽셀입니다
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG 필터를 그릴 수 없습니다: 프리미티브와 그 입력을 확인하세요
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 필터의 요소는 최대 {MAX_DEPTH}단계까지 중첩됩니다
+@msg	an SVG filter is at most {_1} KB	SVG 필터는 최대 {_1}KB입니다
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`는 값이 shaded 또는 wireframe인 `mode`만 있는 객체여야 합니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
-@msg	bevel must be none or one of {_1}	bevel은 none 또는 {_1} 중 하나여야 합니다
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel은 none, {_1} 중 하나 또는 {BEVEL_PROFILE}을(를) 함께 지정한 custom이어야 합니다
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom에는 베벨의 포인트인 {BEVEL_PROFILE}이(가) 필요합니다
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME}은(는) 문자열이어야 합니다
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE}은(는) 2개에서 {most}개의 [x, y] 포인트여야 하며, 각 값은 0과 1 사이의 비율이고 [0, 0](끝면의 가장자리)에서 [1, 1](옆면 벽)까지여야 합니다
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}은(는) 이 아트로 입체를 만들 수 없습니다. 심볼 인스턴스, 블렌드, 클리핑 그룹에 개체가 너무 많습니다
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}은(는) 심볼 “{symbol}”의 인스턴스로 입체를 만들 수 없습니다. 심볼의 아트를 사용할 수 없습니다
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: 클리핑 패스가 너무 복잡하여 아트를 자를 수 없습니다
@@ -5731,11 +6534,13 @@ lighting	Light	광원
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}`의 각 항목은 개체여야 합니다
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 항목에는 symbol, face, x, y, scale, rotation만 사용할 수 있으며 `{k}`은(는) 사용할 수 없습니다
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}`의 각 항목에는 심볼 이름인 `symbol`이 필요합니다
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`의 face는 front 또는 back이어야 합니다
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`의 face는 front, back 또는 side여야 합니다
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	그래픽은 평면, 돌출, 회전체, 부풀리기 개체 유형에 매핑됩니다
 @msg	Revolve maps graphics onto its side: map them onto the front	회전체는 그래픽을 옆면에 매핑합니다. 앞면에 매핑하십시오
+@msg	Inflate maps graphics onto its front and back, not onto a side	부풀리기는 그래픽을 앞면과 뒷면에 매핑하며 옆면에는 매핑하지 않습니다
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	개체 {_1}: 부풀리기의 뒷면에 그래픽을 매핑하려면 양면과 캡을 켜세요
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	그래픽이 이 표면에 비해 너무 복잡합니다. 심볼의 아트를 단순화하거나 세그먼트를 줄이십시오
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}`에는 그래픽을 최대 {MAX_GRAPHICS}개까지 넣을 수 있습니다
 @msg	A plane has one face: map its graphics onto the front	평면에는 면이 하나뿐입니다. 그래픽을 앞면에 매핑하십시오
@@ -5752,6 +6557,19 @@ lighting	Light	광원
 	Transform Objects	개체 변형
 @msg	unknown parameter `{key}`; did you mean `{near}`?	알 수 없는 매개변수 `{key}`: `{near}`을(를) 의미하셨습니까?
 @msg	unknown parameter `{key}`; the command takes no parameters	알 수 없는 매개변수 `{key}`: 이 명령에는 매개변수가 없습니다
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	알 수 없는 매개변수 `{key}`: `{object}`이(가) 받는 키: {keys}
+@msg	unknown parameter `{key}`; {why_not}	알 수 없는 매개변수 `{key}`: {why_not}
+@msg	no format takes it (see document.formats)	이 옵션을 받는 형식이 없습니다(document.formats 참조)
+@msg	no save format takes it (see file.formatOptions)	이 옵션을 받는 저장 형식이 없습니다(file.formatOptions 참조)
+@msg	PDF doesn't take it (see document.formats)	PDF는 이 옵션을 받지 않습니다(document.formats 참조)
+@msg	EPS doesn't take it (see document.formats)	EPS는 이 옵션을 받지 않습니다(document.formats 참조)
+@msg	DXF doesn't take it (see document.formats)	DXF는 이 옵션을 받지 않습니다(document.formats 참조)
+@msg	{name} must be {range} (got {v})	{name}은(는) {range}이어야 합니다({v} 입력됨)
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	처음 시도한 그래픽 프로세서가 창을 표시하지 못해 {summary}에서 VectorCraft를 다시 시작했습니다(설정 › 성능 › 그래픽 프로세서 › 자동은 디스플레이를 구동하는 프로세서를 사용합니다)
+@msg	Sent “{title}” to {to}	“{title}”을(를) {to}(으)로 보냈습니다
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}”을(를) {to}(으)로 보냈습니다. 인쇄 대기열 응답: {note}
+@msg	the default printer	기본 프린터
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	개체 {object}의 래스터 효과: {requested} ppi를 요청했지만 6,400만 픽셀 한도 때문에 {achieved} ppi가 되었습니다
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
 @msg	the params must be an object, not {got}	매개변수는 객체여야 합니다({got} 사용 불가)
 @msg	unknown parameter `{path}`; the object takes no keys	알 수 없는 매개변수 `{path}`: 이 객체는 키를 받지 않습니다
@@ -5860,7 +6678,7 @@ lighting	Light	광원
 @msg	Unknown dimension style	알 수 없는 치수 스타일
 @msg	Unknown unit	알 수 없는 단위
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면이 열린 상태로 유지됩니다.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면도 닫힙니다.
 	Distance	거리
 @msg	span must be "object" or "selection", got {v}	span은 "object" 또는 "selection"이어야 합니다. {v}은(는) 사용할 수 없습니다
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection"은 `gradient`를 배치합니다. 견본은 배치할 수 없습니다
@@ -5872,6 +6690,7 @@ lighting	Light	광원
 	Export Data Sets…	데이터 세트 내보내기…
 	Load Variable Library…	변수 라이브러리 불러오기…
 	Save Variable Library…	변수 라이브러리 저장…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"가져오기"는 확장자가 .csv, .tsv, .txt 또는 .xml인 데이터 소스 파일을 읽습니다
 @msg	a variable library holds text variables, and the document has none	변수 라이브러리에는 텍스트 변수가 들어가는데 문서에 텍스트 변수가 없습니다
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	변수 `{name}`은(는) 변수 라이브러리에 저장할 수 없습니다: 문자나 `_`로 시작하고 공백이나 `-`, `_`, `.` 이외의 기호가 없도록 이름을 바꾸세요
 @msg	{k} has control characters	{k}에 제어 문자가 있습니다
@@ -6004,6 +6823,9 @@ lighting	Light	광원
 	Continue in Background	백그라운드에서 계속
 	Cancel Export	내보내기 취소
 @msg	Export cancelled	내보내기를 취소했습니다
+	Cancel Save	저장 취소
+@plural	{n} more save waiting|{n} more saves waiting	대기 중인 저장 {n}개 더
+@msg	Save canceled	저장을 취소했습니다
 # Paragraph panel menu › Justification…
 	Desired	희망
 	Word Spacing:	단어 간격:
@@ -6013,6 +6835,7 @@ lighting	Light	광원
 	Single Word Justification:	단일 단어 정렬:
 	Full Justify	강제 양쪽 정렬
 	Minimum must not exceed Desired, nor Desired Maximum.	최소값은 희망값을, 희망값은 최대값을 넘을 수 없습니다.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: 최소값은 희망값을, 희망값은 최대값을 넘을 수 없습니다
 	Minimum	최소
 	Justification	양끝 맞춤
 	Add filters from the list above	위 목록에서 필터 추가
@@ -6111,6 +6934,8 @@ axis	Y Axis	Y축
 	Cancel Plug-in Run	플러그인 실행 취소
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1}이(가) 끝났지만 그동안 문서나 플러그인이 변경되었습니다. 다시 실행하세요
 @msg	Running “{name}”…	“{name}” 실행 중…
+@msg	Plug-in “{name}”: {notice}	플러그인 “{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice`는 보이는 텍스트가 있는 문자열이어야 합니다
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	라이브 효과는 문서를 그리는 동안 실행되므로 `heavy`일 수 없습니다
 @msg	an exporter always gets an export's budget: leave `budget` out	내보내기 플러그인은 항상 내보내기 예산을 받습니다. `budget`은 생략하세요
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `allowHeavy: true`를 전달하세요
@@ -6136,11 +6961,19 @@ axis	Y Axis	Y축
 @msg	module is {_1} bytes (limit {_2})	모듈이 {_1}바이트입니다(한도 {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	승인이 필요합니다. {0}을(를) 요청하며, 사용자가 따로 설치할 때 허용합니다
 @msg	not JSON: {e}	JSON이 아닙니다: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly 바이너리가 아닙니다(\0asm 헤더 없음)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly 바이너리가 아닙니다(\\0asm 헤더 없음)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	함수 형식의 매개변수가 한도인 {MAX_FUNC_TYPE_VALUES}개를 초과합니다
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	함수 형식의 결과가 한도인 {MAX_FUNC_TYPE_VALUES}개를 초과합니다
 @msg	parameter `{k}`: {what}	매개변수 `{k}`: {what}
 @msg	parameter `{name}`: {what}	매개변수 `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	플러그인 매개변수는 JSON 개체여야 합니다
 @msg	the module must export its linear memory as `memory`	모듈은 선형 메모리를 `memory`(으)로 내보내야 합니다
+@msg	the module must export `{name}` with the type {signature}	모듈은 `{name}`을(를) {signature} 형식으로 내보내야 합니다
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	모듈에 사용자 지정 섹션 `{MANIFEST_SECTION}`이(가) 둘 이상 있습니다
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	메모리 예산(모듈의 초기 메모리가 {initial}바이트, 한도 {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	사용자 지정 섹션 `{MANIFEST_SECTION}`의 매니페스트는 `abi`를 {ABI_VERSION}(으)로 지정해야 합니다. 이는 이 호스트가 구현하는 ABI 버전입니다
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	테이블 예산(모듈이 테이블 {count}개를 정의하며 가장 큰 테이블의 요소는 {largest}개, 한도는 테이블 {MAX_TABLES}개, 각 {MAX_TABLE_ELEMENTS}개 요소)
+@msg	the module's table section could not be read	모듈의 테이블 섹션을 읽을 수 없습니다
 @msg	the objects to change are no longer in the document	변경할 개체가 더 이상 문서에 없습니다
 @msg	the runtime panicked	런타임이 비정상 종료되었습니다
 @msg	unexpected host trap	호스트에서 예기치 않은 트랩이 발생했습니다
@@ -6148,6 +6981,10 @@ axis	Y Axis	Y축
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc이 0을 반환했습니다(메모리 부족)
 @msg	vc_alloc returned a block outside memory	vc_alloc이 메모리 밖의 블록을 반환했습니다
 @msg	vc_run returned error code {packed}	vc_run이 오류 코드 {packed}을(를) 반환했습니다
+@msg	did not finish loading within {secs} s	{secs}초 안에 로드를 마치지 못했습니다
+@msg	no thread was left to load it	로드할 스레드가 남아 있지 않았습니다
+@msg	panicked while loading	로드하는 중에 비정상 종료되었습니다
+@msg	panicked while loading: {what}	로드하는 중에 비정상 종료되었습니다: {what}
 @msg	{_1} is not a file	{_1}은(는) 파일이 아닙니다
 @msg	{_1} is {_2} bytes (limit {_3})	{_1}이(가) {_2}바이트입니다(한도 {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	개체 {_1}개(한도 {MAX_OBJECTS})
@@ -6167,6 +7004,11 @@ axis	Y Axis	Y축
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems`와 `maxItems`는 0-{MAX_LIST}, `maxItems`는 1 이상이어야 하며 기본값의 항목 수도 그 범위여야 합니다
 @msg	`name` must be a string	`name`은(는) 문자열이어야 합니다
 @msg	`opacity` must be a number	`opacity`은(는) 숫자여야 합니다
+@msg	`opacity` must be a number from 0 to 100	`opacity`은(는) 0에서 100 사이의 숫자여야 합니다
+@msg	`opacity` must be true or false	`opacity`은(는) true 또는 false여야 합니다
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	문자에는 자체 불투명도가 없습니다. 모양새 패널의 새 칠 추가 또는 새 선 추가로 칠이나 선을 추가하세요
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	심볼 인스턴스에서 선택한 개체에는 자체 칠 또는 선 불투명도가 없습니다
+@msg	no target has that fill or stroke to take the opacity	불투명도를 적용할 해당 칠 또는 선이 있는 대상이 없습니다
 @msg	`type` must be "path" or "compound"	`type`은(는) "path" 또는 "compound"여야 합니다
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`은(는) 인쇄 가능한 문자 1-{MAX_UNIT}자여야 합니다
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`에는 `{other}`의 값을 1-{MAX_CONDITION_VALUES}개 나열해야 합니다
@@ -6185,12 +7027,21 @@ axis	Y Axis	Y축
 @msg	a list of {min_items} to {max_items} numbers	숫자 {min_items}-{max_items}개의 목록
 @msg	a new object needs a `path`	새 개체에는 `path`가 필요합니다
 @msg	a number	숫자
-@msg	a painted live effect returns only `objects`	페인트형 라이브 효과는 `objects`만 반환합니다
+@msg	a painted live effect returns only `objects` and `notice`	페인트형 라이브 효과는 `objects`와 `notice`만 반환합니다
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`만 있습니다
 @msg	a read-only object was left out	읽기 전용 개체가 빠졌습니다
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	읽기 전용 개체가 빠졌습니다: {{"id": …}}만 있는 형태나 받은 그대로 반환하십시오
 @msg	a string	문자열
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`만 있습니다
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend`, `effects`만 있습니다
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend`, `effects`만 있습니다
+@msg	`appearanceOutput` may only be true	`appearanceOutput`에는 true만 지정할 수 있습니다
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput`은 `paintOutput`을 선언한 `api` 3의 라이브 효과에만 쓸 수 있습니다
+@msg	`opacity` must be a number from 0 to 1	`opacity`는 0에서 1 사이의 숫자여야 합니다
+@msg	unknown blending mode; `blend` is one of {_1}	알 수 없는 혼합 모드입니다. `blend`는 {_1} 중 하나입니다
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects`는 최대 {MAX_LOOK_EFFECTS}개 레코드의 배열이어야 합니다
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	결과 하나에는 효과 레코드가 최대 {MAX_RESULT_EFFECTS}개까지 들어갑니다
+@msg	this host takes no effects here	이 호스트는 여기서 효과를 받지 않습니다
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	선은 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 형태여야 합니다
 @msg	an effect must be {{"id", "params"?, "visible"?}}	효과는 {{"id", "params"?, "visible"?}} 형태여야 합니다
 @msg	an effect on a fill returns only `fills`	칠에 적용된 효과는 `fills`만 반환합니다
@@ -6210,6 +7061,8 @@ axis	Y Axis	Y축
 @msg	`plates` requires a stop linked to a spot swatch	`plates`에는 별색 견본에 연결된 정지점이 필요합니다
 @msg	the output	출력
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	컴파운드 패스 {id}에 숨겨졌거나 잠겼거나 안내선인 멤버가 있어 멤버를 바꿀 수 없습니다
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	컴파운드 패스 {id}에 패스가 아닌 멤버가 있어 멤버를 바꿀 수 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
 @msg	true or false	true 또는 false
 @msg	a number >= {_1}	{_1} 이상인 숫자
@@ -6288,6 +7141,8 @@ axis	Y Axis	Y축
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api`가 {_1}입니다. 이 호스트는 플러그인 API 수준 1부터 {API_LEVEL}까지 지원합니다
 @msg	`paintOutput` may only be true	`paintOutput`에는 true만 지정할 수 있습니다
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput`은 `api` 2의 라이브 효과(`kind` "effect")에만 쓸 수 있습니다
+@msg	`place` is only for an importer (`kind` "importer")	`place`는 임포터(`kind` "importer")에만 쓸 수 있습니다
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}”은(는) 파일을 열지만 배치하지는 않습니다: 매니페스트에 `place`가 설정되어 있지 않습니다
 @msg	`grant` must be a list of permission names	`grant`는 권한 이름 목록이어야 합니다
 @msg	`grant` names an unknown permission `{shown}`	`grant`에 알 수 없는 권한 `{shown}`이(가) 있습니다
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 종류의 플러그인에는 `{_2}` 권한이 필요합니다
@@ -6299,12 +7154,60 @@ axis	Y Axis	Y축
 @msg	`inputs` lists `{shown}` twice	`inputs`에 `{shown}`이(가) 두 번 나열되어 있습니다
 @msg	`inputs` needs `api` 2 or later	`inputs`에는 `api` 2 이상이 필요합니다
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
+@msg	only a filter declares `writes`	필터만 `writes`를 선언할 수 있습니다
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes`에 알 수 없는 개체 종류 `{shown}`이(가) 있습니다. type, image 또는 symbolInstance를 사용하세요
+@msg	`writes` lists `{shown}` twice	`writes`에 `{shown}`이(가) 두 번 나열되어 있습니다
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes`에 나열된 `{shown}`이(가) `inputs`에는 없습니다
+@msg	`writes` needs `api` {WRITES_API} or later	`writes`에는 `api` {WRITES_API} 이상이 필요합니다
+@msg	`writes` needs the permission `doc.write`	`writes`에는 `doc.write` 권한이 필요합니다
+@msg	{_1} is not type, an image or a symbol instance	{_1}은(는) 문자, 이미지, 심볼 인스턴스가 아닙니다
+@msg	the text of type given as `truncated` can't be changed	`truncated`로 전달된 문자 개체의 텍스트는 변경할 수 없습니다
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	항목이 최대 {MAX_INPUT_RUNS}개인 목록이어야 합니다
+@msg	type needs at least one run	문자에는 런이 하나 이상 있어야 합니다
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	텍스트 {bytes}바이트(한도 {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	단락 {paragraphs}개(한도 {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	출력 전체의 텍스트가 {MAX_INPUT_TEXT_TOTAL}바이트를 넘습니다
+@msg	unknown key '{k}'	알 수 없는 키 '{k}'
+@msg	must be a list of 6 numbers	숫자 6개의 목록이어야 합니다
+@msg	a number is out of range (limit ±{MAX_COORD})	숫자가 범위를 벗어났습니다(한도 ±{MAX_COORD})
+@msg	flattens the object to a line or a point	개체를 선이나 점으로 납작하게 만듭니다
+@msg	an object flattened to a line or a point can't be placed again	선이나 점으로 납작해진 개체는 다시 배치할 수 없습니다
+@msg	must be a number from 0 to 1	0에서 1 사이의 숫자여야 합니다
+@msg	must be the name of a symbol	심볼 이름이어야 합니다
+@msg	'{shown}' is not a symbol in this document	'{shown}'은(는) 이 문서의 심볼이 아닙니다
+@msg	a run must be {{"text", "style", "inline"?}}	런은 {{"text", "style", "inline"?}} 형식이어야 합니다
+@msg	`text` holds the character of an inline graphic	`text`에 인라인 그래픽 문자가 들어 있습니다
+@msg	inline graphics can't be added, removed, reordered or changed	인라인 그래픽은 추가, 제거, 순서 변경, 수정할 수 없습니다
+@msg	the characters of threaded type can't be changed	연결된 문자의 글자는 변경할 수 없습니다
+@msg	the characters of type with ruby can't be changed	루비가 있는 문자의 글자는 변경할 수 없습니다
+@msg	expected {count} paragraph styles, one per paragraph	단락마다 하나씩 단락 스타일 {count}개가 필요합니다
+@msg	the document has no Kinsoku set named '{shown}'	문서에 '{shown}'(이)라는 긴소쿠 세트가 없습니다
+@msg	must be 1-{MAX_FAMILY} printable characters	인쇄 가능한 문자 1-{MAX_FAMILY}자여야 합니다
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	전달받은 개체와 문서의 설정, 아트보드, 레이어, 견본 읽기
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`에는 서로 다른 섹션을 나열해야 합니다: settings, artboards, layers 또는 swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context`는 `api` 3 이상이고 `doc.read` 권한이 있는 필터 또는 `commands`가 있는 라이브 효과에만 쓸 수 있습니다
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	플러그인이 요청한 문서 정보가 너무 커서 넘길 수 없습니다: 아트보드, 레이어, 견본은 {MAX_CONTEXT_BYTES}바이트 안에서 최대 {MAX_CONTEXT_ITEMS}개입니다
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
 @msg	instruction budget	명령어 예산
 @msg	time budget	시간 예산
 @msg	memory budget (the selection is too large to hand over)	메모리 예산(선택 항목이 너무 커서 넘길 수 없음)
 @msg	output size ({what} is {len} bytes, limit {max})	출력 크기({what}: {len}바이트, 제한 {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason}({id}, {script} {line}행 {column}열)
+@msg	{reason} ({id}, {script})	{reason}({id}, {script})
+@msg	memory budget	메모리 예산
+@msg	call depth	호출 깊이
+@msg	run(input, params) returned no output object	run(input, params)이 출력 개체를 반환하지 않았습니다
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js"에는 `script`가 필요합니다: 매니페스트 옆에 있는 플러그인 .js 파일의 이름
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script`는 매니페스트 폴더에 있는 .js 파일의 이름이어야 합니다: 1-128바이트, 폴더 없음, `:` 없음, `.`으로 시작하지 않음
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source`는 스크립트의 텍스트이며 plugin.install의 dataBase64가 받는 JSON에서만 지정합니다: .vcplugin 파일은 스크립트를 `script`에 지정합니다
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript 플러그인의 매니페스트는 `runtime` "js"를 지정합니다
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js"는 개체 필터(`kind` "filter")용이며 `kind` "{kind}"용이 아닙니다
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript 플러그인은 권한 `{name}`을(를) 나열할 수 없습니다: 호스트 권한 중에서 `progress`를 나열할 수 있습니다
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly 모듈의 매니페스트는 `runtime`을 생략합니다: "js"는 JavaScript 플러그인용입니다
+@msg	a JavaScript plug-in makes no command calls	JavaScript 플러그인은 명령을 호출하지 않습니다
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total)는 숫자 두 개를 받습니다
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text)는 수준 0(오류), 1(경고), 2(정보), 3(디버그) 중 하나와 문자열을 받습니다
 @msg	the plug-in's grant can't be removed from the plug-in store	플러그인 저장소에서 플러그인의 권한을 제거할 수 없습니다
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
@@ -6389,6 +7292,10 @@ axis	Y Axis	Y축
 	Create New Action	새 액션 만들기
 	Play Action	액션 재생
 	Action Set:	액션 세트:
+	Choose Align To at playback	재생 시 정렬 대상 선택
+	Align steps use the key object, key anchor or key guide when one is set.	키 개체, 키 앵커 포인트 또는 키 안내선이 설정되어 있으면 정렬 단계는 그것을 사용합니다.
+	With one whole object selected and no key, they use the artboard.	개체 하나 전체만 선택되어 있고 키가 없으면 아트보드를 사용합니다.
+	Otherwise they use the selection.	그 밖에는 선택 영역을 사용합니다.
 	Function Key:	기능 키:
 	Record	기록
 	Create New Set	새 세트 만들기
@@ -6420,6 +7327,8 @@ axis	Y Axis	Y축
 	Checkpoint	체크포인트
 	Inventory Icons	인벤토리 아이콘
 	Skill Icons	스킬 아이콘
+	Weather Icons	날씨 아이콘
+	Media Controls	미디어 제어
 	Attack	공격
 	Defend	방어
 	Heal	치유
@@ -6525,6 +7434,13 @@ axis	Y Axis	Y축
 	Bus Lines	버스 배선
 	Terminal Nodes	단자 노드
 
+# Original arrow art brushes.
+	Arrows	화살표 브러시
+	Solid Arrow	채워진 화살표
+	Open Arrow	속이 빈 화살표
+	Double Arrow	양방향 화살표
+	Chevron Arrow	갈매기형 화살표
+
 	Notched Ribbon	노치 리본
 	Double Line	이중선
 	Wave	물결
@@ -6541,6 +7457,261 @@ axis	Y Axis	Y축
 	Stars	별
 	Triangles	삼각형
 	Sparkles	반짝임
+	Warm Gray	따뜻한 회색
+	Cool Gray	차가운 회색
+	Neutrals	뉴트럴
+	Ivory	아이보리
+	Linen	리넨
+	Oat	오트
+	Greige	그레이지
+	Stone	스톤
+	Taupe	토프
+	Slate	슬레이트
+	Clay	점토
+	Terracotta	테라코타
+	Ochre	황토색
+	Umber	엄버
+	Sand	모래
+	Olive	올리브
+	Moss	이끼
+	Rosy	장밋빛
+	Neutral	중성
+	Golden	황금빛
+	Pastel	파스텔
+	Pastel Red	파스텔 빨강
+	Pastel Orange	파스텔 주황
+	Pastel Amber	파스텔 호박색
+	Pastel Yellow	파스텔 노랑
+	Pastel Lime	파스텔 라임
+	Pastel Green	파스텔 초록
+	Pastel Teal	파스텔 청록
+	Pastel Cyan	파스텔 시안
+	Pastel Azure	파스텔 하늘색
+	Pastel Blue	파스텔 파랑
+	Pastel Violet	파스텔 보라
+	Pastel Magenta	파스텔 마젠타
+	Soft Red	부드러운 빨강
+	Soft Orange	부드러운 주황
+	Soft Amber	부드러운 호박색
+	Soft Yellow	부드러운 노랑
+	Soft Lime	부드러운 라임
+	Soft Green	부드러운 초록
+	Soft Teal	부드러운 청록
+	Soft Cyan	부드러운 시안
+	Soft Azure	부드러운 하늘색
+	Soft Blue	부드러운 파랑
+	Soft Violet	부드러운 보라
+	Soft Magenta	부드러운 마젠타
+	Vivid Red	선명한 빨강
+	Vivid Orange	선명한 주황
+	Vivid Amber	선명한 호박색
+	Vivid Yellow	선명한 노랑
+	Vivid Lime	선명한 라임
+	Vivid Green	선명한 초록
+	Vivid Teal	선명한 청록
+	Vivid Cyan	선명한 시안
+	Vivid Azure	선명한 하늘색
+	Vivid Blue	선명한 파랑
+	Vivid Violet	선명한 보라
+	Vivid Magenta	선명한 마젠타
+	Deep	짙은 색
+	Deep Red	짙은 빨강
+	Deep Orange	짙은 주황
+	Deep Amber	짙은 호박색
+	Deep Yellow	짙은 노랑
+	Deep Lime	짙은 라임
+	Deep Green	짙은 초록
+	Deep Teal	짙은 청록
+	Deep Cyan	짙은 시안
+	Deep Azure	짙은 하늘색
+	Deep Blue	짙은 파랑
+	Deep Violet	짙은 보라
+	Deep Magenta	짙은 마젠타
+	Gold	금
+	Silver	은
+	Bronze	청동
+	Copper	구리
+	Brass	황동
+	Rose Gold	로즈 골드
+	Gunmetal	건메탈
+	Platinum	백금
+	Pewter	백랍
+	Ember	잔불
+	Lagoon	석호
+	Dusk	땅거미
+	Clay to Teal	점토에서 청록으로
+	Plum to Olive	자두색에서 올리브로
+	Complementary Coral	코럴, 보색
+	Split Complementary Coral	코럴, 분할 보색
+	Analogous Coral	코럴, 유사색
+	Triad Coral	코럴, 3색 조화
+	Tetrad Coral	코럴, 4색 조화
+	Pentagram Coral	코럴, 오각별
+	Complementary Teal	청록, 보색
+	Split Complementary Teal	청록, 분할 보색
+	Analogous Teal	청록, 유사색
+	Triad Teal	청록, 3색 조화
+	Tetrad Teal	청록, 4색 조화
+	Pentagram Teal	청록, 오각별
+	Soft Spectrum	부드러운 스펙트럼
+	Red to Amber	빨강에서 호박색으로
+	Orange to Yellow	주황에서 노랑으로
+	Amber to Lime	호박색에서 라임으로
+	Yellow to Green	노랑에서 초록으로
+	Lime to Teal	라임에서 청록으로
+	Green to Cyan	초록에서 시안으로
+	Teal to Azure	청록에서 하늘색으로
+	Cyan to Blue	시안에서 파랑으로
+	Azure to Violet	하늘색에서 보라로
+	Blue to Magenta	파랑에서 마젠타로
+	Violet to Red	보라에서 빨강으로
+	Magenta to Orange	마젠타에서 주황으로
+	Dawn	새벽
+	Noon	정오
+	Sunset	노을
+	Night	밤
+	Overcast	흐린 하늘
+	White to Black	흰색에서 검정으로
+	Light Grays	밝은 회색
+	Dark Grays	어두운 회색
+	Warm Grays	따뜻한 회색 계열
+	Cool Grays	차가운 회색 계열
+	Fade to Transparent	투명으로 페이드
+	White Fade	흰색 페이드
+	Vignette	비네트
+	Mist	안개
+	Petal	꽃잎
+	Fern	고사리
+	Smoke	연기
+	Honey	꿀
+	Seafoam	바다 거품
+	Lavender	라벤더
+	Driftwood	유목
+	Ink Wash	수묵 번짐
+	Tide	조수
+	Bloom	개화
+	Dew	이슬
+	Pollen	꽃가루
+	Lichen	지의류
+	Prism Veil	프리즘 베일
+	Opal Ribbon	오팔 리본
+	Pearl Flash	진주 섬광
+	Aurora Foil	오로라 호일
+	Iris Sheen	무지갯빛 광택
+	Frost Spectrum	서리 스펙트럼
+	Silver Tide	은빛 물결
+	Rose Quartz Gleam	로즈 쿼츠 광채
+	Moonstone Shift	월장석 일렁임
+	Violet Edge	보라 가장자리
+	Mint Halo	민트 후광
+	Amber Corona	호박색 코로나
+	Polar Glint	극지의 반짝임
+	Pastel Orbit	파스텔 궤도
+	Coral and Navy	코럴과 네이비
+	Plum and Lime	자두색과 라임
+	Teal and Gold	청록과 금색
+	Indigo and Peach	인디고와 복숭아색
+	Forest and Rose	숲과 장미
+	Red Glow	빨강 광채
+	Orange Glow	주황 광채
+	Amber Glow	호박색 광채
+	Yellow Glow	노랑 광채
+	Lime Glow	라임 광채
+	Green Glow	초록 광채
+	Teal Glow	청록 광채
+	Cyan Glow	시안 광채
+	Azure Glow	하늘색 광채
+	Blue Glow	파랑 광채
+	Violet Glow	보라 광채
+	Magenta Glow	마젠타 광채
+	Polka Dots	물방울무늬
+	Vertical Stripes	세로 줄무늬
+	Horizontal Stripes	가로 줄무늬
+	Diagonal Stripes	사선 줄무늬
+	Checkerboard	체커보드
+	Diamonds	마름모
+	Crosses	십자
+	Coarse Grit	거친 입자
+	Stipple	점묘
+	Scratches	긁힌 자국
+	Sparse Flecks	성긴 반점
+	Dense Flecks	촘촘한 반점
+	Sine Bands	사인파 띠
+	Ripple Lines	물결선
+	Interference Rings	간섭 고리
+	Offset Rings	어긋난 고리
+	Warped Checks	뒤틀린 체크
+	Pinched Stripes	오므린 줄무늬
+	Chevron Pulse	셰브런 펄스
+	Radiating Lenses	방사형 렌즈
+	Soft Shadow	부드러운 그림자
+	Hard Shadow	선명한 그림자
+	Lifted Card	들린 카드
+	Neon Tube	네온관
+	Inner Light	안쪽 빛
+	Feathered	가장자리 흐림
+	Haze	아지랑이
+	Double Rule	이중 괘선
+	Triple Rule	삼중 괘선
+	Dashed Border	파선 테두리
+	Dotted Border	점선 테두리
+	Offset Keyline	오프셋 윤곽선
+	Inset Keyline	안쪽 윤곽선
+	Outside Stroke	바깥쪽 획
+	Pointer	포인터
+	Highlighter	형광펜
+	Sketchy Line	스케치 선
+	Scribble Fill	낙서 칠
+	Wobble	흔들림
+	Zig Zag Edge	지그재그 가장자리
+	Wavy Edge	물결 가장자리
+	Puffy	부풀림
+	Starburst	별 폭발
+	Glossy	광택
+	Brushed Metal	브러시드 메탈
+	Spotlight	스포트라이트
+	Sunset Band	노을 띠
+	Sea Glass	바다 유리
+	Pearl	진주
+	Chrome Rim	크롬 테
+	Glow Orb	빛나는 구
+	Pill Badge	알약 배지
+	Round Badge	원형 배지
+	Flag Wave	펄럭이는 깃발
+	Bulge	불룩
+	Twisted	비틀림
+	Echo	메아리
+	Spiral Copies	나선형 복사본
+	Multiply Tint	곱하기 색조
+	Darken Veil	어둡게 베일
+	Ghosted	반투명
+	Two Tone	투톤
+	Overlay Glaze	오버레이 유약
+	Screen Light	스크린 빛
+	Soft Light Wash	소프트 라이트 번짐
+	Cyan Neon	시안 네온
+	Magenta Laser	마젠타 레이저
+	Amber Tube	호박색 튜브
+	Electric Lime	일렉트릭 라임
+	Pulse Violet	펄스 바이올렛
+	Cobalt Phosphor	코발트 형광체
+	Burst	폭발
+	Rounded Square	둥근 사각형
+	Sun	해
+	Moon	달
+	Cloud	구름
+	Rain	비
+	Thunder	천둥
+	Snow	눈
+	Play	재생
+	Pause	일시 중지
+	Skip Next	다음으로 건너뛰기
+	Shuffle	셔플
+	Bar	막대
+	Hexagon	육각형
+	Spectrum	스펙트럼
+	Triangle	삼각형
+	Vivid	선명한 색
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)
@@ -6601,6 +7772,7 @@ anchor	Points:	포인트:
 	Open a document to check it for issues.	문서를 열면 문제를 점검할 수 있습니다.
 	Empty Text	빈 텍스트
 	Unpainted Objects	칠하지 않은 오브젝트
+	Empty Text Paths	빈 텍스트 패스
 	Zero-Opacity Objects	불투명도 0% 오브젝트
 	Duplicate Objects	중복 오브젝트
 	Off-Artboard Art	아트보드 밖의 아트워크
@@ -6644,6 +7816,37 @@ anchor	Points:	포인트:
 @msg	`{id}` is not a colour adjustment	`{id}`은(는) 색상 조정이 아닙니다
 @msg	missing `effect`	`effect`이 없습니다
 @msg	`params` must be an object	`params`는 개체여야 합니다
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	삼각형 (윤곽)
+	Circle (open)	원 (윤곽)
+	Square (open)	사각 (윤곽)
+	Arrow (open)	화살표 (윤곽)
+	Barbed	미늘
+arrowhead	Feather	깃털
+arrowhead	Target	과녁
+	Half Arrow (left)	반쪽 화살표 (왼쪽)
+	Half Arrow (right)	반쪽 화살표 (오른쪽)
+	Double Bar	이중 막대
+	Dot on Bar	막대 위 점
+	Chevron	갈매기형
+	Plus	더하기
+	Hexagon (open)	육각형 (윤곽)
+	Tag	태그
+	Tag (open)	태그 (윤곽)
+	Half Circle	반원
+	Drop	물방울
+	Slash	슬래시
+	Double Slash	이중 슬래시
+	Diamond (open)	다이아몬드 (윤곽)
+	Reverse Triangle	역삼각형
+	Swallowtail	제비 꼬리
+	Bracket	대괄호
+	Fork	포크
+	Leaf	잎
+	Kite	연
+	Triangle to Bar	삼각형에서 막대
+	Oval	타원
+	Line Arrow	선 화살표
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	패스 정밀 도구
 	Anchor Eraser Brush	앵커 포인트 지우개 브러시
@@ -6730,6 +7933,12 @@ anchor	Points:	포인트:
 @msg	`segment` must be "straight" or "curved"	`segment`는 "straight" 또는 "curved"여야 합니다
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode`는 "free", "keepAngles" 또는 "symmetric"이어야 합니다
 @msg	`{key}` must be [x, y]	`{key}`은(는) [x, y]여야 합니다
+
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	단위 변환기
+	Unit Converter Panel	단위 변환기 패널
+	Copy with Units	단위 포함 복사
+	From Selection	선택 영역에서
 
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	색상 종류로 선택
@@ -6928,6 +8137,8 @@ breakText	Glyphs	글리프
 	Remove Strokes	선 제거
 	Place Brush Art	브러시 아트 배치
 	Replace Brush Art	브러시 아트 바꾸기
+	Replace Pattern Art	패턴 아트 바꾸기
+	Place Pattern Art	패턴 아트 배치
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	선에서 이 브러시를 사용합니다. 새 아트를 해당 선에 적용하시겠습니까, 아니면 선을 그대로 두고 새 아트로 브러시 사본을 추가하시겠습니까?
 	Apply to Strokes	선에 적용
 	Leave Strokes	선 유지
@@ -6956,9 +8167,74 @@ breakText	Glyphs	글리프
 	Remove Gaps	간격 제거
 @msg	that makes too many pieces (at most 100000): make the dashes longer	조각이 너무 많아집니다(최대 100000개). 대시를 더 길게 하십시오
 @msg	select paths, or segments, to divide	나눌 패스나 세그먼트를 선택하십시오
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	부드러운 브리지…
+	Smooth Bridge	부드러운 브리지
+	Keep Originals	원본 유지
+@msg	select two or more circles to bridge	연결할 원을 두 개 이상 선택하십시오
+@msg	one circle is inside the other	한 원이 다른 원 안에 있습니다
+@msg	the circles are too far apart for this radius: raise the radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다. 반경을 늘리십시오
+@msg	the circles are too far apart for this radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다
+	Constant Gap	일정한 간격
+	Reach:	도달 거리:
+@msg	the circles are too far apart for this gap: raise the gap	이 간격에서는 원이 너무 멀리 떨어져 있습니다. 간격을 늘리십시오
+@msg	the circles are too far apart for this gap	이 간격에서는 원이 너무 멀리 떨어져 있습니다
+@msg	no two circles are within reach: raise the reach	도달 거리 안에 있는 두 원이 없습니다. 도달 거리를 늘리십시오
+@msg	select at most 2000 circles to bridge	연결할 원을 2000개 이하로 선택하십시오
+@msg	that makes too many bridges (at most 8000): lower the reach	브리지가 너무 많아집니다(최대 8000개). 도달 거리를 줄이십시오
+@msg	the bridged circles are too complex to unite	연결된 원이 너무 복잡하여 합칠 수 없습니다
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	공통 접선…
+	Common Tangents	공통 접선
+	Tangents	접선
+	Centerline	중심선
+	External	외부
+	Internal	내부
+@msg	select two closed paths	닫힌 패스 2개를 선택하십시오
+@msg	a selected path is open	선택한 패스가 열려 있습니다
+@msg	a selected path is not convex	선택한 패스가 볼록하지 않습니다
+@msg	a selected path has no area	선택한 패스에 면적이 없습니다
+@msg	a selected path has more than 10000 segments	선택한 패스의 세그먼트가 10000개를 넘습니다
+@msg	the two paths have the same outline	두 패스의 윤곽선이 같습니다
+@msg	One path lies inside the other, so they have no common tangents	한 패스가 다른 패스 안에 있어 공통 접선이 없습니다
+@msg	The paths overlap, so they have no internal tangents	패스가 겹쳐 있어 내부 접선이 없습니다
+@msg	One path lies inside the other, so they have no internal tangents	한 패스가 다른 패스 안에 있어 내부 접선이 없습니다
+@msg	The point lies inside the path, so it has no tangents	점이 패스 안에 있어 접선이 없습니다
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	접원…
+	Tangent Circle	접원
+	Tangent Circle Tool	접원 도구
+	No tangent circle here	여기에는 접원이 없음
+	Ask For Circle Radius	원 반지름 묻기
+	Auto-Update Default	기본값 자동 업데이트
+	Circle:	원:
+@msg	`ids` names an object twice	`ids`에 같은 오브젝트가 두 번 있습니다
+@msg	select two or three paths or compound paths	패스나 컴파운드 패스를 두 개 또는 세 개 선택하세요
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius`은(는) 0.01에서 1000000 pt 사이여야 합니다
+@msg	two shapes need a `radius`	모양 두 개에는 `radius`이(가) 필요합니다
+@msg	three shapes set the radius themselves: leave `radius` out	모양 세 개는 반지름을 스스로 정하므로 `radius`을(를) 빼세요
+@msg	`circle` must be from 0 to 64	`circle`은(는) 0에서 64 사이여야 합니다
+@msg	a shape has no outline	윤곽선이 없는 모양이 있습니다
+@msg	the shapes are too complex: at most 2000 segments in all	모양이 너무 복잡합니다: 세그먼트는 모두 합쳐 최대 2000개입니다
+@msg	these shapes take too long to search	이 모양들을 찾는 데 시간이 너무 오래 걸립니다
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	이 모양들에 닿는 원이 64개를 넘습니다: 곡선 전체를 따라 닿아 있을 수 있습니다
+@msg	no circle touches these shapes	이 모양들에 닿는 원이 없습니다
+@msg	`circle` is past the last circle found ({found})	`circle`이(가) 찾은 마지막 원을 넘었습니다({found})
+@msg	object {value} is not a path or compound path	오브젝트 {value}은(는) 패스나 컴파운드 패스가 아닙니다
+@msg	these shapes are too small to measure	이 모양들은 너무 작아서 측정할 수 없습니다
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	경계 사각형 추가
+	Add Bounding Circle	경계 원 추가
+	Add Bounding Rectangle…	경계 사각형 추가…
+	Add Bounding Circle…	경계 원 추가…
+	One per Object	개체마다 하나
+@msg	nothing to enclose	둘러쌀 항목이 없습니다
+@msg	`offset` must be 0 or more	`offset`은(는) 0 이상이어야 합니다
+@msg	the shape would have no size	도형의 크기가 없습니다
+@msg	the shape would reach past the edge of the canvas	도형이 캔버스 가장자리를 벗어납니다
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	문서 도구
 	Save a Timestamped Copy	날짜와 시간이 붙은 사본 저장
@@ -6980,6 +8256,11 @@ breakText	Glyphs	글리프
 	Malayalam	말라얄람어
 	Odia	오리야어
 	Urdu	우르두어
+	Sanskrit	산스크리트어
+	Nepali	네팔어
+	Assamese	아삼어
+	Konkani	코카니어
+	Sindhi	신디어
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 이상 (버전 {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	열린 모든 문서를 PDF로 내보내기
@@ -7013,7 +8294,7 @@ breakText	Glyphs	글리프
 @msg	stroke cannot be set on a symbol instance	심볼 인스턴스에는 stroke를 설정할 수 없습니다
 @msg	fill on a symbol instance must be a solid color or none	심볼 인스턴스의 fill은 단색 또는 none이어야 합니다
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	모양으로 변환 또는 개체 윤곽선화 효과가 없는 이미지에는 {key}을(를) 설정할 수 없습니다
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice 및/또는 type을 지정하세요
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type 및/또는 alignToPixelGrid을 지정하세요
 	Text Flow	텍스트 흐름
 	By Rows	행 방향
 	By Columns	열 방향
@@ -7239,6 +8520,13 @@ breakText	Glyphs	글리프
 @msg	No bridge of this width fits across the selected art	이 너비의 브리지가 선택한 아트워크에 들어가지 않습니다
 @msg	Some islands could not be joined to the area around the art	일부 섬을 아트워크 주변 영역에 연결할 수 없습니다
 @msg	`width` must be from {lo} to {hi} pt	`width`는 {lo}에서 {hi}pt 사이여야 합니다
+@msg	`angle` must be from -180 to 180 degrees	`angle`는 -180도에서 180도 사이여야 합니다
+@msg	`roundness` must be from 0 to 100%	`roundness`는 0%에서 100% 사이여야 합니다
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity`는 0.01에서 100pt 사이여야 합니다
+@msg	style must be "pencil" or "brush"	style은 "pencil" 또는 "brush"여야 합니다
+@msg	extend end must be "start" or "end"	extend 끝은 "start" 또는 "end"여야 합니다
+@msg	connect end must be "start" or "end"	connect 끝은 "start" 또는 "end"여야 합니다
+@msg	`roundness` must be from 1 to 100%	`roundness`는 1%에서 100% 사이여야 합니다
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`는 1에서 {MAX_BRIDGES_PER_ISLAND} 사이의 정수여야 합니다
 	Weed Box and Lines…	위딩 상자 및 선…
 	Weed Box and Lines	위딩 상자 및 선
@@ -7300,6 +8588,7 @@ breakText	Glyphs	글리프
 @msg	Too many Revolve faces for visibility evaluation	회전체의 면이 너무 많아 가시성을 계산할 수 없습니다
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft는 견본 교환 파일에서 색상과 그룹을 최대 {ASE_MAX_ENTRIES}개까지 읽는데, 이 라이브러리에는 {entries}개가 있습니다
 @msg	WebP encoding failed: {e}	WebP 인코딩 실패: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 인코딩 실패: 이미지가 너무 커서 손실 WebP로 만들 수 없습니다: 해상도를 낮추거나 무손실을 선택하세요
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index`은(는) 정수여야 합니다
@@ -7452,7 +8741,7 @@ breakText	Glyphs	글리프
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	{name} 프로파일을 읽을 수 없어 새 문서에 기본 설정을 사용했습니다: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	트랩: 트랩할 만큼 가까운 개체 쌍이 {_1}개보다 많거나, 같은 가로 범위에 있는 개체가 너무 많습니다. 한 번에 더 적은 개체를 트랩하세요
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	위딩 상자 및 선: 아트웍 바깥에 들어갈 위딩 선이 없고 위딩 상자가 꺼져 있습니다
-@msg	\ at end of pattern	패턴 끝에 \이(가) 있습니다
+@msg	\\ at end of pattern	패턴 끝에 \\이(가) 있습니다
 @msg	`alignOn` cannot be empty	`alignOn`은(는) 비워 둘 수 없습니다
 @msg	`alignOn` must be a string	`alignOn`은(는) 문자열이어야 합니다
 @msg	`align` is start, center or end	`align`은(는) start, center 또는 end입니다
@@ -7503,6 +8792,8 @@ breakText	Glyphs	글리프
 @msg	`dataBase64` is larger than the module limit	`dataBase64`이(가) 모듈 한도보다 큽니다
 @msg	`dataBase64` is not valid base64	`dataBase64`이(가) 올바른 base64가 아닙니다
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`은(는) `ids`, `reverse` 또는 `append`와 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`은(는) `ids`, `id` 또는 `item`과 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`은(는) `brush`와 함께 쓸 수 없습니다
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth`와 `childLimit`은 요약을 잘라 냅니다: `summary: true`를 전달하세요
 @msg	`design` is a design name, or null for plain columns	`design`은(는) 디자인 이름이며, 일반 막대에는 null입니다
 @msg	`design` is a design name, or null for the default marker	`design`은(는) 디자인 이름이며, 기본 마커에는 null입니다
@@ -7617,7 +8908,7 @@ breakText	Glyphs	글리프
 @msg	`scale` must be a number from 0.001 to 1000	`scale`은(는) 0.001에서 1000 사이의 숫자여야 합니다
 @msg	`scale` must be a number in (0, 100]	`scale`은(는) (0, 100] 범위의 숫자여야 합니다
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}`은(는) 비어 있지 않은 배열이어야 합니다
-@msg	`scope` must be "document", {artboards} or {layers}	`scope`은(는) "document", {artboards} 또는 {layers}여야 합니다
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope`은(는) "document", {{artboards: [index, …]}} 또는 {{layers: [id, …]}}여야 합니다
 @msg	`scope` must be "selection" or "document", not {other}	`scope`은(는) "selection" 또는 "document"여야 합니다: {other}
 @msg	`script` must be a string	`script`은(는) 문자열이어야 합니다
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes`은(는) 계열 인덱스가 하나 이상 있는 목록입니다
@@ -7696,6 +8987,8 @@ breakText	Glyphs	글리프
 @msg	`{f}` is the copy of a document open now	`{f}`은(는) 지금 열려 있는 문서의 복사본입니다
 @msg	`{id}` is no writable format (see document.formats)	`{id}`은(는) 기록할 수 있는 형식이 아닙니다(document.formats 참조)
 @msg	`{id}` isn't a loaded library	`{id}`은(는) 불러온 라이브러리가 아닙니다
+@msg	`{file}` has no swatches of its own	`{file}`에 자체 견본이 없습니다
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}`에 패턴 견본이 있어 .vcswatches 파일에 담을 수 없습니다
 @msg	`{key}` has no colours	`{key}`에 색상이 없습니다
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}`에 단어가 {MAX_EDIT_WORDS}개보다 많습니다
 @msg	`{key}` is a design name	`{key}`은(는) 디자인 이름입니다
@@ -7776,7 +9069,7 @@ breakText	Glyphs	글리프
 @msg	a CMap has too many mappings	CMap에 매핑이 너무 많습니다
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	DXF 도면에는 원점이 하나입니다: 아트보드마다 도면을 하나씩 만들려면 useArtboards: true를 전달하세요
 @msg	a PDF presets file with over {_1} presets	사전 설정이 {_1}개를 넘는 PDF 사전 설정 파일입니다
-@msg	a \u escape needs four hexadecimal digits	\u 이스케이프에는 16진수 네 자리가 필요합니다
+@msg	a \\u escape needs four hexadecimal digits	\\u 이스케이프에는 16진수 네 자리가 필요합니다
 @msg	a batch preview cannot switch documents	일괄 처리 미리 보기에서는 문서를 전환할 수 없습니다
 @msg	a brush named `{nn}` exists	`{nn}` 브러시가 이미 있습니다
 @msg	a comma in an XPath expression must separate function arguments	XPath 식의 쉼표는 함수 인수를 구분해야 합니다
@@ -7880,7 +9173,6 @@ breakText	Glyphs	글리프
 @msg	anchor `smooth` must be true or false	앵커의 `smooth`은(는) true 또는 false여야 합니다
 @msg	anchor `{key}` must be [x, y]	앵커의 `{key}`은(는) [x, y]여야 합니다
 @msg	anchor `{key}` must be a number	앵커의 `{key}`은(는) 숫자여야 합니다
-@msg	angle and roundness must be finite	각도와 원형률은 유한해야 합니다
 @msg	angles must be a list as long as pins (degrees or null)	angles는 pins와 길이가 같은 목록이어야 합니다(도 또는 null)
 @msg	appearance must be flat|center|edge	appearance는 flat|center|edge여야 합니다
 @msg	apply is "fill" or "stroke", not `{other}`	apply는 "fill" 또는 "stroke"입니다: `{other}`
@@ -7989,7 +9281,13 @@ breakText	Glyphs	글리프
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel은 {own}(문서의 모드), grayscale 또는 bitmap이어야 합니다
 @msg	colour groups can't go into colour groups	색상 그룹은 색상 그룹 안에 넣을 수 없습니다
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode, spot은 단색 견본에만 적용됩니다
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	{column}열: `{cell}`은(는) 그래프 데이터 파일의 `%` 열이며, 이 열은 읽지 않습니다
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	{line}행, {column}열: `{var}`의 그래프 데이터 파일 `{path}`은(는) 상대 경로입니다. `base` 또는 절대 경로를 지정하세요
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	{line}행, {column}열: `{var}`의 그래프 데이터 파일을 읽을 수 없습니다: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	{line}행, {column}열: `{var}`의 그래프 데이터 파일 `{path}`을(를) 따라가지 않습니다: {r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	{line}행, {column}열: `{var}`의 그래프 데이터 파일 `{path}`이(가) {MAX_GRAPH_DATA_FILE}바이트보다 큽니다
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	{line}행, {column}열: `{var}`의 그래프 데이터 파일 `{path}`에서 나온 그래프 값이 {MAX_GRAPH_CSV}바이트보다 깁니다
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	{line}행, {column}열: 그래프 데이터 파일이 모두 합쳐 {MAX_GRAPH_FILES_TOTAL}바이트를 넘습니다
+@msg	`base` is empty	`base`가 비어 있습니다
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	{column}열: `{cell}`이(가) 가리키는 `{name}`은(는) {_1} 변수입니다
 @msg	column {column}: `{cell}` names no variable	{column}열: `{cell}`이(가) 가리키는 변수가 없습니다
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	{column}열: 변수 이름이 {MAX_NAME}자보다 깁니다
@@ -8000,6 +9298,7 @@ breakText	Glyphs	글리프
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	컴파운드 모양에는 패스, 컴파운드 패스, 그룹, 컴파운드 모양, 문자, 블렌드, 엔벨로프를 넣을 수 있습니다
 @msg	compound {_1} must contain exactly one open path to join	컴파운드 {_1}에는 연결할 열린 패스가 정확히 하나 있어야 합니다
 @msg	connect needs a path other than the one extended	connect에는 연장한 패스가 아닌 다른 패스가 필요합니다
+@msg	connect needs extend	connect에는 extend가 필요합니다
 @msg	connect needs id	connect에는 id가 필요합니다
 @msg	connect path has no open end	connect 패스에 열린 끝이 없습니다
 @msg	continuation must be an array of path chunks	continuation은 패스 조각의 배열이어야 합니다
@@ -8123,6 +9422,7 @@ breakText	Glyphs	글리프
 @msg	give a pattern name or select an object painted with a pattern	패턴 이름을 지정하거나 패턴으로 칠한 개체를 선택하세요
 @msg	give at least one of clip, invert, disabled, linked	clip, invert, disabled, linked 중 하나 이상을 지정하세요
 @msg	give color, none, swatch or gradient	color, none, swatch 또는 gradient를 지정하세요
+@msg	give color, none, swatch, gradient or opacity	color, none, swatch, gradient 또는 opacity를 지정하세요
 @msg	give dataBase64	dataBase64를 지정하세요
 @msg	give either at (a click) or area (a path drawn around the overlaps)	at(클릭) 또는 area(겹친 부분 둘레에 그린 패스) 중 하나를 지정하세요
 @msg	give exactly one of `at`, `rect` and `points`	`at`, `rect`, `points` 중 정확히 하나를 지정하세요
@@ -8495,7 +9795,7 @@ breakText	Glyphs	글리프
 @msg	not a regular expression	정규식이 아닙니다
 @msg	not a stored or deflated central record	저장 방식이나 deflate 방식의 중앙 레코드가 아닙니다
 @msg	not a valid SVGZ file: {e}	올바른 SVGZ 파일이 아닙니다: {e}
-@msg	not an RTF file: it doesn't start with {\rtf	RTF 파일이 아닙니다: {\rtf(으)로 시작하지 않습니다
+@msg	not an RTF file: it doesn't start with {\\rtf	RTF 파일이 아닙니다: {\\rtf(으)로 시작하지 않습니다
 @msg	not an action set: the text doesn't start with /version and a number	액션 세트가 아닙니다: 텍스트가 /version과 숫자로 시작하지 않습니다
 @msg	not an image VectorCraft reads (see document.formats)	VectorCraft가 읽는 이미지가 아닙니다(document.formats 참조)
 @msg	not area type (text in a frame) outside perspective	원근 밖의 영역 문자(프레임 안의 텍스트)가 아닙니다
@@ -8512,7 +9812,7 @@ breakText	Glyphs	글리프
 @msg	nothing to print: every artboard picked is blank	인쇄할 것이 없습니다: 선택한 아트보드가 모두 비어 있습니다
 @msg	nothing to print: the document has no art that prints	인쇄할 것이 없습니다: 문서에 인쇄되는 아트웍이 없습니다
 @msg	nothing to repeat	반복할 항목이 없습니다
-@msg	numbers out of order in {_1} quantifier	{_1} 수량자의 숫자 순서가 잘못되었습니다
+@msg	numbers out of order in {{}} quantifier	{{}} 수량자의 숫자 순서가 잘못되었습니다
 @msg	object is not a path	개체가 패스가 아닙니다
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	개체 투명도는 강조 표시한 글자에 샘플링할 수 없습니다. 스포이드 옵션에서 투명도를 끄거나 개체 전체를 선택하세요
 @msg	object {_1} can't be set as point type	개체 {_1}은(는) 포인트 문자로 설정할 수 없습니다
@@ -8613,7 +9913,9 @@ breakText	Glyphs	글리프
 @msg	position must be normal, superscript or subscript	position은 normal, superscript 또는 subscript여야 합니다
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position은 topLeft, topRight, bottomLeft 또는 bottomRight여야 합니다
 @msg	positions must be between 0 and 100000 pt	positions는 0에서 100000 pt 사이여야 합니다
+@msg	ppi can't be more than {max} for this image	이 이미지의 ppi는 {max}보다 클 수 없습니다
 @msg	ppi must be a positive number, not {ppi}	ppi는 양수여야 합니다: {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim은 이미지의 픽셀을 그대로 유지합니다: ppi를 지정하지 마세요
 @msg	ppi must be between 1 and 2400	ppi는 1에서 2400 사이여야 합니다
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`은(는) transforms|bounds|fileDimensions|fit|fill이 아닙니다
 @msg	preserveShape must be clippingMask|transparency	preserveShape는 clippingMask|transparency여야 합니다
@@ -8801,6 +10103,7 @@ breakText	Glyphs	글리프
 @msg	the character's size can't be measured	글자의 크기를 잴 수 없습니다
 @msg	the code runs past its last instruction	코드가 마지막 명령을 지나 실행됩니다
 @msg	the compound shape is too complex to expand	컴파운드 모양이 너무 복잡해서 확장할 수 없습니다
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	영역을 둘러싸지 않는 선이나 기타 열린 패스는 컴파운드 모양에 영역을 더하지 않습니다. 포함하려면 먼저 개체 › 패스 › 선 윤곽선화를 적용하세요
 @msg	the container of the listed objects is gone	나열한 개체의 컨테이너가 없어졌습니다
 @msg	the copy `{user_id}` can't be read as a library	복사본 `{user_id}`을(를) 라이브러리로 읽을 수 없습니다
 @msg	the copy would leave the canvas	복사본이 캔버스를 벗어납니다
@@ -8874,7 +10177,7 @@ breakText	Glyphs	글리프
 @msg	the page has no area	페이지에 면적이 없습니다
 @msg	the page's type in an unread object's box isn't in its page art	읽지 않은 개체의 상자에 있는 페이지 문자가 페이지 아트웍에 없습니다
 @msg	the paint behind the proxy is not a gradient	프록시 뒤의 페인트가 그레이디언트가 아닙니다
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	페인트가 자유 형태 그레이디언트가 아닙니다(paint.editGradient {kind}(으)로 적용하세요)
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	페인트가 자유 형태 그레이디언트가 아닙니다(paint.editGradient {{kind: "freeform"}}(으)로 적용하세요)
 @msg	the parameters or body do not form one function	매개변수나 본문이 하나의 함수를 이루지 않습니다
 @msg	the parent must be a layer or sublayer	상위 항목은 레이어나 하위 레이어여야 합니다
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	붙여넣은 SVG 필터 {name}은(는) 문서에 있는 같은 이름의 필터와 다르게 그려지며, 쓸 수 있는 빈 이름이 없습니다
@@ -9040,8 +10343,6 @@ breakText	Glyphs	글리프
 @msg	unknown panel	알 수 없는 패널
 @msg	unknown panel `{panel}`	알 수 없는 패널 `{panel}`
 @msg	unknown parameter `{key}`	알 수 없는 매개변수 `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	알 수 없는 매개변수 `{within}settings.{format}`: {why}
-@msg	unknown parameter `{within}{key}`; {why}	알 수 없는 매개변수 `{within}{key}`: {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	알 수 없는 pieLegend `{v}`(none, standard 또는 wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	알 수 없는 piePosition `{v}`(even, ratio 또는 stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	알 수 없는 pieSort `{v}`(none, all 또는 first)
@@ -9149,7 +10450,6 @@ breakText	Glyphs	글리프
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 파일에는 투명도가 없는데 이 파일에는 {what}이(가) 있게 됩니다: 먼저 병합하세요(object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} 이미지는 열 수 없습니다(document.formats 참조)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}`은(는) 선택 항목 중 하나가 아닙니다
-@msg	{k} has control characters{_1}	{k}에 제어 문자가 있습니다{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k}이(가) 너무 깁니다(최대 {MAX_TEXT}자)
 @msg	{k} must be > 0	{k}은(는) 0보다 커야 합니다
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k}은(는) 숫자(pt) 또는 "210 mm" 같은 길이여야 합니다
@@ -9170,7 +10470,6 @@ breakText	Glyphs	글리프
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name}은(는) 기본 제공 항목이라 삭제할 수 없습니다
 @msg	{name} must be a number	{name}은(는) 숫자여야 합니다
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name}은(는) {lo}–{hi}{unit}여야 합니다({v} 입력됨)
 @msg	{name}: CRC or size mismatch	{name}: CRC 또는 크기가 일치하지 않습니다
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: 이 Affinity 파일은 포함된 미리 보기만 읽을 수 있었습니다. 경고와 함께 보려면 파일 › 열기를 사용하거나, 가져오기 전에 Affinity에서 SVG 또는 PDF로 내보내세요
 @msg	{name}: {e}	{name}: {e}
@@ -9208,3 +10507,140 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Fold Angle	접는 각도
+	Set Fold Angle…	접는 각도 설정…
+	Set Fold Angle	접는 각도 설정
+	Reset Fold Angle	접는 각도 재설정
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	잠기거나 숨겨지지 않은 오시선, 하프 컷 선 또는 미싱선을 선택하세요
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	도구 막대의 도구와 그 키가 하는 일을 도움말 대신 카드로 표시합니다. 도구 설명 표시가 켜져 있어야 합니다.
+	Selects whole objects and groups to move, resize or rotate them.	개체와 그룹 전체를 선택하여 이동하거나 크기를 조정하거나 회전합니다.
+	Selects anchor points and path segments to reshape a path.	기준점과 패스 세그먼트를 선택하여 패스의 모양을 바꿉니다.
+	Draws paths point by point, with straight segments and smooth curves.	직선 세그먼트와 부드러운 곡선으로 패스를 한 점씩 그립니다.
+	Draws smooth curves through the points you click.	클릭한 점을 지나는 부드러운 곡선을 그립니다.
+	Adds text at a point, or in a frame you drag.	한 점에 또는 드래그한 프레임 안에 텍스트를 추가합니다.
+	Draws rectangles and squares.	직사각형과 정사각형을 그립니다.
+	Draws rectangles with rounded corners.	모서리가 둥근 직사각형을 그립니다.
+	Draws ellipses and circles.	타원과 원을 그립니다.
+	Draws polygons with sides of equal length.	변의 길이가 같은 다각형을 그립니다.
+	Draws stars.	별을 그립니다.
+	Turns objects around a reference point.	기준점을 중심으로 개체를 회전합니다.
+	Flips objects across an axis through a reference point.	기준점을 지나는 축을 기준으로 개체를 반사합니다.
+	Resizes objects from a reference point.	기준점에서 개체의 크기를 조정합니다.
+	Slants objects from a reference point.	기준점에서 개체를 기울입니다.
+	Moves the view of the document.	문서 보기를 이동합니다.
+	Magnifies or reduces the view.	보기를 확대하거나 축소합니다.
+	Copies the color and other attributes of one object to the selection.	한 개체의 색상과 기타 속성을 선택 항목에 복사합니다.
+	Sets the direction and length of a gradient.	그레이디언트의 방향과 길이를 설정합니다.
+	Creates, selects and resizes artboards.	아트보드를 만들고 선택하고 크기를 조정합니다.
+	Changes the width of a stroke along its length.	선의 폭을 길이를 따라 바꿉니다.
+	Bends art by dragging pins placed on it.	아트에 놓은 핀을 드래그하여 구부립니다.
+	Pushes the outlines of paths in the direction you drag.	패스의 윤곽을 드래그하는 방향으로 밀어냅니다.
+	Twists the outlines of paths into swirls.	패스의 윤곽을 소용돌이 모양으로 비틉니다.
+	Pulls the outlines of paths in toward the brush.	패스의 윤곽을 브러시 쪽으로 끌어당깁니다.
+	Pushes the outlines of paths out from the brush.	패스의 윤곽을 브러시에서 바깥쪽으로 밀어냅니다.
+	Adds curved details along the outlines of paths.	패스의 윤곽을 따라 곡선 모양의 세부를 추가합니다.
+	Adds spiky details along the outlines of paths.	패스의 윤곽을 따라 뾰족한 세부를 추가합니다.
+	Adds wrinkles along the outlines of paths.	패스의 윤곽을 따라 주름을 추가합니다.
+	Moves, copies and resizes objects on the perspective grid.	원근 격자에서 개체를 이동, 복사하고 크기를 조정합니다.
+	Makes a series of steps between two or more objects.	두 개 이상의 개체 사이에 일련의 단계를 만듭니다.
+	Places dimension lines that show measured lengths.	측정한 길이를 보여 주는 치수선을 배치합니다.
+	Tap	짧게 누르기
+	Clear Hold	길게 누르기 지우기
+	Hold Shortcuts	길게 누르기 단축키
+	Hold Shortcut Delay	길게 누르기 단축키 지연 시간
+	How hold shortcuts work	길게 누르기 단축키 작동 방식
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	클릭한 다음 이 항목에 길게 누를 키를 누르세요 (Esc로 취소). 키를 길게 누르면 이 항목이 실행되고, 짧게 누르면 키 자체의 단축키가 실행됩니다.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	키를 짧게 누르면 해당 단축키가 실행됩니다. 지연 시간 동안 키를 누르고 있으면 대신 누르고 있기 열의 도구나 명령이 실행됩니다. 길게 누르기 단축키는 문자, 숫자 또는 문장 부호 키이며, 단독으로 또는 Shift와 함께 사용합니다.
+@msg	Hold {_1} is already used by {_2}	길게 누르기 {_1}은(는) 이미 {_2}에서 사용 중입니다
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	길게 누르기 단축키는 문자를 입력하는 키를 단독으로 또는 Shift와 함께 사용해야 합니다 ({shown}에 Cmd, Ctrl 또는 Alt가 있음)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown}은(는) 길게 누르기 단축키가 될 수 없습니다: 문자, 숫자 또는 문장 부호 키를 사용하세요
+	Check	검사
+	Check Fold Lines	접는 선 검사
+@msg	No cut lines are in the selection.	선택 영역에 재단선이 없습니다.
+@msg	No cut lines are in the document.	문서에 재단선이 없습니다.
+@msg	The cut lines do not enclose an area.	재단선이 영역을 둘러싸지 않습니다.
+@msg	A cut line ends without meeting another cut line.	재단선이 다른 재단선과 만나지 않고 끝납니다.
+@msg	A gap between cut lines was closed.	재단선 사이의 틈을 닫았습니다.
+@msg	The fold lines are too complex to check.	접는 선이 너무 복잡해서 검사할 수 없습니다.
+@msg	A cut line and a crease lie on top of each other.	재단선과 오시선이 겹쳐 있습니다.
+@msg	No cut lines are among the given objects.	지정한 개체에 재단선이 없습니다.
+@msg	Two fold lines lie on top of each other.	접는 선 두 개가 겹쳐 있습니다.
+@msg	A crease ends inside a panel.	오시선이 패널 안에서 끝납니다.
+@msg	A crease does not divide two panels.	오시선이 두 패널을 나누지 않습니다.
+@msg	A crease lies outside the cut outline, wholly or in part.	오시선의 전체 또는 일부가 재단 윤곽선 밖에 있습니다.
+@msg	The pieces of a hinge are not on one straight line.	힌지의 조각들이 한 직선 위에 있지 않습니다.
+@msg	A gap between cut lines is too narrow to tell apart.	재단선 사이의 틈이 너무 좁아 구별할 수 없습니다.
+@msg	A cut-out area holds other fold lines or another blank.	잘라 낸 영역에 다른 접는 선이나 다른 전개도가 있습니다.
+@msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
+@msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Nature Icons	자연 아이콘
+	Flower	꽃
+	Tree	나무
+	Mountain	산
+	Ornamental	장식 문양
+	Scrollwork	소용돌이 장식
+	Filigree Arrow	세공 화살표
+	Petal Sweep	꽃잎 곡선
+	Twin Curl	이중 소용돌이
+	Vector Packs	벡터 팩
+	Compass Rose	나침반 장미
+	Botanical Sprig	식물 가지
+	Facet Diamond	패싯 다이아몬드
+	Tide Crest	파도 마루
+	Leaf Vine	잎 덩굴
+	Blossom Chain	꽃사슬
+	Pennant Garland	깃발 장식
+	Lantern String	등불 줄
+	Orbit Lines	궤도 선
+	Petal Garland	꽃잎 화환
+	Lattice Braid	격자 땋기
+	Facet Sweep	면 분할 붓질
+	Artistic Brushes	예술 브러시
+	Paint	페인트
+	Flat Sweep	평평한 붓질
+	Dry Drag	마른 붓질
+	Loaded Stroke	두터운 붓질
+	Fan Sweep	부채꼴 붓질
+	Engraving	판화
+	Fine Hatching	가는 해칭
+	Dense Hatching	촘촘한 해칭
+	Tapered Hatching	가늘어지는 해칭
+	Broken Hatching	끊긴 해칭
+	Image Brush	이미지 브러시
+	Soft Bloom	부드러운 꽃
+	Halftone Field	하프톤 필드
+	Solar Grain	태양 입자
+	Color Flecks	색 점
+	Paper Cutouts	종이 오려내기
+	Coral Layers	산호색 레이어
+	Mint Layers	민트색 레이어
+	Midnight Layers	한밤중 레이어
+	Sunflower Sheet	해바라기 시트
+	Rose Layers	장미색 레이어
+	Monochrome Stack	단색 쌓기
+	Dashed Arrow	점선 화살표
+	Fine Stipple	가는 점묘
+	Dense Stipple	촘촘한 점묘
+	Soft Stipple	부드러운 점묘
+	Bold Stipple	굵은 점묘
+	Pressure Sensitive	압력 감지
+	Flex Ribbon	유연한 리본
+	Pulse Stroke	맥동 획
+	Round Flow	둥근 흐름
+	Chisel Flow	비스듬한 흐름
+	Fold Preview	접기 미리 보기
+	Fold	접기
+	Show Fold Lines	접는 선 표시
+	Three-Quarter	3/4 보기
+	Open a document to preview its folded shape.	접은 모양을 미리 보려면 문서를 여세요.
+@msg	Check the fold lines first.	먼저 접는 선을 검사하세요.
+@msg	Panels: {panels}, hinges: {hinges}	패널: {panels}, 힌지: {hinges}
+@msg	Other blanks not shown: {count}	표시되지 않은 다른 전개도: {count}
+@msg	A joint does not close by {gap} pt.	이음매가 {gap} pt만큼 닫히지 않습니다.
+@msg	Two panels pass through each other.	두 패널이 서로 관통합니다.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	원본 편집 앱:
+file-filter	Applications	응용 프로그램

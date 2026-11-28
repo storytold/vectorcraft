@@ -4,9 +4,11 @@
 //! - PDF/X-1a:2001: every colour is CMYK, grey or a spot ink with a CMYK alternate (colours and
 //!   images are converted to a CMYK destination and written untagged, see [`crate::output`]), no
 //!   transparency (the app flattens it before writing), no layers, PDF 1.3.
-//! - PDF/X-3:2002: colours are ICC-based (always tagged), no transparency, no layers, PDF 1.3.
-//! - PDF/X-4:2010: transparency and layers are kept, colours are tagged, PDF 1.6 at most, and the
-//!   XMP metadata names the standard too.
+//! - PDF/X-3:2002: colors are ICC-based (always tagged), except CMYK colors in the CMYK output
+//!   intent's profile, which are DeviceCMYK (with `profiles` `none`, all CMYK colors unless they
+//!   are converted to a CMYK destination of another profile), no transparency, no layers, PDF 1.3.
+//! - PDF/X-4:2010: transparency and layers are kept, colors are tagged as in PDF/X-3, PDF 1.6 at
+//!   most, and the XMP metadata names the standard too and carries `xmp:MetadataDate`.
 //! - All of them: a `/GTS_PDFX` output intent (blank, the CMYK profile in effect, embedded), a
 //!   TrimBox on every page (the artboard), `/Trapped` True or False, `/GTS_PDFXVersion` in the
 //!   document information, a title and dates, embedded fonts (or text as outlines), no editing
@@ -23,65 +25,13 @@ use crate::lab_spot::find;
 use crate::patch::{Patch, Xref};
 use crate::{PdfError, PdfSettings, Standard};
 
-impl Standard {
-    /// A PDF/X standard.
-    pub fn is_pdfx(self) -> bool {
-        matches!(self, Self::PdfX1a | Self::PdfX3 | Self::PdfX4)
-    }
-
-    /// Files of this standard have no transparency (PDF/X-1a and PDF/X-3): it is flattened.
-    pub fn flattens(self) -> bool {
-        matches!(self, Self::PdfX1a | Self::PdfX3)
-    }
-
-    /// Every colour is CMYK, grey or a spot ink (PDF/X-1a).
-    pub fn cmyk_only(self) -> bool {
-        self == Self::PdfX1a
-    }
-
-    /// Files of this standard may have PDF layers (PDF/X-1a and PDF/X-3 are PDF 1.3, which has
-    /// none).
-    pub fn allows_layers(self) -> bool {
-        !self.flattens()
-    }
-
-    /// `/GTS_PDFXVersion` and `/GTS_PDFXConformance` (when the standard has one).
-    fn pdfx_ids(self) -> Option<(&'static str, Option<&'static str>)> {
-        match self {
-            Self::PdfX1a => Some(("PDF/X-1:2001", Some("PDF/X-1a:2001"))),
-            Self::PdfX3 => Some(("PDF/X-3:2002", None)),
-            Self::PdfX4 => Some(("PDF/X-4", None)),
-            Self::None | Self::PdfA2b => None,
-        }
-    }
-}
-
-/// Refuse a PDF/X output intent the file can't have: a grey profile, an RGB one in PDF/X-1a, or a
-/// name that isn't a profile, unless PDF/X-1a and PDF/X-3 name a registered printing condition
-/// (with a registry) without embedding a profile; PDF/X-4 always embeds one.
-pub(crate) fn check(set: &PdfSettings) -> Result<(), PdfError> {
-    let o = &set.output;
-    let name = o.output_intent.trim();
-    if !set.standard.is_pdfx() || name.is_empty() {
-        return Ok(());
-    }
-    let std = set.standard.label();
-    match cms::profile(name).map(|p| p.kind) {
-        Some(ProfileKind::Cmyk) => Ok(()),
-        Some(ProfileKind::Rgb) if !set.standard.cmyk_only() => Ok(()),
-        Some(ProfileKind::Rgb) => {
-            Err(PdfError::BadSetting(format!("output.outputIntent: {std} files print in CMYK, and “{name}” is an RGB profile")))
-        }
-        Some(ProfileKind::Gray) => {
-            Err(PdfError::BadSetting(format!("output.outputIntent: “{name}” is a grey profile, which can't be a {std} output intent")))
-        }
-        None if !o.registry.trim().is_empty() && set.standard != Standard::PdfX4 => Ok(()),
-        None if set.standard == Standard::PdfX4 => {
-            Err(PdfError::BadSetting(format!("output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile")))
-        }
-        None => Err(PdfError::BadSetting(format!(
-            "output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)"
-        ))),
+/// `/GTS_PDFXVersion` and `/GTS_PDFXConformance` (when the standard has one).
+fn pdfx_ids(standard: Standard) -> Option<(&'static str, Option<&'static str>)> {
+    match standard {
+        Standard::PdfX1a => Some(("PDF/X-1:2001", Some("PDF/X-1a:2001"))),
+        Standard::PdfX3 => Some(("PDF/X-3:2002", None)),
+        Standard::PdfX4 => Some(("PDF/X-4", None)),
+        Standard::None | Standard::PdfA2b => None,
     }
 }
 
@@ -111,7 +61,7 @@ pub(crate) fn require_date(standard: Standard, created: Option<i64>) -> Result<(
 
 /// The document information entries naming `standard` (empty for other files).
 pub(crate) fn info_entries(standard: Standard) -> String {
-    let Some((version, conformance)) = standard.pdfx_ids() else { return String::new() };
+    let Some((version, conformance)) = pdfx_ids(standard) else { return String::new() };
     let mut out = format!("/GTS_PDFXVersion({version})");
     if let Some(c) = conformance {
         out.push_str(&format!("/GTS_PDFXConformance({c})"));
@@ -120,8 +70,9 @@ pub(crate) fn info_entries(standard: Standard) -> String {
 }
 
 /// Edit the XMP metadata of a PDF/X file (the catalog's `/Metadata` stream; `root` is the
-/// catalog dictionary's contents) into `patch`: PDF/X-4 adds the standard, Trapped and a version
-/// id (PDF 1.3 files say so in [`finish`]). Files without metadata are left as they are.
+/// catalog dictionary's contents) into `patch`: PDF/X-4 adds the standard, Trapped, a version id
+/// and the metadata date (PDF 1.3 files say so in [`finish`]). Files without metadata are left as
+/// they are.
 pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Patch, standard: Standard, trapped: bool) -> Result<(), PdfError> {
     if !standard.is_pdfx() {
         return Ok(());
@@ -137,7 +88,7 @@ pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Pat
     let data = data + obj.get(data..).map_or(0, |r| r.iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count());
     let xml = data.checked_add(length).and_then(|e| obj.get(data..e)).ok_or_else(bad)?;
     let mut edits: Vec<(usize, usize, Vec<u8>)> = vec![];
-    if let Some((version, _)) = standard.pdfx_ids().filter(|_| standard == Standard::PdfX4) {
+    if let Some((version, _)) = pdfx_ids(standard).filter(|_| standard == Standard::PdfX4) {
         // Into the writer's description, whose namespaces declare the `pdf` and `xmpMM` prefixes.
         let close = crate::lab_spot::rfind(xml, b"</rdf:Description>").ok_or_else(bad)?;
         let trapped = if trapped { "True" } else { "False" };
@@ -145,6 +96,22 @@ pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Pat
             "<pdfxid:GTS_PDFXVersion xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\">{version}</pdfxid:GTS_PDFXVersion><pdf:Trapped>{trapped}</pdf:Trapped><xmpMM:VersionID>1</xmpMM:VersionID>"
         );
         edits.push((close, close, props.into_bytes()));
+        // When the packet has no `<xmp:MetadataDate>` element, this adds one after the writer's
+        // `<xmp:ModifyDate>` element with the same value. The search expects the writer's form:
+        // properties written as elements with the `xmp` prefix, and `<` in text written as `&lt;`.
+        // The writer's description declares the `xmp` prefix there, and
+        // [`crate::post::modification_date`] keeps the two dates equal.
+        if find(xml, b"<xmp:MetadataDate>", 0).is_none()
+            && let Some(at) = find(xml, b"<xmp:ModifyDate>", 0).map(|i| i + b"<xmp:ModifyDate>".len())
+            && let Some(to) = find(xml, b"</xmp:ModifyDate>", at)
+        {
+            let date = xml.get(at..to).ok_or_else(bad)?;
+            let mut prop = b"<xmp:MetadataDate>".to_vec();
+            prop.extend_from_slice(date);
+            prop.extend_from_slice(b"</xmp:MetadataDate>");
+            let after = to + b"</xmp:ModifyDate>".len();
+            edits.push((after, after, prop));
+        }
     }
     // Every edit grows the stream (or keeps its length).
     let grown: usize = edits.iter().map(|(s, e, new)| new.len().saturating_sub(e - s)).sum();

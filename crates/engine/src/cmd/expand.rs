@@ -182,7 +182,7 @@ impl Expandable {
         n.walk(&mut |c| {
             let shape = matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
             e.text |= matches!(c.kind, NodeKind::Text(_));
-            e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. });
+            e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. }) || c.extras().flare.is_some();
             e.effects |= !c.appearance.effects.is_empty();
             e.envelope |= matches!(c.kind, NodeKind::Envelope { .. });
             e.blends |= matches!(c.kind, NodeKind::Blend { .. });
@@ -503,9 +503,13 @@ fn end_dimension_links(s: &mut Session, ended: &mut Vec<EndedLink>) -> Result<()
     Ok(())
 }
 
+/// Makes the live shapes in `n` plain paths, and the flares plain groups of their parts.
 fn drop_live(n: &mut Node) {
     if let NodeKind::Path { live, .. } = &mut n.kind {
         *live = None;
+    }
+    if n.extras().flare.is_some() {
+        n.extras_mut().flare = None;
     }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {
@@ -1150,21 +1154,27 @@ fn random_brushes_baked<'a>(
     std::borrow::Cow::Owned(def)
 }
 
-/// Does brush `name` of `brushes` draw different art for different points: a calligraphic or
-/// scatter brush with Random variation, or a bristle brush?
-fn draws_random_art(brushes: &[vectorcraft_brush::Brush], name: &str) -> bool {
+/// Does brush `name` of `brushes`, with the stroke's own brush settings `options`, draw different
+/// art for different points: a calligraphic or scatter brush with Random variation, or a bristle
+/// brush?
+fn draws_random_art(brushes: &[vectorcraft_brush::Brush], name: &str, options: &serde_json::Map<String, Value>) -> bool {
     use vectorcraft_brush::{BrushKind, Variation};
-    brushes.iter().find(|b| b.name == name).is_some_and(|b| match &b.kind {
+    let Some(brush) = brushes.iter().find(|b| b.name == name) else { return false };
+    let edited = if options.is_empty() { None } else { brush.with_stroke_options(options).ok() };
+    let b = edited.as_ref().unwrap_or(brush);
+    match &b.kind {
         BrushKind::Calligraphic(c) => c.modes().contains(&Variation::Random),
         BrushKind::Scatter(s) => s.modes().contains(&Variation::Random),
         BrushKind::Bristle(_) => true,
         BrushKind::Art(_) | BrushKind::Pattern(_) => false,
-    })
+    }
 }
 
 /// Is `n` a path with a visible stroke whose brush varies at random ([`draws_random_art`])?
 fn random_brushed(brushes: &[vectorcraft_brush::Brush], n: &Node) -> bool {
-    let random = |st: &vectorcraft_doc::appearance::StrokeLayer| st.visible && st.brush.as_deref().is_some_and(|b| draws_random_art(brushes, b));
+    let random = |st: &vectorcraft_doc::appearance::StrokeLayer| {
+        st.visible && st.brush.as_deref().is_some_and(|b| draws_random_art(brushes, b, &st.brush_options))
+    };
     matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
         && n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if random(st)))
 }

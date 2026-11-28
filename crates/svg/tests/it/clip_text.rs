@@ -126,6 +126,20 @@ fn a_text_clip_path_with_a_clip_rule_or_a_clip_of_its_own_clips_by_its_outlines(
 }
 
 #[test]
+fn a_text_imported_as_several_objects_clips_by_all_their_outlines() {
+    // One object cannot put ג on its x, so the text is several objects; the clip outlines all of them.
+    let d = open(
+        r##"<clipPath id="c"><text x="100 160 220" y="80" direction="rtl" font-size="20">אbג</text></clipPath>
+        <rect width="400" height="300" clip-path="url(#c)"/>"##,
+    );
+    let (clip, _) = clip_group(&top(&d)[0]);
+    assert!(!matches!(clip.kind, NodeKind::Text(_)), "{:?}", clip.kind);
+    let b = clip_bounds(clip);
+    // ג ends at 220, the first object at 160.
+    assert!(b.x1 > 200.0 && b.x1 <= 220.0 + 1e-6 && b.x0 < 100.0, "{b:?}");
+}
+
+#[test]
 fn tspans_and_type_on_a_path_clip_too() {
     let d = open(
         r##"<clipPath id="c"><text font-size="60"><tspan x="10" y="80">A</tspan><tspan x="10" y="200">B</tspan></text></clipPath>

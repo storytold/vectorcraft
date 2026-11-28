@@ -20,4 +20,7 @@ craft-affinity = { workspace = true }
 proptest = { workspace = true }
 # The tests build containers and decode previews.
 crc32fast = { workspace = true }
-image = { workspace = true }
+craft-image-codecs = { workspace = true }
+# tests/it's `import_limits`, `outline_limits` and `text` modules need `synth`, also when this crate
+# is tested without vectorcraft-engine (`cargo xtask ci shard`).
+vectorcraft-affinity = { path = ".", features = ["synth"] }

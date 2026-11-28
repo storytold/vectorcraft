@@ -34,7 +34,24 @@ fn effect_image(doc: &Document) -> image::RgbaImage {
     let kids = flat.layers[0].children().unwrap();
     let NodeKind::Group { children, .. } = &kids[0].kind else { panic!("a shadow becomes a group") };
     let NodeKind::Image(im) = &children[0].kind else { panic!("the image goes under the object") };
-    image::load_from_memory(&flat.images[&im.key].bytes).unwrap().to_rgba8()
+    craft_image_codecs::decode(&flat.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
 }
 
 #[test]
@@ -167,7 +184,24 @@ fn the_color_model_and_anti_alias_reach_the_pixels() {
     let out = s.execute("object.rasterize", &json!({"colorModel": "rgb"})).unwrap();
     let d = &s.doc().unwrap().doc;
     let NodeKind::Image(im) = &d.node(id(&out)).unwrap().kind else { panic!("an image") };
-    let img = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&d.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert!(img.pixels().all(|p| p[3] == 0 || p[3] == 255), "hard edges");
     assert!(img.pixels().any(|p| p[3] == 0) && img.pixels().any(|p| p[3] == 255));
 }
@@ -184,7 +218,24 @@ fn rasterize_takes_the_document_settings_as_defaults() {
     assert_eq!((out["width"].as_u64(), out["height"].as_u64()), (Some(60), Some(60)), "10 pt around");
     let d = &s.doc().unwrap().doc;
     let NodeKind::Image(im) = &d.node(id(&out)).unwrap().kind else { panic!("an image") };
-    let img = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&d.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.get_pixel(0, 0).0, [255, 255, 255, 255], "white around the art");
     let p = img.get_pixel(30, 30).0;
     assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 128, "red in grayscale: {p:?}");
@@ -344,6 +395,56 @@ fn expand_rasterize_then_transform_matches_canvas() {
     assert!(matches!(&n.kind, vectorcraft_doc::NodeKind::Group { children, .. } if children.is_empty()), "{:?}", n.kind);
 }
 
+/// With copies, the Transform effect after Rasterize places the one image on the original and on
+/// each copy: Expand Appearance and PDF export make a group of the image placed by each copy's
+/// map, the last copy lowest and the original on top, as the canvas draws it, all on the pixels
+/// Object › Rasterize makes of the art.
+#[test]
+fn expand_rasterize_then_copying_transform_places_the_image_on_each_copy() {
+    let mut o = session();
+    red_rectangle(&mut o);
+    let made = id(&o.execute("object.rasterize", &json!({"ppi": 72, "background": "white", "addAround": 2})).unwrap());
+    let od = &o.doc().unwrap().doc;
+    let (w, h, xf, png, _) = rasterized(od, od.node(made).unwrap());
+    let about =
+        |m: vectorcraft_geom::Affine| vectorcraft_geom::Affine::translate((70.5, 65.25)) * m * vectorcraft_geom::Affine::translate((-70.5, -65.25));
+    let turn = |deg: f64| about(vectorcraft_geom::Affine::rotate(-deg.to_radians()));
+    let cases = [
+        (json!({"moveH": 50, "copies": 2}), [vectorcraft_geom::Affine::translate((100.0, 0.0)), vectorcraft_geom::Affine::translate((50.0, 0.0))]),
+        (json!({"rotate": 30, "copies": 2}), [turn(60.0), turn(30.0)]),
+    ];
+    for (params, [lowest, middle]) in cases {
+        let mut s = session();
+        let r = red_rectangle(&mut s);
+        let raster = json!({"useDocumentResolution": false, "resolution": 72, "background": "white", "addAround": 2});
+        s.execute("effect.apply", &json!({"effect": "rasterize", "params": raster, "ids": [r.0]})).unwrap();
+        s.execute("effect.apply", &json!({"effect": "distort.transform", "params": params.clone(), "ids": [r.0]})).unwrap();
+        let check = |d: &Document, n: &vectorcraft_doc::Node, what: &str| {
+            let NodeKind::Group { children, clip: false } = &n.kind else { panic!("{what} {params}: a group, {:?}", n.kind_label()) };
+            assert_eq!(children.len(), 3, "{what} {params}");
+            let mut keys = std::collections::HashSet::new();
+            for (c, map) in children.iter().zip([lowest, middle, vectorcraft_geom::Affine::IDENTITY]) {
+                let (w2, h2, xf2, png2, _) = rasterized(d, c);
+                assert_eq!((w2, h2), (w, h), "{what} {params}");
+                assert!(png2 == png, "{what} {params}: the same pixels");
+                let want = map * xf;
+                assert!(xf2.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{what} {params}: {xf2:?} {want:?}");
+                if let NodeKind::Image(im) = &c.kind {
+                    keys.insert(im.key.clone());
+                }
+            }
+            assert_eq!(keys.len(), 1, "{what} {params}: one image for the three placements");
+            let mut ids = std::collections::HashSet::new();
+            n.walk(&mut |c| assert!(ids.insert(c.id), "{what} {params}: id {:?} twice", c.id));
+        };
+        let flat = crate::flatten_raster_effects(&s.doc().unwrap().doc).unwrap();
+        check(&flat, &flat.layers[0].children().unwrap()[0], "PDF export");
+        s.execute("effect.expandAppearance", &json!({"ids": [r.0]})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        check(d, d.node(r).unwrap(), "Expand Appearance");
+    }
+}
+
 #[test]
 fn the_clipping_mask_follows_the_art_its_geometry_effects_draw() {
     let clip = |s: &Session, n: NodeId| match &s.doc().unwrap().doc.node(n).unwrap().kind {
@@ -395,7 +496,24 @@ fn object_rasterize_takes_in_everything_an_effect_stack_paints() {
     let made = id(&s.execute("object.rasterize", &json!({"ppi": 72, "background": "transparent"})).unwrap());
     let d = &s.doc().unwrap().doc;
     let (width, height, xf, png, _) = rasterized(d, d.node(made).unwrap());
-    let img = image::load_from_memory(&png).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     // 41 pt of rectangle and stroke, and 6 pt of blur and 10 pt of white on each side: white from
     // the first column to the last.
     assert_eq!((width, xf.translation().x), (73, 34.0));
@@ -503,7 +621,24 @@ fn rasterize_to_cmyk_makes_a_cmyk_image() {
     let mask = masked.extras().mask.as_deref().expect("an opacity mask").clone();
     let d = &s.doc().unwrap().doc;
     let NodeKind::Image(m) = &mask.art.kind else { panic!("the mask is an image") };
-    let alpha = image::load_from_memory(&d.images[&m.key].bytes).unwrap().to_luma8();
+    let alpha = craft_image_codecs::decode(&d.images[&m.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_luma8();
     assert_eq!((alpha.get_pixel(1, 1).0, alpha.get_pixel(25, 25).0), ([0], [255]));
     assert!(mask.clip);
 }
@@ -530,7 +665,24 @@ fn rasterize_to_grayscale_or_bitmap_makes_a_grayscale_image() {
             assert!(n.extras().mask.is_none(), "{mode} {model} {background}: no opacity mask");
             let NodeKind::Image(im) = &n.kind else { panic!("an image") };
             let blob = d.images[&im.key].clone();
-            let pixels = image::load_from_memory(&blob.bytes).unwrap().to_luma_alpha8();
+            let pixels = craft_image_codecs::decode(&blob.bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_luma_alpha8();
             assert_eq!(pixels.dimensions(), (50, 50));
             let at = |x, y| pixels.get_pixel(x, y).0;
             s.execute("edit.undo", &json!({})).unwrap();

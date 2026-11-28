@@ -25,11 +25,20 @@ pub(crate) fn has_fx(n: &Node) -> bool {
 /// effect copies it with a gradient or changes its fills and strokes ([`effects::has_transform_art`]),
 /// or is it a group or layer with an appearance of its own (see [`Renderer::draw_object_fx`])?
 pub(crate) fn has_object_fx(n: &Node) -> bool {
+    object_fx(n, true)
+}
+
+/// The alternate-art dispatches other than a group or layer's own container appearance.
+pub(super) fn has_non_container_art_fx(n: &Node) -> bool {
+    object_fx(n, false)
+}
+
+fn object_fx(n: &Node, containers: bool) -> bool {
     (effects::needs_outline(n) && (visible(&n.appearance.effects) || n.projection().is_some()))
         || effects::has_item_geometry(n)
         || effects::has_instance_row_raster(n)
         || effects::has_transform_art(n)
-        || effects::has_container_appearance(n)
+        || (containers && effects::has_container_appearance(n))
         || effects::has_crop_marks(n)
         || effects::addons::halftone::has_halftone(n)
         || effects::has_adjustment(n)
@@ -59,11 +68,13 @@ pub(super) fn evaluates_live(n: &Node) -> bool {
 /// dots sampled from everything it draws), one with a live-effect plug-in that paints its pieces
 /// (drawn only while the swatches and patterns they name are in the document), or an image with a
 /// fill or stroke that follows the outline of its pixels ([`effects::follows_image_pixels`]: the
-/// document's pixels for it can change), in it or in the opacity masks of the objects in it.
+/// document's pixels for it can change), or a placed document (its file read, or in some Outline
+/// frames its crossed box, [`vectorcraft_doc::placed_document::Crossed`]), in it or in the opacity
+/// masks of the objects in it.
 pub(super) fn reads_outside(n: &Node) -> bool {
     let mut reads = false;
     n.walk(&mut |c| {
-        reads |= matches!(c.kind, NodeKind::Text(_) | NodeKind::SymbolInstance { .. })
+        reads |= matches!(c.kind, NodeKind::Text(_) | NodeKind::SymbolInstance { .. } | NodeKind::PlacedDocument(_))
             || effects::follows_image_pixels(c)
             || effects::has_revolve(c)
             || effects::has_solid(c)

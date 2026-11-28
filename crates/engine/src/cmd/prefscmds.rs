@@ -139,9 +139,14 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("cornerRadius", "General", "", "Corner Radius", len(0.0, 1296.0, General)),
     p!("pasteOffset", "General", "", "Paste Offset", len(0.0, 1296.0, General)),
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
+    p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
+    p!("deleteKeepsPathsJoined", "General", "Options", "Delete Removes Anchor Points and Keeps Paths Joined", bool),
+    p!("doubleClickAddsAnchorPoints", "General", "Options", "Double-Click Adds Anchor Points", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showToolCards", "General", "Options", "Show Tool Cards", bool),
     p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
+    p!("runStartupScripts", "General", "Options", "Run Startup Scripts", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),
     p!("showHomeScreen", "General", "Options", "Show The Home Screen When No Documents Are Open", bool),
@@ -156,6 +161,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
     p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
+    p!("holdShortcuts", "General", "Options", "Hold Shortcuts", bool),
+    p!("keyHoldDelay", "General", "Options", "Hold Shortcut Delay", num(0.2, 1.0, "s")),
     p!("boundingBoxWhileMovingAndDrawing", "General", "Options", "Show Bounding Box While Moving and Drawing", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
@@ -314,12 +321,23 @@ pub const PREF_SPECS: &[PrefSpec] = &[
             ("or", "Odia"),
             ("as", "Assamese"),
             ("sa", "Sanskrit"),
-            ("ur", "Urdu")
+            ("ur", "Urdu"),
+            ("ne", "Nepali"),
+            ("kok", "Konkani"),
+            ("sd", "Sindhi")
         ])
     ),
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
     // Plug-ins & Scratch Disks
     p!("pluginsFolder", "Plug-ins & Scratch Disks", "Plug-ins", "Additional Plug-ins Folder", text),
+    // The instructions each object filter run gets: Large gives at least 250 M besides those for each byte of input.
+    p!(
+        "pluginInstructionBudget",
+        "Plug-ins & Scratch Disks",
+        "Plug-ins",
+        "Plug-in Instruction Budget",
+        choice(&[("normal", "Normal"), ("large", "Large")])
+    ),
     p!("scratchPrimary", "Plug-ins & Scratch Disks", "Scratch Disks", "Primary", text),
     p!("scratchSecondary", "Plug-ins & Scratch Disks", "Scratch Disks", "Secondary", text),
     // User Interface
@@ -365,6 +383,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("gpuPerformance", "Performance", "GPU Performance", "GPU Performance", bool),
     p!("animatedZoom", "Performance", "GPU Performance", "Animated Zoom", bool),
     p!("gpuPreference", "Performance", "GPU Performance", "Graphics Processor", choice(GPU_PREFERENCES)),
+    // Read by the desktop app at startup: the window presents without vsync, capped at 240 fps (#6013).
+    p!("lowLatencyDrawing", "Performance", "GPU Performance", "Low-Latency Drawing", bool),
     p!("historyStates", "Performance", "", "History States", int(5, 1000)),
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),
@@ -379,6 +399,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("recoveryOffForComplex", "File Handling", "Data Recovery", "Turn off Data Recovery for complex documents", bool),
     p!("recentFilesCount", "File Handling", "Files", "Number of Recent Files to Display", int(0, 30)),
     p!("lowResProxyEps", "File Handling", "Files", "Use Low Resolution Proxy for Linked EPS", bool),
+    p!("pdfImportEmbeddedFonts", "File Handling", "Files", "Use fonts embedded in imported PDFs", bool),
     p!("antiAliasedBitmaps", "File Handling", "Files", "Display Bitmaps as Anti-aliased Images in Pixel Preview", bool),
     p!(
         "updateLinks",
@@ -387,6 +408,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         "Update Links",
         choice(&[("automatically", "Automatically"), ("manually", "Manually"), ("askWhenModified", "Ask When Modified")])
     ),
+    p!("pdfTextAs", "File Handling", "Files", "PDF Text", choice(&[("text", "Editable"), ("outlines", "Outlines")])),
     // Clipboard Handling
     p!("copyAsSvg", "Clipboard Handling", "On Copy", "Include SVG Code", bool),
     p!("copyAsPdf", "Clipboard Handling", "On Copy", "PDF", bool),
@@ -439,6 +461,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
     ),
     p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
+    // The Transform panel menu: drawing a shape shows the panel.
+    p!("showOnShapeCreation", "General", "Transform Panel", "Show on Shape Creation", bool),
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
@@ -687,6 +711,12 @@ impl Prefs {
 }
 
 impl Session {
+    /// Take the categories `prefs.reset` reset since the last call, each once, with `None` for a
+    /// reset of every category. A frontend resets the settings it keeps itself in them.
+    pub fn take_prefs_resets(&mut self) -> Vec<Option<&'static str>> {
+        std::mem::take(&mut self.prefs_resets)
+    }
+
     /// Replace the preferences and push the ones with engine-side consumers into open documents
     /// and the renderer (grid, history depth, render threads).
     pub fn apply_prefs(&mut self, mut p: Prefs) {
@@ -732,6 +762,13 @@ impl Session {
                 if t.id() == "roundedRectangle" {
                     t.set_option("cornerRadius", &r);
                 }
+            }
+            // A press of the tool that is dropped keeps the new radius, also when the tool lent a
+            // selection tool for the press.
+            if self.press_taken_by("roundedRectangle")
+                && let Some((_, saved)) = self.press_options.as_mut()
+            {
+                saved.insert("cornerRadius".into(), r);
             }
         }
         if fonts_folder_changed {
@@ -787,7 +824,7 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             set
         ),
-        cmd!(query "prefs.reset", "Reset Preferences", [], None, "{category?} reset one category (or everything) to defaults", always, reset),
+        cmd!(query "prefs.reset", "Reset Preferences", [], None, "{category?: string} reset one category (or everything, with category left out or null) to defaults; an unknown category or one that is not a string is an error", always, reset),
         cmd!(query "prefs.list", "List Preferences", [], None, "{} → [{key, category, section, label, kind, value, …}] every preference; under automation read roots a folder preference's value outside them is null", always, list),
         cmd!(
             query "prefs.export",
@@ -970,15 +1007,17 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn reset(s: &mut Session, p: &Value) -> Result<Value> {
-    let cat = str_param(p, "category");
-    if let Some(c) = cat
-        && !PREF_CATEGORIES.iter().any(|x| x.eq_ignore_ascii_case(c))
-    {
-        return Err(bad("prefs.reset", format!("unknown category `{c}`")));
-    }
+    let cat = text_param(p, "category", "prefs.reset")?;
+    let known = |c: &str| {
+        PREF_CATEGORIES.iter().copied().find(|x| x.eq_ignore_ascii_case(c)).ok_or_else(|| bad("prefs.reset", format!("unknown category `{c}`")))
+    };
+    let category = cat.map(known).transpose()?;
     let mut next = s.prefs.clone();
     next.reset(cat);
     s.apply_prefs(next);
+    if !s.prefs_resets.contains(&category) {
+        s.prefs_resets.push(category);
+    }
     Ok(json!({ "prefs": shown_prefs(&s.prefs) }))
 }
 

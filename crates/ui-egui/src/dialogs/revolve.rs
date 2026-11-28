@@ -1,168 +1,39 @@
-//! Compact controls for the 3D and Materials effects: Extrude & Bevel, Revolve, Inflate and Rotate,
-//! and Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), whose own controls are in
-//! `three_d_classic`. The object and the rotation and light gizmos live on the artboard. All document changes run through the effect
-//! dialog's existing preview/commit commands.
+//! The rows of the 3D and Materials effects: Extrude & Bevel, Revolve, Inflate and Rotate, and Extrude & Bevel
+//! (Classic), Revolve (Classic) and Rotate (Classic), whose own rows are in `three_d_classic`. The dialog
+//! ([`super::three_d`]) and the 3D and Materials panel show the same list; the object and the rotation and light
+//! gizmos live on the artboard.
 
-use egui::{Align2, FontId, Id, Pos2, Sense, Stroke, vec2};
+use std::sync::{Arc, RwLock};
+
+use craft::behavior::{DisplayOrder, ItemSource, SelectionChange};
+use craft::theme::Srgba;
+use craft::ui::buttons::Button;
+use craft::ui::choice::Swatch;
+use craft::ui::contract::Entry;
+use craft::ui::contract::{Bind, CollectionEvent, Gap, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamKind, ParamRows};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::LengthUnits;
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::tabs::{Tab, TabKind, TabStrip};
+use craft::ui::value_drag::SliderScale;
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
-use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, REVOLVE, ROTATION_PRESETS};
+use vectorcraft_effects::{BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, REVOLVE, ROTATION_PRESETS};
 
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, scrub, widgets};
+use super::form::json_of;
+use super::three_d::Data;
+use crate::VectorcraftApp;
 
-const LABEL_W: f32 = 102.0;
-const VALUE_W: f32 = 74.0;
-const SIDE_W: f32 = 354.0;
-
-/// Sized to the screen, with scrolling inside the body so OK and Cancel stay reachable.
-pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    // Values start in drag mode; clicking or Tab enters their text editor.
-    ui.data_mut(|m| m.remove::<bool>(widgets::dialog_focus_flag()));
-    let screen = ui.ctx().content_rect();
-    let width = (screen.width() - 64.0).clamp(240.0, SIDE_W);
-    // Tall enough for Extrude & Bevel's Object tab, the longest, where the screen has the room.
-    let height = (screen.height() - 240.0).clamp(120.0, 450.0);
-    ui.set_width(width);
-    egui::ScrollArea::vertical().id_salt("revolve-body").max_height(height).auto_shrink([false, true]).show(ui, |ui| {
-        controls(app, ui, d);
-    });
-    ui.add_space(6.0);
-    ui.horizontal(|ui| {
-        let t = Tokens::get(ui.ctx());
-        ui.allocate_ui_with_layout(vec2((width - 100.0).max(80.0), 32.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.add(egui::Label::new(egui::RichText::new(super::revolve_gizmo::hint(d)).size(11.0).color(t.text_dim)).wrap());
-        });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let id = d.str("__effect");
-            let defaults = vectorcraft_effects::default_params(&id).unwrap_or(json!({}));
-            // Reset all resets the shape, view and light; the mapped graphics and the render
-            // settings stay.
-            let defaults = match defaults {
-                Value::Object(mut m) => {
-                    m.remove(vectorcraft_effects::GRAPHICS);
-                    m.remove(vectorcraft_effects::RENDER);
-                    Value::Object(m)
-                }
-                other => other,
-            };
-            let changed = defaults.as_object().is_some_and(|m| {
-                m.iter().any(|(k, v)| v.as_f64().map_or_else(|| d.fields.get(k) != Some(v), |default| (d.f64(k, default) - default).abs() > 1e-6))
-            });
-            let (r, _) = ui.allocate_exact_size(vec2(88.0, 24.0), Sense::hover());
-            let response = ui.interact(r, Id::unique("revolve-reset-all"), Sense::click());
-            response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset all")));
-            if response.hovered() {
-                ui.painter().rect_filled(r, 3.0, t.hover);
-            }
-            ui.painter().text(r.left_center() + vec2(4.0, 0.0), Align2::LEFT_CENTER, tl!("Reset all"), FontId::proportional(11.5), t.text);
-            dot(ui, r.right_center() - vec2(10.0, 0.0), changed);
-            let tip =
-                if id == REVOLVE { tl!("Reset all Revolve settings to their defaults.") } else { tl!("Reset all 3D settings to their defaults.") };
-            if response.on_hover_text(tip).clicked()
-                && let Some(defaults) = defaults.as_object()
-            {
-                d.fields.extend(defaults.clone());
-                d.fields.remove("__light");
-                super::revolve_gizmo::clear(ui.ctx());
-            }
-        });
-    });
-}
-
-/// The tabs and controls of the 3D effect in `d.fields["__effect"]`, editing `d.fields`; the
-/// dialog's body and the 3D and Materials panel draw them. With `__panel` set (the panel), the
-/// controls that only the dialog's artboard gizmos use are left out.
-pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.spacing_mut().item_spacing.y = 4.0;
-    let id = d.str("__effect");
-    if id != REVOLVE {
-        return solid_controls(app, ui, d, &id);
-    }
-    let lighting = super::revolve_gizmo::lighting(d);
-    // The panel adds the Materials tab between Rotation and Lighting.
-    let panel = d.bool("__panel");
-    let tabs: Vec<&str> = if panel { vec![tl!("Rotation"), tl!("Materials"), tl!("Lighting")] } else { vec![tl!("Rotation"), tl!("Lighting")] };
-    let current = if lighting { tabs.len() - 1 } else { usize::from(materials(d)) };
-    if let Some(tab) = widgets::tab_bar(ui, &tabs, current) {
-        let light = tab + 1 == tabs.len();
-        d.fields.insert("__gizmo".into(), json!(if light { "light" } else { "rotation" }));
-        d.fields.insert("__tab".into(), json!(if panel && tab == 1 && !light { "materials" } else { "rotation" }));
-    }
-    ui.add_space(8.0);
-    if super::revolve_gizmo::lighting(d) {
-        lighting_controls(ui, d);
-        return;
-    }
-    if materials(d) {
-        super::three_d_materials::controls(app, ui, d);
-        return;
-    }
-    let unit = app.session.general_unit();
-    heading(ui, tl!("Shape"));
-    number(ui, d, "angle", tl!("Revolve angle"), (0.0, 360.0), "°", 1, None);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, tl!("Axis side"));
-        let edge = d.str("edge");
-        let sides = super::effect::own_choices(REVOLVE, "edge", false).unwrap_or_default();
-        let current = sides.iter().find(|(_, v)| *v == edge).or(sides.first()).map_or("", |(l, _)| *l);
-        let labels: Vec<&str> = sides.iter().map(|(l, _)| *l).collect();
-        let width = VALUE_W + rail_width(ui) + 6.0;
-        if let Some((_, v)) = widgets::dropdown(ui, "revolve-edge", current, &labels, width).and_then(|k| sides.get(k)) {
-            d.fields.insert("edge".into(), json!(v));
-        }
-        if reset_dot(ui, "edge", edge != "left", tl!("Left")) {
-            d.fields.insert("edge".into(), json!("left"));
-        }
-    });
-    number(ui, d, "offset", tl!("Offset"), (0.0, 100000.0), "", 1, Some(unit));
-    ui.horizontal(|ui| {
-        let cap = flag(d, "cap", true);
-        let tip = tl!("Close the circular ends of open profiles. Partial sweeps keep their cut sides open.");
-        if widgets::check3_tip(ui, c3("Cap"), cap, true, tip) {
-            d.fields.insert("cap".into(), json!(cap != Some(true)));
-        }
-        ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, "cap", cap != Some(true), "true") {
-            d.fields.insert("cap".into(), json!(true));
-        }
-    });
-    ui.add_space(10.0);
-    heading(ui, tl!("View"));
-    for (key, name) in [("rotationX", tl!("Rotation X")), ("rotationY", tl!("Rotation Y")), ("rotationZ", tl!("Rotation Z"))] {
-        number(ui, d, key, name, (-360.0, 360.0), "°", 1, None);
-    }
-    number(ui, d, "perspectiveAngle", tl!("Perspective"), (0.0, 160.0), "°", 1, None);
-    ui.add_space(6.0);
-    egui::CollapsingHeader::new(tl!("Advanced")).id_salt("revolve-advanced").show(ui, |ui| {
-        number(ui, d, "segments", tl!("Segments"), (8.0, 128.0), "", 0, None);
-        if !d.bool("__panel") {
-            super::form::check(ui, d, "__showAxis", tl!("Show axis"));
-        }
-        ui.add_space(6.0);
-        ui.horizontal(|ui| {
-            let visible = flag(d, "expandVisibleOnly", true);
-            let tip = tl!("Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.");
-            let toggled = ui.allocate_ui_with_layout(
-                vec2((ui.available_width() - 30.0).max(100.0), 24.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    widgets::check3_tip(ui, tl!("Keep visible surfaces only when expanding"), visible, true, tip)
-                },
-            ).inner;
-            if toggled {
-                d.fields.insert("expandVisibleOnly".into(), json!(visible != Some(true)));
-            }
-            if reset_dot(ui, "expandVisibleOnly", visible != Some(true), "true") {
-                d.fields.insert("expandVisibleOnly".into(), json!(true));
-            }
-        });
-    });
-}
-
-/// Is the 3D and Materials panel's Materials tab open (the dialog has none)?
-pub(crate) fn materials(d: &Dialog) -> bool {
-    d.bool("__panel") && d.str("__tab") == "materials" && !super::revolve_gizmo::lighting(d)
+/// Where the rows are shown: the dialog has the gizmos' companions (Show axis, Reset all); the panel adds Materials.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Place {
+    /// The effect dialog.
+    Dialog,
+    /// The 3D and Materials panel.
+    Panel,
 }
 
 /// `s` as the 3D effects mean it (a solid's cap, not a stroke's; a bevelled edge, not a join).
@@ -170,102 +41,428 @@ pub(super) fn c3(s: &'static str) -> &'static str {
     crate::i18n::tr_ctx(crate::i18n::current(), "3d", s)
 }
 
-/// Extrude & Bevel, Inflate, Extrude & Bevel (Classic) and Revolve (Classic): Object, Rotation and
-/// Lighting tabs (Rotate and Rotate (Classic) have no Object tab). The rotation gizmo shows on the
-/// first two, the light gizmo on Lighting.
-fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
-    let classic = vectorcraft_effects::is_classic_three_d(id);
-    let object = id == EXTRUDE || id == INFLATE || id == CLASSIC_EXTRUDE || id == CLASSIC_REVOLVE;
-    let mut tabs = vec![];
-    if object {
-        tabs.push(tl!("Object"));
+/// The pages of `effect`'s rows, as (key, title).
+pub(crate) fn pages(effect: &str, place: Place) -> Vec<(&'static str, &'static str)> {
+    let mut pages = vec![];
+    if [EXTRUDE, INFLATE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE].contains(&effect) {
+        pages.push(("object", tl!("Object")));
     }
-    tabs.push(tl!("Rotation"));
-    let rotation_at = tabs.len() - 1;
-    // The panel adds the Materials tab before Lighting (Extrude & Bevel (Classic) has none).
-    let materials_at = (d.bool("__panel") && id != CLASSIC_EXTRUDE).then(|| {
-        tabs.push(tl!("Materials"));
-        tabs.len() - 1
-    });
-    tabs.push(tl!("Lighting"));
-    let current = if super::revolve_gizmo::lighting(d) {
-        tabs.len() - 1
-    } else if let Some(at) = materials_at.filter(|_| materials(d)) {
+    pages.push(("rotation", tl!("Rotation")));
+    if place == Place::Panel && effect != CLASSIC_EXTRUDE {
+        pages.push(("materials", tl!("Materials")));
+    }
+    pages.push(("lighting", tl!("Lighting")));
+    pages
+}
+
+/// The index in `pages` of the page `fields["__page"]` names; the first when it names none.
+fn page_at(fields: &DialogFields, pages: &[(&'static str, &'static str)]) -> usize {
+    fields.text("__page").and_then(|p| pages.iter().position(|(k, _)| *k == p)).unwrap_or(0)
+}
+
+/// The titles of the page strip, keyed by position.
+struct Titles(Vec<String>);
+
+impl DisplayOrder<usize> for Titles {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+    fn key(&self, at: usize) -> usize {
         at
-    } else if object && d.str("__tab") != "rotation" {
-        0
-    } else {
-        rotation_at
+    }
+    fn index_of(&self, key: &usize) -> Option<usize> {
+        (*key < self.0.len()).then_some(*key)
+    }
+    fn text(&self, at: usize) -> Option<std::borrow::Cow<'_, str>> {
+        self.0.get(at).map(|t| std::borrow::Cow::Borrowed(t.as_str()))
+    }
+}
+
+impl ItemSource<usize> for Titles {}
+
+/// The row of page tabs; a pick writes `__page`.
+fn page_row(pages: Vec<(&'static str, &'static str)>) -> Param {
+    Param::custom("__page", "", move |ui, fields, _| {
+        let titles = Titles(pages.iter().map(|(_, t)| (*t).to_string()).collect());
+        let out = TabStrip::new(tl!("Page")).id_salt("three-d-page").kind(TabKind::Text).shown(page_at(fields, &pages)).show_items(
+            ui,
+            &titles,
+            &mut |k, _| Tab::new(titles.0[*k].clone()).id_salt(("tab", *k)),
+        );
+        let picked = out.response.events.into_iter().find_map(|e| match e {
+            CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.last().copied(),
+            _ => None,
+        });
+        if let Some((key, _)) = picked.and_then(|k| pages.get(k)) {
+            fields.set("__page", (*key).to_string());
+        }
+        ui.response()
+    })
+    .full_width()
+}
+
+/// A field's value as JSON: structured values as stored, scalars by their kind.
+fn value_of(fields: &DialogFields, key: &str) -> Option<Value> {
+    match fields.get(key)? {
+        FieldValue::Json(v) => Some(v.clone()),
+        _ => fields.bool(key).map(Value::from).or_else(|| fields.number(key).map(Value::from)).or_else(|| fields.text(key).map(Value::from)),
+    }
+}
+
+/// The value a row keeps for JSON `value`; none for `null`.
+fn field_value(value: &Value) -> Option<FieldValue> {
+    Some(match value {
+        Value::Null => return None,
+        Value::Bool(b) => FieldValue::from(*b),
+        Value::Number(n) => FieldValue::from(n.as_f64().unwrap_or_default()),
+        Value::String(s) => FieldValue::from(s.clone()),
+        other => FieldValue::Json(other.clone()),
+    })
+}
+
+/// Stores JSON `value` under `key` the way a row keeps it; `null` removes the key.
+fn set_value(fields: &mut DialogFields, key: &str, value: &Value) {
+    match field_value(value) {
+        Some(v) => fields.set(key, v),
+        None => {
+            fields.remove(key);
+        }
+    }
+}
+
+/// A select over `titles`: the index picked this pass. `at` is the shown entry (none shows a placeholder).
+fn pick(ui: &mut egui::Ui, label: &str, titles: &[String], at: Option<usize>, default: Option<usize>) -> Option<usize> {
+    let entries: Vec<Entry<usize>> = titles.iter().enumerate().map(|(i, t)| Entry::new(i, t.clone())).collect();
+    let mut bind = Bind::given(at.unwrap_or(usize::MAX));
+    if let Some(d) = default {
+        bind = bind.reset(d);
+    }
+    Select::new(label.to_owned(), bind, &entries).id_salt(label).show(ui).value().copied()
+}
+
+/// A select row of JSON `options` (value, title) for `key`.
+fn select_row(key: &str, label: &'static str, options: Vec<(Value, String)>, default: Value) -> Param {
+    let key_owned = key.to_owned();
+    Param::custom(key, label, move |ui, fields, _| {
+        let titles: Vec<String> = options.iter().map(|(_, t)| t.clone()).collect();
+        let shown = (!fields.is_mixed(&key_owned)).then(|| value_of(fields, &key_owned).unwrap_or_else(|| default.clone()));
+        let at = shown.and_then(|v| options.iter().position(|(o, _)| *o == v));
+        let default_at = options.iter().position(|(o, _)| *o == default);
+        if let Some((value, _)) = pick(ui, label, &titles, at, default_at).and_then(|i| options.get(i)) {
+            set_value(fields, &key_owned, value);
+        }
+        ui.response()
+    })
+}
+
+/// The built-in choices of `effect`'s `key`, as a choice row's options.
+fn choices(effect: &str, key: &str) -> Vec<(String, craft::ui::runtime::env::Label)> {
+    super::effect_params::own_choices(effect, key, false)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(label, value)| (value.to_string(), label.into()))
+        .collect()
+}
+
+/// The numeric and flag rows of one effect, with the defaults it resets to.
+struct Rows<'a> {
+    defaults: &'a Value,
+    unit: Unit,
+    bare_points: bool,
+}
+
+impl Rows<'_> {
+    fn default_number(&self, key: &str) -> f64 {
+        self.defaults.get(key).and_then(Value::as_f64).unwrap_or(0.0)
+    }
+
+    fn range(&self, key: &str, label: &'static str, range: (f64, f64), decimals: u32, unit: UnitKind) -> Param {
+        self.plain(key, label, range, decimals).unit(unit)
+    }
+
+    /// A slider over a number shown with no unit after it, such as a count.
+    fn plain(&self, key: &str, label: &'static str, (lo, hi): (f64, f64), decimals: u32) -> Param {
+        Param::new(key, label, ParamKind::range(lo, hi, self.default_number(key), SliderScale::Linear)).decimals(decimals).resettable()
+    }
+
+    fn degrees(&self, key: &str, label: &'static str, range: (f64, f64), decimals: u32) -> Param {
+        self.range(key, label, range, decimals, UnitKind::Degrees)
+    }
+
+    fn percent(&self, key: &str, label: &'static str, range: (f64, f64)) -> Param {
+        self.range(key, label, range, 1, UnitKind::Percent)
+    }
+
+    /// A length in points, shown in the general unit.
+    fn length(&self, key: &str, label: &'static str, range: (f64, f64)) -> Param {
+        // Stored in points; a pixel is a point, as the rulers count it.
+        let lengths = LengthUnits::new(UnitKind::Points, crate::canvas::rulers::unit_kind(self.unit), 72.0);
+        self.range(key, label, range, 1, UnitKind::Pixels).length(crate::fields::bare_points(lengths, self.bare_points))
+    }
+
+    fn flag(&self, key: &str, label: &'static str) -> Param {
+        Param::new(key, label, ParamKind::bool(self.defaults.get(key).and_then(Value::as_bool).unwrap_or(false))).resettable()
+    }
+
+    fn choice(&self, effect: &str, key: &str, label: &'static str) -> Param {
+        let default = self.defaults.get(key).and_then(Value::as_str).map(str::to_owned);
+        Param::new(key, label, ParamKind::choice(choices(effect, key), default)).resettable()
+    }
+}
+
+/// The rows of `data.effect` for `fields["__page"]`: the page tabs and the page's rows.
+pub(crate) fn params(data: &Data, fields: &DialogFields, place: Place) -> Vec<Param> {
+    let Some(effect) = data.effect.as_deref() else { return vec![] };
+    let classic = vectorcraft_effects::is_classic_three_d(effect);
+    let defaults = vectorcraft_effects::default_params(effect).unwrap_or(json!({}));
+    let rows = Rows { defaults: &defaults, unit: data.unit, bare_points: data.bare_points };
+    let pages = pages(effect, place);
+    // Map Art takes the place of the tabs until its Done.
+    if vectorcraft_effects::takes_map_art(effect) && fields.text("__page") == Some("mapArt") {
+        return super::three_d_classic::map_art_params(data, fields, effect);
+    }
+    let page = pages.get(page_at(fields, &pages)).map_or("rotation", |p| p.0);
+    let mut out = vec![];
+    match page {
+        "object" => out.extend(object_rows(data, &rows, effect, place)),
+        "materials" => out.push(super::three_d_materials::row(Arc::new(RwLock::new(data.clone())))),
+        "lighting" if classic => out.extend(super::three_d_classic::surface_params(data, fields, effect)),
+        "lighting" => out.extend(lighting_rows(data, fields, &rows, place, effect)),
+        _ if effect == REVOLVE => out.extend(revolve_rows(&rows, effect, place)),
+        _ => out.extend(view_rows(&rows, effect, classic)),
+    }
+    // In the dialog automation sets every setting Reset all puts back: the page's rows keep the keys they take, the
+    // tabs take the others.
+    let tabs = match place {
+        Place::Dialog => {
+            let free: Vec<String> = reset_defaults(effect)
+                .into_iter()
+                .filter(|(k, v)| !out.iter().any(|row| row.key == *k || field_value(v).is_some_and(|v| row.accepts(k, &v))))
+                .map(|(k, _)| k)
+                .collect();
+            page_row(pages).companions(free)
+        }
+        Place::Panel => page_row(pages),
     };
-    if let Some(tab) = widgets::tab_bar(ui, &tabs, current) {
-        let light = tab + 1 == tabs.len();
-        d.fields.insert("__gizmo".into(), json!(if light { "light" } else { "rotation" }));
-        let kind = if object && tab == 0 {
-            "object"
-        } else if Some(tab) == materials_at {
-            "materials"
+    out.insert(0, tabs);
+    out
+}
+
+/// The Object page of `effect`.
+fn object_rows(data: &Data, rows: &Rows, effect: &str, place: Place) -> Vec<Param> {
+    match effect {
+        CLASSIC_EXTRUDE => return super::three_d_classic::object_params(data, &DialogFields::new(), effect),
+        CLASSIC_REVOLVE => return super::three_d_classic::revolve_params(data, &DialogFields::new(), effect),
+        _ => {}
+    }
+    let solid = [Value::Bool(true), Value::Bool(false)];
+    let cap = select_row("cap", c3("Cap"), vec![(solid[0].clone(), c3("Solid").into()), (solid[1].clone(), c3("Hollow").into())], json!(true));
+    let mut out = vec![
+        Param::section(tl!("Object")),
+        rows.length("depth", tl!("Depth"), (0.0, 2000.0)),
+        rows.degrees("twist", tl!("Twist"), (0.0, 360.0), 1),
+        rows.percent("taper", tl!("Taper"), (1.0, 100.0)),
+        cap,
+    ];
+    if effect == INFLATE {
+        out.push(rows.percent("volume", tl!("Volume"), (0.0, 100.0)));
+        out.push(rows.flag("bothSides", tl!("Both sides")));
+        return out;
+    }
+    // Every option but None takes the bevel's size settings.
+    let mut shaped: Vec<String> = choices(effect, "bevel").into_iter().map(|(v, _)| v).filter(|v| v != "none").collect();
+    if !shaped.iter().any(|v| v == "custom") {
+        shaped.push("custom".into());
+    }
+    let sized = |p: Param| p.enabled_when_in("bevel", shaped.clone());
+    out.push(bevel_heading());
+    out.push(bevel_row(data, effect, place));
+    out.push(sized(rows.length("bevelWidth", tl!("Width"), (0.0, 1000.0))));
+    out.push(sized(rows.length("bevelHeight", tl!("Height"), (0.0, 1000.0))));
+    out.push(sized(rows.plain("bevelRepeat", tl!("Repeat"), (1.0, 32.0), 0)));
+    out.push(sized(rows.percent("bevelSpace", c3("Space"), (0.0, 90.0))));
+    out.push(sized(rows.flag("bevelInside", tl!("Bevel Inside"))));
+    out.push(sized(rows.flag("bevelBothSides", tl!("Bevel both sides"))));
+    out
+}
+
+/// A Button of `label` that reports a press.
+fn pressed(ui: &mut egui::Ui, label: &str, enabled: bool, tip: Option<&str>) -> bool {
+    let mut button = Button::new(label.to_owned()).enabled(enabled);
+    if let Some(tip) = tip {
+        button = button.tooltip(tip.to_owned());
+    }
+    clicked(&button.show(ui))
+}
+
+/// The Bevel heading with its Reset button, which puts every bevel setting back to its default and leaves the other
+/// settings as they are. The button is off while every bevel setting is at its default.
+fn bevel_heading() -> Param {
+    let defaults = bevel_defaults();
+    let keys: Vec<String> = defaults.keys().cloned().collect();
+    Param::custom("__bevelHeading", c3("Bevel"), move |ui, fields, _| {
+        let mut reset = false;
+        let changed = differs_from(fields, &defaults);
+        let shown = crate::panels::section(c3("Bevel"))
+            .id_salt("bevel")
+            .controls(|ui, _| reset = pressed(ui, tl!("Reset"), changed, None))
+            .show(ui, |_, _| {});
+        if reset {
+            defaults.iter().for_each(|(k, v)| set_value(fields, k, v));
+        }
+        shown.output.response
+    })
+    .companions(keys)
+    .full_width()
+}
+
+/// A Bevel Shape menu entry: (shown label, value, the custom bevel's name and points).
+pub(crate) type BevelChoice = (String, Value, Option<(String, Value)>);
+
+/// The entries of the Bevel Shape menu for form `fields`, and how many are built in. The built-in labels are
+/// translated; custom bevels show their names as they are. The effect's own custom bevel in `fields` (the 3D and
+/// Materials panel gives the first selected effect's settings, unmarked by a mixed selection) is listed unless the
+/// file lists it by name with the same points; while another entry has its label, " (document)" is added to it.
+pub(crate) fn bevel_options(app: &VectorcraftApp, fields: &serde_json::Map<String, Value>, effect: &str) -> (Vec<BevelChoice>, usize) {
+    let mut options: Vec<BevelChoice> = super::effect_params::own_choices(effect, "bevel", false)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(label, value)| (tl!(label).to_string(), json!(value), None))
+        .collect();
+    let builtin = options.len();
+    for b in app.session.bevels.bevels() {
+        options.push((b.name.clone(), json!("custom"), Some((b.name.clone(), b.profile_json()))));
+    }
+    let custom = fields.get("bevel").and_then(Value::as_str) == Some("custom");
+    let own = fields
+        .get(BEVEL_PROFILE)
+        .filter(|p| custom && !p.is_null())
+        .map(|p| (fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default().to_string(), p.clone()));
+    if let Some((n, p)) = own
+        && !options[builtin..].iter().any(|(_, _, c)| c.as_ref().is_some_and(|(cn, cp)| *cn == n && *cp == p))
+    {
+        let mut shown = if n.is_empty() { tl!("Custom").to_string() } else { n.clone() };
+        // Each pass makes the label longer, so this ends once no entry has it.
+        while options.iter().any(|(l, _, _)| *l == shown) {
+            shown = crate::i18n::fmt(tl!("{name} (document)"), &[("name", &shown)]);
+        }
+        options.push((shown, json!("custom"), Some((n, p))));
+    }
+    (options, builtin)
+}
+
+/// The Bevel Shape menu of Extrude & Bevel and Extrude & Bevel (Classic) (`effect`): None and the built-in shapes,
+/// then the custom bevels of the bevels file, and the effect's own custom bevel when the file does not list it. Picking
+/// a custom bevel stores its name and a copy of its points. In the panel, Edit Bevels… opens the bevels file
+/// (`__editBevels`, which the panel runs).
+pub(crate) fn bevel_row(data: &Data, effect: &str, place: Place) -> Param {
+    let options = data.bevels.clone();
+    let file = data.bevels_file;
+    let default = vectorcraft_effects::default_params(effect).and_then(|p| p.get("bevel").cloned()).unwrap_or(Value::Null);
+    Param::custom("bevel", c3("Bevel Shape"), move |ui, fields, _| {
+        // Marked by index, not label: a custom bevel's name can match another entry's label.
+        let builtin = options.iter().take_while(|(_, _, c)| c.is_none()).count();
+        let name = fields.text(BEVEL_NAME).unwrap_or_default().to_owned();
+        let points = value_of(fields, BEVEL_PROFILE).filter(|v| !v.is_null());
+        let current = if fields.is_mixed("bevel") {
+            None
+        } else if fields.text("bevel") == Some("custom") {
+            options[builtin..]
+                .iter()
+                .position(|(_, _, c)| c.as_ref().is_some_and(|(n, p)| *n == name && Some(p) == points.as_ref()))
+                .map(|i| i + builtin)
         } else {
-            "rotation"
+            let value = fields.text("bevel").map_or_else(|| default.clone(), |t| json!(t));
+            options[..builtin].iter().position(|(_, v, _)| *v == value)
         };
-        d.fields.insert("__tab".into(), json!(kind));
-    }
-    ui.add_space(8.0);
-    if super::revolve_gizmo::lighting(d) {
-        if classic {
-            super::three_d_classic::surface_controls(ui, d);
-        } else {
-            lighting_controls(ui, d);
+        let default_at = options[..builtin].iter().position(|(_, v, _)| *v == default);
+        let titles: Vec<String> = options.iter().map(|(l, _, _)| l.clone()).collect();
+        // The row's body may run more than once in a pass: it reports the pick and the press, which apply after it.
+        let (mut picked, mut edit) = (None, false);
+        let row = Row::new().show(ui, |ui, _| {
+            picked = pick(ui, c3("Bevel Shape"), &titles, current, default_at);
+            edit = place == Place::Panel && pressed(ui, tl!("Edit Bevels…"), file, None);
+        });
+        if let Some((_, v, c)) = picked.and_then(|i| options.get(i)) {
+            set_value(fields, "bevel", v);
+            if let Some((n, p)) = c {
+                set_value(fields, BEVEL_NAME, &json!(n));
+                set_value(fields, BEVEL_PROFILE, p);
+            }
         }
-    } else if materials_at.is_some() && materials(d) {
-        super::three_d_materials::controls(app, ui, d);
-    } else if object && d.str("__tab") != "rotation" {
-        let unit = app.session.general_unit();
-        if id == CLASSIC_EXTRUDE {
-            super::three_d_classic::object_controls(ui, d, unit);
-        } else if id == CLASSIC_REVOLVE {
-            super::three_d_classic::revolve_controls(ui, d, unit);
-        } else if id == EXTRUDE {
-            extrude_controls(ui, d, unit);
-        } else {
-            heading(ui, tl!("Object"));
-            number(ui, d, "depth", tl!("Depth"), (0.0, 2000.0), "", 1, Some(unit));
-            number(ui, d, "twist", tl!("Twist"), (0.0, 360.0), "°", 1, None);
-            number(ui, d, "taper", tl!("Taper"), (1.0, 100.0), "%", 1, None);
-            choice(ui, d, "cap", c3("Cap"), &[(json!(true), c3("Solid")), (json!(false), c3("Hollow"))]);
-            number(ui, d, "volume", tl!("Volume"), (0.0, 100.0), "%", 1, None);
-            toggle(ui, d, "bothSides", tl!("Both sides"), false);
+        if edit {
+            fields.set("__editBevels", true);
         }
-    } else {
-        view_controls(ui, d);
+        row.output
+    })
+    .companions([BEVEL_NAME, BEVEL_PROFILE, "__editBevels"])
+}
+
+/// Extrude & Bevel's bevel settings (every parameter named `bevel…`) with their defaults.
+fn bevel_defaults() -> serde_json::Map<String, Value> {
+    match vectorcraft_effects::default_params(EXTRUDE) {
+        Some(Value::Object(m)) => m.into_iter().filter(|(k, _)| k.starts_with("bevel")).collect(),
+        _ => serde_json::Map::new(),
     }
 }
 
-/// Extrude & Bevel's depth, twist, taper, cap and bevel.
-fn extrude_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
-    heading(ui, tl!("Object"));
-    number(ui, d, "depth", tl!("Depth"), (0.0, 2000.0), "", 1, Some(unit));
-    number(ui, d, "twist", tl!("Twist"), (0.0, 360.0), "°", 1, None);
-    number(ui, d, "taper", tl!("Taper"), (1.0, 100.0), "%", 1, None);
-    choice(ui, d, "cap", c3("Cap"), &[(json!(true), c3("Solid")), (json!(false), c3("Hollow"))]);
-    ui.add_space(10.0);
-    heading(ui, c3("Bevel"));
-    let shapes: Vec<(Value, &str)> =
-        super::effect::own_choices(EXTRUDE, "bevel", false).unwrap_or_default().into_iter().map(|(label, value)| (json!(value), label)).collect();
-    choice(ui, d, "bevel", tl!("Bevel Shape"), &shapes);
-    ui.add_enabled_ui(d.str("bevel") != "none", |ui| {
-        number(ui, d, "bevelWidth", tl!("Width"), (0.0, 1000.0), "", 1, Some(unit));
-        number(ui, d, "bevelHeight", tl!("Height"), (0.0, 1000.0), "", 1, Some(unit));
-        number(ui, d, "bevelRepeat", tl!("Repeat"), (1.0, 32.0), "", 0, None);
-        number(ui, d, "bevelSpace", c3("Space"), (0.0, 90.0), "%", 1, None);
-        toggle(ui, d, "bevelInside", tl!("Bevel Inside"), false);
-        toggle(ui, d, "bevelBothSides", tl!("Bevel both sides"), false);
-    });
+/// Does any setting in `defaults` differ from its default in `fields`? A setting the panel's selected effects hold with
+/// different values (mixed) counts as changed.
+fn differs_from(fields: &DialogFields, defaults: &serde_json::Map<String, Value>) -> bool {
+    defaults.iter().any(|(k, v)| {
+        fields.is_mixed(k)
+            || match v.as_f64() {
+                Some(default) => (fields.number(k).unwrap_or(default) - default).abs() > 1e-6,
+                None => value_of(fields, k).is_some_and(|f| f != *v),
+            }
+    })
 }
 
-/// Rotation presets, rotation and perspective for Extrude & Bevel, Inflate and Rotate, and the
-/// classic 3D effects, which have the track cube below the presets.
-fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
-    heading(ui, tl!("Rotation"));
+/// Revolve's Rotation page: shape, view and the advanced settings.
+fn revolve_rows(rows: &Rows, effect: &str, place: Place) -> Vec<Param> {
+    let mut advanced = vec![rows.plain("segments", tl!("Segments"), (8.0, 128.0), 0)];
+    if place == Place::Dialog {
+        advanced.push(rows.flag("__showAxis", tl!("Show axis")));
+    }
+    let keep = rows.flag("expandVisibleOnly", tl!("Keep visible surfaces only when expanding")).tooltip(tl!(
+        "Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces."
+    ));
+    let cap = rows.flag("cap", tl!("Cap")).tooltip(tl!("Close the circular ends of open profiles. Partial sweeps also close their cut sides."));
+    let mut out = vec![
+        Param::section(tl!("Shape")),
+        rows.degrees("angle", tl!("Revolve angle"), (0.0, 360.0), 1),
+        rows.choice(effect, "edge", tl!("Axis side")),
+        rows.length("offset", tl!("Offset"), (0.0, 100000.0)),
+        cap,
+        Param::section(tl!("View")),
+        rows.degrees("rotationX", tl!("Rotation X"), (-360.0, 360.0), 1),
+        rows.degrees("rotationY", tl!("Rotation Y"), (-360.0, 360.0), 1),
+        rows.degrees("rotationZ", tl!("Rotation Z"), (-360.0, 360.0), 1),
+        rows.degrees("perspectiveAngle", tl!("Perspective"), (0.0, 160.0), 1),
+        Param::group(tl!("Advanced")).initially_open(false),
+    ];
+    out.extend(advanced);
+    out.push(keep);
+    out
+}
+
+/// Rotation presets, rotation and perspective for Extrude & Bevel, Inflate and Rotate, and the classic 3D effects,
+/// which have the track cube below the presets.
+fn view_rows(rows: &Rows, effect: &str, classic: bool) -> Vec<Param> {
+    let _ = effect;
+    let mut out = vec![Param::section(tl!("Rotation")), presets_row()];
+    if classic {
+        out.push(super::track_cube::row());
+    }
+    for (key, name) in [("rotationX", tl!("Rotation X")), ("rotationY", tl!("Rotation Y")), ("rotationZ", tl!("Rotation Z"))] {
+        out.push(rows.degrees(key, name, (-180.0, 180.0), 2));
+    }
+    out.push(rows.degrees("perspectiveAngle", tl!("Perspective"), (0.0, 160.0), 1));
+    out
+}
+
+/// The rotation presets by name, then Custom for angles none of them has.
+fn presets_row() -> Param {
     let names = [
         tl!("Front"),
         tl!("Back"),
@@ -284,150 +481,123 @@ fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
         tl!("Isometric Top"),
         tl!("Isometric Bottom"),
     ];
-    let angles = [d.f64("rotationX", 0.0), d.f64("rotationY", 0.0), d.f64("rotationZ", 0.0)];
-    let current = ROTATION_PRESETS.iter().position(|(_, a)| a.iter().zip(angles).all(|(a, b)| (a - b).abs() < 0.005));
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, tl!("Presets"));
-        let width = VALUE_W + rail_width(ui) + 6.0;
-        let shown = current.and_then(|i| names.get(i).copied()).unwrap_or(tl!("Custom"));
-        if let Some(k) = widgets::dropdown(ui, "three-d-position", shown, &names, width)
-            && let Some((_, [x, y, z])) = ROTATION_PRESETS.get(k)
-        {
-            d.fields.extend([("rotationX".into(), json!(x)), ("rotationY".into(), json!(y)), ("rotationZ".into(), json!(z))]);
+    Param::custom("__rotationPreset", tl!("Presets"), move |ui, fields, _| {
+        let angles = ["rotationX", "rotationY", "rotationZ"].map(|k| fields.number(k).unwrap_or(0.0));
+        let current = ROTATION_PRESETS.iter().position(|(_, a)| a.iter().zip(angles).all(|(a, b)| (a - b).abs() < 0.005));
+        let mut titles: Vec<String> = names.iter().map(|n| (*n).to_string()).collect();
+        titles.push(tl!("Custom").to_string());
+        let at = current.unwrap_or(names.len());
+        if let Some((_, angles)) = pick(ui, tl!("Presets"), &titles, Some(at), None).and_then(|i| ROTATION_PRESETS.get(i)) {
+            for (key, angle) in ["rotationX", "rotationY", "rotationZ"].into_iter().zip(angles) {
+                fields.set(key, *angle);
+            }
         }
-    });
-    if vectorcraft_effects::is_classic_three_d(&d.str("__effect")) {
-        super::three_d_classic::track_cube(ui, d);
+        ui.response()
+    })
+    .companions(["rotationX", "rotationY", "rotationZ"])
+}
+
+/// The Lighting page of the effects that shade (the classic ones have `three_d_classic::surface_params`).
+fn lighting_rows(data: &Data, fields: &DialogFields, rows: &Rows, place: Place, effect: &str) -> Vec<Param> {
+    // A mixed Shading leaves the light settings on.
+    let shaded = |p: Param| if fields.is_mixed("shade") { p } else { p.enabled_when("shade", true) };
+    let mut out = vec![
+        rows.flag("shade", tl!("Shading")),
+        shaded(lighting_presets_row(effect)),
+        shaded(light_editor(data, place, false)),
+        shaded(rows.percent("ambient", tl!("Ambient Light"), (0.0, 200.0))),
+        shaded(rows.flag("shadow", tl!("Shadows"))),
+    ];
+    if fields.bool("shadow").unwrap_or(false) || fields.is_mixed("shadow") {
+        out.push(shaded(rows.choice(effect, "shadowPosition", tl!("Position"))));
+        out.push(shaded(rows.percent("shadowDistance", tl!("Distance from Object"), (0.0, 100.0))));
+        out.push(shaded(rows.percent("shadowBounds", tl!("Shadow Bounds"), (10.0, 400.0))));
     }
-    for (key, name) in [("rotationX", tl!("Rotation X")), ("rotationY", tl!("Rotation Y")), ("rotationZ", tl!("Rotation Z"))] {
-        number(ui, d, key, name, (-180.0, 180.0), "°", 2, None);
-    }
-    number(ui, d, "perspectiveAngle", tl!("Perspective"), (0.0, 160.0), "°", 1, None);
+    out
 }
 
-/// A dropdown of `options` (value, label) for `key`, with its reset dot.
-pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, options: &[(Value, &str)]) {
-    let id = d.str("__effect");
-    let default = vectorcraft_effects::default_params(&id).and_then(|p| p.get(key).cloned()).unwrap_or(Value::Null);
-    // A mixed setting (null) shows its default, with its reset dot filled.
-    let mixed = d.fields.get(key).is_some_and(Value::is_null);
-    let value = d.fields.get(key).filter(|v| !v.is_null()).cloned().unwrap_or_else(|| default.clone());
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, name);
-        let current = options.iter().find(|(v, _)| *v == value).map_or("", |(_, l)| *l);
-        let labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
-        let width = VALUE_W + rail_width(ui) + 6.0;
-        if let Some(k) = widgets::dropdown(ui, ("three-d-choice", key), current, &labels, width)
-            && let Some((v, _)) = options.get(k)
-        {
-            d.fields.insert(key.into(), v.clone());
-        }
-        let default_label = options.iter().find(|(v, _)| *v == default).map_or("", |(_, l)| *l);
-        if reset_dot(ui, key, mixed || value != default, default_label) {
-            d.fields.insert(key.into(), default.clone());
-        }
-    });
-}
-
-/// The checkbox setting `key`: `None` when it is null (the 3D and Materials panel's selected
-/// effects hold it with different values), else its value, or `default` when it has none.
-fn flag(d: &Dialog, key: &str, default: bool) -> Option<bool> {
-    match d.fields.get(key) {
-        Some(Value::Null) => None,
-        value => Some(value.and_then(Value::as_bool).unwrap_or(default)),
-    }
-}
-
-/// A checkbox for `key`, with its reset dot. A mixed setting shows a dash, and a click turns it on.
-pub(super) fn toggle(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, default: bool) {
-    ui.horizontal(|ui| {
-        let on = flag(d, key, default);
-        if widgets::check3(ui, name, on, ui.is_enabled()) {
-            d.fields.insert(key.into(), json!(on != Some(true)));
-        }
-        ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, key, on != Some(default), if default { "true" } else { "false" }) {
-            d.fields.insert(key.into(), json!(default));
-        }
-    });
-}
-
-fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
-    let shade = flag(d, "shade", true);
-    ui.horizontal(|ui| {
-        if widgets::check3(ui, tl!("Shading"), shade, true) {
-            d.fields.insert("shade".into(), json!(shade != Some(true)));
-        }
-        ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, "shade", shade != Some(true), "true") {
-            d.fields.insert("shade".into(), json!(true));
-        }
-    });
-    // A mixed Shading leaves the light settings on, for the effects that shade.
-    ui.add_enabled_ui(flag(d, "shade", true) != Some(false), |ui| {
-        lighting_presets(ui, d);
-        // The panel's lighting widget; the dialog moves lights with its rings on the artboard.
-        if d.bool("__panel") {
-            super::revolve_lights::show(ui, d);
-        }
-        light_list(ui, d);
-        let mut selected = selected_light(d);
-        let before = light_record(&selected);
-        // The documented Light Settings, in their order.
-        light_color(ui, &mut selected);
-        number(ui, &mut selected, "lightIntensity", tl!("Intensity"), (0.0, 100.0), "%", 1, None);
-        number(ui, &mut selected, "lightRotation", tl!("Rotation"), (-180.0, 180.0), "°", 1, None);
-        number(ui, &mut selected, "lightHeight", tl!("Height"), (0.0, 90.0), "°", 1, None);
-        number(ui, &mut selected, "lightSoftness", tl!("Softness"), (0.0, 100.0), "%", 1, None);
-        number(ui, d, "ambient", tl!("Ambient Light"), (0.0, 200.0), "%", 1, None);
-        toggle(ui, &mut selected, "lightBehind", tl!("Light behind the object"), false);
-        if light_record(&selected) != before {
-            store_selected(d, &selected);
-        }
-    });
-    shadow_controls(ui, d);
-}
-
-/// The Shadows switch, and below it while the switch is on or mixed, the shadow's Position,
-/// Distance from Object and Shadow Bounds. The first light casts the shadow, so they are
-/// unavailable while Shading is off.
-fn shadow_controls(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.add_enabled_ui(flag(d, "shade", true) != Some(false), |ui| {
-        toggle(ui, d, "shadow", tl!("Shadows"), false);
-        if flag(d, "shadow", false) == Some(false) {
-            return;
-        }
-        let positions: Vec<(Value, &str)> = super::effect::own_choices(&d.str("__effect"), "shadowPosition", false)
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(label, value)| (json!(value), label))
-            .collect();
-        choice(ui, d, "shadowPosition", tl!("Position"), &positions);
-        number(ui, d, "shadowDistance", tl!("Distance from Object"), (0.0, 100.0), "%", 1, None);
-        number(ui, d, "shadowBounds", tl!("Shadow Bounds"), (10.0, 400.0), "%", 1, None);
-    });
-}
-
-fn lighting_presets(ui: &mut egui::Ui, d: &mut Dialog) {
-    let names = [tl!("Standard"), tl!("Diffuse"), tl!("Top Left"), tl!("Right")];
-    let current = vectorcraft_effects::matching_lighting_preset(&super::form::params(d));
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, tl!("Presets"));
-        let shown = current.and_then(|i| names.get(i).copied()).unwrap_or(tl!("Custom"));
-        if let Some(preset) = widgets::dropdown(ui, "three-d-lighting-presets", shown, &names, VALUE_W + rail_width(ui) + 6.0)
-            .and_then(|i| vectorcraft_effects::LIGHTING_PRESETS.get(i))
+/// The lighting presets by name, then Custom for settings none of them has; a pick writes the preset's patch.
+fn lighting_presets_row(effect: &str) -> Param {
+    let keys: Vec<String> =
+        vectorcraft_effects::default_params(effect).and_then(|p| p.as_object().map(|m| m.keys().cloned().collect())).unwrap_or_default();
+    Param::custom("__lightingPreset", tl!("Presets"), move |ui, fields, _| {
+        let names = [tl!("Standard"), tl!("Diffuse"), tl!("Top Left"), tl!("Right")];
+        let params: serde_json::Map<String, Value> = keys.iter().filter_map(|k| value_of(fields, k).map(|v| (k.clone(), v))).collect();
+        let current = vectorcraft_effects::matching_lighting_preset(&Value::Object(params));
+        let mut titles: Vec<String> = names.iter().map(|n| (*n).to_string()).collect();
+        titles.push(tl!("Custom").to_string());
+        let at = current.unwrap_or(names.len());
+        if let Some(preset) = pick(ui, tl!("Presets"), &titles, Some(at), None).and_then(|i| vectorcraft_effects::LIGHTING_PRESETS.get(i))
             && let Some(patch) = preset.params().as_object()
         {
-            d.fields.extend(patch.clone());
-            d.fields.insert("__light".into(), json!(0));
-            ui.memory_mut(|m| m.stop_text_input());
-            super::revolve_gizmo::clear(ui.ctx());
+            patch.iter().for_each(|(k, v)| set_value(fields, k, v));
+            fields.set("__light", 0i64);
         }
-    });
-    ui.add_space(4.0);
+        ui.response()
+    })
+    .companions(["__light"])
+}
+
+/// The id of the footer's Reset all button.
+pub(crate) const RESET_ALL: &str = "resetAll";
+
+/// What Reset all puts back: the effect's defaults but the mapped graphics, Map Art with its options and the render
+/// settings, which stay.
+fn reset_defaults(effect: &str) -> serde_json::Map<String, Value> {
+    let mut kept = vectorcraft_effects::default_params(effect).and_then(|d| d.as_object().cloned()).unwrap_or_default();
+    for key in [
+        vectorcraft_effects::GRAPHICS,
+        vectorcraft_effects::RENDER,
+        vectorcraft_effects::MAP_ART,
+        vectorcraft_effects::MAP_SHADE,
+        vectorcraft_effects::MAP_INVISIBLE,
+    ] {
+        kept.remove(key);
+    }
+    kept
+}
+
+/// The dialog's Reset all, in its footer beside the page's hint as production placed it, so it stays in view however
+/// long the page: off while every setting it puts back is at its default; none on the Map Art page.
+pub(crate) fn reset_all_button(effect: &str, fields: &DialogFields) -> Option<(String, FooterButton)> {
+    (fields.text("__page") != Some("mapArt")).then(|| {
+        let tip =
+            if effect == REVOLVE { tl!("Reset all Revolve settings to their defaults.") } else { tl!("Reset all 3D settings to their defaults.") };
+        let enabled = differs_from(fields, &reset_defaults(effect));
+        (RESET_ALL.to_owned(), FooterButton::new(tl!("Reset all"), DialogRole::Other).enabled(enabled).tooltip(tip))
+    })
+}
+
+/// Reset all's press: the shape, view and light back to their defaults, the first light selected.
+pub(crate) fn reset_all(dialog: &mut HostedParamDialog, effect: &str) {
+    let kept = reset_defaults(effect);
+    let mut fields = dialog.fields().clone();
+    kept.iter().for_each(|(k, v)| set_value(&mut fields, k, v));
+    fields.set("__light", 0i64);
+    for key in kept.keys().map(String::as_str).chain(["__light"]) {
+        match fields.get(key) {
+            Some(value) if dialog.fields().get(key) != Some(value) => dialog.set_field(key, value.clone()),
+            Some(_) => {}
+            None => dialog.clear_field(key),
+        }
+    }
+}
+
+/// Drops from `params` the light settings `effect` doesn't take: the light editor lists all six, and the classic effects
+/// take neither a colour nor a softness.
+pub(super) fn drop_untaken_light_keys(effect: &str, params: &mut serde_json::Map<String, Value>) {
+    for (_, key) in LIGHT_KEYS {
+        if let Some(value) = params.get(key)
+            && vectorcraft_engine::cmd::params::check_effect_params(
+                "effect.apply",
+                effect,
+                &Value::Object([(key.to_owned(), value.clone())].into_iter().collect()),
+            )
+            .is_err()
+        {
+            params.remove(key);
+        }
+    }
 }
 
 const LIGHT_KEYS: [(&str, &str); 6] = [
@@ -439,254 +609,190 @@ const LIGHT_KEYS: [(&str, &str); 6] = [
     ("behind", "lightBehind"),
 ];
 
-pub(super) fn explicit_lights(d: &Dialog) -> Option<&Vec<Value>> {
-    d.fields.get("lights").and_then(Value::as_array).filter(|v| !v.is_empty() && v.len() <= vectorcraft_three_d::MAX_LIGHTS)
+/// The explicit lights of `fields`, when it has a usable list.
+pub(super) fn explicit_lights(fields: &DialogFields) -> Option<Vec<Value>> {
+    let list: Vec<Value> = match fields.get("lights")? {
+        FieldValue::Json(Value::Array(a)) => a.clone(),
+        // A list of objects reads back as a list of `Json` values.
+        FieldValue::List(items) => items
+            .iter()
+            .map(|i| match i {
+                FieldValue::Json(v) => v.clone(),
+                other => serde_json::to_value(other).unwrap_or(Value::Null),
+            })
+            .collect(),
+        _ => return None,
+    };
+    (!list.is_empty() && list.len() <= vectorcraft_three_d::MAX_LIGHTS).then_some(list)
 }
 
-fn light_index(d: &Dialog, count: usize) -> usize {
-    d.fields.get("__light").and_then(Value::as_u64).and_then(|v| usize::try_from(v).ok()).unwrap_or(0).min(count.saturating_sub(1))
+fn light_index(fields: &DialogFields, count: usize) -> usize {
+    fields.int("__light").and_then(|v| usize::try_from(v).ok()).unwrap_or(0).min(count.saturating_sub(1))
 }
 
-/// Only the selected light's six settings are overlaid. Selection is UI state and never
-/// enters effect parameters, so selecting another light creates no document history.
-pub(super) fn selected_light(d: &Dialog) -> Dialog {
-    let mut selected = d.clone();
-    selected.fields.remove("lights");
-    if let Some(list) = explicit_lights(d)
-        && let Some(light) = list.get(light_index(d, list.len()))
+/// Only the selected light's six settings are overlaid. Selection is UI state and never enters effect parameters, so
+/// selecting another light creates no document history.
+pub(super) fn selected_light(fields: &DialogFields) -> DialogFields {
+    let mut selected = fields.clone();
+    selected.remove("lights");
+    if let Some(list) = explicit_lights(fields)
+        && let Some(light) = list.get(light_index(fields, list.len()))
     {
-        let defaults = vectorcraft_effects::default_params(&d.str("__effect")).unwrap_or(json!({}));
+        let defaults = vectorcraft_effects::default_params(fields.text("__effect").unwrap_or_default()).unwrap_or(json!({}));
         for (key, field) in LIGHT_KEYS {
             if let Some(value) = light.get(key).or_else(|| defaults.get(field)) {
-                selected.fields.insert(field.into(), value.clone());
+                set_value(&mut selected, field, value);
             }
         }
     }
     selected
 }
 
-pub(super) fn light_options(d: &Dialog) -> vectorcraft_three_d::Revolve {
-    vectorcraft_effects::revolve_options(&super::form::params(&selected_light(d)))
+/// The selected light's options, as the gizmo reads them.
+pub(super) fn light_options(fields: &DialogFields) -> vectorcraft_three_d::Revolve {
+    vectorcraft_effects::revolve_options(&Value::Object(json_of(&[], &selected_light(fields))))
 }
 
-pub(super) fn light_record(d: &Dialog) -> Value {
-    Value::Object(LIGHT_KEYS.iter().filter_map(|(key, field)| d.fields.get(*field).map(|v| ((*key).into(), v.clone()))).collect())
+/// The six settings of a light held in `fields`, as a light record.
+pub(super) fn light_record(fields: &DialogFields) -> Value {
+    Value::Object(LIGHT_KEYS.iter().filter_map(|(key, field)| value_of(fields, field).map(|v| ((*key).into(), v))).collect())
 }
 
-pub(super) fn store_selected(d: &mut Dialog, selected: &Dialog) {
-    if let Some(list) = explicit_lights(d) {
-        let index = light_index(d, list.len());
-        let mut list = list.clone();
+/// Writes the selected light's settings from `selected` back into `fields`.
+pub(super) fn store_selected(fields: &mut DialogFields, selected: &DialogFields) {
+    if let Some(mut list) = explicit_lights(fields) {
+        let index = light_index(fields, list.len());
         if let Some(light) = list.get_mut(index) {
             *light = light_record(selected);
         }
-        d.fields.insert("lights".into(), json!(list));
+        fields.set("lights", FieldValue::Json(Value::Array(list)));
     } else {
         for (_, key) in LIGHT_KEYS {
-            if let Some(value) = selected.fields.get(key) {
-                d.fields.insert(key.into(), value.clone());
+            if let Some(value) = value_of(selected, key) {
+                set_value(fields, key, &value);
             }
         }
     }
 }
 
-pub(super) fn set_light_value(d: &mut Dialog, key: &str, value: Value) {
-    let mut selected = selected_light(d);
-    selected.fields.insert(key.into(), value);
-    store_selected(d, &selected);
+/// Sets one setting of the selected light.
+pub(super) fn set_light_value(fields: &mut DialogFields, key: &str, value: Value) {
+    let mut selected = selected_light(fields);
+    set_value(&mut selected, key, &value);
+    store_selected(fields, &selected);
 }
 
-pub(super) fn light_list(ui: &mut egui::Ui, d: &mut Dialog) {
-    let mut list = explicit_lights(d).cloned().unwrap_or_else(|| vec![light_record(d)]);
-    let mut index = light_index(d, list.len());
-    let names: Vec<_> = (1..=list.len()).map(|i| format!("{} {i}", c3("Light"))).collect();
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, tl!("Lights"));
-        let labels: Vec<_> = names.iter().map(String::as_str).collect();
-        if let Some(next) =
-            widgets::dropdown(ui, "three-d-lights", names.get(index).map_or("", String::as_str), &labels, VALUE_W + rail_width(ui) + 6.0)
-        {
-            index = next;
-            ui.memory_mut(|m| m.stop_text_input());
-            super::revolve_gizmo::clear(ui.ctx());
+/// The light's colour: a swatch that asks the host's picker; the answer arrives in `__lightPick`.
+fn light_color_row() -> Param {
+    Param::custom("lightColor", tl!("Color"), |ui, fields, cx| {
+        let color = fields.text("lightColor").and_then(Srgba::from_hex).unwrap_or(Srgba::rgb(1.0, 1.0, 1.0));
+        let swatch = Swatch::new(tl!("Color"), color).tooltip(tl!("Color")).show(ui);
+        if swatch.clicked {
+            cx.pick_color("__lightPick", color);
         }
-    });
-    // Add Light is off while a setting of the single light is mixed (null).
-    let mixed = explicit_lights(d).is_none() && LIGHT_KEYS.iter().any(|(_, key)| d.fields.get(*key).is_some_and(Value::is_null));
-    ui.horizontal(|ui| {
-        if ui.add_enabled(list.len() < vectorcraft_three_d::MAX_LIGHTS && !mixed, egui::Button::new(tl!("Add Light"))).clicked() {
-            let mut added = selected_light(d);
-            let defaults = vectorcraft_effects::default_params(&d.str("__effect")).unwrap_or(json!({}));
-            for (_, key) in LIGHT_KEYS {
-                if let Some(value) = defaults.get(key) {
-                    added.fields.insert(key.into(), value.clone());
+        swatch.response
+    })
+    .opens_with("#ffffff")
+}
+
+/// The lights: the list with Add and Delete, the sphere (the panel and the classic dialogs; the other dialogs move
+/// lights with the rings on the artboard) and the selected light's six settings.
+pub(crate) fn light_editor(_data: &Data, place: Place, classic: bool) -> Param {
+    let settings = [
+        light_color_row(),
+        Param::new("lightIntensity", tl!("Intensity"), ParamKind::range(0.0, 100.0, 100.0, SliderScale::Linear))
+            .decimals(1)
+            .unit(UnitKind::Percent)
+            .resettable(),
+        Param::new("lightRotation", tl!("Rotation"), ParamKind::range(-180.0, 180.0, 0.0, SliderScale::Linear))
+            .decimals(1)
+            .unit(UnitKind::Degrees)
+            .resettable(),
+        Param::new("lightHeight", tl!("Height"), ParamKind::range(0.0, 90.0, 90.0, SliderScale::Linear))
+            .decimals(1)
+            .unit(UnitKind::Degrees)
+            .resettable(),
+        Param::new("lightSoftness", tl!("Softness"), ParamKind::range(0.0, 100.0, 0.0, SliderScale::Linear))
+            .decimals(1)
+            .unit(UnitKind::Percent)
+            .resettable(),
+        Param::new("lightBehind", tl!("Light behind the object"), ParamKind::bool(false)).resettable(),
+    ];
+    // The classic effects' lights have no colour.
+    let settings: Vec<Param> = settings.into_iter().filter(|p| !(classic && p.key == "lightColor")).collect();
+    Param::custom("lights", tl!("Lights"), move |ui, fields, cx| {
+        if let Some(Value::String(hex)) = fields.color("__lightPick").map(|c| json!(Srgba::from_rgb_array(c).to_hex())) {
+            fields.remove("__lightPick");
+            set_light_value(fields, "lightColor", json!(hex));
+        }
+        // The list with its buttons and sphere, then the selected light's settings, a stack gap apart.
+        super::form::stacked(ui, fields, |ui, fields| {
+            Stack::new().gap(Gap::Stack).show(ui, |ui, _| {
+                Stack::new().show(ui, |ui, _| light_list(ui, fields, cx, place, classic));
+                let mut selected = selected_light(fields);
+                let before = light_record(&selected);
+                let out = ParamRows::new(tl!("Light Settings"), &settings, Bind::bound(&mut selected)).show(ui);
+                cx.gesture(&out.events);
+                if light_record(&selected) != before {
+                    store_selected(fields, &selected);
                 }
+            });
+        })
+    })
+    .companions(LIGHT_KEYS.iter().map(|(_, k)| *k).chain(["__light", "__lightPick"]))
+    .on_set(set_light_field)
+    .full_width()
+}
+
+/// The light list with Add Light and Delete Light, and the sphere where `place` and `classic` show it.
+fn light_list(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext, place: Place, classic: bool) {
+    let mut list = explicit_lights(fields).unwrap_or_else(|| vec![light_record(fields)]);
+    let mut index = light_index(fields, list.len());
+    let titles: Vec<String> = (1..=list.len()).map(|i| format!("{} {i}", c3("Light"))).collect();
+    if let Some(next) = pick(ui, tl!("Lights"), &titles, Some(index), None) {
+        index = next;
+    }
+    // Add Light is off while a setting of the single light is mixed.
+    let mixed = explicit_lights(fields).is_none() && LIGHT_KEYS.iter().any(|(_, key)| fields.is_mixed(key));
+    // The row's body may run more than once in a pass: it reports the presses, which apply after it.
+    let (mut add, mut delete) = (false, false);
+    Row::new().show(ui, |ui, _| {
+        add = pressed(ui, tl!("Add Light"), list.len() < vectorcraft_three_d::MAX_LIGHTS && !mixed, None);
+        delete = pressed(ui, tl!("Delete Light"), list.len() > 1, None);
+    });
+    if add {
+        let mut added = selected_light(fields);
+        let defaults = vectorcraft_effects::default_params(fields.text("__effect").unwrap_or_default()).unwrap_or(json!({}));
+        for (_, key) in LIGHT_KEYS {
+            if let Some(value) = defaults.get(key) {
+                set_value(&mut added, key, value);
             }
-            added.fields.insert("lightRotation".into(), json!(0.0));
-            added.fields.insert("lightHeight".into(), json!(90.0));
-            list.push(light_record(&added));
-            index = list.len() - 1;
-            d.fields.insert("lights".into(), json!(list));
-            super::revolve_gizmo::clear(ui.ctx());
         }
-        if ui.add_enabled(list.len() > 1, egui::Button::new(tl!("Delete Light"))).clicked() && index < list.len() {
-            list.remove(index);
-            index = index.min(list.len().saturating_sub(1));
-            d.fields.insert("lights".into(), json!(list));
-            super::revolve_gizmo::clear(ui.ctx());
-        }
-    });
-    d.fields.insert("__light".into(), json!(index));
-    ui.add_space(4.0);
-}
-
-fn light_color(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, tl!("Color"));
-        let color = d
-            .fields
-            .get("lightColor")
-            .and_then(Value::as_str)
-            .filter(|s| s.len() == 7 && s.starts_with('#'))
-            .and_then(vectorcraft_color::Color::from_hex)
-            .unwrap_or(vectorcraft_color::Color::WHITE);
-        // Light colors are display RGB, independent of the document's working profile.
-        let mut rgb = color.to_rgb_uncalibrated().map(|c| (c * 255.0).round() as u8);
-        if ui.color_edit_button_srgb(&mut rgb).on_hover_text(tl!("Color")).changed() {
-            d.fields.insert("lightColor".into(), json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
-        }
-        ui.label(format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]));
-        ui.add_space((ui.available_width() - 24.0).max(0.0));
-        let mixed = d.fields.get("lightColor").is_some_and(Value::is_null);
-        if reset_dot(ui, "lightColor", mixed || rgb != [255; 3], "#FFFFFF") {
-            d.fields.insert("lightColor".into(), json!("#ffffff"));
-        }
-    });
-}
-
-pub(super) fn heading(ui: &mut egui::Ui, text: &str) {
-    let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(text).font(crate::theme::semibold(13.0)).color(t.text));
-}
-
-pub(super) fn label(ui: &mut egui::Ui, name: &str) {
-    let t = Tokens::get(ui.ctx());
-    let (r, _) = ui.allocate_exact_size(vec2(LABEL_W, 24.0), Sense::hover());
-    ui.put(r, egui::Label::new(egui::RichText::new(name).size(12.5).color(t.text)).halign(egui::Align::Min).truncate()).on_hover_text(name);
-    scrub::note_label(ui, r);
-}
-
-fn rail_width(ui: &egui::Ui) -> f32 {
-    (ui.available_width() - VALUE_W - 24.0 - 18.0).clamp(40.0, 134.0)
-}
-
-/// A value can be typed, dragged, scrubbed by its label, or moved on its slider.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, range: (f64, f64), suffix: &str, decimals: usize, unit: Option<Unit>) {
-    // Values that are not the effect's own parameters (a mapped graphic's) bring their defaults.
-    let default = vectorcraft_effects::default_params(&d.str("__effect"))
-        .and_then(|p| p.get(key).and_then(Value::as_f64))
-        .or_else(|| d.fields.get("__defaults").and_then(|m| m.get(key)).and_then(Value::as_f64))
-        .unwrap_or(0.0);
-    let from = |n| unit.map_or(n, |u| u.from_pt(n));
-    let to = |n| unit.map_or(n, |u| u.to_pt(n));
-    let typed = unit.map(|u| widgets::typed_unit(ui.ctx(), u));
-    let mut value = from(d.f64(key, default)).clamp(from(range.0), from(range.1));
-    let suffix = unit.map_or_else(|| suffix.to_string(), |u| format!(" {}", u.suffix()));
-    let speed = if decimals == 0 { 1.0 } else { 0.25 };
-    let mut next = None;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, name);
-        let t = Tokens::get(ui.ctx());
-        let response = ui
-            .scope(|ui| {
-                ui.visuals_mut().widgets.inactive.weak_bg_fill = t.input;
-                ui.visuals_mut().widgets.inactive.bg_stroke = Stroke::new(1.0, t.input_border);
-                ui.add_sized(
-                    [VALUE_W, 24.0],
-                    egui::DragValue::new(&mut value)
-                        .range(from(range.0)..=from(range.1))
-                        .speed(speed)
-                        .max_decimals(decimals)
-                        .suffix(&suffix)
-                        .update_while_editing(false)
-                        .custom_parser(|s| {
-                            unit.map_or_else(
-                                || vectorcraft_doc::parse_number(&s.replace(['°', '%'], "")),
-                                |u| typed.unwrap_or(u).parse(s).map(|v| u.from_pt(v)),
-                            )
-                        }),
-                )
-            })
-            .inner;
-        response.clone().on_hover_text(tl!("Drag values or labels. Double-click a value to type."));
-        if response.changed() {
-            next = Some(value);
-        }
-        if let Some(n) =
-            scrub::field(ui, response.id, response.rect, &value.to_string(), Some(value), decimals as i32, &(from(range.0)..=from(range.1)))
-        {
-            next = Some(n);
-        }
-        // Lengths' rails cover a useful working range; larger values can still be typed.
-        let rail_max = match key {
-            "offset" | "depth" => from(500.0),
-            "bevelWidth" | "bevelHeight" => from(100.0),
-            _ => from(range.1),
-        };
-        let rail_min = from(range.0);
-        let rail = rail_width(ui) + VALUE_W;
-        // The text the DragValue shows: at least the places its speed gives (one for 0.25 at 1x to
-        // 3x scaling, as egui computes them), at most `decimals`.
-        let places = ((f64::from(ui.input(|i| i.aim_radius())) / speed).log10().ceil().clamp(0.0, 15.0) as usize).min(decimals);
-        let number = ui.style().number_formatter.format(value, places..=decimals);
-        let shown = widgets::SliderValue::text(number.parse().unwrap_or(value), rail_min..=rail_max, format!("{number}{suffix}"));
-        let slider = widgets::color_slider_stepped(
-            ui,
-            ("revolve-slider", key),
-            name,
-            Some(shown),
-            ((value - rail_min) / (rail_max - rail_min)).clamp(0.0, 1.0) as f32,
-            rail,
-            &|_| t.input_border,
-        );
-        if let Some(n) = slider.0.map(|n| rail_min + f64::from(n) * (rail_max - rail_min)).or(slider.2) {
-            next = Some(n);
-        }
-        // A setting the 3D and Materials panel's selected effects hold with different values is null.
-        let mixed = d.fields.get(key).is_some_and(Value::is_null);
-        if reset_dot(ui, key, mixed || (to(value) - default).abs() > 1e-6, &format!("{}{}", from(default), suffix)) {
-            next = Some(from(default));
-        }
-    });
-    if let Some(n) = next.filter(|n| n.is_finite()) {
-        let factor = 10f64.powi(decimals as i32);
-        let n = (n * factor).round() / factor;
-        d.fields.insert(key.into(), json!(to(n.clamp(from(range.0), from(range.1)))));
+        set_value(&mut added, "lightRotation", &json!(0.0));
+        set_value(&mut added, "lightHeight", &json!(90.0));
+        list.push(light_record(&added));
+        index = list.len() - 1;
+        fields.set("lights", FieldValue::Json(Value::Array(list.clone())));
+    }
+    if delete && index < list.len() {
+        list.remove(index);
+        index = index.min(list.len().saturating_sub(1));
+        fields.set("lights", FieldValue::Json(Value::Array(list.clone())));
+    }
+    fields.set("__light", i64::try_from(index).unwrap_or(0));
+    if place == Place::Panel || classic {
+        super::revolve_lights::sphere(ui, fields, cx, classic);
     }
 }
 
-fn dot(ui: &egui::Ui, p: Pos2, changed: bool) {
-    let t = Tokens::get(ui.ctx());
-    if changed {
-        ui.painter().circle_filled(p, 3.0, if ui.is_enabled() { t.accent } else { t.text_disabled });
+/// The light editor's set-time rule: a light setting set from outside goes to the selected light, as its rows do.
+fn set_light_field(fields: &mut DialogFields, key: &str, value: Value) -> Result<(), String> {
+    if LIGHT_KEYS.iter().any(|(_, k)| *k == key) {
+        set_light_value(fields, key, value);
     } else {
-        ui.painter().circle_stroke(p, 3.0, Stroke::new(1.0, t.text_disabled));
+        set_value(fields, key, &value);
     }
-}
-
-pub(super) fn reset_dot(ui: &mut egui::Ui, key: &str, changed: bool, default: &str) -> bool {
-    let (r, _) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::hover());
-    let response = ui.interact(r, Id::unique(("revolve-reset", key)), Sense::click());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset to default")));
-    if response.hovered() {
-        ui.painter().rect_filled(r, 3.0, Tokens::get(ui.ctx()).hover);
-    }
-    dot(ui, r.center(), changed);
-    response.on_hover_text(format!("{}: {default}", tl!("Reset to default"))).clicked()
+    Ok(())
 }
 
 #[cfg(test)]

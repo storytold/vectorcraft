@@ -50,7 +50,23 @@ fn eps_covers_the_art_y_up_from_the_first_artboard_with_a_preview_and_the_docume
     let bytes = b64(&r);
     // The default TIFF preview sits behind the binary header.
     let (_, tiff) = vectorcraft_eps::sections(&bytes).unwrap();
-    let preview = image::load_from_memory_with_format(tiff.unwrap(), image::ImageFormat::Tiff).unwrap();
+    let preview = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, tiff.unwrap())
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((preview.width(), preview.height()), (100, 40));
     let ps = postscript(&bytes);
     assert_eq!(dsc(&ps, "BoundingBox").as_deref(), Some("50 100 150 140"), "60..100 down is 100..140 up");
@@ -196,11 +212,29 @@ fn flattening_cropped_art_keeps_the_art_under_its_hidden_part() {
 fn overprints_are_kept_or_discarded() {
     let mut s = session(100.0, 100.0, 1);
     let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [id], "color": {"c": 100, "m": 0, "y": 0, "k": 0}})).unwrap();
     s.execute("attributes.set", &json!({"ids": [id], "overprintFill": true})).unwrap();
     let kept = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap()));
     assert!(kept.contains("true op\n"), "{kept}");
     let dropped = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none", "overprints": "discard"})).unwrap()));
     assert!(!dropped.contains("true op"));
+
+    // A white fill or stroke that overprints knocks out with Discard White Overprint (on by
+    // default), and overprints without it, as in PDF export.
+    let white = json!({"c": 0, "m": 0, "y": 0, "k": 0});
+    let filled = [json!({"ids": [id], "color": white}), json!({"ids": [id], "none": true})];
+    let stroked = [json!({"ids": [id], "none": true}), json!({"ids": [id], "color": white})];
+    for (i, [fill, stroke]) in [filled, stroked].iter().enumerate() {
+        s.execute("paint.setFill", fill).unwrap();
+        s.execute("paint.setStroke", stroke).unwrap();
+        s.execute("attributes.set", &json!({"ids": [id], "overprintFill": i == 0, "overprintStroke": i == 1})).unwrap();
+        s.execute("document.setup", &json!({"discardWhiteOverprint": true})).unwrap();
+        let knocked_out = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap()));
+        assert!(!knocked_out.contains("true op"), "{i}: {knocked_out}");
+        s.execute("document.setup", &json!({"discardWhiteOverprint": false})).unwrap();
+        let overprinted = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap()));
+        assert!(overprinted.contains("true op\n"), "{i}: {overprinted}");
+    }
 }
 
 #[test]
@@ -221,13 +255,47 @@ fn placed_images_are_written_and_previews_are_black_and_white_on_request() {
 /// The PNG thumbnail of an EPS file, decoded.
 fn thumbnail_png(bytes: &[u8]) -> image::RgbaImage {
     let png = vectorcraft_eps::thumbnail(bytes).expect("a thumbnail");
-    image::load_from_memory_with_format(&png, image::ImageFormat::Png).unwrap().to_rgba8()
+    craft_image_codecs::decode_as(craft_image_codecs::Format::Png, &png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
 }
 
 /// The TIFF preview of an EPS file, decoded.
 fn preview_tiff(bytes: &[u8]) -> image::RgbaImage {
     let tiff = vectorcraft_eps::sections(bytes).unwrap().1.expect("a preview");
-    image::load_from_memory_with_format(tiff, image::ImageFormat::Tiff).unwrap().to_rgba8()
+    craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, tiff)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
 }
 
 /// The size of a thumbnail render of the rect an EPS file's preview shows (its bounding box).

@@ -716,11 +716,33 @@ fn a_cut_out_edge_in_grayscale_ties_by_its_gray() {
     let t = TRANSPARENT;
     let q = Quantized { labels: vec![0, 2, 1, t, t, t], palette: vec![[50, 50, 50], [150, 150, 150], [90, 90, 90]] };
     let mut gray = q.clone();
-    crate::quantize::settle_cut_edges(&mut gray, &img, true);
+    let marked = crate::quantize::settle_cut_edges(&mut gray, &img, true);
     assert_eq!(gray.palette.get(gray.labels[1] as usize), Some(&[50, 50, 50]));
+    assert_eq!(marked, [false, true, false, false, false, false], "the edge pixel is marked as a blend");
     let mut color = q;
     crate::quantize::settle_cut_edges(&mut color, &img, false);
     assert_eq!(color.palette.get(color.labels[1] as usize), Some(&[150, 150, 150]));
+}
+
+#[test]
+fn a_cut_out_edge_pixel_already_of_the_color_beside_it_is_marked_when_a_blend_of_it() {
+    // A semi-transparent dark red edge pixel between opaque red and blue pixels, already labeled red: it keeps red,
+    // and is marked as a blend for Noise. A purple one labeled red is a blend of neither pixel's color alone and is
+    // not marked.
+    for (edge, blend) in [([128, 0, 0, 192], true), ([128, 0, 128, 192], false)] {
+        let img = Raster::from_fn(3, 2, |x, y| match (x, y) {
+            (0, 0) => [255, 0, 0, 255],
+            (1, 0) => edge,
+            (2, 0) => [0, 0, 255, 255],
+            _ => [0, 0, 0, 0],
+        });
+        let t = TRANSPARENT;
+        let q = Quantized { labels: vec![0, 0, 1, t, t, t], palette: vec![[255, 0, 0], [0, 0, 255]] };
+        let mut settled = q.clone();
+        let marked = crate::quantize::settle_cut_edges(&mut settled, &img, false);
+        assert_eq!(settled, q, "{edge:?}");
+        assert_eq!(marked, [false, blend, false, false, false, false], "{edge:?}");
+    }
 }
 
 #[test]
@@ -761,8 +783,9 @@ fn a_thin_semi_transparent_outline_keeps_its_own_color() {
             let q = quantize(&img, &TraceParams { mode, colors: 3, ..TraceParams::default() });
             assert_ne!(q.labels[9 * 60 + 30], q.labels[30 * 60 + 30], "{mode:?}, alpha {alpha}: the outline has a color of its own");
             let mut settled = q.clone();
-            crate::quantize::settle_cut_edges(&mut settled, &img, mode == Mode::Grayscale);
+            let marked = crate::quantize::settle_cut_edges(&mut settled, &img, mode == Mode::Grayscale);
             assert_eq!(settled, q, "{mode:?}, alpha {alpha}");
+            assert!(!marked.contains(&true), "{mode:?}, alpha {alpha}: the outline is no blend of the square");
         }
     }
 }
@@ -798,9 +821,17 @@ fn a_library_of_many_repeated_swatches_is_read_once_per_color() {
         })
         .collect();
     let params = TraceParams { mode: Mode::Color, palette: Palette::DocumentLibrary, swatches, colors: 2, ..TraceParams::default() };
-    let start = std::time::Instant::now();
+    let distinct = 50_000;
+    let count = params.swatches.len();
+    quantize::LIBRARY_COMPARISONS.with(|n| n.set(0));
+    quantize::SWATCH_LOOKUPS.with(|n| n.set(0));
     let q = quantize(&img, &params);
-    assert!(start.elapsed() < std::time::Duration::from_secs(30), "{:?}", start.elapsed());
+    // Each swatch is looked up once to drop the repeats. The two colors of the picture are each
+    // compared with every distinct swatch once, and the image's few bins with the two swatches kept.
+    let lookups = quantize::SWATCH_LOOKUPS.with(|n| n.get());
+    assert!(lookups > 0 && lookups <= count, "{lookups} lookups for {count} swatches");
+    let comparisons = quantize::LIBRARY_COMPARISONS.with(|n| n.get());
+    assert!(comparisons > 0 && comparisons <= 2 * distinct + 1_000, "{comparisons} comparisons for {distinct} distinct swatches");
     assert_eq!(q.labels.len(), 2);
 }
 
@@ -899,10 +930,10 @@ fn presets_have_their_paths_corners_and_noise() {
         ("High Fidelity Photo", 50.0, 50.0, 5),
         ("Low Fidelity Photo", 50.0, 50.0, 10),
         ("3 Colors", 50.0, 50.0, 15),
-        ("6 Colors", 50.0, 50.0, 15),
-        ("16 Colors", 50.0, 50.0, 15),
+        ("6 Colors", 50.0, 50.0, 8),
+        ("16 Colors", 50.0, 50.0, 8),
         ("Shades of Gray", 50.0, 50.0, 15),
-        ("Black and White Logo", 50.0, 75.0, 25),
+        ("Black and White Logo", 50.0, 75.0, 5),
         ("Sketched Art", 50.0, 50.0, 20),
         ("Silhouettes", 50.0, 50.0, 90),
         ("Line Art", 50.0, 75.0, 20),
@@ -919,6 +950,16 @@ fn presets_have_their_paths_corners_and_noise() {
         .map(|n| preset(n).unwrap().colors)
         .collect();
     assert_eq!(colors, [64, 20, 3, 6, 16, 8]);
+}
+
+#[test]
+fn high_fidelity_photo_traces_in_full_tone() {
+    // As many colors as the tones need, split until no color spans more than about 21 levels, as
+    // abutting shapes.
+    let p = preset("High Fidelity Photo").unwrap();
+    assert_eq!((p.palette, p.color_detail, p.method), (Palette::FullTone, 85.0, Method::Abutting));
+    // Low Fidelity Photo keeps its 20 colors.
+    assert_eq!(preset("Low Fidelity Photo").unwrap().palette, Palette::Limited);
 }
 
 #[test]
@@ -1123,7 +1164,7 @@ fn scaling_down_weighs_color_by_alpha() {
     // Opaque red and clear black columns, decoded from a PNG and scaled to fit as `decode_to_fit`
     // does: each scaled pixel covers a red and a clear one.
     let half_clear = Raster::from_fn(4, 2, |x, _| if x % 2 == 0 { RED } else { [0; 4] });
-    let decoded = image::load_from_memory(&half_clear.encode_png()).unwrap().into_rgba8();
+    let decoded = Raster::decode(&half_clear.encode_png()).unwrap();
     let fitted = Raster::fitted(&decoded, 2);
     assert_eq!((fitted.width, fitted.height), (2, 1));
     assert_eq!(fitted.rgba, [[200, 30, 30, 128]; 2].concat());
@@ -1190,12 +1231,14 @@ fn full_tone_follows_the_tones_the_image_has() {
 }
 
 #[test]
-fn automatic_traces_flat_art_with_its_colours_and_photos_in_full_tone() {
+fn automatic_traces_flat_art_with_its_colours_and_photos_in_continuous_tone() {
     let flat = palette(&flat_quads(), Palette::Automatic, 2, 50.0);
     assert_eq!(flat.len(), 4, "the four flat colours, whatever `colors` says: {flat:?}");
     assert!(flat.iter().any(|c| c[0] > 200 && c[1] < 60 && c[2] < 60), "red is one of them: {flat:?}");
     let tone = palette(&gradient(), Palette::Automatic, 2, 50.0);
-    assert_eq!(tone.len(), palette(&gradient(), Palette::FullTone, 2, 50.0).len(), "continuous tone: as Full Tone");
+    // Continuous tone: as many colors as the tones need, without Full Tone's least count.
+    let full = palette(&gradient(), Palette::FullTone, 2, 50.0);
+    assert!(tone.len() > 4 && tone.len() <= full.len(), "{} colors, {} in Full Tone", tone.len(), full.len());
 }
 
 #[test]
@@ -1690,6 +1733,56 @@ fn jitter(x: u32, y: u32, salt: u32) -> f64 {
     f64::from(v & 0xFFFF) / 32768.0 - 1.0
 }
 
+#[test]
+fn full_tone_keeps_more_of_a_noisy_ramps_tones() {
+    // Gray to green with grain: Full Tone's neighboring tones are close in RGB and mixed along
+    // their borders, and still look different.
+    let img = Raster::from_fn(256, 96, |x, y| {
+        let v = |k: u32, base: f64, slope: f64| (base + slope * f64::from(x) + 8.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
+        [v(0, 100.0, 0.0), v(1, 40.0, 0.7), v(2, 100.0, 0.0), 255]
+    });
+    let params = TraceParams { mode: Mode::Color, palette: Palette::FullTone, color_detail: 85.0, ..TraceParams::default() };
+    // Median cut gives at least 85 (one per step of Color detail). Merging the ones that look alike
+    // leaves 6 (one per 30 or so levels of the ramp); merging close RGB colors would leave 4.
+    let n = quantize(&img, &params).palette.len();
+    assert!(n >= 6, "{n} tones");
+    // Automatic traces continuous tone without Full Tone's least count and keeps merging close RGB colors.
+    let automatic = quantize(&img, &TraceParams { palette: Palette::Automatic, ..params }).palette.len();
+    assert!(automatic < n, "{automatic} tones with Automatic, {n} with Full Tone");
+}
+
+#[test]
+fn full_tone_traces_a_noisy_dark_ground_like_a_light_one() {
+    // A gray ground with up to 8 levels of grain a channel. The same grain lies farther apart in
+    // Oklab in a dark gray than in a light one; the dark ground still takes about as many colors
+    // and shapes as the light one (32 and 53 against 31 and 52 when measured).
+    let ground = |gray: f64| {
+        let img = Raster::from_fn(192, 128, |x, y| {
+            let c = |k: u32| (gray + 8.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
+            [c(0), c(1), c(2), 255]
+        });
+        trace(&img, &preset("High Fidelity Photo").unwrap())
+    };
+    let (dark, light) = (ground(28.0), ground(200.0));
+    assert!(dark.palette.len() <= light.palette.len() + 2, "{} colors dark, {} light", dark.palette.len(), light.palette.len());
+    assert!(dark.paths.len() <= light.paths.len() + 6, "{} shapes dark, {} light", dark.paths.len(), light.paths.len());
+}
+
+#[test]
+fn full_tone_merges_a_flat_colors_compression_blocks() {
+    // Three flat colors stored in 8 × 8 blocks, each block off by up to 8 levels a channel, with a
+    // little grain: the blocks of one color look alike and are mixed in patches, so each flat
+    // color traces as one shape in Full Tone too, not as squares of near colors.
+    let bases = [[200.0, 150.0, 120.0], [70.0, 120.0, 190.0], [40.0, 90.0, 40.0]];
+    let img = Raster::from_fn(192, 128, |x, y| {
+        let base: [f64; 3] = bases[(x / 64) as usize];
+        let c = |k: u32| (base[k as usize] + 8.0 * jitter(x / 8, y / 8, k) + 1.5 * jitter(x, y, k + 7)).round().clamp(0.0, 255.0) as u8;
+        [c(0), c(1), c(2), 255]
+    });
+    let res = trace(&img, &preset("High Fidelity Photo").unwrap());
+    assert_eq!((res.palette.len(), res.paths.len()), (3, 3), "{:?}", res.palette);
+}
+
 /// Three flat colours (a navy field, a yellow disc, a green bar) drawn anti-aliased, with `noise`
 /// levels of noise per channel.
 fn three_colour_art(noise: f64) -> Raster {
@@ -1928,7 +2021,9 @@ fn contour_spread(res: &TraceResult) -> (f64, usize) {
 
 #[test]
 fn the_borders_of_a_gradients_bands_follow_its_contours() {
-    let res = trace(&wavy_bands(), &sixteen_colors());
+    // At the Noise this test was written for: at 16 Colors' Noise 8 the 6 levels of noise leave more
+    // small regions along the borders.
+    let res = trace(&wavy_bands(), &TraceParams { noise: 15, ..sixteen_colors() });
     // The square's sides are edges: it keeps its four corners.
     let [l, t, r, b] = WAVY_SQUARE;
     let square = res.paths.iter().find(|p| p.color.iter().all(|&c| c < 40)).expect("the dark square");
@@ -1988,7 +2083,7 @@ fn a_nearly_flat_dark_ground_keeps_one_color() {
 
 #[test]
 fn a_noisy_gradient_keeps_its_tones_without_specks() {
-    // Tones 0–255 across with noise larger than High Fidelity Photo's 64 steps are apart.
+    // Tones 0–255 across with up to 5 levels of noise a channel.
     let img = Raster::from_fn(256, 96, |x, y| {
         let c = |k: u32| (f64::from(x) + 5.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
         [c(0), c(1), c(2), 255]
@@ -2174,7 +2269,8 @@ fn small_accents_of_other_colors_leave_a_tinted_photo_continuous_tone() {
     }
 }
 
-/// `img` saved as a JPEG of `quality` and read back.
+/// `img` saved as a JPEG of `quality` and read back. The `image` crate's encoder stays the fixture:
+/// `a_jpegs_blocks_are_not_traced_as_steps` measures block artifacts, which differ by encoder.
 fn through_jpeg(img: &Raster, quality: u8) -> Raster {
     let rgb: Vec<u8> = img.rgba.chunks(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
     let mut bytes = vec![];
@@ -4033,4 +4129,75 @@ fn a_gif_frame_larger_than_its_screen_is_refused_before_decoding() {
     gif.extend([2, 1, 0, 0, 0x3B]);
     assert!(matches!(Raster::decode(&gif), Err(TraceError::TooLarge { .. })), "{:?}", Raster::decode(&gif).err());
     assert!(matches!(Raster::decode_to_fit(&gif), Err(TraceError::TooLarge { .. })));
+    assert!(matches!(decode_alpha(&gif), Err(TraceError::TooLarge { .. })));
+}
+
+// Synthetic PNG chunks for transparency/orientation regression fixtures.
+fn png_test_chunk(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
+    let mut out = (data.len() as u32).to_be_bytes().to_vec();
+    out.extend(kind);
+    out.extend(data);
+    let mut crc = !0u32;
+    for &b in &out[4..] {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 { 0xedb8_8320 ^ (crc >> 1) } else { crc >> 1 };
+        }
+    }
+    out.extend((!crc).to_be_bytes());
+    out
+}
+
+#[test]
+fn alpha_decode_keeps_rgb_and_grayscale_png_transparency_keys() {
+    use craft_image_codecs::{ChannelLayout, Format, Image};
+    for (layout, samples, key) in
+        [(ChannelLayout::Rgb, vec![10, 20, 30, 40, 50, 60], vec![0, 10, 0, 20, 0, 30]), (ChannelLayout::Gray, vec![10, 40], vec![0, 10])]
+    {
+        let image = Image::from_u8(2, 1, layout, samples).unwrap();
+        let mut png = craft_image_codecs::encode(&image, Format::Png, &Default::default()).unwrap();
+        // A transparency key precedes IDAT, immediately after the IHDR chunk.
+        png.splice(33..33, png_test_chunk(b"tRNS", &key));
+        assert_eq!(decode_alpha(&png).unwrap(), Some((2, 1, vec![0, 255])));
+    }
+}
+
+#[test]
+fn trace_and_alpha_keep_stored_pixels_with_exif_orientation() {
+    use craft_image_codecs::{ChannelLayout, Format, Image};
+    // Little-endian TIFF IFD containing Orientation=6 (90 degrees clockwise).
+    let exif = [b'I', b'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 1, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
+    let raster = Raster::from_fn(3, 2, |x, y| [x as u8 * 60, y as u8 * 90, 17, (x + 3 * y) as u8 * 40]);
+    let mut png = raster.encode_png();
+    png.splice(33..33, png_test_chunk(b"eXIf", &exif));
+    for actual in [Raster::decode(&png).unwrap(), Raster::decode_to_fit(&png).unwrap()] {
+        assert_eq!((actual.width, actual.height), (3, 2));
+        assert_eq!(actual.rgba, raster.rgba);
+    }
+    assert_eq!(decode_alpha(&png).unwrap(), Some((3, 2, raster.rgba.as_chunks::<4>().0.iter().map(|p| p[3]).collect())));
+
+    let image =
+        Image::from_u8(3, 2, ChannelLayout::Rgb, raster.rgba.as_chunks::<4>().0.iter().flat_map(|p| p[..3].iter().copied()).collect()).unwrap();
+    let mut jpeg = craft_image_codecs::encode(&image, Format::Jpeg, &Default::default()).unwrap();
+    let expected = Raster::decode(&jpeg).unwrap();
+    let mut app1 = vec![0xff, 0xe1];
+    app1.extend(((exif.len() + 8) as u16).to_be_bytes());
+    app1.extend(b"Exif\0\0");
+    app1.extend(exif);
+    jpeg.splice(2..2, app1);
+    for actual in [Raster::decode(&jpeg).unwrap(), Raster::decode_to_fit(&jpeg).unwrap()] {
+        assert_eq!((actual.width, actual.height), (3, 2));
+        assert_eq!(actual.rgba, expected.rgba);
+    }
+}
+
+#[test]
+fn alpha_rejects_oversized_png_before_decoding() {
+    assert!(matches!(decode_alpha(&png_header(30_000, 30_000)), Err(TraceError::TooLarge { .. })));
+    assert!(matches!(decode_alpha(&png_header(64, 64)), Err(TraceError::Decode(_))));
+    let mut deep = png_header(7000, 6000);
+    deep[24] = 16;
+    let ihdr = png_test_chunk(b"IHDR", &deep[16..29]);
+    deep.splice(8..33, ihdr);
+    assert!(matches!(decode_alpha(&deep), Err(TraceError::TooLarge { .. })));
 }

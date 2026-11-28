@@ -629,6 +629,24 @@ impl<W: std::io::Write> std::io::Write for Counted<W> {
     }
 }
 
+/// A writer that fails once the work running on this thread is canceled
+/// ([`crate::cancel::is_cancelled`]), so a streamed save stops writing into its temporary file.
+/// It sits under the stream's buffer: it is checked once per buffer written, not per write.
+struct StopsWhenCancelled<W>(W);
+
+impl<W: std::io::Write> std::io::Write for StopsWhenCancelled<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if crate::cancel::is_cancelled() {
+            return Err(std::io::Error::other(crate::cancel::Cancelled));
+        }
+        self.0.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.flush()
+    }
+}
+
 /// The artboards a native or `.ai` save also writes to files of their own: with
 /// `separateArtboards`, those `range` names (default all).
 fn separate_boards(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<usize>> {
@@ -889,7 +907,6 @@ pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<Save
 
 fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i64>) -> Result<SaveJob> {
     let cmd = plan.mode.command();
-    super::check_linked_scripts(cmd, plan.format.id, st)?;
     let mut own = doc_to_save(st, plan.format);
     let mut params = plan.options.clone();
     if is_svg(plan.format) {
@@ -897,7 +914,10 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
         params.entry("hiddenLayers").or_insert(Value::Bool(true));
     }
     let params = Value::Object(params);
-    super::check_linked_images(cmd, plan.format.id, st, &own, &params)?;
+    // Other formats are checked below, with the options the encoder reads.
+    if is_svg(plan.format) {
+        super::check_linked_images(cmd, plan.format.id, st, &own, &params)?;
+    }
     // The file the document is saved as (else its own) titles it if New's name is all it has.
     let file = plan.path.as_deref().filter(|_| plan.retargets()).or(st.path.as_deref());
     if let Some(d) = super::titled_for_export(&own, file, plan.format.id) {
@@ -934,6 +954,15 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
             o.insert("range".into(), json!("all"));
         }
     }
+    // A saved `.ai` or `.ait` file has the artboards as its pages, whatever `useArtboards` says.
+    let checked = match (&params, plan.format.id) {
+        (Value::Object(o), "ai" | "ait") => {
+            std::borrow::Cow::Owned(Value::Object(o.iter().filter(|(k, _)| *k != "useArtboards").map(|(k, v)| (k.clone(), v.clone())).collect()))
+        }
+        _ => std::borrow::Cow::Borrowed(&params),
+    };
+    super::check_linked_scripts(cmd, plan.format.id, st, &checked)?;
+    super::access::check_native_images(cmd, plan.format.id, &st.doc, crate::cmd::links::LinkBase::of(st), &checked)?;
     Ok(SaveJob { plan, doc, params, snapshot, source: st.doc.clone(), stamped, boards })
 }
 
@@ -1015,10 +1044,15 @@ impl SaveJob {
     }
 
     /// [`SaveJob::write`], once `stop` has seen the paths of every file it writes to a path, in
-    /// order: when `stop` returns a value, nothing is written and that value is returned.
+    /// order: when `stop` returns a value, nothing is written and that value is returned. Work
+    /// canceled ([`crate::cancel`]) before the first file is written returns
+    /// [`crate::EngineError::Cancelled`] and writes nothing; once the first file is written, the
+    /// others are written too.
     pub fn write_unless(&self, stop: impl FnOnce(&[&str]) -> Option<Value>, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
         let (plan, doc) = (&self.plan, &*self.doc);
+        crate::cancel::check()?;
         let enc = self.encode()?;
+        crate::cancel::check()?;
         let extra = json!({ "format": plan.format.id, "warnings": enc.notes() });
         let Some(path) = &plan.path else {
             let mut out = write_encoded(None, &plan.name, doc, &enc, extra)?;
@@ -1035,8 +1069,13 @@ impl SaveJob {
         if let Some(stopped) = stop(&files.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>()) {
             return Ok(stopped);
         }
-        for (p, bytes) in &files {
-            write(p, bytes)?;
+        for (i, (p, bytes)) in files.iter().enumerate() {
+            if i == 0 {
+                write(p, bytes)?;
+            } else {
+                // Once a file is in place, a Cancel no longer stops the save: the set is written whole.
+                crate::cancel::scope(&crate::cancel::CancelToken::new(), None, || write(p, bytes))?;
+            }
         }
         let bytes = files.first().map_or(0, |f| f.1.len());
         let mut out = super::merge(json!({ "path": path, "bytes": bytes }), extra);
@@ -1059,11 +1098,15 @@ impl SaveJob {
     /// [`SaveJob::write`] through `stream`, which writes the file at a path with what the filler
     /// it is given writes (atomically, as [`vectorcraft_format::write_atomic_with`]). A native
     /// file goes into it as it is encoded ([`SaveJob::streams`]), never held whole in memory;
-    /// other files are encoded first, then written into it.
+    /// other files are encoded first, then written into it. Work canceled ([`crate::cancel`])
+    /// while the native file is encoded, or before its filler returns, returns
+    /// [`crate::EngineError::Cancelled`]: the filler fails, so `stream` keeps the file as it was
+    /// (the atomic writer checks once more before it puts the file in place).
     pub fn write_streamed(&self, stream: StreamWrite) -> Result<Value> {
         let (Some(path), true) = (&self.plan.path, self.streams()) else {
             return self.write(|p, b| stream(p, &mut |w| w.write_all(b)));
         };
+        crate::cancel::check()?;
         let (cmd, f) = (self.plan.mode.command(), self.plan.format);
         let doc = self.doc.without_edit_modes();
         let doc = match f.id {
@@ -1080,16 +1123,22 @@ impl SaveJob {
         let mut failed = None;
         let mut written = 0u64;
         let mut fill = |w: &mut dyn std::io::Write| {
-            let mut out = Counted { inner: std::io::BufWriter::with_capacity(STREAM_BUFFER, w), n: 0 };
+            let mut out = Counted { inner: std::io::BufWriter::with_capacity(STREAM_BUFFER, StopsWhenCancelled(w)), n: 0 };
             let r = super::native::encode_to(cmd, f, &doc, &self.params, &mut out);
             written = out.n;
-            match r {
+            let r = match r {
                 Ok(()) => out.inner.flush(),
                 Err(e) => {
                     failed = Some(e);
                     Err(std::io::Error::other("the file couldn't be encoded"))
                 }
+            };
+            // The last check before the file is replaced: a canceled save leaves it as it was.
+            if crate::cancel::is_cancelled() {
+                failed = Some(crate::EngineError::Cancelled);
+                return Err(std::io::Error::other(crate::cancel::Cancelled));
             }
+            r
         };
         let r = stream(path, &mut fill);
         r.map_err(|e| failed.take().unwrap_or(e))?;
@@ -1099,10 +1148,14 @@ impl SaveJob {
     /// Once written: Save and Save As (except to a template) make the file `st`'s own: path,
     /// title, format, options, and the snapshot as the saved state (edits made since the job was
     /// made keep the document modified; changes that are not edits to save don't,
-    /// [`DocState::same_content`]).
+    /// [`DocState::same_content`]). Saved outside a command a script runs, from the document's
+    /// content as it is now, the document is as the person left it ([`DocState::by_script`]).
     pub fn finish(self, st: &mut DocState) {
         let retargets = self.plan.retargets();
         if let (true, Some(path)) = (retargets, self.plan.path) {
+            if !crate::file_access::in_script_command() && st.same_content(&self.source) {
+                st.by_script = None;
+            }
             st.path = Some(path);
             st.format = self.plan.format.id;
             st.save_options = self.plan.options;
@@ -1144,7 +1197,8 @@ impl SaveJob {
         }
         // The other open documents that place this one show the new version.
         let written = self.plan.path.clone().filter(|_| matches!(self.plan.format.id, "vectorcraft" | "template"));
-        // A save of the arrowheads file lists its heads in the arrowhead menus.
+        // A save of the arrowheads file lists its heads in the arrowhead menus, and one of the
+        // bevels file its bevels in the Bevel Shape menus.
         let native = self.plan.format.id == "vectorcraft";
         if let Some(st) = s.document_mut(uid) {
             self.finish(st);
@@ -1155,6 +1209,7 @@ impl SaveJob {
         if let Some(path) = written {
             if native {
                 s.arrowheads_saved(&path);
+                s.bevels_saved(&path);
             }
             crate::cmd::links::refresh_placed(s, uid, &path);
         }
@@ -1318,7 +1373,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai|eps (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead (an option given flat or in svg and in options with different values is an error), compress?: bool (native, also in options: gzip; default: the useCompression preference; warnings name an option given flat or in options that the file doesn't read: a legacy .ai reads only its own options, and other .ai files don't read outlineText, hiddenObjects, transparentImages or preserveEditing), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), precision?: 0..9 (native: round path anchors and handles to this many decimal places, a smaller file; colors, transforms and type stay exact; default: exact, and a later save without it writes exactly again), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: true (native: also carry a PDF of every artboard; false omits it) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file and EPS (below): a .ai file is a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly, on the active artboard (the app's, else the one the document opened on; with editingData: false, the first); separateArtboards writes more files, one per artboard. EPS takes the options of document.exportEps: by default one file whose bounding box fits the visible art (the first artboard when no art shows), carrying the whole editable document; useArtboards: true (also when artboard, artboards or range names artboards; file.formatOptions then reports it true) makes the chosen artboard the page, drawn with its background color (without Use Artboards, only the first artboard's page when no art shows has its color), and with two or more chosen the file at the path is the central file of the visible art (again the first artboard when none shows) and each artboard is also written to <name>_<artboard>.eps beside it, holding that artboard; selectedOnly is refused; its PostScript appearance flattens transparency, as EPS requires. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF/EPS saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified. Under automation read roots, a reply leaves out the document's own file outside them when no path is given (files and linked then name the files by their file names), and a suggested folder outside them; an svg or svgz save (a document whose own format is SVG or SVGZ included) is refused, before any file is written, while the document links a JavaScript file outside them (svgInteractivity; a URL is not checked), or while the file would name a linked image's file outside them (images: link, preserveEditing, or an image whose pixels the document doesn't hold; a URL is not checked), also by file.saveAs and file.saveCopy. A key that no save format takes, beside the path or in options, and an unknown key inside a PDF option's object or svg, are refused. A terminal filesystem permission/read-only refusal returns READ_ONLY_LOCATION: followed by the reason; recovery-copy failures keep their original error. Non-UI callers never open a save panel",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai|eps (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead (an option given flat or in svg and in options with different values is an error), compress?: bool (native, also in options: gzip; default: the useCompression preference; warnings name an option given flat or in options that the file doesn't read: a legacy .ai reads only its own options, and other .ai files don't read outlineText, hiddenObjects, transparentImages or preserveEditing), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), precision?: 0..9 (native: round path anchors and handles to this many decimal places, a smaller file; colors, transforms and type stay exact; default: exact, and a later save without it writes exactly again), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: true (native: also carry a PDF of every artboard; false omits it) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file and EPS (below): a .ai file is a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly, on the active artboard (the app's, else the one the document opened on; with editingData: false, the first); separateArtboards writes more files, one per artboard. EPS takes the options of document.exportEps: by default one file whose bounding box fits the visible art (the first artboard when no art shows), carrying the whole editable document; useArtboards: true (also when artboard, artboards or range names artboards; file.formatOptions then reports it true) makes the chosen artboard the page, drawn with its background color (without Use Artboards, only the first artboard's page when no art shows has its color), and with two or more chosen the file at the path is the central file of the visible art (again the first artboard when none shows) and each artboard is also written to <name>_<artboard>.eps beside it, holding that artboard; selectedOnly is refused; its PostScript appearance flattens transparency, as EPS requires. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF/EPS saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified. Under automation read roots, a reply leaves out the document's own file outside them when no path is given (files and linked then name the files by their file names), and a suggested folder outside them; an svg or svgz save (a document whose own format is SVG or SVGZ included), and a save whose file carries the native document (vectorcraft, template, eps, ai but a version 7 file, pdf of every artboard with preserveEditing on and useArtboards not false), is refused, before any file is written, while the document links a JavaScript file outside them (svgInteractivity; a URL is not checked), or while the file would name a linked image's file outside them (images: link, preserveEditing, or an image whose pixels the document doesn't hold; a URL is not checked), also by file.saveAs and file.saveCopy. A key that no save format takes, beside the path or in options, and an unknown key inside a PDF option's object or svg, are refused. A terminal filesystem permission/read-only refusal returns READ_ONLY_LOCATION: followed by the reason; recovery-copy failures keep their original error. Non-UI callers never open a save panel",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),
@@ -1345,7 +1400,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save as Template…",
             ["File"],
             None,
-            "{…as document.save} {path? (saved with the format's extension: one naming another format is replaced, and one is added to a name without it), format?: template (default) | ait (also when format is not given and the path ends in .ait), compress?, version?, preview?, precision?} a template that opens as a new untitled document: a native template (.vctemplate), or a PDF-compatible .ait written as a .ai file is (the .ai options and the PDF options, as document.save takes them for .ai; aiVersion 7 is an error); the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.<ext>\", folder: the Templates folder (preference templatesFolder), warnings}",
+            "{…as document.save} {path? (saved with the format's extension: one naming another format is replaced, and one is added to a name without it), format?: template (default) | ait (also when format is not given and the path ends in .ait), compress?, version?, preview?, precision?} a template that opens as a new untitled document: a native template (.vctemplate), or a PDF-compatible .ait written as a .ai file is (the .ai options and the PDF options, as document.save takes them for .ai; aiVersion 7 is an error); the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.<ext>\", folder: the Templates folder (preference templatesFolder), warnings}. Under automation read roots, it is refused, before any file is written, while the document links a JavaScript file outside them, as document.save refuses it",
             has_doc,
             |s, p| save(s, SaveMode::Template, p)
         ),

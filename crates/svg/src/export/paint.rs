@@ -13,10 +13,16 @@ fn web_image(b: &ImageBlob) -> std::borrow::Cow<'_, ImageBlob> {
     if matches!(b.mime.as_str(), "image/png" | "image/jpeg" | "image/jpg" | "image/gif" | "image/webp" | "image/svg+xml") {
         return Cow::Borrowed(b);
     }
-    let png = image::load_from_memory(&b.bytes).ok().and_then(|img| {
-        let mut out = Vec::new();
-        img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-        Some(out)
+    let png = craft_image_codecs::decode(&b.bytes).ok().and_then(|img| {
+        let raw = craft_image_codecs::Image::from_raw(
+            img.width(),
+            img.height(),
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            img.to_rgba8(),
+        )
+        .ok()?;
+        craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
     });
     png.map_or(Cow::Borrowed(b), |png| Cow::Owned(ImageBlob::png(png)))
 }
@@ -37,9 +43,25 @@ pub(super) enum StrokePlan {
     Written(Written),
 }
 
+/// Visit `n` and the descendants the writer draws ([`Writer::node_body`]): a hidden layer or object
+/// and what it holds only with `hidden` (SVG Options › hidden layers kept), and a template layer's
+/// art never.
+fn walk_drawn<'a>(n: &'a Node, hidden: bool, f: &mut impl FnMut(&'a Node)) {
+    if !(n.visible || hidden) {
+        return;
+    }
+    f(n);
+    if matches!(n.kind, NodeKind::Layer { template: true, .. }) {
+        return;
+    }
+    for c in n.children().into_iter().flatten() {
+        walk_drawn(c, hidden, f);
+    }
+}
+
 impl Writer<'_> {
     pub(super) fn count_colorized_images(&mut self, art: &Node) {
-        art.walk(&mut |n| {
+        walk_drawn(art, self.opts.hidden_layers, &mut |n| {
             let NodeKind::Image(im) = &n.kind else { return };
             let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref() else { return };
             let shown = self.doc.shown_image(n, im);
@@ -81,15 +103,16 @@ impl Writer<'_> {
             for alpha in coverage {
                 rgba.extend_from_slice(&if self.tiny() { [rgb[0], rgb[1], rgb[2], alpha] } else { [255, 255, 255, alpha] });
             }
-            let Some(pixels) = image::RgbaImage::from_raw(width, height, rgba) else {
+            let Ok(pixels) =
+                craft_image_codecs::Image::from_raw(width, height, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba)
+            else {
                 self.warn(UNDECODED);
                 return;
             };
-            let mut png = Vec::new();
-            if pixels.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+            let Ok(png) = craft_image_codecs::encode(&pixels, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
                 self.warn(UNDECODED);
                 return;
-            }
+            };
             let href = self.blob_href(&ImageBlob::png(png));
             self.colorized_hrefs.insert(key.clone(), href.clone());
             href
@@ -176,7 +199,7 @@ impl Writer<'_> {
         self.count_colorized_images(art);
         // Each image's count and its first piece, which shows what they all show.
         let mut seen: HashMap<(String, u32, u32), (usize, vectorcraft_doc::ImageObject)> = HashMap::new();
-        art.walk(&mut |c| {
+        walk_drawn(art, self.opts.hidden_layers, &mut |c| {
             if let NodeKind::Image(im) = &c.kind {
                 let shown = self.doc.shown_image(c, im);
                 let im = &*shown;
@@ -521,11 +544,18 @@ impl Writer<'_> {
                 let (cols, rows) = (along(cover.width()), along(cover.height()));
                 (g.pixels(b, cover, cols, rows, fill, &Color::to_rgb).flatten().collect(), cols, rows)
             };
-            let mut png = Vec::new();
-            let Some(img) = image::RgbaImage::from_raw(u32::from(cols), u32::from(rows), rgba) else { return };
-            if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+            let Ok(img) = craft_image_codecs::Image::from_raw(
+                u32::from(cols),
+                u32::from(rows),
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U8,
+                rgba,
+            ) else {
                 return;
-            }
+            };
+            let Ok(png) = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
+                return;
+            };
             self.warn(if freeform {
                 "freeform gradients are written as images clipped to their shapes"
             } else if conic {
@@ -650,7 +680,7 @@ impl Writer<'_> {
             }
             return 0;
         }
-        let bounds = n.visual_bounds_with(&self.doc.symbol_boxes());
+        let bounds = n.visual_bounds_with(&self.symbol_lookup.unmeasured());
         // An Outer Glow's silhouette grows by a quarter of a pixel of the document's raster grid first.
         let grow = 18.0 / self.doc.raster_ppi();
         let reach: f64 =
@@ -675,7 +705,7 @@ impl Writer<'_> {
                 // object's geometry turned into it, grown by what its strokes and other paint add
                 // around it in the document: a square that far to each side, as it measures in
                 // user space along each axis (a miter corner reaches that far along both).
-                let symbols = self.doc.symbol_boxes();
+                let symbols = self.symbol_lookup.unmeasured();
                 let visual = input.visual_bounds_with(&symbols).unwrap_or_default();
                 let user_box = if sf.moves_only() {
                     visual - sf.origin()

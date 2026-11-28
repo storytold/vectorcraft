@@ -535,6 +535,60 @@ fn drawn_lines_land_perpendicular_to_segments_and_tangent_to_curves() {
     }
 }
 
+/// A touch point that falls exactly on one of the samples `touch_params` takes (t = k / 24) is
+/// found, once: the foot of the perpendicular from above a segment's middle, and the tangent
+/// point of a line drawn from a free point to a circle (#7846). A line to an oval lands tangent
+/// between samples, as before.
+#[test]
+fn touch_points_exactly_on_a_sample_are_found() {
+    use super::snap::touch_params;
+    use vectorcraft_doc::{Appearance, Node};
+    use vectorcraft_geom::kurbo::{CubicBez, Line, ParamCurve};
+    use vectorcraft_geom::shapes;
+    // (50, 40) above the segment (0, 0) to (100, 0): the foot is (50, 0), at t = 0.5 = 12 / 24.
+    let flat = PathSeg::Line(Line::new((0.0, 0.0), (100.0, 0.0)));
+    assert_eq!(touch_params(&flat, Point::new(50.0, 40.0), true), [0.5]);
+    assert_eq!(touch_params(&flat, Point::new(30.0, 40.0), true).len(), 1, "between samples, as before");
+    assert!(touch_params(&flat, Point::new(0.0, 40.0), true).is_empty(), "the ends stay out");
+    assert!(touch_params(&flat, Point::new(100.0, 40.0), true).is_empty(), "the ends stay out");
+    // From a point on the segment itself there is no line to be square.
+    assert!(touch_params(&flat, Point::new(50.0, 0.0), true).is_empty());
+    // A straight cubic seen from its own line runs along that line everywhere: no touch point.
+    let straight = PathSeg::Cubic(CubicBez::new((0.0, 0.0), (30.0, 0.0), (70.0, 0.0), (100.0, 0.0)));
+    assert!(touch_params(&straight, Point::new(-50.0, 0.0), false).is_empty());
+    // y = 400 (t - 0.5)^3 has its inflection at t = 0.5, and the tangent there (the x axis)
+    // touches zero without a change of sign; seen from (-100, 0) it is still found.
+    let wave = PathSeg::Cubic(CubicBez::new((0.0, -50.0), (100.0 / 3.0, 50.0), (200.0 / 3.0, -50.0), (100.0, 50.0)));
+    assert_eq!(touch_params(&wave, Point::new(-100.0, 0.0), false), [0.5]);
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let circle = shapes::ellipse(Rect::new(450.0, 450.0, 550.0, 550.0));
+    // The middle of the lower right quarter, and a point on the circle's tangent there.
+    let quarter = PathSeg::Cubic(circle.subpaths[0].segment(2));
+    let mid = quarter.eval(0.5);
+    let from = mid + Vec2::new(-64.0, 64.0);
+    assert!(((mid - Point::new(500.0, 500.0)).hypot() - 50.0).abs() < 0.1, "{mid:?}");
+    assert_eq!(touch_params(&quarter, from, false), [0.5]);
+    d.insert(Some(l), 1, Node::path(id, circle, Appearance::default_art())).unwrap();
+    // An oval (centre (500, 300), 100 by 50) seen from (300, 300): the tangent points are at
+    // x = 450, y = 300 -/+ 25 * sqrt(3), between samples.
+    let oval = d.alloc_id();
+    d.insert(Some(l), 2, Node::path(oval, shapes::ellipse(Rect::new(400.0, 250.0, 600.0, 350.0)), Appearance::default_art())).unwrap();
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let leave = Leave::segment(&c, from, false);
+    let (q, ov) = PointSnap::new(&c, || Targets::for_drawing(&d, &[], None, None)).snap_from(&c, mid + Vec2::new(1.5, 1.0), Some(&leave));
+    assert_eq!(labels(&ov), ["tangent"]);
+    assert!((q - mid).hypot() < 1e-9, "{q:?} {mid:?}");
+    assert_eq!(lines(&ov), vec![(from, q)]);
+    let start = Point::new(300.0, 300.0);
+    let leave = Leave::segment(&c, start, false);
+    let (q, ov) = PointSnap::new(&c, || Targets::for_drawing(&d, &[], None, None)).snap_from(&c, Point::new(452.0, 259.0), Some(&leave));
+    assert_eq!(labels(&ov), ["tangent"]);
+    assert!((q - Point::new(450.0, 300.0 - 25.0 * 3f64.sqrt())).hypot() < 0.2, "{q:?}");
+}
+
 /// A box dragged from a corner (Rectangle, Ellipse, ...) never snaps square to a segment, and
 /// a busy spot does not hide the contact: every segment in reach is tried.
 #[test]
@@ -628,8 +682,8 @@ fn drawn_points_snap_to_ruler_guides_with_smart_guides_on() {
     assert_eq!(snap.press(&off, Point::new(260.0, 315.0), &[], None), Point::new(260.0, 315.0));
 }
 
-/// A drawing tool's snapper reuses its targets while hovering over the same document state, and
-/// gathers them again when it changes, and on every press.
+/// A drawing tool's snapper reuses its targets while hovering and pressing over the same document
+/// state, and gathers them again when it changes.
 #[test]
 fn draw_snap_gathers_once_per_document_state() {
     let (d, _) = doc_with_rect();
@@ -640,17 +694,19 @@ fn draw_snap_gathers_once_per_document_state() {
     let c = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
     assert_eq!(snap.hover(&c, at, &[], None), Point::new(200.0, 200.0));
     assert_eq!(labels(snap.guides()), ["anchor"]);
-    // The same revision: the targets are the ones gathered (the document isn't read again).
+    // The same revision: the targets are the ones gathered (the document isn't read again), for
+    // a hover and for the press after it.
     let c = ToolContext { revision: (1, 1), ..cx(&empty, &s, &p) };
     assert_eq!(snap.hover(&c, at, &[], None), Point::new(200.0, 200.0));
-    // A new revision, or a press, reads it.
+    assert_eq!(snap.press(&c, at, &[], None), Point::new(200.0, 200.0));
+    // A new revision reads it, for a hover and for a press.
     let c = ToolContext { revision: (1, 2), ..cx(&empty, &s, &p) };
     assert_eq!(snap.hover(&c, at, &[], None), at);
     assert!(snap.guides().is_empty());
-    let c = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
+    let c = ToolContext { revision: (1, 3), ..cx(&d, &s, &p) };
     assert_eq!(snap.press(&c, at, &[], None), Point::new(200.0, 200.0));
     // The drag keeps what the press gathered, though the document now shows its preview.
-    let c = ToolContext { revision: (1, 3), ..cx(&empty, &s, &p) };
+    let c = ToolContext { revision: (1, 4), ..cx(&empty, &s, &p) };
     assert_eq!(snap.drag(&c, at, None), Point::new(200.0, 200.0));
     snap.clear();
     assert!(snap.guides().is_empty());
@@ -1120,14 +1176,15 @@ fn gradient_vector_ends_land_on_a_glyph_anchor() {
         let acts = tool.pointer(&c, &ev(PointerKind::Drag, near + Vec2::new(1.5, -1.0)));
         assert!(acts.is_empty(), "drag start, Snap to Glyph {glyphs}: {acts:?}");
         tool.pointer(&c, &ev(PointerKind::Up, near + Vec2::new(1.5, -1.0)));
-        // The end handle of the rectangle's gradient dragged to the click lands on the anchor.
+        // The end handle of the rectangle's gradient Alt-dragged to the click lands on the anchor.
         let c = ToolContext { snap_to_glyph: glyphs, ..cx(&d, &on_rect, &p) };
         let mut tool = GradientTool::default();
         // Hovering over the handle (on the rectangle's edge) shows no guides.
         tool.pointer(&c, &ev(PointerKind::Move, Point::new(400.0, 100.0)));
         assert!(!tool.overlays(&c).iter().any(|o| matches!(o, Overlay::Label { .. })), "hover over the handle");
-        tool.pointer(&c, &ev(PointerKind::Down, Point::new(400.0, 100.0)));
-        let v = preview(&tool.pointer(&c, &ev(PointerKind::Drag, click)));
+        let alt = |kind, q: Point| PointerEvent { mods: crate::Mods { alt: true, ..Default::default() }, ..ev(kind, q) };
+        tool.pointer(&c, &alt(PointerKind::Down, Point::new(400.0, 100.0)));
+        let v = preview(&tool.pointer(&c, &alt(PointerKind::Drag, click)));
         assert_eq!(lands(at(&v["end"])), glyphs, "end handle, Snap to Glyph {glyphs}: {v}");
         tool.pointer(&c, &ev(PointerKind::Up, click));
         // The start handle dragged to the click lands on the anchor.

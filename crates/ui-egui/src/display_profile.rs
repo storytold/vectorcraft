@@ -13,10 +13,17 @@
 
 use std::sync::{Arc, RwLock};
 
+use craft::cms::Profile;
+use craft::color_ui::display::{DisplayTransform, check_monitor};
+use craft::color_ui::ui::ProfileWords;
 use serde_json::{Value, json};
-use vectorcraft_color::cms::display::DisplayTransform;
-pub use vectorcraft_color::cms::display::MAX_PROFILE_BYTES;
 use vectorcraft_geom::{Affine, Point, Rect};
+
+// `ProfileWords::english` is a `WordSet` method.
+use craft::i18n::WordSet as _;
+
+/// The most bytes of a display profile's ICC file that are read.
+pub const MAX_PROFILE_BYTES: usize = 1 << 20;
 
 /// What the desktop app read for the display showing the main window.
 #[derive(Clone, Debug, PartialEq)]
@@ -78,6 +85,10 @@ struct State {
     transform: Option<Arc<DisplayTransform>>,
     /// The bytes last reported, so a reading of the same profile builds nothing.
     reported: Option<(Option<String>, Vec<u8>)>,
+    /// The desktop app reads the display's profile ([`DisplayProfile::attach_reader`]).
+    reader: bool,
+    /// Refresh Monitor Profile asked for a reading that hasn't started yet.
+    requested: bool,
 }
 
 impl Default for State {
@@ -90,6 +101,8 @@ impl Default for State {
             reason: Some("this build doesn't read display profiles".into()),
             transform: None,
             reported: None,
+            reader: false,
+            requested: false,
         }
     }
 }
@@ -116,6 +129,42 @@ impl DisplayProfile {
         }
     }
 
+    /// The desktop app reads the display's profile, so [`Self::request_read`] can ask it to.
+    pub fn attach_reader(&self) {
+        self.write().reader = true;
+    }
+
+    /// Whether something reads the display's profile ([`Self::attach_reader`]).
+    pub(crate) fn has_reader(&self) -> bool {
+        self.read().reader
+    }
+
+    /// Edit › Refresh Monitor Profile: asks the desktop app to read the display's profile again on
+    /// its next frame, without waiting for its intervals; while a reading runs, the request waits
+    /// for it to end. Refused while `enabled` (the preference) is off, and when nothing reads the
+    /// profile. Nothing is queued when it is refused.
+    pub fn request_read(&self, enabled: bool) -> Result<(), String> {
+        if !enabled {
+            return Err("turn on Use Monitor Profile for Canvas first".into());
+        }
+        let mut s = self.write();
+        if !s.reader {
+            return Err("this build doesn't read display profiles".into());
+        }
+        s.requested = true;
+        Ok(())
+    }
+
+    /// Whether [`Self::request_read`] asked for a reading that hasn't started.
+    pub fn read_requested(&self) -> bool {
+        self.read().requested
+    }
+
+    /// Takes the request [`Self::request_read`] made: whether there was one.
+    pub fn take_request(&self) -> bool {
+        self.read_requested() && std::mem::take(&mut self.write().requested)
+    }
+
     /// Takes `reading` in. A profile is checked, and its conversion built, on the calling thread;
     /// a profile that can't be used leaves the canvas sRGB, with the reason in [`Self::status`].
     /// The same profile reported again for the same display changes nothing. Returns whether the
@@ -129,9 +178,9 @@ impl DisplayProfile {
         let (kind, profile, reason, transform, reported) = match reading.found {
             Found::Profile { icc, from } => {
                 let reported = Some((reading.display.clone(), icc.clone()));
-                match DisplayTransform::from_icc(&icc) {
-                    Ok(t) if t.is_identity() => (Kind::Identity, Some((t.name().to_string(), from)), None, None, reported),
-                    Ok(t) => (Kind::Applied, Some((t.name().to_string(), from)), None, Some(Arc::new(t)), reported),
+                match build(&icc) {
+                    Ok(t) if t.is_identity() => (Kind::Identity, Some((t.monitor.description.clone(), from)), None, None, reported),
+                    Ok(t) => (Kind::Applied, Some((t.monitor.description.clone(), from)), None, Some(Arc::new(t)), reported),
                     Err(e) => (Kind::NoProfile, None, Some(format!("{from}: {e}")), None, reported),
                 }
             }
@@ -142,7 +191,7 @@ impl DisplayProfile {
         let changed = s.kind != kind || s.display != reading.display || s.profile != profile || s.reason != reason;
         let converts_differently = match (&s.transform, &transform) {
             (None, None) => false,
-            (Some(a), Some(b)) => a.fingerprint() != b.fingerprint(),
+            (Some(a), Some(b)) => a.key != b.key,
             _ => true,
         };
         if converts_differently {
@@ -170,8 +219,9 @@ impl DisplayProfile {
 
     /// The status `ui.inspect` reports as `displayProfile`: the display, what was found
     /// (`profile`, `srgbProfile`, `system`, `none`, `pending` or `unsupported`), the profile's
-    /// description and where it was read from, whether the canvas is converted, why not, and
-    /// whether the system converts the window.
+    /// description and where it was read from, whether the canvas is converted, why not, whether
+    /// the system converts the window, and whether a reading [`Self::request_read`] asked for
+    /// hasn't started.
     pub fn status(&self, enabled: bool) -> Value {
         let s = self.read();
         json!({
@@ -183,6 +233,7 @@ impl DisplayProfile {
             "applied": enabled && s.transform.is_some(),
             "reason": s.reason,
             "osManaged": s.kind == Kind::System,
+            "readRequested": s.requested,
         })
     }
 
@@ -201,7 +252,25 @@ impl DisplayProfile {
 /// Why `icc` can't be used as a display profile, or `Ok` when [`DisplayProfile::report`] would
 /// convert through it (or find that it shows sRGB unchanged). Builds no conversion table.
 pub fn check_profile(icc: &[u8]) -> Result<(), String> {
-    DisplayTransform::check(icc).map_err(|e| e.to_string())
+    check_monitor(icc).map_err(|problem| problem.label(&ProfileWords::english()))
+}
+
+/// The conversion from sRGB into the display profile `icc`, or why it can't be built. The one
+/// place a reading becomes a transform, so a bad profile always ends in the same wording.
+fn build(icc: &[u8]) -> Result<DisplayTransform, String> {
+    check_profile(icc)?;
+    let monitor = Profile::parse(icc).map_err(|e| e.to_string())?;
+    // The canvas holds the document's sRGB: a monitor profile of that sRGB converts nothing.
+    let srgb = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::SRGB).map_err(|e| e.to_string())?;
+    let source = Profile::parse(&srgb).map_err(|e| e.to_string())?;
+    DisplayTransform::new(Arc::new(source), Arc::new(monitor)).map_err(|e| e.to_string())
+}
+
+/// One opaque sRGB color through `t`.
+fn apply8(t: &DisplayTransform, [r, g, b]: [u8; 3]) -> [u8; 3] {
+    let mut px = [r, g, b, 255];
+    t.apply_premultiplied_rgba8(&mut px);
+    [px[0], px[1], px[2]]
 }
 
 /// `pixels` (premultiplied RGBA8) through `t`, using every core for a large frame.
@@ -215,13 +284,13 @@ pub(crate) fn convert(t: Option<&DisplayTransform>, pixels: &mut [u8]) {
             let per = pixels.len().div_ceil(threads).div_ceil(4) * 4;
             std::thread::scope(|scope| {
                 for piece in pixels.chunks_mut(per) {
-                    scope.spawn(move || t.apply_premultiplied(piece));
+                    scope.spawn(move || t.apply_premultiplied_rgba8(piece));
                 }
             });
             return;
         }
     }
-    t.apply_premultiplied(pixels);
+    t.apply_premultiplied_rgba8(pixels);
 }
 
 /// The document's paper under the canvas's art, which the canvas draws converted into the display
@@ -229,7 +298,8 @@ pub(crate) fn convert(t: Option<&DisplayTransform>, pixels: &mut [u8]) {
 /// The pasteboard and Outline's white canvas are interface colors and are not part of it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Backdrop {
-    /// View › Hide Artboards: the sRGB color of the paper that covers the whole canvas.
+    /// The sRGB color of the paper where no artboard is: with View › Hide Artboards the paper that
+    /// covers the whole canvas, and in Overprint Preview the white canvas around the artboards.
     pub(crate) everywhere: Option<[u8; 3]>,
     /// The artboards in the order they are drawn (the last on top), each with its paper's sRGB color.
     pub(crate) artboards: Vec<(Rect, [u8; 3])>,
@@ -293,7 +363,7 @@ impl<'a> Over<'a> {
         if (b.everywhere.is_none() && b.artboards.is_empty()) || !det.is_finite() || det.abs() < 1e-12 {
             return None;
         }
-        let paper = |srgb: [u8; 3]| Paper { srgb, shown: t.apply8(srgb) };
+        let paper = |srgb: [u8; 3]| Paper { srgb, shown: apply8(t, srgb) };
         let to_doc = view.inverse();
         // The frame in the document, a pixel wider on every side than its pixels' centers reach.
         let frame = to_doc.transform_rect_bbox(Rect::new(-1.0, -1.0, width as f64 + 1.0, height as f64 + 1.0));
@@ -386,9 +456,10 @@ impl<'a> Over<'a> {
         }
     }
 
-    /// The paper at pixel `i` of the row at height `y`, whose artboard on top is `owner`.
+    /// The paper at pixel `i` of the row at height `y`, whose artboard on top is `owner`: the paper
+    /// where no artboard is when there is none.
     fn paper_at(&self, owner: u32, i: usize, y: f64) -> Option<Paper> {
-        let b = self.boards.get(owner as usize)?;
+        let Some(b) = self.boards.get(owner as usize) else { return self.everywhere };
         Some(match &self.grid {
             Some((colors, cell)) => {
                 let p = self.to_doc * Point::new(i as f64 + 0.5, y);
@@ -415,7 +486,7 @@ impl<'a> Over<'a> {
                 }
                 let paper = if a == 255 {
                     None
-                } else if self.everywhere.is_some() {
+                } else if self.boards.is_empty() {
                     self.everywhere
                 } else {
                     if !found {
@@ -431,7 +502,7 @@ impl<'a> Over<'a> {
                         // Drawn over the converted paper, the pixel shows `px` over the paper in sRGB, converted.
                         let under = 255 - u32::from(a);
                         let mix = |c: usize| (u32::from(px[c]) + (u32::from(p.srgb[c]) * under + 127) / 255).min(255) as u8;
-                        let shown = self.t.apply8([mix(0), mix(1), mix(2)]);
+                        let shown = apply8(self.t, [mix(0), mix(1), mix(2)]);
                         for ((o, s), u) in px.iter_mut().zip(shown).zip(p.shown) {
                             let paper_part = ((u32::from(u) * under + 127) / 255) as i32;
                             *o = (i32::from(s) - paper_part).clamp(0, 255) as u8;
@@ -441,7 +512,7 @@ impl<'a> Over<'a> {
                     None if last_px.0 == *px => *px = last_px.1,
                     None => {
                         let input = *px;
-                        self.t.apply_premultiplied(px);
+                        self.t.apply_premultiplied_rgba8(px);
                         last_px = (input, *px);
                     }
                 }
@@ -453,8 +524,9 @@ impl<'a> Over<'a> {
 /// [`convert`], with each translucent pixel over the paper or the transparency grid of `backdrop`
 /// blended with it in sRGB before the conversion. The canvas draws the art over the paper
 /// converted: such a pixel keeps its alpha and takes the color that, drawn over the converted
-/// paper, shows the blend converted. Opaque and fully transparent pixels, and pixels over the
-/// pasteboard, convert as [`convert`] converts them. The pixels are rows of `width`; `view` maps the
+/// paper, shows the blend converted. Translucent pixels where no artboard is are blended with the
+/// backdrop's paper there (`everywhere`) when it has one. Opaque and fully transparent pixels, and
+/// pixels over the pasteboard, convert as [`convert`] converts them. The pixels are rows of `width`; `view` maps the
 /// document to them, and the backdrop's `zoom` is the canvas's screen points per document point,
 /// in which the grid's cells are measured.
 pub(crate) fn convert_over(t: Option<&DisplayTransform>, pixels: &mut [u8], width: u32, view: Affine, backdrop: Option<(&Backdrop, f64)>) {
@@ -486,7 +558,7 @@ pub(crate) fn convert_over(t: Option<&DisplayTransform>, pixels: &mut [u8], widt
 pub(crate) fn color32(t: Option<&DisplayTransform>, c: egui::Color32) -> egui::Color32 {
     let Some(t) = t else { return c };
     let mut px = c.to_array();
-    t.apply_premultiplied(&mut px);
+    t.apply_premultiplied_rgba8(&mut px);
     egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
 }
 
@@ -499,6 +571,12 @@ pub(crate) mod tests {
         let mut b = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::DISPLAY_P3).unwrap().to_vec();
         b[12..16].copy_from_slice(b"mntr");
         b
+    }
+
+    /// The conversion from sRGB into [`p3`].
+    // PLAN: returned by value, not in an `Arc`: tests pass `Some(&t)` to `convert_over`.
+    pub(crate) fn transform() -> DisplayTransform {
+        build(&p3()).unwrap()
     }
 
     fn reading(found: Found) -> Reading {
@@ -514,7 +592,8 @@ pub(crate) mod tests {
         assert_eq!(d.status(true)["source"], "pending");
         assert!(d.report(reading(Found::Profile { icc: p3(), from: "colord".into() })));
         let st = d.status(true);
-        assert_eq!((st["source"].as_str(), st["applied"].as_bool(), st["profile"].as_str()), (Some("profile"), Some(true), Some("Display P3")));
+        let name = Profile::parse(&p3()).unwrap().description;
+        assert_eq!((st["source"].as_str(), st["applied"].as_bool(), st["profile"].as_str()), (Some("profile"), Some(true), Some(name.as_str())));
         assert_eq!((st["display"].as_str(), st["from"].as_str(), st["osManaged"].as_bool()), (Some("DP-1"), Some("colord"), Some(false)));
         assert!(d.transform(true).is_some());
         let key = d.key(true);
@@ -536,16 +615,34 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_reading_is_requested_only_with_the_preference_on_and_a_reader() {
+        let d = DisplayProfile::default();
+        assert_eq!(d.request_read(true).unwrap_err(), "this build doesn't read display profiles");
+        d.attach_reader();
+        assert_eq!(d.request_read(false).unwrap_err(), "turn on Use Monitor Profile for Canvas first");
+        assert!(!d.read_requested() && !d.take_request(), "a refused request is not queued");
+        d.request_read(true).unwrap();
+        d.request_read(true).unwrap();
+        assert_eq!(d.status(true)["readRequested"].as_bool(), Some(true));
+        // Two requests before the reading starts make one reading.
+        assert!(d.take_request());
+        assert!(!d.take_request());
+        assert_eq!(d.status(true)["readRequested"].as_bool(), Some(false));
+    }
+
+    #[test]
     fn a_profile_that_can_t_be_used_leaves_the_canvas_srgb_and_says_why() {
         let d = DisplayProfile::default();
         let cmyk = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::GENERIC_CMYK).unwrap().to_vec();
         assert!(d.report(reading(Found::Profile { icc: cmyk, from: "printer.icc".into() })));
         let st = d.status(true);
         assert_eq!((st["source"].as_str(), st["applied"].as_bool()), (Some("none"), Some(false)));
-        assert!(st["reason"].as_str().is_some_and(|r| r.starts_with("printer.icc: ") && r.contains("not a display profile")), "{st}");
+        assert!(st["reason"].as_str().is_some_and(|r| r.starts_with("printer.icc: ")), "{st}");
         assert!(d.transform(true).is_none());
         d.report(reading(Found::Profile { icc: vec![1, 2, 3], from: "broken.icc".into() }));
-        assert!(d.status(true)["reason"].as_str().is_some_and(|r| r.contains("not an ICC profile")));
+        let st = d.status(true);
+        assert_eq!((st["source"].as_str(), st["applied"].as_bool()), (Some("none"), Some(false)));
+        assert!(st["reason"].as_str().is_some_and(|r| r.starts_with("broken.icc: ")), "{st}");
         // An sRGB display profile converts nothing.
         let mut srgb = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::SRGB).unwrap().to_vec();
         srgb[12..16].copy_from_slice(b"mntr");
@@ -556,17 +653,17 @@ pub(crate) mod tests {
 
     #[test]
     fn large_frames_convert_the_same_on_several_threads() {
-        let t = DisplayTransform::from_icc(&p3()).unwrap();
+        let t = transform();
         let mut big: Vec<u8> = (0..(600 * 1024 * 4)).map(|i| (i * 7 % 251) as u8).collect();
         for px in big.as_chunks_mut::<4>().0 {
             px[3] = 255;
         }
         let mut one = big.clone();
-        t.apply_premultiplied(&mut one);
+        t.apply_premultiplied_rgba8(&mut one);
         convert(Some(&t), &mut big);
         assert_eq!(big, one);
         assert_eq!(color32(None, egui::Color32::RED), egui::Color32::RED);
-        let [r, g, b] = t.apply8([255, 0, 0]);
+        let [r, g, b] = apply8(&t, [255, 0, 0]);
         assert_eq!(color32(Some(&t), egui::Color32::RED), egui::Color32::from_rgb(r, g, b));
     }
 
@@ -579,7 +676,7 @@ pub(crate) mod tests {
     /// `px` blended with the sRGB paper `paper`, converted.
     fn blended(t: &DisplayTransform, px: [u8; 4], paper: [u8; 3]) -> [u8; 3] {
         let k = 255 - u32::from(px[3]);
-        t.apply8([0, 1, 2].map(|i| (u32::from(px[i]) + (u32::from(paper[i]) * k + 127) / 255).min(255) as u8))
+        apply8(t, [0, 1, 2].map(|i| (u32::from(px[i]) + (u32::from(paper[i]) * k + 127) / 255).min(255) as u8))
     }
 
     fn assert_near(got: [u32; 3], want: [u8; 3], at: &str) {
@@ -591,40 +688,24 @@ pub(crate) mod tests {
         px.repeat(n)
     }
 
+    /// Overprint Preview's white canvas is paper too: translucent pixels around the artboards are
+    /// blended with it, and pixels on an artboard with the artboard's own paper.
     #[test]
-    fn translucent_pixels_over_the_paper_are_blended_before_they_are_converted() {
-        let t = DisplayTransform::from_icc(&p3()).unwrap();
+    fn translucent_pixels_around_the_artboards_are_blended_with_the_white_canvas() {
+        let t = transform();
         let half_red = [128, 0, 0, 128];
-        let b = Backdrop { everywhere: None, artboards: vec![(Rect::new(0.0, 0.0, 10.0, 1.0), [255; 3])], grid: None };
+        let dark = [40; 3];
+        let b = Backdrop { everywhere: Some([255; 3]), artboards: vec![(Rect::new(0.0, 0.0, 10.0, 1.0), dark)], grid: None };
         let mut px = row(20, half_red);
-        px[12..16].copy_from_slice(&[255, 0, 0, 255]);
-        px[16..20].copy_from_slice(&[0; 4]);
         convert_over(Some(&t), &mut px, 20, Affine::IDENTITY, Some((&b, 1.0)));
         let at = |i: usize| -> [u8; 4] { px[i * 4..i * 4 + 4].try_into().unwrap() };
-        let white = t.apply8([255; 3]);
-        assert_near(shown_over(at(0), white), blended(&t, half_red, [255; 3]), "over the paper");
-        // Converted alone and drawn over the converted paper, the pixel shows another color.
-        let mut alone = half_red;
-        t.apply_premultiplied(&mut alone);
-        let want = blended(&t, half_red, [255; 3]);
-        assert!((0..3).any(|i| shown_over(alone, white)[i].abs_diff(u32::from(want[i])) > 2), "{alone:?}");
-        assert_eq!(at(0)[3], 128, "the alpha is kept");
-        // Opaque and empty pixels, and pixels over the pasteboard, convert as before.
-        let red = t.apply8([255, 0, 0]);
-        assert_eq!((at(3), at(4)), ([red[0], red[1], red[2], 255], [0; 4]));
-        assert_eq!(at(15), alone, "over the pasteboard");
-        // Without a backdrop, and without a profile, as before.
-        let mut plain = row(20, half_red);
-        convert_over(Some(&t), &mut plain, 20, Affine::IDENTITY, None);
-        assert_eq!(plain, row(20, alone));
-        let mut srgb = row(20, half_red);
-        convert_over(None, &mut srgb, 20, Affine::IDENTITY, Some((&b, 1.0)));
-        assert_eq!(srgb, row(20, half_red));
+        assert_near(shown_over(at(2), apply8(&t, dark)), blended(&t, half_red, dark), "on the artboard");
+        assert_near(shown_over(at(15), apply8(&t, [255; 3])), blended(&t, half_red, [255; 3]), "around the artboards");
     }
 
     #[test]
     fn the_backdrop_is_found_through_the_view() {
-        let t = DisplayTransform::from_icc(&p3()).unwrap();
+        let t = transform();
         // Papers far apart: a pixel blended with the wrong one shows a color several levels off.
         let half = [128, 0, 0, 128];
         let (light, dark) = ([255, 230, 230], [40, 40, 30]);
@@ -640,17 +721,17 @@ pub(crate) mod tests {
         convert_over(Some(&t), &mut px, 10, view, Some((&b, 1.0)));
         // Pixel (2.5, 0.5) is document point (20.5, 67.5): on the first artboard only.
         let at = |i: usize| -> [u8; 4] { px[i * 4..i * 4 + 4].try_into().unwrap() };
-        assert_near(shown_over(at(2), t.apply8(light)), blended(&t, half, light), "on the first artboard");
+        assert_near(shown_over(at(2), apply8(&t, light)), blended(&t, half, light), "on the first artboard");
         let view = Affine::translate((-60.0, -5.0));
         let mut px = row(10, half);
         convert_over(Some(&t), &mut px, 10, view, Some((&b, 1.0)));
         let at = |i: usize| -> [u8; 4] { px[i * 4..i * 4 + 4].try_into().unwrap() };
-        assert_near(shown_over(at(0), t.apply8(dark)), blended(&t, half, dark), "where the second covers the first");
+        assert_near(shown_over(at(0), apply8(&t, dark)), blended(&t, half, dark), "where the second covers the first");
         // View › Hide Artboards: the paper everywhere.
         let all = Backdrop { everywhere: Some(dark), artboards: vec![], grid: None };
         let mut px = row(10, half);
         convert_over(Some(&t), &mut px, 10, Affine::translate((-5000.0, 0.0)), Some((&all, 1.0)));
-        assert_near(shown_over(px[..4].try_into().unwrap(), t.apply8(dark)), blended(&t, half, dark), "Hide Artboards");
+        assert_near(shown_over(px[..4].try_into().unwrap(), apply8(&t, dark)), blended(&t, half, dark), "Hide Artboards");
         // Overlapping artboards under a turned and scaled view, against a direct lookup of the
         // artboard on top whose rectangle holds each pixel's center.
         let boards: Vec<(Rect, [u8; 3])> = (0..12u8)
@@ -674,7 +755,7 @@ pub(crate) mod tests {
                         convert_over(Some(&t), &mut want, 1, Affine::IDENTITY, Some((&one, 1.0)));
                         on_paper += 1;
                     }
-                    None => t.apply_premultiplied(&mut want),
+                    None => t.apply_premultiplied_rgba8(&mut want),
                 }
                 assert_eq!(&px[i * 4..i * 4 + 4], &want[..], "pixel {i} at {p:?} through {view:?}");
             }
@@ -692,7 +773,7 @@ pub(crate) mod tests {
 
     #[test]
     fn the_transparency_grid_is_blended_cell_by_cell() {
-        let t = DisplayTransform::from_icc(&p3()).unwrap();
+        let t = transform();
         let half = [128, 0, 0, 128];
         // Far apart, so that a pixel blended with the other cell's color shows several levels off.
         let (light, dark) = ([255; 3], [40; 3]);
@@ -703,7 +784,7 @@ pub(crate) mod tests {
             convert_over(Some(&t), &mut px, 60, Affine::IDENTITY, Some((&b, zoom)));
             for (i, paper) in cells {
                 assert_near(
-                    shown_over(px[i * 4..i * 4 + 4].try_into().unwrap(), t.apply8(paper)),
+                    shown_over(px[i * 4..i * 4 + 4].try_into().unwrap(), apply8(&t, paper)),
                     blended(&t, half, paper),
                     &format!("pixel {i} at {zoom}"),
                 );
@@ -716,7 +797,7 @@ pub(crate) mod tests {
 
     #[test]
     fn large_frames_blend_the_same_on_several_threads() {
-        let t = DisplayTransform::from_icc(&p3()).unwrap();
+        let t = transform();
         let b = Backdrop {
             everywhere: None,
             artboards: vec![(Rect::new(0.0, 0.0, 500.0, 900.0), [240, 230, 220])],
@@ -738,7 +819,7 @@ pub(crate) mod tests {
 
     #[test]
     fn artboards_outside_the_frame_are_not_looked_up() {
-        let t = DisplayTransform::from_icc(&p3()).unwrap();
+        let t = transform();
         let half = [128, 0, 0, 128];
         // A row of 1,000 artboards 30 points apart, each 20 wide and 40 high.
         let artboards: Vec<(Rect, [u8; 3])> = (0..1000u32)
@@ -767,7 +848,7 @@ pub(crate) mod tests {
                     convert_over(Some(&t), &mut want, 1, Affine::IDENTITY, Some((&one, 1.0)));
                     on_paper += 1;
                 }
-                None => t.apply_premultiplied(&mut want),
+                None => t.apply_premultiplied_rgba8(&mut want),
             }
             assert_eq!(&px[i * 4..i * 4 + 4], &want[..], "pixel {i} at {p:?}");
         }

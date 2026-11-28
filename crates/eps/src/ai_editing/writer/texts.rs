@@ -17,6 +17,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+use std::sync::Arc;
 
 use kurbo::{ParamCurveArclen, PathSeg};
 use vectorcraft_color::{Color, Paint};
@@ -27,10 +28,10 @@ use vectorcraft_doc::{
 };
 use vectorcraft_geom::{Affine, PathData, Point};
 
-use crate::ps;
+use crate::{ai_ops, ps};
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, Insert Aki, paragraph alignment, indents, space before and after, hyphenation on or off, right-to-left direction, Kinsoku set, Kinsoku Shori Type, Burasagari and Bunri-Kinshi (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, Insert Aki, paragraph alignment, indents, space before and after, hyphenation on or off, right-to-left direction, Kinsoku set, Kinsoku Shori Type, Burasagari and Bunri-Kinshi (for example underline, kerning, OpenType features, swatch links of its colors other than to spot colors, global process colors and Registration, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -175,14 +176,33 @@ fn set(resources: Vec<V>, display: bool) -> V {
 }
 
 /// A paint: kind 0 gray (`[alpha, lightness]`), 1 RGB, 2 CMYK, as the reader's `paint` reads them.
-fn paint(c: &Color) -> V {
+/// RGB values are an RGB color's own (in the working RGB space) and a Lab color's converted into
+/// the working RGB space ([`ai_ops::rgb_values`]). With `style`, the art style that links the color
+/// to its swatch (key 5, [`TextDoc::link`]): the reader takes the style's color, at its tint, in
+/// place of these values.
+fn paint(c: &Color, style: Option<&str>) -> V {
     let (kind, values) = match *c {
         Color::Gray { k } => (0, vec![1.0 - f64::from(k.clamp(0.0, 1.0))]),
         Color::Cmyk { c, m, y, k } => (2, [c, m, y, k].iter().map(|v| f64::from(v.clamp(0.0, 1.0))).collect()),
-        Color::Rgb { .. } | Color::Lab { .. } => (1, c.to_rgb().iter().map(|v| f64::from(v.clamp(0.0, 1.0))).collect()),
+        Color::Rgb { .. } | Color::Lab { .. } => (1, ai_ops::rgb_values(*c).iter().map(|v| f64::from(*v)).collect()),
     };
     let values: Vec<f64> = std::iter::once(1.0).chain(values).collect();
-    dict(vec![(99, V::Name("SimplePaint")), (0, dict(vec![(0, V::Int(kind)), (1, reals(&values))]))])
+    let color = dict(vec![(0, V::Int(kind)), (1, reals(&values))]);
+    match style {
+        Some(name) => dict(vec![(99, V::Name("CAITextPaint")), (5, V::Str(name.to_owned())), (0, color)]),
+        None => dict(vec![(99, V::Name("SimplePaint")), (0, color)]),
+    }
+}
+
+/// A color linked to a swatch, by the swatch's name and its tint ([`TextDoc::links`]).
+pub(in crate::ai_editing) type LinkKey = (String, u32);
+
+/// The swatch and tint paint `p` is linked to, if it is.
+pub(in crate::ai_editing) fn link_key(p: &Paint) -> Option<LinkKey> {
+    match p {
+        Paint::Solid { swatch: Some(name), tint, .. } => Some((name.clone(), tint.to_bits())),
+        _ => None,
+    }
 }
 
 /// The color of paint `p` when the text document can hold it (a solid color or none).
@@ -197,8 +217,8 @@ fn solid(p: &Paint) -> Option<Option<Color>> {
 /// Can the text document hold type `t` of object `n` as it is: point type that isn't mirrored, or
 /// area type or type on a path that is only moved ([`shape`]); characters other than inline graphics
 /// and ruby; solid fills and strokes; no fills, strokes, effects or opacity mask of the object's
-/// own; some text.
-pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
+/// own; some text. Area type with wrap shapes only when `wrap_held` ([`wraps_held`]).
+pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject, wrap_held: bool) -> bool {
     let xf = t.xf.as_coeffs();
     let shape_ok = match &t.kind {
         TextKind::Point => xf.iter().all(|v| v.is_finite()) && t.xf.determinant() > 1e-12,
@@ -210,10 +230,9 @@ pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
         }
     };
     // Area type with wrap shapes: the text document doesn't hold them. The reader works them out
-    // again from the art above the type, which can wrap it differently (a live object written as
-    // its drawn pieces) or not at all.
+    // again from the art above the type, which wraps it the same only where `wraps_held` says so.
     shape_ok
-        && t.wrap.is_empty()
+        && (t.wrap.is_empty() || wrap_held)
         && t.ruby.is_empty()
         && !t.stacks_warichu()
         && t.runs.iter().any(|r| r.text.chars().any(|c| !c.is_whitespace()))
@@ -324,6 +343,112 @@ fn plain(n: &Node) -> bool {
         && n.extras().mask.is_none()
 }
 
+/// The area type of `doc` whose wrap shapes the reader of the editing data works out again as they
+/// are ([`vectorcraft_doc::text::resolve_wrap`], which the reader runs on what it reads): the
+/// shapes are the ones the wrap objects above it give it now, and each of those objects is written
+/// as itself and read back with the same outline and options ([`wrap_source_held`]), in layers
+/// and groups written as they are ([`plain_containers`]). `styled`: the objects written with an
+/// art style. Empty when the shapes of the document's area type would hold more anchors than the
+/// reader copies into them ([`crate::import::MAX_WRAP_WORK`]).
+pub(in crate::ai_editing) fn wraps_held(doc: &Document, styled: &HashMap<NodeId, Arc<Node>>) -> HashSet<NodeId> {
+    let mut held = HashSet::new();
+    if vectorcraft_doc::text::wrap_work(doc) > crate::import::MAX_WRAP_WORK {
+        return held;
+    }
+    let mut plain_in = HashSet::new();
+    for layer in &doc.layers {
+        plain_containers(layer, true, styled, &mut plain_in);
+    }
+    let mut checked: HashMap<NodeId, bool> = HashMap::new();
+    vectorcraft_doc::text::wrap_sources(doc, |n, sources, shapes| {
+        let NodeKind::Text(t) = &n.kind else { return };
+        if t.wrap.is_empty() || shapes != t.wrap || !plain_in.contains(&n.id) {
+            return;
+        }
+        let ok = sources.iter().all(|s| *checked.entry(s.id).or_insert_with(|| plain_in.contains(&s.id) && wrap_source_held(s, styled)));
+        if ok {
+            held.insert(n.id);
+        }
+    });
+    held
+}
+
+/// Adds to `out` the objects with text wrap options and the text objects in `n` (a top-level layer
+/// when `top`) that sit only in layers and groups written as they are: layers and sublayers that
+/// don't clip and have no effects, and groups that don't clip, have no fills, strokes, effects,
+/// art style, opacity mask or graph and aren't written with an art style (`styled`).
+fn plain_containers(n: &Node, top: bool, styled: &HashMap<NodeId, Arc<Node>>, out: &mut HashSet<NodeId>) {
+    let plain = match &n.kind {
+        NodeKind::Layer { clip, .. } => !clip && n.appearance.effects.is_empty(),
+        NodeKind::Group { clip, .. } => !top && !clip && n.appearance.items.is_empty() && own_plain(n, styled),
+        _ => false,
+    };
+    if !plain {
+        return;
+    }
+    for c in n.children().map(Vec::as_slice).unwrap_or_default() {
+        if c.extras().wrap.is_some() || matches!(c.kind, NodeKind::Text(_)) {
+            out.insert(c.id);
+        }
+        plain_containers(c, false, styled, out);
+    }
+}
+
+/// Has object `n` no effects, art style, opacity mask or graph, and isn't it a ruler guide or
+/// written with an art style (`styled`)?
+fn own_plain(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+    !styled.contains_key(&n.id)
+        && n.appearance.effects.is_empty()
+        && n.appearance.items.iter().all(|i| i.effects().is_empty())
+        && n.extras().graphic_style.is_none()
+        && n.extras().mask.is_none()
+        && n.extras().graph.is_none()
+        && !n.is_ruler_guide()
+}
+
+/// Is wrap object `n` written as itself and read back with the same outline and text wrap options:
+/// an offset the writer and the reader keep as it is (-1000 to 1000 pt) and a plain object
+/// ([`plain_wrap_art`])?
+fn wrap_source_held(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+    n.extras().wrap.is_some_and(|w| w.offset.is_finite() && w.offset.abs() <= 1000.0) && plain_wrap_art(n, styled)
+}
+
+/// Is `n` written as one object of its own kind that the reader reads back with the same outline
+/// ([`vectorcraft_doc::text::resolve_wrap`]): a path of one subpath, a compound path of visible
+/// paths with two subpaths or more in all, each painted with no paint, a solid fill, a plain line of a solid color or both, or a
+/// group that doesn't clip of such paths, compound paths and groups (hidden ones too) without text
+/// wrap options of their own; each without effects, art style, opacity mask or graph
+/// ([`own_plain`]). Each subpath has two anchors or more.
+fn plain_wrap_art(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+    use vectorcraft_doc::AppearanceItem;
+    let solid = |p: &Paint| matches!(p, Paint::Solid { .. });
+    let painted = || match super::visible_items(n).as_slice() {
+        [] => true,
+        [AppearanceItem::Fill(f)] => solid(&f.paint),
+        [AppearanceItem::Stroke(s)] => solid(&s.paint) && vectorcraft_effects::stroke::is_plain(s),
+        [AppearanceItem::Fill(f), AppearanceItem::Stroke(s)] => solid(&f.paint) && solid(&s.paint) && vectorcraft_effects::stroke::is_plain(s),
+        _ => false,
+    };
+    let whole = |p: &PathData| p.subpaths.iter().all(|sp| sp.anchors.len() >= 2);
+    own_plain(n, styled)
+        && match &n.kind {
+            NodeKind::Path { path, clipping: false, guide: false, .. } => path.subpaths.len() == 1 && whole(path) && painted(),
+            // One subpath in all would be written, and read back, as a path.
+            NodeKind::Compound { children, .. } => {
+                let subpaths: usize = children.iter().filter_map(|c| c.path_data()).map(|p| p.subpaths.len()).sum();
+                let members = children.iter().all(|c| {
+                    c.visible
+                        && matches!(&c.kind, NodeKind::Path { path, clipping: false, guide: false, .. } if !path.subpaths.is_empty() && whole(path))
+                });
+                painted() && subpaths > 1 && members
+            }
+            NodeKind::Group { children, clip: false } => {
+                n.appearance.items.is_empty() && children.iter().all(|c| c.extras().wrap.is_none() && plain_wrap_art(c, styled))
+            }
+            _ => false,
+        }
+}
+
 /// Is the end bracket of type on an open path so near the path's end that the reader reads it as
 /// no bracket (`Story::node`: within 0.02 of a segment)?
 fn end_read_as_none(t: &TextObject) -> bool {
@@ -337,15 +462,18 @@ fn held_aki(v: f64) -> f64 {
     if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) }
 }
 
-/// Has type `t` attributes the text document leaves out ([`TYPE_ATTRIBUTES`])?
-pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
+/// Has type `t` attributes the text document leaves out ([`TYPE_ATTRIBUTES`])? `fonts` holds the
+/// fonts already resolved.
+fn loses(t: &TextObject, fonts: &mut ResolvedFonts, links: &HashMap<LinkKey, Option<String>>) -> bool {
     // Small capitals are read back at Document Setup's default size.
     let default_small_caps = vectorcraft_doc::DocSetup::default().small_caps_size;
+    // Is paint `p` held with its swatch link, by an art style ([`TextDoc::link`])?
+    let linked = |p: &Paint| link_key(p).is_some_and(|k| matches!(links.get(&k), Some(Some(_))));
     // A run's style as the text document holds it: every other attribute at its default. A color
-    // is held without its swatch link.
+    // is held without its swatch link, unless an art style holds the link.
     let held_char = |s: &CharStyle| {
         let unlinked = |p: &Paint| match p {
-            Paint::Solid { color, .. } => Paint::solid(*color),
+            Paint::Solid { color, .. } if !linked(p) => Paint::solid(*color),
             other => other.clone(),
         };
         let stroked = !s.stroke.is_none();
@@ -376,7 +504,7 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             ..CharStyle::default()
         }
     };
-    let run_lost = |s: &CharStyle| {
+    let mut run_lost = |s: &CharStyle| {
         let stroked = !s.stroke.is_none();
         // Without a stroke, its weight, cap, join and miter limit draw nothing: nothing is lost.
         let unstroked = CharStyle::default();
@@ -391,9 +519,9 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
                 ..s.clone()
             }
         };
-        // A Lab color is written as RGB.
-        let lab = |p: &Paint| matches!(p, Paint::Solid { color: Color::Lab { .. }, .. });
-        s != held_char(&s) || lab(&s.fill) || lab(&s.stroke) || !font_kept(&s)
+        // A Lab color is written as RGB, unless an art style holds it with its link.
+        let lab = |p: &Paint| matches!(p, Paint::Solid { color: Color::Lab { .. }, .. }) && !linked(p);
+        s != held_char(&s) || lab(&s.fill) || lab(&s.stroke) || !fonts.kept(&s)
     };
     // A paragraph's style as the text document holds it, and its text: aligned to the start of
     // its direction (Auto) without a direction of its own, it comes back aligned left, which
@@ -561,6 +689,84 @@ fn font_kept(st: &CharStyle) -> bool {
         && face(&family, &style, read.as_deref()) == face(&st.font_family, &st.font_style, st.font_version.as_deref())
 }
 
+/// The font fields of a style, as [`ResolvedFonts`] keeps what they resolve to: the family, style
+/// and version, and each Variable Font setting as the bits of its value, so two settings that
+/// differ are two keys even where they are written as one number.
+#[derive(PartialEq, Eq, Hash)]
+struct FontKey {
+    family: String,
+    style: String,
+    version: Option<String>,
+    axes: Vec<(String, u64)>,
+}
+
+impl FontKey {
+    fn of(st: &CharStyle) -> Self {
+        FontKey {
+            family: st.font_family.clone(),
+            style: st.font_style.clone(),
+            version: st.font_version.clone(),
+            axes: st.font_axes.iter().map(|(tag, v)| (tag.clone(), v.to_bits())).collect(),
+        }
+    }
+}
+
+/// What one style's font fields resolved to, each with the font database's generation
+/// ([`vectorcraft_text::FontDb::generation`]) when it was resolved.
+#[derive(Default)]
+struct Resolved {
+    /// Its font record ([`font_name`]).
+    record: Option<(u64, FontRecord)>,
+    /// Whether its font comes back as itself ([`font_kept`]).
+    kept: Option<(u64, bool)>,
+}
+
+/// The fonts of the styles written so far, each resolved once for the whole save. A value is used
+/// again only while the font database's generation is the one it was resolved in: fonts added or
+/// loaded since then resolve it again.
+#[derive(Default)]
+struct ResolvedFonts(HashMap<FontKey, Resolved>);
+
+#[cfg(test)]
+thread_local! {
+    /// While set on this thread, [`ResolvedFonts`] keeps nothing: every run's font is resolved again.
+    pub(in crate::ai_editing) static RESOLVE_EACH_RUN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// How many times [`ResolvedFonts`] has resolved a font record or checked a font on this thread.
+    pub(in crate::ai_editing) static FONT_RESOLVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+impl ResolvedFonts {
+    /// The value `slot` holds for the font of style `st` when it was resolved in the font
+    /// database's current generation, else `resolve(st)`, kept for later runs.
+    fn get<T>(&mut self, st: &CharStyle, slot: fn(&mut Resolved) -> &mut Option<(u64, T)>, resolve: fn(&CharStyle) -> T) -> &T {
+        let now = vectorcraft_text::FontDb::global().generation();
+        let held = slot(self.0.entry(FontKey::of(st)).or_default());
+        #[cfg(test)]
+        if RESOLVE_EACH_RUN.get() {
+            *held = None;
+        }
+        if held.as_ref().is_some_and(|(generation, _)| *generation != now) {
+            *held = None;
+        }
+        let (_, value) = held.get_or_insert_with(|| {
+            #[cfg(test)]
+            FONT_RESOLVES.set(FONT_RESOLVES.get() + 1);
+            (now, resolve(st))
+        });
+        value
+    }
+
+    /// The font record of style `st` ([`font_name`]).
+    fn record(&mut self, st: &CharStyle) -> &FontRecord {
+        self.get(st, |r| &mut r.record, font_name)
+    }
+
+    /// Whether the font of style `st` comes back as itself ([`font_kept`]).
+    fn kept(&mut self, st: &CharStyle) -> bool {
+        *self.get(st, |r| &mut r.kept, font_kept)
+    }
+}
+
 /// Whether `c` is a strong right-to-left letter (`Some(true)`: Hebrew, Arabic, Syriac, Thaana, NKo
 /// and their presentation forms) or a strong left-to-right one (`Some(false)`: any other letter).
 fn strong_direction(c: char) -> Option<bool> {
@@ -653,6 +859,12 @@ pub(in crate::ai_editing) struct TextDoc {
     /// reader counts in them.
     doc_bytes: usize,
     doc_values: usize,
+    /// The fonts of the styles written so far, as they resolve.
+    resolved: ResolvedFonts,
+    /// The swatch links of type's colors looked at so far, by swatch and tint: the art style that
+    /// holds each (a style of one paint, the color with its swatch, which key 5 of a run's paint
+    /// names), `None` when the editing data can't hold it ([`super::Writer::link_type_colors`]).
+    links: HashMap<LinkKey, Option<String>>,
 }
 
 impl TextDoc {
@@ -660,9 +872,60 @@ impl TextDoc {
         self.stories.is_empty()
     }
 
+    /// Has type `t` attributes the text document leaves out ([`loses`])?
+    pub(in crate::ai_editing) fn loses(&mut self, t: &TextObject) -> bool {
+        loses(t, &mut self.resolved, &self.links)
+    }
+
+    /// The colors of type whose swatch links are still to be looked at: the fills and strokes of
+    /// `texts`' runs that are linked to a swatch and not in [`Self::links`] yet, each once.
+    pub(in crate::ai_editing) fn unlooked_links<'t>(&self, texts: &[&'t TextObject]) -> Vec<&'t Paint> {
+        let mut seen = HashSet::new();
+        texts
+            .iter()
+            .flat_map(|t| t.runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke]))
+            .filter(|p| link_key(p).is_some_and(|k| !self.links.contains_key(&k) && seen.insert(k)))
+            .collect()
+    }
+
+    /// Record the art style `style` that holds the swatch link of colors linked as `p` is, or
+    /// `None` when none does ([`Self::links`]).
+    pub(in crate::ai_editing) fn set_link(&mut self, p: &Paint, style: Option<String>) {
+        if let Some(k) = link_key(p) {
+            self.links.insert(k, style);
+        }
+    }
+
+    /// The art styles the stories written name for their runs' colors (key 5 of a paint).
+    pub(in crate::ai_editing) fn named_styles(&self) -> HashSet<&str> {
+        fn walk<'v>(v: &'v V, out: &mut HashSet<&'v str>) {
+            match v {
+                V::Dict(d) => {
+                    if d.iter().any(|(k, v)| *k == 99 && matches!(v, V::Name("CAITextPaint"))) {
+                        out.extend(d.iter().filter_map(|(k, v)| match (k, v) {
+                            (5, V::Str(s)) => Some(s.as_str()),
+                            _ => None,
+                        }));
+                    }
+                    d.iter().for_each(|(_, v)| walk(v, out));
+                }
+                V::List(l) => l.iter().for_each(|v| walk(v, out)),
+                _ => {}
+            }
+        }
+        let mut out = HashSet::new();
+        self.stories.iter().for_each(|v| walk(v, &mut out));
+        out
+    }
+
+    /// The art style that holds the swatch link of `p`, if one does.
+    fn link(&self, p: &Paint) -> Option<&str> {
+        self.links.get(&link_key(p)?)?.as_deref()
+    }
+
     /// The index of the font of `st` in the font set.
     fn font(&mut self, st: &CharStyle) -> i64 {
-        let font = font_name(st);
+        let font = self.resolved.record(st);
         // Two installed versions of one font are two fonts, so each keeps its own `/5`.
         let same = |f: &FontRecord| {
             f.name == font.name && f.version == font.version && f.design.iter().map(|v| fixed(*v)).eq(font.design.iter().map(|v| fixed(*v)))
@@ -670,7 +933,7 @@ impl TextDoc {
         let i = match self.fonts.iter().position(same) {
             Some(i) => i,
             None => {
-                self.fonts.push(font);
+                self.fonts.push(font.clone());
                 self.fonts.len() - 1
             }
         };
@@ -715,11 +978,13 @@ impl TextDoc {
         let fill = solid(&st.fill).flatten();
         // A stroke of no width keeps its paint.
         let stroke = solid(&st.stroke).flatten();
+        // A color linked to a swatch names the art style that holds the link, the fill's for a
+        // stroke too (the reader's `Texts::with_paints`).
         if let Some(c) = &fill {
-            d.push((53, paint(c)));
+            d.push((53, paint(c, self.link(&st.fill))));
         }
         if let Some(c) = &stroke {
-            d.push((54, paint(c)));
+            d.push((54, paint(c, self.link(&st.stroke))));
         }
         d.extend([(56, V::Bool(fill.is_some())), (57, V::Bool(stroke.is_some()))]);
         if stroke.is_some() {
@@ -896,6 +1161,7 @@ impl TextDoc {
                     FirstBaseline::CapHeight => Some(2),
                     FirstBaseline::Leading => Some(3),
                     FirstBaseline::XHeight => Some(4),
+                    FirstBaseline::EmBoxHeight => Some(5),
                 };
                 if let Some(k) = kind {
                     data.push((10, dict(vec![(0, V::Int(k)), (1, real(o.first_baseline_min / scale))])));
@@ -1000,7 +1266,8 @@ impl TextDoc {
     /// `thread` (its frames in order, all area type the document holds, the first holding the
     /// story) the first time one of its frames is written. `None` when the thread can't be written
     /// as one story: `writable` says which frames are written where type can be text (every frame
-    /// of the thread must be).
+    /// of the thread must be), and `wraps_held` which frames with wrap shapes the reader wraps the
+    /// same ([`wraps_held`]; every frame with wrap shapes must be one).
     pub(in crate::ai_editing) fn thread(
         &mut self,
         doc: &Document,
@@ -1008,6 +1275,7 @@ impl TextDoc {
         id: NodeId,
         canvas: Affine,
         writable: &dyn Fn(NodeId) -> bool,
+        wraps_held: &HashSet<NodeId>,
     ) -> Option<(usize, usize)> {
         let first = *thread.first()?;
         if self.planned.insert(first) {
@@ -1026,7 +1294,7 @@ impl TextDoc {
                         && t.vertical == vertical
                         && writable(n.id)
                         // The text document doesn't hold wrap shapes (see `holds`).
-                        && t.wrap.is_empty()
+                        && (t.wrap.is_empty() || wraps_held.contains(&n.id))
                         && plain(n)
                         && t.ruby.is_empty()
                         && !t.stacks_warichu()
@@ -1046,7 +1314,7 @@ impl TextDoc {
                 if !whole.runs.iter().any(|r| r.text.chars().any(|c| !c.is_whitespace())) || !self.room(&whole, texts.len()) {
                     return None;
                 }
-                let lost = split_differs || texts.iter().any(|t| loses(t));
+                let lost = split_differs || texts.iter().any(|t| loses(t, &mut self.resolved, &self.links));
                 let frames: Vec<usize> = texts.iter().map(|t| self.frame(t, canvas, scale)).collect();
                 let story = self.story(&whole, &frames, scale);
                 if !self.fits(mark) {
@@ -1160,7 +1428,7 @@ impl TextDoc {
             (12, V::Int(0)),
             // Every run writes its own key 35, so this only sets where new type starts: Standard (1).
             (35, V::Int(1)),
-            (53, paint(&Color::gray(1.0))),
+            (53, paint(&Color::gray(1.0), None)),
             (56, V::Bool(true)),
             (57, V::Bool(false)),
             (63, real(1.0)),
@@ -1240,4 +1508,59 @@ pub(in crate::ai_editing) fn stub(s: &mut String, story: usize, frame: usize, t:
         s.push_str("X+\n; /ConfiningPath ,\n");
     }
     s.push_str("2 /TextAntialiasing ,\n;\n");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A style's font resolved through [`ResolvedFonts`], the first time and again, is the font
+    /// record and the check [`font_name`] and [`font_kept`] give for it: static and variable fonts,
+    /// a version of their own, Variable Font settings within and outside the axis's range, not a
+    /// number, +0 and -0, an axis the font doesn't have, and a family that isn't installed. A font
+    /// resolved before the font database last changed is resolved again.
+    #[test]
+    fn resolved_fonts_are_the_fonts_resolved_for_each_run() {
+        use vectorcraft_text::test_fonts::{VARIABLE_FAMILY, variable_font};
+        vectorcraft_text::FontDb::global().add_font(variable_font().unwrap());
+        let font = |family: &str, style: &str, version: Option<&str>, axes: &[(&str, f64)]| CharStyle {
+            font_family: family.into(),
+            font_style: style.into(),
+            font_version: version.map(str::to_owned),
+            font_axes: axes.iter().map(|(t, v)| (t.to_string(), *v)).collect(),
+            ..CharStyle::default()
+        };
+        let styles = [
+            CharStyle::default(),
+            font("Source Sans 3", "Bold", None, &[]),
+            font("Inter", "Medium", None, &[]),
+            font(VARIABLE_FAMILY, "Regular", None, &[]),
+            font(VARIABLE_FAMILY, "Bold", Some("Version 1.000"), &[]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", 650.0)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", 900.0)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", f64::NAN)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", 0.0)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wght", -0.0)]),
+            font(VARIABLE_FAMILY, "Bold", None, &[("wdth", 80.0), ("wght", 500.0)]),
+            font("No Such Family", "Bold", None, &[]),
+            font("No Such Family", "", Some("2.0"), &[]),
+        ];
+        let mut fonts = ResolvedFonts::default();
+        for round in ["first", "again"] {
+            for st in &styles {
+                assert_eq!(fonts.record(st), &font_name(st), "{round}: {st:?}");
+                assert_eq!(fonts.kept(st), font_kept(st), "{round}: {st:?}");
+            }
+        }
+        assert_eq!(fonts.0.len(), styles.len(), "each style's font fields are a key of their own");
+        // What was resolved before the font database last changed is resolved again.
+        let stale = vectorcraft_text::FontDb::global().generation().wrapping_sub(1);
+        let wrong = FontRecord { name: "Wrong".into(), truetype: false, design: vec![], version: String::new() };
+        for st in &styles {
+            let held = fonts.0.entry(FontKey::of(st)).or_default();
+            (held.record, held.kept) = (Some((stale, wrong.clone())), Some((stale, !font_kept(st))));
+            assert_eq!(fonts.record(st), &font_name(st), "{st:?}");
+            assert_eq!(fonts.kept(st), font_kept(st), "{st:?}");
+        }
+    }
 }

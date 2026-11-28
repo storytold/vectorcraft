@@ -83,8 +83,9 @@ gradient, texture, sensor noise):
 Photo trace was 86,000 anchors under the old limit; a noisier scan of the same size would have been
 refused. At 8,000,000 anchors a trace keeps about 0.7 GB, with a peak of about 0.9 GB while tracing.
 The preset rows were measured with the earlier preset values: High Fidelity Photo at Paths 90, Corners 25
-and Noise 4, Low Fidelity Photo at Paths 60, Noise 12 and 16 Colors at Paths 70, Corners 55 and Noise 10
-(see [Preset Paths, Corners and Noise](#preset-paths-corners-and-noise)).
+and Noise 4 with a Limited palette of 64 colors and Overlapping, Low Fidelity Photo at Paths 60, Noise 12
+and 16 Colors at Paths 70, Corners 55 and Noise 10 (see [Preset Paths, Corners and
+Noise](#preset-paths-corners-and-noise) and [High Fidelity Photo in Full Tone](#high-fidelity-photo-in-full-tone)).
 ## Collapsed loops keep few segments
 A small closed loop (or a piece that returns to its own junction) whose fit collapsed to a single
 cubic cannot stay as one, so it kept every positioned point as a straight segment. A looser Paths
@@ -237,10 +238,10 @@ Every built-in preset other than Auto Color and Flat Logo traces at Paths 50. Co
 | High Fidelity Photo | 50 | 50 | 5 | 90, 25, 4 |
 | Low Fidelity Photo | 50 | 50 | 10 | 60, 50, 12 |
 | 3 Colors | 50 | 50 | 15 | 60, 60, 20 |
-| 6 Colors | 50 | 50 | 15 | 65, 60, 16 |
-| 16 Colors | 50 | 50 | 15 | 70, 55, 10 |
+| 6 Colors | 50 | 50 | 8 | 65, 60, 16 |
+| 16 Colors | 50 | 50 | 8 | 70, 55, 10 |
 | Shades of Gray | 50 | 50 | 15 | 60, 50, 10 |
-| Black and White Logo | 50 | 75 | 25 | 95, 80, 8 |
+| Black and White Logo | 50 | 75 | 5 | 95, 80, 8 |
 | Sketched Art | 50 | 50 | 20 | 50, 50, 100 |
 | Silhouettes | 50 | 50 | 90 | 40, 60, 30 |
 | Line Art | 50 | 75 | 20 | 80, 70, 10 |
@@ -248,7 +249,10 @@ Every built-in preset other than Auto Color and Flat Logo traces at Paths 50. Co
 | Outline | 50 | 75 | 20 | 80, 70, 10 |
 
 The palettes, color counts, thresholds and other options of the presets did not change. The enhanced
-versions of these presets use the same Paths, Corners and Noise.
+versions of these presets use the same Paths, Corners and Noise. 6 Colors and 16 Colors were at Noise 15
+and Black and White Logo at 25 until [Noise joins the nearest color](#noise-joins-the-nearest-color);
+the measurements below were made at those values. High Fidelity Photo's palette and Method changed
+later (see [High Fidelity Photo in Full Tone](#high-fidelity-photo-in-full-tone)).
 
 Measured with the harness below (section 1, each preset on the inputs it is meant for), before and after:
 anchors fall in 10 of the 12 changed presets, for example 5,494 to 3,136 (High Fidelity Photo), 33 to 27
@@ -268,6 +272,47 @@ where it left 10 and 3 Colors 14 where it left 12. On the same images Sketched A
 the other sections of this file, and in the Image Trace entries of
 [target-app-parity.md](target-app-parity.md), were measured at the earlier values.
 Test: `presets_have_their_paths_corners_and_noise` in `crates/trace/src/tests.rs`.
+
+## High Fidelity Photo in Full Tone
+High Fidelity Photo traces with Palette › Full Tone at Color detail 85 and Method › Abutting. It traced
+with a Limited palette of 64 colors, Overlapping, before. Paths, Corners and Noise stay 50, 50 and 5.
+These are VectorCraft's own values. Low Fidelity Photo keeps its Limited palette of 20 colors.
+
+Palette › Full Tone splits its colors until none spans more than its width limit. Then, while it has
+fewer colors than Color detail's value (85 at 85), it splits the narrower ones too, where the image has
+that many colors. The colors that look alike merge after that, and a merged color can merge again, so a
+trace can end with far fewer colors than that count: a gray-to-green ramp 256 px wide with up to 8 levels
+of grain a channel ends with 6 colors at Color detail 85, where the RGB test leaves 4. Full Tone's colors
+merge when they are thoroughly mixed and less than 5 apart in Oklab × 100, or mixed in patches
+(compression blocks) and less than 1.5 apart. The other palettes, Automatic included, keep the RGB test
+(under 30 levels and thoroughly mixed, or under 12 and mixed in patches), and Automatic's continuous-tone
+colors do not take the least count. These rules apply to every trace with Palette › Full Tone, so an
+existing Full Tone trace or saved preset traces differently when it is traced again.
+
+On 19 photos, cartoons and synthetic shapes of 400 to 4,000 px, the mean pixel difference summed over the
+inputs fell from 80.5 to 65.6 levels. It fell by more than 1% on 14 inputs (2.88 to 2.19 and 2.59 to 2.48
+on two photos, the second a JPEG at quality 40; 1.88 to 1.45 on a 4000 × 3000 photo; 12.40 to 7.44 on an
+upscaled cartoon) and changed by less than 1% on the other 5. Anchors rose 1.66 times (1.98 million to
+3.29 million) and the SVG size 1.31 times. The trace time rose 1.7 times (18.9 to 31.5 s for all 19, with
+both builds tracing 3 images at a time in the same run). Flat synthetic art costs the most: 12 to 400
+anchors on a 4000 × 3000 image of two flat colors, and about 3 times the anchors on two images of
+synthetic shapes (400 × 300 and 1600 × 1200), with the same pixel difference. A flat gray 192 × 128 with
+up to 3 levels of grain a channel traces as 25 colors and 244 anchors, where the Limited palette of 64
+traced 1 color and 4 anchors; with up to 5 or 8 levels both trace it as 25 to 37 colors, on each of the
+grays tested (28, 60, 128 and 200).
+
+In the same run, peak memory fell on 16 of the 19 inputs, for example 906 to 625 MiB on a 1536 × 2048
+cartoon, and rose on 3 small ones (by 5 to 11 MiB). Abutting accounts for the fall: the earlier preset
+with Method › Abutting peaked at 523 MiB on the same cartoon, against 924 MiB with Overlapping, in another
+run. Low Fidelity Photo, 16 Colors, 6 Colors, Black and White Logo and Auto Color give byte-identical
+SVGs. On three flat colors stored in 8 × 8 blocks, each block off by up to 8 levels a channel, High
+Fidelity Photo traces 3 colors as 3 paths; without the patch rule it traced 7 colors as 74 paths.
+
+Tests: `high_fidelity_photo_traces_in_full_tone`, `full_tone_keeps_more_of_a_noisy_ramps_tones`,
+`full_tone_traces_a_noisy_dark_ground_like_a_light_one` and
+`full_tone_merges_a_flat_colors_compression_blocks` in `crates/trace/src/tests.rs`,
+`full_tone_merges_only_mixed_colors_that_look_alike` in `crates/trace/src/quantize.rs`, and
+`full_tone_makes_one_color_per_step_of_color_detail` in `crates/trace/src/quantize/palette.rs`.
 
 ## A simpler contour walk
 `contour::trace_mask` follows each region's outline along the pixel cracks with the inside on the
@@ -308,6 +353,47 @@ photo quality must also be checked. Local photo/scan validation uses fixed hashe
 identical settings on unchanged current source and the candidate, including separate portrait
 crops and white-composited PNG comparisons. These local fixtures are not repository assets.
 The parity score is unchanged.
+
+## Noise joins the nearest color
+
+A region below Noise used to join the color it shares the longest border with. Along a thin dark
+line on a light ground, a dark speck of the line touches the ground on more sides than the line, so
+it joined the ground and the line broke into dashes. Now, when the color of the longest border is
+10 or more apart from the region's own color (Oklab × 100), the region joins the neighboring color
+nearest the average of its pixels, among the colors that share at least a tenth of the longest
+border. The average is taken in the image as prepared for tracing (deblocked, and smoothed for a
+photo) and leaves out the semi-transparent pixels along a cut-out image's edge that are the color
+beside them blended with the transparent background. A single pixel whose longest border is tied
+between colors keeps the previous rule. The rule changes only which
+color a region joins, and higher Noise still continues the same merge sequence. It applies in Color
+and Grayscale: in Black and White a region has only one neighboring color. The values are
+VectorCraft's own. 6 Colors and 16 Colors move from Noise 15 to 8, and Black and White Logo from 25 to 5.
+The new Noise values were chosen with the rule in place, and the measurements below include both
+changes.
+
+Measured on 17 local images (synthetic shapes and photos at several sizes, a geometric drawing and
+eight illustrations; not repository assets), against `main` at `ea3f81d9c3`, with the mean absolute
+difference per channel (0 to 255) against the image on white:
+
+| preset | three illustrations with fine dark lines | four other illustrations | synthetic shapes and photos |
+|:--|:--|:--|:--|
+| 16 Colors | 8.15 / 10.80 / 8.69 → 5.82 / 6.25 / 6.01; anchors +72% to +99% | −1.8% to −11.9%; anchors +20% to +39% | within 0.08 of a level; anchors 0% to +37% |
+| 6 Colors | 7.24 / 9.14 / 9.21 → 5.87 / 6.66 / 7.87; anchors +55% to +73% | −0.6% to −3.5%; anchors +13% to +20% | within 0.03; anchors 0% to +22% |
+| High Fidelity Photo | 8.42 / 10.11 / 7.46 → 6.85 / 7.54 / 6.00; anchors +31% to +51% | −1.4% to −5.8%; anchors −9% to +4% | within 0.08; anchors −6% to +5% |
+
+With Black and White Logo, where only the Noise value changes, the pixels that differ from the image
+thresholded at 128 fall from 2.00 / 2.42 / 1.96% to 1.49 / 1.58 / 1.23% on the three illustrations,
+with 37% to 64% more anchors, and from 1.19 to 2.37% to 1.14 to 1.94% on the other four, with 5% to
+41% more anchors; the synthetic inputs change by 0.01% or less. On a simple flat illustration the
+difference changes by 1.0% or less in every preset, with up to 21% more anchors, and the geometric
+drawing keeps its anchor count and difference in every preset. Tests:
+`a_dark_speck_beside_a_dark_line_joins_the_line`, `a_speck_close_to_its_longest_border_color_joins_it`,
+`a_color_with_a_short_border_is_not_chosen`, `a_lone_pixel_tied_between_colors_merges_by_border`,
+`a_speck_of_settled_cut_edge_pixels_merges_by_border`, `noise_still_removes_every_region_below_it` and
+`a_source_that_does_not_cover_the_labels_is_not_read` in `crates/trace/src/quantize/denoise.rs`.
+`the_borders_of_a_gradients_bands_follow_its_contours` now traces at Noise 15: at 16 Colors' new
+Noise 8 the borders of its noisy gradient stray 0.92 px from the contours, above the test's 0.9 px
+limit.
 
 ## Pieces returning to a junction
 An outline piece can return to its starting junction while being fitted as an open chain. At loose

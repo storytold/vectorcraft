@@ -10,8 +10,8 @@ use super::object::choice;
 use super::threads::ThreadIndex;
 use super::typecmd::{area_text, block_gaps, needed_room, refresh_bounds};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, number_or,
-    switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, index_opt,
+    named_ids, number_or, object_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Dynamic Text",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool, wordGap?: % of a word space 0..1000 (100), lineGap?: pt -1296..1296 (0)} turn Dynamic Text on or off for the selected type on a path and area type, or turn it on for point type (on omitted: the opposite of the first object's setting, point type counting as off, or on when a gap is given). On type on a path, the layout scales the text by one factor (every character's size, leading and baseline shift; Type on a Path Options › Spacing stays) so that it fills the span between its start and end brackets, larger or smaller, and fits it again after every edit to the text, the path or the brackets; the first character's size moves in steps of 0.1 pt within 0.1 to 1,296 pt, and at 0.1 pt text that still runs past the end bracket overflows. The stored sizes keep their proportions. On area type it is Block: each line as typed (each paragraph, and each forced line break in one; lines are not broken again) is set to the frame's width, less the inset, the gutters and the paragraph's indents, by changing its font size only: its first character's size, in steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it, with baseline shifts following. Every character's leading is its size plus lineGap, and the layout sets every paragraph with wordGap as its Desired word spacing, its Minimum or Maximum moving out to wordGap when wordGap lies outside it (the paragraphs keep their own Justification… values, which apply again when Block is off; the gaps are area type's, and are kept while Block is off; a gap with no area type in the selection, and no point type it turns into area type, is an error). The sizes are written into the characters and fitted again after every edit to the text or the frame, in the same undo step; at a size limit a line can be narrower than the frame or wrap. An empty line keeps its size. Block replaces Auto Size and Shrink Text to Fit (Area Type Options › Block is the same setting). Off, the text keeps the sizes it was drawn at. Turning it on turns point type into area type with Block on, with the default Area Type Options but the gaps (options kept from an earlier frame do not carry over): the frame is as wide (along the lines) as the widest line as typed with its paragraph's indents, so that line keeps its size and sits where it was (by its own alignment), the other lines are set to that width (when negative indents take more than that line's width, the frame is as wide as the line, and Block makes it larger), and the frame then grows in depth (down, or to the left for vertical type) to hold every fitted line, around any Text Wrap objects above it; the gaps apply to it as to area type. Point type with no line to fit (empty, or only spaces and breaks) is left as it is, and so is point type when it is turned off; a selection holding type in a thread is refused (threading type turns Dynamic Text off, keeping its drawn sizes). When nothing changes, no undo step is recorded → {on, ids, fitScale (the first object's factor; 1 when off and for area type), wordGap?, lineGap? (the first area type's; left out without area type)}",
+            "{ids?|id?, on?: bool, wordGap?: % of a word space 0..1000 (100), lineGap?: pt -1296..1296 (0)} turn Dynamic Text on or off for the selected type on a path and area type, or turn it on for point type (on omitted: the opposite of the first object's setting, point type counting as off, or on when a gap is given). On type on a path, the layout scales the text by one factor (every character's size, leading and baseline shift; Type on a Path Options › Spacing stays) so that it fills the span between its start and end brackets, larger or smaller, and fits it again after every edit to the text, the path or the brackets; the first character's size moves in steps of 0.1 pt within 0.1 to 1,296 pt, and at 0.1 pt text that still runs past the end bracket overflows. The stored sizes keep their proportions. On area type it is Block: each line as typed (each paragraph, and each forced line break in one; lines are not broken again) is set to the frame's width, less the inset, the gutters and the paragraph's indents, by changing its font size only: its first character's size, in steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it, with baseline shifts following. Every character's leading is its size plus lineGap (a leading change on the text, from text.setStyle, text.setRangeStyle, type.step, a character style or Text Tweaker, sets lineGap to the new leading less the size of the first character changed), and the layout sets every paragraph with wordGap as its Desired word spacing, its Minimum or Maximum moving out to wordGap when wordGap lies outside it (the paragraphs keep their own Justification… values, which apply again when Block is off; the gaps are area type's, and are kept while Block is off; a gap with no area type in the selection, and no point type it turns into area type, is an error). The sizes are written into the characters and fitted again after every edit to the text or the frame, in the same undo step; at a size limit a line can be narrower than the frame or wrap. An empty line keeps its size. Block replaces Auto Size and Shrink Text to Fit (Area Type Options › Block is the same setting). Off, the text keeps the sizes it was drawn at. Turning it on turns point type into area type with Block on, with the default Area Type Options but the gaps (options kept from an earlier frame do not carry over): the frame is as wide (along the lines) as the widest line as typed with its paragraph's indents, so that line keeps its size and sits where it was (by its own alignment), the other lines are set to that width (when negative indents take more than that line's width, the frame is as wide as the line, and Block makes it larger), and the frame then grows in depth (down, or to the left for vertical type) to hold every fitted line, around any Text Wrap objects above it; the gaps apply to it as to area type. Point type with no line to fit (empty, or only spaces and breaks) is left as it is, and so is point type when it is turned off; a selection holding type in a thread is refused (threading type turns Dynamic Text off, keeping its drawn sizes). When nothing changes, no undo step is recorded → {on, ids, fitScale (the first object's factor; 1 when off and for area type), wordGap?, lineGap? (the first area type's; left out without area type)}",
             has_dynamic_type,
             dynamic_text
         ),
@@ -111,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Character",
             ["Type"],
             None,
-            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string | code: Windows Alt+0 code (0–255 in Windows-1252, a Unicode code point above: 176 → °, 151 → —) | unicode: hex code point (\"00B0\" or \"U+00B0\"), ids?|id?: object ids (default: the selection)} append to the selected text objects",
+            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string | code: Windows Alt+0 code (0–255 in Windows-1252, a Unicode code point above: 176 → °, 151 → —) | unicode: hex code point (\"00B0\" or \"U+00B0\"), ids?|id?: object ids (default: the selection)} insert at the Type tool's caret, replacing its selection, while it edits text and no ids are given; otherwise append to the selected text objects. forcedLineBreak is U+2028, a new line in the same paragraph; paragraphReturn is a line feed, which starts a new paragraph",
             has_selection,
             insert_char
         ),
@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find and Replace…",
             ["Edit"],
             None,
-            "{find, replace?: \"\", matchCase?: false, wholeWord?: false, ids?} replace in every text object (or ids) → {count}. Matches never span style runs.",
+            "{find, replace?: \"\", matchCase?: false, wholeWord?: false, hiddenLayers?: false, lockedLayers?: false, ids?} replace every match in the type the search reaches (or in ids, whatever their layers), as one undo step → {count (every match), replaced (the matches that did not already read as `replace`)}. The search reaches visible, unlocked type on visible, unlocked layers, off locked artboards; hiddenLayers adds the type of hidden layers and sublayers and lockedLayers that of locked ones, while a hidden or locked object or group keeps its type out. Matches never span style runs. When nothing matches, or every match already reads as `replace`, nothing changes and no undo step is recorded.",
             has_doc,
             find_replace
         ),
@@ -129,16 +129,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find Next",
             ["Edit"],
             None,
-            "{find, matchCase?, wholeWord?} select the next text object (after the selected one, wrapping) containing `find` → {id|null}",
+            "{find, matchCase?: false, wholeWord?: false, backwards?: false, hiddenLayers?: false, lockedLayers?: false, from?: {id, start, end} (a match this command returned, or the range edit.replaceMatch returned)} find the next match of `find` in the type edit.findReplace reaches and select its type object → {id, start, end (the match's bytes in the object's plain text), index (its place among all the matches, from 1), count, selected} or {id: null, count: 0}. The search visits type objects from the top of the stacking order down and each object's matches in reading order; backwards visits the objects from the bottom up and each object's matches from the last. It goes on after `from` and, past the last match, starts again at the first. Without `from` it goes on after the first selected type object, and with no type selected, or with a null `from`, it starts at the first match. A match on a hidden or locked layer is returned with selected false and the selection stays as it is. Nothing is recorded for undo.",
             has_doc,
             find_next
+        ),
+        cmd!(
+            "edit.replaceMatch",
+            "Replace",
+            [],
+            None,
+            "{find, replace?: \"\", matchCase?: false, wholeWord?: false, id, start, end} replace one match of `find`, the bytes start..end of type object id as edit.findNext returns them, with `replace`, as one undo step → {id, start, end (the replacement's bytes; pass them to edit.findNext as `from` to go on), replaced}. Bytes that are no match of `find` are refused. When the match already reads as `replace`, nothing changes, no undo step is recorded and replaced is false.",
+            has_doc,
+            replace_one
         ),
         cmd!(
             "edit.pasteWithoutFormatting",
             "Paste without Formatting",
             ["Edit"],
             Some("Cmd+Alt+V"),
-            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs, which take a new graph's label character style and paragraph attributes (keeping their alignment); a pasted graph no longer keeps its labels' character and paragraph formats, so a later redraw sets them the same way → {ids, added, merged, renamed}",
+            "{center?, dx?, dy?, swatchConflict?, profileMismatch?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs, which take a new graph's label character style and paragraph attributes (keeping their alignment); a pasted graph no longer keeps its labels' character and paragraph formats, so a later redraw sets them the same way → {ids, added, merged, renamed}",
             has_clipboard,
             paste_plain
         ),
@@ -625,32 +634,38 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
             if !matches!(t.kind, TextKind::Point) {
                 continue;
             }
-            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-            // The frame is worked out in line space, where the lines are; vertical type turns it
-            // into text space with the lines.
-            let text_bounds = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
-            let mut b = lay.line_xf.inverse().transform_rect_bbox(text_bounds);
-            // Across, the frame spans the lines as they are aligned: from their starts to their ends
-            // without the tracking after their last characters (`LineInfo::trailing`), not to the
-            // ink, which tracking can pull past an advance. Area type aligns them alike.
-            let (x0, x1) = lay.lines.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), l| (a.min(l.x0), z.max(l.x1 - l.trailing)));
-            if x0.is_finite() && x1.is_finite() && x0 <= x1 {
-                (b.x0, b.x1) = (x0, x1);
-            }
-            // Line breaking counts that tracking: the slack holds the most of it.
-            let trailing = lay.lines.iter().map(|l| l.trailing).filter(|t| t.is_finite()).fold(0.0, f64::max);
-            let size = t.first_style().size;
-            // A little slack on the right so the text doesn't rewrap.
-            let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
-            let slack = size * 0.5 + trailing;
-            let (sl, sr) = slack_sides(t.para_at(0).justify, lay.lines.first().is_some_and(|l| l.rtl), slack);
-            let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
-            t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
-            refresh_bounds(t);
+            point_to_area(t);
         }
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// Point type `t` turned into area type in a frame around its lines, with a little slack where its
+/// alignment leaves room, so the text stays where it is and does not rewrap.
+pub(super) fn point_to_area(t: &mut TextObject) {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    // The frame is worked out in line space, where the lines are; vertical type turns it
+    // into text space with the lines.
+    let text_bounds = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+    let mut b = lay.line_xf.inverse().transform_rect_bbox(text_bounds);
+    // Across, the frame spans the lines as they are aligned: from their starts to their ends
+    // without the tracking after their last characters (`LineInfo::trailing`), not to the
+    // ink, which tracking can pull past an advance. Area type aligns them alike.
+    let (x0, x1) = lay.lines.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), l| (a.min(l.x0), z.max(l.x1 - l.trailing)));
+    if x0.is_finite() && x1.is_finite() && x0 <= x1 {
+        (b.x0, b.x1) = (x0, x1);
+    }
+    // Line breaking counts that tracking: the slack holds the most of it.
+    let trailing = lay.lines.iter().map(|l| l.trailing).filter(|t| t.is_finite()).fold(0.0, f64::max);
+    let size = t.first_style().size;
+    // A little slack on the right so the text doesn't rewrap.
+    let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
+    let slack = size * 0.5 + trailing;
+    let (sl, sr) = slack_sides(t.para_at(0).justify, lay.lines.first().is_some_and(|l| l.rtl), slack);
+    let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
+    t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
+    refresh_bounds(t);
 }
 
 /// How `slack` added to point type's lines in a frame is shared before and after them: where the
@@ -786,8 +801,9 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             let plain = t.plain_text();
             let baseline = lay.lines.first().map(|l| l.baseline).unwrap_or(fb.y0 + t.first_style().size * 0.8);
             // Soft wraps → explicit breaks (replace the space before the wrap when there is one).
-            let mut breaks: Vec<usize> =
-                lay.lines.iter().skip(1).map(|l| l.start).filter(|&b| b > 0 && plain.as_bytes().get(b - 1) != Some(&b'\n')).collect();
+            // A line after a paragraph return or a forced line break (U+2028) already starts there.
+            let hard = |b: usize| plain.get(..b).is_some_and(|s| s.ends_with(['\n', '\u{2028}']));
+            let mut breaks: Vec<usize> = lay.lines.iter().skip(1).map(|l| l.start).filter(|&b| b > 0 && !hard(b)).collect();
             breaks.sort_unstable();
             breaks.dedup();
             for b in breaks.into_iter().rev() {
@@ -1525,8 +1541,9 @@ pub(crate) fn special_char(name: &str) -> Option<&'static str> {
         "thirdSpace" => "\u{2004}",
         "quarterSpace" => "\u{2005}",
         "tab" => "\t",
-        // Our text model breaks lines at paragraph returns only.
-        "forcedLineBreak" | "paragraphReturn" => "\n",
+        // A line break inside the paragraph, as Shift+Enter types it.
+        "forcedLineBreak" => "\u{2028}",
+        "paragraphReturn" => "\n",
         _ => return None,
     })
 }
@@ -1576,6 +1593,11 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
         (None, None, None, Some(u)) => unicode_char(u).ok_or_else(|| bad(C, format!("`{u}` is no Unicode character")))?.to_string(),
         (None, None, None, None) => return Err(bad(C, "give `char`, `text`, `code` or `unicode`")),
     };
+    if named_ids(p)?.is_none()
+        && let Some(r) = insert_at_type_caret(s, &text)?
+    {
+        return Ok(r);
+    }
     let ids = texts(s, p, C)?;
     // When `text` is empty and every object ends with a run of text, the document and its undo
     // history stay as they are.
@@ -1606,20 +1628,53 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(ids_json(&ids))
 }
 
+/// `type.insert` while the Type tool edits text: `text` replaces the tool's selection (inserts at
+/// its caret) as one undo step, and the caret goes after it. `None` when no text is being edited.
+fn insert_at_type_caret(s: &mut Session, text: &str) -> Result<Option<Value>> {
+    let tool = s.tool_options();
+    let Some(id) = tool.get("editing").and_then(Value::as_u64).map(NodeId) else { return Ok(None) };
+    let d = &s.doc()?.doc;
+    let Some(NodeKind::Text(t)) = d.node(id).map(|n| &n.kind) else { return Ok(None) };
+    let len = vectorcraft_text::edit::runs_len(&t.runs);
+    let g = |k: &str| tool.get(k).and_then(Value::as_u64).map_or(len, |v| (v as usize).min(len));
+    let (x, y) = (g("start"), g("end"));
+    let (a, b) = (x.min(y), x.max(y));
+    // After Select All in threaded text the whole story is selected: the other frames' text goes
+    // in the same edit, as when typing replaces it.
+    let story: Vec<NodeId> = tool.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+    let clear: Vec<u64> = if a == 0 && b == len && story.contains(&id) {
+        let has_text = |f: &NodeId| matches!(d.node(*f).map(|n| &n.kind), Some(NodeKind::Text(o)) if !o.runs.iter().all(|r| r.text.is_empty()));
+        story.iter().filter(|f| **f != id && has_text(f)).map(|f| f.0).collect()
+    } else {
+        vec![]
+    };
+    if text.is_empty() && a == b && clear.is_empty() {
+        return Ok(Some(ids_json(&[id])));
+    }
+    // A typing session ends first: the insertion is a step of its own.
+    if tool.get("typing").and_then(Value::as_bool) == Some(true) {
+        s.set_tool_option("commitTyping", &Value::Bool(true));
+        s.commit_interaction()?;
+    }
+    // The frame's place in the story once the edit has cleared the frames in `clear`.
+    let start: usize =
+        super::panelcmds::story_frames(s, id).iter().take_while(|(f, _)| *f != id).filter(|(f, _)| !clear.contains(&f.0)).map(|(_, n)| n).sum();
+    let r = super::textedit::edit_range(s, &json!({"id": id.0, "start": a, "end": b, "insert": text, "clear": clear}))?;
+    let caret = r.get("caret").and_then(Value::as_u64).map_or(a + text.len(), |c| c as usize);
+    // Threaded text re-flows in the edit: the caret goes to the frame its place moved to.
+    super::panelcmds::select_story_range(s, id, start + caret, start + caret)?;
+    Ok(Some(ids_json(&[id])))
+}
+
 // ---------- Find and Replace ----------
 
 fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
-/// Byte ranges of `needle` in `hay`.
-pub(crate) fn find_all(hay: &str, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize)> {
-    find_all_between(hay, needle, match_case, whole_word, None, None)
-}
-
-/// [`find_all`] in run `i` of `runs`: a whole word looks past the run's ends at the characters
-/// next to it, so a change of style inside a word is not a word boundary (#5901). Matches stay
-/// inside the run.
+/// Byte ranges of `needle` in run `i` of `runs`: a whole word looks past the run's ends at the
+/// characters next to it, so a change of style inside a word is not a word boundary (#5901).
+/// Matches stay inside the run.
 fn find_in_run(runs: &[TextRun], i: usize, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize)> {
     let Some(run) = runs.get(i) else { return vec![] };
     let before = runs.get(..i).and_then(|r| r.iter().rev().find_map(|r| r.text.chars().next_back()));
@@ -1627,8 +1682,8 @@ fn find_in_run(runs: &[TextRun], i: usize, needle: &str, match_case: bool, whole
     find_all_between(&run.text, needle, match_case, whole_word, before, after)
 }
 
-/// [`find_all`], with `before` and `after` the characters on either side of `hay` (none at the
-/// text's ends), which a whole word must not touch either.
+/// Byte ranges of `needle` in `hay`, with `before` and `after` the characters on either side of
+/// `hay` (none at the text's ends), which a whole word must not touch either.
 fn find_all_between(hay: &str, needle: &str, match_case: bool, whole_word: bool, before: Option<char>, after: Option<char>) -> Vec<(usize, usize)> {
     let nc: Vec<char> = needle.chars().collect();
     if nc.is_empty() {
@@ -1660,102 +1715,234 @@ fn find_all_between(hay: &str, needle: &str, match_case: bool, whole_word: bool,
 /// The visible, unlocked type objects of visible, unlocked layers, off locked artboards, in paint
 /// order: the text Find and Replace and Check Spelling go through.
 pub(crate) fn all_texts(d: &Document) -> Vec<NodeId> {
-    fn visit(n: &Node, locks: &LockedArtboards<'_>, v: &mut Vec<NodeId>) {
-        if !n.visible || n.locked {
+    searched_texts(d, false, false)
+}
+
+/// [`all_texts`], with the type of hidden layers (`hidden_layers`) and of locked layers
+/// (`locked_layers`) as well, as Check Hidden Layers and Check Locked Layers of Find and Replace
+/// ask. The switches are about layers and sublayers: a hidden or locked object or group keeps its
+/// type out, and so does a locked artboard.
+fn searched_texts(d: &Document, hidden_layers: bool, locked_layers: bool) -> Vec<NodeId> {
+    fn visit(n: &Node, locks: &LockedArtboards<'_>, layers: (bool, bool), v: &mut Vec<NodeId>) {
+        let layer = matches!(n.kind, NodeKind::Layer { .. });
+        if (!n.visible && !(layer && layers.0)) || (n.locked && !(layer && layers.1)) {
             return;
         }
         if matches!(n.kind, NodeKind::Text(_)) && !locks.holds_id(n.id) {
             v.push(n.id);
         }
         for c in n.children().into_iter().flatten() {
-            visit(c, locks, v);
+            visit(c, locks, layers, v);
         }
     }
     let mut v = vec![];
     let locks = d.locked_artboards();
     for l in &d.layers {
-        visit(l, &locks, &mut v);
+        visit(l, &locks, (hidden_layers, locked_layers), &mut v);
     }
     v
 }
 
+/// What Find and Replace looks for: the text, Match Case and Find Whole Word.
+struct Query {
+    find: String,
+    match_case: bool,
+    whole_word: bool,
+}
+
+impl Query {
+    /// The `find`, `matchCase` and `wholeWord` params of command `c`. An empty or missing `find`
+    /// is an error.
+    fn of(p: &Value, c: &str) -> Result<Self> {
+        let find = text_param(p, "find", c)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(c, "missing `find`"))?.to_string();
+        Ok(Self { find, match_case: switch_or(p, "matchCase", false, c)?, whole_word: switch_or(p, "wholeWord", false, c)? })
+    }
+
+    /// The matches in `t`, in reading order, each as (run, start, end) with `start..end` the bytes
+    /// of the match in the object's plain text. A match stays inside one style run, and an inline
+    /// graphic is art, not characters to find.
+    fn matches(&self, t: &TextObject) -> Vec<(usize, usize, usize)> {
+        let mut hits = vec![];
+        let mut base = 0;
+        for (ri, r) in t.runs.iter().enumerate() {
+            if r.inline.is_none() {
+                hits.extend(
+                    find_in_run(&t.runs, ri, &self.find, self.match_case, self.whole_word).into_iter().map(|(a, b)| (ri, base + a, base + b)),
+                );
+            }
+            base += r.text.len();
+        }
+        hits
+    }
+}
+
+/// Replace bytes `start..end` of the plain text of `t`, which lie inside run `run`, with `rep`.
+/// The paragraph styles and the ruby follow the edit, as `text.editRange` moves them. The caller
+/// refreshes the bounds.
+fn replace_match(t: &mut TextObject, run: usize, start: usize, end: usize, rep: &str) {
+    let base: usize = t.runs.iter().take(run).map(|r| r.text.len()).sum();
+    let (Some(a), Some(b)) = (start.checked_sub(base), end.checked_sub(base)) else { return };
+    if !t.runs.get(run).is_some_and(|r| a <= b && r.text.is_char_boundary(a) && r.text.is_char_boundary(b)) {
+        return;
+    }
+    t.splice_paras(start, end, rep);
+    if let Some(r) = t.runs.get_mut(run) {
+        r.text.replace_range(a..b, rep);
+    }
+    t.ruby_after_replace(start, end, rep.len());
+}
+
 fn find_replace(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.findReplace";
-    let find = text_param(p, "find", C)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `find`"))?.to_string();
+    let q = Query::of(p, C)?;
     let rep = text_param(p, "replace", C)?.unwrap_or("").to_string();
-    let (mc, ww) = (switch_or(p, "matchCase", false, C)?, switch_or(p, "wholeWord", false, C)?);
+    let (hidden, locked) = (switch_or(p, "hiddenLayers", false, C)?, switch_or(p, "lockedLayers", false, C)?);
     let ids = match p.get("ids").filter(|v| !v.is_null()) {
         Some(_) => text_ids(&s.doc()?.doc, &checked_ids_param(s, p, "ids", C)?),
-        None => all_texts(&s.doc()?.doc),
+        None => searched_texts(&s.doc()?.doc, hidden, locked),
     };
     let st = s.doc()?;
-    let total: usize = ids
+    // Every match, and the matches that do not already read as the replacement.
+    let (total, replaced) = ids
         .iter()
         .filter_map(|id| match &st.doc.node(*id)?.kind {
-            NodeKind::Text(t) => Some((0..t.runs.len()).map(|i| find_in_run(&t.runs, i, &find, mc, ww).len()).sum::<usize>()),
+            NodeKind::Text(t) => {
+                let plain = t.plain_text();
+                let hits = q.matches(t);
+                Some((hits.len(), hits.iter().filter(|(_, a, b)| plain.get(*a..*b) != Some(rep.as_str())).count()))
+            }
             _ => None,
         })
-        .sum();
-    if total == 0 {
-        return Ok(json!({ "count": 0 }));
+        .fold((0, 0), |(n, r), (hn, hr)| (n + hn, r + hr));
+    if replaced == 0 {
+        return Ok(json!({ "count": total, "replaced": 0 }));
     }
     super::overprint::edit_counted(s, "Replace", |d| {
         let mut changed = 0;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            // Matches as (run, start, end) with offsets inside the run. Inline graphics are art, not
-            // characters to rewrite.
-            let mut hits = vec![];
-            let mut base = 0;
-            for (ri, r) in t.runs.iter().enumerate() {
-                if r.inline.is_none() {
-                    for (a, b) in find_in_run(&t.runs, ri, &find, mc, ww) {
-                        if r.text.get(a..b) != Some(rep.as_str()) {
-                            hits.push((ri, base + a, base + b, a, b));
-                        }
-                    }
-                }
-                base += r.text.len();
-            }
+            let plain = t.plain_text();
+            let hits: Vec<_> = q.matches(t).into_iter().filter(|(_, a, b)| plain.get(*a..*b) != Some(rep.as_str())).collect();
             if hits.is_empty() {
                 continue;
             }
-            // Last match first, so the offsets of earlier ones stay valid. The paragraph styles follow
-            // each edit, as `text.editRange` does.
-            for (ri, ta, tb, a, b) in hits.into_iter().rev() {
-                t.splice_paras(ta, tb, &rep);
-                if let Some(r) = t.runs.get_mut(ri) {
-                    r.text.replace_range(a..b, &rep);
-                }
+            // Last match first, so the offsets of earlier ones stay valid.
+            for (ri, a, b) in hits.into_iter().rev() {
+                replace_match(t, ri, a, b, &rep);
             }
             changed += 1;
             refresh_bounds(t);
         }
         Ok(changed)
     })?;
-    Ok(json!({ "count": total }))
+    Ok(json!({ "count": total, "replaced": replaced }))
+}
+
+/// A match of Find and Replace: bytes `start..end` of the plain text of type object `id`.
+#[derive(Clone, Copy)]
+struct Match {
+    id: NodeId,
+    start: usize,
+    end: usize,
+}
+
+impl Match {
+    /// The `id`, `start` and `end` that `p` gives for a match, under command `c`: an object id and
+    /// two byte offsets, put in order as `text.editRange` orders its own.
+    fn of(p: &Value, c: &str) -> Result<Self> {
+        let whole = |key: &str| index_opt(p, key, c)?.ok_or_else(|| bad(c, format!("missing `{key}`")));
+        let id = object_param(p, "id", c)?.ok_or_else(|| bad(c, "missing `id`"))?;
+        let (start, end) = (whole("start")?, whole("end")?);
+        Ok(Self { id, start: start.min(end), end: start.max(end) })
+    }
 }
 
 fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.findNext";
-    let find = text_param(p, "find", C)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `find`"))?.to_string();
-    let (mc, ww) = (switch_or(p, "matchCase", false, C)?, switch_or(p, "wholeWord", false, C)?);
+    let q = Query::of(p, C)?;
+    let backwards = switch_or(p, "backwards", false, C)?;
+    let (hidden, locked) = (switch_or(p, "hiddenLayers", false, C)?, switch_or(p, "lockedLayers", false, C)?);
+    // A `from` that is no object gives no `id`, and is refused as one without it. A null `from`
+    // starts at the first match, whatever is selected.
+    let from = match p.get("from") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(v) => Some(Some(Match::of(v, C)?)),
+    };
     let st = s.doc()?;
-    let all = all_texts(&st.doc);
-    let cur = st.selection.objects.first().and_then(|id| all.iter().position(|x| x == id));
-    let n = all.len();
-    let start = cur.map(|c| c + 1).unwrap_or(0);
-    let hit = (0..n).map(|k| all[(start + k) % n.max(1)]).find(|id| match st.doc.node(*id).map(|n| &n.kind) {
-        Some(NodeKind::Text(t)) => !find_all(&t.plain_text(), &find, mc, ww).is_empty(),
-        _ => false,
-    });
-    match hit {
-        Some(id) => {
-            s.select(|_, sel| sel.set([id]))?;
-            Ok(json!({ "id": id.0 }))
-        }
-        None => Ok(json!({ "id": null })),
+    // The objects in the order the search visits them: from the top of the stacking order down,
+    // or with Search Backwards from the bottom up.
+    let mut order = searched_texts(&st.doc, hidden, locked);
+    if !backwards {
+        order.reverse();
     }
+    // Every match in that order as (object's place, match): inside an object in reading order, or
+    // with Search Backwards from its end.
+    let mut all: Vec<(usize, Match)> = vec![];
+    for (place, id) in order.iter().enumerate() {
+        let Some(NodeKind::Text(t)) = st.doc.node(*id).map(|n| &n.kind) else { continue };
+        let mut hits = q.matches(t);
+        if backwards {
+            hits.reverse();
+        }
+        all.extend(hits.into_iter().map(|(_, start, end)| (place, Match { id: *id, start, end })));
+    }
+    if all.is_empty() {
+        return Ok(json!({ "id": null, "count": 0 }));
+    }
+    // The search goes on from `from`, or from the whole of the first selected type object it
+    // visits, so that the same call again reaches the next object. From anywhere else it starts
+    // at the first match.
+    let from = from.unwrap_or_else(|| {
+        st.selection.objects.iter().filter(|id| order.contains(id)).find_map(|id| match &st.doc.node(*id)?.kind {
+            NodeKind::Text(t) => Some(Match { id: *id, start: 0, end: t.runs.iter().map(|r| r.text.len()).sum() }),
+            _ => None,
+        })
+    });
+    let after = |(place, m): &(usize, Match), at: usize, f: &Match| {
+        *place > at || (*place == at && if backwards { m.end <= f.start } else { m.start >= f.end })
+    };
+    let k = from
+        .and_then(|f| order.iter().position(|id| *id == f.id).map(|at| (at, f)))
+        .and_then(|(at, f)| all.iter().position(|hit| after(hit, at, &f)))
+        .unwrap_or(0);
+    let Some((_, m)) = all.get(k).copied() else { return Ok(json!({ "id": null, "count": 0 })) };
+    let count = all.len();
+    // Type that a selection tool can't reach (on a hidden or locked layer) is found without being
+    // selected.
+    let selected = all_texts(&st.doc).contains(&m.id);
+    if selected && st.selection.objects != [m.id] {
+        s.select(|_, sel| sel.set([m.id]))?;
+    }
+    let index = if backwards { count - k } else { k + 1 };
+    Ok(json!({ "id": m.id.0, "start": m.start, "end": m.end, "index": index, "count": count, "selected": selected }))
+}
+
+fn replace_one(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.replaceMatch";
+    let q = Query::of(p, C)?;
+    let rep = text_param(p, "replace", C)?.unwrap_or("").to_string();
+    let m = Match::of(p, C)?;
+    let st = s.doc()?;
+    let t = match st.doc.node(m.id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => t,
+        Some(_) => return Err(bad(C, format!("node {} is not text", m.id.0))),
+        None => return Err(EngineError::NoNode(m.id)),
+    };
+    let Some((run, ..)) = q.matches(t).into_iter().find(|(_, a, b)| (*a, *b) == (m.start, m.end)) else {
+        return Err(bad(C, format!("no match of `find` at bytes {}..{} of object {}", m.start, m.end, m.id.0)));
+    };
+    let end = m.start + rep.len();
+    if t.plain_text().get(m.start..m.end) == Some(rep.as_str()) {
+        return Ok(json!({ "id": m.id.0, "start": m.start, "end": end, "replaced": false }));
+    }
+    s.edit("Replace", |d, _| {
+        let Some(NodeKind::Text(t)) = d.node_mut(m.id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(m.id)) };
+        replace_match(t, run, m.start, m.end, &rep);
+        refresh_bounds(t);
+        Ok(())
+    })?;
+    Ok(json!({ "id": m.id.0, "start": m.start, "end": end, "replaced": true }))
 }
 
 // ---------- Paste without Formatting ----------

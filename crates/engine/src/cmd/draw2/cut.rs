@@ -1,11 +1,13 @@
 use super::common::{
-    PenRecord, Sample, dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, replace_with_pieces,
-    samples_param, sibling_with, size_pressure, target_paths, usize_opt,
+    PenRecord, SIZE_VARIATIONS, SIZES, Sample, center_strokes, dist_to_polyline, fill_targets, has_fill, has_painted_ancestor_stroke,
+    has_painted_stroke, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, ranged, replace_with_pieces, samples_param,
+    set_geometry, sibling_with, size_profile, target_paths, usize_opt,
 };
 use super::{
-    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, Paint, ParamCurve, PathData, Point, Result, Session,
-    SubPath, Value, Vec2, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
+    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, Document, EngineError, FillRule, Join, NodeId, NodeKind, Paint, ParamCurve, PathData, Point,
+    Rect, Result, Session, SubPath, Value, Vec2, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
 };
+use kurbo::{CubicBez, Line, PathSeg};
 use vectorcraft_brush::{Brush, BrushKind, Calligraphic, Variation};
 use vectorcraft_doc::StrokeLayer;
 use vectorcraft_tools::draw2::MIN_BRUSH_SIZE;
@@ -46,8 +48,8 @@ pub(in super::super) fn components(pd: &PathData) -> Vec<PathData> {
 
 /// The pieces of `sp` where `remove(point)` is false. `None` when nothing is removed. Each segment
 /// is sampled at least every `step` pt (and at least 24 times), so a removed stretch at least
-/// `step` long is found.
-fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool) -> Option<Vec<SubPath>> {
+/// `step` long is found, and also at the parameters `extra` gives for it.
+fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool, extra: &dyn Fn(CubicBez) -> Vec<f64>) -> Option<Vec<SubPath>> {
     let nseg = sp.segment_count();
     if nseg == 0 {
         return sp.anchors.first().filter(|a| remove(a.p)).map(|_| vec![]);
@@ -64,6 +66,13 @@ fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool) -> Optio
         let edge = (c.p1 - c.p0).hypot().max((c.p2 - c.p1).hypot()).max((c.p3 - c.p2).hypot());
         let wanted = (3.0 * edge / step).ceil();
         let samples = if wanted.is_finite() && wanted > K as f64 { (wanted as usize).min(MAX_SAMPLES) } else { K };
+        let mut ts: Vec<f64> = (1..=samples).map(|k| k as f64 / samples as f64).collect();
+        let more = extra(c);
+        if !more.is_empty() {
+            ts.extend(more.into_iter().filter(|t| t.is_finite() && *t > 0.0 && *t < 1.0));
+            ts.sort_by(f64::total_cmp);
+            ts.dedup();
+        }
         let mut prev_t = 0.0;
         let mut prev_rm = remove(c.eval(0.0));
         let mut start = if prev_rm { None } else { Some(0.0) };
@@ -73,8 +82,7 @@ fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool) -> Optio
                 runs.push(std::mem::take(&mut cur));
             }
         }
-        for k in 1..=samples {
-            let t = k as f64 / samples as f64;
+        for t in ts {
             let rm = remove(c.eval(t));
             if rm != prev_rm {
                 let (mut lo, mut hi) = (prev_t, t);
@@ -146,10 +154,15 @@ fn cut_subpath(sp: &SubPath, step: f64, remove: &dyn Fn(Point) -> bool) -> Optio
 /// every `step` pt (`f64::INFINITY` for the fixed sampling). Returns the new geometry per output
 /// object (one object per piece when the path had a single subpath), or None if unchanged.
 pub(in super::super) fn erase_outline(pd: &PathData, step: f64, remove: &dyn Fn(Point) -> bool) -> Option<Vec<PathData>> {
+    erase_outline_at(pd, step, remove, &|_| vec![])
+}
+
+/// [`erase_outline`], also sampling each segment at the parameters `extra` gives for it.
+fn erase_outline_at(pd: &PathData, step: f64, remove: &dyn Fn(Point) -> bool, extra: &dyn Fn(CubicBez) -> Vec<f64>) -> Option<Vec<PathData>> {
     let mut changed = false;
     let mut subs = vec![];
     for sp in &pd.subpaths {
-        match cut_subpath(sp, step, remove) {
+        match cut_subpath(sp, step, remove, extra) {
             Some(pieces) => {
                 changed = true;
                 subs.extend(pieces);
@@ -184,6 +197,9 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
     if !t.is_finite() || p.get("t").is_some_and(|v| !v.is_f64() && !v.is_i64() && !v.is_u64()) {
         return Err(bad(C, "invalid t"));
     }
+    if !(0.0..=1.0).contains(&t) {
+        return Err(bad(C, "`t` must be from 0 to 1"));
+    }
     let ids = s.edit("Split Path", |d, sel| {
         let path = path_mut(d, id)?;
         let mut sp = path.subpaths.get(si).cloned().ok_or_else(|| EngineError::Other("no such subpath".into()))?;
@@ -210,14 +226,17 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
             sel.add(id);
             sel.anchors.entry(id).or_default().insert((si, 0));
         };
+        // The paths a cut makes keep the source's appearance with every stroke centered.
         if sp.closed {
             path.subpaths[si] = pieces.pop().ok_or_else(|| EngineError::Other("no such anchor".into()))?;
+            center_strokes(d, id);
             pick(sel, id, si);
             return Ok(vec![id]);
         }
         let [left, right] = <[SubPath; 2]>::try_from(pieces).map_err(|_| EngineError::Other("cannot split an open path at its end point".into()))?;
         if path.subpaths.len() == 1 {
             path.subpaths[0] = left;
+            center_strokes(d, id);
             let node = sibling_with(d, id, PathData::single(right))?;
             let (parent, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
             let nid = d.insert(parent, idx + 1, node)?;
@@ -226,6 +245,7 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
         } else {
             path.subpaths[si] = left;
             path.subpaths.insert(si + 1, right);
+            center_strokes(d, id);
             pick(sel, id, si + 1);
             Ok(vec![id])
         }
@@ -247,7 +267,7 @@ pub(super) fn knife(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let strip = po::outline_stroke(&PathData::single(SubPath::polyline(&pts, false)), KNIFE_GAP, Cap::Butt, Join::Round, 4.0);
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, 1.0))? {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, 1.0), false)? {
         if !pd.is_closed() {
             continue;
         }
@@ -274,23 +294,32 @@ pub(super) fn knife(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.eraseRegion";
-    let samples = samples_param(p, "points", C)?;
-    let size = number_or(p, "size", 10.0, C)?;
-    if !(size.is_finite() && size > 0.0) {
-        return Err(bad(C, "size must be positive"));
+    if let Some(rect) = p.get("rect").filter(|v| !v.is_null()) {
+        if p.get("points").is_some_and(|v| !v.is_null()) {
+            return Err(bad(C, "give `points` or `rect`, not both"));
+        }
+        return erase_rect(s, marquee_param(rect, C)?);
     }
+    let samples = samples_param(p, "points", C)?;
+    let size = ranged(p, "size", 10.0, SIZES, C)?;
     let angle = number_or(p, "angle", 0.0, C)?;
+    if !(-180.0..=180.0).contains(&angle) {
+        return Err(bad(C, "`angle` must be from -180 to 180 degrees"));
+    }
     let roundness = number_or(p, "roundness", 100.0, C)?;
+    if !(1.0..=100.0).contains(&roundness) {
+        return Err(bad(C, "`roundness` must be from 1 to 100%"));
+    }
     let vary = eraser_variations(p, C)?;
     if varies_beyond_size_pressure(&vary) {
         return erase_varied(s, &samples, [angle, roundness, size], vary);
     }
-    let pressure = if vary[2].0 == Variation::Pressure { size_pressure(p, &samples, C)? } else { None };
+    let pressure = if vary[2].0 == Variation::Pressure { size_profile(p, &samples, C)? } else { None };
     let pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
     let r = size / 2.0;
     // The tip's short axis (its narrowest with Pressure): an open path is sampled at least every half of it.
     let narrowest = pressure.as_ref().map_or(size, |(_, v)| vectorcraft_tools::draw2::pressure_size(size, *v, 0.0));
-    let short = narrowest * roundness.clamp(1.0, 100.0) / 100.0;
+    let short = narrowest * roundness / 100.0;
     let st = s.doc()?;
     // A point is under the tip when, with the tip squashed back into a circle, it is within the
     // circle's radius of the squashed drag.
@@ -312,8 +341,9 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
         None => dist_to_polyline(&round, squash * q) <= r,
     };
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach))? {
-        if pd.is_closed() {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach), true)? {
+        if erase_as_area(&st.doc, id, &pd) {
+            let pd = eraser_fill_operand(pd);
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
@@ -325,18 +355,100 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     apply_plan(s, "Eraser", plan)
 }
 
+/// Whether the target is erased as filled area rather than as an open outline.
+fn erase_as_area(doc: &Document, id: NodeId, pd: &PathData) -> bool {
+    // An unaggregated compound member keeps the outline route: its own appearance does not
+    // paint it. Eligible fill-only compounds were collected as one parent target above.
+    let compound_member =
+        doc.parent_of(id).and_then(|parent| doc.node(parent)).is_some_and(|parent| matches!(parent.kind, NodeKind::Compound { .. }));
+    let filled_open =
+        !compound_member && !has_painted_ancestor_stroke(doc, id) && doc.node(id).is_some_and(|node| has_fill(node) && !has_painted_stroke(node));
+    pd.is_closed() || filled_open
+}
+
+/// Close only Eraser's temporary fill operand, preserving an open path's straight closing edge.
+fn eraser_fill_operand(mut pd: PathData) -> PathData {
+    for sp in &mut pd.subpaths {
+        if !sp.closed {
+            // These endpoint handles are unused by an open path. Closing it must not activate them.
+            if let Some(first) = sp.anchors.first_mut() {
+                first.h_in = first.p;
+            }
+            if let Some(last) = sp.anchors.last_mut() {
+                last.h_out = last.p;
+            }
+            sp.closed = true;
+        }
+    }
+    pd
+}
+
+/// `path.eraseRegion`'s `rect: [x, y, width, height]`: four finite numbers, with a width and a
+/// height above 0.
+fn marquee_param(v: &Value, cmd: &str) -> Result<Rect> {
+    const SHAPE: &str = "rect is [x, y, width, height] in points, with a width and a height above 0";
+    let n: Vec<f64> = match v.as_array() {
+        Some(a) if a.len() == 4 => a.iter().map(Value::as_f64).collect::<Option<_>>().ok_or_else(|| bad(cmd, SHAPE))?,
+        _ => return Err(bad(cmd, SHAPE)),
+    };
+    let [x, y, w, h] = [n[0], n[1], n[2], n[3]];
+    if !(n.iter().all(|v| v.is_finite()) && w > 0.0 && h > 0.0 && (x + w).is_finite() && (y + h).is_finite()) {
+        return Err(bad(cmd, SHAPE));
+    }
+    Ok(Rect::new(x, y, x + w, y + h))
+}
+
+/// `path.eraseRegion` with a marquee: everything inside `r` is erased from the paths (selected, or
+/// all). Closed paths and fill-only open paths lose the rectangle's area; other open paths are cut where they cross its edges.
+fn erase_rect(s: &mut Session, r: Rect) -> Result<Value> {
+    let region =
+        PathData::single(SubPath::polyline(&[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)], true));
+    let inside = |q: Point| q.x >= r.x0 && q.x <= r.x1 && q.y >= r.y0 && q.y <= r.y1;
+    // An open path is sampled at least every half of the rectangle's shorter side, and also where
+    // each segment crosses the rectangle's edges and halfway between those crossings, so a stretch
+    // inside the rectangle is found however long the segment is.
+    let step = r.width().min(r.height()) / 2.0;
+    let corners = [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
+    let crossings = |c: CubicBez| {
+        let mut ts: Vec<f64> = (0..4)
+            .flat_map(|k| PathSeg::Cubic(c).intersect_line(Line::new(corners[k], corners[(k + 1) % 4])))
+            .map(|x| x.segment_t)
+            .filter(|t| t.is_finite() && *t > 0.0 && *t < 1.0)
+            .collect();
+        ts.sort_by(f64::total_cmp);
+        let mids: Vec<f64> = [0.0].iter().chain(&ts).zip(ts.iter().chain(&[1.0])).map(|(a, b)| 0.5 * (a + b)).collect();
+        ts.extend(mids);
+        ts
+    };
+    let st = s.doc()?;
+    let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, r, true)? {
+        if erase_as_area(&st.doc, id, &pd) {
+            let pd = eraser_fill_operand(pd);
+            if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
+                continue;
+            }
+            plan.push((id, components(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Difference))));
+        } else if let Some(pieces) = erase_outline_at(&pd, step, &inside, &crossings) {
+            plan.push((id, pieces));
+        }
+    }
+    apply_plan(s, "Eraser", plan)
+}
+
 /// The variation modes `path.eraseRegion` takes for each of `angleMode`, `roundnessMode` and
 /// `sizeMode`.
-const ERASER_MODES: &str = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\" or \"rotation\"";
+const ERASER_MODES: &str = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\", \"rotation\" or \"stylusWheel\"";
 
 /// Eraser Tool Options' Angle, Roundness and Size variations: for each of angle (`angleMode` with
 /// `angleVariation` in degrees, at most 180), roundness (`roundnessMode` with `roundnessVariation`
-/// in percent, at most 100) and size (`sizeMode` with `sizeVariation` in points), its mode and how
-/// far it varies either way. A mode left out or null is Fixed, and a variation left out or null
-/// is 0; any other mode, or a variation that is negative or past its most, is refused.
+/// in percent, at most 100) and size (`sizeMode` with `sizeVariation` in points, at most 1000), its
+/// mode and how far it varies either way. A mode left out or null is Fixed, and a variation left
+/// out or null is 0; any other mode, or a variation that is negative or past its most, is refused,
+/// in every mode.
 fn eraser_variations(p: &Value, cmd: &str) -> Result<[(Variation, f64); 3]> {
     const KEYS: [(&str, &str, f64); 3] =
-        [("angleMode", "angleVariation", 180.0), ("roundnessMode", "roundnessVariation", 100.0), ("sizeMode", "sizeVariation", f64::INFINITY)];
+        [("angleMode", "angleVariation", 180.0), ("roundnessMode", "roundnessVariation", 100.0), ("sizeMode", "sizeVariation", SIZE_VARIATIONS.1)];
     let mut out = [(Variation::Fixed, 0.0); 3];
     for (slot, (mode_key, var_key, most)) in out.iter_mut().zip(KEYS) {
         let mode = match p.get(mode_key).filter(|v| !v.is_null()) {
@@ -349,7 +461,11 @@ fn eraser_variations(p: &Value, cmd: &str) -> Result<[(Variation, f64); 3]> {
             return Err(bad(cmd, format!("{var_key} must be 0 or more")));
         }
         if variation > most {
-            return Err(bad(cmd, format!("{var_key} must be at most {most}")));
+            // Size Variation is refused as path.blob refuses it.
+            return Err(match var_key {
+                "sizeVariation" => bad(cmd, format!("`{var_key}` must be from {} to {most}", SIZE_VARIATIONS.0)),
+                _ => bad(cmd, format!("{var_key} must be at most {most}")),
+            });
         }
         *slot = (mode, variation);
     }
@@ -407,8 +523,9 @@ fn erase_varied(s: &mut Session, samples: &[Sample], tip: [f64; 3], vary: [(Vari
     let short = low(2).max(MIN_BRUSH_SIZE) * low(1).clamp(1.0, 100.0) / 100.0;
     let reach = (size + sv) / 2.0;
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach))? {
-        if pd.is_closed() {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach), true)? {
+        if erase_as_area(&st.doc, id, &pd) {
+            let pd = eraser_fill_operand(pd);
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
@@ -425,10 +542,36 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
         return Ok(json!({ "ids": [] }));
     }
     let ids = s.edit(label, |d, sel| {
+        // Measure every original painting owner before any geometry or appearance changes.
+        // This includes a Compound above a Path Eraser target and containers above live art.
+        let owners: std::collections::BTreeSet<_> = plan.iter().flat_map(|(id, _)| d.ancestry(*id).unwrap_or_default()).collect();
+        let pinned: Vec<_> = owners
+            .into_iter()
+            .filter_map(|id| {
+                let node = d.node(id)?;
+                if !node.appearance.has_unplaced_gradient() {
+                    return None;
+                }
+                vectorcraft_render::pinned_appearance_for_geometry_edit(d, node).map(|appearance| (id, appearance))
+            })
+            .collect();
+        for (id, appearance) in pinned {
+            if let Some(node) = d.node_mut(id) {
+                node.appearance = appearance.into();
+            }
+        }
         let mut all = vec![];
         let mut cut = Beside::replacing(d, &plan.iter().map(|(id, _)| *id).collect::<Vec<_>>());
         for (id, pieces) in plan {
-            all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
+            let clipping_path = d.position(id).is_some_and(|(parent, i, _)| i == 0 && parent.and_then(|p| d.node(p)).is_some_and(|p| p.clips()));
+            if clipping_path {
+                // Keep every clipping contour in its original first child slot. An empty mask
+                // must also stay there so the clipped artwork cannot become the new mask.
+                set_geometry(d, id, PathData::new(pieces.into_iter().flat_map(|p| p.subpaths).collect()))?;
+                all.push(id);
+            } else {
+                all.extend(replace_with_pieces(d, &mut cut, id, pieces)?);
+            }
         }
         cut.finish(d)?;
         sel.set(all.iter().copied());
@@ -437,13 +580,13 @@ fn apply_plan(s: &mut Session, label: &str, plan: Vec<(NodeId, Vec<PathData>)>) 
     Ok(ids_json(&ids))
 }
 
+/// The Path Eraser's band width, in points (VectorCraft's own range).
+const PATH_ERASER_WIDTHS: (f64, f64) = (0.001, 1000.0);
+
 pub(super) fn erase_segments(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.eraseSegments";
     let pts = points_param(p, "points", C)?;
-    let w = number_or(p, "width", 8.0, C)?;
-    if !(w.is_finite() && w > 0.0) {
-        return Err(bad(C, "width must be positive"));
-    }
+    let w = ranged(p, "width", 8.0, PATH_ERASER_WIDTHS, C)?;
     let st = s.doc()?;
     let mut plan = vec![];
     for id in target_paths(&st.doc, &st.selection, poly_bounds(&pts, w)) {

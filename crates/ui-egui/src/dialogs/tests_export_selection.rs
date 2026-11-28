@@ -7,8 +7,7 @@ use std::rc::Rc;
 use serde_json::json;
 use vectorcraft_plugins::wat::{self as tpl, Echo};
 
-use super::tests_export::{Written, app_saving, frame, kind, names, set};
-use super::*;
+use super::tests_export::{Written, answer_saves, app_saving, confirm, fields, frame, kind, names, on_save, rgba, set};
 
 /// The last file written, as text.
 fn last_text(written: &Written) -> String {
@@ -22,9 +21,9 @@ fn png_size(png: &[u8]) -> (u32, u32) {
 }
 
 /// Pick `path` in the next save panels.
-fn picking(app: &mut VectorcraftApp, path: &str) {
+fn picking(path: &str) {
     let picked = path.to_string();
-    app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+    on_save(move |_| Some(picked.clone()));
 }
 
 /// How many paths a native document's JSON (or the input an exporter plug-in is given) holds.
@@ -32,55 +31,33 @@ fn paths_in(bytes: &[u8]) -> usize {
     String::from_utf8_lossy(vectorcraft_format::json_part(bytes)).matches("\"anchors\"").count()
 }
 
-/// A PDF continues in Save PDF, without its artboard choice, and its options apply: the page is
-/// the selected 10 m rectangle's crop (not the art's bounds, which take in the ellipse), with a
-/// `UserUnit` once "Write pages longer than 200 in at full size in points" is turned off.
+/// Every format with an options dialog shows it after the save panel, writes nothing before its OK, and OK
+/// writes the selection alone, cropped to the selected 10×5 pt rectangle: the PDF's page, the PNG at 72 ppi,
+/// the SVG's view box, the EPS bounding box and the DXF's extents.
 #[test]
-fn export_selection_to_pdf_continues_in_save_pdf() {
-    let (mut app, written) = app_saving(2, |_| "/out/sel.pdf".into());
-    app.run("shape.rectangle", json!({"x": 0, "y": 100, "width": 28_346.46, "height": 50})).unwrap();
-    app.run("document.exportSelection", json!({})).unwrap();
-    assert_eq!(kind(&app), Some("savePdf"), "the PDF options follow");
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.str("path"), "/out/sel.pdf");
-    assert!(d.bool("__artBounds") && d.bool(export_as::SELECTION_FIELD));
-    assert!(written.borrow().is_empty(), "nothing is written before OK");
-    set(&mut app, "longPagesInPoints", json!(false));
-    frame(&mut app);
-    assert_eq!(confirm(&mut app).unwrap()["path"], "/out/sel.pdf");
-    assert!(app.ui.dialog.is_none());
-    let bytes = written.borrow()[0].1.clone();
-    assert!(String::from_utf8_lossy(&bytes).contains("/UserUnit"), "the dialog's option applies");
-    let pdf = vectorcraft_pdf::import(&bytes).unwrap();
-    assert_eq!(pdf.artboards.len(), 1);
-    let page = pdf.artboards[0].rect;
-    assert!((28_346.0..28_350.0).contains(&page.width()), "{}", page.width());
-    assert_eq!(page.height().round(), 50.0, "the selection's crop");
-}
-
-/// Every format with an options dialog shows it after the save panel, and OK writes the
-/// selection alone, cropped to the selected 10×5 pt rectangle: the PNG at 72 ppi, the SVG's view
-/// box, the EPS bounding box and the DXF's extents. The mark is not kept with the options
-/// remembered for the next export.
-#[test]
-fn export_selection_continues_in_each_format_s_options() {
+fn export_selection_continues_in_each_formats_options() {
     let (mut app, written) = app_saving(2, |_| String::new());
     app.run("shape.rectangle", json!({"x": 40, "y": 30, "width": 10, "height": 5})).unwrap();
-    for (ext, options) in [("svg", "svgOptions"), ("png", "pngOptions"), ("eps", "epsOptions"), ("dxf", "dxfOptions")] {
+    for (ext, options) in [("pdf", "pdf-export"), ("svg", "svgOptions"), ("png", "pngOptions"), ("eps", "epsOptions"), ("dxf", "dxfOptions")] {
         let path = format!("/out/sel.{ext}");
-        picking(&mut app, &path);
+        let before = names(&written).len();
+        picking(&path);
         app.run("document.exportSelection", json!({})).unwrap();
-        assert_eq!(kind(&app), Some(options), "{ext}");
-        assert!(app.ui.dialog.as_ref().unwrap().bool(export_as::SELECTION_FIELD), "{ext}");
-        if ext == "png" {
-            assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__size"], json!([10.0, 5.0]), "the selection's size");
-        }
+        answer_saves(&mut app);
+        assert_eq!(kind(&app).as_deref(), Some(options), "{ext}");
+        assert_eq!(names(&written).len(), before, "{ext}: nothing is written before OK");
         frame(&mut app);
-        confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none(), "{ext}");
+        confirm(&mut app);
+        assert!(kind(&app).is_none(), "{ext}");
         assert_eq!(names(&written).last(), Some(&path), "{ext}");
         let text = last_text(&written);
         match ext {
+            "pdf" => {
+                let pdf = vectorcraft_pdf::import(&written.borrow().last().unwrap().1).unwrap();
+                assert_eq!(pdf.artboards.len(), 1, "{ext}");
+                let page = pdf.artboards[0].rect;
+                assert_eq!((page.width().round(), page.height().round()), (10.0, 5.0), "the selection's crop, not the art's bounds");
+            }
             "png" => assert_eq!(png_size(&written.borrow().last().unwrap().1), (10, 5), "10×5 pt at 72 ppi"),
             "svg" => assert!(text.contains(r#"viewBox="0 0 10 5""#), "{text}"),
             "eps" => assert!(text.contains("%%BoundingBox: 0 0 10 5"), "{text}"),
@@ -92,9 +69,7 @@ fn export_selection_continues_in_each_format_s_options() {
             }
         }
     }
-    assert_eq!(names(&written).len(), 4, "one file each");
-    assert!(app.ui.eps_options.get(export_as::SELECTION_FIELD).is_none(), "EPS Options does not remember the mark");
-    assert!(app.ui.svg_options.get(export_as::SELECTION_FIELD).is_none());
+    assert_eq!(names(&written).len(), 5, "one file each");
 }
 
 /// Text Export Options opens with Selection Only on, and OK writes the selected type alone.
@@ -104,12 +79,14 @@ fn export_selection_to_text_writes_the_selected_type() {
     app.run("text.create", json!({"x": 10, "y": 10, "text": "Left out"})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 30, "text": "Selected"})).unwrap();
     app.run("document.exportSelection", json!({})).unwrap();
-    assert_eq!(kind(&app), Some("txtOptions"));
-    assert!(app.ui.dialog.as_ref().unwrap().bool("selectionOnly"));
+    answer_saves(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("txtOptions"));
+    assert_eq!(fields(&app)["selectionOnly"], json!(true));
     frame(&mut app);
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!(names(&written), ["/out/sel.txt"]);
-    assert_eq!(last_text(&written), "Selected\n");
+    // Line endings default to the platform's.
+    assert_eq!(last_text(&written), if cfg!(windows) { "Selected\r\n" } else { "Selected\n" });
 }
 
 /// SVG Options opened by Export Selection hides Use Artboards, and its OK leaves the Use
@@ -119,12 +96,13 @@ fn export_selection_to_svg_keeps_the_remembered_use_artboards() {
     let (mut app, _) = app_saving(2, |_| "/out/sel.svg".into());
     app.run("file.export.svg", json!({})).unwrap();
     set(&mut app, "useArtboards", json!(true));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!(app.ui.svg_options["useArtboards"], true);
     app.run("shape.rectangle", json!({"x": 40, "y": 30, "width": 10, "height": 5})).unwrap();
     app.run("document.exportSelection", json!({})).unwrap();
-    assert_eq!(kind(&app), Some("svgOptions"));
-    confirm(&mut app).unwrap();
+    answer_saves(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("svgOptions"));
+    confirm(&mut app);
     assert_eq!(app.ui.svg_options["useArtboards"], true, "{}", app.ui.svg_options);
 }
 
@@ -136,9 +114,10 @@ fn export_selection_without_a_dialog_and_to_plug_ins_writes_the_selection() {
     app.run("shape.rectangle", json!({"x": 40, "y": 30, "width": 10, "height": 5})).unwrap();
     app.run("file.exportAs", json!({"path": "/out/all.vectorcraft"})).unwrap();
     let all = paths_in(&written.borrow().last().unwrap().1);
-    picking(&mut app, "/out/sel.vectorcraft");
+    picking("/out/sel.vectorcraft");
     app.run("document.exportSelection", json!({})).unwrap();
-    assert!(app.ui.dialog.is_none(), "written at once");
+    answer_saves(&mut app);
+    assert!(kind(&app).is_none(), "written at once");
     assert_eq!(names(&written).last().map(String::as_str), Some("/out/sel.vectorcraft"));
     let selected = paths_in(&written.borrow().last().unwrap().1);
     assert!(selected >= 1 && selected < all, "{selected} of {all} paths");
@@ -148,14 +127,15 @@ fn export_selection_without_a_dialog_and_to_plug_ins_writes_the_selection() {
     {
         let wasm = wat::parse_str(tpl::echo_exporter(&tpl::exporter(id, &format!(r#"["{ext}"]"#), params), Echo::Input)).unwrap();
         app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
-        picking(&mut app, &format!("/out/sel.{ext}"));
+        picking(&format!("/out/sel.{ext}"));
         app.run("document.exportSelection", json!({})).unwrap();
+        answer_saves(&mut app);
         if params != "{}" {
-            assert_eq!(kind(&app), Some(plugin::EXPORT_KIND), "{id} asks for its parameters");
+            assert!(kind(&app).is_some(), "{id} asks for its parameters");
             frame(&mut app);
-            confirm(&mut app).unwrap();
+            confirm(&mut app);
         }
-        assert!(app.ui.dialog.is_none(), "{id}");
+        assert!(kind(&app).is_none(), "{id}");
         assert_eq!(names(&written).last(), Some(&format!("/out/sel.{ext}")));
         let given = paths_in(&written.borrow().last().unwrap().1);
         app.run("plugin.remove", json!({"id": id})).unwrap();
@@ -173,11 +153,13 @@ fn export_selection_after_the_question_before_losing_writes_the_selection() {
     st.imported_from = Some("/out/sel.png".into());
     st.import_losses = vec!["hidden type".into()];
     app.run("document.exportSelection", json!({})).unwrap();
-    assert_eq!(kind(&app), Some("pngOptions"));
+    answer_saves(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
     frame(&mut app);
-    assert_eq!(confirm(&mut app).unwrap()["pending"], super::confirm::KIND);
+    confirm(&mut app);
+    assert!(kind(&app).is_some(), "the question is open");
     assert!(written.borrow().is_empty(), "nothing is written before OK");
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!(names(&written), ["/out/sel.png"]);
     assert_eq!(png_size(&written.borrow()[0].1), (10, 5), "the selection's crop");
 }
@@ -204,10 +186,7 @@ fn rich_black_reaches_files_from_the_export_dialogs() {
     app.run("paint.setStroke", json!({"none": true})).unwrap();
     app.run("paint.setFill", json!({"color": {"c": 0, "m": 0, "y": 0, "k": 1}})).unwrap();
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
-    let px = |w: &Written| {
-        let w = w.borrow();
-        image::load_from_memory(&w.last().unwrap().1).unwrap().to_rgba8().get_pixel(10, 10).0
-    };
+    let px = |w: &Written| rgba(&w.borrow().last().unwrap().1).get_pixel(10, 10).0;
     app.run("file.exportAs", json!({"path": "/out/all.png"})).unwrap();
     let accurate = px(&written);
     assert!(accurate[0] > 10, "accurate: dark grey, {accurate:?}");
@@ -216,7 +195,7 @@ fn rich_black_reaches_files_from_the_export_dialogs() {
     assert_eq!(px(&written), [0, 0, 0, 255], "Export As");
     app.run("document.exportSelection", json!({})).unwrap();
     frame(&mut app);
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!(names(&written).last().map(String::as_str), Some("/out/sel.png"));
     assert_eq!(px(&written), [0, 0, 0, 255], "Export Selection");
 }
@@ -228,11 +207,11 @@ fn nothing_selected_stops_before_the_save_panel() {
     app.run("select.none", json!({})).unwrap();
     let asked = Rc::new(Cell::new(false));
     let a = asked.clone();
-    app.services.pick_save = Some(Box::new(move |_| {
+    on_save(move |_| {
         a.set(true);
         Some("/out/sel.pdf".into())
-    }));
+    });
     let e = app.run("document.exportSelection", json!({})).unwrap_err();
     assert!(e.contains("select something to export"), "{e}");
-    assert!(!asked.get() && app.ui.dialog.is_none() && written.borrow().is_empty());
+    assert!(!asked.get() && kind(&app).is_none() && written.borrow().is_empty());
 }

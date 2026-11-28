@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Overprint",
             [],
             None,
-            "{fill?: bool, stroke?: bool, item?: appearance item index|null, ids?|id?, target?: \"object\"|\"contents\"} make fills and/or strokes overprint (Overprint Preview, Separations Preview) or knock out: item's, else every fill or stroke of the painted objects (groups: their contents; type: its characters too). Without item and ids, the Appearance panel's active item stands in when it is of that kind → {changed: objects}",
+            "{fill?: bool, stroke?: bool, item?: appearance item index|null, ids?|id?, target?: \"object\"|\"contents\"} make fills and/or strokes overprint (Overprint Preview, Separations Preview) or knock out: item's, else every fill or stroke of the painted objects (groups: their contents; type: its characters too; a grayscale or 1-bit image colorized by paint.setFill: without item, the fill flags set whether its color overprints). Without item and ids, the Appearance panel's active item stands in when it is of that kind. A whole Live Paint group (also its contents with `item`) takes the fill flags on its faces and the stroke flags on its edges, and its hidden source paths keep theirs → {changed: objects}",
             has_doc,
             set_overprint
         ),
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Attributes",
             [],
             None,
-            "{ids?|id?, item?, target?: \"object\"|\"contents\"} → {ids, overprintFill, overprintStroke, showCenter, imageMap: \"none\"|\"rectangle\"|\"polygon\", url, note, fillRule: \"nonZero\"|\"evenOdd\" (of the paths and compound paths in them), reversed (their subpaths run counter-clockwise on screen: Reverse Path Direction On), recentUrls: [newest first]} the Attributes panel's values for `ids` or the selection, overprint aimed as object.setOverprint aims; a value is null where they differ (or nothing has a fill, stroke or path)",
+            "{ids?|id?, item?, target?: \"object\"|\"contents\"} → {ids, overprintFill, overprintStroke, showCenter, imageMap: \"none\"|\"rectangle\"|\"polygon\", url, note, fillRule: \"nonZero\"|\"evenOdd\" (of the paths and compound paths in them), reversed (their subpaths run counter-clockwise on screen: Reverse Path Direction On), recentUrls: [newest first, at most 30]} the Attributes panel's values for `ids` or the selection, overprint aimed as object.setOverprint aims; a value is null where they differ (or nothing has a fill, stroke or path)",
             has_doc,
             |s, p| Ok(attributes(s, p)?.to_json())
         ),
@@ -97,7 +97,16 @@ fn flags(n: &Node, fill: bool, index: Option<usize>) -> Vec<bool> {
     if let (None, NodeKind::Text(t)) = (index, &n.kind) {
         v.extend(t.runs.iter().map(|r| if fill { r.style.overprint_fill } else { r.style.overprint_stroke }));
     }
+    if fill && index.is_none() && colorized(n) {
+        v.push(n.extras().colorize_overprint);
+    }
     v
+}
+
+/// Is `n` an image colorized with a color, whose fill overprint is its color's
+/// ([`vectorcraft_doc::NodeExtras::colorize_overprint`])?
+fn colorized(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Image(_)) && n.extras().colorize.as_deref().is_some_and(|p| !p.is_none())
 }
 
 /// [`flags`], to change.
@@ -126,14 +135,18 @@ fn kinds(p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<(bool, bool)>> {
         .collect()
 }
 
-/// Each kind's item target and objects: (fill?, item, ids).
-fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>) -> Result<Vec<(bool, ItemTarget, Vec<NodeId>)>> {
+/// Each kind's item target and objects: (fill?, item, ids). With `edit`, the art of graph designs drawn in graph series
+/// is left out, and an explicit item that the art left out has no row of that kind for is an error, as when the edit
+/// resolves it on the other objects. Without it, the art is read with the other objects.
+fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>, edit: bool) -> Result<Vec<(bool, ItemTarget, Vec<NodeId>)>> {
     let item = item_target(s, p, cmd)?;
     kinds
         .into_iter()
         .map(|fill| {
             let it = item.of_kind(s, fill);
-            Ok((fill, it, it.targets(s, p)?))
+            let ids = it.targets_for(s, p, fill)?;
+            let ids = if edit { super::appearance::drop_design_art_rows(s, ids, it, fill, cmd)? } else { ids };
+            Ok((fill, it, ids))
         })
         .collect()
 }
@@ -159,12 +172,7 @@ pub(super) type OverprintJob = ((bool, ItemTarget, Vec<NodeId>), bool);
 /// `object.setOverprint` aims, leaving out the art of graph designs drawn in graph series.
 pub(super) fn overprint_jobs(s: &Session, p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<OverprintJob>> {
     let kinds = kinds(p, cmd, keys)?;
-    let d = &s.doc()?.doc;
-    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0))?
-        .into_iter()
-        .map(|(fill, it, ids)| (fill, it, super::appearance::drop_design_art(d, ids)))
-        .zip(kinds.iter().map(|k| k.1))
-        .collect())
+    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0), true)?.into_iter().zip(kinds.iter().map(|k| k.1)).collect())
 }
 
 /// Apply `jobs` to `d`, adding the objects changed to `changed`.
@@ -178,6 +186,10 @@ pub(super) fn apply_overprint(d: &mut Document, jobs: &[OverprintJob], cmd: &str
                     *f = *on;
                     changed.insert(*id);
                 }
+            }
+            if *fill && index.is_none() && colorized(n) && n.extras().colorize_overprint != *on {
+                n.extras_mut().colorize_overprint = *on;
+                changed.insert(*id);
             }
         }
     }
@@ -203,7 +215,7 @@ fn attributes(s: &Session, p: &Value) -> Result<AttributesInfo> {
     let d = &s.doc()?.doc;
     let mut info = AttributesInfo { ids: targets(s, p)?, recent_urls: s.recent_urls.clone(), ..Default::default() };
     super::attributes::fill_info(d, &mut info);
-    for (fill, item, ids) in aims(s, p, C, [true, false])? {
+    for (fill, item, ids) in aims(s, p, C, [true, false], false)? {
         let mut all =
             ids.iter().filter_map(|id| d.node(*id)).filter_map(|n| Some(flags(n, fill, item.resolve(&n.appearance, fill, C).ok()?))).flatten();
         let same = all.next().and_then(|first| all.all(|b| b == first).then_some(first));

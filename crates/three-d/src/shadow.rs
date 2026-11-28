@@ -1,6 +1,7 @@
 //! The shadow a 3D effect's solid casts: its faces projected along the first light onto a plane
 //! behind the object (square to the view) or below it (under the object's own vertical axis, turned
-//! with it), as one hard-edged vector shape.
+//! with it), as one vector shape. The light's Softness gives the shape a blur radius
+//! ([`ShadowPlane::blur`]); at 0 the shape stays hard-edged.
 //!
 //! Every face is projected whole, so the shape is the union of the projected faces: each contour is
 //! turned so that its face winds the same way, and the shape is filled with the nonzero rule. The
@@ -48,19 +49,35 @@ pub struct Shadow {
     /// How far the plane reaches, as a share (0.1..4): at 1 the plane is a square four times the
     /// object's largest size across.
     pub bounds: f64,
+    /// The casting light's Softness (0..1): at 0 the shadow is hard-edged, above it blurred
+    /// ([`ShadowPlane::blur`]).
+    pub softness: f64,
 }
 
 impl Default for Shadow {
     fn default() -> Self {
-        Self { position: ShadowPosition::Behind, distance: 0.0, bounds: 1.0 }
+        Self { position: ShadowPosition::Behind, distance: 0.0, bounds: 1.0, softness: 0.0 }
     }
 }
 
 impl Shadow {
     fn sanitized(self) -> Self {
-        Self { distance: finite(self.distance, 0.0, 0.0, 1.0), bounds: finite(self.bounds, 1.0, 0.1, 4.0), ..self }
+        Self {
+            distance: finite(self.distance, 0.0, 0.0, 1.0),
+            bounds: finite(self.bounds, 1.0, 0.1, 4.0),
+            softness: finite(self.softness, 0.0, 0.0, 1.0),
+            ..self
+        }
     }
 }
+
+/// The blur radius at full Softness on a plane that touches the object, as a share of the object's
+/// largest size, and what each share of Distance from Object adds to it. VectorCraft's own values.
+const BLUR_NEAR: f64 = 0.05;
+const BLUR_PER_DISTANCE: f64 = 0.2;
+
+/// Most blur radius a shadow takes, in points (the Gaussian Blur effect's own limit).
+pub const MAX_SHADOW_BLUR: f64 = 1000.0;
 
 /// The rotation and projection a solid is drawn with.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -119,6 +136,17 @@ pub struct ShadowPlane {
     foot: V3,
     /// Half the side of the square the plane ends at.
     half: f64,
+    /// The blur radius of the shadow on the plane, in points ([`ShadowPlane::blur`]).
+    blur: f64,
+}
+
+impl ShadowPlane {
+    /// The radius, in points, of the blur that softens the edges of the shadow on this plane: 0 at
+    /// Softness 0, and with Softness a share of the object's largest size that grows with the
+    /// plane's distance from the object (VectorCraft's own mapping), at most [`MAX_SHADOW_BLUR`].
+    pub fn blur(&self) -> f64 {
+        self.blur
+    }
 }
 
 /// The faces of one object's solids, gathered to cast one shadow. The solids of one object share
@@ -233,7 +261,7 @@ impl ShadowCaster {
         let p = self.projection?;
         let light = p.light()?;
         let s = shadow.sanitized();
-        let corners = || self.within(faces).flat_map(|(contours, _)| contours.iter().flatten());
+        let corners = || self.within(faces).flat_map(|face| face.contours.iter().flatten());
         let first = *corners().next()?;
         let (lo, hi) = corners()
             .fold((first, first), |(lo, hi), v| (V3(lo.0.min(v.0), lo.1.min(v.1), lo.2.min(v.2)), V3(hi.0.max(v.0), hi.1.max(v.1), hi.2.max(v.2))));
@@ -254,13 +282,15 @@ impl ShadowCaster {
         let level = corners().map(|v| n.dot(*v)).fold(f64::INFINITY, f64::min) - s.distance * size;
         let centre = V3((lo.0 + hi.0) / 2.0, (lo.1 + hi.1) / 2.0, (lo.2 + hi.2) / 2.0);
         let foot = add(centre, scale(n, level - n.dot(centre)));
-        Some(ShadowPlane { projection: p, light, reach, n, u, w, level, foot, half: 2.0 * s.bounds * size })
+        let blur = (s.softness * size * (BLUR_NEAR + BLUR_PER_DISTANCE * s.distance)).min(MAX_SHADOW_BLUR);
+        let blur = if blur.is_finite() { blur } else { 0.0 };
+        Some(ShadowPlane { projection: p, light, reach, n, u, w, level, foot, half: 2.0 * s.bounds * size, blur })
     }
 
     /// The shadow the faces in the ranges `faces` cast on `plane`, on the page, filled with the
     /// nonzero rule; `None` when nothing of it falls within the plane.
     pub fn path_on(&self, plane: &ShadowPlane, faces: &[Range<usize>]) -> Option<PathData> {
-        let &ShadowPlane { projection: p, light, reach, n, u, w, level, foot, half } = plane;
+        let &ShadowPlane { projection: p, light, reach, n, u, w, level, foot, half, .. } = plane;
         // A corner's shadow, in the plane's axes about the foot.
         let cast = |v: V3| {
             let q = add(v, scale(light, -(n.dot(v) - level) / reach));
@@ -269,8 +299,8 @@ impl ShadowCaster {
         };
         let to_page = |q: Point| p.project(add(foot, add(scale(u, q.x), scale(w, q.y))));
         let mut bp = BezPath::new();
-        for (contours, _) in self.within(faces) {
-            let flat: Vec<Vec<Point>> = contours.iter().map(|c| c.iter().map(|v| cast(*v)).collect()).collect();
+        for face in self.within(faces) {
+            let flat: Vec<Vec<Point>> = face.contours.iter().map(|c| c.iter().map(|v| cast(*v)).collect()).collect();
             let turn: f64 = flat.iter().map(|c| signed_area(c)).sum();
             // A face edge-on to the light casts nothing.
             if flat_area(turn, flat.iter().flatten()) {
@@ -335,11 +365,11 @@ pub fn inflate_shadowed(
 }
 
 /// Revolve's surface ([`crate::revolve`]) and, from the same sweep, the faces
-/// [`ShadowCaster::revolve`] adds for it with the nonzero fill rule. An error where
+/// [`ShadowCaster::revolve`] adds for it with the fill rule of `options`. An error where
 /// [`crate::revolve`] gives one.
 pub fn revolve_shadowed(path: &PathData, bounds: Rect, options: Revolve) -> Result<(Vec<Face>, SolidFaces), String> {
     let mut kept = vec![];
-    let (faces, lost) = crate::revolve_sweep(path, FillRule::NonZero, bounds, options, true, Some(&mut kept))?;
+    let (faces, lost) = crate::revolve_sweep(path, options.fill_rule, bounds, options, true, Some(&mut kept), None)?;
     let projection = Some(crate::revolve_projection(bounds, options.sanitized()));
     Ok((faces, SolidFaces { faces: lost.map_or(Ok(kept), Err), projection }))
 }

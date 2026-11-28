@@ -1,194 +1,246 @@
-//! The Properties panel: context-sensitive sections like Illustrator's.
+//! The Properties panel: sections that change with the selection.
 
+use craft::behavior::{ColumnWidth, IconId};
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::contract::{LabelScheme, Props as _, Show as _, ShowContainer as _};
+use craft::ui::layout_components::{Grid, Row, Stack};
+use craft::ui::patterns::panels::Inspector;
+
+use craft::ui::runtime::commands::CommandRef;
+use craft::ui::sections::HeaderStrength;
 use egui::Ui;
 use serde_json::json;
-use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{LiveCorners, LiveShape, NodeKind, Unit, WidthProfile};
-use vectorcraft_engine::cmd::newdoc;
+use vectorcraft_doc::{LiveShape, Node, NodeKind};
 
-use super::{first_selected, pstate, set_pstate};
-use crate::theme::Tokens;
-use crate::widgets::{self, dim_label, divider, section_header};
-use crate::{VectorcraftApp, icons};
+use super::{first_selected, section};
+use crate::VectorcraftApp;
+
+/// Run-only state of the Properties panel.
+#[derive(Clone, Debug, Default)]
+pub struct PropertiesUi {
+    /// The Global Edit Options popover is open.
+    pub global_edit_open: bool,
+    /// The panel's More Options popover is open.
+    pub more_options_open: bool,
+    /// The cache of `appearance_section::edited_strokes_profiled`, keyed by (document uid, revision,
+    /// active Appearance row).
+    pub edited_profiled: Option<(ProfiledKey, bool)>,
+}
+
+/// The key of [`PropertiesUi::edited_profiled`]: (document uid, revision, active Appearance row).
+type ProfiledKey = (u64, u64, Option<usize>);
+
+/// Two equal columns: the Quick Actions and the paired buttons of the sections.
+const HALVES: [ColumnWidth; 2] = [ColumnWidth::fill(1.0); 2];
+
+/// One Quick Actions button: its label and the command it runs.
+pub(crate) struct QuickAction {
+    /// The button's label.
+    pub label: &'static str,
+    /// The command the button runs.
+    pub command: &'static str,
+}
 
 /// The panel for what is selected: the selection's kind as its heading, then its sections (Edit
 /// Artboards' with the Artboard tool, the document's with nothing selected).
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let Some(st) = app.session.active() else {
-        dim_label(ui, tl!("No document open"));
+    let inspector = Inspector::new(tl!("Properties")).title_strength(HeaderStrength::Quiet).empty(tl!("No document open"));
+    let Some(key) = target_key(app) else {
+        inspector.show(ui, |_, _| {});
         return;
     };
-    let n_sel = st.selection.len();
+    let n_sel = app.session.active().map_or(0, |st| st.selection.len());
     let anchors = crate::chrome::anchor_controls(app);
     let first = first_selected(app);
     // Edit Artboards (the Artboard tool): the active artboard, whatever is selected.
     let editing_artboards = app.session.tool_id() == "artboard";
     // Ruler guides selected on their own (a click on one): their position.
     let guides = super::transform::selected_guides(app);
-    let label = heading(first.as_ref(), n_sel, editing_artboards, guides.is_some());
-    ui.label(egui::RichText::new(label).size(11.5).color(t.text_dim));
-    ui.add_space(4.0);
-    if editing_artboards {
-        artboard_sections(app, ui);
-        return;
-    }
-    if first.is_none() {
-        match guides {
-            Some(guides) => guide_sections(app, ui, guides),
-            None => document_sections(app, ui),
-        }
-        return;
-    }
+    let header = heading(first.as_deref(), n_sel, editing_artboards, guides.is_some());
+    inspector.target(key).header(header).show(ui, |ui, _| {
+        // The reference panel's labels end in a colon beside fields that keep their own width.
+        Stack::new().fill_width().labels(LabelScheme::Form).show(ui, |ui, _| {
+            if editing_artboards {
+                artboard_sections::artboard_sections(app, ui);
+            } else if first.is_none() {
+                match guides {
+                    Some(guides) => transform_section::guide_sections(app, ui, guides),
+                    None => document_sections::document_sections(app, ui),
+                }
+            } else {
+                body(app, ui, first.as_deref(), n_sel, anchors);
+            }
+        });
+    });
+}
+
+/// The document's uid: production's field ids do not change with the selection, so neither does the key and the
+/// scroll position stays.
+fn target_key(app: &VectorcraftApp) -> Option<u64> {
+    app.session.active().map(|st| st.uid)
+}
+
+/// The sections of a selection, in the reference order.
+fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usize, anchors: crate::chrome::AnchorControls) {
+    let kind = first.map(|n| &n.kind);
     if n_sel == 1
-        && let Some(NodeKind::Group { clip: true, children }) = first.as_ref().map(|n| &n.kind)
+        && let Some(NodeKind::Group { clip: true, children }) = kind
     {
-        clip_group_buttons(app, ui, children.len() > 1);
-        divider(ui);
+        let has_contents = children.len() > 1;
+        Grid::new(&HALVES).show(ui, |ui, _| {
+            Button::command("object.clippingMask.editMask").label(tl!("Edit Clipping Path")).show(ui);
+            if has_contents {
+                Button::command("object.clippingMask.editContents").label(tl!("Edit Contents")).show(ui);
+            }
+        });
     }
     transform_section(app, ui);
-    corner_rows(app, ui);
-    divider(ui);
+    transform_section::corner_rows(app, ui);
     // The Gradient tool: the gradient's type and, for a freeform one, how clicks add points (#921).
     if app.session.tool_id() == "gradient" {
-        section_header(ui, tl!("Gradient"));
-        super::gradient::type_row(app, ui);
-        super::gradient::draw_radios(app, ui);
-        divider(ui);
+        section(tl!("Gradient")).show(ui, |ui, _| {
+            super::gradient::type_row(app, ui);
+            super::gradient::draw_radios(app, ui);
+        });
     }
-    let is_image = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Image(_)));
+    let is_image = n_sel == 1 && matches!(kind, Some(NodeKind::Image(_)));
     if is_image {
-        image_section(app, ui);
-        divider(ui);
+        object_sections::image_section(app, ui);
     }
     if let Some((preset, view)) = crate::panels::image_trace::selected_trace(app) {
-        trace_section(app, ui, &preset, view);
-        divider(ui);
+        object_sections::trace_section(app, ui, &preset, view);
     }
-    if let Some(oop) = selected_objects_on_path(app) {
-        objects_on_path_section(app, ui, &oop);
-        divider(ui);
+    if let Some(oop) = object_sections::selected_objects_on_path(app) {
+        object_sections::objects_on_path_section(app, ui, &oop);
     }
-    if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
+    graph::section(app, ui);
+    if matches!(kind, Some(NodeKind::Text(_))) {
         type_sections(app, ui);
-        divider(ui);
     }
     if crate::dialogs::dimension::selected(app).is_some() {
         crate::dialogs::dimension::properties_section(app, ui);
-        divider(ui);
     }
-    appearance_section(app, ui);
-    divider(ui);
-    section_header(ui, tl!("Align"));
-    ui.horizontal(|ui| {
-        super::align::align_buttons(app, ui, 26.0);
-        // The rest (Distribute Objects, Distribute Spacing, Align To) is the Align panel's.
-        if widgets::icon_button(ui, "ellipsis", tl!("More Align options"), false, 26.0).clicked() {
-            app.ui.open_panel = Some("align".into());
-        }
+    appearance_section::appearance_section(app, ui);
+    section(tl!("Align")).show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
+            super::align::align_buttons(app, ui);
+            // The rest (Distribute Objects, Distribute Spacing, Align To) is the Align panel's.
+            more_options(ui, "align", tl!("More Align options"));
+        });
     });
     if n_sel > 1 {
-        divider(ui);
-        section_header(ui, tl!("Pathfinder"));
-        ui.horizontal(|ui| {
-            for (icon, tip, op) in [
-                ("squares-unite", tl!("Unite"), "unite"),
-                ("squares-subtract", tl!("Minus Front"), "minusFront"),
-                ("squares-intersect", tl!("Intersect"), "intersect"),
-                ("squares-exclude", tl!("Exclude"), "exclude"),
-            ] {
-                if widgets::icon_button(ui, icon, tip, false, 28.0).clicked() {
-                    app.run(&format!("object.pathfinder.{op}"), json!({})).ok();
+        section(tl!("Pathfinder")).show(ui, |ui, _| {
+            Row::new().show(ui, |ui, _| {
+                for (icon, tip, op) in [
+                    ("squares-unite", tl!("Unite"), "unite"),
+                    ("squares-subtract", tl!("Minus Front"), "minusFront"),
+                    ("squares-intersect", tl!("Intersect"), "intersect"),
+                    ("squares-exclude", tl!("Exclude"), "exclude"),
+                ] {
+                    IconButton::command(IconId::new(icon), CommandRef::new(format!("object.pathfinder.{op}"))).label(tip).show(ui);
                 }
-            }
-            if widgets::icon_button(ui, "ellipsis", tl!("More Pathfinder options"), false, 28.0).clicked() {
-                app.ui.open_panel = Some("pathfinder".into());
-            }
+                more_options(ui, "pathfinder", tl!("More Pathfinder options"));
+            });
         });
     }
     if anchors != crate::chrome::AnchorControls::None {
-        divider(ui);
-        section_header(ui, tl!("Anchor Point"));
-        crate::chrome::anchor_buttons(app, ui, anchors);
+        section(tl!("Anchor Point")).show(ui, |ui, _| crate::chrome::anchor_buttons(app, ui, anchors));
     }
-    divider(ui);
-    section_header(ui, tl!("Quick Actions"));
-    let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
-    let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(**l, LiveShape::Path { .. }));
-    // Blend Options for one selected blend, Merge Live Paint for a Live Paint group selected with
-    // more to merge into it, as the Properties panel overview lists them
-    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
-    // The overview names the Blend tool; the blending page has the button for a blend selected with
-    // any tool (<https://helpx.adobe.com/illustrator/using/blending-objects.html>, #4817).
-    let blend_options = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
-    let merge_live_paint = n_sel > 1 && can_merge_live_paint(app);
-    // Repeat Options for one selected repeat (radial, grid or mirror), or one object of its source
-    // art in isolation mode: Object › Repeat › Options, the dialog of the repeat options pages
-    // (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-radial-repeat-options.html>,
-    // #5181).
-    let repeat_options = n_sel == 1 && crate::menus::enabled(app, "object.repeat.options");
-    let mut actions: Vec<(&str, &str)> = vec![];
-    if n_sel > 1 {
-        actions.push((tl!("Group"), "object.group"));
-        actions.push((tl!("Make Clipping Mask"), "object.clippingMask.make"));
-    }
-    if merge_live_paint {
-        actions.push((tl!("Merge Live Paint"), "livePaint.merge"));
-    }
-    if blend_options {
-        actions.push((tl!("Blend Options"), "ui.blendOptions"));
-    }
-    if repeat_options {
-        actions.push((tl!("Repeat Options"), "object.repeat.options"));
-    }
-    if is_group {
-        actions.push((tl!("Ungroup"), "object.ungroup"));
-        actions.push((tl!("Isolate Group"), "object.isolate"));
-    }
-    if is_live {
-        actions.push((tl!("Expand Shape"), "object.expandShape"));
-    }
-    // A dynamic symbol instance with appearance changes of its own: Reset shows the symbol's again.
-    if super::symbols::changed_instances_selected(app) {
-        actions.push((tl!("Reset"), "symbol.instance.reset"));
-    }
-    if multi_color(app, ui.ctx()) {
-        actions.push((tl!("Recolor"), "ui.recolorDialog"));
-    }
-    if is_image {
-        crate::panels::image_trace::trace_button(app, ui, ui.available_width());
-        actions.push((tl!("Crop Image"), "ui.cropImage"));
-        actions.push((tl!("Mask"), "object.maskImage"));
-        // Remove Background at once with its defaults, as the reference app's Quick Actions do
-        // (<https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
-        actions.push((tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND));
-    }
-    // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
-    // live through the Appearance panel's Effect › Path › Offset Path (#2238).
-    let type_only = app.session.active().is_some_and(|st| {
-        let mut nodes = st.selection.objects.iter().filter_map(|id| st.doc.node(*id));
-        nodes.all(|n| matches!(n.kind, NodeKind::Text(_)))
+    section(tl!("Quick Actions")).show(ui, |ui, _| {
+        if is_image {
+            crate::panels::image_trace::trace_button(app, ui);
+        }
+        quick_action_buttons(app, ui);
+        appearance_section::global_edit_row(app, ui);
     });
-    if !type_only {
-        actions.push((tl!("Offset Path"), "object.path.offsetPath"));
-        actions.push((tl!("Simplify"), "object.path.simplify"));
-    }
-    actions.push((tl!("Arrange: Bring to Front"), "object.arrange.bringToFront"));
-    actions.push((tl!("Lock"), "object.lock"));
-    // Lock and Isolate Group are left out while their commands are off (in isolation mode, while
-    // an opacity mask is edited).
-    actions.retain(|(_, id)| !matches!(*id, "object.lock" | "object.isolate") || crate::menus::enabled(app, id));
-    let w = (ui.available_width() - 6.0) / 2.0;
-    for pair in actions.chunks(2) {
-        ui.horizontal(|ui| {
-            for (label, id) in pair {
-                if widgets::flat_button(ui, label, w).clicked() {
-                    crate::menus::invoke(app, id, json!({}));
+}
+
+fn quick_action_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
+    // Several images and nothing else: Embed and Unembed… for them, first.
+    let images = crate::place::SeveralImages::selected(app);
+    Grid::new(&HALVES).show(ui, |ui, _| {
+        if let Some(images) = &images {
+            for action in images.shown(app) {
+                if Button::new(action.label()).show(ui).clicked() {
+                    images.run(app, action);
                 }
             }
-        });
-    }
-    global_edit_row(app, ui);
+        }
+        for action in quick_actions(app) {
+            Button::command(action.command).label(action.label).show(ui);
+        }
+    });
+}
+
+/// The ellipsis button that shows the panel `panel` for the section's further options.
+fn more_options(ui: &mut Ui, panel: &str, tip: &'static str) {
+    IconButton::command(IconId::new("ellipsis"), CommandRef::with_params("window.panel", json!({ "panel": panel }))).label(tip).show(ui);
+}
+
+/// The Quick Actions the selection offers, in order. Lock and Isolate Group are left out while their commands are
+/// off (in isolation mode, while an opacity mask is edited).
+pub(crate) fn quick_actions(app: &mut VectorcraftApp) -> Vec<QuickAction> {
+    let n_sel = super::selection_len(app);
+    let first = first_selected(app);
+    let kind = first.as_deref().map(|n| &n.kind);
+    let (has_group, all_vector) = app.session.active().map_or((false, false), |st| {
+        let kinds = || st.selection.objects.iter().map(|id| st.doc.node(*id).map(|node| &node.kind));
+        (
+            kinds().any(|kind| matches!(kind, Some(NodeKind::Group { .. }))),
+            kinds().all(|kind| matches!(kind, Some(NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }))),
+        )
+    });
+    let is_live = matches!(kind, Some(NodeKind::Path { live: Some(l), .. }) if !matches!(**l, LiveShape::Path { .. }));
+    // Blend Options for one selected blend, Merge Live Paint for a Live Paint group selected with more to merge into
+    // it, as the Properties panel overview lists them
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>,
+    // <https://helpx.adobe.com/illustrator/using/blending-objects.html>, #4817).
+    let blend_options = n_sel == 1 && matches!(kind, Some(NodeKind::Blend { .. }));
+    let merge_live_paint = n_sel > 1 && can_merge_live_paint(app);
+    // Repeat Options for one selected repeat, or one object of its source art in isolation mode (#5181).
+    let repeat_options = n_sel == 1 && crate::menus::enabled(app, "object.repeat.options");
+    let is_image = n_sel == 1 && matches!(kind, Some(NodeKind::Image(_)));
+    let mut actions = vec![];
+    let mut add = |on: bool, label: &'static str, command: &'static str| {
+        if on {
+            actions.push(QuickAction { label, command });
+        }
+    };
+    add(n_sel > 1, tl!("Group"), "object.group");
+    add(n_sel > 1, tl!("Make Clipping Mask"), "object.clippingMask.make");
+    add(n_sel > 1 && all_vector, tl!("Unite"), "object.pathfinder.unite");
+    add(merge_live_paint, tl!("Merge Live Paint"), "livePaint.merge");
+    add(blend_options, tl!("Blend Options"), "ui.blendOptions");
+    add(repeat_options, tl!("Repeat Options"), "object.repeat.options");
+    add(has_group, tl!("Ungroup"), "object.ungroup");
+    add(n_sel == 1 && has_group, tl!("Isolate Group"), "object.isolate");
+    add(is_live, tl!("Expand Shape"), "object.expandShape");
+    // A dynamic symbol instance with appearance changes of its own: Reset shows the symbol's again.
+    add(super::symbols::changed_instances_selected(app), tl!("Reset"), "symbol.instance.reset");
+    add(multi_color(app), tl!("Recolor"), "ui.recolorDialog");
+    add(is_image, tl!("Crop Image"), "ui.cropImage");
+    add(is_image, tl!("Mask"), "object.maskImage");
+    // Remove Background at once with its defaults.
+    add(is_image, tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND);
+    // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets live through the
+    // Appearance panel's Effect › Path › Offset Path (#2238).
+    let (has_type, type_only) = app.session.active().map_or((false, false), |st| {
+        let is_text = |id: &vectorcraft_doc::NodeId| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)));
+        let objects = &st.selection.objects;
+        (objects.iter().any(is_text), !objects.is_empty() && objects.iter().all(is_text))
+    });
+    // A type selection's own Quick Actions: Create Outlines, Retype and Find and Replace…
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
+    let retype = has_type && (crate::menus::enabled(app, "ui.retype") || crate::menus::enabled(app, "type.retype"));
+    add(has_type, tl!("Create Outlines"), "type.createOutlines");
+    add(retype, tl!("Retype"), "ui.retype");
+    add(has_type, tl!("Find and Replace…"), "ui.findAndReplace");
+    add(!type_only, tl!("Offset Path"), "object.path.offsetPath");
+    add(!type_only, tl!("Simplify"), "object.path.simplify");
+    add(true, tl!("Arrange: Bring to Front"), "object.arrange.bringToFront");
+    add(true, tl!("Lock"), "object.lock");
+    actions.retain(|a| !matches!(a.command, "object.lock" | "object.isolate") || crate::menus::enabled(app, a.command));
+    actions
 }
 
 /// Whether Merge Live Paint can take the selection: a Live Paint group among the selected objects
@@ -201,514 +253,20 @@ fn can_merge_live_paint(app: &VectorcraftApp) -> bool {
     })
 }
 
-/// The Corners of the one path whose corners Direct Selection has selected: their kind and radius,
-/// which `object.setLiveShape` sets on those corners. The Properties panel overview shows the
-/// control while the Direct Selection tool is chosen and a corner of an object is selected
-/// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
-/// A live rectangle's and a live polygon's own rows already set the selected corners.
-fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if app.session.tool_id() != "directSelection" {
-        return;
-    }
-    let Some(st) = app.session.active() else { return };
-    let [id] = st.selection.objects[..] else { return };
-    let Some(n) = st.doc.node(id) else { return };
-    if matches!(n.live_shape(), Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. })) {
-        return;
-    }
-    let Some(lc) = LiveCorners::of(n) else { return };
-    if st.selection.partial(id).is_none_or(|a| lc.corners_of(a).is_empty()) {
-        return;
-    }
-    let n = n.clone();
-    let kind = super::corner_style(app, &n).1;
-    let kinds: Vec<&str> = vectorcraft_geom::shapes::CornerKind::ALL.iter().map(|k| crate::dialogs::corners::kind_label(*k)).collect();
-    let fw = super::field_width(ui);
-    egui::Grid::new("props-corners").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
-        dim_label(ui, tl!("Corner:"));
-        let picked = widgets::dropdown_names(ui, ("props-corners", "kind"), kind.map_or("", crate::dialogs::corners::kind_label), &kinds, fw);
-        if let Some(k) = picked.and_then(|i| vectorcraft_geom::shapes::CornerKind::ALL.get(i)) {
-            app.run("object.setLiveShape", json!({"kind": k})).ok();
-        }
-        ui.end_row();
-        dim_label(ui, tl!("Corner Radius:"));
-        super::corner_radius_field(app, ui, &n, ("props-corners", "radius"), fw);
-        ui.end_row();
-    });
-}
-
-/// Start Global Edit (Stop Global Edit while it is on) with the Global Edit Options beside it, in
-/// Quick Actions as the help page places them
-/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html>).
-fn global_edit_row(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let on = app.session.active().is_some_and(|d| d.global_edit.is_some());
-    if !crate::menus::enabled(app, "select.globalEdit") {
-        return;
-    }
-    ui.horizontal(|ui| {
-        let label = if on { tl!("Stop Global Edit") } else { tl!("Start Global Edit") };
-        if widgets::flat_button(ui, label, ui.available_width() - 26.0).clicked() {
-            crate::menus::invoke(app, "select.globalEdit", json!({}));
-        }
-        let options = widgets::icon_button_enabled(ui, "chevron-down", tl!("Global Edit Options"), false, !on, 20.0);
-        egui::Popup::menu(&options)
-            .open_memory(global_edit_options_open(&options, on))
-            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .show(|ui| global_edit_options(app, ui));
-    });
-}
-
-/// The open state for a Global Edit Options dropdown's popup: a click on the button toggles the
-/// popup, and the popup is closed while Global Edit is on, including when Global Edit starts with
-/// the popup open.
-pub(crate) fn global_edit_options_open(options: &egui::Response, on: bool) -> Option<egui::SetOpenCommand> {
-    if on { Some(egui::SetOpenCommand::Bool(false)) } else { options.clicked().then_some(egui::SetOpenCommand::Toggle) }
-}
-
-/// The Global Edit Options: what else similar objects must share (Match), where they may lie (On
-/// Artboards) and how many objects that takes now. The Control bar's Global Edit Options dropdown
-/// shows them too.
-pub(crate) fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.set_min_width(220.0);
-    let o = app.session.global_edit_options.clone();
-    let set = |app: &mut VectorcraftApp, p: serde_json::Value| crate::menus::invoke(app, "select.globalEditOptions", p);
-    widgets::subheader(ui, tl!("Match"));
-    if widgets::check(ui, tl!("Appearance"), o.appearance, true) {
-        set(app, json!({ "appearance": !o.appearance }));
-    }
-    if widgets::check(ui, tl!("Size"), o.size, true) {
-        set(app, json!({ "size": !o.size }));
-    }
-    widgets::subheader(ui, tl!("On Artboards"));
-    if widgets::check(ui, tl!("All Artboards"), o.artboards.is_none(), true) {
-        set(app, json!({ "artboards": if o.artboards.is_some() { "all" } else { "1" } }));
-    }
-    if let Some(range) = &o.artboards {
-        ui.horizontal(|ui| {
-            ui.label(tl!("Range:"));
-            if let Some(r) = widgets::text_field(ui, "global-edit-range", Some(range), 120.0, 1) {
-                set(app, json!({ "artboards": r }));
-            }
-        });
-    }
-    if widgets::check(ui, tl!("Include Objects On Canvas"), o.include_canvas, true) {
-        set(app, json!({ "includeCanvas": !o.include_canvas }));
-    }
-    dim_label(ui, &global_edit_results(global_edit_count(app, ui.ctx())));
-}
-
-/// The options' line with how many objects Start Global Edit would take, in the interface language.
-pub(crate) fn global_edit_results(n: usize) -> String {
-    crate::i18n::tn(n as u64, "Result: {n}", "Results: {n}")
-}
-
-/// The cached Results count: the (document, revision, options, one selected object) it was
-/// found for, and the count.
-type GlobalEditCount = Option<((u64, u64, vectorcraft_engine::cmd::globaledit::Options, Option<u64>), usize)>;
-
-/// How many objects Start Global Edit would take now (the options' Results line), cached per
-/// document revision, options and selected object, as finding them walks the whole document.
-fn global_edit_count(app: &VectorcraftApp, ctx: &egui::Context) -> usize {
-    let Some(st) = app.session.active() else { return 0 };
-    let selected = match st.selection.objects.as_slice() {
-        [id] => Some(id.0),
-        _ => None,
-    };
-    let key = (st.uid, st.revision, app.session.global_edit_options.clone(), selected);
-    match pstate::<GlobalEditCount>(ctx, "props-global-edit-count") {
-        Some((k, count)) if k == key => count,
-        _ => {
-            let count = vectorcraft_engine::cmd::globaledit::match_count(&app.session);
-            set_pstate::<GlobalEditCount>(ctx, "props-global-edit-count", Some((key, count)));
-            count
-        }
-    }
-}
-
-/// The one selected clip group's Edit Clipping Path and Edit Contents, at the top of the panel as in
-/// the reference app ("With the clip group selected, click the Edit Clipping Path button at the top
-/// of the Properties panel to select and edit the mask, or click the Edit Contents button to select
-/// and edit the masked content", <https://www.adobe.com/learn/illustrator/web/crop-using-masks>):
-/// they select its clipping path or its clipped art for the selection tools, as Object › Clipping
-/// Mask does. Edit Contents only when the group clips something.
-fn clip_group_buttons(app: &mut VectorcraftApp, ui: &mut Ui, has_contents: bool) {
-    let w = (ui.available_width() - 6.0) / 2.0;
-    ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("Edit Clipping Path"), w).clicked() {
-            crate::menus::invoke(app, "object.clippingMask.editMask", json!({}));
-        }
-        if has_contents && widgets::flat_button(ui, tl!("Edit Contents"), w).clicked() {
-            crate::menus::invoke(app, "object.clippingMask.editContents", json!({}));
-        }
-    });
-}
-
-/// The one selected image: its file (or Embedded), colour mode and resolution, and the Links
-/// panel's actions for it.
-fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let Some(i) = crate::place::selected_image_info(app) else { return };
-    let (name, details) = crate::place::image_summary(i);
-    let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return };
-    section_header(ui, if linked { tl!("Linked File") } else { tl!("Embedded Image") });
-    ui.add(egui::Label::new(egui::RichText::new(&name).size(12.0).color(t.text_strong)).truncate());
-    dim_label(ui, &details);
-    ui.add_space(4.0);
-    let w = (ui.available_width() - 6.0) / 2.0;
-    let links = crate::panels::links::ID;
-    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, crate::place::LinkButtons::Width(w)));
-    ui.horizontal(|ui| {
-        if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Replace…"), w).clicked() {
-            crate::panels::links::replace(app, vec![id]);
-        }
-        if widgets::flat_button(ui, tl!("Links"), w).clicked() {
-            app.ui.open_panel = Some(links.into());
-        }
-    });
-}
-
-/// The one selected Image Trace object: its preset (choosing another traces it again with that
-/// one), view, a button to reveal the tracing controls, Expand and Release.
-fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vectorcraft_doc::TraceView) {
-    section_header(ui, tl!("Image Trace"));
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Preset:"));
-        crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
-    });
-    ui.horizontal(|ui| crate::panels::image_trace::view_row(app, ui, view, ui.available_width()));
-    if widgets::flat_button(ui, tl!("Image Trace"), ui.available_width()).clicked() {
-        crate::panels::image_trace::open_settings(app);
-    }
-    let w = (ui.available_width() - 6.0) / 2.0;
-    ui.horizontal(|ui| {
-        for (label, id) in [(tl!("Expand"), "imageTrace.expand"), (tl!("Release"), "imageTrace.release")] {
-            if widgets::flat_button(ui, label, w).clicked() {
-                app.run(id, json!({})).ok();
-            }
-        }
-    });
-}
-
-/// The Objects on Path groups selected with nothing else: their ids, the Pivot and Rotate they
-/// share (`None` where they differ), and whether Detach can take an object off the path: one group,
-/// neither hidden nor locked, with an object chosen with its Select/Move widget that is neither
-/// hidden nor locked.
-struct ObjectsOnPathSelection {
-    ids: Vec<u64>,
-    pivot: Option<u8>,
-    rotate: Option<f64>,
-    detachable: bool,
-}
-
-/// The selection as Objects on Path groups ([`ObjectsOnPathSelection`]), when every selected
-/// object is one.
-fn selected_objects_on_path(app: &VectorcraftApp) -> Option<ObjectsOnPathSelection> {
-    let st = app.session.active()?;
-    let mut out: Option<ObjectsOnPathSelection> = None;
-    for id in &st.selection.objects {
-        let rec = st.doc.node(*id)?.extras().objects_on_path.as_deref()?;
-        match &mut out {
-            None => {
-                let chosen = st.selection.on_path_member.filter(|m| st.selection.objects.len() == 1 && rec.members.iter().any(|x| x.id == *m));
-                let detachable = chosen.is_some_and(|m| st.doc.is_editable(*id) && st.doc.is_editable(m));
-                out = Some(ObjectsOnPathSelection { ids: vec![id.0], pivot: Some(rec.pivot), rotate: Some(rec.rotate), detachable });
-            }
-            Some(s) => {
-                s.ids.push(id.0);
-                if s.pivot != Some(rec.pivot) {
-                    s.pivot = None;
-                }
-                if s.rotate != Some(rec.rotate) {
-                    s.rotate = None;
-                }
-            }
-        }
-    }
-    out
-}
-
-/// The Objects on Path Options of the selected Objects on Path groups: Pivot, the point of each
-/// object that attaches to the path, and Rotate, the angle each object tilts by from upright on the
-/// path, as the help page places them in the Properties panel
-/// (<https://helpx.adobe.com/illustrator/using/objects-on-path.html>). A change goes to every
-/// selected group in one undo step (`object.objectsOnPath.options`). Where the groups differ, no
-/// Pivot square is chosen and Rotate is blank. Detach takes the object chosen with its Select/Move
-/// widget off the path (`object.objectsOnPath.detach`), and is dimmed until one is chosen.
-fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsOnPathSelection) {
-    section_header(ui, tl!("Objects on Path Options"));
-    let fw = super::field_width(ui);
-    let set = |app: &mut VectorcraftApp, mut p: serde_json::Value| {
-        p["ids"] = json!(oop.ids);
-        if let Err(e) = app.run("object.objectsOnPath.options", p) {
-            app.status(e);
-        }
-    };
-    egui::Grid::new("props-objects-on-path").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
-        dim_label(ui, tl!("Pivot:"));
-        // 9 is no square: the groups' pivots differ.
-        if let Some(i) = widgets::reference_point_named(ui, oop.pivot.map_or(9, usize::from), tl!("Pivot:"))
-            && oop.pivot.is_none_or(|p| usize::from(p) != i)
-        {
-            set(app, json!({ "pivot": i }));
-        }
-        ui.end_row();
-        dim_label(ui, tl!("Rotate:"));
-        if let Some(a) = widgets::spin_plain(ui, "props-oop-rotate", oop.rotate, "°", 2, fw, 15.0, -360.0, &super::transform::ANGLE_PRESETS)
-            && oop.rotate != Some(a)
-        {
-            set(app, json!({ "rotate": a }));
-        }
-        ui.end_row();
-    });
-    let w = ui.available_width();
-    if ui.add_enabled_ui(oop.detachable, |ui| widgets::flat_button(ui, tl!("Detach"), w)).inner.clicked()
-        && let Err(e) = app.run("object.objectsOnPath.detach", json!({}))
-    {
-        app.status(e);
-    }
-}
-
 /// Whether the selection uses more than one colour (`recolor.colors`), which offers the Recolor
-/// quick action; cached per document revision.
-fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
+/// quick action; memoised per document revision.
+pub(crate) fn multi_color(app: &mut VectorcraftApp) -> bool {
     let Some(st) = app.session.active() else { return false };
     let key = (st.uid, st.revision);
-    match pstate::<Option<((u64, u64), bool)>>(ctx, "props-multi-color") {
-        Some((k, multi)) if k == key => multi,
-        _ => {
-            let r = app.session.execute("recolor.colors", &json!({})).unwrap_or_default();
-            let multi = r["colors"].as_array().is_some_and(|c| c.len() > 1);
-            set_pstate(ctx, "props-multi-color", Some((key, multi)));
-            multi
-        }
+    if let Some((k, multi)) = app.canvas.multi_color
+        && k == key
+    {
+        return multi;
     }
-}
-
-/// Edit Artboards (the Artboard tool), as in the reference app (#5219): a Transform section with
-/// the active artboard's reference point, position and size (as in the Transform panel: X and Y
-/// are the reference point's, and a new W or H keeps it in place, with the Constrain Width and
-/// Height Proportions link; with Scale Artwork with Artboard on, a new size scales its art, #602;
-/// a new W or H, preset or orientation goes to every selected artboard, in one undo step), its
-/// preset and orientation (#671), and Move and Scale Artwork with Artboard; then an Artboards
-/// section with its name, which can be edited to rename it, the Artboard Options icon, its Fill
-/// (background color, also for every selected artboard), New Artboard and Delete Artboard; and
-/// Quick Actions: Rearrange All (#681) and Exit back to the Selection tool (#530).
-fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
-    let i = super::artboards::selected(app, n);
-    if let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() {
-        section_header(ui, tl!("Transform"));
-        let fw = super::field_width(ui);
-        super::transform::artboard_fields(app, ui, i, ab.rect, fw);
-        artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
-        ui.add_space(2.0);
-        super::artboards::art_options(app, ui);
-        divider(ui);
-        section_header(ui, tl!("Artboards"));
-        // The field shows the artboard's name as it is (names are never translated). Typing a new
-        // name and pressing Enter or clicking elsewhere renames the artboard as the Artboards panel's
-        // rename does; pressing Escape or leaving the field empty keeps the old name. A click on
-        // the icon opens the artboard's Artboard Options, as double-clicking the Artboard tool's
-        // button does.
-        ui.horizontal(|ui| {
-            let w = (ui.available_width() - 26.0 - ui.spacing().item_spacing.x).max(80.0);
-            if let Some(name) = widgets::text_field_named(ui, ("ab", "name"), Some(tl!("Name:")), Some(&ab.name), w, 1).filter(|n| !n.is_empty()) {
-                app.run("artboard.setProps", json!({"index": i, "name": name})).ok();
-            }
-            if widgets::icon_button(ui, "dc-artboard-options", tl!("Artboard Options"), false, 26.0).clicked() {
-                app.run("tool.options", json!({"tool": "artboard"})).ok();
-            }
-        });
-        artboard_fill_row(app, ui, i, ab.color);
-    }
-    ui.add_space(4.0);
-    let w = (ui.available_width() - 6.0) / 2.0;
-    ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() {
-            super::artboards::add_new(app);
-        }
-        let deletable = n > 1 && !super::artboards::deletable(app, n).is_empty();
-        if ui.add_enabled_ui(deletable, |ui| widgets::flat_button(ui, tl!("Delete Artboard"), w)).inner.clicked() {
-            super::artboards::delete_selected(app);
-        }
-    });
-    divider(ui);
-    section_header(ui, tl!("Quick Actions"));
-    ui.horizontal(|ui| {
-        rearrange_button(app, ui, n, w);
-        if widgets::flat_button(ui, tl!("Exit"), w).clicked() {
-            app.select_tool("selection");
-        }
-    });
-}
-
-/// Rearrange All (#681): opens Rearrange All Artboards; disabled with fewer than two artboards.
-fn rearrange_button(app: &mut VectorcraftApp, ui: &mut Ui, artboards: usize, w: f32) {
-    if ui.add_enabled_ui(artboards > 1, |ui| widgets::flat_button(ui, tl!("Rearrange All"), w)).inner.clicked() {
-        super::artboards::open_rearrange(app);
-    }
-}
-
-/// A preset `pw` × `ph` turned to an artboard's orientation (`landscape`, or portrait; a square
-/// preset as it is).
-fn turned(landscape: bool, pw: f64, ph: f64) -> (f64, f64) {
-    if (pw > ph) == landscape || pw == ph { (pw, ph) } else { (ph, pw) }
-}
-
-/// Artboard `i`'s size preset (New Document's saved and built-in presets, by category, either way
-/// round; Custom when its `w` × `h` points match none) and its orientation, here and in the Control
-/// bar. A preset sizes each selected artboard in its own orientation; an orientation swaps the
-/// width and height of each selected artboard that is not square and not already in it. Each
-/// top-left corner stays put.
-pub(crate) fn artboard_size_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, w: f64, h: f64) {
-    let Some(choice) = artboard_size_controls(app, ui, w, h) else { return };
-    let scale_art = super::artboards::scale_art(app);
-    let indices = super::artboards::resized_with(app, i);
-    super::artboards::set_props(app, &indices, json!({"scaleArt": scale_art}), |j, r| {
-        let (width, height) = choice.size_for(r.width(), r.height())?;
-        Some(json!({"index": j, "width": width, "height": height}))
-    })
-    .ok();
-}
-
-/// A shared picker choice, applied separately to each artboard's orientation.
-#[derive(Clone, Copy)]
-pub(crate) enum ArtboardSizeChoice {
-    Preset(f64, f64),
-    Orientation(bool),
-}
-
-impl ArtboardSizeChoice {
-    pub(crate) fn size_for(self, w: f64, h: f64) -> Option<(f64, f64)> {
-        match self {
-            Self::Preset(pw, ph) => Some(turned(w > h, pw, ph)),
-            Self::Orientation(landscape) if (w > h) != landscape && w != h => Some((h, w)),
-            Self::Orientation(_) => None,
-        }
-    }
-}
-
-/// Shared existing presets/orientation UI. Dialogs keep the chosen size in their draft until OK.
-pub(crate) fn artboard_size_controls(app: &VectorcraftApp, ui: &mut Ui, w: f64, h: f64) -> Option<ArtboardSizeChoice> {
-    artboard_size_controls_inner(app, ui, w, h, None).0
-}
-
-/// The dialog's shared preset/orientation picker with optional artwork and selection fits.
-/// The second return value is a chosen Fit: false for all artwork, true for selected artwork.
-pub(crate) fn artboard_size_controls_with_fit(
-    app: &VectorcraftApp,
-    ui: &mut Ui,
-    w: f64,
-    h: f64,
-    enabled: [bool; 2],
-) -> (Option<ArtboardSizeChoice>, Option<bool>) {
-    artboard_size_controls_inner(app, ui, w, h, Some(enabled))
-}
-
-/// Properties and Control keep their ordinary picker; Artboard Options adds two Fit entries.
-fn artboard_size_controls_inner(
-    app: &VectorcraftApp,
-    ui: &mut Ui,
-    w: f64,
-    h: f64,
-    fits: Option<[bool; 2]>,
-) -> (Option<ArtboardSizeChoice>, Option<bool>) {
-    let landscape = w > h;
-    let same = |s: &newdoc::DocSettings| {
-        let (pw, ph) = turned(landscape, s.width, s.height);
-        (pw - w).abs() < 0.01 && (ph - h).abs() < 0.01
-    };
-    // Recent holds documents made, not presets.
-    let cats: Vec<(&str, Vec<newdoc::DocSettings>)> = newdoc::category_names()
-        .filter(|c| !c.eq_ignore_ascii_case("Recent"))
-        .filter_map(|c| Some((c, newdoc::category(&app.session, c)?)))
-        .filter(|(_, l)| !l.is_empty())
-        .collect();
-    let current = cats.iter().flat_map(|(_, l)| l).find(|s| same(s)).map_or(tl!("Custom"), |s| crate::dialogs::preset_name(&s.name)).to_string();
-    // The preset's width and height as listed, or the orientation clicked.
-    let mut preset = None;
-    let mut orientation = None;
-    let mut fit = None;
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Preset:"));
-        preset = widgets::combo(ui, "ab-preset", &current, PRESET_MENU_WIDTH, |ui| {
-            let mut chosen = None;
-            if let Some(enabled) = fits {
-                for (selection, label) in [(false, tl!("Fit to Artwork Bounds")), (true, tl!("Fit to Selected Art"))] {
-                    if widgets::menu_item_name(ui, label, enabled[usize::from(selection)], false) {
-                        fit = Some(selection);
-                    }
-                }
-                ui.separator();
-            }
-            for (cat, list) in &cats {
-                ui.menu_button(tl!(cat), |ui| {
-                    widgets::menu_scroll(ui, |ui| {
-                        for s in list {
-                            if widgets::menu_item_name(ui, crate::dialogs::preset_name(&s.name), true, same(s)) {
-                                chosen = Some((s.width, s.height));
-                            }
-                        }
-                    });
-                });
-            }
-            chosen
-        });
-        ui.spacing_mut().item_spacing.x = 2.0;
-        for (is_landscape, tip) in [(false, tl!("Portrait")), (true, tl!("Landscape"))] {
-            if widgets::orientation_button(ui, is_landscape, landscape == is_landscape, tip) {
-                orientation = Some(is_landscape);
-            }
-        }
-    });
-    (preset.map(|(w, h)| ArtboardSizeChoice::Preset(w, h)).or_else(|| orientation.map(ArtboardSizeChoice::Orientation)), fit)
-}
-
-/// The width of the artboard size row's Preset menu.
-const PRESET_MENU_WIDTH: f32 = 140.0;
-
-/// The width of the artboard size row's Portrait and Landscape buttons, 26 points each, with the
-/// 2 points between them.
-const ORIENTATION_BUTTONS_WIDTH: f32 = 2.0 * 26.0 + 2.0;
-
-/// The widths of the parts of [`artboard_size_row`] in a row, as [`crate::chrome::Fit::room`] takes
-/// them: the Preset label, its menu, and the Portrait and Landscape buttons.
-pub(crate) fn artboard_size_row_widths(ui: &Ui) -> [f32; 3] {
-    [widgets::dim_label_width(ui, tl!("Preset:")), PRESET_MENU_WIDTH, ORIENTATION_BUTTONS_WIDTH]
-}
-
-/// Artboard `i`'s Fill, its background `color`: the chip shows it (the None paint when the artboard
-/// has none) and a click on it opens the Color Picker for the artboard. The list sets None, White or
-/// Black (in the document's color mode) or opens the Color Picker.
-fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Option<Color>) {
-    let fills = super::artboards::fill_colors(app);
-    let shown = super::artboards::fill_name(app, color);
-    let mut options = super::artboards::FILLS.to_vec();
-    options.push("Color Picker…");
-    let mut set = None;
-    let mut pick = false;
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Fill:"));
-        let paint = color.map_or(Paint::None, Paint::solid);
-        let chip = widgets::chip_button(ui, 22.0, false, |ui, r| {
-            widgets::proxy_chip(ui, r, &paint, false, None);
-        });
-        pick = chip.on_hover_text(tl!("Color Picker…")).clicked();
-        match widgets::dropdown_named(ui, "ab-fill", Some(tl!("Fill:")), shown, &options, 110.0) {
-            Some(k) if k < fills.len() => set = Some(fills[k]),
-            Some(_) => pick = true,
-            None => {}
-        }
-    });
-    // A Fill chosen from the list goes to every selected artboard, in one undo step (#5698).
-    if let Some(c) = set {
-        let color = c.as_ref().map(super::color_json);
-        let indices = super::artboards::renamed_with(app, i);
-        super::artboards::set_props(app, &indices, json!({}), |j, _| Some(json!({"index": j, "color": color}))).ok();
-    }
-    if pick {
-        app.run("ui.colorPicker", json!({"artboard": i})).ok();
-    }
+    let r = app.session.execute("recolor.colors", &json!({})).unwrap_or_default();
+    let multi = r["colors"].as_array().is_some_and(|c| c.len() > 1);
+    app.canvas.multi_color = Some((key, multi));
+    multi
 }
 
 /// The panel's heading: what the sections are for (the artboards with the Artboard tool, the
@@ -724,332 +282,20 @@ fn heading(first: Option<&vectorcraft_doc::Node>, n_sel: usize, editing_artboard
     }
 }
 
-/// Ruler guides selected on their own: a Transform section with the X of the vertical ones and
-/// the Y of the horizontal ones, which move them, as the Transform panel shows them (#1597).
-fn guide_sections(app: &mut VectorcraftApp, ui: &mut Ui, guides: (Option<f64>, Option<f64>)) {
-    section_header(ui, tl!("Transform"));
-    let fw = super::field_width(ui);
-    super::transform::guide_fields(app, ui, guides, fw);
-}
+mod appearance_section;
+mod artboard_sections;
+mod document_sections;
+mod object_sections;
+mod transform_section;
+mod type_sections;
 
-fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let units = app.session.general_unit();
-    section_header(ui, tl!("Document"));
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Units"));
-        let labels: Vec<&str> = Unit::ALL.iter().map(|u| u.label()).collect();
-        if let Some(i) = widgets::dropdown(ui, "units", units.label(), &labels, 140.0) {
-            app.run("document.setUnits", json!({"units": labels[i]})).ok();
-        }
-    });
-    let w = (ui.available_width() - 6.0) / 2.0;
-    ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("Document Setup"), w).clicked() {
-            app.run("file.documentSetup", json!({})).ok();
-        }
-        if widgets::flat_button(ui, tl!("Edit Artboards"), w).clicked() {
-            app.select_tool("artboard");
-        }
-    });
-    let artboards = app.session.active().map_or(0, |d| d.doc.artboards.len());
-    if artboards > 1 {
-        rearrange_button(app, ui, artboards, w);
-    }
-    divider(ui);
-    section_header(ui, tl!("Appearance"));
-    fill_stroke_rows(app, ui);
-    divider(ui);
-    section_header(ui, tl!("Rulers & Grids"));
-    ui.horizontal(|ui| {
-        let v = app.ui.view.clone();
-        if widgets::icon_button(ui, "ruler", tl!("Show Rulers (⌘R)"), v.rulers, 26.0).clicked() {
-            app.run("view.rulers", json!({})).ok();
-        }
-        if widgets::icon_button(ui, "grid-3x3", tl!("Show Grid (⌘')"), v.grid, 26.0).clicked() {
-            app.run("view.grid", json!({})).ok();
-        }
-        let transparency_grid = app.session.active().is_some_and(|d| d.transparency_grid);
-        if widgets::icon_button(ui, "square-dashed", tl!("Show Transparency Grid"), transparency_grid, 26.0).clicked() {
-            app.run("view.transparencyGrid", json!({})).ok();
-        }
-    });
-    divider(ui);
-    section_header(ui, tl!("Guides"));
-    ui.horizontal(|ui| {
-        let v = app.ui.view.clone();
-        if widgets::icon_button(ui, "layout-grid", tl!("Show Guides"), v.guides, 26.0).clicked() {
-            app.run("view.guides", json!({})).ok();
-        }
-        if widgets::icon_button(ui, "sparkles", tl!("Smart Guides (⌘U)"), v.smart_guides, 26.0).clicked() {
-            app.run("view.smartGuides", json!({})).ok();
-        }
-    });
-    divider(ui);
-    section_header(ui, tl!("Snap Options"));
-    if widgets::check(ui, tl!("Snap to Point"), app.ui.view.snap_to_point, true) {
-        app.ui.view.snap_to_point ^= true;
-    }
-    if widgets::check(ui, tl!("Snap to Grid"), app.ui.view.snap_to_grid, true) {
-        app.ui.view.snap_to_grid ^= true;
-    }
-    divider(ui);
-    section_header(ui, tl!("Preferences"));
-    let fw = super::field_width(ui);
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Keyboard Increment"));
-        if let Some(v) = widgets::num_field(ui, "kbinc", Some(app.session.prefs.keyboard_increment), units, fw) {
-            app.session.prefs.keyboard_increment = v.max(0.001);
-        }
-    });
-    let ss = app.session.prefs.scale_strokes;
-    if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
-        super::transform::set_pref(app, "scaleStrokes", !ss);
-    }
-    divider(ui);
-    section_header(ui, tl!("Quick Actions"));
-    let w = (ui.available_width() - 6.0) / 2.0;
-    ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("Document Setup"), w).clicked() {
-            app.run("file.documentSetup", json!({})).ok();
-        }
-        if widgets::flat_button(ui, tl!("Preferences"), w).clicked() {
-            app.run("edit.preferences", json!({})).ok();
-        }
-    });
-}
-
-pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if app.session.active().is_none() {
-        return;
-    }
-    let units = app.session.general_unit();
-    let origin = app.ruler_origin();
-    // The bounding box, rotated with rotated objects (as in the Transform panel).
-    let Some(bx) = app.selection_box() else {
-        dim_label(ui, tl!("No Selection"));
-        return;
-    };
-    let b = bx.rect;
-    // The reference point, or a symbol instance's registration point: X/Y are read and set there
-    // and the rotation and flips turn and mirror the selection about it, as in the Transform panel.
-    let reference = super::transform::panel_reference(app, ui, &bx);
-    let (refi, rp) = (reference.index, reference.point);
-    let copy = super::transform::alt_enter_copies(app, ui);
-    section_header(ui, tl!("Transform"));
-    let fw = super::field_width(ui);
-    ui.horizontal(|ui| {
-        if let Some(i) = widgets::reference_point(ui, refi) {
-            ui.data_mut(|d| d.insert_temp(egui::Id::unique("refpt"), i));
-        }
-        ui.add_space(6.0);
-        let link = super::transform::proportional(app, ui);
-        egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-            dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field_named(ui, "tx", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, fw) {
-                super::transform::run_transform(
-                    app,
-                    "object.setBounds",
-                    json!({"x": reference.bounds_xy(v + origin.x, 0.0).0, "reference": refi, "copy": copy}),
-                );
-            }
-            dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field_named(ui, "tw", Some(tl!("W:")), Some(b.width()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy}));
-            }
-            ui.end_row();
-            dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field_named(ui, "ty", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, fw) {
-                super::transform::run_transform(
-                    app,
-                    "object.setBounds",
-                    json!({"y": reference.bounds_xy(0.0, v + origin.y).1, "reference": refi, "copy": copy}),
-                );
-            }
-            dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field_named(ui, "th", Some(tl!("H:")), Some(b.height()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy}));
-            }
-            ui.end_row();
-        });
-        super::transform::constrain_link(app, ui);
-    });
-    let fw = super::field_width(ui);
-    ui.horizontal(|ui| {
-        let icon = icons::icon(ui, "rotate-ccw", 16.0, Tokens::get(ui.ctx()).icon);
-        crate::scrub::note_label(ui, icon.rect);
-        // The bounding box's angle: a new value turns the selection to it.
-        if let Some(a) = widgets::plain_field_named(ui, "rot", Some(tl!("Rotation")), bx.angle, "°", 2, fw) {
-            super::transform::run_transform(app, "object.rotate", json!({"angle": a, "absolute": true, "origin": reference.origin(), "copy": copy}));
-        }
-        ui.add_space(10.0);
-        // Lucide's flip icons are named for their mirror line: flip-vertical-2 draws a vertical
-        // line (the left-right flip), flip-horizontal-2 a horizontal one (top-bottom). The labels
-        // are the reference app's Properties panel names for the same buttons (#1910).
-        if widgets::icon_button(ui, "flip-vertical-2", tl!("Flip Along Horizontal Axis"), false, 24.0).clicked() {
-            super::transform::run_transform(app, "object.reflect", json!({"axis": "vertical", "origin": reference.origin()}));
-        }
-        if widgets::icon_button(ui, "flip-horizontal-2", tl!("Flip Along Vertical Axis"), false, 24.0).clicked() {
-            super::transform::run_transform(app, "object.reflect", json!({"axis": "horizontal", "origin": reference.origin()}));
-        }
-        // More Options: the Transform panel's Scale Corners and Scale Strokes & Effects, open
-        // while they are toggled.
-        let more = widgets::icon_button(ui, "ellipsis", tl!("More Options"), false, 24.0);
-        egui::Popup::menu(&more).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            let (sc, ss) = (app.session.prefs.scale_corners, app.session.prefs.scale_strokes);
-            if widgets::check(ui, tl!("Scale Corners"), sc, true) {
-                super::transform::set_pref(app, "scaleCorners", !sc);
-            }
-            if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
-                super::transform::set_pref(app, "scaleStrokes", !ss);
-            }
-        });
-    });
-    // Live shape properties.
-    if let Some(n) = first_selected(app)
-        && let NodeKind::Path { live: Some(live), .. } = &n.kind
-    {
-        super::transform::live_shape_rows(app, ui, &n, live, "props", false);
-    }
-}
-
-fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some(n) = first_selected(app) else { return };
-    section_header(ui, tl!("Appearance"));
-    fill_stroke_rows(app, ui);
-    width_profile_row(app, ui);
-    let fw = super::field_width(ui);
-    ui.horizontal(|ui| {
-        widgets::field_label(ui, egui::RichText::new(tl!("Opacity")).size(12.0));
-        ui.add_space(8.0);
-        if let Some(o) = widgets::range_field(ui, "ap-op", n.opacity as f64 * 100.0, 0.0..=100.0, "%", 0, fw) {
-            app.run("object.setProps", json!({"opacity": o})).ok();
-        }
-        if widgets::icon_button(ui, "ellipsis", tl!("Transparency"), false, 22.0).clicked() {
-            app.ui.open_panel = Some("transparency".into());
-        }
-    });
-    // The effects of one selected object: the fill's and stroke's as well as its own.
-    let effects: Vec<(Option<usize>, usize, &str)> = if super::selection_len(app) == 1 {
-        let own = n.appearance.effects.iter().enumerate().map(|(k, e)| (None, k, e.id.as_str()));
-        let items =
-            n.appearance.items.iter().enumerate().flat_map(|(i, it)| it.effects().iter().enumerate().map(move |(k, e)| (Some(i), k, e.id.as_str())));
-        own.chain(items).collect()
-    } else {
-        vec![]
-    };
-    ui.horizontal(|ui| {
-        // The fx button opens the effect menu, as the Appearance panel's does.
-        let r = widgets::flat_button(ui, "fx", 34.0).on_hover_text(tl!("Add New Effect"));
-        egui::Popup::menu(&r).show(|ui| super::appearance::fx_menu(app, ui));
-        effect_delete(app, ui, n.id, &effects);
-        if widgets::icon_button(ui, "ellipsis", tl!("Appearance panel"), false, 22.0).clicked() {
-            app.ui.open_panel = Some("appearance".into());
-        }
-    });
-}
-
-/// The Delete icon beside the fx button, as the Properties panel overview has it
-/// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>):
-/// with one effect applied, its name and an icon that removes it (`effect.remove`); with several,
-/// the icon opens the Appearance panel to remove them there. Nothing without effects.
-fn effect_delete(app: &mut VectorcraftApp, ui: &mut Ui, id: vectorcraft_doc::NodeId, effects: &[(Option<usize>, usize, &str)]) {
-    match effects {
-        [] => {}
-        [(item, k, effect)] => {
-            let t = Tokens::get(ui.ctx());
-            let name = super::appearance::shown_effect_label(effect);
-            // A long name is cut short before the Delete and Appearance panel icons.
-            let room = (ui.available_width() - 2.0 * (22.0 + ui.spacing().item_spacing.x)).max(0.0);
-            ui.allocate_ui(egui::vec2(room, 22.0), |ui| ui.add(egui::Label::new(egui::RichText::new(name).size(12.0).color(t.text)).truncate()));
-            if widgets::icon_button(ui, "trash-2", tl!("Remove Effect"), false, 22.0).clicked() {
-                app.run("effect.remove", json!({"ids": [id.0], "item": item, "index": k})).ok();
-            }
-        }
-        _ => {
-            if widgets::icon_button(ui, "trash-2", tl!("Remove Effect"), false, 22.0).clicked() {
-                app.ui.open_panel = Some("appearance".into());
-            }
-        }
-    }
-}
-
-/// The stroke's Variable Width Profile (the Control bar's list), shown while the Width tool is in
-/// use or the stroke has a variable width, as the Properties panel overview places it
-/// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
-fn width_profile_row(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let stroke = super::current_stroke(app);
-    let profile = stroke.as_ref().and_then(|s| s.profile.as_ref());
-    if app.session.tool_id() != "width" && WidthProfile::id_of(profile) == "uniform" {
-        return;
-    }
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Profile:"));
-        if let Some(id) = super::stroke::profile_dropdown(app, ui, profile) {
-            app.run("stroke.set", json!({"profile": id})).ok();
-        }
-    });
-}
-
-/// The Fill and Stroke rows, with the Control bar's widgets: the chips (a click opens the
-/// swatches, Shift-click the mixer), the Stroke link that opens the Stroke panel as a popover
-/// and the weight spinner with its presets. With nothing selected they set up the next object.
-fn fill_stroke_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let weight = super::stroke::shown_weight(app, super::current_stroke(app).as_ref(), &super::stroke_mixed(app, ui.ctx()));
-    let fw = super::field_width(ui);
-    ui.horizontal(|ui| {
-        super::paint_chip(app, ui, false, 22.0, true);
-        ui.label(egui::RichText::new(tl!("Fill")).size(12.0).color(t.text));
-    });
-    ui.horizontal(|ui| {
-        super::paint_chip(app, ui, true, 22.0, true);
-        super::stroke::link(app, ui, tl!("Stroke"));
-        ui.add_space(8.0);
-        super::stroke::weight_field(app, ui, "ap-w", weight, fw);
-    });
-}
-
-pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some(n) = first_selected(app) else {
-        dim_label(ui, tl!("Select a text object"));
-        return;
-    };
-    let NodeKind::Text(tx) = &n.kind else {
-        dim_label(ui, tl!("Select a text object"));
-        return;
-    };
-    let s = tx.first_style();
-    section_header(ui, tl!("Character"));
-    // The font, Font Size, Leading, Kerning and Tracking as in the Character panel.
-    let w = ui.available_width();
-    super::character::font_pickers(app, ui, &s, ("font", "font-style"), (w - 4.0, w - 4.0));
-    super::character::variable_font(app, ui, &s, w - 4.0);
-    super::character::metrics_grid(app, ui, "props-char", &s, w, false);
-    section_header(ui, tl!("Paragraph"));
-    // As in the Paragraph panel: the seven alignments and Hyphenate (#775), and area type's
-    // vertical alignment (#3759); the rest is there.
-    if let Some((_, para)) = super::character::text_style(app) {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 3.0;
-            super::paragraph::alignment_buttons(app, ui, &para, 24.0);
-            if widgets::icon_button(ui, "ellipsis", tl!("More Paragraph options"), false, 24.0).clicked() {
-                app.ui.open_panel = Some("paragraph".into());
-            }
-        });
-        // Area type: its vertical alignment in the frame (#3759).
-        if vertical_align::shown(app).is_some() {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 3.0;
-                vertical_align::buttons(app, ui, 24.0);
-            });
-        }
-        super::paragraph::hyphenate_check(app, ui, &para);
-        // Area type: Dynamic Text's Block and its gaps.
-        dynamic_text::rows(app, ui);
-    }
-}
+pub(crate) use appearance_section::{GlobalEditKey, global_edit_popover};
+pub(crate) use artboard_sections::{ArtboardSizeChoice, artboard_presets, artboard_size_controls, artboard_size_row};
+pub use transform_section::transform_section;
+pub use type_sections::type_sections;
 
 pub(crate) mod dynamic_text;
+pub(crate) mod graph;
 pub(crate) mod vertical_align;
 
 #[cfg(test)]

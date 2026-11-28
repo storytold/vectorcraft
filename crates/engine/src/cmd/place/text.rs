@@ -3,8 +3,8 @@
 
 use serde_json::Value;
 
-use super::super::utf16_order_without_mark;
-use super::{Point, Rect, Result, bad, bool_or, fileio, shapes, str_param};
+use super::super::{text_param, utf16_order_without_mark};
+use super::{Point, Rect, Result, bad, fileio, shapes, switch_or};
 
 /// Text files as `file.place` reports them (not a format `document.open` reads).
 pub(super) const FORMAT: fileio::Format = fileio::Format {
@@ -22,13 +22,68 @@ pub(super) const FORMAT: fileio::Format = fileio::Format {
 /// document may give.
 pub(super) const MAX_TEXT: usize = 4 << 20;
 
+/// A character set of Text Import Options (`text.characterSet`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum CharacterSet {
+    /// UTF-8, or UTF-16 with or without a byte-order mark ([`decode`]).
+    #[default]
+    Unicode,
+    /// The platform's 8-bit character set: Windows-1252, or Mac Roman on a Mac.
+    Ansi,
+    ShiftJis,
+    Gb2312,
+    ChineseBig5,
+    Cyrillic,
+    Gb18030,
+    Greek,
+    Turkish,
+    Baltic,
+    CentralEuropean,
+}
+
+/// Each character set by its `text.characterSet` value.
+const CHARACTER_SETS: [(&str, CharacterSet); 11] = [
+    ("unicode", CharacterSet::Unicode),
+    ("ansi", CharacterSet::Ansi),
+    ("shiftJis", CharacterSet::ShiftJis),
+    ("gb2312", CharacterSet::Gb2312),
+    ("chineseBig5", CharacterSet::ChineseBig5),
+    ("cyrillic", CharacterSet::Cyrillic),
+    ("gb18030", CharacterSet::Gb18030),
+    ("greek", CharacterSet::Greek),
+    ("turkish", CharacterSet::Turkish),
+    ("baltic", CharacterSet::Baltic),
+    ("centralEuropean", CharacterSet::CentralEuropean),
+];
+
+impl CharacterSet {
+    /// The Encoding Standard decoder of a set other than Unicode and ANSI, for a file from a Mac
+    /// when `mac`: GB2312 reads as GBK, Cyrillic as windows-1251 (x-mac-cyrillic on a Mac), and
+    /// Greek, Turkish, Baltic and Central European as windows-1253, 1254, 1257 and 1250 on both
+    /// platforms.
+    fn encoding(self, mac: bool) -> Option<&'static encoding_rs::Encoding> {
+        Some(match self {
+            Self::Unicode | Self::Ansi => return None,
+            Self::ShiftJis => encoding_rs::SHIFT_JIS,
+            Self::Gb2312 => encoding_rs::GBK,
+            Self::ChineseBig5 => encoding_rs::BIG5,
+            Self::Cyrillic if mac => encoding_rs::X_MAC_CYRILLIC,
+            Self::Cyrillic => encoding_rs::WINDOWS_1251,
+            Self::Gb18030 => encoding_rs::GB18030,
+            Self::Greek => encoding_rs::WINDOWS_1253,
+            Self::Turkish => encoding_rs::WINDOWS_1254,
+            Self::Baltic => encoding_rs::WINDOWS_1257,
+            Self::CentralEuropean => encoding_rs::WINDOWS_1250,
+        })
+    }
+}
+
 /// Text Import Options (`file.place`'s `text` param).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct TextOptions {
-    /// Decode as the platform's 8-bit character set (Windows-1252 or Mac Roman) instead of
-    /// Unicode.
-    ansi: bool,
-    /// The file comes from a Mac (its 8-bit character set is Mac Roman).
+    /// The character set the file's bytes are decoded as.
+    character_set: CharacterSet,
+    /// The file comes from a Mac (its ANSI set is Mac Roman, its Cyrillic set x-mac-cyrillic).
     mac: bool,
     /// Join the lines of each block of text (blank lines end paragraphs).
     remove_line_returns: bool,
@@ -45,11 +100,13 @@ impl TextOptions {
         if !t.is_object() {
             return Err(bad(cmd, "text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}"));
         }
-        let choice = |key: &str, values: [&str; 2]| match str_param(t, key) {
-            None => Ok(false),
-            Some(v) if v == values[0] => Ok(false),
-            Some(v) if v == values[1] => Ok(true),
-            Some(v) => Err(bad(cmd, format!("text.{key} `{v}`: use \"{}\" or \"{}\"", values[0], values[1]))),
+        // The index of `text[key]` in `values`; 0 when it is omitted or null.
+        let choice = |key: &str, values: &[&str]| -> Result<usize> {
+            let Some(v) = text_param(t, key, cmd)? else { return Ok(0) };
+            values.iter().position(|x| *x == v).ok_or_else(|| {
+                let (last, rest) = values.split_last().map_or(("", &[][..]), |(last, rest)| (*last, rest));
+                bad(cmd, format!("text.{key} `{v}`: use \"{}\" or \"{}\"", rest.join("\", \""), last))
+            })
         };
         let spaces_to_tab = match t.get("replaceSpaces") {
             None | Some(Value::Null) => None,
@@ -58,11 +115,12 @@ impl TextOptions {
                     as usize,
             ),
         };
+        let set = choice("characterSet", &CHARACTER_SETS.map(|(name, _)| name))?;
         Ok(Self {
-            ansi: choice("characterSet", ["unicode", "ansi"])?,
-            mac: choice("platform", ["windows", "mac"])?,
-            remove_line_returns: bool_or(t, "removeLineReturns", false),
-            remove_paragraph_returns: bool_or(t, "removeParagraphReturns", false),
+            character_set: CHARACTER_SETS.get(set).map_or(CharacterSet::Unicode, |(_, s)| *s),
+            mac: choice("platform", &["windows", "mac"])? == 1,
+            remove_line_returns: switch_or(t, "removeLineReturns", false, cmd)?,
+            remove_paragraph_returns: switch_or(t, "removeParagraphReturns", false, cmd)?,
             spaces_to_tab,
         })
     }
@@ -80,10 +138,15 @@ pub(super) fn import(bytes: &[u8], o: TextOptions, cmd: &str) -> Result<String> 
 /// `bytes` as text: Unicode (UTF-8, or UTF-16 with a byte-order mark, or without one when the
 /// file has an even length, reads as valid UTF-16 with no NUL character in the byte order
 /// [`utf16_order_without_mark`] gives; bytes that aren't UTF-8 are read as the platform's 8-bit
-/// set), or the platform's 8-bit character set.
+/// set), the platform's 8-bit character set, or another set's decoder
+/// ([`CharacterSet::encoding`]), which reads a byte-order mark as ordinary bytes and a malformed
+/// sequence as U+FFFD.
 fn decode(bytes: &[u8], o: TextOptions) -> String {
+    if let Some(encoding) = o.character_set.encoding(o.mac) {
+        return encoding.decode_without_bom_handling(bytes).0.into_owned();
+    }
     let eight_bit = |b: &[u8]| -> String { b.iter().map(|&c| if o.mac { mac_roman(c) } else { windows_1252(c) }).collect() };
-    if o.ansi {
+    if o.character_set == CharacterSet::Ansi {
         return eight_bit(bytes);
     }
     let utf16 = |rest: &[u8], le: bool| {
@@ -122,20 +185,7 @@ pub(in crate::cmd) fn windows_1252(b: u8) -> char {
 
 /// Byte `b` of Mac Roman.
 pub(in crate::cmd) fn mac_roman(b: u8) -> char {
-    const HIGH: [char; 128] = [
-        'Ä', 'Å', 'Ç', 'É', 'Ñ', 'Ö', 'Ü', 'á', 'à', 'â', 'ä', 'ã', 'å', 'ç', 'é', 'è', //
-        'ê', 'ë', 'í', 'ì', 'î', 'ï', 'ñ', 'ó', 'ò', 'ô', 'ö', 'õ', 'ú', 'ù', 'û', 'ü', //
-        '†', '°', '¢', '£', '§', '•', '¶', 'ß', '®', '©', '™', '´', '¨', '≠', 'Æ', 'Ø', //
-        '∞', '±', '≤', '≥', '¥', 'µ', '∂', '∑', '∏', 'π', '∫', 'ª', 'º', 'Ω', 'æ', 'ø', //
-        '¿', '¡', '¬', '√', 'ƒ', '≈', '∆', '«', '»', '…', '\u{A0}', 'À', 'Ã', 'Õ', 'Œ', 'œ', //
-        '–', '—', '“', '”', '‘', '’', '÷', '◊', 'ÿ', 'Ÿ', '⁄', '€', '‹', '›', 'ﬁ', 'ﬂ', //
-        '‡', '·', '‚', '„', '‰', 'Â', 'Ê', 'Á', 'Ë', 'È', 'Í', 'Î', 'Ï', 'Ì', 'Ó', 'Ô', //
-        '\u{F8FF}', 'Ò', 'Ú', 'Û', 'Ù', 'ı', 'ˆ', '˜', '¯', '˘', '˙', '˚', '¸', '˝', '˛', 'ˇ',
-    ];
-    match b {
-        0x80.. => HIGH.get(usize::from(b - 0x80)).copied().unwrap_or(char::REPLACEMENT_CHARACTER),
-        _ => char::from(b),
-    }
+    craft_codepage::windows_byte(craft_codepage::MAC_ROMAN_CODE_PAGE, b)
 }
 
 /// `text` with its line breaks (CR LF, CR or LF) as paragraph breaks, cleaned up as `o` says:
@@ -278,22 +328,76 @@ mod tests {
         assert_eq!(decode(&[0xFF, 0xFE, b'h', 0, 0xE9, 0], unicode), "hé", "UTF-16 LE");
         assert_eq!(decode(&[0xFE, 0xFF, 0, b'h', 0x20, 0xAC], unicode), "h€", "UTF-16 BE");
         assert_eq!(decode(&[b'c', b'a', b'f', 0xE9, 0x80], unicode), "café€", "not UTF-8: Windows-1252");
-        let ansi = TextOptions { ansi: true, ..TextOptions::default() };
+        let ansi = TextOptions { character_set: CharacterSet::Ansi, ..TextOptions::default() };
         assert_eq!(decode(&[0x93, b'q', 0x94, 0xE9], ansi), "“q”é");
-        let mac = TextOptions { ansi: true, mac: true, ..TextOptions::default() };
-        assert_eq!(decode(&[0xD2, b'q', 0xD3, 0x8E, 0xA5, 0xDB], mac), "“q”é•€");
+        let mac = TextOptions { character_set: CharacterSet::Ansi, mac: true, ..TextOptions::default() };
+        assert_eq!(decode(&[0xD2, b'q', 0xD3, 0x8E, 0xCA, 0xA5, 0xDB, 0xDE, 0xF0], mac), "“q”é\u{a0}•€ﬁ\u{f8ff}");
+    }
+
+    /// The other character sets decode by their Encoding Standard decoders: the platform matters
+    /// for Cyrillic alone, a byte-order mark is read as ordinary bytes, and a malformed sequence
+    /// reads as U+FFFD.
+    #[test]
+    fn decodes_the_other_character_sets() {
+        let cases: [(CharacterSet, &[u8], &str); 9] = [
+            (CharacterSet::ShiftJis, &[0x93, 0xFA, 0x96, 0x7B], "日本"),
+            (CharacterSet::Gb2312, &[0xD6, 0xD0, 0xCE, 0xC4], "中文"),
+            (CharacterSet::ChineseBig5, &[0xA4, 0xA4, 0xA4, 0xE5], "中文"),
+            (CharacterSet::Cyrillic, &[0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2], "Привет"),
+            (CharacterSet::Gb18030, &[0x95, 0x32, 0x82, 0x36], "\u{20000}"),
+            (CharacterSet::Greek, &[0xC5, 0xEB, 0xEB, 0xDC, 0xE4, 0xE1], "Ελλάδα"),
+            (CharacterSet::Turkish, &[0xDD, 0x73, 0x74], "İst"),
+            (CharacterSet::Baltic, &[0x52, 0xEE, 0x67, 0x61], "Rīga"),
+            (CharacterSet::CentralEuropean, &[0xA3, 0xF3, 0x64, 0x9F], "Łódź"),
+        ];
+        for (set, bytes, text) in cases {
+            let windows = TextOptions { character_set: set, ..TextOptions::default() };
+            assert_eq!(decode(bytes, windows), text, "{set:?}");
+            if set != CharacterSet::Cyrillic {
+                assert_eq!(decode(bytes, TextOptions { mac: true, ..windows }), text, "{set:?} from a Mac");
+            }
+        }
+        let mac_cyrillic = TextOptions { character_set: CharacterSet::Cyrillic, mac: true, ..TextOptions::default() };
+        assert_eq!(decode(&[0x8F, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2], mac_cyrillic), "Привет");
+        let shift_jis = TextOptions { character_set: CharacterSet::ShiftJis, ..TextOptions::default() };
+        assert_eq!(decode(&[0x82, 0x22], shift_jis), "\u{FFFD}\"", "a lead byte before ASCII");
+        assert_eq!(decode(&[b'a', 0x82], shift_jis), "a\u{FFFD}", "a lead byte at the end");
+        let central = TextOptions { character_set: CharacterSet::CentralEuropean, ..TextOptions::default() };
+        assert_eq!(decode(&[0xEF, 0xBB, 0xBF, b'A'], central), "ď»żA", "a UTF-8 byte-order mark is read as windows-1250");
+        assert_eq!(decode(&[0xFF, 0xFE, b'A', 0], shift_jis), "\u{FFFD}\u{FFFD}A\0", "a UTF-16 byte-order mark is read as Shift JIS");
     }
 
     #[test]
     fn options_parse_and_reject_bad_values() {
         let p = serde_json::json!({"text": {"characterSet": "ansi", "platform": "mac", "removeLineReturns": true, "replaceSpaces": 4}});
         let o = TextOptions::parse(&p, "file.place").unwrap();
-        assert_eq!(o, TextOptions { ansi: true, mac: true, remove_line_returns: true, remove_paragraph_returns: false, spaces_to_tab: Some(4) });
+        assert_eq!(
+            o,
+            TextOptions {
+                character_set: CharacterSet::Ansi,
+                mac: true,
+                remove_line_returns: true,
+                remove_paragraph_returns: false,
+                spaces_to_tab: Some(4)
+            }
+        );
+        for (name, set) in CHARACTER_SETS {
+            let o = TextOptions::parse(&serde_json::json!({"text": {"characterSet": name}}), "file.place").unwrap();
+            assert_eq!(o.character_set, set, "{name}");
+        }
         assert_eq!(TextOptions::parse(&serde_json::json!({}), "file.place").unwrap(), TextOptions::default());
-        for bad in
-            [serde_json::json!({"text": 3}), serde_json::json!({"text": {"platform": "amiga"}}), serde_json::json!({"text": {"replaceSpaces": 1}})]
-        {
+        for bad in [
+            serde_json::json!({"text": 3}),
+            serde_json::json!({"text": {"platform": "amiga"}}),
+            serde_json::json!({"text": {"replaceSpaces": 1}}),
+            serde_json::json!({"text": {"characterSet": 3}}),
+            serde_json::json!({"text": {"platform": true}}),
+            serde_json::json!({"text": {"removeLineReturns": "yes"}}),
+            serde_json::json!({"text": {"removeParagraphReturns": 1}}),
+        ] {
             assert!(TextOptions::parse(&bad, "file.place").is_err(), "{bad}");
         }
+        let null = serde_json::json!({"text": {"characterSet": null, "platform": null, "removeLineReturns": null}});
+        assert_eq!(TextOptions::parse(&null, "file.place").unwrap(), TextOptions::default(), "null leaves the default");
     }
 }

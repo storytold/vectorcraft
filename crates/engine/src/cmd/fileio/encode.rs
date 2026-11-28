@@ -241,7 +241,8 @@ struct RasterOptions {
     width: Option<f64>,
     /// The height of each file in pixels (wins over `ppi` and `scale`).
     height: Option<f64>,
-    quality: Option<u8>,
+    /// JPEG and lossy WebP quality, read by [`RasterOptions::quality`].
+    quality: Option<Value>,
     background: Option<Value>,
     anti_alias: Option<String>,
     interlaced: Option<bool>,
@@ -255,6 +256,11 @@ struct RasterOptions {
     dither: Option<String>,
     dither_amount: Option<u8>,
     transparency: Option<bool>,
+    /// GIF and PNG-8 with `transparency`: none, diffusion, pattern or noise, read by
+    /// [`RasterOptions::transparency_dither`] (other formats do not check it).
+    transparency_dither: Option<Value>,
+    /// The diffusion transparency dither's strength, 0–100, read as `transparency_dither` is.
+    transparency_dither_amount: Option<Value>,
     matte: Option<Value>,
     lossless: Option<bool>,
     lzw: Option<bool>,
@@ -268,6 +274,8 @@ struct RasterOptions {
     /// PSD: Write Layers.
     layers: Option<bool>,
     max_editability: Option<bool>,
+    /// PSD: Preserve Text Editability (with layers).
+    preserve_text: Option<bool>,
     hidden_layers: Option<bool>,
     /// Appearance of Black › Printing / Exporting (`prefs.blackOutput`); agents can set it here too.
     rich_black: Option<bool>,
@@ -279,6 +287,39 @@ fn clamped_ppi(ppi: f64) -> f64 {
 }
 
 impl RasterOptions {
+    /// `quality` as given: `None` when absent or null, else a whole number 0–255 (JPEG caps it at
+    /// 100; WebP refuses more than 100), or an error naming it.
+    fn quality(&self) -> Result<Option<u8>> {
+        match &self.quality {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => v
+                .as_u64()
+                .and_then(|q| u8::try_from(q).ok())
+                .map(Some)
+                .ok_or_else(|| bad(C, format!("quality must be a whole number from 0 to 100, not {v}"))),
+        }
+    }
+
+    /// GIF and PNG-8: `transparencyDither` (absent: none, which cuts at half opacity, not
+    /// `Dither`'s own default) and `transparencyDitherAmount` (0–100, default 100), or an error.
+    fn transparency_dither(&self) -> Result<(Dither, u8)> {
+        const IDS: &str = "none, diffusion, pattern or noise";
+        let method = match &self.transparency_dither {
+            None | Some(Value::Null) => PaletteOptions::default().transparency_dither,
+            Some(Value::String(s)) => parse(Some(s), Dither::from_id, "transparencyDither", IDS)?,
+            Some(v) => return Err(bad(C, format!("transparencyDither must be {IDS}, not {v}"))),
+        };
+        let amount = match &self.transparency_dither_amount {
+            None | Some(Value::Null) => 100,
+            Some(v) => v
+                .as_u64()
+                .filter(|n| *n <= 100)
+                .and_then(|n| u8::try_from(n).ok())
+                .ok_or_else(|| bad(C, format!("transparencyDitherAmount must be a whole number from 0 to 100, not {v}")))?,
+        };
+        Ok((method, amount))
+    }
+
     /// The pixel size each file is scaled to: `width`, else `height`; `None` when neither is set.
     fn pixel_size(&self) -> Result<Option<ScreenSize>> {
         let checked = |key: &str, n: f64| {
@@ -309,7 +350,8 @@ impl RasterOptions {
             },
             anti_alias: self.anti_alias.as_deref().map(anti_alias).transpose().map_err(|e| bad(C, e))?.unwrap_or_default(),
             interlaced: self.interlaced.unwrap_or(false),
-            quality: self.quality.unwrap_or(90).min(100),
+            quality: self.quality()?.unwrap_or(90).min(100),
+            webp_lossless: self.lossless.unwrap_or(true),
             jpeg: JpegOptions {
                 color_model,
                 method: parse(self.method.as_deref(), jpeg::Method::from_id, "method", "baseline, optimized or progressive")?,
@@ -331,6 +373,7 @@ impl RasterOptions {
                     Some(v) => background(v).map_err(|e| bad(C, format!("matte: {e}")))?,
                     None => Some([255; 3]),
                 },
+                ..PaletteOptions::default()
             },
             tiff: TiffOptions {
                 color_model,
@@ -350,6 +393,7 @@ impl RasterOptions {
                 color_model,
                 layers: self.layers.unwrap_or(true),
                 max_editability: self.max_editability.unwrap_or(false),
+                preserve_text: self.preserve_text.unwrap_or(false),
                 hidden_layers: self.hidden_layers.unwrap_or(false),
                 embed_icc,
             },
@@ -374,6 +418,7 @@ fn check_options(format: RasterFormat, o: &RasterExportOptions) -> Result<()> {
     let r = match format {
         RasterFormat::Bmp if model == jpeg::ColorModel::Cmyk => Err("BMP files are RGB or grayscale: colorModel rgb or gray".to_string()),
         RasterFormat::Tga if model != jpeg::ColorModel::Rgb => Err("Targa files are RGB: colorModel rgb".to_string()),
+        RasterFormat::Psd if o.psd.preserve_text && !o.psd.layers => Err("preserveText writes type layers: it needs layers: true".to_string()),
         RasterFormat::Bmp => o.bmp.check(),
         RasterFormat::Tga => o.tga.check(),
         _ => Ok(()),
@@ -859,7 +904,7 @@ fn without_nodes(n: &Arc<Node>, left_out: &dyn Fn(&Node) -> bool, changed: Optio
 /// absent; an error when it is not four finite numbers with a positive size, when the format isn't
 /// a raster one, or when it comes with an artboard choice (`rect` is the area, so those would
 /// contradict it). The image size limits are checked with the scale, as for an artboard.
-fn page_rect(f: &Format, p: &Value) -> Result<Option<Rect>> {
+pub(super) fn page_rect(f: &Format, p: &Value) -> Result<Option<Rect>> {
     let v = match p.get("rect") {
         None | Some(Value::Null) => return Ok(None),
         Some(v) => v,
@@ -1024,7 +1069,7 @@ fn encode_all_of(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     }
     // Formats that draw type: missing fonts come out in the fallback font (PDF and SVG say so
     // themselves: SVG only when it outlines or embeds fonts).
-    if (f.raster || matches!(f.id, "eps" | "emf" | "wmf" | "hpgl"))
+    if (f.raster || matches!(f.id, "eps" | "emf" | "wmf" | "hpgl" | "cmx"))
         && let Some(w) = crate::cmd::fonts::substitution_warning(doc)
     {
         enc.warnings.push(w);
@@ -1034,12 +1079,14 @@ fn encode_all_of(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
 
 /// The file exporter plug-in `plugin` writes of `doc` in its format `f`
 /// ([`vectorcraft_plugins::export`]). The plug-in is given the native file's JSON
-/// ([`vectorcraft_format::json_part`]) and `p`'s `params`, for the file `p`'s `path` names (else
-/// one named after the document) with that path's extension when the plug-in lists it, else its
-/// first. Its warnings come back with the file, as losses (the plug-in gives them no kind).
+/// ([`vectorcraft_format::json_part`]), without an Export for Screens folder outside the read roots
+/// ([`super::access::with_readable_settings_folder`]), and `p`'s `params`, for the file `p`'s `path`
+/// names (else one named after the document) with that path's extension when the plug-in lists it,
+/// else its first. Its warnings come back with the file, as losses (the plug-in gives them no kind).
 fn plugin_file(doc: &Document, plugin: &vectorcraft_plugins::Plugin, f: &Format, p: &Value) -> Result<Encoded> {
     use vectorcraft_plugins::{Error, export};
-    let doc = &*doc.without_edit_modes();
+    let doc = doc.without_edit_modes();
+    let doc = &*super::access::with_readable_settings_folder(&doc);
     let file = vectorcraft_format::save_with(doc, &vectorcraft_format::SaveOptions::default()).map_err(|e| EngineError::Other(e.to_string()))?;
     let path = p.get("path").and_then(Value::as_str);
     let listed = path.map(super::extension).and_then(|e| f.extensions.iter().copied().find(|x| *x == e));
@@ -1063,7 +1110,7 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
     let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
     // SVG reads its own `useArtboards` (an SVG option).
-    let use_artboards = if f.raster || matches!(f.id, "pdf" | "ai" | "dxf" | "emf" | "wmf" | "hpgl") { use_artboards(C, p)? } else { None };
+    let use_artboards = if f.raster || matches!(f.id, "pdf" | "ai" | "dxf" | "emf" | "wmf" | "hpgl" | "cmx") { use_artboards(C, p)? } else { None };
     // `rect`: that area of the page, as if it were the only artboard (the document is not changed).
     if let Some(rect) = page_rect(f, p)? {
         let mut q = super::export::without_artboards(p);
@@ -1109,6 +1156,7 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
         "emf" => return super::metafile::encode(doc, p, use_artboards, vectorcraft_metafile::Kind::Emf),
         "wmf" => return super::metafile::encode(doc, p, use_artboards, vectorcraft_metafile::Kind::Wmf),
         "hpgl" => return super::hpgl::encode(doc, p, use_artboards),
+        "cmx" => return super::cmx::encode(doc, f, p, use_artboards),
         "ai" => return super::save::encode_ai(C, f, doc, p),
         "pdf" => {
             let (bytes, notes) = super::pdf::encode(C, doc, p)?;
@@ -1132,6 +1180,14 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 "psd" => RasterFormat::Psd,
                 _ => RasterFormat::WebP,
             };
+            if format == RasterFormat::WebP
+                && let Some(q) = o.quality()?.filter(|q| *q > 100)
+            {
+                return Err(bad(C, format!("quality {q}: WebP quality is 0–100")));
+            }
+            if matches!(format, RasterFormat::Gif | RasterFormat::Png8) {
+                (settings.palette.transparency_dither, settings.palette.transparency_dither_amount) = o.transparency_dither()?;
+            }
             check_options(format, &settings)?;
             // Use Artboards: one file per chosen artboard (default all); else the one chosen.
             let chosen = match use_artboards {
@@ -1178,9 +1234,6 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
             }
             let regions: Vec<Rect> = enc.files.iter().filter_map(|(b, _)| b.and_then(|b| doc.artboards.get(b))).map(|a| a.rect).collect();
             enc.warnings.extend(crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, Some(&regions)));
-            if format == RasterFormat::WebP && o.lossless == Some(false) {
-                enc.setting_notes.push("lossy WebP isn't available yet: the file is lossless (exact, but larger)".into());
-            }
             return Ok(enc);
         }
         _ => return Err(bad(C, format!("no encoder for {} yet", f.label))),

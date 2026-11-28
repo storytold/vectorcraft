@@ -1,11 +1,22 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
 //! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
-//! map), WebP Options, and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
-//! transparency and matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
+//! map), WebP Options (lossless, or lossy at a quality 0–100), and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
+//! transparency and its dither, matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
 //! ([`super::psd_options`]). Fields
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
 //! dialog's.
 
+use craft::theme::{Rgba, Srgba};
+use craft::ui::choice::Swatch;
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::display::Text;
+use craft::ui::form::SliderField;
+use craft::ui::layout_components::Row;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::text::NumberField;
+use craft::ui::value_drag::SliderScale;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format};
@@ -13,13 +24,10 @@ use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, ColorModel, Method};
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 
-use super::{DialogSpec, form, psd_options, tiff_bmp_tga};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, io, widgets};
-
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading, body, confirm, ok: Some("Export"), min_width: 360.0, inputs: |_| &["path"], ..DialogSpec::FORM };
+use super::export_host::{self, After, Export, Open};
+use super::form::{fields_of, json_of};
+use super::{psd_options, tiff_bmp_tga};
+use crate::{VectorcraftApp, io};
 
 /// Resolution presets (pixels per inch).
 pub(super) const RESOLUTIONS: [f64; 3] = [72.0, 150.0, 300.0];
@@ -32,13 +40,21 @@ const BACKGROUND_LABELS: [&str; 4] = ["Transparent", "White", "Black", "Other"];
 /// JPEG image map param values and their labels.
 const IMAGE_MAPS: [&str; 3] = ["none", "client", "server"];
 const IMAGE_MAP_LABELS: [&str; 3] = ["None", "Client-side (.html)", "Server-side (.map)"];
-/// Palette sizes offered (any 2–256 can be typed).
-const COLOR_COUNTS: [&str; 8] = ["2", "4", "8", "16", "32", "64", "128", "256"];
 /// Matte param values and their labels (`Other`: a colour).
 const MATTES: [&str; 3] = ["none", "white", "black"];
 const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
+/// The Transparency Dither labels, in [`Dither::ALL`] order.
+const TRANSPARENCY_DITHER_LABELS: [&str; 4] = ["No Transparency Dither", "Diffusion", "Pattern", "Noise"];
 /// JPEG quality on the dialog's 0–10 scale: the band each step falls in.
 const QUALITY_BANDS: [&str; 11] = ["Low", "Low", "Low", "Medium", "Medium", "Medium", "High", "High", "Maximum", "Maximum", "Maximum"];
+/// WebP compression labels: `lossless` true, then false.
+const WEBP_COMPRESSION_LABELS: [&str; 2] = ["Lossless", "Lossy"];
+/// The lossy WebP quality a new export starts with (0–100).
+const WEBP_QUALITY: u8 = 90;
+/// The colour a colour choice's `Other` starts from.
+const OTHER_COLOR: &str = "#808080";
+/// Params the engine reads as whole numbers; a row may hold them as floats or as option ids.
+const INTEGER_KEYS: [&str; 5] = ["quality", "scans", "colors", "ditherAmount", "depth"];
 
 /// The dialog kind of a raster format (`pngOptions`, `jpgOptions`, `webpOptions`, `gifOptions`,
 /// `png8Options`).
@@ -46,26 +62,43 @@ fn kind(f: &Format) -> String {
     format!("{}Options", f.id)
 }
 
-fn format_of(d: &Dialog) -> Option<&'static Format> {
-    fileio::format(d.kind.strip_suffix("Options")?)
-}
-
 /// Open the options of raster format `f` for an export whose params (format, path, artboard
 /// choice) are `params`.
-pub fn open(app: &mut VectorcraftApp, f: &Format, mut params: Value) {
-    let selection = params[super::export_as::SELECTION_FIELD] == true;
+pub fn open(app: &mut VectorcraftApp, f: &Format, params: Value) {
+    open_with(app, f, params, false);
+}
+
+/// [`open`] for Export Selection when `selection`: the size shown is the selection's crop.
+pub(crate) fn open_with(app: &mut VectorcraftApp, f: &Format, mut params: Value, selection: bool) {
     let size = app.session.active().and_then(|st| match selection {
         true => vectorcraft_engine::cmd::fileio::selection_doc(st, "document.exportSelection", false).ok().map(|(_, r)| (r.width(), r.height())),
         false => export_size(&st.doc, &params),
     });
     if let Some(o) = params.as_object_mut() {
-        o.insert("ppi".into(), json!(72));
-        o.extend(defaults(app, f));
+        let mut initial = defaults(app, f);
+        initial.insert("ppi".into(), json!(72));
+        for (key, value) in initial {
+            if o.get(&key).is_none_or(Value::is_null) {
+                o.insert(key, value);
+            }
+        }
         if let Some((w, h)) = size {
             o.insert("__size".into(), json!([w, h]));
         }
     }
-    app.ui.dialog = Some(Dialog::new(&kind(f), params));
+    let Some(ctx) = app.ui_ctx.clone() else { return };
+    let size = size.map(|(w, h)| [w, h]);
+    let (id, label, key) = (f.id, f.label, kind(f));
+    let map = params.as_object().cloned().unwrap_or_default();
+    let initial = fields_of(&raster_rows(id, false, size, &DialogFields::new()), &map);
+    let dialog = HostedParamDialog::new(&ctx, key.clone(), initial, move |fields| {
+        normalize_colors(fields);
+        if id == "bmp" {
+            tiff_bmp_tga::normalize_bmp(fields);
+        }
+        ParamDialog::new(key.clone(), heading(label), raster_rows(id, false, size, fields)).values(Bind::bound(fields)).ok_label(tl!("Export").into())
+    });
+    export_host::open(app, Export::Raster { format: id }, selection, dialog);
 }
 
 /// The options raster format `f` starts with (after the resolution): the document's background
@@ -80,6 +113,9 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
     match f.id {
         "png" => {
             o.insert("interlaced".into(), json!(false));
+        }
+        "webp" => {
+            o.extend([("lossless".into(), json!(true)), ("quality".into(), json!(WEBP_QUALITY))]);
         }
         "jpg" => {
             let model = if cmyk { ColorModel::Cmyk } else { ColorModel::Rgb };
@@ -101,6 +137,8 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
                 ("dither".into(), json!(p.dither.id())),
                 ("ditherAmount".into(), json!(p.dither_amount)),
                 ("transparency".into(), json!(p.transparency)),
+                ("transparencyDither".into(), json!(p.transparency_dither.id())),
+                ("transparencyDitherAmount".into(), json!(p.transparency_dither_amount)),
                 ("matte".into(), json!(MATTES[1])),
                 ("interlaced".into(), json!(false)),
             ]);
@@ -120,7 +158,7 @@ fn export_size(doc: &vectorcraft_doc::Document, p: &Value) -> Option<(f64, f64)>
         Some(false) => vectorcraft_render::encode::art_bounds(doc)?,
         Some(true) => match pick.resolve(n).ok()?.as_deref() {
             Some([i]) => doc.artboards.get(*i)?.rect,
-            None if n == 1 => doc.artboards[0].rect,
+            None if n == 1 => doc.artboards.first()?.rect,
             _ => return None,
         },
         None => doc.artboards.get(pick.one(n).ok()?)?.rect,
@@ -128,221 +166,234 @@ fn export_size(doc: &vectorcraft_doc::Document, p: &Value) -> Option<(f64, f64)>
     Some((r.width(), r.height()))
 }
 
-fn heading(d: &Dialog) -> String {
-    crate::i18n::fmt(tl!("{format} Options"), &[("format", format_of(d).map_or(tl!("Export"), |f| f.label))])
+fn heading(label: &str) -> String {
+    crate::i18n::fmt(tl!("{format} Options"), &[("format", label)])
 }
 
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let id = format_of(d).map_or("png", |f| f.id);
-    let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(tl!(text)).color(t.text_dim));
-    egui::Grid::new("raster-options").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        label(ui, tl!("Resolution:"));
-        let ppi = d.f64("ppi", 72.0);
-        let preset = RESOLUTIONS.iter().position(|p| *p == ppi).filter(|_| !d.bool("__otherPpi"));
-        ui.horizontal(|ui| {
-            if let Some(i) = widgets::dropdown(ui, "ro-ppi", RESOLUTION_LABELS[preset.unwrap_or(3)], &RESOLUTION_LABELS, 150.0) {
-                if let Some(p) = RESOLUTIONS.get(i) {
-                    d.fields.insert("ppi".into(), json!(p));
-                }
-                d.fields.insert("__otherPpi".into(), json!(i == 3));
-            }
-            if preset.is_none()
-                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, 1.0..=4608.0, " ppi", 0, 80.0)
-            {
-                d.fields.insert("ppi".into(), json!(v));
-            }
-        });
-        ui.end_row();
-
-        option_rows(ui, d, id, false);
-
-        if let Some([w, h]) =
-            d.fields.get("__size").and_then(Value::as_array).map(|a| [0, 1].map(|i| a.get(i).and_then(Value::as_f64).unwrap_or(0.0)))
-        {
-            label(ui, tl!("Size:"));
-            let (pw, ph) = vectorcraft_render::region_pixels(vectorcraft_geom::Rect::new(0.0, 0.0, w, h), d.f64("ppi", 72.0) / 72.0);
-            ui.label(egui::RichText::new(format!("{pw} × {ph} px")).color(t.text));
-            ui.end_row();
-        }
-    });
-    false
+/// The rows of raster format `id`'s options: resolution, the size it gives, background,
+/// anti-aliasing and the format's own. `screens` (Export for Screens' Format Settings) leaves out
+/// what its rows choose (JPEG quality) and what writes other files (image maps). `size` is the
+/// region's size in points, when one region is exported.
+pub(crate) fn raster_params(id: &str, screens: bool, size: Option<[f64; 2]>) -> Vec<Param> {
+    raster_rows(id, screens, size, &DialogFields::new())
 }
 
-/// The grid rows of raster format `id`'s options after the resolution: background, anti-aliasing
-/// and the format's own. `screens` (Export for Screens' Format Settings) leaves out what its rows
-/// choose (JPEG quality) and what writes other files (image maps).
-pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: bool) {
-    let t = Tokens::get(ui.ctx());
-    let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(tl!(text)).color(t.text_dim));
-    label(ui, tl!("Background Color:"));
-    let bg = d.str("background");
-    let choice = BACKGROUNDS.iter().position(|v| bg.eq_ignore_ascii_case(v)).unwrap_or(3);
+/// [`raster_params`] for a dialog whose rows depend on its values (BMP's palette rows).
+fn raster_rows(id: &str, screens: bool, size: Option<[f64; 2]>, fields: &DialogFields) -> Vec<Param> {
+    let mut rows = vec![resolution_row()];
+    if let Some([w, h]) = size {
+        rows.push(size_row(w, h));
+    }
     // JPEG has no transparency, nor have some TIFF, BMP and Targa options: their list starts at
     // White, which is what transparent becomes.
-    let first = usize::from(!tiff_bmp_tga::keeps_alpha(id, d));
-    ui.horizontal(|ui| {
-        if let Some(i) = widgets::dropdown(ui, "ro-bg", BACKGROUND_LABELS[choice.max(first)], &BACKGROUND_LABELS[first..], 150.0) {
-            let value = BACKGROUNDS.get(i + first).copied().unwrap_or("#808080");
-            d.fields.insert("background".into(), json!(value));
-        }
-        if choice == 3 {
-            color_button(ui, d, "background");
-        }
-    });
-    ui.end_row();
-
-    label(ui, tl!("Anti-aliasing:"));
-    let aa = AntiAlias::from_id(&d.str("antiAlias")).unwrap_or_default();
-    if let Some(i) = widgets::dropdown(ui, "ro-aa", aa.label(), &AntiAlias::ALL.map(AntiAlias::label), 150.0) {
-        d.fields.insert("antiAlias".into(), json!(AntiAlias::ALL[i].id()));
-    }
-    ui.end_row();
-
+    let format = id.to_string();
+    rows.push(color_choice("background", tl!("Background Color:"), &BACKGROUNDS, &BACKGROUND_LABELS, move |f| {
+        usize::from(!tiff_bmp_tga::keeps_alpha(&format, f))
+    }));
+    rows.push(choice("antiAlias", tl!("Anti-aliasing:"), &AntiAlias::ALL.map(AntiAlias::id), &AntiAlias::ALL.map(AntiAlias::label)));
     match id {
-        "png" => {
-            ui.label("");
-            form::check(ui, d, "interlaced", tl!("Interlaced"));
-            ui.end_row();
+        "png" => rows.push(check("interlaced", tl!("Interlaced"), false)),
+        "jpg" => rows.extend(jpeg_rows(screens)),
+        "gif" | "png8" => rows.extend(palette_rows()),
+        "webp" => rows.extend(webp_rows()),
+        "psd" => rows.extend(psd_options::params()),
+        id => rows.extend(tiff_bmp_tga::params(id, fields)),
+    }
+    rows
+}
+
+/// A dropdown row bound to `key`: one of `ids`, shown by its label.
+pub(super) fn choice(key: &str, label: &'static str, ids: &[impl AsRef<str>], labels: &[&'static str]) -> Param {
+    let options = ids.iter().zip(labels).map(|(id, l)| (id.as_ref().to_string(), tl!(*l).into())).collect();
+    Param::new(key, tl!(label), ParamKind::choice(options, ids.first().map(|id| id.as_ref().to_string())))
+}
+
+/// A check box row bound to `key`.
+pub(super) fn check(key: &str, label: &'static str, default: bool) -> Param {
+    Param::new(key, tl!(label), ParamKind::bool(default))
+}
+
+/// Resolution: a preset, or Other with a field of its own (`__otherPpi` marks Other, so a typed
+/// 72 stays Other).
+fn resolution_row() -> Param {
+    Param::custom("ppi", tl!("Resolution:"), |ui, fields, _| {
+        let ppi = fields.number("ppi").unwrap_or(72.0);
+        let preset = RESOLUTIONS.iter().position(|p| *p == ppi).filter(|_| fields.bool("__otherPpi") != Some(true));
+        let other = RESOLUTION_LABELS.len() - 1;
+        let entries: Vec<Entry<usize>> = RESOLUTION_LABELS.iter().enumerate().map(|(i, label)| Entry::new(i, tl!(*label))).collect();
+        let (mut picked, mut typed) = (None, None);
+        let shown = Row::new().show(ui, |ui, _| {
+            picked = Select::new(tl!("Resolution:"), Bind::given(preset.unwrap_or(other)), &entries).show(ui).value().copied();
+            if preset.is_none() {
+                let field = NumberField::new(tl!("Resolution:"), Bind::given(Some(ppi)))
+                    .range(1.0..=4608.0)
+                    .step(1.0)
+                    .unit_kind(UnitKind::PixelsPerInch)
+                    .show(ui);
+                typed = field.edit.value().copied().flatten();
+            }
+        });
+        if let Some(i) = picked {
+            if let Some(p) = RESOLUTIONS.get(i) {
+                fields.set("ppi", *p);
+            }
+            fields.set("__otherPpi", i == other);
         }
-        "jpg" => jpeg_rows(ui, d, &label, screens),
-        "gif" | "png8" => palette_rows(ui, d, &label),
-        "webp" => {
-            ui.label("");
-            label(ui, tl!("Lossless (lossy WebP isn't available yet)"));
-            ui.end_row();
+        if let Some(v) = typed {
+            fields.set("ppi", v);
         }
-        "psd" => psd_options::rows(ui, d, &label),
-        id => tiff_bmp_tga::rows(ui, d, id, &label),
+        shown.output
+    })
+    .companions(["__otherPpi"])
+    .opens_with(72.0)
+}
+
+/// The pixel size the region of `w` × `h` points gives at the current resolution.
+fn size_row(w: f64, h: f64) -> Param {
+    Param::custom("__sizeText", tl!("Size:"), move |ui, fields, _| {
+        let (pw, ph) = vectorcraft_render::region_pixels(vectorcraft_geom::Rect::new(0.0, 0.0, w, h), fields.number("ppi").unwrap_or(72.0) / 72.0);
+        Text::new(format!("{pw} × {ph} px")).show(ui)
+    })
+}
+
+/// A colour row: one of `ids` shown by its label, or Other (the last label) with a swatch that
+/// asks the host's colour picker. The value is an id or `"#rrggbb"`. `first` is where the list
+/// starts for the current values.
+fn color_choice(
+    key: &'static str,
+    label: &'static str,
+    ids: &'static [&'static str],
+    labels: &'static [&'static str],
+    first: impl Fn(&DialogFields) -> usize + Send + Sync + 'static,
+) -> Param {
+    Param::custom(key, tl!(label), move |ui, fields, cx| {
+        let current = fields.text(key).unwrap_or_default().to_string();
+        let at = ids.iter().position(|v| current.eq_ignore_ascii_case(v)).unwrap_or(ids.len());
+        let start = first(fields);
+        let entries: Vec<Entry<usize>> = labels.iter().enumerate().skip(start).map(|(i, l)| Entry::new(i, tl!(*l))).collect();
+        let color = (at == ids.len()).then(|| Srgba::from(Rgba::from_hex(&current).unwrap_or(Rgba::rgb(128, 128, 128))));
+        let (mut picked, mut pick_color) = (None, false);
+        let shown = Row::new().show(ui, |ui, _| {
+            picked = Select::new(tl!(label), Bind::given(at.max(start)), &entries).show(ui).value().copied();
+            if let Some(color) = color {
+                pick_color = Swatch::new(tl!(label), color).show(ui).clicked;
+            }
+        });
+        if let Some(i) = picked {
+            fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));
+        }
+        if let Some(color) = color.filter(|_| pick_color) {
+            cx.pick_color(key, color);
+        }
+        shown.output
+    })
+}
+
+/// The picker answers a colour row with a colour value; the dialog keeps one representation, the
+/// `"#rrggbb"` text the export reads.
+fn normalize_colors(fields: &mut DialogFields) {
+    for key in ["background", "matte"] {
+        if let Some([r, g, b]) = fields.color(key) {
+            let to8 = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+            fields.set(key, format!("#{:02x}{:02x}{:02x}", to8(r), to8(g), to8(b)));
+        }
     }
 }
 
 /// The JPEG Options rows: colour model, quality, method and scans, profile and image map (not
 /// quality and image map for Export for Screens).
-fn jpeg_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response, screens: bool) {
-    label(ui, tl!("Color Model:"));
-    choice(ui, d, "colorModel", &ColorModel::ALL.map(ColorModel::id), &ColorModel::ALL.map(ColorModel::label));
-    ui.end_row();
-
+fn jpeg_rows(screens: bool) -> Vec<Param> {
+    let mut rows = vec![choice("colorModel", tl!("Color Model:"), &ColorModel::ALL.map(ColorModel::id), &ColorModel::ALL.map(ColorModel::label))];
     if !screens {
-        quality_row(ui, d, label);
+        rows.push(quality_row());
     }
-    method_row(ui, d, label);
+    rows.push(choice("method", tl!("Method:"), &Method::ALL.map(Method::id), &Method::ALL.map(Method::label)));
+    let scans = ParamKind::int(Some(i64::from(*jpeg::SCANS.start())), Some(i64::from(*jpeg::SCANS.end())), 3);
+    rows.push(Param::new("scans", tl!("Scans:"), scans).visible_when("method", Method::Progressive.id()));
     if !screens {
-        label(ui, tl!("Image Map:"));
-        choice(ui, d, "imageMap", &IMAGE_MAPS, &IMAGE_MAP_LABELS);
-        ui.end_row();
+        rows.push(choice("imageMap", tl!("Image Map:"), &IMAGE_MAPS, &IMAGE_MAP_LABELS));
     }
-
-    ui.label("");
-    form::check(ui, d, "embedIcc", tl!("Embed ICC Profile"));
-    ui.end_row();
+    rows.push(check("embedIcc", tl!("Embed ICC Profile"), true));
+    rows
 }
 
 /// JPEG quality on the dialog's 0–10 scale (stored ×10).
-fn quality_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
-    label(ui, tl!("Quality:"));
-    let mut q = (d.f64("quality", 90.0) / 10.0).round().clamp(0.0, 10.0) as u8;
-    ui.horizontal(|ui| {
-        if widgets::slider(ui, egui::Slider::new(&mut q, 0..=10)).changed() {
-            d.fields.insert("quality".into(), json!(u32::from(q) * 10));
+fn quality_row() -> Param {
+    Param::custom("quality", tl!("Quality:"), |ui, fields, _| {
+        let q = (fields.number("quality").unwrap_or(90.0) / 10.0).round().clamp(0.0, 10.0);
+        let mut slid = None;
+        let shown = Row::new().show(ui, |ui, _| {
+            let out = SliderField::new(tl!("Quality:"), Bind::given(q), 0.0..=10.0).step(1.0).show(ui);
+            slid = out.edit.value().map(|v| v.round());
+            let q = slid.unwrap_or(q);
+            Text::new(tl!(QUALITY_BANDS.get(q as usize).copied().unwrap_or_default())).show(ui);
+        });
+        if let Some(v) = slid {
+            fields.set("quality", v * 10.0);
         }
-        label(ui, QUALITY_BANDS[q as usize]);
-    });
-    ui.end_row();
+        shown.output
+    })
+    .opens_with(90.0)
 }
 
-/// The JPEG method, and its scans when progressive.
-fn method_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
-    label(ui, tl!("Method:"));
-    ui.horizontal(|ui| {
-        choice(ui, d, "method", &Method::ALL.map(Method::id), &Method::ALL.map(Method::label));
-        if Method::from_id(&d.str("method")) == Some(Method::Progressive) {
-            label(ui, tl!("Scans:"));
-            let range = f64::from(*jpeg::SCANS.start())..=f64::from(*jpeg::SCANS.end());
-            if let Some(scans) = widgets::range_field(ui, "scans", d.f64("scans", 3.0), range, "", 0, 44.0) {
-                d.fields.insert("scans".into(), json!(scans as u8));
-            }
-        }
-    });
-    ui.end_row();
+/// The WebP Options rows: Lossless or Lossy compression, and the quality 0–100 that Lossy uses
+/// (disabled while Lossless is chosen, keeping its value).
+fn webp_rows() -> Vec<Param> {
+    let [lossless, lossy] = WEBP_COMPRESSION_LABELS;
+    let compression = ParamKind::radio(vec![("true".into(), tl!(lossless).into()), ("false".into(), tl!(lossy).into())], Some("true".into()));
+    vec![
+        Param::new("lossless", tl!("Compression:"), compression),
+        Param::new("quality", tl!("Quality:"), ParamKind::range(0.0, 100.0, f64::from(WEBP_QUALITY), SliderScale::Linear))
+            .enabled_when("lossless", "false"),
+    ]
 }
 
 /// The PNG-8 and GIF Options rows: the palette (reduction, colours, dither and amount),
-/// transparency and matte, interlacing.
-fn palette_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
-    label(ui, tl!("Color Reduction:"));
-    choice(ui, d, "reduction", &Reduction::ALL.map(Reduction::id), &Reduction::ALL.map(Reduction::label));
-    ui.end_row();
-
-    label(ui, tl!("Colors:"));
-    let mut n = d.f64("colors", 256.0).round().clamp(2.0, 256.0) as u16;
-    ui.horizontal(|ui| {
-        if let Some(i) = widgets::dropdown(ui, "ro-colors", &n.to_string(), &COLOR_COUNTS, 70.0) {
-            n = COLOR_COUNTS.get(i).and_then(|c| c.parse().ok()).unwrap_or(n);
-            d.fields.insert("colors".into(), json!(n));
-        }
-        if let Some(n) = widgets::range_field(ui, "colors", f64::from(n), 2.0..=256.0, "", 0, 52.0) {
-            d.fields.insert("colors".into(), json!(n as u16));
-        }
-    });
-    ui.end_row();
-
-    label(ui, tl!("Dither:"));
-    ui.horizontal(|ui| {
-        choice(ui, d, "dither", &Dither::ALL.map(Dither::id), &Dither::ALL.map(Dither::label));
-        if Dither::from_id(&d.str("dither")).is_some_and(|x| x != Dither::None)
-            && let Some(amount) = widgets::range_field(ui, "ditherAmount", d.f64("ditherAmount", 100.0), 0.0..=100.0, "%", 0, 52.0)
-        {
-            d.fields.insert("ditherAmount".into(), json!(amount as u8));
-        }
-    });
-    ui.end_row();
-
-    label(ui, tl!("Matte:"));
-    let matte = d.str("matte");
-    let at = MATTES.iter().position(|v| matte.eq_ignore_ascii_case(v)).unwrap_or(3);
-    ui.horizontal(|ui| {
-        if let Some(i) = widgets::dropdown(ui, "ro-matte", MATTE_LABELS[at], &MATTE_LABELS, 150.0) {
-            d.fields.insert("matte".into(), json!(MATTES.get(i).copied().unwrap_or("#808080")));
-        }
-        if at == 3 {
-            color_button(ui, d, "matte");
-        }
-    });
-    ui.end_row();
-
-    ui.label("");
-    ui.horizontal(|ui| {
-        form::check(ui, d, "transparency", tl!("Transparency"));
-        form::check(ui, d, "interlaced", tl!("Interlaced"));
-    });
-    ui.end_row();
+/// transparency and matte, interlacing, and Transparency Dither with the amount Diffusion uses
+/// (both disabled while Transparency is off, keeping their values).
+fn palette_rows() -> Vec<Param> {
+    let dithering = Dither::ALL.iter().copied().filter(|d| *d != Dither::None).map(Dither::id);
+    vec![
+        choice("reduction", tl!("Color Reduction:"), &Reduction::ALL.map(Reduction::id), &Reduction::ALL.map(Reduction::label)),
+        Param::new("colors", tl!("Colors:"), ParamKind::int(Some(2), Some(256), 256)),
+        choice("dither", tl!("Dither:"), &Dither::ALL.map(Dither::id), &Dither::ALL.map(Dither::label)),
+        Param::new("ditherAmount", tl!("Dither Amount:"), ParamKind::int(Some(0), Some(100), 100)).enabled_when_in("dither", dithering),
+        color_choice("matte", tl!("Matte:"), &MATTES, &MATTE_LABELS, |_| 0),
+        check("transparency", tl!("Transparency"), true),
+        choice("transparencyDither", tl!("Transparency Dither:"), &Dither::ALL.map(Dither::id), &TRANSPARENCY_DITHER_LABELS)
+            .enabled_when("transparency", true),
+        Param::new("transparencyDitherAmount", tl!("Transparency Dither Amount:"), ParamKind::int(Some(0), Some(100), 100))
+            .visible_when("transparencyDither", Dither::Diffusion.id())
+            .enabled_when("transparency", true),
+        check("interlaced", tl!("Interlaced"), false),
+    ]
 }
 
-/// A colour button bound to `d.fields[key]` (`"#rrggbb"`; grey when unset).
-pub(super) fn color_button(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
-    let c = vectorcraft_color::Color::from_hex(&d.str(key)).map_or([128, 128, 128, 255], |c| c.to_rgba8(1.0));
-    let mut rgb = [c[0], c[1], c[2]];
-    if ui.color_edit_button_srgb(&mut rgb).changed() {
-        d.fields.insert(key.into(), json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
-    }
-}
-
-/// A dropdown bound to `d.fields[key]`: one of `ids`, shown by its label (the first when unknown).
-pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, ids: &[&str], labels: &[&str]) {
-    let cur = d.str(key);
-    let at = ids.iter().position(|v| v.eq_ignore_ascii_case(&cur)).unwrap_or(0);
-    if let Some(i) = widgets::dropdown(ui, ("ro", key), labels.get(at).copied().unwrap_or_default(), labels, 150.0)
-        && let Some(v) = ids.get(i)
-    {
-        d.fields.insert(key.into(), json!(v));
+/// Whole-number params the rows hold as floats or option ids are written as integers, as the
+/// export reads them.
+fn integers(params: &mut Value) {
+    let Some(o) = params.as_object_mut() else { return };
+    for key in INTEGER_KEYS {
+        let number = match o.get(key) {
+            Some(Value::String(text)) => text.parse::<f64>().ok(),
+            Some(Value::Number(n)) => n.as_f64().filter(|_| !n.is_u64() && !n.is_i64()),
+            _ => None,
+        };
+        if let Some(n) = number.filter(|n| n.is_finite() && n.fract() == 0.0 && *n >= 0.0) {
+            o.insert(key.into(), json!(n as u64));
+        }
     }
 }
 
 /// Write the file(s) with the chosen options.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let (format, path) = (d.str("format"), d.str("path"));
-    app.ui.dialog = None;
-    io::export(app, Some(&format), Some(path), &super::export_as::exported(d, form::params(d)))
+pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Result<After, String> {
+    let format = fields.text("format").unwrap_or_default().to_string();
+    let path = fields.text("path").unwrap_or_default().to_string();
+    let id = fileio::format(&format).map_or("png", |f| f.id);
+    let mut params = Value::Object(json_of(&raster_rows(id, false, None, fields), fields));
+    integers(&mut params);
+    if format == "psd" {
+        psd_options::drop_unused(&mut params);
+    }
+    io::export(app, Some(&format), Some(path), &super::export_as::exported(open.selection, params)).map(|_| None)
 }

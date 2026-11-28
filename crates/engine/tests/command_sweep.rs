@@ -93,7 +93,7 @@ fn every_command_without_a_document() {
 }
 
 /// Regression: huge column counts used to panic with `capacity overflow`; in every layout and
-/// order (#681), with huge and negative spacing too.
+/// order (#681), with huge and negative spacing too, and with `indices` and `at`.
 #[test]
 fn artboard_rearrange_huge_columns() {
     for fx in Fixture::ALL {
@@ -105,6 +105,11 @@ fn artboard_rearrange_huge_columns() {
                     assert_eq!(probe(fx, "artboard.rearrange", &p), None);
                 }
             }
+        }
+        // Listed artboards, out of range, and the grid's top-left at the far ends of the plane.
+        for (indices, at) in [(json!([0]), json!([1e308, -1e308])), (json!([0, u64::MAX]), json!([0, 0])), (json!([]), json!([-1e308, 1e308]))] {
+            let p = json!({ "indices": indices, "at": at, "columns": u64::MAX, "spacing": 1e308 });
+            assert_eq!(probe(fx, "artboard.rearrange", &p), None);
         }
     }
 }
@@ -604,6 +609,17 @@ fn structured_junk() {
         ("brush.options", json!({"name": "Arrow", "params": {"width": -5, "direction": "diagonal", "flip_along": "yes"}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "flip_across": true}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 0, "spacing": 1e308, "fit": "nope", "side": null}})),
+        ("brush.apply", json!({"name": "Chain", "id": 2})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "colorization": {"method": "hueShift"}}}),
+        ),
+        ("brush.objectOptions", json!({"id": 2, "params": {"scale": "x", "fit": "nope", "side": null}})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"colorization": {"method": "hueShift", "key": {"model": "rgb", "r": 1e308, "g": -1e308, "b": 0}}}}),
+        ),
+        ("brush.objectOptions", json!({"ids": [1e308, -1], "params": {}, "reset": true})),
         ("path.curvature", json!({"points": [{"x": 0, "y": 0}]})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 1000, "x": 0, "y": 0})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 0, "x": 1e308, "y": -1e308})),
@@ -963,6 +979,13 @@ fn structured_junk() {
         ("addon.pathtools.trim", json!({"points": [[0, 0], [1e7, 1e7], [-1e7, 5], [0, 0]]})),
         ("addon.pathtools.trim", json!({"points": [[0, 0], [1, "y"], null]})),
         ("addon.pathtools.trim", json!({"at": [50, 50], "tolerance": 100})),
+        // Path Precision Tools: Tangent Circle.
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3], "radius": 1e6, "circle": u64::MAX})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3, 4], "radius": f64::MIN_POSITIVE, "circle": -1})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 2], "radius": "1 mm"})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3], "radius": 0.01, "circle": 64})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3, 4]})),
+        ("addon.pathtools.tangentCircle", json!({"ids": "x", "radius": f64::NAN, "circle": 1.5})),
         // Arrange Tools add-on.
         ("addon.arrange.grid", json!({"columns": u64::MAX, "gapX": 1e6, "gapY": -1e6, "centerOnArtboard": true})),
         ("addon.arrange.grid", json!({"layout": "row", "gapX": f64::MAX, "columns": -1})),
@@ -984,9 +1007,18 @@ fn structured_junk() {
         ("addon.pathtools.divideDashes", json!({"dash": 1e-308, "gap": -1e308, "fit": "x"})),
         ("addon.pathtools.divideDashes", json!({"dash": 0.01, "gap": 1e6, "fit": true, "removeGaps": false})),
         ("addon.pathtools.divideDashes", json!({"dash": f64::MAX, "gap": [0], "removeGaps": null})),
+        ("addon.pathtools.commonTangents", json!({"tangents": "all", "centerline": true})),
+        ("addon.pathtools.commonTangents", json!({"tangents": "x", "centerline": "y", "ids": [u64::MAX, -1]})),
+        ("addon.pathtools.commonTangents", json!({"tangents": null, "ids": [1, 2, 3, 4], "centerline": null})),
+        ("addon.pathtools.commonTangents", json!({"tangents": ["external"], "ids": "all"})),
         ("addon.pathtools.expandDashes", json!({})),
         ("addon.pathtools.expandDashes", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
         ("addon.pathtools.expandDashes", json!({"ids": "x", "junk": f64::MAX})),
+        ("addon.pathtools.bridge", json!({"radius": 1e-308, "keepOriginals": "x"})),
+        ("addon.pathtools.bridge", json!({"radius": 1000, "keepOriginals": true, "ids": [0, 1, 2, 3, u64::MAX]})),
+        ("addon.pathtools.bridge", json!({"radius": f64::MAX, "ids": [1, 1], "junk": [0]})),
+        ("addon.pathtools.bridge", json!({"gap": -1e308, "reach": f64::MAX, "ids": [0, 1, 2]})),
+        ("addon.pathtools.bridge", json!({"gap": 1000, "reach": 10000, "radius": null, "keepOriginals": true})),
         // Refused before anything is written: no format of that name, a time that is no time.
         ("addon.document.saveTimestampedCopy", json!({"format": "png", "folder": 7})),
         ("addon.document.saveTimestampedCopy", json!({"format": "svg", "time": [1e308], "folder": null})),
@@ -1000,6 +1032,9 @@ fn structured_junk() {
         ("addon.packaging.roles", json!({"ids": [-1, 1e300]})),
         ("addon.packaging.setRoleSwatch", json!({"role": "perforation", "swatch": "[Registration]"})),
         ("addon.packaging.setRoleSwatch", json!({"role": "cut", "swatch": 5})),
+        ("addon.packaging.check", json!({"ids": [u64::MAX, -1], "select": "yes", "tolerance": 1e308})),
+        ("addon.packaging.check", json!({"tolerance": "-5 mm", "select": true})),
+        ("addon.packaging.check", json!({"ids": [], "tolerance": null})),
         // Smart Pen add-on.
         ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
         ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),
@@ -1044,6 +1079,12 @@ fn structured_junk() {
         ("addon.type.releasePath", json!({"mode": "text", "keepOriginal": false, "id": 2})),
         ("addon.type.releasePath", json!({"mode": ["both"], "keepOriginal": "no", "ids": "all", "id": -1})),
         ("addon.type.releasePath", json!({"mode": "nope", "keepOriginal": 1e308, "ids": [1.5, null, "x"]})),
+        // Unit Converter add-on.
+        ("addon.units.convert", json!({"value": f64::MAX, "unit": "yards"})),
+        ("addon.units.convert", json!({"value": "1e308m*1e308", "unit": "q"})),
+        ("addon.units.convert", json!({"value": "-2p6/0", "unit": ["mm"]})),
+        ("addon.units.convert", json!({"value": [1], "unit": 5})),
+        ("addon.units.selectionSize", json!({"ids": [u64::MAX]})),
         // Cutting Tools add-on: Stencil Bridges.
         ("addon.cutting.bridges", json!({"width": 0.01, "count": 16, "direction": "shortest", "keepOriginal": true})),
         ("addon.cutting.bridges", json!({"width": 1000, "count": 1, "direction": "horizontal", "keepOriginal": false})),
@@ -1234,6 +1275,69 @@ fn polygon_properties_junk() {
                 Ok(_) => {
                     if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
                         failures.push(format!("object.setLiveShape {p} [{scale:?}]: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// A live rectangle's and ellipse's Rectangle and Ellipse Angle with junk values, drawn plain,
+/// scaled unevenly, flattened to nothing and sheared: never a panic, and the document stays sound.
+#[test]
+fn rectangle_and_ellipse_angle_junk() {
+    let mut failures = vec![];
+    for (shape, key) in [("shape.rectangle", "rectangleAngle"), ("shape.ellipse", "ellipseAngle")] {
+        for xf in [
+            None,
+            Some(("object.scale", json!({"sx": 300, "sy": 20}))),
+            Some(("object.scale", json!({"sx": 1e-300, "sy": 100}))),
+            Some(("object.shear", json!({"angle": 40}))),
+        ] {
+            for v in junk_values() {
+                let p = json!({ key: v });
+                let mut s = Fixture::Multi.session();
+                let Ok(_) = no_panic(s.execute(shape, &json!({"x": 60, "y": 60, "width": 80, "height": 50}))) else { continue };
+                if let Some((cmd, q)) = &xf {
+                    let _ = no_panic(s.execute(cmd, q));
+                }
+                match catch_quiet(|| no_panic(s.execute("object.setLiveShape", &p))) {
+                    Err(m) => failures.push(format!("PANIC object.setLiveShape {p} [{xf:?}]: {m}")),
+                    Ok(_) => {
+                        if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                            failures.push(format!("object.setLiveShape {p} [{xf:?}]: {e}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// A live line's Line Properties with junk values (the fixtures have no line), on a line, a line
+/// whose ends meet and one at the coordinate limit: never a panic, and the document stays sound.
+#[test]
+fn line_properties_junk() {
+    let mut cases: Vec<Value> = vec![json!({"lineLength": 4.0e6, "lineAngle": 45})];
+    for key in ["lineLength", "lineAngle"] {
+        for v in junk_values() {
+            cases.push(json!({ key: v }));
+        }
+    }
+    let mut failures = vec![];
+    for (a, b) in [((10.0, 20.0), (110.0, 70.0)), ((50.0, 50.0), (50.0, 50.0)), ((-4.0e6, 4.0e6), (4.0e6, -4.0e6))] {
+        for p in &cases {
+            let mut s = Fixture::Multi.session();
+            let Ok(_) = no_panic(s.execute("shape.line", &json!({"x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1}))) else {
+                continue;
+            };
+            match catch_quiet(|| no_panic(s.execute("object.setLiveShape", p))) {
+                Err(m) => failures.push(format!("PANIC object.setLiveShape {p} [{a:?} {b:?}]: {m}")),
+                Ok(_) => {
+                    if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                        failures.push(format!("object.setLiveShape {p} [{a:?} {b:?}]: {e}"));
                     }
                 }
             }
@@ -1479,7 +1583,41 @@ fn gradient_mesh_from_images_with_junk_params() {
     use vectorcraft_geom::Affine;
     let img = image::RgbaImage::from_fn(5, 3, |x, y| image::Rgba([x as u8 * 50, y as u8 * 90, 7, if x == 2 { 0 } else { 255 }]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let params = [
         json!({}),
         json!({"rows": 1, "cols": 1}),

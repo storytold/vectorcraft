@@ -116,13 +116,20 @@ pub(super) type Built = Result<(Document, Vec<String>), String>;
 /// look draws), no object is unread or has another placement or drawn art that the page would
 /// choose, no linked image shows a placeholder, and its artboards are the pages, one for one and of their size, in points or in the pages'
 /// units ([`page_scale_alone`]). The document is drawn at that scale. Else `Err(structure)`, for
-/// [`build_from`] with the page.
-pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Result<Built, Box<Structure>> {
-    let Some(scale) = alone_scale(&structure, data, pages, unit) else {
+/// [`build_from`] with the page. `text` keeps what was read of the text of `data` for the check and
+/// the build, and for any later build of `data`.
+pub(super) fn build_without_page(
+    structure: Structure,
+    data: &[u8],
+    pages: &[(f64, f64)],
+    unit: f64,
+    text: &mut ReadText,
+) -> Result<Built, Box<Structure>> {
+    let Some(scale) = alone_scale(&structure, data, pages, unit, text) else {
         return Err(Box::new(structure));
     };
     let (styles, own_size) = (structure.styles_read, structure.symbols_own_size);
-    let built = build_from(structure, data, None, Page::Artboard, false, false, 1.0).map(|(mut doc, notes)| {
+    let built = build_weighing(structure, data, None, Page::Artboard, false, false, 1.0, &mut None, text).map(|(mut doc, notes)| {
         if scale != 1.0 {
             // The graphic styles read from the file are drawn in its units too.
             scale_read_document(&mut doc, scale, styles, own_size);
@@ -133,9 +140,56 @@ pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f6
 }
 
 /// The scale [`build_without_page`] draws `structure` (the editing copy `data` read) at on `pages`
-/// in units of `unit` points, when it builds it without the page.
-pub(super) fn alone_scale(structure: &Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Option<f64> {
-    page_scale_alone(structure, pages, unit).filter(|_| nothing_waits_on_page(structure) && type_all_made(structure, data))
+/// in units of `unit` points, when it builds it without the page. `text` keeps what was read of the
+/// text of `data`.
+pub(super) fn alone_scale(structure: &Structure, data: &[u8], pages: &[(f64, f64)], unit: f64, text: &mut ReadText) -> Option<f64> {
+    page_scale_alone(structure, pages, unit).filter(|_| nothing_waits_on_page(structure) && type_all_made(structure, data, text))
+}
+
+/// The text objects' frames and the text document of an editing copy, each read the first time it
+/// is asked for and kept for every later check and build of the same copy.
+#[derive(Default)]
+pub(super) struct ReadText {
+    /// [`ai::text_frames`] of the copy, once scanned.
+    frames: Option<std::collections::HashMap<(u32, usize), kurbo::BezPath>>,
+    /// [`Texts::read`] of the copy, once read: `Some(None)` when it has no text document that can
+    /// be read.
+    texts: Option<Option<Texts>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// While set, [`ReadText`] keeps nothing on this thread: each check and build reads the text afresh.
+    pub(crate) static READ_AFRESH: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+impl ReadText {
+    /// Forgets what was read while [`READ_AFRESH`] is set (only in tests).
+    fn forget_in_tests(&mut self) {
+        #[cfg(test)]
+        if READ_AFRESH.get() {
+            *self = Self::default();
+        }
+    }
+
+    /// The `/Art` path of each text object of `data` ([`ai::text_frames`]).
+    fn frames(&mut self, data: &[u8]) -> &std::collections::HashMap<(u32, usize), kurbo::BezPath> {
+        self.forget_in_tests();
+        self.frames.get_or_insert_with(|| ai::text_frames(data))
+    }
+
+    /// The text document of `data` ([`Texts::read`]), if it has one that can be read.
+    fn texts(&mut self, data: &[u8]) -> Option<&Texts> {
+        self.forget_in_tests();
+        self.texts.get_or_insert_with(|| Texts::read(data)).as_ref()
+    }
+
+    /// [`Self::texts`] with its characters painted by `paints` ([`Texts::with_paints`]).
+    fn texts_with(&mut self, data: &[u8], paints: std::collections::HashMap<String, vectorcraft_color::Paint>) -> Option<&Texts> {
+        self.forget_in_tests();
+        let texts = self.texts.take().unwrap_or_else(|| Texts::read(data)).map(|t| t.with_paints(paints));
+        self.texts.insert(texts).as_ref()
+    }
 }
 
 /// Is nothing in `structure` waiting on the page: no object unread (the page's art takes its
@@ -152,17 +206,18 @@ fn nothing_waits_on_page(structure: &Structure) -> bool {
 
 /// Does the text document of `data` (read as `structure`) make the type of every text object, those
 /// that don't show included, with at least one that shows, and none of them type that a look draws?
-fn type_all_made(structure: &Structure, data: &[u8]) -> bool {
+/// The frames and the text document are read into `text` when it doesn't have them yet.
+fn type_all_made(structure: &Structure, data: &[u8], text: &mut ReadText) -> bool {
     let mut infos = vec![];
     collect_slots(&structure.doc.layers, true, &mut infos);
     if !infos.iter().any(|i| i.shown) || infos.iter().any(|i| i.look.is_some()) {
         return false;
     }
-    let frames = ai::text_frames(data);
+    let frames = text.frames(data);
     for info in &mut infos {
         info.art_path = info.story.and_then(|s| frames.get(&(s, info.frame))).map(|p| PathData::from_bezpath(&(structure.to_doc * p.clone())));
     }
-    let Some(texts) = Texts::read(data) else { return false };
+    let Some(texts) = text.texts(data) else { return false };
     let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
     let stories: Vec<Option<Arc<Story>>> = infos
         .iter()
@@ -244,13 +299,14 @@ pub(super) fn build_from(
     trust: bool,
     unit: f64,
 ) -> Result<(Document, Vec<String>), String> {
-    build_weighing(structure, data, visible, page, outlined, trust, unit, &mut None)
+    build_weighing(structure, data, visible, page, outlined, trust, unit, &mut None, &mut ReadText::default())
 }
 
 /// [`build_from`]. When the layers with their live envelopes don't draw as the page, and don't with
 /// the drawn art of every live envelope put back either, `free` is set to the envelopes of type
 /// (by their place among them, as read) that opened live and that the page doesn't hold against
-/// them ([`held_back`]), whether or not the layers are then used, and however.
+/// them ([`held_back`]), whether or not the layers are then used, and however. The text of `data`
+/// is taken from `text`, and read into it when it doesn't have it yet.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_weighing(
     structure: Structure,
@@ -261,6 +317,7 @@ pub(super) fn build_weighing(
     trust: bool,
     unit: f64,
     free: &mut Option<Vec<usize>>,
+    text: &mut ReadText,
 ) -> Result<(Document, Vec<String>), String> {
     let Structure {
         mut doc,
@@ -272,13 +329,15 @@ pub(super) fn build_weighing(
         unread,
         unread_elsewhere,
         slot_names,
+        type_clips,
         restyled,
         placeholders,
         placed_elsewhere,
         placed_pages,
+        placed_eps,
         envelopes_drawn,
         styles_read,
-        text_patterns,
+        text_paints,
         canvas_scale,
         symbols_own_size,
         xml_ids,
@@ -425,7 +484,7 @@ pub(super) fn build_weighing(
     collect_slots(&doc.layers, true, &mut infos);
     super::slots::limit_look_slots(&mut doc.layers, &mut infos, shown.len(), outlined);
     // Each text object's own frame or path, by its story and frame.
-    let frames = ai::text_frames(data);
+    let frames = text.frames(data);
     for info in &mut infos {
         info.art_path = info.story.and_then(|s| frames.get(&(s, info.frame))).map(|p| PathData::from_bezpath(&(to_doc * p.clone())));
     }
@@ -439,14 +498,14 @@ pub(super) fn build_weighing(
     // The page's type that needs no text object of the layers: the layers' own legacy text, or
     // placed files that show it.
     let as_outlines = page_type_elsewhere(infos.is_empty(), infos.iter().all(|i| !i.shown), &mut shown, &mut hidden, &doc, &placed_elsewhere)?;
-    let texts = Texts::read(data).map(|t| t.with_patterns(text_patterns));
+    let texts = text.texts_with(data, text_paints);
     // Each story is read once, however many text objects name it.
     let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
     let stories: Vec<Option<Arc<Story>>> = infos
         .iter()
         .map(|i| {
             let n = i.story?;
-            read.entry(n).or_insert_with(|| texts.as_ref().and_then(|t| t.story(n as usize)).map(Arc::new)).clone()
+            read.entry(n).or_insert_with(|| texts.and_then(|t| t.story(n as usize)).map(Arc::new)).clone()
         })
         .collect();
     if stories.iter().flatten().map(|s| s.len()).sum::<usize>() > MAX_TEXT {
@@ -470,14 +529,15 @@ pub(super) fn build_weighing(
     let mut made = vec![];
     let mut filled = std::collections::HashMap::new();
     fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty, &mut made, &mut vec![], &mut filled);
+    clip_by_type(&mut layers, &type_clips, &filled);
     doc.layers = layers;
     made.sort();
-    let threaded_frames: BTreeSet<NodeId> =
-        made.chunk_by(|a, b| a.0 == b.0).filter(|thread| thread.len() > 1).flatten().map(|(_, _, id)| *id).collect();
+    let threads = threads_of(&made);
+    let threaded_frames: BTreeSet<NodeId> = threads.iter().flat_map(|(_, ids)| ids.iter().copied()).collect();
     if !unread.is_empty() {
         let Some(frame) = frame.as_ref() else { return Err(unread_error(&unread)) };
         let mut copied = BTreeSet::new();
-        let kinds = replace_unread(&mut doc, frame, &unread, &unread_elsewhere, &threaded_frames, &mut copied)?;
+        let kinds = replace_unread(&mut doc, frame, &unread, &unread_elsewhere, &held_frames(&infos, &stories, &threads), &mut copied)?;
         // With the text objects filled, the page art chosen can differ from the first try's: the
         // page's type set aside for it, and no other, must be in it.
         let all_copied = |o: &Vec<Arc<Node>>| !o.is_empty() && o.iter().all(|n| copied.contains(&n.id));
@@ -486,12 +546,8 @@ pub(super) fn build_weighing(
         }
         notes.push(format!("{}: they came in as the page's art", kinds.join(", ")));
     }
-    // A story in several frames is threaded type: its frames in order (the first holds the story).
-    for thread in made.chunk_by(|a, b| a.0 == b.0) {
-        if thread.len() > 1 {
-            doc.text_threads.push(thread.iter().map(|(_, _, id)| *id).collect());
-        }
-    }
+    // The frames still threaded: a blank story's frame an unread object left alone isn't.
+    let threaded_frames = add_threads(&mut doc, threads, &threaded_frames, !unread.is_empty());
     // Area type flows around the wrap objects above it before it is compared with the page.
     resolve_text_wrap(&mut doc)?;
     let bound_text = bound_slots(&doc, &bindings, &xml_ids, VariableKind::Text);
@@ -589,33 +645,50 @@ pub(super) fn build_weighing(
     }
     doc.limit_depth_noting(&mut notes);
     bind_variables(&mut doc, &bindings, bindings_skipped, &xml_ids, &filled, &mut notes);
-    placed_documents(&mut doc, &placed_pages);
+    if placed_documents(&mut doc, &placed_pages, &placed_eps) && !notes.iter().any(|n| n == ai::LINKED_PREVIEWS) {
+        notes.push(ai::LINKED_PREVIEWS.to_string());
+    }
     if small.is_some() {
         scale_read_document(&mut doc, unit, styles_read, symbols_own_size);
     }
     Ok((doc, notes))
 }
 
-/// The linked images of `pages` that are still in `doc`, opacity-mask art included, as placed
-/// documents of their page and box, over the same place, each showing the same preview until its
-/// file is read. An image bound to an image variable stays a linked image, the object an image
-/// variable binds.
-fn placed_documents(doc: &mut Document, pages: &[ai::PlacedPage]) {
-    if pages.is_empty() {
-        return;
+/// The linked images of `pages` and included `eps` still in `doc`, opacity-mask art included, as placed
+/// documents of their page and box. PDF pages keep their previews, and EPS files keep their included
+/// bytes. An image bound to an image variable stays a linked image, the object an image variable binds.
+/// Returns whether an included EPS file stays a linked image that way, showing its preview.
+pub(in crate::import) fn placed_documents(doc: &mut Document, pages: &[ai::PlacedPage], eps: &[ai::PlacedEps]) -> bool {
+    if pages.is_empty() && eps.is_empty() {
+        return false;
     }
     let vars = &doc.variables;
     let image_bound = |id: &NodeId| {
         vars.bindings.get(id).is_some_and(|names| names.iter().any(|v| vars.variable(v).is_some_and(|v| v.kind == VariableKind::Image)))
     };
     let pages: std::collections::HashMap<NodeId, ai::PlacedPage> = pages.iter().filter(|p| !image_bound(&p.id)).map(|p| (p.id, *p)).collect();
+    let previews = eps.iter().any(|p| image_bound(&p.id));
+    let eps: std::collections::HashMap<NodeId, &ai::PlacedEps> = eps.iter().filter(|p| !image_bound(&p.id)).map(|p| (p.id, p)).collect();
     for layer in &mut doc.layers {
-        to_placed_documents(Arc::make_mut(layer), &pages);
+        to_placed_documents(Arc::make_mut(layer), &pages, &eps, &mut doc.images);
     }
+    previews
 }
 
 /// [`placed_documents`] in `n` and everything in it.
-fn to_placed_documents(n: &mut Node, pages: &std::collections::HashMap<NodeId, ai::PlacedPage>) {
+fn to_placed_documents(
+    n: &mut Node,
+    pages: &std::collections::HashMap<NodeId, ai::PlacedPage>,
+    eps: &std::collections::HashMap<NodeId, &ai::PlacedEps>,
+    images: &mut std::collections::BTreeMap<String, vectorcraft_doc::ImageBlob>,
+) {
+    if let Some(eps) = eps.get(&n.id)
+        && let NodeKind::Image(im) = &n.kind
+        && im.link.is_some()
+    {
+        images.entry(eps.placed.key.clone()).or_insert_with(|| eps.blob.clone());
+        n.kind = NodeKind::PlacedDocument(Box::new(eps.placed.clone()));
+    }
     // A box too small to take the image's pixels to (its transform not finite) keeps the linked image.
     if let Some(page) = pages.get(&n.id)
         && let NodeKind::Image(im) = &n.kind
@@ -639,10 +712,10 @@ fn to_placed_documents(n: &mut Node, pages: &std::collections::HashMap<NodeId, a
         n.kind = NodeKind::PlacedDocument(Box::new(placed));
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
-        to_placed_documents(Arc::make_mut(&mut m.art), pages);
+        to_placed_documents(Arc::make_mut(&mut m.art), pages, eps, images);
     }
     for c in n.children_mut().into_iter().flatten() {
-        to_placed_documents(Arc::make_mut(c), pages);
+        to_placed_documents(Arc::make_mut(c), pages, eps, images);
     }
 }
 
@@ -773,7 +846,7 @@ fn settle_warped_type(
 }
 
 /// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
-const MAX_WRAP_WORK: usize = 2_000_000;
+pub(crate) const MAX_WRAP_WORK: usize = 2_000_000;
 
 /// [`relayout_wrapped`], or an error when the wrap shapes would hold more than [`MAX_WRAP_WORK`]
 /// anchors.
@@ -1426,7 +1499,9 @@ fn slot_content(
 ) -> Result<(Vec<Content>, bool), String> {
     let made = make_slots(infos, stories, template, to_doc, notes);
     if let Some(own) = own.filter(|_| readable_all(infos, &made)) {
-        return Ok((made_only(infos, made, [own, pages[1]], notes), true));
+        let mut content = made_only(infos, stories, made, [own, pages[1]], notes);
+        settle_blank_stories(infos, stories, template, to_doc, &mut content, notes);
+        return Ok((content, true));
     }
     // The page's type is matched with every text object whose type isn't made, and weighed against
     // where every made one draws: that has its limits (the slots of type that looks draw are within
@@ -1435,7 +1510,100 @@ fn slot_content(
     if open > MAX_SLOTS || infos.len().saturating_mul(pages[0].len()) > MAX_PAIRS {
         return Err("it has too many text objects".into());
     }
-    Ok((plan(infos, stories, made, template, to_doc, pages, notes), false))
+    let mut content = plan(infos, stories, made, template, to_doc, pages, notes);
+    settle_blank_stories(infos, stories, template, to_doc, &mut content, notes);
+    Ok((content, false))
+}
+
+/// The threads of the text objects `made` (story, frame and id of each, sorted): each story in
+/// several frames, with its frames in order (the first holds the story).
+fn threads_of(made: &[(u32, usize, NodeId)]) -> Vec<(u32, Vec<NodeId>)> {
+    made.chunk_by(|a, b| a.0 == b.0)
+        .filter(|thread| thread.len() > 1)
+        .map(|thread| (thread[0].0, thread.iter().map(|(_, _, id)| *id).collect()))
+        .collect()
+}
+
+/// The frames of `threads` that an unread object can't take with it: those of a blank story's thread
+/// hold no type, so they may go.
+fn held_frames(infos: &[SlotInfo], stories: &[Option<Arc<Story>>], threads: &[(u32, Vec<NodeId>)]) -> BTreeSet<NodeId> {
+    let blank: BTreeSet<u32> =
+        infos.iter().zip(stories).filter(|(_, s)| s.as_ref().is_some_and(|s| s.is_blank())).filter_map(|(i, _)| i.story).collect();
+    threads.iter().filter(|(story, _)| !blank.contains(story)).flat_map(|(_, ids)| ids.iter().copied()).collect()
+}
+
+/// `threads` as `doc`'s text threads, and the frames of the threads added. With `replaced` (unread
+/// objects were replaced by page art), the frames they took with them (`frames` that `doc` no longer
+/// has, only a blank story's) are left out, and so is a thread left with one frame.
+fn add_threads(doc: &mut Document, threads: Vec<(u32, Vec<NodeId>)>, frames: &BTreeSet<NodeId>, replaced: bool) -> BTreeSet<NodeId> {
+    let present = replaced.then(|| doc.index_paths(frames.iter().copied()));
+    let mut threaded = BTreeSet::new();
+    for (_, mut ids) in threads {
+        if let Some(present) = &present {
+            ids.retain(|id| present.contains_key(id));
+        }
+        if ids.len() > 1 {
+            threaded.extend(ids.iter().copied());
+            doc.text_threads.push(ids);
+        }
+    }
+    threaded
+}
+
+/// The slots of blank stories (nothing but spaces and line ends) that neither the text document nor
+/// the page fills: blank point type draws nothing and has nothing to keep, so it is left out without
+/// a note, as VectorCraft's Type tool discards empty point type (#85, #154); blank area type and
+/// type on a path come in as an empty text object with their frame or path, as the Type tool keeps
+/// such an empty frame, also where the page's type went to another text object (`Merged`). An empty
+/// frame draws nothing, so the page can't show it: it is kept without being weighed against the
+/// page (`prune_unseen` would take it out), and so are the later frames of its thread, which the
+/// text document makes empty. Type that a look draws is left as it is.
+fn settle_blank_stories(
+    infos: &[SlotInfo],
+    stories: &[Option<Arc<Story>>],
+    template: Option<(f64, f64)>,
+    to_doc: Affine,
+    content: &mut [Content],
+    notes: &mut Vec<String>,
+) {
+    // The stories whose first frame came in as an empty frame: their later frames stay with it.
+    let mut kept = BTreeSet::new();
+    for ((story, info), c) in stories.iter().zip(infos).zip(content.iter_mut()) {
+        let Some(story) = story.as_ref().filter(|s| s.is_blank() && info.look.is_none()) else { continue };
+        let unfilled = match c {
+            Content::Empty => true,
+            Content::Page(parts) => parts.is_empty(),
+            _ => false,
+        };
+        if story.blank_point(info.frame) {
+            if unfilled {
+                *c = Content::Merged;
+            }
+        } else if (unfilled || matches!(c, Content::Merged))
+            && let Some((node, region)) = template.and_then(|t| super::plan::blank_frame(info, story, t, to_doc))
+        {
+            *c = Content::Made(node, region.filter(|_| info.shown), true);
+            kept.extend(info.story);
+            // Its paragraphs' settings are read as made type's are, with the same notes.
+            for (left_out, note) in [
+                (story.tabs_left_out(), crate::import::ate::TABS_LEFT_OUT),
+                (story.kinsoku_sets_left_out(), crate::import::ate::KINSOKU_SETS_LEFT_OUT),
+            ] {
+                if left_out && !notes.iter().any(|n| n == note) {
+                    notes.push(note.into());
+                }
+            }
+        }
+    }
+    for (info, c) in infos.iter().zip(content.iter_mut()) {
+        if let Content::Made(_, _, seen) = c
+            && info.frame > 0
+            && info.look.is_none()
+            && info.story.is_some_and(|s| kept.contains(&s))
+        {
+            *seen = true;
+        }
+    }
 }
 
 /// The layers `doc` don't draw as the page (`why`), `unseen` text objects of them taken out: the
@@ -1755,11 +1923,12 @@ fn outside_placed_files(objects: &[Vec<Arc<Node>>], doc: &Document, placed: &[(N
 }
 
 /// Where the placed files that show in `nodes` are: the linked images the editing data's reader
-/// makes of them.
+/// makes of them, and the placed documents it makes of the EPS files whose bytes it includes.
 fn placed_files(nodes: &[Arc<Node>], out: &mut Vec<Rect>) {
     for n in nodes.iter().filter(|n| n.visible) {
         match &n.kind {
             NodeKind::Image(im) if im.link.is_some() => out.extend(n.visual_bounds()),
+            NodeKind::PlacedDocument(_) => out.extend(n.visual_bounds()),
             _ => {
                 if let Some(c) = n.children() {
                     placed_files(c, out);
@@ -2095,6 +2264,30 @@ fn unmark(nodes: &mut [Arc<Node>], shown: bool, prints: bool, found: &mut Vec<(N
         {
             unmark(c, shown, prints, found);
         }
+    }
+}
+
+/// Make the clipping groups in `layers` that their type clips ([`Structure::type_clips`]) clip by it,
+/// where its slot became one text object (`filled`). The page shows that type by what it clips, so
+/// it is never weighed as type the page doesn't draw ([`prune_unseen`]).
+fn clip_by_type(
+    layers: &mut [Arc<Node>],
+    type_clips: &std::collections::HashMap<NodeId, NodeId>,
+    filled: &std::collections::HashMap<NodeId, Filled>,
+) {
+    let one = |slot: NodeId| {
+        filled.get(&slot).and_then(|f| match f.objects.as_slice() {
+            [id] => Some(*id),
+            _ => None,
+        })
+    };
+    let mut seen = |n: &mut Node| {
+        if let Some(name) = n.name.as_deref().and_then(|m| m.strip_prefix(MADE)) {
+            n.name = (!name.is_empty()).then(|| name.to_string());
+        }
+    };
+    for l in layers {
+        ai::clip_by_type(Arc::make_mut(l), type_clips, &one, &mut seen);
     }
 }
 
@@ -3310,5 +3503,73 @@ mod candidate_tests {
         let Some((kept, _, notes, typed)) = found else { panic!("the layers aren't used") };
         assert!(typed && kept.node(drawn[0].0).is_none() && kept.node(drawn[1].0).is_some());
         assert!(!notes.iter().any(|n| n.starts_with(DREW_DIFFERENTLY)), "{notes:?}");
+    }
+
+    /// The editing copy of a 100 × 100 file whose one layer holds a square and `stories` objects of
+    /// point type, each its own story, with the text document that makes them.
+    fn many_stories(stories: u32) -> Vec<u8> {
+        use crate::import::tests_native::{Story, layer, native_with_text, square, text_object, unsplit_text_document};
+        let texts: Vec<String> = (0..stories).map(|i| format!("Story {i}\r")).collect();
+        let anchor = |i: u32| (8170.0 + f64::from(i % 40), 8180.0 + f64::from(i / 40 % 40));
+        let list: Vec<Story<'_>> = (0..stories).zip(&texts).map(|(i, t)| (t.as_str(), 0, anchor(i), (0.0, 0.0), 0.0)).collect();
+        let objects: String = (0..stories).map(text_object).collect();
+        native_with_text(&layer("Art", true, &format!("{}\n{objects}", square(10, 10))), &unsplit_text_document(&list)).into_bytes()
+    }
+
+    /// The check and the build of layers that open without the page, each reading the text of the
+    /// editing copy afresh, as [`build_without_page`] did before it read it once for both.
+    fn alone_reading_twice(structure: Structure, data: &[u8], pages: &[(f64, f64)]) -> Option<Built> {
+        let scale = alone_scale(&structure, data, pages, 1.0, &mut ReadText::default())?;
+        assert_eq!(scale, 1.0);
+        Some(build_from(structure, data, None, Page::Artboard, false, false, 1.0))
+    }
+
+    /// Layers that open without the page, their text read once for the check and the build, come in
+    /// as they do with the text read afresh for each.
+    #[test]
+    fn layers_alone_read_their_text_once_and_come_in_as_with_two_reads() {
+        let data = many_stories(12);
+        let read = || ai::read_over_page(&data, false, ai::NameEncoding::default()).unwrap();
+        let pages = [(100.0, 100.0)];
+        let Some(Ok(twice)) = alone_reading_twice(read(), &data, &pages) else { panic!("didn't open without the page") };
+        let Ok(Ok(once)) = build_without_page(read(), &data, &pages, 1.0, &mut ReadText::default()) else { panic!("didn't open without the page") };
+        assert_eq!(once, twice);
+        let mut texts = vec![];
+        once.0.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                texts.push(t.plain_text());
+            }
+        });
+        assert_eq!(texts.len(), 12, "{:?}", once.1);
+        assert!(texts.iter().enumerate().all(|(i, t)| *t == format!("Story {i}")), "{texts:?}");
+    }
+
+    /// The check and the build of layers that open without the page, 2,000 objects of point type in
+    /// them, timed with the text read afresh for each and read once for both, alternating, seven runs
+    /// of each: `cargo test -p vectorcraft-eps --lib -- --ignored --nocapture text_read_once_timing`.
+    #[test]
+    #[ignore = "a timing, run by hand"]
+    fn text_read_once_timing() {
+        let data = many_stories(2000);
+        let read = || ai::read_over_page(&data, false, ai::NameEncoding::default()).unwrap();
+        let pages = [(100.0, 100.0)];
+        let (mut twice, mut once) = (vec![], vec![]);
+        for _ in 0..7 {
+            let structure = read();
+            let start = std::time::Instant::now();
+            let Some(Ok(a)) = alone_reading_twice(structure, &data, &pages) else { panic!("didn't open without the page") };
+            twice.push(start.elapsed());
+            let structure = read();
+            let start = std::time::Instant::now();
+            let Ok(Ok(b)) = build_without_page(structure, &data, &pages, 1.0, &mut ReadText::default()) else {
+                panic!("didn't open without the page")
+            };
+            once.push(start.elapsed());
+            assert_eq!(a, b);
+        }
+        println!("read twice: {twice:?}\nread once:  {once:?}");
+        twice.sort();
+        once.sort();
+        println!("median: read twice {:?}, read once {:?}", twice[3], once[3]);
     }
 }

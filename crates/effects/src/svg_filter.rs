@@ -8,7 +8,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use resvg::{tiny_skia, usvg};
+use craft_svg::tree::draw::{resvg, tiny_skia};
+use craft_svg::tree::usvg;
 use serde_json::Value;
 use usvg::roxmltree;
 use vectorcraft_doc::SvgFilter;
@@ -624,17 +625,27 @@ fn write_drop_shadow(n: roxmltree::Node, input: &str, result: Option<&str>, name
 /// first bytes whatever its `data:` URL says, of at most [`MAX_IMAGE_PIXELS`] pixels by its header.
 /// `None` for anything else, SVG and compressed SVG included.
 fn raster_image_sized(data: Arc<Vec<u8>>) -> Option<(usvg::ImageKind, u64)> {
-    let format = image::guess_format(&data).ok()?;
-    let (w, h) = image::ImageReader::with_format(std::io::Cursor::new(data.as_slice()), format).into_dimensions().ok()?;
+    let format = craft_image_codecs::detect(&data)?;
+    let (w, h) = match format {
+        craft_image_codecs::Format::Png => {
+            if data.len() < 24 || &data[..8] != b"\x89PNG\r\n\x1a\n" || &data[12..16] != b"IHDR" {
+                return None;
+            }
+            (u32::from_be_bytes(data[16..20].try_into().ok()?), u32::from_be_bytes(data[20..24].try_into().ok()?))
+        }
+        craft_image_codecs::Format::Jpeg => craft_image_codecs::jpeg_info(&data).map(|j| (j.width, j.height))?,
+        craft_image_codecs::Format::Gif | craft_image_codecs::Format::WebP => craft_image_codecs::probe_size(&data).ok()?,
+        _ => return None,
+    };
     let pixels = u64::from(w) * u64::from(h);
     if pixels == 0 || pixels > MAX_IMAGE_PIXELS {
         return None;
     }
     let kind = match format {
-        image::ImageFormat::Png => usvg::ImageKind::PNG(data),
-        image::ImageFormat::Jpeg => usvg::ImageKind::JPEG(data),
-        image::ImageFormat::Gif => usvg::ImageKind::GIF(data),
-        image::ImageFormat::WebP => usvg::ImageKind::WEBP(data),
+        craft_image_codecs::Format::Png => usvg::ImageKind::PNG(data),
+        craft_image_codecs::Format::Jpeg => usvg::ImageKind::JPEG(data),
+        craft_image_codecs::Format::Gif => usvg::ImageKind::GIF(data),
+        craft_image_codecs::Format::WebP => usvg::ImageKind::WEBP(data),
         _ => return None,
     };
     Some((kind, pixels))
@@ -1636,7 +1647,6 @@ fn on_canvas(data: &[u8], w: usize, h: usize, cw: u32, ch: u32, to_canvas: Affin
 
 /// The pixels of `data` (premultiplied RGBA8, `w` wide) in columns x0..x1 and rows y0..y1, as a PNG.
 fn png_of(data: &[u8], w: usize, x0: usize, y0: usize, x1: usize, y1: usize) -> Option<Vec<u8>> {
-    use image::ImageEncoder;
     let px = data.as_chunks::<4>().0;
     let mut straight = Vec::with_capacity((x1 - x0) * (y1 - y0) * 4);
     for y in y0..y1 {
@@ -1646,14 +1656,16 @@ fn png_of(data: &[u8], w: usize, x0: usize, y0: usize, x1: usize, y1: usize) -> 
             straight.extend_from_slice(&[un(p[0]), un(p[1]), un(p[2]), p[3]]);
         }
     }
-    let mut png = vec![];
-    let encoder = image::codecs::png::PngEncoder::new_with_quality(
-        &mut png,
-        image::codecs::png::CompressionType::Fast,
-        image::codecs::png::FilterType::NoFilter,
-    );
-    encoder.write_image(&straight, (x1 - x0) as u32, (y1 - y0) as u32, image::ExtendedColorType::Rgba8).ok()?;
-    Some(png)
+    let raw = craft_image_codecs::Image::from_raw(
+        (x1 - x0) as u32,
+        (y1 - y0) as u32,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        straight,
+    )
+    .ok()?;
+    let opts = craft_image_codecs::EncodeOptions { png_compression: craft_image_codecs::PngCompression::Fast, ..Default::default() };
+    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &opts).ok()
 }
 
 /// `a` as an SVG `matrix(…)`.

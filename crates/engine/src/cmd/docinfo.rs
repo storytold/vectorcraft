@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), pathArea?: bool (default true; false skips the paths' area pass, as a category other than objects does), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi, transparency: {gridSize: small|medium|large, gridColors: [#rrggbb, #rrggbb], gridColorsName (a preset's name or Custom), simulatePaper, flattenerPreset} (File › Document Setup's transparency settings, which the document category lists), selectedArtboards: [{index, name, width, height, x, y}] (while the Artboard tool is the current tool, the artboards it has selected, in the document's units, x and y those of the top-left corner from the ruler origin of its active artboard, which the document category lists after the artboards; else empty)}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), pathArea: pt² (the paths' total area, compound paths' included, guides left out; null unless the request covers the Objects category (no category, or objects) and pathArea? is not false: the area pass normalizes every closed path's geometry, so a caller showing another category can skip it), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontUses: [{font, type: truetype|opentype|unknown, uses}] (each font of fonts, in order: truetype or opentype by the outlines (glyf, or CFF or CFF2) of the face its type is drawn in, unknown for a font not installed in the family and style it names; uses: the text objects set in it, each once however many of its runs use the font, the type in a mask or in a symbol's or pattern's art once however many objects show it; the fonts category's rows give them as `TrueType; 2 uses`), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file, format, effectivePpi, memoryBytes, storedBytes}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one; format: a linked image's file format by its extension, else the format of the pixels the document holds, null when unknown; effectivePpi: [x, y] pixels per inch at the size it is placed at, a distorted image measured at its middle, null when it has no area; memoryBytes: for an embedded image width × height × 4, the bytes of the 8-bit RGBA pixels it is drawn from, else null; storedBytes: for an embedded image the bytes of the encoded image the document holds, else null; a Linked Images row gives the format, the size, the resolution and the file (`PNG; 1200 × 800 px; 150 ppi — /art/photo.png`), an Embedded Images row the format, the size and the memory (`PNG; 1200 × 800 px; estimated memory 3.7 MiB`)), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
             has_doc,
             info
         ),
@@ -144,8 +144,165 @@ fn font_detail(used: &super::fonts::UsedFont) -> (Value, (String, String)) {
     (entry, (label, detail))
 }
 
-/// An image object as Document Info lists it: (name, width, height, linked file).
-type ImageRow = (String, u32, u32, Option<String>);
+/// The type of a font as Fonts lists it: `truetype` or `opentype` by the outlines of the face the
+/// type is drawn in (in the version the type names), `unknown` for a font that is not installed in
+/// the family and style it names, or whose face holds neither kind of outline.
+fn font_type(used: &super::fonts::UsedFont) -> &'static str {
+    let db = vectorcraft_text::FontDb::global();
+    let (family, style, version) = used;
+    match db.resolve(family, style) {
+        Some((f, vectorcraft_text::FontMatch::Exact)) => match db.face_version(family, style, version.as_deref()).unwrap_or(f).outline_format() {
+            Some(vectorcraft_text::OutlineFormat::TrueType) => "truetype",
+            Some(vectorcraft_text::OutlineFormat::Cff) => "opentype",
+            None => "unknown",
+        },
+        _ => "unknown",
+    }
+}
+
+/// A font as Fonts lists it: its `fontUses` entry and its row, which gives the font's type and its
+/// number of uses (`uses`: the text objects set in it).
+fn font_use(used: &super::fonts::UsedFont, uses: usize) -> (Value, (String, String)) {
+    let label = super::fonts::font_label(used);
+    let kind = font_type(used);
+    let name = match kind {
+        "truetype" => "TrueType",
+        "opentype" => "OpenType",
+        _ => "unknown type",
+    };
+    let count = if uses == 1 { "1 use".to_string() } else { format!("{uses} uses") };
+    (json!({ "font": label, "type": kind, "uses": uses }), (label, format!("{name}; {count}")))
+}
+
+/// Counts text object `t` once for each font its runs are drawn in, a composite font's parts in
+/// place of its name ([`super::fonts::run_fonts`]).
+fn count_fonts(fonts: &mut BTreeMap<super::fonts::UsedFont, usize>, t: &vectorcraft_doc::TextObject) {
+    let own: BTreeSet<super::fonts::UsedFont> = t.runs.iter().flat_map(super::fonts::run_fonts).collect();
+    for font in own {
+        *fonts.entry(font).or_default() += 1;
+    }
+}
+
+/// An image object as Linked Images or Embedded Images lists it.
+struct ImageRow {
+    name: String,
+    width: u32,
+    height: u32,
+    /// What a linked image's row names: its file's path, or the file's name alone when the request
+    /// may not read it. `None` for an embedded image.
+    file: Option<String>,
+    /// The image's format ([`image_format`]); `None` when it is not known.
+    format: Option<&'static str>,
+    /// The pixels per inch across and down at the size the image is placed at; `None` when its
+    /// transform flattens it.
+    ppi: Option<[f64; 2]>,
+    /// For an embedded image, the bytes its pixels take when drawn (8-bit RGBA: width × height × 4).
+    memory: Option<u64>,
+    /// For an embedded image, the bytes of the encoded image the document holds.
+    stored: Option<u64>,
+}
+
+impl ImageRow {
+    /// Image object `n` (image `im`) of `d`, `file` the row value of its link.
+    fn of(d: &Document, n: &Node, im: &vectorcraft_doc::ImageObject, file: Option<String>) -> Self {
+        let name = im.link.as_ref().map_or_else(|| n.display_name(), |l| l.name().to_string());
+        // A distorted image is measured at its middle, as `image.info` measures it.
+        let xf = vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf);
+        let ppi = super::place::effective_ppi(xf);
+        // An image with no pixels across or down has no area, and so does one whose transform lays
+        // both pixel axes on one line. The determinant is compared with the product of the two
+        // axes' lengths, at any scale.
+        let [xx, xy, yx, yy, ..] = xf.as_coeffs();
+        let has_area = im.width > 0 && im.height > 0 && xf.determinant().abs() > 1e-9 * xx.hypot(xy) * yx.hypot(yy);
+        let embedded = im.link.is_none();
+        let memory = || u64::from(im.width).checked_mul(u64::from(im.height))?.checked_mul(4);
+        Self {
+            name,
+            width: im.width,
+            height: im.height,
+            file,
+            format: image_format(d, im),
+            ppi: (has_area && ppi.iter().all(|v| *v > 0.0 && v.is_finite())).then_some(ppi),
+            memory: if embedded { memory() } else { None },
+            stored: if embedded { d.images.get(&im.key).map(|b| b.bytes.len() as u64) } else { None },
+        }
+    }
+
+    /// The row's value: the format, the size in pixels, and for a linked image its resolution and
+    /// file, for an embedded one the memory its pixels take.
+    fn value(&self) -> String {
+        let format = self.format.unwrap_or("Unknown format");
+        let size = format!("{} × {} px", self.width, self.height);
+        match &self.file {
+            Some(file) => {
+                let ppi = match self.ppi {
+                    Some([x, y]) if ppi_number(x) == ppi_number(y) => format!("{} ppi", ppi_number(x)),
+                    Some([x, y]) => format!("{} × {} ppi", ppi_number(x), ppi_number(y)),
+                    None => "resolution unavailable".into(),
+                };
+                format!("{format}; {size}; {ppi} — {file}")
+            }
+            None => {
+                let memory = self.memory.map_or_else(|| "memory unavailable".to_string(), |b| format!("estimated memory {}", byte_size(b)));
+                format!("{format}; {size}; {memory}")
+            }
+        }
+    }
+
+    /// The row's `imageObjects` entry.
+    fn entry(&self) -> Value {
+        json!({
+            "name": self.name,
+            "width": self.width,
+            "height": self.height,
+            "linked": self.file.is_some(),
+            "file": self.file,
+            "format": self.format,
+            "effectivePpi": self.ppi,
+            "memoryBytes": self.memory,
+            "storedBytes": self.stored,
+        })
+    }
+}
+
+/// The format of image `im` of `d`, as the Links panel names it: for a linked image its file's, by
+/// its extension (DCS for a separated one), else the type of the pixels the document holds for it;
+/// `None` when neither names a known format.
+fn image_format(d: &Document, im: &vectorcraft_doc::ImageObject) -> Option<&'static str> {
+    use super::fileio;
+    if im.link.is_some() && d.images.get(&im.key).is_some_and(vectorcraft_doc::ImageBlob::is_separated) {
+        return Some("DCS");
+    }
+    im.link
+        .as_ref()
+        .and_then(|l| fileio::format_for_name(l.name()).or_else(|| fileio::readable_format_for_name(l.name())))
+        .or_else(|| d.images.get(&im.key).and_then(|b| fileio::FORMATS.iter().find(|f| f.raster && f.mime == b.mime)))
+        .map(|f| f.label)
+}
+
+/// A resolution as Document Info shows it: rounded to a tenth (below 1, to a hundredth), without a
+/// trailing `.0`.
+pub fn ppi_number(ppi: f64) -> String {
+    let k = if ppi.abs() < 1.0 { 100.0 } else { 10.0 };
+    format!("{}", (ppi * k).round() / k)
+}
+
+/// A number of bytes as Document Info shows it: in B below 1 KiB, else in KiB, MiB or GiB rounded
+/// to a tenth.
+pub fn byte_size(bytes: u64) -> String {
+    const UNITS: [&str; 3] = ["KiB", "MiB", "GiB"];
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    let mut v = bytes as f64 / 1024.0;
+    let mut unit = 0;
+    // 1023.96 KiB is shown as 1 MiB rather than as 1024 KiB.
+    while v >= 1023.95 && unit + 1 < UNITS.len() {
+        v /= 1024.0;
+        unit += 1;
+    }
+    format!("{} {}", (v * 10.0).round() / 10.0, UNITS[unit])
+}
 
 /// A Repeat object as Document Info lists it: its `repeatObjects` entry, and its row, which gives
 /// its name and then its kind with the number of instances it draws (for a grid, its rows and
@@ -178,15 +335,59 @@ fn repeat_entry(d: &Document, n: &Node, spec: &RepeatSpec) -> (Value, (String, S
     (entry, (name, format!("{}, {detail}", kind.label())))
 }
 
+/// The artboards the Artboard tool has selected while it is the current tool, in artboard order,
+/// with the index of its active artboard; none with another tool or when it has none of the
+/// document's artboards selected. Indices the document does not have are left out.
+fn artboard_tool_selection(s: &Session) -> Option<(Vec<usize>, usize)> {
+    if s.tool_id() != "artboard" {
+        return None;
+    }
+    let n = s.active().map_or(0, |d| d.doc.artboards.len());
+    let t = s.tool_options_of("artboard");
+    let index = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < n);
+    let mut picked: Vec<usize> = t["selected"].as_array().into_iter().flatten().filter_map(index).collect();
+    picked.sort_unstable();
+    picked.dedup();
+    let first = *picked.first()?;
+    let active = index(&t["active"]).filter(|a| picked.contains(a)).unwrap_or(first);
+    Some((picked, active))
+}
+
+/// The artboards `picked` as Document Info › Document lists them while the Artboard tool is the
+/// current tool: their `selectedArtboards` entries (in the document's units), and for each its
+/// rows: its name, width, height and the X and Y of its top-left corner from the ruler origin of
+/// artboard `active`.
+fn selected_artboard_rows(d: &Document, picked: &[usize], active: usize) -> (Vec<Value>, Vec<(String, String)>) {
+    let (u, per) = (d.units, d.units.points());
+    let origin = d.ruler_origin_for(active);
+    let mut entries = vec![];
+    let mut rows = vec![];
+    for &i in picked {
+        let Some(a) = d.artboards.get(i) else { continue };
+        let (w, h, x, y) = (a.rect.width(), a.rect.height(), a.rect.x0 - origin.x, a.rect.y0 - origin.y);
+        entries.push(json!({ "index": i, "name": a.name, "width": w / per, "height": h / per, "x": x / per, "y": y / per }));
+        rows.extend([
+            ("Artboard".to_string(), a.name.clone()),
+            ("Width".into(), u.format(w)),
+            ("Height".into(), u.format(h)),
+            ("X".into(), u.format(x)),
+            ("Y".into(), u.format(y)),
+        ]);
+    }
+    (entries, rows)
+}
+
 /// The Document Info categories of `d` (only `category` when given) from `info` (what
-/// `document.info` reports), its fonts and their Font Details rows, its image objects, the rows of
-/// the brushes its art uses, the rows of its Repeat objects and the rows of its objects filled or
-/// stroked with a spot color, with a pattern and with a gradient.
+/// `document.info` reports), the rows of the artboards the Artboard tool has selected, the rows of
+/// its fonts and their Font Details rows, its image objects, the rows of the brushes its art uses,
+/// the rows of its Repeat objects and the rows of its objects filled or stroked with a spot color,
+/// with a pattern and with a gradient.
 #[allow(clippy::too_many_arguments)]
 fn sections(
     d: &Document,
     info: &Value,
-    fonts: &BTreeSet<super::fonts::UsedFont>,
+    selected_artboards: &[(String, String)],
+    fonts: &[(String, String)],
     font_details: &[(String, String)],
     images: &[ImageRow],
     brushes: &[(String, String)],
@@ -215,7 +416,19 @@ fn sections(
                     rows.extend(
                         d.artboards.iter().map(|a| (a.name.clone(), format!("{} × {}", u.format(a.rect.width()), u.format(a.rect.height())))),
                     );
+                    rows.extend(selected_artboards.iter().cloned());
                     rows.push(("Raster Effects".into(), format!("{} ppi", d.raster_effects_ppi)));
+                    let setup = &d.setup;
+                    let colors = match setup.grid_colors_name() {
+                        "Custom" => setup.grid_colors.map(|c| c.to_hex()).join(", "),
+                        name => name.to_string(),
+                    };
+                    rows.extend([
+                        ("Grid Size".to_string(), setup.grid_size.label().to_string()),
+                        ("Grid Colors".into(), colors),
+                        ("Simulate Colored Paper".into(), if setup.simulate_paper { "On" } else { "Off" }.into()),
+                        ("Flattener Preset".into(), setup.flattener().to_string()),
+                    ]);
                     let counts = [
                         ("Swatches", "swatches"),
                         ("Character Styles", "characterStyles"),
@@ -232,6 +445,12 @@ fn sections(
                     if let Some(at) = rows.iter().position(|(label, _)| label == "Paths") {
                         rows.insert(at + 1, ("Path Length".into(), u.format(info["pathLength"].as_f64().unwrap_or(0.0))));
                     }
+                    let area = info["pathArea"].as_f64().unwrap_or(0.0);
+                    if area > 0.0
+                        && let Some(at) = rows.iter().position(|(label, _)| label == "Path Length")
+                    {
+                        rows.insert(at + 1, ("Path Area".into(), u.format_area(area)));
+                    }
                     rows
                 }
                 "graphicStyles" => names("graphicStyleNames"),
@@ -240,13 +459,11 @@ fn sections(
                 "patterns" => pattern_objects.to_vec(),
                 "gradients" => gradient_objects.to_vec(),
                 "symbols" => names("symbols"),
-                "fonts" => fonts.iter().map(|f| (super::fonts::font_label(f), String::new())).collect(),
+                "fonts" => fonts.to_vec(),
                 "fontDetails" => font_details.to_vec(),
-                "linkedImages" => {
-                    images.iter().filter_map(|(name, w, h, link)| Some((name.clone(), format!("{w} × {h} px — {}", link.as_ref()?)))).collect()
-                }
+                "linkedImages" => images.iter().filter(|i| i.file.is_some()).map(|i| (i.name.clone(), i.value())).collect(),
                 "repeats" => repeats.to_vec(),
-                _ => images.iter().filter(|i| i.3.is_none()).map(|(name, w, h, _)| (name.clone(), format!("{w} × {h} px"))).collect(),
+                _ => images.iter().filter(|i| i.file.is_none()).map(|i| (i.name.clone(), i.value())).collect(),
             };
             Section { id, title, rows }
         })
@@ -544,6 +761,38 @@ fn object_paints(d: &Document, spots: &HashSet<&str>, members: &HashSet<*const N
     used
 }
 
+/// Filled area of a path's closed subpaths under its fill rule (holes subtracted; open subpaths left out).
+fn closed_path_area(path: &vectorcraft_geom::PathData, rule: vectorcraft_geom::FillRule) -> f64 {
+    let closed = vectorcraft_geom::PathData { subpaths: path.subpaths.iter().filter(|s| s.closed).cloned().collect() };
+    if closed.subpaths.is_empty() {
+        return 0.0;
+    }
+    let a = vectorcraft_pathops::area(&closed, rule);
+    if a.is_finite() && a > 0.0 { a } else { 0.0 }
+}
+
+/// Recursively collects non-guide subpaths from a node and its descendants for compound path area calculation.
+fn collect_compound_subpaths(n: &Node, subs: &mut Vec<vectorcraft_geom::SubPath>) {
+    if n.is_guide() {
+        return;
+    }
+    match &n.kind {
+        NodeKind::Path { path, guide: false, .. } => {
+            subs.extend(path.subpaths.clone());
+        }
+        NodeKind::Compound { children, .. } => {
+            for c in children {
+                collect_compound_subpaths(c, subs);
+            }
+        }
+        _ => {
+            if let Some((pd, _)) = super::pathops::node_path(n) {
+                subs.extend(pd.subpaths);
+            }
+        }
+    }
+}
+
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.info";
     let category = str_param(p, "category");
@@ -556,6 +805,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         Some("text") => true,
         Some(f) => return Err(bad(C, format!("format `{f}`: text or json"))),
     };
+    let artboard_tool = artboard_tool_selection(s);
     let st = s.doc()?;
     let d = &st.doc;
     let selection_only = bool_or(p, "selectionOnly", false);
@@ -570,7 +820,12 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // The paths' total length, as Document Info › Objects shows it (the length of a cut line, a
     // strip of LEDs along the letters, #1958).
     let mut path_length = 0.0;
-    let mut fonts = BTreeSet::new();
+    let mut path_area = 0.0;
+    // The area normalizes every closed path's geometry, so it is worked out only for a request
+    // that covers the Objects category and does not turn it off with `pathArea: false`.
+    let want_area = bool_or(p, "pathArea", true) && category.is_none_or(|c| c == "objects");
+    // Each font with the number of text objects set in it.
+    let mut fonts: BTreeMap<super::fonts::UsedFont, usize> = BTreeMap::new();
     let mut images: BTreeMap<String, Value> = BTreeMap::new();
     let mut image_rows: Vec<ImageRow> = vec![];
     // Whether the request being served may read each linked file (a relative path read from the
@@ -617,6 +872,19 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             members.extend(children.iter().map(|c| std::ptr::from_ref(&**c)));
         }
     });
+    // The members of the compound paths that the roots contain. Only these leave their area to the compound.
+    let mut compound_members: HashSet<*const Node> = HashSet::new();
+    for (r, _) in roots.iter().filter(|_| want_area) {
+        r.walk(&mut |n| {
+            if let NodeKind::Compound { children, .. } = &n.kind {
+                for c in children {
+                    c.walk(&mut |descendant| {
+                        compound_members.insert(std::ptr::from_ref(descendant));
+                    });
+                }
+            }
+        });
+    }
     // Depth first, in paint order, as `Node::walk` visits: each object with whether it and the groups and layers around it
     // draw. An object that does not draw is still counted, and its members are visited.
     let mut stack: Vec<(&Node, bool)> = vec![];
@@ -636,18 +904,28 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 NodeKind::Group { clip: true, .. } => Some("clipGroups"),
                 NodeKind::Group { .. } => Some("groups"),
                 NodeKind::Path { guide: true, .. } => Some("guides"),
-                NodeKind::Path { path, .. } => {
+                NodeKind::Path { path, rule, .. } => {
                     let l = path.length();
                     if l.is_finite() {
                         path_length += l;
                     }
+                    if want_area && !compound_members.contains(&std::ptr::from_ref(n)) {
+                        path_area += closed_path_area(path, *rule);
+                    }
                     Some("paths")
                 }
-                NodeKind::Compound { .. } => Some("compoundPaths"),
-                NodeKind::Text(t) => {
-                    for run in &t.runs {
-                        fonts.insert((run.style.font_family.clone(), run.style.font_style.clone(), run.style.font_version.clone()));
+                NodeKind::Compound { children, rule } => {
+                    if want_area && !compound_members.contains(&std::ptr::from_ref(n)) {
+                        let mut subs = Vec::new();
+                        for c in children {
+                            collect_compound_subpaths(c, &mut subs);
+                        }
+                        path_area += closed_path_area(&vectorcraft_geom::PathData::new(subs), *rule);
                     }
+                    Some("compoundPaths")
+                }
+                NodeKind::Text(t) => {
+                    count_fonts(&mut fonts, t);
                     Some("textObjects")
                 }
                 NodeKind::Image(im) => {
@@ -658,8 +936,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                         im.key.clone(),
                         json!({ "width": im.width, "height": im.height, "linked": im.link.is_some(), "link": link.and_then(|(l, ok)| ok.then_some(&l.path)) }),
                     );
-                    let name = im.link.as_ref().map_or_else(|| n.display_name(), |l| l.name().to_string());
-                    image_rows.push((name, im.width, im.height, link.map(|(l, ok)| if ok { l.path.clone() } else { l.name().to_string() })));
+                    let file = link.map(|(l, ok)| if ok { l.path.clone() } else { l.name().to_string() });
+                    image_rows.push(ImageRow::of(d, n, im, file));
                     Some("images")
                 }
                 NodeKind::SymbolInstance { symbol, .. } => {
@@ -730,19 +1008,18 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     // The document's fonts include those of the type in opacity masks and in the art of its
-    // symbols and patterns, as Find Font lists them.
+    // symbols and patterns, as Find Font lists them. Each of those text objects counts once, however
+    // many objects show it.
     if !selection_only {
-        fonts.extend(super::fonts::art_texts_of(d).into_iter().flat_map(|(_, t, _)| t.runs.iter().map(|r| super::fonts::font_of(&r.style))));
+        for (_, t, _) in super::fonts::art_texts_of(d) {
+            count_fonts(&mut fonts, t);
+        }
     }
-    let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
-    let (font_entries, font_rows): (Vec<Value>, Vec<(String, String)>) = fonts.iter().map(font_detail).unzip();
-    // The image objects in walk order, as Linked Images and Embedded Images list them: `file` is a
-    // linked image's row value (its path, or its file name alone when the request may not read it),
-    // and null for an embedded one.
-    let image_objects: Vec<Value> = image_rows
-        .iter()
-        .map(|(name, w, h, file)| json!({ "name": name, "width": w, "height": h, "linked": file.is_some(), "file": file }))
-        .collect();
+    let font_names: Vec<String> = fonts.keys().map(super::fonts::font_label).collect();
+    let (font_uses, font_use_rows): (Vec<Value>, Vec<(String, String)>) = fonts.iter().map(|(f, n)| font_use(f, *n)).unzip();
+    let (font_entries, font_rows): (Vec<Value>, Vec<(String, String)>) = fonts.keys().map(font_detail).unzip();
+    // The image objects in walk order, as Linked Images and Embedded Images list them.
+    let image_objects: Vec<Value> = image_rows.iter().map(ImageRow::entry).collect();
     // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the first of two
     // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type. A row names the type
     // as the New Brush dialog does (`Art Brush`), and the panel translates these values when it shows them.
@@ -762,7 +1039,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "document": document_summary(d),
         "objects": counts,
         "pathLength": path_length,
+        "pathArea": want_area.then_some(path_area),
         "fonts": font_names,
+        "fontUses": font_uses,
         "fontDetails": font_entries,
         "images": images,
         "imageObjects": image_objects,
@@ -787,7 +1066,22 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     });
     // The document's name: its file's, else its title.
     out["document"]["name"] = json!(st.title());
-    let sections = sections(d, &out, &fonts, &font_rows, &image_rows, &brush_rows, &repeat_rows, &spot_rows, &pattern_rows, &gradient_rows, category);
+    let (selected_entries, selected_rows) = artboard_tool.map(|(picked, active)| selected_artboard_rows(d, &picked, active)).unwrap_or_default();
+    out["document"]["selectedArtboards"] = json!(selected_entries);
+    let sections = sections(
+        d,
+        &out,
+        &selected_rows,
+        &font_use_rows,
+        &font_rows,
+        &image_rows,
+        &brush_rows,
+        &repeat_rows,
+        &spot_rows,
+        &pattern_rows,
+        &gradient_rows,
+        category,
+    );
     if text {
         return Ok(json!({ "text": report_text(&st.title(), selection_only, &sections) }));
     }
@@ -804,6 +1098,13 @@ fn document_summary(d: &Document) -> Value {
         "unitId": d.units.key(),
         "artboards": d.artboards.iter().map(|a| json!({ "name": a.name, "width": a.rect.width() / u, "height": a.rect.height() / u })).collect::<Vec<_>>(),
         "rasterEffectsPpi": d.raster_effects_ppi,
+        "transparency": {
+            "gridSize": d.setup.grid_size.id(),
+            "gridColors": d.setup.grid_colors.map(|c| c.to_hex()),
+            "gridColorsName": d.setup.grid_colors_name(),
+            "simulatePaper": d.setup.simulate_paper,
+            "flattenerPreset": d.setup.flattener(),
+        },
     })
 }
 
@@ -857,14 +1158,12 @@ mod tests {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
         let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
-        s.execute(
-            "paint.setFill",
-            &json!({"gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]}}),
-        )
-        .unwrap();
+        let gradient = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        s.execute("paint.setFill", &json!({"gradient": gradient})).unwrap();
         let t = s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        // New type starts black (#7975); filled with the gradient, its characters make it a gradient object too.
+        s.execute("paint.setFill", &json!({"gradient": gradient, "ids": [t]})).unwrap();
         let i = s.execute("document.info", &json!({})).unwrap();
-        // The type's characters take the current gradient fill, so it is a gradient object too.
         assert_eq!(
             (i["objects"]["paths"].as_u64(), i["objects"]["textObjects"].as_u64(), i["objects"]["gradients"].as_u64()),
             (Some(1), Some(1), Some(2))
@@ -875,6 +1174,101 @@ mod tests {
         s.execute("select.set", &json!({"ids": [r]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["textObjects"].is_null() && i["objects"]["paths"] == 1);
+    }
+
+    /// The Document category's rows from `info`, as (label, value) pairs.
+    fn document_rows(i: &Value) -> Vec<(String, String)> {
+        let doc = i["sections"].as_array().unwrap().iter().find(|s| s["id"] == "document").unwrap();
+        doc["rows"].as_array().unwrap().iter().map(|r| (r[0].as_str().unwrap().to_string(), r[1].as_str().unwrap().to_string())).collect()
+    }
+
+    /// Document lists File › Document Setup's transparency settings: the grid's size and colors
+    /// (a preset's name, else both colors), Simulate Colored Paper and the flattener preset.
+    #[test]
+    fn info_lists_the_transparency_settings() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let t = &i["document"]["transparency"];
+        assert_eq!(
+            (t["gridSize"].clone(), t["gridColorsName"].clone(), t["simulatePaper"].clone(), t["flattenerPreset"].clone()),
+            (json!("medium"), json!("Light"), json!(false), json!("Medium Resolution"))
+        );
+        let rows = document_rows(&i);
+        let at = rows.iter().position(|(l, _)| l == "Raster Effects").unwrap();
+        let expected =
+            [("Grid Size", "Medium"), ("Grid Colors", "Light"), ("Simulate Colored Paper", "Off"), ("Flattener Preset", "Medium Resolution")];
+        assert_eq!(rows[at + 1..at + 5], expected.map(|(l, v)| (l.to_string(), v.to_string())), "{rows:?}");
+        s.execute(
+            "document.setup",
+            &json!({"gridSize": "large", "gridColors": ["#ff0000", "#00ff00"], "simulatePaper": true, "flattenerPreset": "High Resolution"}),
+        )
+        .unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(i["document"]["transparency"]["gridColors"], json!(["#ff0000", "#00ff00"]));
+        assert_eq!(i["document"]["transparency"]["gridColorsName"], "Custom");
+        let rows = document_rows(&i);
+        let expected =
+            [("Grid Size", "Large"), ("Grid Colors", "#ff0000, #00ff00"), ("Simulate Colored Paper", "On"), ("Flattener Preset", "High Resolution")];
+        assert_eq!(rows[at + 1..at + 5], expected.map(|(l, v)| (l.to_string(), v.to_string())), "{rows:?}");
+        let report = s.execute("document.info", &json!({"category": "document", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(report.contains("Grid Colors: #ff0000, #00ff00\nSimulate Colored Paper: On\nFlattener Preset: High Resolution\n"), "{report}");
+    }
+
+    /// While the Artboard tool is the current tool, Document lists each artboard it has selected
+    /// after the artboards: its name, width, height and the X and Y of its top-left corner from the
+    /// ruler origin of the tool's active artboard. With another tool it lists none.
+    #[test]
+    fn info_lists_the_artboards_the_artboard_tool_selected() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        s.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+        s.execute("artboard.new", &json!({"x": 400, "y": 10, "width": 100, "height": 50})).unwrap();
+        s.execute("artboard.setProps", &json!({"index": 2, "name": "Back"})).unwrap();
+        let before = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(before["document"]["selectedArtboards"], json!([]));
+        s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+        s.set_tool_option("selected", &json!([2, 1, 7]));
+        let i = s.execute("document.info", &json!({})).unwrap();
+        // Artboard 2 is active: positions are measured from its top-left corner.
+        assert_eq!(
+            i["document"]["selectedArtboards"],
+            json!([
+                {"index": 1, "name": "Artboard 2", "width": 60.0, "height": 80.0, "x": -250.0, "y": 30.0},
+                {"index": 2, "name": "Back", "width": 100.0, "height": 50.0, "x": 0.0, "y": 0.0},
+            ])
+        );
+        let rows = document_rows(&i);
+        let at = rows.iter().position(|(l, _)| l == "Artboards").unwrap() + 4;
+        let expected = [
+            ("Artboard", "Artboard 2"),
+            ("Width", "60 pt"),
+            ("Height", "80 pt"),
+            ("X", "-250 pt"),
+            ("Y", "30 pt"),
+            ("Artboard", "Back"),
+            ("Width", "100 pt"),
+            ("Height", "50 pt"),
+            ("X", "0 pt"),
+            ("Y", "0 pt"),
+            ("Raster Effects", "72 ppi"),
+        ];
+        assert_eq!(rows[at..at + 11], expected.map(|(l, v)| (l.to_string(), v.to_string())), "{rows:?}");
+        // The rows follow the document's units and its ruler origin.
+        s.execute("document.setup", &json!({"units": "Millimeters"})).unwrap();
+        s.execute("document.setRulerOrigin", &json!({"x": 390, "y": 0, "artboard": 2})).unwrap();
+        s.set_tool_option("selected", &json!([2]));
+        let i = s.execute("document.info", &json!({"category": "document"})).unwrap();
+        let entry = &i["document"]["selectedArtboards"];
+        assert_eq!((entry.as_array().unwrap().len(), entry[0]["index"].clone()), (1, json!(2)));
+        assert!((entry[0]["x"].as_f64().unwrap() - 10.0 * 25.4 / 72.0).abs() < 1e-9, "{entry}");
+        let rows = document_rows(&i);
+        assert!(rows.contains(&("X".into(), "3.5278 mm".into())) && rows.contains(&("Y".into(), "3.5278 mm".into())), "{rows:?}");
+        // Another tool: no artboard rows.
+        s.select_tool("selection", crate::tooling::ViewInfo::default()).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(i["document"]["selectedArtboards"], json!([]));
+        assert!(!document_rows(&i).iter().any(|(l, _)| l == "X"), "{:?}", document_rows(&i));
     }
 
     /// Document Info's fonts include the type in an opacity mask, in a symbol's art and in a
@@ -911,6 +1305,92 @@ mod tests {
         assert_eq!(fonts(&mut s, json!({"selectionOnly": true})), json!(["Source Sans 3 Regular"]));
     }
 
+    /// Fonts gives each font's type and its number of uses: the text objects set in it, each once
+    /// however many of its runs use the font. The type in a symbol's art counts once however many
+    /// instances show it, and the type in an opacity mask once. With Selection Only it counts the
+    /// selected type alone. A font that is not installed has an unknown type. The rows, the report
+    /// and `fontUses` give the same facts, in the order of `fonts`.
+    #[test]
+    fn info_fonts_give_each_font_s_type_and_uses() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+        let text =
+            |s: &mut Session, font: &str, y: f64| id(s.execute("text.create", &json!({"x": 10, "y": y, "text": "Hello", "font": font})).unwrap());
+        // Two runs in Source Sans 3 Regular in one text object, a second object in it, and one in Inter.
+        let twice = text(&mut s, "Source Sans 3", 20.0);
+        s.execute("text.setRangeStyle", &json!({"id": twice.0, "start": 0, "end": 2, "size": 30})).unwrap();
+        assert!(matches!(&s.doc().unwrap().doc.node(twice).unwrap().kind, NodeKind::Text(t) if t.runs.len() == 2));
+        let other = text(&mut s, "Source Sans 3", 50.0);
+        text(&mut s, "Inter", 80.0);
+        text(&mut s, "Qx Absent Family", 110.0);
+        // A symbol whose art holds type in Inter, shown by two instances, and a mask holding type in Inter.
+        let in_symbol = text(&mut s, "Inter", 140.0);
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+        s.execute("symbol.place", &json!({"name": "Mark", "x": 100, "y": 100})).unwrap();
+        let masked = id(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap());
+        let in_mask = text(&mut s, "Inter", 170.0);
+        s.edit("Mask", |d, _| {
+            let art = d.remove(in_mask)?;
+            d.node_mut(masked).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+            Ok(())
+        })
+        .unwrap();
+        let i = s.execute("document.info", &json!({"category": "fonts"})).unwrap();
+        assert_eq!(i["fonts"], json!(["Inter Regular", "Qx Absent Family Regular", "Source Sans 3 Regular"]));
+        assert_eq!(
+            i["fontUses"],
+            json!([
+                {"font": "Inter Regular", "type": "truetype", "uses": 3},
+                {"font": "Qx Absent Family Regular", "type": "unknown", "uses": 1},
+                {"font": "Source Sans 3 Regular", "type": "truetype", "uses": 2},
+            ])
+        );
+        assert_eq!(
+            i["sections"][0]["rows"],
+            json!([
+                ["Inter Regular", "TrueType; 3 uses"],
+                ["Qx Absent Family Regular", "unknown type; 1 use"],
+                ["Source Sans 3 Regular", "TrueType; 2 uses"],
+            ])
+        );
+        let report = s.execute("document.info", &json!({"category": "fonts", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(report.contains("\nFONTS\nInter Regular: TrueType; 3 uses\nQx Absent Family Regular: unknown type; 1 use\n"), "{report}");
+        // Selection Only: the selected type's fonts and uses.
+        s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "fonts"})).unwrap();
+        assert_eq!(i["fontUses"], json!([{"font": "Source Sans 3 Regular", "type": "truetype", "uses": 1}]));
+        assert_eq!(i["sections"][0]["rows"], json!([["Source Sans 3 Regular", "TrueType; 1 use"]]));
+        s.execute("select.none", &json!({})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "fonts"})).unwrap();
+        assert_eq!((i["fontUses"].clone(), i["sections"][0]["rows"].clone()), (json!([]), json!([])));
+    }
+
+    /// Type set in a composite font counts as a use of the fonts of the parts its characters fall
+    /// in, as Find Font lists them, not of the composite font's name.
+    #[test]
+    fn info_fonts_count_the_parts_of_a_composite_font() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let font = json!({"name": "DI Uses Composite", "parts": {
+            "kanji": {"font": "Source Sans 3"},
+            "roman": {"font": "JetBrains Mono"},
+            "numerals": {"font": "Inter"},
+        }});
+        s.execute("type.compositeFonts.set", &json!({"fonts": [font]})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab1", "font": "DI Uses Composite"})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "12", "font": "DI Uses Composite"})).unwrap();
+        let i = s.execute("document.info", &json!({"category": "fonts"})).unwrap();
+        assert_eq!(i["fonts"], json!(["Inter Regular", "JetBrains Mono Regular"]));
+        assert_eq!(
+            i["fontUses"],
+            json!([
+                {"font": "Inter Regular", "type": "truetype", "uses": 2},
+                {"font": "JetBrains Mono Regular", "type": "truetype", "uses": 1},
+            ])
+        );
+    }
+
     /// Document Info › Objects gives the paths' total length in the document's units (#1958): an
     /// open line, a closed rectangle's perimeter and a compound path's pieces count, a guide doesn't.
     #[test]
@@ -933,6 +1413,115 @@ mod tests {
         // Nothing with no paths, and no length row.
         s.execute("select.none", &json!({})).unwrap();
         assert_eq!(length(&mut s, json!({"selectionOnly": true})), 0.0);
+    }
+
+    /// Document Info › Objects gives the paths' total area in the document's units: an open line
+    /// counts 0, a closed rectangle encloses its area, and a compound path's holes are subtracted.
+    #[test]
+    fn info_gives_the_paths_total_area() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400, "units": "Points"})).unwrap();
+        let line = s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 72, "y2": 0})).unwrap()["id"].clone();
+        let rect = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 10, "height": 20})).unwrap()["id"].clone();
+        let area = |s: &mut Session, p: Value| s.execute("document.info", &p).unwrap()["pathArea"].as_f64().unwrap();
+        // The rectangle encloses 200 pt²; the open line encloses 0.
+        assert!((area(&mut s, json!({})) - 200.0).abs() < 1e-6);
+        // An open line selected: pathArea is 0, so no "Path Area" row is inserted.
+        s.execute("select.set", &json!({"ids": [line]})).unwrap();
+        assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
+        let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
+        assert_eq!(rows, json!([["Paths", "1"], ["Path Length", "72 pt"]]));
+        // The rectangle selected: "Path Area" row follows "Path Length".
+        s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+        assert!((area(&mut s, json!({"selectionOnly": true})) - 200.0).abs() < 1e-6);
+        let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
+        assert_eq!(rows, json!([["Paths", "1"], ["Path Length", "60 pt"], ["Path Area", "200 pt²"]]));
+        // A compound path's pieces are paths: their areas count.
+        let other = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 5, "height": 5})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [rect, other]})).unwrap();
+        s.execute("object.compoundPath.make", &json!({})).unwrap();
+        assert!((area(&mut s, json!({"selectionOnly": true})) - 225.0).abs() < 1e-6);
+        // A compound path (a 10x10 outer contour with a 6x6 inner hole) subtracts the hole:
+        let mut s2 = Session::new();
+        s2.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points"})).unwrap();
+        let outer = s2.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let inner = s2.execute("shape.rectangle", &json!({"x": 12, "y": 12, "width": 6, "height": 6})).unwrap()["id"].clone();
+        s2.execute("select.set", &json!({"ids": [outer, inner]})).unwrap();
+        let cp1 = s2.execute("object.compoundPath.make", &json!({})).unwrap()["id"].clone();
+        assert!((area(&mut s2, json!({"selectionOnly": true})) - 64.0).abs() < 1e-6);
+        // A nested compound path (cp1 compounded with another disjoint 5x5 rectangle) does not double-count cp1:
+        let extra = s2.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 5, "height": 5})).unwrap()["id"].clone();
+        s2.execute("select.set", &json!({"ids": [cp1, extra]})).unwrap();
+        s2.execute("object.compoundPath.make", &json!({})).unwrap();
+        assert!((area(&mut s2, json!({"selectionOnly": true})) - 89.0).abs() < 1e-6);
+        // A guide path is left out.
+        let guide = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(guide)).unwrap().kind {
+            *g = true;
+        }
+        s.execute("select.set", &json!({"ids": [guide]})).unwrap();
+        assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
+        // A compound path whose members are guides is left out.
+        let g1 = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        let g2 = s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(g1)).unwrap().kind {
+            *g = true;
+        }
+        if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(g2)).unwrap().kind {
+            *g = true;
+        }
+        s.execute("select.set", &json!({"ids": [g1, g2]})).unwrap();
+        s.execute("object.compoundPath.make", &json!({})).unwrap();
+        assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
+        // Nothing with no paths, and no area row.
+        s.execute("select.none", &json!({})).unwrap();
+        assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
+    }
+
+    /// The area pass normalizes every closed path, so `document.info` leaves it out (`pathArea`
+    /// null) for a request that does not cover the Objects category or turns it off, and still
+    /// gives it for Objects and for every category.
+    #[test]
+    fn info_works_out_the_path_area_only_for_the_objects_category() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 20})).unwrap();
+        let area = |s: &mut Session, p: Value| s.execute("document.info", &p).unwrap()["pathArea"].as_f64();
+        assert!(area(&mut s, json!({})).is_some_and(|a| a > 0.0));
+        assert!(area(&mut s, json!({"category": "objects"})).is_some_and(|a| a > 0.0));
+        assert_eq!(area(&mut s, json!({"category": "fonts"})), None);
+        assert_eq!(area(&mut s, json!({"pathArea": false})), None);
+        // Without the area, Objects has no Path Area row and keeps its other rows.
+        let rows = |s: &mut Session, p: Value| s.execute("document.info", &p).unwrap()["sections"][0]["rows"].clone();
+        let without = rows(&mut s, json!({"category": "objects", "pathArea": false}));
+        let with = rows(&mut s, json!({"category": "objects"}));
+        assert!(without.as_array().unwrap().iter().all(|r| r[0] != "Path Area"), "{without}");
+        assert!(with.as_array().unwrap().iter().any(|r| r[0] == "Path Area"), "{with}");
+        assert_eq!(with.as_array().unwrap().len(), without.as_array().unwrap().len() + 1);
+    }
+
+    /// A selection containing both a compound and its member counts the member once; selecting
+    /// only the member still reports that path's area.
+    #[test]
+    fn info_path_area_counts_selected_compound_members_once() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let p = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        let q = s.execute("shape.rectangle", &json!({"x": 30, "y": 30, "width": 5, "height": 5})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [p, q]})).unwrap();
+        let compound = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let st = s.doc_mut().unwrap();
+        let NodeKind::Compound { children, .. } = &st.doc.node(NodeId(compound)).unwrap().kind else { panic!("not a compound path") };
+        let member = children.iter().find(|child| child.id.0 == p).unwrap().id;
+        let area = |s: &mut Session| s.execute("document.info", &json!({"selectionOnly": true})).unwrap()["pathArea"].as_f64().unwrap();
+        let picked = s.execute("select.set", &json!({"ids": [member.0]})).unwrap();
+        assert_eq!(picked["count"], 1);
+        assert!((area(&mut s) - 100.0).abs() < 1e-6);
+        let picked = s.execute("select.set", &json!({"ids": [member.0, compound]})).unwrap();
+        assert_eq!(picked["count"], 2);
+        assert!((area(&mut s) - 125.0).abs() < 1e-6);
     }
 
     /// Document Info › Brushes lists the brushes the art's strokes use, each once with its type, and
@@ -1500,9 +2089,41 @@ mod tests {
         s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
         s.execute("swatch.new", &json!({"name": "Ink", "color": {"model": "cmyk", "c": 0, "m": 1, "y": 1, "k": 0}, "spot": true})).unwrap();
         let mut bytes = Vec::new();
-        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap())
-            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
-            .unwrap();
+        {
+            let __dyn: image::DynamicImage = image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| bytes.extend_from_slice(&__b))
+        }
+        .unwrap();
         let image = s
             .edit("Place", |d, sel| {
                 d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(bytes));
@@ -1657,9 +2278,41 @@ mod tests {
         s.execute("paint.setStroke", &json!({"ids": [word], "none": true})).unwrap();
         // A grayscale image colorized with the spot color.
         let mut bytes = Vec::new();
-        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap())
-            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
-            .unwrap();
+        {
+            let __dyn: image::DynamicImage = image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| bytes.extend_from_slice(&__b))
+        }
+        .unwrap();
         let image = s
             .edit("Place", |d, sel| {
                 d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(bytes));
@@ -1881,9 +2534,154 @@ mod tests {
         assert_eq!(objects.len(), 2, "{objects:?}");
         for (o, r) in objects.iter().zip(&embedded) {
             assert_eq!((o["linked"].clone(), o["file"].clone(), o["name"].clone()), (json!(false), Value::Null, r[0].clone()), "{o}");
-            assert_eq!(r[1], format!("{} × {} px", o["width"], o["height"]));
+            let memory = byte_size(o["memoryBytes"].as_u64().unwrap());
+            assert_eq!(r[1], format!("{}; {} × {} px; estimated memory {memory}", o["format"].as_str().unwrap(), o["width"], o["height"]));
         }
         assert!(section("linkedImages").is_empty());
+    }
+
+    /// An image object to place: (key, MIME type, linked path, width, height, transform).
+    type Placed<'a> = (&'a str, &'a str, Option<&'a str>, u32, u32, Affine);
+
+    /// Image objects `images` placed in a new document, with a blob of `100 + n` bytes of type
+    /// `mime` for each new key; their ids in order.
+    fn images_in(s: &mut Session, images: &[Placed]) -> Vec<NodeId> {
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        s.edit("Place", |d, _| {
+            let mut ids = vec![];
+            for (n, (key, mime, link, width, height, xf)) in images.iter().enumerate() {
+                if !d.images.contains_key(*key) {
+                    d.images.insert((*key).into(), vectorcraft_doc::ImageBlob::new(*mime, vec![0; 100 + n]));
+                }
+                let id = d.alloc_id();
+                let im = vectorcraft_doc::ImageObject {
+                    key: (*key).into(),
+                    width: *width,
+                    height: *height,
+                    xf: *xf,
+                    link: link.map(vectorcraft_doc::LinkInfo::new),
+                    placement: Default::default(),
+                    pixels: None,
+                };
+                d.insert(d.default_layer(), usize::MAX, Node::new(id, NodeKind::Image(Box::new(im))))?;
+                ids.push(id);
+            }
+            Ok(ids)
+        })
+        .unwrap()
+    }
+
+    /// Linked Images gives each linked image's format, size in pixels, resolution at the size it is
+    /// placed at and file, and Embedded Images each embedded image's format, size and the memory
+    /// its pixels take; `imageObjects` gives the same facts with the bytes the document holds for an
+    /// embedded image, the text report writes the same rows, and Selection Only lists the selected
+    /// images alone.
+    #[test]
+    fn image_rows_give_format_resolution_and_memory() {
+        let mut s = Session::new();
+        let half = Affine::scale(0.5);
+        let ids = images_in(
+            &mut s,
+            &[
+                ("a", "image/png", None, 1200, 800, half),
+                ("b", "image/jpeg", None, 10, 10, half),
+                ("c", "image/x-unheard-of", None, 3, 2, half),
+                ("a", "image/png", Some("/art/photo.png"), 1200, 800, Affine::scale(0.48)),
+                ("a", "image/png", Some("/art/photo.png"), 1200, 800, Affine::scale(0.24)),
+                ("a", "image/png", Some("/art/wide.png"), 1200, 800, Affine::scale_non_uniform(0.5, 1.0)),
+                ("a", "image/png", Some("/art/scan.tif"), 1200, 800, half),
+                ("a", "image/png", Some("/art/flat.png"), 1200, 800, Affine::scale_non_uniform(0.5, 0.0)),
+                // Both pixel axes on one line: neither has length 0, but the image has no area.
+                ("a", "image/png", Some("/art/line.png"), 1200, 800, Affine::new([0.5, 0.5, 1.0, 1.0, 0.0, 0.0])),
+                ("c", "image/x-unheard-of", Some("/art/odd.qqq"), 3, 2, half),
+            ],
+        );
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let rows = |i: &Value, id: &str| -> Vec<(String, String)> {
+            let section = i["sections"].as_array().unwrap().iter().find(|s| s["id"] == id).unwrap().clone();
+            section["rows"].as_array().unwrap().iter().map(|r| (r[0].as_str().unwrap().into(), r[1].as_str().unwrap().into())).collect()
+        };
+        let embedded = rows(&i, "embeddedImages");
+        let values: Vec<&str> = embedded.iter().map(|(_, v)| v.as_str()).collect();
+        assert_eq!(
+            values,
+            [
+                "PNG; 1200 × 800 px; estimated memory 3.7 MiB",
+                "JPEG; 10 × 10 px; estimated memory 400 B",
+                "Unknown format; 3 × 2 px; estimated memory 24 B"
+            ]
+        );
+        let linked = rows(&i, "linkedImages");
+        assert_eq!(
+            linked,
+            [
+                ("photo.png", "PNG; 1200 × 800 px; 150 ppi — /art/photo.png"),
+                ("photo.png", "PNG; 1200 × 800 px; 300 ppi — /art/photo.png"),
+                ("wide.png", "PNG; 1200 × 800 px; 144 × 72 ppi — /art/wide.png"),
+                ("scan.tif", "TIFF; 1200 × 800 px; 144 ppi — /art/scan.tif"),
+                ("flat.png", "PNG; 1200 × 800 px; resolution unavailable — /art/flat.png"),
+                ("line.png", "PNG; 1200 × 800 px; resolution unavailable — /art/line.png"),
+                ("odd.qqq", "Unknown format; 3 × 2 px; 144 ppi — /art/odd.qqq"),
+            ]
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+        );
+        let objects = i["imageObjects"].as_array().unwrap();
+        assert_eq!(objects.len(), 10);
+        assert_eq!(
+            (objects[0]["format"].clone(), objects[0]["effectivePpi"].clone(), objects[0]["memoryBytes"].clone(), objects[0]["storedBytes"].clone()),
+            (json!("PNG"), json!([144.0, 144.0]), json!(1200 * 800 * 4), json!(100))
+        );
+        assert_eq!((objects[1]["format"].clone(), objects[1]["storedBytes"].clone()), (json!("JPEG"), json!(101)));
+        assert_eq!(objects[2]["format"], Value::Null);
+        // A linked image gives no memory and no stored bytes: the document holds only its preview.
+        assert_eq!((objects[3]["memoryBytes"].clone(), objects[3]["storedBytes"].clone()), (Value::Null, Value::Null));
+        let ppi = |o: &Value| -> Vec<f64> { o["effectivePpi"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect() };
+        assert!(ppi(&objects[3]).iter().all(|v| (v - 150.0).abs() < 1e-9), "{}", objects[3]);
+        assert_eq!(ppi(&objects[5]), [144.0, 72.0]);
+        assert_eq!((objects[7]["effectivePpi"].clone(), objects[8]["effectivePpi"].clone()), (Value::Null, Value::Null));
+        let text = s.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(text.contains("\nphoto.png: PNG; 1200 × 800 px; 150 ppi — /art/photo.png\n"), "{text}");
+        assert!(text.contains(": JPEG; 10 × 10 px; estimated memory 400 B\n"), "{text}");
+        // Selection Only lists the selected images alone, with the same rows.
+        s.execute("select.set", &json!({"ids": [ids[1].0, ids[5].0]})).unwrap();
+        let selected = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
+        assert_eq!(rows(&selected, "embeddedImages").iter().map(|(_, v)| v.as_str()).collect::<Vec<_>>(), [values[1]]);
+        assert_eq!(rows(&selected, "linkedImages"), [linked[2].clone()]);
+    }
+
+    /// An image placed at a very small size still has an area, so its row gives a resolution.
+    #[test]
+    fn a_tiny_placement_still_gives_a_resolution() {
+        let mut s = Session::new();
+        images_in(&mut s, &[("a", "image/png", Some("/art/huge.png"), 100_000, 100_000, Affine::scale(1e-7))]);
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let ppi = i["imageObjects"][0]["effectivePpi"].as_array().map(|v| v.iter().map(|v| v.as_f64().unwrap_or(0.0)).collect::<Vec<_>>());
+        let ppi = ppi.unwrap_or_default();
+        assert!(ppi.len() == 2 && ppi.iter().all(|v| (v / 7.2e8 - 1.0).abs() < 1e-9), "{}", i["imageObjects"][0]);
+    }
+
+    /// An image with no pixels across or down has no area, so its row gives no resolution whatever
+    /// its transform.
+    #[test]
+    fn a_zero_pixel_image_has_no_resolution() {
+        let mut s = Session::new();
+        let half = Affine::scale(0.5);
+        images_in(&mut s, &[("a", "image/png", Some("/art/none.png"), 0, 800, half), ("a", "image/png", Some("/art/flat.png"), 1200, 0, half)]);
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let objects = i["imageObjects"].as_array().cloned().unwrap_or_default();
+        assert_eq!(objects.iter().map(|o| o["effectivePpi"].clone()).collect::<Vec<_>>(), [Value::Null, Value::Null], "{objects:?}");
+        let text = s.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap_or_default().to_string();
+        assert!(text.contains("none.png: PNG; 0 × 800 px; resolution unavailable — /art/none.png\n"), "{text}");
+        assert!(text.contains("flat.png: PNG; 1200 × 0 px; resolution unavailable — /art/flat.png\n"), "{text}");
+    }
+
+    /// A number of bytes reads in B below 1 KiB, else in KiB, MiB or GiB to a tenth, and a
+    /// resolution to a tenth without a trailing `.0`.
+    #[test]
+    fn byte_sizes_and_resolutions_read_to_a_tenth() {
+        let shown = [0, 1023, 1024, 1536, 1024 * 1024 - 1, 3_840_000, 5 << 30, u64::MAX].map(byte_size);
+        assert_eq!(shown, ["0 B", "1023 B", "1 KiB", "1.5 KiB", "1 MiB", "3.7 MiB", "5 GiB", "17179869184 GiB"]);
+        assert_eq!([150.0, 72.0 / 0.48, 205.714, 0.04, 0.001].map(ppi_number), ["150", "150", "205.7", "0.04", "0"]);
     }
 
     /// A `gradientObjects` entry's `kinds` gives the kind of each gradient listed by its kind

@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, TextKind};
+use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, Selection, TextKind};
 use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
@@ -14,8 +14,8 @@ use super::panelcmds::artboard_at;
 use super::pathops::Beside;
 use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
-    CommandSpec, EngineError, Point, Result, Session, bad, checked_ids_param, cmd, f64_req, has_doc, has_selection, id_param, number_or, ok,
-    str_param, switch_or, text_param,
+    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, f64_req, has_doc, has_selection, id_param, number_or, ok, str_param,
+    switch_or, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -238,7 +238,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Guide",
             [],
             None,
-            "{index, pos: pt} | {dx?, dy?: pt, copy?: bool} put ruler guide `index` at `pos`, or move the selected guides (vertical ones by dx, horizontal ones by dy); copy leaves them and selects the moved copies",
+            "{index, pos: pt} | {dx?, dy?: pt, copy?: bool, interpolate?: bool (with art selected too: as object.move's)} put ruler guide `index` at `pos`, or move the selected guides (vertical ones by dx, horizontal ones by dy); copy leaves them and selects the moved copies",
             guides_unlocked,
             guide_move
         ),
@@ -269,6 +269,33 @@ pub fn specs() -> Vec<CommandSpec> {
             "{title?, author?, authorTitle?, description?, keywords?: [string…]|\"a, b\" (each once), rating?: 0–5, copyrightStatus?: \"unknown\"|\"copyrighted\"|\"publicDomain\", copyrightNotice?, copyrightUrl?, created?, modified?, colorMode?, units?, artboards?, objects? (the last six only as read back; ignored)} set the File Info in one undo step (SVG with metadata, PDF and PNG exports carry it); no params → {title, author, authorTitle, description, keywords, rating, copyrightStatus, copyrightNotice, copyrightUrl, created, modified (ISO 8601 UTC or null; read-only), colorMode, units, artboards, objects}",
             has_doc,
             super::fileinfo::file_info
+        ),
+        cmd!(
+            "file.info.saveTemplate",
+            "Save Metadata Template…",
+            [],
+            None,
+            "{name?: save into the metadata templates folder as <name>.xmp (a name with characters file systems reject, a dot at either end, or a device name is an error (spaces at either end are dropped); the same name replaces that template), path?: save to this file instead (not both), fields?: {File Info fields as file.info takes them} save these instead of the document's (default: the document's File Info)} write the File Info as an XMP metadata template: title (only one of its own, not Untitled-N), author, authorTitle, description, keywords, rating (1–5), copyrightStatus, copyrightNotice and copyrightUrl, each where it has a value; the dates are left out → {name, path} (with name), {path} (with path), or {data: the XMP text} with neither",
+            has_doc,
+            super::fileinfo::save_template
+        ),
+        cmd!(
+            "file.info.applyTemplate",
+            "Import Metadata Template…",
+            [],
+            None,
+            "{path?: an XMP file, name?: a template of the metadata templates folder by the name or file file.info.templates lists, data?: XMP text, dataBase64?: XMP bytes (exactly one source; at most 8 MB), mode: \"replace\" (clear the author, authorTitle, description, keywords, rating, copyright status, notice and URL, then take the template's; the title stays unless the template has one) | \"keep\" (keep the File Info, and take each field the template has) | \"append\" (keep the File Info, add the template's keywords, and take its other fields only where the File Info has none: a title only over an Untitled-N one, a rating only over 0, a copyright status only over unknown), apply?: true (false: change nothing and return the merged File Info), base?: {File Info fields as file.info takes them} merged into instead of the document's} merge a metadata template into the File Info in one undo step, none when nothing changes; a template value file.info would refuse is left out; a missing file, a file larger than 8 MB or one that is not XMP is an error → the File Info as file.info reports it, with changed: true|false (with apply: false, the merged File Info without changed)",
+            has_doc,
+            super::fileinfo::apply_template
+        ),
+        cmd!(
+            query "file.info.templates",
+            "Metadata Templates",
+            [],
+            None,
+            "{create?: false (true: make the folder when it is missing)} the metadata templates in the metadata templates folder next to the preferences, sorted by name, at most 1,000 → {templates: [{name, file: the file name, path}], folder?: the folder (left out for a request that may not read it, in runs without preferences and on the web, where the list is empty)}",
+            super::always,
+            super::fileinfo::templates
         ),
     ]
 }
@@ -468,14 +495,15 @@ fn direction_handles(s: &mut Session, _: &Value) -> Result<Value> {
         }
     }
     let total: usize = items.iter().map(|x| x.1.len()).sum();
-    s.select(|_, sel| {
-        sel.clear();
-        for (id, refs) in items {
-            sel.add(id);
-            sel.anchors.insert(id, refs);
-        }
-    })?;
+    s.select(|_, sel| select_anchors(sel, items))?;
     Ok(json!({ "anchors": total }))
+}
+
+/// Replaces `sel` with the paths of `items` in order, each once, and direct-selects the anchors
+/// listed with each path. A path listed twice keeps its first place and its last anchor set.
+fn select_anchors(sel: &mut Selection, items: Vec<(NodeId, BTreeSet<(usize, usize)>)>) {
+    sel.set(items.iter().map(|(id, _)| *id));
+    sel.anchors.extend(items);
 }
 
 fn save_selection(s: &mut Session, p: &Value) -> Result<Value> {
@@ -702,13 +730,10 @@ fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Find each ruler guide's line and its parent: the guide's layer, else where new art goes.
     let st = s.doc()?;
-    let artboards = st.doc.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b));
     let mut lines = Vec::with_capacity(rulers.len());
     for &i in &rulers {
         let Some(g) = st.doc.ruler_guide(i) else { continue };
-        let span = st.doc.guide_span(&g).or_else(|| artboards.map(|r| if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) }));
-        let Some((a, b)) = span else { continue };
-        let (a, b) = if g.vertical { (Point::new(g.pos, a), Point::new(g.pos, b)) } else { (Point::new(a, g.pos), Point::new(b, g.pos)) };
+        let Some((a, b)) = st.doc.guide_line(&g) else { continue };
         let parent = match g.layer.filter(|l| st.doc.node(*l).is_some_and(Node::is_layer)) {
             Some(l) => Some(l),
             None => st.target_parent()?,
@@ -962,6 +987,7 @@ pub(crate) fn guide_move(s: &mut Session, p: &Value) -> Result<Value> {
     let dx = number_or(p, "dx", 0.0, "guide.move")?;
     let dy = number_or(p, "dy", 0.0, "guide.move")?;
     let copy = switch_or(p, "copy", false, "guide.move")?;
+    switch_or(p, "interpolate", false, "guide.move")?;
     if !s.doc()?.selection.is_empty() {
         let ids = super::edit::selected_roots(s)?;
         return super::object::apply_transform(
@@ -999,3 +1025,6 @@ fn close_all(s: &mut Session, _: &Value) -> Result<Value> {
     }
     Ok(json!({ "closed": n }))
 }
+
+#[cfg(test)]
+mod tests;

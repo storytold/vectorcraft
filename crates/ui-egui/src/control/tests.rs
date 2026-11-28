@@ -2,13 +2,19 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
-use super::{ControlRequest, MAX_DIALOG_FIELDS, Outcome, handle};
-use crate::state::Dialog;
+use craft::automation::{ControlRequest, Reply};
+
+use super::{handle, inspect};
 use crate::{Services, VectorcraftApp};
+
+/// Whether a dialog is open on the app's window.
+fn dialog_open(app: &VectorcraftApp) -> bool {
+    app.dialogs().is_some_and(|host| host.with(|h| !h.open_dialogs().is_empty()))
+}
 
 fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
     let (req, _) = ControlRequest::new(method, params);
-    let Outcome::Done(r) = handle(app, &egui::Context::default(), &req) else { panic!("expected immediate reply") };
+    let Reply::Done(r) = handle(app, &crate::testing::ui_context(), &req) else { panic!("expected immediate reply") };
     r
 }
 
@@ -28,7 +34,7 @@ fn a_reply_hides_a_hidden_library_whatever_surrounds_it() {
 fn hiding(hidden: &[(&str, &str)], readable: &[&str]) -> super::Hiding {
     let mut hidden: Vec<(String, String)> = hidden.iter().map(|(id, shown)| (id.to_string(), shown.to_string())).collect();
     hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
-    super::Hiding { hidden, readable: readable.iter().map(|id| id.to_string()).collect(), sent: Vec::new() }
+    super::Hiding { hidden, readable: readable.iter().map(|id| id.to_string()).collect(), sent: Vec::new(), folders: Vec::new() }
 }
 
 /// [`super::hide_library_ids`] on `reply`, under a read root made for `tag`.
@@ -592,272 +598,64 @@ fn deferred_pointer_reply_uses_the_gesture_document_after_file_new() {
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [id]})).unwrap();
-    let (reply, received) = std::sync::mpsc::channel();
-    let at = app.session.input_count();
-    app.pointer_replies.push(super::PendingPointerReply { from: at, to: at, document: app.session.active().map(|d| d.uid), reply });
+    let gesture = app.session.active().map(|d| d.uid);
 
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app.run("tool.select", json!({"tool": "rectangle"})).unwrap();
-    app.answer_pointer_replies(&egui::Context::default());
 
-    let result = received.try_recv().unwrap();
+    let result = super::pointer_reply_for(&app, gesture);
     assert_eq!(result["ok"], true, "{result}");
     assert_eq!(result["result"]["selection"], json!([id]));
     assert_eq!(result["result"]["key"], Value::Null);
     assert_eq!(result["result"]["tool"], "rectangle");
 }
 
-#[test]
-fn control_lists_and_selects_optional_addon_tools() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    let listed = input_request(&mut app, "ui.tool.list", json!({}));
-    assert_eq!(listed["ok"], true);
-    let groups = listed["result"].as_array().unwrap();
-    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
-        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
-        assert_eq!(matching.len(), 1, "{}", tool.id);
-        assert_eq!(matching[0]["label"], tool.label);
-        assert!(matching[0]["shortcut"].is_null());
-        let selected = input_request(&mut app, "ui.tool.select", json!({"tool": tool.id}));
-        assert_eq!(selected["ok"], true, "{selected}");
-        assert_eq!(selected["result"]["tool"], tool.id);
-    }
-}
-
-#[test]
-fn ui_set_turns_the_image_trace_preview_off_and_on() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    assert!(app.ui.image_trace_preview);
-    for on in [false, true] {
-        let r = input_request(&mut app, "ui.set", json!({"imageTracePreview": on}));
-        assert_eq!(r["ok"], true, "{r}");
-        assert_eq!(app.ui.image_trace_preview, on);
-    }
-}
-
-/// #3797: `ui.set` `outline` sets the active document's view; without a document it is an error
-/// and sets nothing else either.
-#[test]
-fn ui_set_outline_sets_the_active_documents_view() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    for params in [json!({"outline": false}), json!({"outline": true, "grid": true})] {
-        let r = input_request(&mut app, "ui.set", params);
-        assert_eq!(r["ok"], false, "{r}");
-    }
-    assert!(!app.ui.view.grid, "nothing is set");
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let r = input_request(&mut app, "ui.set", json!({"outline": true}));
-    assert_eq!(r["ok"], true, "{r}");
-    assert!(app.outline_view());
-    assert_eq!(app.views.iter().map(|v| v.outline).collect::<Vec<_>>(), [false, true], "the other document stays in Preview");
-}
-
-#[test]
-fn the_image_trace_preview_is_a_command() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    assert!(crate::menus::UI_COMMANDS.iter().any(|c| c.0 == "imageTrace.preview"));
-    assert_eq!(app.run("imageTrace.preview", json!({})), Ok(json!(false)), "toggles");
-    assert!(!app.ui.image_trace_preview);
-    assert_eq!(app.run("imageTrace.preview", json!({"on": false})), Ok(json!(false)), "stays off");
-    assert_eq!(app.run("imageTrace.preview", json!({"on": true})), Ok(json!(true)));
-    assert!(app.ui.image_trace_preview);
-    assert!(app.run("imageTrace.preview", json!({"on": "yes"})).is_err());
-    assert!(app.ui.image_trace_preview, "a bad value leaves it");
-    let r = input_request(&mut app, "engine.execute", json!({"command": "imageTrace.preview", "params": {"on": false}}));
-    assert_eq!(r["ok"], true, "{r}");
-    assert!(!app.ui.image_trace_preview, "the control channel reaches it");
-}
-
-#[test]
-fn control_input_rejects_excessive_counts_before_mutation() {
-    // Only modest over-limit values on the baseline: never exercise an unbounded loop.
-    for (method, params) in [("ui.click", json!({"count": 17})), ("ui.drag", json!({"steps": 257})), ("ui.drag", json!({"steps": 2, "count": 17}))] {
-        let mut app = VectorcraftApp::new(Session::new(), Services::default());
-        app.synthetic.push(egui::Event::Text("already queued".into()));
-        let before = format!("{:?}", app.synthetic);
-        let r = input_request(&mut app, method, params);
-        assert_eq!(r["ok"], false, "oversized input must be rejected: {r}");
-        assert_eq!(format!("{:?}", app.synthetic), before, "rejection must preserve the entire queue");
-    }
-}
-
-#[test]
-fn control_input_respects_existing_queue_budget() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    app.synthetic = vec![egui::Event::PointerMoved(egui::pos2(1.0, 2.0)); 1023];
-    let before = format!("{:?}", app.synthetic);
-    let r = input_request(&mut app, "ui.click", json!({}));
-    assert_eq!(r["ok"], false, "a whole click must fit before any part is appended");
-    assert_eq!(format!("{:?}", app.synthetic), before);
-}
-
-#[test]
-fn control_input_yields_control_channel_after_frame_budget() {
-    let (tx, rx) = std::sync::mpsc::channel();
-    let mut app = VectorcraftApp::new(Session::new(), Services::default()).with_control(rx);
-    let mut replies = vec![];
-    for _ in 0..65 {
-        let (req, reply) = ControlRequest::new("ui.move", json!({"x": 1, "y": 2}));
-        tx.send(req).unwrap();
-        replies.push(reply);
-    }
-    app.drain_control(&egui::Context::default());
-    assert_eq!(replies.iter().filter(|r| r.try_recv().is_ok()).count(), 64);
-    assert_eq!(app.synthetic.len(), 64);
-    app.drain_control(&egui::Context::default());
-    assert_eq!(replies.last().unwrap().try_recv().unwrap()["ok"], true);
-    assert_eq!(app.synthetic.len(), 65);
-}
-
-#[test]
-fn control_input_rejects_invalid_and_extreme_counts() {
-    for value in [json!(u64::MAX), json!(-1), json!(1.5), json!("2"), Value::Null] {
-        for (method, key) in [("ui.click", "count"), ("ui.drag", "count"), ("ui.drag", "steps")] {
-            let mut app = VectorcraftApp::new(Session::new(), Services::default());
-            app.synthetic.push(egui::Event::Text("pending".into()));
-            let before = format!("{:?}", app.synthetic);
-            let mut params = json!({});
-            params[key] = value.clone();
-            let r = input_request(&mut app, method, params);
-            assert_eq!(r["ok"], false, "{method}/{key}: {r}");
-            assert!(r["error"].as_str().unwrap().contains(key));
-            assert_eq!(format!("{:?}", app.synthetic), before);
-        }
-    }
-}
-
-#[test]
-fn control_input_accepts_boundary_gestures_and_preserves_event_order() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    let r = input_request(
-        &mut app,
-        "ui.drag",
-        json!({"x": 2, "y": 3, "toX": 20, "toY": 30,
-        "steps": 256, "count": 16, "button": "right", "shift": true}),
-    );
-    assert_eq!(r["ok"], true);
-    assert_eq!(app.synthetic.len(), 289);
-    assert!(matches!(app.synthetic.first(), Some(egui::Event::PointerMoved(p)) if *p == egui::pos2(2.0, 3.0)));
-    assert!(
-        matches!(app.synthetic.get(1), Some(egui::Event::PointerButton { pressed: true, button: egui::PointerButton::Secondary, modifiers, .. }) if modifiers.shift)
-    );
-    assert!(matches!(app.synthetic.get(257), Some(egui::Event::PointerMoved(p)) if *p == egui::pos2(20.0, 30.0)));
-    assert!(matches!(app.synthetic.get(258), Some(egui::Event::PointerButton { pressed: false, .. })));
-    assert!(matches!(app.synthetic.last(), Some(egui::Event::PointerButton { pressed: false, pos, .. }) if *pos == egui::pos2(20.0, 30.0)));
-    for (method, params, events) in [
-        ("ui.click", json!({}), 3),
-        ("ui.click", json!({"count": 2}), 5),
-        ("ui.drag", json!({}), 11),
-        ("ui.drag", json!({"steps": 0, "count": 0}), 4),
-    ] {
-        app.synthetic.clear();
-        assert_eq!(input_request(&mut app, method, params)["ok"], true);
-        assert_eq!(app.synthetic.len(), events);
-    }
-    app.synthetic = vec![egui::Event::PointerMoved(egui::pos2(0.0, 0.0)); 1021];
-    assert_eq!(input_request(&mut app, "ui.click", json!({}))["ok"], true);
-    assert_eq!(app.synthetic.len(), 1024, "the exact queue boundary is permitted");
-}
-
-#[test]
-fn control_input_budget_covers_every_synthetic_method() {
-    for (method, params) in [
-        ("ui.key", json!({"key": "Enter", "text": "x"})),
-        ("ui.move", json!({})),
-        ("ui.wheel", json!({"dy": 1})),
-        ("ui.text", json!({"text": "hello"})),
-        ("ui.click", json!({})),
-        ("ui.drag", json!({"steps": 1})),
-    ] {
-        let mut app = VectorcraftApp::new(Session::new(), Services::default());
-        app.synthetic = vec![egui::Event::PointerMoved(egui::pos2(1.0, 2.0)); 1024];
-        let before = format!("{:?}", app.synthetic);
-        let r = input_request(&mut app, method, params);
-        assert_eq!(r["ok"], false, "{method}: {r}");
-        assert_eq!(format!("{:?}", app.synthetic), before);
-        app.synthetic.clear();
-        assert_eq!(input_request(&mut app, method, json!({"key": "Enter", "steps": 1}))["ok"], true, "queue space becomes usable after draining");
-    }
-}
-
-/// `ui.dialog.set {fields}` stores the whole list in order, or nothing when an item is refused.
-#[test]
-fn dialog_set_stores_a_field_list_whole_or_not_at_all() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    app.ui.dialog = Some(crate::state::Dialog::new("move", json!({"dx": "0 pt", "dy": "0 pt"})));
-    let fields = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| serde_json::to_value(&d.fields).unwrap());
-    let before = fields(&app);
-    for params in [
-        json!({"fields": [{"field": "copy", "value": true}, {"value": 1}]}),
-        json!({"fields": [{"field": "copy", "value": true}, 7]}),
-        json!({"fields": {"field": "copy"}}),
-        json!({"field": "dx", "fields": [{"field": "copy", "value": true}]}),
-        json!({"fields": [{"field": "copy", "value": true}, {"field": "note"}]}),
-    ] {
-        let r = input_request(&mut app, "ui.dialog.set", params.clone());
-        assert_eq!(r["ok"], false, "{params}: {r}");
-        assert_eq!(fields(&app), before, "{params}: a refused list stores no field");
-    }
-    let list = json!([{"field": "copy", "value": true}, {"field": "dx", "value": "3 pt"}, {"field": "dx", "value": "5 pt"}, {"field": "dy"}]);
-    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": list}));
-    assert_eq!(r["ok"], true, "{r}");
-    let after = fields(&app).unwrap();
-    assert_eq!(after, json!({"copy": true, "dx": "5 pt", "dy": null}));
-    assert_eq!(r["result"]["fields"], after);
-    let r = input_request(&mut app, "ui.dialog.set", json!({"field": "dy", "value": "2 pt"}));
-    assert_eq!(r["ok"], true, "{r}");
-    assert_eq!(fields(&app).unwrap()["dy"], "2 pt");
-    app.ui.dialog = None;
-    assert_eq!(input_request(&mut app, "ui.dialog.set", json!({"fields": []}))["error"], "no dialog open");
-}
-
-/// `ui.dialog.set {fields}` stores at most `MAX_DIALOG_FIELDS` items; a longer list stores none.
-#[test]
-fn dialog_set_refuses_a_field_list_over_the_limit() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    app.ui.dialog = Some(crate::state::Dialog::new("move", json!({"dx": "0 pt"})));
-    let list = |n: usize| Value::Array((0..n).map(|i| json!({"field": "dx", "value": format!("{i} pt")})).collect());
-    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": list(MAX_DIALOG_FIELDS + 1)}));
-    assert_eq!(r["ok"], false, "{r}");
-    assert_eq!(r["error"], format!("`fields` holds {} items; at most {MAX_DIALOG_FIELDS}", MAX_DIALOG_FIELDS + 1));
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["dx"].clone()), Some(json!("0 pt")), "a refused list stores no field");
-    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": list(MAX_DIALOG_FIELDS)}));
-    assert_eq!(r["ok"], true, "{r}");
-    let last = format!("{} pt", MAX_DIALOG_FIELDS - 1);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["dx"].clone()), Some(json!(last)), "the whole list is stored, in order");
-}
-
 /// `ui.dialog.set {fields, action}` confirms or cancels the dialog it set the fields in, within the
-/// same request, and replies `{dialog, result}`. A bad `action` or a refused field sets nothing and
-/// leaves the dialog open.
+/// same request. A bad `action` or a refused field sets nothing and leaves the dialog open.
 #[test]
 fn dialog_set_with_an_action_answers_the_same_dialog() {
+    use craft::ui::dialog::{DialogId, DialogResult};
+    use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    let open = |app: &mut VectorcraftApp| app.ui.dialog = Some(crate::state::Dialog::new("note", json!({"text": "a"})));
-    let text = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.fields["text"].clone());
-    open(&mut app);
+    let ctx = crate::testing::ui_context();
+    app.ui_ctx = Some(ctx.clone());
+    let open = |app: &mut VectorcraftApp| -> DialogId {
+        let dialog = HostedParamDialog::new(&ctx, "note", DialogFields::from_pairs([("text", "a")]), |_| {
+            ParamDialog::new("note", "Note", vec![Param::new("text", "Text:", ParamKind::text(""))])
+        });
+        app.dialogs().expect("a window").with(|h| h.open(dialog))
+    };
+    let text = |app: &VectorcraftApp, id: DialogId| {
+        app.dialogs().expect("a window").with(|h| h.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().text("text").map(str::to_owned)))
+    };
+    let taken = |app: &VectorcraftApp, id: DialogId| app.dialogs().expect("a window").with(|h| h.take_by_id::<HostedParamDialog>(id));
+    let request = |app: &mut VectorcraftApp, params: Value| {
+        let (req, _) = ControlRequest::new("ui.dialog.set", params);
+        let Reply::Done(r) = handle(app, &ctx, &req) else { panic!("expected immediate reply") };
+        r
+    };
+    let id = open(&mut app);
     for params in [
         json!({"fields": [{"field": "text", "value": "b"}], "action": "ok"}),
         json!({"fields": [{"field": "text", "value": "b"}], "action": true}),
         json!({"fields": [{"field": "text", "value": "b"}], "action": null}),
         json!({"fields": [{"field": "text", "value": "b"}, {"field": "nope", "value": 1}], "action": "confirm"}),
     ] {
-        let r = input_request(&mut app, "ui.dialog.set", params.clone());
+        let r = request(&mut app, params.clone());
         assert_eq!(r["ok"], false, "{params}: {r}");
-        assert_eq!(text(&app), Some(json!("a")), "{params}: the dialog stays open as it was");
+        assert_eq!(text(&app, id).as_deref(), Some("a"), "{params}: the dialog stays open as it was");
     }
-    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": [{"field": "text", "value": "b"}], "action": "confirm"}));
+    let r = request(&mut app, json!({"fields": [{"field": "text", "value": "b"}], "action": "confirm"}));
     assert_eq!(r["ok"], true, "{r}");
-    assert_eq!(r["result"], json!({"dialog": {"kind": "note", "fields": {"text": "b"}}, "result": null}));
-    assert!(app.ui.dialog.is_none(), "confirmed in the same request");
-    open(&mut app);
-    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": [{"field": "text", "value": "c"}], "action": "cancel"}));
+    let Some(DialogResult::Ok(answer)) = taken(&app, id) else { panic!("confirmed in the same request") };
+    assert_eq!(answer.fields.text("text"), Some("b"), "the answer holds the field set with it");
+    let id = open(&mut app);
+    let r = request(&mut app, json!({"fields": [{"field": "text", "value": "c"}], "action": "cancel"}));
     assert_eq!(r["ok"], true, "{r}");
-    assert_eq!(r["result"], json!({"dialog": {"kind": "note", "fields": {"text": "c"}}, "result": null}));
-    assert!(app.ui.dialog.is_none(), "canceled in the same request");
-    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": [], "action": "confirm"}));
-    assert_eq!(r["error"], "no dialog open");
+    assert!(matches!(taken(&app, id), Some(DialogResult::Cancel)), "canceled in the same request");
+    let r = request(&mut app, json!({"fields": [], "action": "confirm"}));
+    assert_eq!(r["ok"], false, "no dialog open: {r}");
 }
 
 /// #1004: `ui.render` (the MCP `screenshot` of a connected app) renders the artboard asked
@@ -869,7 +667,7 @@ fn render_takes_the_artboard_asked_for() {
     let mut request = |method: &str, params: Value| {
         let (req, reply) = ControlRequest::new(method, params);
         tx.send(req).unwrap();
-        app.drain_control(&egui::Context::default());
+        app.run_control(&crate::testing::ui_context());
         reply.try_recv().unwrap()
     };
     let new = json!({"width": 64, "height": 64, "units": "Points", "artboards": 2});
@@ -902,55 +700,68 @@ fn render_takes_the_artboard_asked_for() {
     assert_eq!([&r["result"]["width"], &r["result"]["height"]].map(Value::as_u64), [Some(64), Some(64)], "null keeps the default: {r}");
 }
 
-/// The control channel's input methods refuse a number or switch of the wrong type before they
-/// queue any event; omitting it keeps its default.
+/// Each method of the control table reaches its handler and refuses a param of the wrong type before
+/// it changes anything; the app's own commands refuse one too, and omitting it or giving null keeps
+/// its default.
 #[test]
-fn control_input_refuses_params_of_the_wrong_type() {
-    let move_to = |mods: Value| json!({"events": [{"kind": "move", "x": 5, "y": 5}, {"kind": "move", "x": 6, "y": 6, "mods": mods}]});
+fn the_method_table_routes_each_method_and_checks_its_params() {
+    {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        let listed = input_request(&mut app, "ui.tool.list", json!({}));
+        assert_eq!(listed["ok"], true);
+        let groups = listed["result"].as_array().unwrap();
+        for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+            let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+            assert_eq!(matching.len(), 1, "{}", tool.id);
+            assert_eq!(matching[0]["label"], tool.label);
+            assert!(matching[0]["shortcut"].is_null());
+            let selected = input_request(&mut app, "ui.tool.select", json!({"tool": tool.id}));
+            assert_eq!(selected["ok"], true, "{selected}");
+            assert_eq!(selected["result"]["tool"], tool.id);
+        }
+        assert!(app.ui.image_trace_preview);
+        for on in [false, true] {
+            let r = input_request(&mut app, "ui.set", json!({"imageTracePreview": on}));
+            assert_eq!(r["ok"], true, "{r}");
+            assert_eq!(app.ui.image_trace_preview, on);
+        }
+        let r = input_request(&mut app, "engine.execute", json!({"command": "imageTrace.preview", "params": {"on": false}}));
+        assert_eq!(r["ok"], true, "{r}");
+        assert!(!app.ui.image_trace_preview, "the control channel reaches the command");
+        // #3797: `ui.set` `outline` sets the active document's view; without a document it is an
+        // error and sets nothing else either.
+        for params in [json!({"outline": false}), json!({"outline": true, "grid": true})] {
+            let r = input_request(&mut app, "ui.set", params);
+            assert_eq!(r["ok"], false, "{r}");
+        }
+        assert!(!app.ui.view.grid, "nothing is set");
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let r = input_request(&mut app, "ui.set", json!({"outline": true}));
+        assert_eq!(r["ok"], true, "{r}");
+        assert!(app.outline_view());
+        assert_eq!(app.views.iter().map(|v| v.outline).collect::<Vec<_>>(), [false, true], "the other document stays in Preview");
+    }
     for (method, params, key) in [
-        ("ui.move", json!({"x": "10"}), "x"),
-        ("ui.move", json!({"y": true}), "y"),
-        ("ui.wheel", json!({"dy": "1"}), "dy"),
-        ("ui.wheel", json!({"dy": 1, "shift": "yes"}), "shift"),
-        ("ui.click", json!({"x": [1]}), "x"),
-        ("ui.click", json!({"cmd": 1}), "cmd"),
-        ("ui.drag", json!({"toX": "5"}), "toX"),
-        ("ui.key", json!({"key": "Enter", "alt": "true"}), "alt"),
         ("ui.resize", json!({"width": "800"}), "width"),
         ("ui.screenshot", json!({"focus": "no"}), "focus"),
-        ("ui.screenshot", json!({"data": 1}), "data"),
         ("ui.set", json!({"rulers": "true"}), "rulers"),
         ("ui.set", json!({"grid": true, "controlBar": 0}), "controlBar"),
-        ("ui.pointer", json!({"events": [{"kind": "move", "x": "5", "y": 0}]}), "x"),
-        ("ui.pointer", move_to(json!({"shift": "yes"})), "mods"),
-        ("ui.pointer", move_to(json!([true])), "mods"),
-        ("ui.pointer", json!({"mods": "shift", "events": [{"kind": "move", "x": 1, "y": 1}]}), "mods"),
     ] {
         let mut app = VectorcraftApp::new(Session::new(), Services::default());
-        app.synthetic.push(egui::Event::Text("pending".into()));
-        let before = (format!("{:?}", app.synthetic), app.ui.view.rulers, app.ui.view.grid, app.ui.control_bar);
+        let before = (app.ui.view.rulers, app.ui.view.grid, app.ui.control_bar);
         let r = input_request(&mut app, method, params.clone());
         assert_eq!(r["ok"], false, "{method} {params}: {r}");
         assert!(r["error"].as_str().is_some_and(|e| e.contains(&format!("`{key}`"))), "{method} {params}: {r}");
-        let after = (format!("{:?}", app.synthetic), app.ui.view.rulers, app.ui.view.grid, app.ui.control_bar);
-        assert_eq!(after, before, "{method} {params}: nothing is queued or set");
+        assert_eq!((app.ui.view.rulers, app.ui.view.grid, app.ui.control_bar), before, "{method} {params}: nothing is set");
     }
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    assert_eq!(input_request(&mut app, "ui.move", json!({"x": null, "y": 4}))["ok"], true);
-    assert!(matches!(app.synthetic.first(), Some(egui::Event::PointerMoved(p)) if *p == egui::pos2(0.0, 4.0)));
-}
-
-/// The app's own commands refuse a param of the wrong type and change nothing; omitting it or
-/// giving null keeps its default.
-#[test]
-fn ui_commands_refuse_params_of_the_wrong_type() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [id]})).unwrap();
     app.run("view.setZoom", json!({"zoom": 300, "center": [5, 5]})).unwrap();
     let view = |app: &VectorcraftApp| app.view().map(|v| (v.zoom, v.center.x, v.center.y));
-    let before = (view(&app), app.ui.screen_mode, app.session.documents().len(), app.ui.dialog.is_some(), app.ui.open_panel.clone());
+    let before = (view(&app), app.ui.screen_mode, app.session.documents().len(), dialog_open(&app), app.ui.open_panel.clone());
     for (id, params, key) in [
         ("view.setZoom", json!({"zoom": "200"}), "zoom"),
         ("view.setZoom", json!({"zoom": 200, "center": [1]}), "center"),
@@ -970,11 +781,28 @@ fn ui_commands_refuse_params_of_the_wrong_type() {
     ] {
         let e = app.run(id, params.clone()).unwrap_err();
         assert!(e.contains(&format!("`{key}`")), "{id} {params}: {e}");
-        let after = (view(&app), app.ui.screen_mode, app.session.documents().len(), app.ui.dialog.is_some(), app.ui.open_panel.clone());
+        let after = (view(&app), app.ui.screen_mode, app.session.documents().len(), dialog_open(&app), app.ui.open_panel.clone());
         assert_eq!(after, before, "{id} {params}: nothing changes");
     }
     app.run("view.setZoom", json!({"zoom": null, "center": null})).unwrap();
-    assert_eq!(app.view().map(|v| v.zoom), Some(crate::state::zoom_from_display_percent(100.0, app.session.prefs.display_print_size)));
+    assert_eq!(app.view().map(|v| v.zoom), Some(crate::state::zoom_from_display_percent(100.0, app.print_ppi())));
+}
+
+/// `ui.inspect` gives the measured density of the main window's display and the points an inch
+/// takes at 100% while Display Print Size at 100% Zoom is on, and neither with it off (#9051).
+#[test]
+fn inspect_reports_the_display_density() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let ctx = egui::Context::default();
+    let got = inspect(&app, &ctx);
+    assert_eq!((got["screenPpi"].clone(), got["printPpi"].as_f64()), (Value::Null, Some(96.0)), "nothing measured: an inch is 96 points");
+    app.set_screen_ppi(Some(127.0));
+    let got = inspect(&app, &ctx);
+    assert_eq!((got["screenPpi"].as_f64(), got["printPpi"].as_f64()), (Some(127.0), Some(127.0)));
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    let got = inspect(&app, &ctx);
+    assert_eq!((got["screenPpi"].clone(), got["printPpi"].clone()), (Value::Null, Value::Null));
 }
 
 #[test]
@@ -1070,11 +898,11 @@ fn pointer_replies_name_the_key_object() {
     let b = app.run("shape.rectangle", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
     app.run("tool.select", json!({"tool": "selection"})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let click = |app: &mut VectorcraftApp| {
         let events = json!([{"kind": "down", "x": 110, "y": 20}, {"kind": "up", "x": 110, "y": 20}]);
         let (req, _) = ControlRequest::new("ui.pointer", json!({"events": events}));
-        let Outcome::Done(r) = handle(app, &ctx, &req) else { panic!("not done") };
+        let Reply::Done(r) = handle(app, &ctx, &req) else { panic!("not done") };
         assert_eq!(r["ok"], true, "{r}");
         r["result"].get("key").cloned()
     };
@@ -1084,6 +912,7 @@ fn pointer_replies_name_the_key_object() {
 
 /// A Shape Builder click on a large selection merges on another thread: the frames go on, and
 /// the `ui.pointer` reply comes once the merge is applied, with the selection after it.
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn pointer_reply_waits_for_a_merge_on_another_thread() {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -1094,19 +923,21 @@ fn pointer_reply_waits_for_a_merge_on_another_thread() {
     }
     app.run("select.all", json!({})).unwrap();
     app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let send = |app: &mut VectorcraftApp, events: Value| {
         let (req, reply) = ControlRequest::new("ui.pointer", json!({"events": events}));
         tx.send(req).unwrap();
-        app.drain_control(&ctx);
+        app.run_control(&ctx);
         reply
     };
     let hover = send(&mut app, json!([{"kind": "move", "x": 15, "y": 10}]));
     assert_eq!(hover.try_recv().unwrap()["ok"], true, "a hover is answered at once");
     app.session.tool_poll(app.view_info(), true).unwrap();
     let revision = app.session.active().unwrap().revision;
+    let mut merge = vectorcraft_tools::builder::testing::pause_next_merge().unwrap();
     let click = send(&mut app, json!([{"kind": "down", "x": 15, "y": 10}, {"kind": "up", "x": 15, "y": 10}]));
     assert!(click.try_recv().is_err() && app.session.tool_editing(), "the click is not answered before the merge is applied");
+    merge.wait_started().unwrap();
     // A hover sent meanwhile is answered at once; a click is made after the merge, and its
     // reply waits until then.
     let hover = send(&mut app, json!([{"kind": "move", "x": 35, "y": 10}]));
@@ -1116,32 +947,20 @@ fn pointer_reply_waits_for_a_merge_on_another_thread() {
     assert!(press.try_recv().is_err(), "a Cmd-click during the merge waits for it");
     let hover = send(&mut app, json!([{"kind": "move", "x": 45, "y": 10}]));
     assert_eq!(hover.try_recv().map(|r| r["ok"].clone()), Ok(json!(true)), "a hover after the held Cmd-click");
-    let start = std::time::Instant::now();
-    let reply = loop {
-        if let Ok(r) = click.try_recv() {
-            break r;
-        }
-        assert!(app.session.tool_editing(), "the merge is being computed until the reply goes");
-        assert_eq!(app.session.active().unwrap().revision, revision);
-        assert!(start.elapsed() < std::time::Duration::from_secs(60), "no reply");
-        std::thread::sleep(std::time::Duration::from_millis(2));
-        // A frame: the canvas checks on the tool, then the replies are answered.
-        let r = app.session.tool_poll(app.view_info(), false);
-        crate::canvas::apply_requests(&mut app, r);
-        app.answer_pointer_replies(&ctx);
-    };
+    assert!(app.session.tool_editing(), "the merge is being computed until the reply goes");
+    assert_eq!(app.session.active().unwrap().revision, revision);
+    merge.release();
+    let r = app.session.tool_poll(app.view_info(), true);
+    crate::canvas::apply_requests(&mut app, r);
+    app.run_control(&ctx);
+    let reply = click.try_recv().expect("the merge was applied before answering the click");
     assert_eq!(reply["ok"], true, "{reply}");
     assert_eq!(reply["result"]["selection"].as_array().map(Vec::len), Some(41), "{reply}: the selection after the merge");
     assert_ne!(app.session.active().unwrap().revision, revision);
-    let press = loop {
-        if let Ok(r) = press.try_recv() {
-            break r;
-        }
-        assert!(start.elapsed() < std::time::Duration::from_secs(60), "no reply to the Cmd-click");
-        let r = app.session.tool_poll(app.view_info(), false);
-        crate::canvas::apply_requests(&mut app, r);
-        app.answer_pointer_replies(&ctx);
-    };
+    let r = app.session.tool_poll(app.view_info(), true);
+    crate::canvas::apply_requests(&mut app, r);
+    app.run_control(&ctx);
+    let press = press.try_recv().expect("the held Cmd-click was applied after the merge");
     assert_eq!(press["result"]["selection"].as_array().map(Vec::len), Some(0), "{press}: the lent selection tool deselected after the merge");
     assert_eq!(press["result"]["tool"], "shapeBuilder", "{press}");
 }
@@ -1213,7 +1032,7 @@ fn held_cmd_click(then: &str) {
 #[test]
 fn menu_dialogs_open_after_a_merge_on_another_thread() {
     for route in ["menu", "ui.menuDialog", "app dialog from the menu", "app dialog from a panel"] {
-        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
         app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
         for k in 0..40 {
             app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
@@ -1244,7 +1063,7 @@ fn menu_dialogs_open_after_a_merge_on_another_thread() {
                 app.run("ui.recolorDialog", json!({})).unwrap();
             }
         }
-        assert!(app.ui.dialog.is_some(), "{route}: the dialog is open");
+        assert!(dialog_open(&app), "{route}: the dialog is open");
         assert!(!app.session.tool_editing(), "{route}");
         let merged = app.session.doc().unwrap().history.undo.last().map(|e| e.label.clone());
         assert_eq!(merged.as_deref(), Some("Shape Builder"), "{route}");
@@ -1257,6 +1076,8 @@ fn menu_dialogs_open_after_a_merge_on_another_thread() {
 /// leave the view off, so they apply it by command id without giving the documents new revisions.
 #[test]
 fn panels_that_redraw_apply_a_merge_on_another_thread_first() {
+    // The proof view the checkboxes leave off is the whole process's.
+    let _view = crate::testing::DefaultProofView::new();
     let cases = [
         ("view.separationsPreview", json!({"on": false})),
         ("view.overprintPreview", json!({"on": false})),
@@ -1302,7 +1123,7 @@ fn save_and_close_apply_a_merge_on_another_thread_first() {
     let dir = crate::tests_folder::Folder::adopt(vectorcraft_testkit::temp_dir("control-merge-save"));
     for then in ["file.saveAs", "file.exportAs", "file.close"] {
         let services = Services { write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))), ..Default::default() };
-        let mut app = VectorcraftApp::new(Session::new(), services);
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
         app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
         for k in 0..40 {
             app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
@@ -1339,90 +1160,18 @@ fn save_and_close_apply_a_merge_on_another_thread_first() {
     }
 }
 
-/// `ui.dialog.set` of a field the open dialog does not have is an error that lists its fields,
-/// and the dialog stays as it was. Fields a dialog may not hold yet are still set: `discard`
-/// with a discard button, `preview` with a live preview and the spec's `inputs`. A `__` field that
-/// is not one of the controls of the dialog's kind is refused.
+/// `engine.commands` lists each UI command's default shortcut on this platform: Select Last
+/// Selection Tool shows Ctrl+` (`Cmd+~`) on Windows and Linux and none on macOS.
 #[test]
-fn dialog_set_refuses_a_field_the_dialog_does_not_have() {
+fn the_command_list_shows_this_platforms_default_shortcut() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    let fields = json!({"index": 0, "uid": 1, "name": "Untitled-1", "then": "close"});
-    app.ui.dialog = Some(Dialog::new(crate::unsaved::KIND, fields.clone()));
-    let r = input_request(&mut app, "ui.dialog.set", json!({"field": "discrad", "value": true}));
-    assert_eq!(r["ok"], false, "{r}");
-    assert_eq!(r["error"], "the `saveChanges` dialog has no field `discrad`; its fields: discard, index, name, then, uid");
-    assert_eq!(app.ui.dialog.as_ref().map(|d| Value::Object(d.fields.clone())), Some(fields.clone()));
-    let r = input_request(&mut app, "ui.dialog.set", json!({"field": "__note", "value": true}));
-    assert_eq!(r["error"], "the `saveChanges` dialog cannot set protected field `__note`", "{r}");
-    assert_eq!(app.ui.dialog.as_ref().map(|d| Value::Object(d.fields.clone())), Some(fields));
-    for field in ["name", "discard"] {
-        let r = input_request(&mut app, "ui.dialog.set", json!({"field": field, "value": true}));
-        assert_eq!(r["ok"], true, "{field}: {r}");
+    let r = input_request(&mut app, "engine.commands", json!({}));
+    let row = r["result"].as_array().unwrap().iter().find(|c| c["id"] == "tool.selectLastSelection").cloned();
+    let row = row.unwrap_or_else(|| panic!("listed: {r}"));
+    assert_eq!(row["shortcut"], if crate::keymap::platform().is_mac() { "" } else { "Cmd+~" }, "{row}");
+    for p in [craft::keymap::Platform::Windows, craft::keymap::Platform::Linux] {
+        assert_eq!(crate::shortcut_editor::ui_command_default("tool.selectLastSelection", "Cmd+~", p), "Cmd+~", "{p:?}");
     }
-    // Move opens without Copy, which its checkbox adds once clicked; Scale's options and the
-    // reference point belong to the other transform dialogs.
-    let set = |app: &mut VectorcraftApp, kind: &str, fields: Value, cases: &[(&str, bool)]| {
-        app.ui.dialog = Some(Dialog::new(kind, fields));
-        for (field, ok) in cases {
-            let r = input_request(app, "ui.dialog.set", json!({"field": field, "value": true}));
-            assert_eq!(r["ok"], *ok, "{kind} {field}: {r}");
-        }
-    };
-    let moved = [("copy", true), ("preview", true), ("distance", true), ("discard", false), ("copies", false), ("corners", false), ("origin", false)];
-    set(&mut app, "move", json!({"dx": "0 pt", "dy": "0 pt"}), &moved);
-    set(
-        &mut app,
-        "scale",
-        json!({"sx": 100, "sy": 100, "uniform": true}),
-        &[("corners", true), ("strokes", true), ("origin", true), ("distance", false)],
-    );
-    set(&mut app, "rotate", json!({"angle": 0}), &[("origin", true), ("objects", true), ("corners", false)]);
-    set(&mut app, "rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}), &[("radius", true), ("sides", false)]);
-    set(&mut app, "ellipse", json!({"x": 0, "y": 0, "width": 10, "height": 10}), &[("radius", false)]);
-    // Corners that differ in kind and radius open without either.
-    let mixed = json!({"id": 1, "corners": [0, 1, 2, 3], "relativeRadii": false});
-    set(&mut app, vectorcraft_tools::corners::DIALOG, mixed, &[("kind", true), ("radius", true), ("radii", false)]);
-    set(&mut app, "saveForOffice", json!({"ppi": 150, "transparent": false, "artboard": 0}), &[("path", true)]);
-    set(&mut app, "brushOptions", json!({"name": "Dots"}), &[("tips", true), ("tip", false)]);
-    set(&mut app, "justification", json!({"wordDesired": 100}), &[("wordMin", true), ("singleWord", true), ("wordMid", false)]);
-    set(&mut app, "hyphenation", json!({"hyphenate": true}), &[("afterFirst", true), ("hyphenationZone", true), ("afterfirst", false)]);
-    set(&mut app, "effectGallery", json!({"stack": []}), &[("browseEffect", true), ("browseParams", true), ("browse", false)]);
-    // A new artboard's dialog opens without a background color or display marks.
-    let new_board = json!({"new": true, "name": "Artboard 2", "x": 0, "y": 0, "width": 10, "height": 10});
-    let marks = [
-        ("color", true),
-        ("showCenterMark", true),
-        ("showCrossHairs", true),
-        ("showVideoSafeAreas", true),
-        ("videoRulerPixelAspectRatio", true),
-        ("showCenterMarks", false),
-    ];
-    set(&mut app, "artboardOptions", new_board, &marks);
-    // Glass and Texturizer take the texture Load Texture… reads; other effects don't.
-    set(&mut app, "effect", json!({"__effect": "distort.glass"}), &[("textureImage", true)]);
-    set(&mut app, "effect", json!({"__effect": "blur.gaussian"}), &[("textureImage", false)]);
-    // The generic dialog takes every parameter of its command.
-    set(&mut app, "command", json!({"__command": "shape.rectangle", "x": 0, "y": 0}), &[("width", true), ("widht", false)]);
-    // Transparency Flattener Presets holds the selected preset's options before its first frame.
-    crate::dialogs::flattener_presets::open(&mut app, None);
-    let r = input_request(&mut app, "ui.dialog.set", json!({"field": "textToOutlines", "value": true}));
-    assert_eq!(r["ok"], true, "{r}");
-    // Edit Selection takes `deleted<i>` for each of its rows only.
-    app.run("file.new", json!({})).unwrap();
-    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-    for name in ["A", "B"] {
-        app.run("select.save", json!({ "name": name })).unwrap();
-    }
-    crate::dialogs::edit_selection::open(&mut app).unwrap();
-    for (field, ok) in [("deleted1", true), ("deleted", false), ("deletedx", false), ("deleted01", false), ("deleted2", false)] {
-        let r = input_request(&mut app, "ui.dialog.set", json!({"field": field, "value": true}));
-        assert_eq!(r["ok"], ok, "{field}: {r}");
-    }
-    let r = input_request(&mut app, "ui.dialog.set", json!({"field": "name", "value": "A"}));
-    assert_eq!(
-        r["error"],
-        "the `editSelection` dialog has no field `name`; its fields: count, deleted0, deleted1, name0, name1, orig0, orig1, selected"
-    );
-    app.ui.dialog = None;
-    assert_eq!(input_request(&mut app, "ui.dialog.set", json!({"field": "name", "value": "A"}))["error"], "no dialog open");
+    assert_eq!(crate::shortcut_editor::ui_command_default("tool.selectLastSelection", "Cmd+~", craft::keymap::Platform::Mac), "");
+    assert_eq!(crate::shortcut_editor::ui_command_default("view.zoomIn", "Cmd+=", craft::keymap::Platform::Mac), "Cmd+=");
 }

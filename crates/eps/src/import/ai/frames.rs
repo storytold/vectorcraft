@@ -21,9 +21,17 @@ const MAX_OBJECTS: usize = 100_000;
 const MAX_OBJECT: usize = 256 << 10;
 const OBJECT: &[u8] = b"/AI11Text :";
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`text_frames`] has scanned an editing copy on this thread.
+    pub(crate) static TEXT_FRAME_SCANS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// The `/Art` path of each text object of `data` (an editing copy's document text), in art space
 /// (y up), by its story and frame. Objects without a readable path are left out.
 pub(crate) fn text_frames(data: &[u8]) -> HashMap<(u32, usize), BezPath> {
+    #[cfg(test)]
+    TEXT_FRAME_SCANS.set(TEXT_FRAME_SCANS.get() + 1);
     let mut out = HashMap::new();
     let mut at = 0;
     while let Some(i) = data.get(at..).and_then(|d| find(d, OBJECT)) {

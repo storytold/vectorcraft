@@ -184,6 +184,20 @@ fn a_polygon_reports_and_takes_its_radius_angle_and_equal_sides() {
     assert_eq!((e.polygon_radius(), e.polygon_angle()), (None, None));
 }
 
+/// A very large angle turns a rectangle to that angle modulo 360, whatever angle it had before.
+#[test]
+fn a_shape_takes_a_very_large_angle() {
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let want = 1e20f64.rem_euclid(360.0);
+    for turned in [0.0, 90.0] {
+        let xf = Affine::translate((50.0, 50.0)) * Affine::rotate(-f64::to_radians(turned));
+        let mut r = LiveShape::Rectangle { w: 100.0, h: 50.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf };
+        assert!(close(r.shape_angle().unwrap(), turned), "{:?}", r.shape_angle());
+        r.set_shape_angle(1e20);
+        assert!(close(r.shape_angle().unwrap(), want), "from {turned}°: {:?}, not {want}", r.shape_angle());
+    }
+}
+
 /// A node holding a live rectangle (`w` × `h`, all radii `r`, placed by `xf`) and its path.
 fn live_rect(w: f64, h: f64, r: f64, xf: Affine) -> Node {
     let live = LiveShape::Rectangle { w, h, radii: [r; 4], kinds: Default::default(), radii_relative: false, xf };
@@ -453,6 +467,60 @@ fn visual_bounds_include_stroke() {
     let mut p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
     p.appearance.stroke_mut().unwrap().join = crate::appearance::LineJoin::Round;
     assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
+}
+
+/// A lone anchor 20 points right of a stroked square widens the path's geometric box, and its
+/// visual box only where the stroke draws it: as the dot of a round or projecting cap on a closed
+/// subpath. An open lone anchor, or a closed one under a butt cap, draws nothing.
+#[test]
+fn a_lone_anchor_widens_the_visual_box_only_where_its_cap_draws_a_dot() {
+    use crate::appearance::LineCap;
+    use vectorcraft_geom::{Point, SubPath};
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    let node = |closed: bool, cap: LineCap| {
+        let mut subpaths = square.subpaths.clone();
+        subpaths.push(SubPath::polyline(&[Point::new(30.0, 5.0)], closed));
+        let mut p = Node::path(NodeId(2), PathData::new(subpaths), Appearance::default_art());
+        let s = p.appearance.stroke_mut().unwrap();
+        (s.cap, s.join) = (cap, crate::appearance::LineJoin::Round);
+        p
+    };
+    for closed in [false, true] {
+        for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+            let p = node(closed, cap);
+            let geometric = p.geometric_bounds().unwrap();
+            let visual = p.visual_bounds().unwrap();
+            assert!(geometric.x1 >= 30.0, "{closed} {cap:?}: the geometric box {geometric:?} leaves out the lone anchor");
+            let dot = closed && cap != LineCap::Butt;
+            assert_eq!(visual.x1 > 30.0, dot, "{closed} {cap:?}: the visual box {visual:?}");
+            assert!(dot || visual.x1 < 11.0, "{closed} {cap:?}: the visual box {visual:?} reaches toward the lone anchor");
+        }
+    }
+}
+
+/// The dot a round or projecting cap draws for a closed lone anchor reaches half the stroke's
+/// width round the anchor under every join, miter and bevel joins included, which measure the
+/// stroke along its segments.
+#[test]
+fn a_lone_anchors_dot_reaches_half_the_stroke_width_under_every_join() {
+    use crate::appearance::{LineCap, LineJoin};
+    use vectorcraft_geom::{Point, SubPath};
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    for join in [LineJoin::Miter, LineJoin::Bevel, LineJoin::Round] {
+        for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+            let mut subpaths = square.subpaths.clone();
+            subpaths.push(SubPath::polyline(&[Point::new(30.0, 5.0)], true));
+            let mut p = Node::path(NodeId(2), PathData::new(subpaths), Appearance::default_art());
+            let s = p.appearance.stroke_mut().unwrap();
+            (s.cap, s.join, s.width) = (cap, join, 4.0);
+            let visual = p.visual_bounds().unwrap();
+            if cap == LineCap::Butt {
+                assert!(visual.x1 < 13.0, "{join:?} {cap:?}: the visual box {visual:?} reaches toward a lone anchor that draws nothing");
+            } else {
+                assert!(visual.x1 >= 32.0 - 1e-9 && visual.y1 >= 10.0, "{join:?} {cap:?}: the visual box {visual:?} leaves out the dot's reach");
+            }
+        }
+    }
 }
 
 /// A group's box from its members' boxes grows by the group's own strokes, leaves out members
@@ -804,4 +872,32 @@ fn mapping_ruler_guide_positions_looks_at_each_child_of_nested_layers_once() {
     group.map_ruler_guide_positions(&mut |_, _| calls += 1);
     assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
     assert_eq!(calls, 0);
+}
+
+/// `try_walk` visits in `walk`'s order and visits nothing after the node that breaks it: not its
+/// children, its later siblings or its ancestors' later siblings.
+#[test]
+fn try_walk_ends_at_the_break() {
+    use std::ops::ControlFlow;
+    let leaf = |id| Arc::new(Node::group(NodeId(id), vec![]));
+    let inner = Node::group(NodeId(2), vec![leaf(3), leaf(4), leaf(5)]);
+    let root = Node::group(NodeId(1), vec![Arc::new(inner), leaf(6), leaf(7)]);
+    let mut all = vec![];
+    root.walk(&mut |n| all.push(n.id));
+    let mut seen = vec![];
+    assert_eq!(
+        root.try_walk(&mut |n| {
+            seen.push(n.id);
+            ControlFlow::<()>::Continue(())
+        }),
+        ControlFlow::Continue(())
+    );
+    assert_eq!(seen, all, "without a break it visits what walk visits, in the same order");
+    seen.clear();
+    let flow = root.try_walk(&mut |n| {
+        seen.push(n.id);
+        if n.id == NodeId(3) { ControlFlow::Break(n.id) } else { ControlFlow::Continue(()) }
+    });
+    assert_eq!(flow, ControlFlow::Break(NodeId(3)));
+    assert_eq!(seen, [NodeId(1), NodeId(2), NodeId(3)]);
 }

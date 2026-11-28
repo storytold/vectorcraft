@@ -36,6 +36,7 @@ mod vertical;
 mod warichu;
 
 pub(crate) use bidi::{is_rtl, para_bidi, starts_bidi};
+pub(crate) use breaking::is_hanging_punctuation;
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};
@@ -50,6 +51,40 @@ pub use driver::{envelope_ink, layout_inputs, register_envelope_ink};
 
 const EPS: f64 = 1e-6;
 
+#[cfg(test)]
+thread_local! {
+    /// The steps laying out text took on this thread ([`layout_work`]).
+    static LAYOUT_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The runs paragraphs looked through on this thread ([`paragraph_runs_read`]).
+    static PARAGRAPH_RUNS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Adds `n` steps to [`layout_work`].
+#[cfg(test)]
+pub(crate) fn count_layout_work(n: usize) {
+    LAYOUT_WORK.set(LAYOUT_WORK.get().saturating_add(n));
+}
+
+/// The steps laying out text took on this thread: the bytes shaped, the clusters the single-line
+/// composer read, and the pairs of a break and a line start the every-line composer weighed.
+#[cfg(test)]
+pub(crate) fn layout_work() -> usize {
+    LAYOUT_WORK.get()
+}
+
+/// Adds one run to [`paragraph_runs_read`].
+#[cfg(test)]
+pub(crate) fn count_paragraph_run() {
+    PARAGRAPH_RUNS_READ.set(PARAGRAPH_RUNS_READ.get().saturating_add(1));
+}
+
+/// The runs that shaping a paragraph and finding its Character Direction stretches looked through
+/// on this thread.
+#[cfg(test)]
+pub(crate) fn paragraph_runs_read() -> usize {
+    PARAGRAPH_RUNS_READ.get()
+}
+
 /// Is glyph `g` a later glyph of the cluster of glyph `prev` before it (a combining mark the shaper
 /// set as a glyph of its own)? A list marker's glyphs stand for no character and are not.
 fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
@@ -62,30 +97,22 @@ fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
 /// ([`upright_extent`]) as a share of `upright`, the length in font units its own width runs down.
 /// Empty for a glyph of one character.
 fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: Option<f64>) -> Vec<(usize, f64)> {
-    use unicode_segmentation::UnicodeSegmentation;
-    let Some(s) = text.get(g.byte..g.byte + g.len).filter(|_| g.len > 1) else { return Vec::new() };
-    let starts: Vec<usize> = s.grapheme_indices(true).skip(1).map(|(i, _)| g.byte + i).collect();
-    if starts.is_empty() {
-        return Vec::new();
-    }
-    let parts = starts.len() + 1;
-    let from_font = if let Some(length) = upright {
-        let (cell, top) = upright_extent(g);
-        g.face
-            .vertical_ligature_carets(g.gid, starts.len(), top, cell)
-            .filter(|c| c.len() == starts.len() && length > 0.0)
-            .map(|c| c.into_iter().map(|d| d / length).collect::<Vec<f64>>())
-            .filter(|c| c.iter().all(|f| *f > 0.0 && *f < 1.0))
-    } else {
-        let advance = g.face.advance(g.gid);
-        g.face
-            .ligature_carets(g.gid, starts.len())
-            .filter(|c| c.len() == starts.len() && advance > 0.0)
-            .map(|c| c.into_iter().map(|x| if rtl { 1.0 - x / advance } else { x / advance }).collect::<Vec<f64>>())
-    };
-    let mut at = from_font.unwrap_or_else(|| (1..parts).map(|j| j as f64 / parts as f64).collect());
-    at.sort_by(f64::total_cmp);
-    starts.into_iter().zip(at).collect()
+    craft::font_catalog::ligature_caret_stops(text, g.byte, g.len, |count| {
+        if let Some(length) = upright {
+            let (cell, top) = upright_extent(g);
+            g.face
+                .vertical_ligature_carets(g.gid, count, top, cell)
+                .filter(|c| c.len() == count && length > 0.0)
+                .map(|c| c.into_iter().map(|d| d / length).collect::<Vec<f64>>())
+                .filter(|c| c.iter().all(|f| *f > 0.0 && *f < 1.0))
+        } else {
+            let advance = g.face.advance(g.gid);
+            g.face
+                .ligature_carets(g.gid, count)
+                .filter(|c| c.len() == count && advance > 0.0)
+                .map(|c| c.into_iter().map(|x| if rtl { 1.0 - x / advance } else { x / advance }).collect::<Vec<f64>>())
+        }
+    })
 }
 
 /// Does glyph `g`, standing upright in vertical type, take a cell of its own down the column? Every
@@ -218,6 +245,8 @@ impl Ctx<'_> {
         // Only the paragraph's own runs (they are in order), not every run of the text.
         let first = self.runs.partition_point(|(rr, _)| rr.end <= r.start);
         for (rr, st) in self.runs.iter().skip(first).take_while(|(rr, _)| rr.start < r.end) {
+            #[cfg(test)]
+            count_paragraph_run();
             let (a, b) = (rr.start.max(r.start), rr.end.min(r.end));
             let Some(d) = st.char_direction.filter(|_| a < b) else { continue };
             let (a, b) = (a - r.start, b - r.start);
@@ -258,18 +287,43 @@ impl Ctx<'_> {
             // of the glyph before it takes no cell of its own: it turns with that glyph (`emit`).
             for i in 0..v.len() {
                 let continues = continues_cluster(i.checked_sub(1).and_then(|p| v.get(p)), v.get(i));
-                let Some(g) = v.get_mut(i).filter(|g| g.adv > 0.0 && !continues && stands_upright(g)) else { continue };
-                let extra = upright_cell(g) - g.face.advance(g.gid) * g.sx;
+                if continues || !v.get(i).is_some_and(stands_upright) {
+                    continue;
+                }
+                // Tsume measured the cluster across its glyphs' widths when it was shaped: an
+                // upright glyph's blank space runs down its cell, so that is taken back first.
+                let measured_down = v.get(i).is_some_and(|g| g.tcy.is_none());
+                if measured_down {
+                    let end = (i + 1..v.len()).find(|&j| !continues_cluster(v.get(j - 1), v.get(j))).unwrap_or(v.len());
+                    let tsume = v.get(end - 1).map_or(0.0, |g| g.tsume);
+                    for g in v.get_mut(i..end).unwrap_or_default() {
+                        g.dx += g.tsume_shift;
+                        g.tsume_shift = 0.0;
+                    }
+                    if let Some(g) = v.get_mut(end - 1) {
+                        g.adv += tsume;
+                        g.tsume = 0.0;
+                    }
+                }
+                let Some(g) = v.get_mut(i).filter(|g| g.adv > 0.0) else { continue };
+                let cell = upright_cell(g);
+                let extra = cell - g.face.advance(g.gid) * g.sx;
                 g.dx += extra * 0.5;
                 g.adv += extra;
                 // Proportional Metrics: `vpal` (and the vertical kerning with it) moves it and
                 // changes its length down the column, in fonts with vertical metrics (else the cell
                 // stays as it is, #966).
+                let mut length = cell;
                 if let Some(a) = g.vpal.filter(|_| g.tcy.is_none() && g.face.vertical_glyph(g.gid).is_some()) {
                     g.dx += a.dx;
                     g.dy += a.dy;
                     g.adv += a.advance;
                     g.proportional = a.proportional;
+                    length += a.advance;
+                }
+                let st = style(g);
+                if measured_down && st.tsume > 0.0 {
+                    self.tighten_upright(g, cell, length, st.size, st.tsume);
                 }
             }
         }
@@ -284,6 +338,25 @@ impl Ctx<'_> {
         if self.system_layout || !self.fractional_widths {
             whole_character_widths(v);
         }
+    }
+
+    /// Tsume `tsume` on upright glyph `g` in vertical type, in type of size `em`, its cell `cell`
+    /// long down the column and `length` long with the Proportional Metrics change to it: its share
+    /// of the blank space above and below what it paints, inside that length, comes out of its
+    /// advance, and it is drawn the share above it earlier, keeping its shape. A combining mark in
+    /// its cluster moves with it. A glyph that paints nothing keeps its place and length.
+    fn tighten_upright(&self, g: &mut SGlyph, cell: f64, length: f64, em: f64, tsume: f64) {
+        let Some(b) = crate::shape::painted_box(self.db, g) else { return };
+        // The glyph turns about the center of its cell, which is `upright_centre` above the
+        // baseline: a point of it in font units (y down) lands that far below the center, down the
+        // column from the top of the cell.
+        let centre = cell * 0.5 + upright_centre(g, cell, em) + g.dy;
+        let (a, z) = (centre + b.y0 * g.sy, centre + b.y1 * g.sy);
+        let Some((above, below)) = crate::shape::tsume_shares((a.min(z), a.max(z)), length, tsume) else { return };
+        g.kern_shift -= above;
+        g.tsume_shift = above;
+        g.adv -= above + below;
+        g.tsume = above + below;
     }
 
     /// Bullets and numbered lists: put marker `text` (the bullet, or the number and its period;

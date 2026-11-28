@@ -100,6 +100,42 @@ fn area(c: Changed) -> Rect {
 }
 
 #[test]
+fn removing_the_last_blend_in_trim_view_repaints_the_artboard_edges() {
+    use vectorcraft_color::BlendMode;
+
+    let mut before = Document::new(110.0, 80.0);
+    let layer = before.layers[0].id;
+    for color in [Color::BLACK, Color::WHITE] {
+        let shape = rect(&mut before, Rect::new(-10.0, 18.0, 25.0, 44.0), color);
+        before.insert(Some(layer), usize::MAX, shape).unwrap();
+    }
+    let mut blend = rect(&mut before, Rect::new(70.0, 35.0, 85.0, 50.0), Color::rgb(0.7, 0.4, 0.3));
+    blend.blend = BlendMode::Multiply;
+    let id = before.insert(Some(layer), usize::MAX, blend).unwrap();
+    let mut after = before.clone();
+    after.node_mut(id).unwrap().blend = BlendMode::Normal;
+
+    let opts = RenderOptions { trim: true, ..Default::default() };
+    let mut r = Renderer::new();
+    let first = r.render(&before, W, H, view(), &opts);
+    let change = r.changed(&before, &after, &opts);
+    let last = Renderer::new().render(&after, W, H, view(), &opts);
+    patched(&mut r, &first, &after, change, &last, &opts);
+    assert_eq!(change, Changed::Everything);
+    assert!(matches!(r.changed(&before, &after, &RenderOptions::default()), Changed::Area(_)));
+
+    // An overprinting fill gets its blend while preparing the proof.
+    let mut overprinting = after.clone();
+    overprinting.node_mut(id).unwrap().appearance.fill_mut().unwrap().overprint = true;
+    let proof = RenderOptions { overprint_preview: true, ..opts };
+    let first = r.render(&overprinting, W, H, view(), &proof);
+    let change = r.changed(&overprinting, &after, &proof);
+    let last = Renderer::new().render(&after, W, H, view(), &proof);
+    patched(&mut r, &first, &after, change, &last, &proof);
+    assert_eq!(change, Changed::Everything, "the proofed fill changes the clipping mode");
+}
+
+#[test]
 fn moving_an_object_changes_where_it_was_and_is() {
     let (old, [loose, ..]) = document();
     let mut new = old.clone();
@@ -547,7 +583,41 @@ fn traced(view: &str) -> (Document, NodeId, NodeId, NodeId) {
     let mut d = Document::new(W as f64, H as f64);
     let mut png = vec![];
     let red = image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255]));
-    red.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = red.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     d.images.insert("red".into(), vectorcraft_doc::ImageBlob::new("image/png", png));
     let source = red_image(&mut d, 10.0);
     let a = rect(&mut d, Rect::new(60.0, 10.0, 70.0, 20.0), Color::rgb(0.0, 0.5, 0.0));

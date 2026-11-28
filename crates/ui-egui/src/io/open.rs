@@ -1,8 +1,14 @@
 use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::permissions;
 
+use std::path::Path;
+
+use craft::host::{PickRequest, Picked};
+use craft::platform::open::same_file;
+
 use super::save::{notes_of, show_with_notes, suggested};
-use super::{Dialog, FilePick, Format, Value, VectorcraftApp, dialogs, fileio, json};
+use super::{Value, VectorcraftApp, dialogs, fileio, json};
+use crate::file_asks::{self, Owner};
 
 /// Template extensions New from Template's open dialog lists first.
 const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"];
@@ -20,9 +26,15 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
 /// [`open_bytes`], a document opening with `document.open`'s params `p`.
 fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
     let opens = opens_as(name);
-    // A WebAssembly plug-in is installed.
+    // A plug-in is installed: a JavaScript plug-in's manifest by its path, which the script it
+    // names is read beside. Without a path the manifest's bytes alone are refused, since they hold
+    // no script (`vectorcraft_plugins::js::SOURCE_RULE`).
     if opens == Some(OpensAs::Plugin) {
-        let module = json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)});
+        let js = vectorcraft_plugins::registry::is_js_package(std::path::Path::new(name));
+        let module = match path.as_deref() {
+            Some(path) if js => json!({ "path": path }),
+            _ => json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)}),
+        };
         return install_module(app, module).map(|_| Value::Null);
     }
     if opens == Some(OpensAs::ShortcutSet) {
@@ -34,6 +46,9 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
             None => json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)}),
         };
         return dialogs::script_check::command(app, &p).map(|_| Value::Null);
+    }
+    if let Some(OpensAs::Presets { import: "imageTrace.presets.import", .. }) = opens {
+        return dialogs::tracing_presets::open_file(app, bytes).map(|_| Value::Null);
     }
     if let Some(OpensAs::Presets { import, what }) = opens {
         import_presets(app, import, what, serde_json::json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}))?;
@@ -108,6 +123,7 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
         (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
         (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
         (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
+        (vectorcraft_engine::cmd::TRACE_PRESET_EXTS, "imageTrace.presets.import", "tracing presets"),
         (fileio::SCREEN_EXPORT_PRESET_EXTS, "document.exportPresets.import", EXPORT_PRESETS),
         (vectorcraft_engine::cmd::compositefonts::EXTS, "type.compositeFonts.import", "composite fonts"),
     ];
@@ -131,11 +147,21 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
 }
 
 /// Open a document through the engine loader with the `document.open` options in `p` →
-/// `document.open`'s result.
+/// `document.open`'s result, or `{dialog}` when Edit › Color Settings asks about its profile first
+/// ([`dialogs::profile_mismatch::open_or_ask`]): the document then opens, and goes on the recent
+/// files, once the question is answered. A PDF opens with the `pdfTextAs` preference unless `p`
+/// gives `textAs` ([`dialogs::import_pdf::with_preferred_text_as`]).
 pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
-    let r = fileio::open_bytes_with(&mut app.session, name, bytes, path, p).map_err(|e| e.to_string())?;
-    opened(app, &r);
-    Ok(r)
+    let p = &dialogs::import_pdf::with_preferred_text_as(app, name, bytes, p);
+    let update_links = app.session.prefs.update_links == "automatically";
+    let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
+    let file = fileio::read_for_open_asking(name, bytes, path.clone(), p, update_links, low_res_proxy_eps, true).map_err(|e| e.to_string())?;
+    dialogs::profile_mismatch::open_or_ask(app, file, path, false)
+}
+
+/// Did an open answer that it asks a question first (`{dialog}`), so the file isn't open yet?
+pub(crate) fn asks_first(r: &Value) -> bool {
+    r.get("dialog").is_some()
 }
 
 /// A document just opened (`r`: `document.open`'s result): the views follow, the status bar says
@@ -145,6 +171,13 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
 /// A line about the document's linked files comes before the notes ([`show_opened`]).
 pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
+    // The file the document came from: a change another app makes to it is told when Save writes.
+    let index = r["index"].as_u64().and_then(|i| usize::try_from(i).ok());
+    if let Some(st) = index.and_then(|i| app.session.documents().get(i))
+        && let Some(path) = &st.path
+    {
+        app.saves.watch.known_now(st.uid, Path::new(path));
+    }
     let notes = open_notes(app, r);
     crate::dialogs::missing_links::after_open(app, r, notes);
 }
@@ -188,9 +221,36 @@ pub(crate) fn opened_after_notice(notice: &str, n: usize, first: &str) -> String
     )
 }
 
-/// A path from the open dialog, or "cancelled".
-fn pick_open(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String> {
-    crate::picks::open(app, pick).ok_or_else(|| "cancelled".into())
+/// An open picker for `purpose` that starts in `folder` and offers `filters`.
+fn open_request<'a>(purpose: &str, folder: Option<String>, filters: impl IntoIterator<Item = (&'a str, &'a [&'a str])>) -> PickRequest {
+    let request = filters.into_iter().fold(PickRequest::open(purpose), |request, (name, exts)| request.filter(name, exts));
+    match folder {
+        Some(folder) => request.directory(folder),
+        None => request,
+    }
+}
+
+/// Asks for a file to open with `request`; `then` gets its path. The web answers with the file's
+/// bytes, which open as File › Open opens them (the extension decides). A cancelled picker runs
+/// nothing. While it is open the reply is `{pending: "fileDialog"}`.
+fn ask_open(
+    app: &mut VectorcraftApp,
+    request: PickRequest,
+    owner: Owner,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    Ok(file_asks::ask(app, request, owner, move |app, picked| match picked {
+        Picked::Contents(files) => {
+            for (name, bytes) in &files {
+                open_bytes_reporting(app, name, bytes);
+            }
+            Ok(Value::Null)
+        }
+        picked => match picked.first_path() {
+            Some(path) => then(app, path.to_string_lossy().into_owned()),
+            None => Err("cancelled".into()),
+        },
+    }))
 }
 
 /// Object › Plug-ins › Install Plug-in…: installs the module `p` gives (`path`, or `dataBase64`
@@ -201,20 +261,21 @@ pub fn install_plugin(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     if given("path") || given("dataBase64") {
         return install_module(app, p.clone());
     }
-    if app.services.open_async.is_some() {
-        return open_dialog(app).map(|_| Value::Null);
-    }
-    let path =
-        pick_open(app, &FilePick { filters: vec![FilePick::filter("Plug-ins", vectorcraft_engine::cmd::plugin::EXTS)], ..Default::default() })?;
-    install_module(app, json!({ "path": path }))
+    let request = open_request("plugin", None, [("Plug-ins", vectorcraft_engine::cmd::plugin::EXTS)]);
+    ask_open(app, request, Owner::Free, |app, path| install_module(app, json!({ "path": path })))
 }
 
 /// What permission `name` lets a plug-in do, in plain words in the UI language, with the ids of
-/// the `commands` it may call for `commands`; a name the app doesn't know is shown as it is.
-fn permission_words(name: &str, commands: &[String]) -> String {
+/// the `commands` it may call for `commands`, and for `doc.read` of a plug-in whose manifest asks
+/// for document information (`context`), that information too; a name the app doesn't know is
+/// shown as it is.
+fn permission_words(name: &str, commands: &[String], context: bool) -> String {
     let words = match permissions::Permission::parse(name) {
         Some(permissions::Permission::Commands) => {
             return crate::i18n::fmt(tl!("Run these commands on the document: {ids}"), &[("ids", &commands.join(", "))]);
+        }
+        Some(permissions::Permission::DocRead) if context => {
+            tl!("Read the objects it is given, and the document's settings, artboards, layers and swatches")
         }
         Some(permissions::Permission::DocRead) => tl!("Read the objects it is given"),
         Some(permissions::Permission::DocWrite) => tl!("Change, add and delete objects in the document"),
@@ -242,10 +303,20 @@ fn permission_words(name: &str, commands: &[String]) -> String {
 /// `replace: true` doesn't skip asking about replacing, and the answer while it asks adds
 /// `approval: "personMustStartInstall"`: the person starts Install Plug-in… to install it.
 /// Every text from the manifest is shown with its hidden characters escaped and its length capped
-/// ([`permissions::display_text`]).
+/// ([`permissions::display_text`]). On the web a worker checks the module first
+/// ([`crate::plugin_runs::check_install`]) → `{pending: true}` while it does; the install then goes
+/// on, and the page runs none of the module's code.
 pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, String> {
-    let origin = if app.automation_asked() { dialogs::plugin::InstallOrigin::Automation } else { dialogs::plugin::InstallOrigin::Person };
-    let automated = origin == dialogs::plugin::InstallOrigin::Automation;
+    let automated = app.automation_asked();
+    install_module_as(app, module, automated)
+}
+
+/// [`install_module`], as automation's install when `automated`.
+pub(crate) fn install_module_as(app: &mut VectorcraftApp, module: Value, automated: bool) -> Result<Value, String> {
+    if let Some(r) = crate::plugin_runs::check_install(app, &module, automated) {
+        return r;
+    }
+    let origin = if automated { dialogs::plugin::InstallOrigin::Automation } else { dialogs::plugin::InstallOrigin::Person };
     let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
     let source = Value::Object(["path", "dataBase64", "name"].into_iter().filter_map(given).collect());
     let mut install = Value::Object(["path", "dataBase64", "name", "replace", "hash"].into_iter().filter_map(given).collect());
@@ -291,7 +362,8 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
             .as_array()
             .map(|ids| ids.iter().filter_map(Value::as_str).map(|id| permissions::display_text(id, permissions::MAX_SHOWN_FIELD)).collect())
             .unwrap_or_default();
-        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p, &commands))));
+        let context = info["context"].as_array().is_some_and(|c| !c.is_empty());
+        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p, &commands, context))));
         paragraphs.push(lines.join("\n"));
         install["grant"] = Value::Array(asked.clone());
     }
@@ -321,8 +393,7 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
         permissions: asked.iter().filter_map(Value::as_str).map(str::to_string).collect(),
         heavy,
     };
-    let pending =
-        dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval, origin, shown: Default::default() };
+    let pending = dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval, origin, question: None };
     Ok(dialogs::plugin::ask_install(app, pending))
 }
 
@@ -337,14 +408,12 @@ fn open_dialog_folder(app: &VectorcraftApp) -> Option<String> {
     app.ui.recent_files.iter().find_map(|p| fileio::dialog_folder(p)).or_else(|| suggested(app, "").1)
 }
 
-/// File → Open…
-pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
-    if crate::picks::open_async(app) {
-        return Ok(());
-    }
-    let path =
-        pick_open(app, &FilePick { filters: FilePick::filters(fileio::open_filters()), folder: open_dialog_folder(app), ..Default::default() })?;
-    open_reporting(app, &path).map(|_| ())
+/// File → Open…: `{pending: "fileDialog"}` while its picker is open.
+pub fn open_dialog(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // The picker lists the extensions of the importer plug-ins the launch is still loading too.
+    app.session.finish_plugin_loads();
+    let request = open_request("document", open_dialog_folder(app), fileio::open_filters());
+    ask_open(app, request, Owner::Free, |app, path| open_reporting(app, &path))
 }
 
 /// File › Open With: opens the file `p` names (`path`), else one picked among the files with the
@@ -352,8 +421,8 @@ pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
 /// format reads the extension (`document.open {importer, params}`), and adds it to Open Recent; a
 /// failure is reported as File › Open reports it. An importer with parameters, given no `params`,
 /// asks for them first in dialog `pluginImport`, at their defaults. The web's file picker can't
-/// carry the importer: there File › Open's picker opens, and the file opens as File › Open opens
-/// it. A file the user picked is read off the UI thread where that is available
+/// carry the importer: there the file opens as File › Open opens it. A file the user picked is
+/// read off the UI thread where that is available
 /// ([`crate::opening`]), and the result is then `{background: true, status}`; with `path` the file
 /// opens before the reply, as automation needs.
 pub fn open_with(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
@@ -370,22 +439,23 @@ fn picks_a_file(p: &Value) -> bool {
 pub(crate) fn open_with_on(app: &mut VectorcraftApp, p: &Value, background: bool) -> Result<Value, String> {
     let importer = p.get("importer").and_then(Value::as_str).ok_or("missing `importer` (see document.formats)")?;
     let plugin = vectorcraft_plugins::import::named(importer).map_err(|e| e.to_string())?;
-    let path = match p.get("path").and_then(Value::as_str).filter(|s| !s.is_empty()) {
-        Some(path) => path.to_string(),
-        None if app.services.open_async.is_some() => return open_dialog(app).map(|_| Value::Null),
-        None => {
-            // The importer's format: its name and extensions, made once for each installation.
-            let filters = fileio::format(&vectorcraft_plugins::export::format_id(plugin.id()))
-                .filter(|f| f.read)
-                .map(|f| FilePick::filter(f.label, f.extensions))
-                .into_iter()
-                .collect();
-            pick_open(app, &FilePick { filters, folder: open_dialog_folder(app), ..Default::default() })?
-        }
-    };
+    if let Some(path) = p.get("path").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+        return import_from(app, p, path, background);
+    }
+    // The importer's format: its name and extensions, made once for each installation.
+    let format = fileio::format(&vectorcraft_plugins::export::format_id(plugin.id())).filter(|f| f.read);
+    let request = open_request("importer", open_dialog_folder(app), format.map(|f| (f.label, f.extensions)));
+    let p = p.clone();
+    ask_open(app, request, Owner::Free, move |app, path| import_from(app, &p, &path, background))
+}
+
+/// [`open_with_on`] for the file at `path`.
+fn import_from(app: &mut VectorcraftApp, p: &Value, path: &str, background: bool) -> Result<Value, String> {
+    let importer = p.get("importer").and_then(Value::as_str).ok_or("missing `importer` (see document.formats)")?;
+    let plugin = vectorcraft_plugins::import::named(importer).map_err(|e| e.to_string())?;
     let importer = vectorcraft_plugins::export::format_id(plugin.id());
     let given = p.get("params").filter(|v| !v.is_null());
-    let opened = vectorcraft_engine::file_access::check_read(&path).and_then(|()| check_import_size(&path, true)).and_then(|()| {
+    let opened = vectorcraft_engine::file_access::check_read(path).and_then(|()| check_import_size(path, true)).and_then(|()| {
         if given.is_none() && !plugin.manifest().params.is_empty() {
             dialogs::plugin::open_import(app, &plugin, json!({ "path": path, "importer": importer, "picked": picks_a_file(p) }));
             return Ok(Value::Null);
@@ -394,20 +464,15 @@ pub(crate) fn open_with_on(app: &mut VectorcraftApp, p: &Value, background: bool
         if let Some(params) = given {
             o["params"] = params.clone();
         }
-        let mut bytes = read(app, &path)?;
+        let bytes = read(app, path)?;
         if background {
-            match crate::opening::start_with(app, &path, bytes, o.clone()) {
-                Ok(r) => return Ok(r),
-                // No thread: at once.
-                Err(back) => bytes = back,
-            }
+            return Ok(crate::opening::start_with(app, path, bytes, o));
         }
-        let r = open_document(app, &path, &bytes, Some(path.clone()), &o)?;
-        note_recent(app, &path);
-        Ok(r)
+        // The open notes it on the recent files, after any question it asks first.
+        open_document(app, path, &bytes, Some(path.to_string()), &o)
     });
     if let Err(e) = &opened {
-        report_open_error(app, &fileio::file_name(&path), e);
+        report_open_error(app, &fileio::file_name(path), e);
     }
     opened
 }
@@ -451,6 +516,17 @@ pub fn report_open_error(app: &mut VectorcraftApp, name: &str, e: &str) {
     dialogs::confirm::tell(app, &message, &crate::i18n::message(crate::i18n::current(), e));
 }
 
+/// [`open_bytes`] for a file the user asked to open, a failure reported ([`report_open_error`]),
+/// also one that a worker's check of a plug-in module finds after it returned
+/// ([`crate::plugin_runs::report_checks_as_opened`]).
+pub fn open_bytes_reporting(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) {
+    let from = crate::plugin_runs::checks_started(app);
+    match open_bytes(app, name, bytes, None) {
+        Ok(_) => crate::plugin_runs::report_checks_as_opened(app, from, name),
+        Err(e) => report_open_error(app, name, &e),
+    }
+}
+
 /// [`open_path`] for a file the user asked for, a failure reported ([`report_open_error`]). On
 /// the desktop a document is decoded off the UI thread ([`crate::opening`]): the result is then
 /// `{background: true, status}`, and the document opens in its tab (or the failure is reported)
@@ -466,8 +542,8 @@ pub fn open_reporting(app: &mut VectorcraftApp, path: &str) -> Result<Value, Str
 /// A file already open in a tab is not opened again: its tab comes to the front, unsaved edits
 /// and all (#3455), without the questions asked after an open (missing links and fonts).
 /// → `{activated: true, …}` as `document.open`'s result, or None.
-fn try_activate_open_document(app: &mut VectorcraftApp, path: &str) -> Result<Option<Value>, String> {
-    let Some(index) = document_index_for_path(app, path) else {
+fn try_activate_open_document(app: &mut VectorcraftApp, path: &str, canonical: Option<&Path>) -> Result<Option<Value>, String> {
+    let Some(index) = document_index_for_path(app, path, canonical) else {
         return Ok(None);
     };
     let st = &app.session.documents()[index];
@@ -486,15 +562,10 @@ fn try_activate_open_document(app: &mut VectorcraftApp, path: &str) -> Result<Op
     Ok(Some(r))
 }
 
-fn document_index_for_path(app: &VectorcraftApp, path: &str) -> Option<usize> {
-    app.session.documents().iter().position(|st| st.path.as_deref().is_some_and(|p| same_open_path(p, path)))
-}
-
-fn same_open_path(a: &str, b: &str) -> bool {
-    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => a == b,
-    }
+/// The tab of the document opened from the file `path` (`canonical`: its resolved form, made once
+/// by the caller).
+fn document_index_for_path(app: &VectorcraftApp, path: &str, canonical: Option<&Path>) -> Option<usize> {
+    app.session.documents().iter().position(|st| st.path.as_deref().is_some_and(|p| same_file(Path::new(p), Path::new(path), canonical)))
 }
 
 fn read(app: &VectorcraftApp, path: &str) -> Result<Vec<u8>, String> {
@@ -521,21 +592,28 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) 
 fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Value) -> Result<Value, String> {
     // Automation confined to some folders reaches no file outside them, open in a tab or not.
     vectorcraft_engine::file_access::check_read(path)?;
+    // A plug-in still loading may be the importer that reads the file, or what installs it.
+    app.session.finish_plugin_loads();
+    // The path is checked again after the wait, so a link replaced while the plug-ins loaded
+    // doesn't lead the read outside the folders.
+    vectorcraft_engine::file_access::check_read(path)?;
     // File › Open, Open Recent, the Home screen, a drop and the Finder all focus a document that
     // is already open, or still being read, instead of opening a second copy. While a dialog or
     // a drag acts on the active document, its tab comes to the front once that ends
     // ([`crate::opening::poll`]), as a file that finishes opening then does.
-    if document_index_for_path(app, path).is_some() && !crate::opening::may_switch(app) {
-        if !app.opening.activate.iter().any(|(p, _)| same_open_path(p, path)) {
+    let canonical = std::fs::canonicalize(path).ok();
+    let same = |open: &str| same_file(Path::new(open), Path::new(path), canonical.as_deref());
+    if document_index_for_path(app, path, canonical.as_deref()).is_some() && !crate::opening::may_switch(app) {
+        if !app.opening.activate.iter().any(|(p, _)| same(p)) {
             let scope = vectorcraft_engine::file_access::ScopeHandle::capture();
             app.opening.activate.push((path.to_string(), scope));
         }
         return Ok(Value::Null);
     }
-    if let Some(r) = try_activate_open_document(app, path)? {
+    if let Some(r) = try_activate_open_document(app, path, canonical.as_deref())? {
         return Ok(r);
     }
-    if app.opening.pending.iter().any(|p| same_open_path(&p.path, path)) {
+    if app.opening.pending.iter().any(|p| same(&p.path)) {
         return Ok(Value::Null);
     }
     // A shortcut set is read by Import Shortcut Set, up to its reader's cap.
@@ -550,9 +628,21 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
         note_recent(app, path);
         return Ok(Value::Null);
     }
+    // A tracing presets file is read up to its size limit, as Import… reads it.
+    if let Some(OpensAs::Presets { import: "imageTrace.presets.import", .. }) = opens_as(path) {
+        dialogs::tracing_presets::open_path(app, path)?;
+        note_recent(app, path);
+        return Ok(Value::Null);
+    }
+    // A JavaScript plug-in's manifest is read by `plugin.install {path}`, with the script it names.
+    if opens_as(path) == Some(OpensAs::Plugin) && vectorcraft_plugins::registry::is_js_package(std::path::Path::new(path)) {
+        install_module(app, json!({ "path": path }))?;
+        note_recent(app, path);
+        return Ok(Value::Null);
+    }
     // A file only an importer plug-in reads is not read past the importer's input limit.
     check_import_size(path, false)?;
-    let mut bytes = read(app, path)?;
+    let bytes = read(app, path)?;
     if background && opens_as(path).is_none() {
         // A PDF with several pages or a password, a DXF drawing, or a PSD file with several layers
         // or with slices asks first, as at once.
@@ -563,45 +653,51 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
             note_recent(app, path);
             return Ok(Value::Null);
         }
-        match crate::opening::start(app, path, bytes) {
-            Ok(r) => return Ok(r),
-            // No thread: at once.
-            Err(back) => bytes = back,
-        }
+        let params = crate::dialogs::import_pdf::with_preferred_text_as(app, path, &bytes, &Value::Null);
+        return Ok(crate::opening::start_with(app, path, bytes, params));
     }
     let r = open_bytes_with(app, path, &bytes, Some(path.to_string()), p)?;
-    note_recent(app, path);
+    // A document that asks a question first goes on the recent files once it opens.
+    if !asks_first(&r) {
+        note_recent(app, path);
+    }
     Ok(r)
 }
 
 /// File → New from Template…: a template (or any readable file) as a new untitled document. Without
-/// a path the open dialog starts in the Templates folder. On the web the browser's file picker
-/// opens it (`.vctemplate`, `.ait` and template files open untitled there too).
+/// a path the open dialog starts in the Templates folder. The browser supplies the picked file's
+/// name and bytes for the same template loader.
 pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
-    let path = match path {
-        Some(p) => p,
-        None if app.services.open_async.is_some() => return open_dialog(app).map(|_| Value::Null),
-        None => {
-            let filters = FilePick::filters(std::iter::once(("Templates", TEMPLATE_EXTS)).chain(fileio::builtin_open_filters()));
-            pick_open(app, &FilePick { folder: fileio::templates_dialog_folder(&app.session.prefs), filters, ..Default::default() })?
-        }
+    let Some(path) = path else {
+        let filters = std::iter::once(("Templates", TEMPLATE_EXTS)).chain(fileio::builtin_open_filters());
+        let request = open_request("template", fileio::templates_dialog_folder(&app.session.prefs), filters);
+        return Ok(file_asks::ask(app, request, Owner::Free, |app, picked| match picked {
+            Picked::Contents(files) => {
+                let (name, bytes) = files.into_iter().next().ok_or("cancelled")?;
+                if let Err(error) = open_template(app, &name, &bytes, None) {
+                    report_open_error(app, &name, &error);
+                }
+                Ok(Value::Null)
+            }
+            picked => {
+                let path = picked.first_path().ok_or("cancelled")?;
+                new_from_path(app, path.to_string_lossy().into_owned())
+            }
+        }));
     };
-    let bytes = read(app, &path)?;
-    let r = fileio::open_template(&mut app.session, &path, &bytes, Some(&path)).map_err(|e| e.to_string())?;
-    opened(app, &r);
-    Ok(r)
+    new_from_path(app, path)
 }
 
-/// Open the save options dialog of format `f` before writing `path`: `action` is the save command
-/// it finishes, and `pick` (the web's Save As) also names the file and chooses the format.
-pub(super) fn open_options(app: &mut VectorcraftApp, action: &str, f: &Format, path: &str, pick: bool) -> Value {
-    let mut fields = dialogs::save_options::option_values(app, f);
-    fields.insert("__action".into(), json!(action));
-    fields.insert("__pick".into(), json!(pick));
-    fields.insert("path".into(), json!(path));
-    fields.insert("format".into(), json!(f.id));
-    app.ui.dialog = Some(Dialog { kind: dialogs::save_options::KIND.into(), fields });
-    json!({ "pending": dialogs::save_options::KIND })
+/// [`new_from_template`] for the file at `path`.
+fn new_from_path(app: &mut VectorcraftApp, path: String) -> Result<Value, String> {
+    let bytes = read(app, &path)?;
+    open_template(app, &path, &bytes, Some(&path))
+}
+
+fn open_template(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value, String> {
+    let r = fileio::open_template(&mut app.session, name, bytes, path).map_err(|e| e.to_string())?;
+    opened(app, &r);
+    Ok(r)
 }
 
 /// The most recent files remembered: Preferences → File Handling → Number of Recent Files to Display
@@ -628,7 +724,13 @@ pub fn ask_revert(app: &mut VectorcraftApp) -> Result<Value, String> {
     (c.enabled)(&app.session)?;
     let name = app.session.active().map(|d| d.title()).unwrap_or_default();
     let message = crate::i18n::fmt(tl!("Revert to the saved version of “{name}”?"), &[("name", &name)]);
-    dialogs::confirm::ask(app, &message, tl!("Changes made since it was last saved will be lost."), "file.revert", json!({ "confirmed": true }));
+    dialogs::confirm::ask_in_document(
+        app,
+        &message,
+        tl!("Changes made since it was last saved will be lost."),
+        "file.revert",
+        json!({ "confirmed": true }),
+    );
     Ok(json!({ "pending": dialogs::confirm::KIND }))
 }
 

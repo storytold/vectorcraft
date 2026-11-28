@@ -157,6 +157,7 @@ pub const STYLE_LIBRARIES: &[BuiltinStyleLibrary] = &[
     BuiltinStyleLibrary { id: "hand-drawn", name: "Hand-Drawn", make: hand_drawn },
     BuiltinStyleLibrary { id: "textures", name: "Textures", make: textures },
     BuiltinStyleLibrary { id: "painted-sketched", name: "Painted and Sketched", make: painted_sketched },
+    BuiltinStyleLibrary { id: "paper-cutouts", name: "Paper Cutouts", make: paper_cutouts },
     BuiltinStyleLibrary { id: "gradient-finishes", name: "Gradient Finishes", make: gradient_finishes },
     BuiltinStyleLibrary { id: "shape-effects", name: "Shape Effects", make: shape_effects },
     BuiltinStyleLibrary { id: "blends-transparency", name: "Blends and Transparency", make: blends_transparency },
@@ -381,6 +382,25 @@ fn painted_sketched() -> Vec<GraphicStyle> {
             vec![F(fill("#d8d4c6"))],
             vec![fx("sketch.graphicPen", json!({"strokeLength": 6.0, "lightDarkBalance": 55.0, "strokeDirection": "rightDiagonal"}))],
         ),
+    ]
+}
+
+/// Paper Cutouts: original layered paper colors with visible cut edges and crisp cast shadows.
+fn paper_cutouts() -> Vec<GraphicStyle> {
+    let cutout = |name: &str, face: &str, edge: &str, rim: &str, shadow: &str, x: f64, y: f64| {
+        style(
+            name,
+            vec![F(fill(face)), S(stroke(edge, 7.0)), S(stroke(rim, 2.0))],
+            vec![fx("stylize.dropShadow", json!({"mode": "normal", "opacity": 100.0, "x": x, "y": y, "blur": 0.0, "color": shadow}))],
+        )
+    };
+    vec![
+        cutout("Coral Layers", "#ff6b6b", "#f9c74f", "#fff4e6", "#6d597a", 5.0, 5.0),
+        cutout("Mint Layers", "#80cbc4", "#2a9d8f", "#e9f5db", "#355070", 4.0, 6.0),
+        cutout("Midnight Layers", "#3d5a80", "#ee6c4d", "#e0fbfc", "#1b263b", 6.0, 4.0),
+        cutout("Sunflower Sheet", "#ffbe0b", "#fb5607", "#fff3b0", "#6a4c93", 3.0, 6.0),
+        cutout("Rose Layers", "#f28482", "#84a59d", "#f7ede2", "#4a4e69", 6.0, 3.0),
+        cutout("Monochrome Stack", "#f5f5f5", "#444444", "#ffffff", "#222222", 5.0, 5.0),
     ]
 }
 
@@ -700,6 +720,26 @@ mod tests {
         }
         let ids: Vec<&str> = STYLE_LIBRARIES.iter().map(|b| b.id).collect();
         assert_eq!(ids.iter().position(|&i| i == "textures"), ids.iter().position(|&i| i == "hand-drawn").map(|i| i + 1), "after Hand-Drawn");
+    }
+
+    #[test]
+    fn paper_cutouts_have_layered_edges_and_crisp_shadows() {
+        let lib = builtin_style_library("paper-cutouts").unwrap();
+        assert_eq!(lib.name, "Paper Cutouts");
+        let names: Vec<&str> = lib.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Coral Layers", "Mint Layers", "Midnight Layers", "Sunflower Sheet", "Rose Layers", "Monochrome Stack"]);
+        for g in &lib.styles {
+            assert_eq!(g.appearance.items.len(), 3, "{} has a face and two cut edges", g.name);
+            assert!(matches!(g.appearance.items[0], AppearanceItem::Fill(_)));
+            assert!(matches!(g.appearance.items[1], AppearanceItem::Stroke(_)));
+            assert!(matches!(g.appearance.items[2], AppearanceItem::Stroke(_)));
+            assert_eq!(g.appearance.effects.len(), 1);
+            let shadow = &g.appearance.effects[0];
+            assert_eq!(shadow.id, "stylize.dropShadow");
+            assert_eq!(shadow.params["blur"], 0.0);
+            assert_eq!(shadow.params["opacity"], 100.0);
+        }
+        assert_eq!(read(&write(&lib), "Fallback").unwrap(), *lib);
     }
 
     /// The built-in styles' Warps draw with the map a new Warp takes.

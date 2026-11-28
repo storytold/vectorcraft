@@ -1153,6 +1153,28 @@ fn transform_each_random_is_deterministic_with_seed() {
     assert!(x.x0.abs() <= 50.0 && x.width() == 100.0);
 }
 
+/// Random with the same horizontal and vertical scale scales each object evenly, Relative and
+/// Absolute alike: one random share takes both sides toward the value, so squares stay square, each
+/// by its own share (#9320).
+#[test]
+fn transform_each_random_with_equal_scales_keeps_proportions() {
+    for p in [
+        json!({"scaleH": 40, "scaleV": 40, "random": true, "seed": 7}),
+        json!({"scaleH": 40, "scaleV": 40, "relative": false, "random": true, "seed": 7}),
+    ] {
+        let mut s = session();
+        let ids: Vec<NodeId> = (0..8).map(|i| rect(&mut s, f64::from(i) * 150.0, 0.0, 100.0, 100.0)).collect();
+        sel(&mut s, &ids);
+        s.execute("object.transformEach", &p).unwrap();
+        let sizes: Vec<(f64, f64)> = ids.iter().map(|id| bounds(&s, *id)).map(|b| (b.width(), b.height())).collect();
+        for (w, h) in &sizes {
+            assert!(close(*w, *h), "{p}: a square came out {w} × {h}");
+            assert!(*w < 100.0, "{p}: a square didn't shrink: {w}");
+        }
+        assert!(sizes.iter().any(|(w, _)| !close(*w, sizes[0].0)), "{p}: every square took the same share: {sizes:?}");
+    }
+}
+
 /// A `reference` or `seed` that is not a whole number (a fraction, a negative number or a string) is an error naming
 /// the key, and the object stays as it was; a `reference` of 0.0 is the top-left point.
 #[test]
@@ -1586,6 +1608,235 @@ fn crop_image_to_a_rect_between_pixels_keeps_the_rect() {
     s.execute("object.cropImage", &json!({"rect": [21, 11, 60, 40]})).unwrap();
     let b = bounds(&s, img);
     assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+}
+
+/// Crop Image's `ppi` resamples the cut pixels to that resolution; the image keeps the box's size.
+#[test]
+fn crop_image_resamples_the_cut_to_the_resolution_asked_for() {
+    let (mut s, img, px) = busy_image_at_two_points_a_pixel();
+    // The image is 36 ppi (2 pt a pixel); 18 ppi halves the cut's 30 × 20 pixels.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (15, 10), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 20.0) && close(b.y0, 10.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    let cut = image::imageops::crop_imm(&px, 10, 5, 30, 20).to_image();
+    // Resampled in 16 bits a channel: within a level of the 8-bit resampling.
+    let want = image::imageops::resize(&cut, 15, 10, image::imageops::FilterType::Lanczos3);
+    assert_eq!(out.dimensions(), want.dimensions());
+    assert!(out.as_raw().iter().zip(want.as_raw()).all(|(a, b)| a.abs_diff(*b) <= 1));
+}
+
+/// Resampling weights colors by their alpha: the color hidden in fully transparent pixels does not
+/// tint the partly transparent edge of what is opaque.
+#[test]
+fn crop_image_resampling_keeps_hidden_colors_out_of_the_edges() {
+    // Opaque white on the left half, fully transparent red on the right.
+    let px = image::RgbaImage::from_fn(40, 20, |x, _| if x < 20 { image::Rgba([255, 255, 255, 255]) } else { image::Rgba([255, 0, 0, 0]) });
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "edge.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    // 36 ppi to 15 ppi over pixels 5 to 35 across: the edge pixels mix white and clear.
+    s.execute("object.cropImage", &json!({"rect": [10, 0, 60, 40], "ppi": 15})).unwrap();
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert!(out.pixels().any(|p| p[3] > 0 && p[3] < 255), "the edge is partly transparent");
+    for p in out.pixels().filter(|p| p[3] > 0) {
+        assert!(p[1] >= 250 && p[2] >= 250, "white, not tinted red: {p:?}");
+    }
+}
+
+/// Resampling keeps the color of pixels that are nearly transparent: a uniform color at the lowest
+/// alpha comes out as that color, not black.
+#[test]
+fn crop_image_resampling_keeps_the_color_of_nearly_transparent_pixels() {
+    let px = image::RgbaImage::from_pixel(100, 80, image::Rgba([100, 50, 25, 1]));
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "faint.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 18})).unwrap();
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    for p in out.pixels() {
+        let near = |a: u8, b: u8| a.abs_diff(b) <= 1;
+        assert!(p[3] == 1 && near(p[0], 100) && near(p[1], 50) && near(p[2], 25), "{p:?}");
+    }
+}
+
+/// A box between pixels drawn at a resolution asked for holds what is inside the box only, at its
+/// place: the edge of the image's content lands where it was in the box.
+#[test]
+fn crop_image_between_pixels_keeps_the_content_at_its_place() {
+    // White pixels 0 to 49 across, black from 50: at 2 pt a pixel, the edge is at x = 100 pt.
+    let px = image::RgbaImage::from_fn(100, 80, |x, _| if x < 50 { image::Rgba([255, 255, 255, 255]) } else { image::Rgba([0, 0, 0, 255]) });
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "edge.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    // 101 × 31 pt from (21, 11), off the pixel grid, at 35 ppi: 49 × 15 px. The edge is 79 pt into
+    // the 101 pt box, so each row holds 49 × 79 / 101 pixels' worth of white.
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 101, 31], "ppi": 35})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (49, 15), "{r}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    let white: f64 = out.pixels().map(|p| f64::from(p[1]) / 255.0).sum::<f64>() / f64::from(out.height());
+    let want = 49.0 * 79.0 / 101.0;
+    assert!((white - want).abs() < 0.1, "{white} pixels of white a row, want {want}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 101.0) && close(b.height(), 31.0), "{b:?}");
+}
+
+/// A box between pixels is drawn at the resolution asked for, and lands on the box.
+#[test]
+fn crop_image_between_pixels_draws_at_the_resolution_asked_for() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 60, 40], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (15, 10), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    // 100 × 30 pt at 20 ppi is 27.8 × 8.3 px: the 28 × 8 px drawn are fitted to the box.
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 100, 30], "ppi": 20})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (28, 8), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 100.0) && close(b.height(), 30.0), "{b:?}");
+}
+
+/// A box over the whole image with a new resolution resamples it; with the image's own there is
+/// nothing to do.
+#[test]
+fn crop_image_over_the_whole_image_only_resamples_it() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let before = undo_len(&s);
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 160], "ppi": 36}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "nothing to crop"), "{r:?}");
+    assert_eq!(undo_len(&s), before);
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 160], "ppi": 9})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (25, 20), "{r}");
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 0.0) && close(b.y0, 0.0) && close(b.width(), 200.0) && close(b.height(), 160.0), "{b:?}");
+}
+
+/// An image scaled more down than across is resampled on both sides at the resolution of its denser
+/// side, so its pixels come out square.
+#[test]
+fn crop_image_resamples_pixels_that_are_not_square() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    // 2 pt a pixel across (36 ppi) and 1 pt a pixel down (72 ppi), 200 × 80 pt.
+    s.execute("object.scale", &json!({"sx": 100, "sy": 50, "origin": [0, 0]})).unwrap();
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 80], "ppi": 72})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (200, 80), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 0.0) && close(b.y0, 0.0) && close(b.width(), 200.0) && close(b.height(), 80.0), "{b:?}");
+}
+
+/// Crop Image refuses a resolution that isn't a positive number, one above the image's own, and one
+/// with trim; the image stays as it was.
+#[test]
+fn crop_image_refuses_a_resolution_it_cannot_give() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let before = (undo_len(&s), node(&s, img));
+    let refused = |s: &mut Session, p: Value, want: &str| {
+        let r = s.execute("object.cropImage", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{p}: {r:?}");
+    };
+    for v in [json!(0), json!(-72), json!("high"), json!(true)] {
+        refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": v}), &format!("ppi must be a positive number, not {v}"));
+    }
+    for v in [0.5, 1e-310, 2401.0] {
+        refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": v}), "ppi must be between 1 and 2400");
+    }
+    refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": 72}), "ppi can't be more than 36 for this image");
+    refused(&mut s, json!({"trim": true, "ppi": 18}), "trim keeps the image's pixels as they are: leave out ppi");
+    assert_eq!((undo_len(&s), node(&s, img)), before);
+    // A null ppi keeps the image's own, as a missing one does.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": null})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (30, 20), "{r}");
+}
+
+/// A turned image keeps its own resolution as the limit (not the density across its bounding box),
+/// and its drawn cut is resampled to the box's size at the resolution asked for.
+#[test]
+fn crop_image_of_a_turned_image_resamples_its_drawing() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 37}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "ppi can't be more than 36 for this image"), "{r:?}");
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (18, 9), "{r}");
+    let c = bounds(&s, img);
+    assert!(close(c.x0, b.x0 + 40.0) && close(c.y0, b.y0 + 40.0) && close(c.width(), 72.0) && close(c.height(), 36.0), "{c:?}");
+}
+
+/// A turned image cropped at its own resolution, asked for, gets that resolution, not the lower
+/// density of the box around it.
+#[test]
+fn crop_image_of_a_turned_image_at_its_own_resolution_keeps_it() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 36})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (36, 18), "{r}");
+    // Over the whole box around it, its own resolution draws it square to the page.
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0, b.y0, b.width(), b.height()], "ppi": 36})).unwrap();
+    assert_eq!(r["width"].as_u64().unwrap(), (b.width() / 2.0).round() as u64, "{r}");
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0, b.y0, b.width(), b.height()]}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "nothing to crop"), "{r:?}");
+}
+
+/// A linked image can be cropped to up to 300 ppi, even above its own; the crop embeds it.
+#[test]
+fn crop_image_takes_a_linked_image_up_to_300_ppi() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.edit("Link", |d, _| {
+        let NodeKind::Image(im) = &mut d.node_mut(img).unwrap().kind else { panic!("not an image") };
+        im.link = Some(vectorcraft_doc::LinkInfo::new("art.png"));
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 301}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "ppi can't be more than 300 for this image"), "{r:?}");
+    // 72 ppi: a pixel a point.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 72})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (60, 40), "{r}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    assert!(im.link.is_none());
+}
+
+/// `tool.setOption` refuses a Crop Image resolution, reference point or link it can't use, and
+/// changes nothing.
+#[test]
+fn crop_image_tool_options_refuse_values_they_cannot_use() {
+    let (mut s, _, _) = busy_image_at_two_points_a_pixel();
+    s.select_tool("cropImage", ViewInfo::default()).unwrap();
+    s.set_tool_option_cmd(&json!({"values": {"ppi": 18, "reference": 0, "linked": true}})).unwrap();
+    // 72 ppi is above the selected 36 ppi image's own.
+    for (key, value) in
+        [("ppi", json!("high")), ("ppi", json!(-1)), ("ppi", json!(0.5)), ("ppi", json!(72)), ("reference", json!(9)), ("linked", json!(1))]
+    {
+        assert!(s.set_tool_option_cmd(&json!({"key": key, "value": value})).is_err(), "{key}: {value}");
+    }
+    let o = s.tool_options();
+    assert_eq!((o["ppi"].clone(), o["reference"].clone(), o["linked"].clone()), (json!(18.0), json!(0), json!(true)), "{o}");
+    s.set_tool_option_cmd(&json!({"key": "ppi", "value": null})).unwrap();
+    assert!(s.tool_options().get("ppi").is_none());
 }
 
 /// Crop Image refuses a `rect` that is not an array, such as text, and the image stays as it was; a
@@ -2148,7 +2399,8 @@ fn find_and_replace_leaves_type_on_a_locked_artboard() {
 
 /// Find and Replace that replaces each match with the text it is (`CAT` found in `cat`, ignoring
 /// case, and replaced by `cat`) records no undo step: the step to redo stays and the document stays
-/// unmodified. It still replies with the count. A replacement that changes the text is one undo step.
+/// unmodified. It still replies with the count, and with no match replaced. A replacement that
+/// changes the text is one undo step.
 #[test]
 fn find_and_replace_that_changes_nothing_records_no_undo_step() {
     let mut s = session();
@@ -2156,9 +2408,9 @@ fn find_and_replace_that_changes_nothing_records_no_undo_step() {
     select_with_a_step_to_redo(&mut s, &[a]);
     let before = history(&s);
     assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
-    assert_eq!(s.execute("edit.findReplace", &json!({"find": "CAT", "replace": "cat"})).unwrap(), json!({"count": 2}));
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "CAT", "replace": "cat"})).unwrap(), json!({"count": 2, "replaced": 0}));
     assert_eq!((history(&s), plain(&s, a)), (before, "cat cat".to_string()));
-    assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2}));
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2, "replaced": 2}));
     assert_eq!((history(&s), plain(&s, a)), ((before.0 + 1, 0, true), "dog dog".to_string()));
 }
 
@@ -2195,10 +2447,188 @@ fn find_next_cycles_through_text_objects() {
     let _ = text(&mut s, "banana");
     let c = text(&mut s, "pineapple");
     s.execute("select.none", &json!({})).unwrap();
-    assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "APPLE"})).unwrap()), a);
+    // From the top of the stacking order down, then round again.
+    assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "APPLE"})).unwrap()), c);
+    assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "apple"})).unwrap()), a);
     assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "apple"})).unwrap()), c);
+    // A selection that starts with a shape goes on after its first type object.
+    let shape = rect(&mut s, 300.0, 300.0, 20.0, 20.0);
+    sel(&mut s, &[shape, c]);
     assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "apple"})).unwrap()), a);
     assert!(s.execute("edit.findNext", &json!({"find": "zzz"})).unwrap()["id"].is_null());
+}
+
+/// The match `r` (an `edit.findNext` result) as (object, start, end, index, count).
+fn found(r: &Value) -> (u64, u64, u64, u64, u64) {
+    let n = |k: &str| r[k].as_u64().unwrap_or_else(|| panic!("no `{k}` in {r}"));
+    (n("id"), n("start"), n("end"), n("index"), n("count"))
+}
+
+/// Find Next steps through the matches one by one when each call is given the match before it:
+/// the objects from the top of the stacking order down, each object's matches in reading order,
+/// and round again after the last. Search Backwards visits them the other way. Each match is
+/// returned with its bytes and its object is selected; nothing is recorded for undo.
+#[test]
+fn find_next_steps_through_the_matches_in_both_directions() {
+    let mut s = session();
+    let bottom = text(&mut s, "cat éa cat");
+    let _ = text(&mut s, "dog");
+    let top = text(&mut s, "a cat");
+    s.execute("select.none", &json!({})).unwrap();
+    let before = history(&s);
+    let step = |s: &mut Session, from: &Value, backwards: bool| {
+        let from = if from.is_null() { Value::Null } else { json!({"id": from["id"], "start": from["start"], "end": from["end"]}) };
+        s.execute("edit.findNext", &json!({"find": "cat", "from": from, "backwards": backwards})).unwrap()
+    };
+    // "é" is two bytes, so the second match of the bottom object is at bytes 8..11.
+    let forward = [(top.0, 2, 5, 1, 3), (bottom.0, 0, 3, 2, 3), (bottom.0, 8, 11, 3, 3), (top.0, 2, 5, 1, 3)];
+    let mut at = Value::Null;
+    for want in forward {
+        at = step(&mut s, &at, false);
+        assert_eq!((found(&at), selected(&s), at["selected"].clone()), (want, vec![NodeId(want.0)], json!(true)));
+    }
+    let backward = [(bottom.0, 8, 11, 3, 3), (bottom.0, 0, 3, 2, 3), (top.0, 2, 5, 1, 3), (bottom.0, 8, 11, 3, 3)];
+    s.execute("select.none", &json!({})).unwrap();
+    let mut at = Value::Null;
+    for want in backward {
+        at = step(&mut s, &at, true);
+        assert_eq!((found(&at), selected(&s)), (want, vec![NodeId(want.0)]));
+    }
+    assert_eq!(history(&s), before, "finding is no undo step");
+    // A `from` in an object the search does not visit starts at the first match.
+    let r = s.execute("edit.findNext", &json!({"find": "cat", "from": {"id": 999_999, "start": 0, "end": 0}})).unwrap();
+    assert_eq!(found(&r), (top.0, 2, 5, 1, 3));
+    // So does a null `from`, with a type object selected.
+    sel(&mut s, &[top]);
+    let r = s.execute("edit.findNext", &json!({"find": "cat", "from": null})).unwrap();
+    assert_eq!(found(&r), (top.0, 2, 5, 1, 3));
+    // Nothing found: no match, and the selection stays.
+    let r = s.execute("edit.findNext", &json!({"find": "zebra"})).unwrap();
+    assert_eq!((r, selected(&s)), (json!({"id": null, "count": 0}), vec![top]));
+}
+
+/// Check Hidden Layers and Check Locked Layers: Find Next and Find and Replace leave the type of
+/// a hidden layer and of a locked layer alone unless the switch for it is on. A match on such a
+/// layer is returned without being selected. A hidden or locked object keeps its type out with
+/// the switches on.
+#[test]
+fn find_and_replace_reach_hidden_and_locked_layers_only_when_asked() {
+    for (prop, switch, other) in [("visible", "hiddenLayers", "lockedLayers"), ("locked", "lockedLayers", "hiddenLayers")] {
+        let mut s = session();
+        let open = text(&mut s, "cat one");
+        let layer = id_of(&s.execute("layer.new", &json!({})).unwrap());
+        let closed = text(&mut s, "cat two");
+        let object = text(&mut s, "cat three");
+        let off = |id: NodeId| if prop == "visible" { json!({"id": id.0, "visible": false}) } else { json!({"id": id.0, "locked": true}) };
+        s.execute("object.setProps", &off(object)).unwrap();
+        s.execute("layer.setProps", &off(layer)).unwrap();
+        sel(&mut s, &[open]);
+        // Without the switch, and with only the other one, the one reachable match is found.
+        for p in [json!({"find": "cat"}), json!({"find": "cat", other: true})] {
+            let r = s.execute("edit.findNext", &p).unwrap();
+            assert_eq!(found(&r), (open.0, 0, 3, 1, 1), "{prop} {p}");
+        }
+        // With it, the layer's type is searched (it is above, so it comes first) and not selected.
+        s.execute("select.none", &json!({})).unwrap();
+        let r = s.execute("edit.findNext", &json!({"find": "cat", switch: true})).unwrap();
+        assert_eq!((found(&r), r["selected"].clone(), selected(&s)), ((closed.0, 0, 3, 1, 2), json!(false), vec![]), "{prop}");
+        let r = s.execute("edit.findNext", &json!({"find": "cat", switch: true, "from": {"id": closed.0, "start": 0, "end": 3}})).unwrap();
+        assert_eq!((found(&r), r["selected"].clone(), selected(&s)), ((open.0, 0, 3, 2, 2), json!(true), vec![open]), "{prop}");
+        // Replace All: the same reach.
+        let n = undo_len(&s);
+        assert_eq!(
+            s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog", other: true})).unwrap(),
+            json!({"count": 1, "replaced": 1}),
+            "{prop}"
+        );
+        assert_eq!((plain(&s, open), plain(&s, closed), plain(&s, object)), ("dog one".into(), "cat two".into(), "cat three".into()), "{prop}");
+        assert_eq!(
+            s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog", switch: true})).unwrap(),
+            json!({"count": 1, "replaced": 1}),
+            "{prop}"
+        );
+        assert_eq!((plain(&s, closed), plain(&s, object), undo_len(&s)), ("dog two".into(), "cat three".into(), n + 2), "{prop}");
+    }
+}
+
+/// Replace changes one match, the bytes Find Next returned, as one undo step, and returns the
+/// replacement's bytes to go on from. Bytes that are no match are refused, and a match that
+/// already reads as the replacement is left with no undo step.
+#[test]
+fn replace_match_replaces_the_one_match_found() {
+    let mut s = session();
+    let t = text(&mut s, "cat cat Cat");
+    s.execute("select.none", &json!({})).unwrap();
+    let first = s.execute("edit.findNext", &json!({"find": "cat"})).unwrap();
+    assert_eq!(found(&first), (t.0, 0, 3, 1, 3));
+    let n = undo_len(&s);
+    let r = s.execute("edit.replaceMatch", &json!({"find": "cat", "replace": "horse", "id": t.0, "start": 0, "end": 3})).unwrap();
+    assert_eq!(r, json!({"id": t.0, "start": 0, "end": 5, "replaced": true}));
+    assert_eq!((plain(&s, t), undo_len(&s)), ("horse cat Cat".to_string(), n + 1));
+    // Replace & Find: on from the replacement, so text put in is not searched again.
+    let r = s.execute("edit.replaceMatch", &json!({"find": "cat", "replace": "a cat", "id": t.0, "start": 6, "end": 9})).unwrap();
+    let next = s.execute("edit.findNext", &json!({"find": "cat", "from": {"id": r["id"], "start": r["start"], "end": r["end"]}})).unwrap();
+    assert_eq!((plain(&s, t), found(&next)), ("horse a cat Cat".to_string(), (t.0, 12, 15, 2, 2)));
+    // Match Case decides what a match is.
+    let shape = rect(&mut s, 300.0, 300.0, 20.0, 20.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let before = (history(&s), plain(&s, t));
+    for (p, want) in [
+        (json!({"find": "cat", "replace": "x", "matchCase": true, "id": t.0, "start": 12, "end": 15}), "at bytes 12..15 of object"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": 1, "end": 4}), "at bytes 1..4 of object"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": 4, "end": 1}), "at bytes 1..4 of object"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": 0}), "missing `end`"),
+        (json!({"find": "cat", "replace": "x", "start": 0, "end": 3}), "missing `id`"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": "0", "end": 3}), "`start` must be a whole number"),
+        (json!({"find": "", "replace": "x", "id": t.0, "start": 0, "end": 3}), "missing `find`"),
+        (json!({"find": "cat", "replace": 5, "id": t.0, "start": 8, "end": 11}), "`replace` must be a string"),
+        (json!({"find": "cat", "replace": "x", "id": shape.0, "start": 0, "end": 3}), "is not text"),
+    ] {
+        let r = s.execute("edit.replaceMatch", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(want)), "{p}: {r:?}");
+        assert_eq!((history(&s), plain(&s, t)), before, "{p}");
+    }
+    let r = s.execute("edit.replaceMatch", &json!({"find": "cat", "replace": "x", "id": 999_999, "start": 0, "end": 3}));
+    assert!(matches!(r, Err(EngineError::NoNode(NodeId(999_999)))), "{r:?}");
+    // A match that already reads as the replacement: nothing to undo.
+    let r = s.execute("edit.replaceMatch", &json!({"find": "CAT", "replace": "Cat", "id": t.0, "start": 12, "end": 15})).unwrap();
+    assert_eq!((r, history(&s)), (json!({"id": t.0, "start": 12, "end": 15, "replaced": false}), before.0));
+    // Find Next refuses a `from` that is not a match.
+    for (from, want) in [
+        (json!(5), "missing `id`"),
+        (json!({"id": t.0, "start": 2}), "missing `end`"),
+        (json!({"id": "x", "start": 0, "end": 1}), "`id` must be a whole number"),
+    ] {
+        let r = s.execute("edit.findNext", &json!({"find": "cat", "from": from}));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(want)), "{from}: {r:?}");
+    }
+    for key in ["backwards", "hiddenLayers", "lockedLayers"] {
+        let r = s.execute("edit.findNext", &json!({"find": "cat", key: "yes"}));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == format!("`{key}` must be true or false")), "{key}: {r:?}");
+    }
+    for key in ["hiddenLayers", "lockedLayers"] {
+        let r = s.execute("edit.findReplace", &json!({"find": "cat", key: 1}));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == format!("`{key}` must be true or false")), "{key}: {r:?}");
+    }
+}
+
+/// Ruby over text after a replaced match moves with the text, for Replace and for Replace All, as
+/// it does when the text is typed.
+#[test]
+fn find_and_replace_moves_the_ruby_after_a_match() {
+    for all in [false, true] {
+        let mut s = session();
+        let t = text(&mut s, "ab 漢字");
+        sel(&mut s, &[t]);
+        s.execute("type.ruby", &json!({"text": "かんじ", "start": 3, "end": 9})).unwrap();
+        if all {
+            s.execute("edit.findReplace", &json!({"find": "ab", "replace": "abcd"})).unwrap();
+        } else {
+            s.execute("edit.replaceMatch", &json!({"find": "ab", "replace": "abcd", "id": t.0, "start": 0, "end": 2})).unwrap();
+        }
+        let NodeKind::Text(tt) = &node(&s, t).kind else { panic!() };
+        assert_eq!((tt.plain_text().as_str(), tt.ruby.first().map(|r| (r.start, r.end))), ("abcd 漢字", Some((5, 11))), "all: {all}");
+    }
 }
 
 /// The Type menu's commands and Find and Replace and Find Next refuse a param of the wrong type, or
@@ -2929,6 +3359,27 @@ fn direction_handles_leave_out_hidden_and_locked_paths() {
     sel(&mut s, &[g]);
     assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4);
     assert_eq!(selected(&s), vec![a]);
+}
+
+#[test]
+fn direction_handles_select_many_paths_in_groups_and_layers_in_paint_order() {
+    let mut s = session();
+    let mut paths: Vec<NodeId> = (0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, (i / 20) as f64 * 12.0, 10.0, 10.0)).collect();
+    sel(&mut s, &paths[10..40]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("layer.new", &json!({})).unwrap();
+    paths.extend((0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, 100.0 + (i / 20) as f64 * 12.0, 10.0, 10.0)));
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4 * paths.len());
+    let st = s.doc().unwrap();
+    let mut want = vectorcraft_doc::Selection::default();
+    for id in st.doc.paint_order(paths.iter().copied()) {
+        want.add(id);
+        want.anchors.insert(id, (0..4).map(|i| (0, i)).collect());
+    }
+    want.new_art = st.selection.new_art.clone();
+    assert_eq!(st.selection.objects.len(), paths.len());
+    assert_eq!(st.selection, want);
 }
 
 #[test]
@@ -3859,6 +4310,17 @@ fn area_to_point_turns_wraps_into_breaks() {
     assert_eq!(txt.replace('\n', " "), "one two three four five six");
 }
 
+/// Convert To Point Type keeps the lines that a paragraph return or a forced line break (U+2028)
+/// starts as they are: neither gets a paragraph return added after it.
+#[test]
+fn area_to_point_keeps_forced_line_breaks() {
+    let mut s = session();
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 0, "text": "ab\u{2028}c\nd", "area": {"width": 300, "height": 200}})).unwrap());
+    sel(&mut s, &[a]);
+    s.execute("type.convertToPointType", &json!({})).unwrap();
+    assert_eq!(plain(&s, a), "ab\u{2028}c\nd");
+}
+
 #[test]
 fn placeholder_and_insert_characters() {
     let mut s = session();
@@ -3872,6 +4334,76 @@ fn placeholder_and_insert_characters() {
     s.execute("type.insert", &json!({"text": "z"})).unwrap();
     assert_eq!(plain(&s, t), "A—©z");
     assert!(s.execute("type.insert", &json!({"char": "nope"})).is_err());
+}
+
+/// Type › Insert Break Character › Forced Line Break (`type.insert {char: "forcedLineBreak"}`)
+/// starts a new line in the same paragraph (U+2028, as Shift+Enter types it), so the paragraph's
+/// space before does not come between the two lines; `paragraphReturn` starts a new paragraph.
+/// Each insert is one undo step.
+#[test]
+fn insert_forced_line_break_differs_from_paragraph_return() {
+    fn second_line_gap(s: &Session, id: NodeId) -> f64 {
+        let NodeKind::Text(t) = &node(s, id).kind else { panic!("not text") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        assert_eq!(lay.lines.len(), 2, "{:?}", t.plain_text());
+        lay.lines[1].baseline - lay.lines[0].baseline
+    }
+    let mut s = session();
+    let mut gaps = Vec::new();
+    for (c, want) in [("forcedLineBreak", "ab\u{2028}c"), ("paragraphReturn", "ab\nc")] {
+        let t = text(&mut s, "ab");
+        sel(&mut s, &[t]);
+        s.execute("text.setFormat", &json!({"ids": [t.0], "spaceBefore": 30})).unwrap();
+        let steps = undo_len(&s);
+        s.execute("type.insert", &json!({"char": c})).unwrap();
+        assert_eq!(undo_len(&s), steps + 1, "{c}");
+        s.execute("type.insert", &json!({"text": "c"})).unwrap();
+        assert_eq!(plain(&s, t), want, "{c}");
+        gaps.push(second_line_gap(&s, t));
+    }
+    assert!(gaps[1] - gaps[0] > 29.0, "space before only at the paragraph return: {gaps:?}");
+    // The same character by `unicode` and by `text`.
+    let t = text(&mut s, "");
+    sel(&mut s, &[t]);
+    s.execute("type.insert", &json!({"unicode": "2028"})).unwrap();
+    s.execute("type.insert", &json!({"text": "\u{2028}"})).unwrap();
+    assert_eq!(plain(&s, t), "\u{2028}\u{2028}");
+}
+
+/// While the Type tool edits text, the Insert Special, Whitespace and Break menu items
+/// (`type.insert` without `ids`) insert at its caret or replace its selection, as one undo step,
+/// and the caret goes after the insertion; `ids` still appends to those objects.
+#[test]
+fn insert_character_goes_to_the_type_tool_caret() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 50.0, 300.0), v).unwrap();
+    }
+    let t = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abcd", v).unwrap();
+    for _ in 0..2 {
+        s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    }
+    let steps = undo_len(&s);
+    s.execute("type.insert", &json!({"text": ""})).unwrap();
+    assert_eq!(undo_len(&s), steps, "an empty insert changes nothing");
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}cd");
+    assert_eq!(s.tool_options()["caret"], json!(5));
+    s.tool_text("X", v).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}Xcd");
+    s.tool_key(ToolKey::Left, Mods { shift: true, ..Mods::default() }, v).unwrap();
+    s.execute("type.insert", &json!({"char": "paragraphReturn"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}\ncd");
+    s.execute("type.insert", &json!({"ids": [t.0], "text": "!"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}\ncd!");
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}Xcd", "the replacement is one undo step");
 }
 
 /// `type.insert` by code (#5108): `code` as a Windows Alt+0 code types (Windows-1252 for
@@ -4025,6 +4557,156 @@ fn release_guides_turns_ruler_guides_into_paths() {
     assert_eq!(guides(&s).len(), 1);
 }
 
+/// The direction of a two-anchor line, in degrees from the page's x axis (y down), from 0 to 180.
+fn line_angle(ends: &[(f64, f64)]) -> f64 {
+    let [(x0, y0), (x1, y1)] = ends[..] else { panic!("not a line of two anchors") };
+    (y1 - y0).atan2(x1 - x0).to_degrees().rem_euclid(180.0)
+}
+
+/// A selected ruler guide rotates with `object.rotate` on its own, in one undo step, about the
+/// middle of the line Release Guides makes of it. At 30° it becomes a selected guide path along
+/// the turned line; Transform Again turns that path on, and undo gives the ruler guide back.
+#[test]
+fn rotating_a_ruler_guide_makes_an_angled_guide() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let line = s.doc().unwrap().doc.guide_line(&s.doc().unwrap().doc.ruler_guides()[0]).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let n = undo_len(&s);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+    assert!(guides(&s).is_empty(), "the ruler guide is replaced");
+    let [path] = selected(&s)[..] else { panic!("one guide path selected") };
+    assert!(selected_guides(&s).is_empty());
+    let (ends, guide) = line_ends(&s, path);
+    assert!(guide, "the path is a guide");
+    let (mid, len) = (line.0.midpoint(line.1), line.0.distance(line.1));
+    let (a, b) = (vectorcraft_geom::Point::new(ends[0].0, ends[0].1), vectorcraft_geom::Point::new(ends[1].0, ends[1].1));
+    assert!(a.midpoint(b).distance(mid) < 1e-6 && close(a.distance(b), len), "it turns about its middle");
+    // Counter-clockwise on the page: the downward vertical line now points 30° toward the right.
+    assert!(close(line_angle(&ends), 60.0), "{ends:?}");
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert!(close(line_angle(&line_ends(&s, path).0), 30.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s), vec![(true, 100.0)]);
+    assert!(s.doc().unwrap().doc.node(path).is_none());
+}
+
+/// A ruler guide turned by a quarter turn stays a ruler guide, horizontal now, through the same
+/// middle; a turn of 0 changes nothing and records no undo step; a copy leaves the guide where it
+/// was; and locked guides cannot be rotated.
+#[test]
+fn ruler_guides_turned_square_stay_ruler_guides() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let mid = {
+        let d = &s.doc().unwrap().doc;
+        let (a, b) = d.guide_line(&d.ruler_guides()[0]).unwrap();
+        a.midpoint(b)
+    };
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let n = undo_len(&s);
+    s.execute("object.rotate", &json!({"angle": 0})).unwrap();
+    assert_eq!((guides(&s), undo_len(&s)), (vec![(true, 100.0)], n));
+    // Guides alone have no bounding box angle for `absolute` to set.
+    assert!(s.execute("object.rotate", &json!({"angle": 90, "absolute": true})).is_err());
+    assert_eq!((guides(&s), undo_len(&s)), (vec![(true, 100.0)], n));
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    let [(vertical, pos)] = guides(&s)[..] else { panic!("one ruler guide") };
+    assert!(!vertical && close(pos, mid.y), "{pos}");
+    assert_eq!((selected_guides(&s), undo_len(&s)), (vec![0], n + 1));
+    // A copy at 45° adds a guide path and keeps the ruler guide.
+    s.execute("object.rotate", &json!({"angle": 45, "copy": true})).unwrap();
+    assert_eq!(guides(&s).len(), 1);
+    let [path] = selected(&s)[..] else { panic!("the copy is selected") };
+    assert!(line_ends(&s, path).1);
+    // Locked guides are deselected, and nothing is left to rotate.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert!(s.execute("object.rotate", &json!({"angle": 30})).is_err());
+    assert_eq!(guides(&s).len(), 1);
+}
+
+/// Art and a ruler guide selected together rotate about the center of the art's box and the
+/// guide's line together, and the angled guide survives a save and reopen as a guide path.
+#[test]
+fn a_ruler_guide_rotates_with_the_selected_art() {
+    let mut s = session();
+    let a = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert_eq!((selected(&s), selected_guides(&s)), (vec![a], vec![0]));
+    let center = {
+        let d = &s.doc().unwrap().doc;
+        let (p, q) = d.guide_line(&d.ruler_guides()[0]).unwrap();
+        Rect::from_points(p, q).union(bounds(&s, a)).center()
+    };
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    let [(vertical, pos)] = guides(&s)[..] else { panic!("one ruler guide") };
+    assert!(vertical && close(pos, center.x + (50.0 - center.y)), "{pos}");
+    let turned = bounds(&s, a);
+    assert!(close(turned.center().x, center.x + (150.0 - center.y)), "{turned:?}");
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    let paths: Vec<NodeId> = selected(&s).into_iter().filter(|id| *id != a).collect();
+    let [path] = paths[..] else { panic!("the guide path is selected with the art") };
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let saved = back.node(path).unwrap();
+    assert!(matches!(&saved.kind, NodeKind::Path { guide: true, path: p, .. } if *p == match &node(&s, path).kind {
+        NodeKind::Path { path, .. } => path.clone(),
+        _ => panic!("not a path"),
+    }));
+    // With anchors selected with Direct Selection, the selected guide turns with them.
+    s.execute("guide.add", &json!({"vertical": true, "pos": 600})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert!(!s.doc().unwrap().selection.anchors.is_empty());
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    assert!(!guides(&s)[0].0, "the vertical guide is horizontal now: {:?}", guides(&s));
+}
+
+/// The reply to a transform lists the guide paths it makes of ruler guides: for a guide alone,
+/// with a copy, beside selected art and beside direct-selected anchors.
+#[test]
+fn a_transform_replies_with_the_guide_paths_it_makes() {
+    fn reply_ids(r: &Value) -> Vec<NodeId> {
+        r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect()
+    }
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    // A copy keeps the ruler guide and adds a guide path, the only new object.
+    let r = s.execute("object.rotate", &json!({"angle": 45, "copy": true})).unwrap();
+    let [copy] = selected(&s)[..] else { panic!("the copy is selected") };
+    assert_eq!(reply_ids(&r), vec![copy]);
+    // Without a copy the guide becomes a guide path.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let r = s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let [path] = selected(&s)[..] else { panic!("one guide path selected") };
+    assert_ne!(path, copy);
+    assert_eq!(reply_ids(&r), vec![path]);
+    // With art selected, the reply lists the art and then the guide path.
+    let a = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    let r = s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    let paths: Vec<NodeId> = selected(&s).into_iter().filter(|id| *id != a).collect();
+    let [mixed] = paths[..] else { panic!("the guide path is selected with the art") };
+    assert_eq!(reply_ids(&r), vec![a, mixed]);
+    // With direct-selected anchors, the guide path joins the reply too.
+    s.execute("guide.add", &json!({"vertical": true, "pos": 600})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert!(!s.doc().unwrap().selection.anchors.is_empty());
+    let r = s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let anchored: Vec<NodeId> = selected(&s).into_iter().filter(|id| *id != a).collect();
+    let [made] = anchored[..] else { panic!("the guide path is selected with the path") };
+    assert!(line_ends(&s, made).1, "it is a guide path");
+    assert!(reply_ids(&r).contains(&made), "{r}");
+}
+
 #[test]
 fn ruler_guides_and_lock() {
     let mut s = session();
@@ -4111,6 +4793,38 @@ fn locked_guides_lock_guide_paths() {
     assert_eq!(selected(&s), vec![b]);
 }
 
+/// A guide path added to the selection after another object stays unselected while Lock Guides is
+/// on, and is selected once it is off.
+#[test]
+fn a_guide_path_added_after_another_object_stays_unselected_while_guides_are_locked() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 20.0, 10.0, 10.0);
+    let g = guide_path(&mut s, 0.0);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    for id in [b, g] {
+        s.execute("select.add", &json!({"ids": [id.0]})).unwrap();
+    }
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    s.execute("select.add", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!(selected(&s), vec![b, g]);
+}
+
+/// An id that names no object and a ruler guide's id, added to a selection after another object,
+/// leave the selection as a whole new selection of the same ids would.
+#[test]
+fn a_missing_object_and_a_ruler_guide_added_after_another_object_stay_unselected() {
+    let mut s = session();
+    let (b, c) = (rect(&mut s, 20.0, 20.0, 10.0, 10.0), rect(&mut s, 40.0, 20.0, 10.0, 10.0));
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let guide = s.doc().unwrap().doc.ruler_guides()[0].id.unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    let missing = NodeId(u64::MAX);
+    s.select(|_, sel| sel.objects.extend([missing, guide, c])).unwrap();
+    assert_eq!(selected(&s), vec![b, c]);
+}
+
 /// A rectangle at (`x`, 0), 10 pt wide, made into a guide; nothing is selected after.
 fn guide_path(s: &mut Session, x: f64) -> NodeId {
     let g = rect(s, x, 0.0, 10.0, 10.0);
@@ -4140,6 +4854,69 @@ fn exit_isolation_leaves_a_locked_guide_path_deselected() {
     s.execute("object.isolate", &json!({"id": g.0})).unwrap();
     s.execute("object.exitIsolation", &json!({})).unwrap();
     assert_eq!(selected(&s), vec![g]);
+}
+
+/// A ruler guide is not isolated, and isolation mode stays as it was.
+#[test]
+fn ruler_guides_are_not_isolated() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    let guide = s.doc().unwrap().doc.ruler_guides()[0].id.unwrap();
+    let err = s.execute("object.isolate", &json!({"id": guide.0})).unwrap_err();
+    assert!(err.to_string().contains("ruler guides can't be isolated"), "{err}");
+    assert_eq!(s.doc().unwrap().isolation, None);
+}
+
+/// Exit Isolation Mode on an isolated sublayer isolates its parent layer and selects the sublayer, one
+/// layer per call, without an undo step; from the top-level layer it leaves isolation mode. `all: true`
+/// leaves from any depth, a hidden parent layer is not isolated (the call leaves), and a group in a
+/// sublayer still leaves in one call.
+#[test]
+fn exit_isolation_goes_up_one_layer_from_a_sublayer() {
+    let mut s = session();
+    let top = s.doc().unwrap().doc.layers[0].id;
+    let mid = id_of(&s.execute("layer.newSublayer", &json!({"parent": top.0})).unwrap());
+    let deep = id_of(&s.execute("layer.newSublayer", &json!({"parent": mid.0})).unwrap());
+    s.execute("layer.setCurrent", &json!({"id": deep.0})).unwrap();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let isolation = |s: &Session| s.doc().unwrap().isolation;
+    let exit = |s: &mut Session, p: Value| s.execute("object.exitIsolation", &p).unwrap();
+
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    let before = history(&s);
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (Some(mid), vec![deep]), "up from the deepest sublayer");
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (Some(top), vec![mid]), "up from the middle sublayer");
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![top]), "out from the top-level layer");
+    assert_eq!(history(&s), before, "no undo step");
+
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    exit(&mut s, json!({"all": true}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![deep]), "all: true");
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    exit(&mut s, json!({"all": false}));
+    assert_eq!(isolation(&s), Some(mid), "all: false");
+    for bad in [json!({"all": 1}), json!({"all": "yes"}), json!({"all": null})] {
+        let e = s.execute("object.exitIsolation", &bad).unwrap_err().to_string();
+        assert!(e.contains("`all` must be true or false"), "{bad}: {e}");
+        assert_eq!(isolation(&s), Some(mid), "{bad}: still isolated");
+    }
+
+    // A parent layer hidden while its sublayer is isolated isn't isolated: the call leaves.
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    s.execute("layer.setProps", &json!({"id": mid.0, "visible": false})).unwrap();
+    exit(&mut s, json!({}));
+    assert_eq!(isolation(&s), None, "hidden parent layer");
+    s.execute("layer.setProps", &json!({"id": mid.0, "visible": true})).unwrap();
+
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![g]), "a group in a sublayer");
 }
 
 /// Undo and Redo bring back a selection without the guides, ruler guides or guide paths, that
@@ -5332,6 +6109,22 @@ fn crop_image_trim_checks_the_rgba_size_before_decoding() {
 }
 
 #[test]
+fn crop_image_resampling_is_held_to_the_raster_allowance() {
+    use crate::cmd::menucmds::check_resample_size;
+    let max = crate::cmd::fileio::MAX_RASTER_ALLOC;
+    // 40 bytes a pixel resampled to the same size (12 + 16 + 12).
+    let side = ((max / 40) as f64).sqrt() as u32;
+    assert!(check_resample_size(side, side, side, side).is_ok());
+    let e = check_resample_size(side + 1, side + 1, side + 1, side + 1).unwrap_err().to_string();
+    assert!(e.contains(&format!("an image of {0} × {0} pixels is too large to resample", side + 1)), "{e}");
+    // A large source counts even when the result is small.
+    let wide = ((max / 12) as f64).sqrt() as u32 + 1;
+    assert!(check_resample_size(wide, wide, 1, 1).is_err());
+    assert!(check_resample_size(u32::MAX, u32::MAX, u32::MAX, u32::MAX).is_err());
+    assert!(check_resample_size(100, 100, 50, 50).is_ok());
+}
+
+#[test]
 fn crop_image_trim_leaves_a_cmyk_image_alone() {
     // CMYK images keep their ink amounts and have no alpha: nothing to cut, and not an error.
     let inks = vectorcraft_doc::cmyk::Inks::new(4, 2, [255, 0, 0, 0].repeat(8)).unwrap();
@@ -5341,4 +6134,21 @@ fn crop_image_trim_leaves_a_cmyk_image_alone() {
     s.execute("select.all", &json!({})).unwrap();
     let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
     assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64(), r["height"].as_u64()), (Some(false), Some(4), Some(2)), "{r}");
+}
+
+/// Lock Guides is not an undo step: it adds none, and undo and redo of the steps before it leave
+/// the guides locked.
+#[test]
+fn lock_guides_is_not_an_undo_step() {
+    let mut s = session();
+    let g = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[g]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.guides_locked());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.guides_locked());
 }

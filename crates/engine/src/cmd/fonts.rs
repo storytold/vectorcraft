@@ -54,6 +54,24 @@ pub fn specs() -> Vec<CommandSpec> {
             font_list
         ),
         cmd!(
+            query "text.similarFonts",
+            "Show Similar Fonts",
+            [],
+            None,
+            "{family (any of its names), limit?: whole number 1..100000 (default: all)} → {family: the family's own name, families: [names]}: the families `text.fontList` lists, ordered as a font menu's Show Similar Fonts orders them: the family itself first, then those that set the same script (Japanese, Thai or neither), then the others, each group nearest first by VectorCraft's own measure of the faces nearest an upright Regular (OS/2 PANOSE digits, weight and width classes, x-height, cap height and average character width, the italic angle, and the kind; a family that shares none of these numbers with it comes after those that share one); an error when the family isn't available or the font menus don't list it, or `limit` is not a whole number from 1 to 100000",
+            always,
+            similar_fonts
+        ),
+        cmd!(
+            query "text.glyphCategories",
+            "Glyph Categories",
+            [],
+            None,
+            "{family, style?} the OpenType categories of the font's glyphs, what the Glyphs panel's Show menu lists after Alternates for Current Selection: from the font's GSUB table, the glyphs that the single, alternate, multiple and ligature substitutions of each kind's features give, each glyph once by id, in this order: `ligatures` (liga, dlig, hlig), `swashes` (swsh, cswh), `stylisticAlternates` (salt), `ss01` to `ss20`, `smallCaps` (smcp, c2sc), `ornaments` (ornm), `fractions` (frac, afrc, numr, dnom) and `figures` (lnum, onum, pnum, tnum); a kind without glyphs is left out; contextual lookups are not followed → {family, style, categories: [{id, name?: a stylistic set's name in the font, glyphs: [glyph id]}]} (style omitted: the family's first style; an error when the family or style isn't available)",
+            always,
+            glyph_categories
+        ),
+        cmd!(
             "text.rescanFonts",
             "Refresh Font List",
             [],
@@ -229,10 +247,11 @@ impl Resources {
     fn expand(&mut self, d: &Document) {
         let mut symbols: Vec<String> = self.symbols.iter().cloned().collect();
         let mut patterns: Vec<String> = self.patterns.iter().cloned().collect();
+        let boxes = d.symbol_boxes();
         while !symbols.is_empty() || !patterns.is_empty() {
             let mut more = Resources::default();
             for name in symbols.drain(..) {
-                if let Some(sym) = d.symbols.iter().find(|sym| sym.name == name) {
+                if let Some(sym) = boxes.symbol(&name) {
                     more.add(&sym.art);
                 }
             }
@@ -465,10 +484,17 @@ pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
 /// in `art` (art read from a file, its resources in `d`), the type in opacity masks included. The
 /// pattern being edited is read from the editing layer only.
 pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
+    fonts_of(d, art, false)
+}
+
+/// [`art_fonts`]; `drawn`: only those the type is drawn in, not the fonts of runs drawn in a font
+/// their file carried ([`in_file_fonts`]).
+fn fonts_of(d: &Document, art: &[Node], drawn: bool) -> BTreeSet<UsedFont> {
     let mut fonts = BTreeSet::new();
     let mut add = |n: &Node| {
         if let NodeKind::Text(t) = &n.kind {
-            fonts.extend(t.runs.iter().flat_map(run_fonts));
+            let file = if drawn { in_file_fonts(t) } else { vec![] };
+            fonts.extend(t.runs.iter().filter(|r| !file.contains(&(r.style.font_family.as_str(), r.style.font_style.as_str()))).flat_map(run_fonts));
         }
     };
     let patterns = d.patterns.iter().filter(|p| !pattern_being_edited(d, &p.name)).flat_map(|p| p.art.iter().map(|a| &**a));
@@ -493,7 +519,7 @@ pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
 /// art of a placed document (`d` as [`Document::with_placed_art`] gives it, for that art's
 /// resources).
 pub(super) fn printed_type(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -> (BTreeSet<UsedFont>, BTreeSet<NodeId>) {
-    let mut walk = Printed { d, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() };
+    let mut walk = Printed::new(d);
     for l in layers {
         walk.node(l, Some(areas));
     }
@@ -505,7 +531,7 @@ pub(super) fn printed_type(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -
 /// found as [`printed_type`] finds them for Print: visible objects of the document that aren't on
 /// a template layer.
 pub(super) fn export_overflow_warning(d: &Document, layers: &[Arc<Node>], areas: Option<&[Rect]>) -> Option<String> {
-    let mut walk = Printed { d, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() };
+    let mut walk = Printed::new(d);
     for l in layers {
         walk.node(l, areas);
     }
@@ -513,9 +539,30 @@ pub(super) fn export_overflow_warning(d: &Document, layers: &[Arc<Node>], areas:
     super::typecmd::export_overflow_warning(&overflow)
 }
 
+/// The objects behind production findings. Resource art points to its first visible owner on
+/// the canvas, so a finding can be located without selecting an id outside the layer tree.
+#[derive(Default)]
+pub(super) struct PreflightType {
+    pub fonts: BTreeMap<UsedFont, BTreeSet<NodeId>>,
+    pub overflow: BTreeSet<NodeId>,
+    pub images: BTreeMap<NodeId, NodeId>,
+}
+
+pub(super) fn preflight_type(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -> PreflightType {
+    let mut walk = Printed::new(d);
+    walk.preflight = Some(PreflightType::default());
+    for l in layers {
+        walk.node(l, Some(areas));
+    }
+    walk.preflight.unwrap_or_default()
+}
+
 /// The walk of [`printed_type`].
 struct Printed<'a> {
     d: &'a Document,
+    /// `d`'s symbols, found by name. Each object is measured in boxes of its own made from these
+    /// ([`vectorcraft_doc::SymbolBoxes::unmeasured`]).
+    boxes: vectorcraft_doc::SymbolBoxes<'a>,
     /// Whether the walk is among the objects of the document, not in art drawn for one.
     own: bool,
     fonts: BTreeSet<UsedFont>,
@@ -524,14 +571,41 @@ struct Printed<'a> {
     /// The symbols and patterns whose art was walked.
     symbols: BTreeSet<String>,
     patterns: BTreeSet<String>,
+    preflight: Option<PreflightType>,
+    owner: Option<NodeId>,
 }
 
-impl Printed<'_> {
+impl<'a> Printed<'a> {
+    /// A walk of `d` among its own objects, nothing found yet.
+    fn new(d: &'a Document) -> Self {
+        let boxes = d.symbol_boxes();
+        Self {
+            d,
+            boxes,
+            own: true,
+            fonts: BTreeSet::new(),
+            overflow: BTreeSet::new(),
+            symbols: BTreeSet::new(),
+            patterns: BTreeSet::new(),
+            preflight: None,
+            owner: None,
+        }
+    }
+
     /// Adds the fonts of `n` and its descendants that print, and the ids of those that don't fit
     /// while [`Printed::own`] is set: those whose bounds meet one of `areas`, or with `None` (in the
     /// art of a symbol, opacity mask, pattern or placed document, in brush pieces, or in a live
     /// object) all of them but those outside the clipping path of a clip group.
     fn node(&mut self, n: &Node, areas: Option<&[Rect]>) {
+        let previous = self.owner;
+        if self.own {
+            self.owner = Some(n.id);
+        }
+        self.node_contents(n, areas);
+        self.owner = previous;
+    }
+
+    fn node_contents(&mut self, n: &Node, areas: Option<&[Rect]>) {
         if !n.visible || matches!(n.kind, NodeKind::Layer { template: true, .. }) {
             return;
         }
@@ -543,6 +617,14 @@ impl Printed<'_> {
             && !open
             && !self.meets(n, a)
         {
+            // An entirely overset frame paints nothing, but is still a delivery problem. Keep
+            // the export walk unchanged; only preflight checks the frame itself in this case.
+            if let (Some(p), Some(owner), NodeKind::Text(t)) = (&mut self.preflight, self.owner, &n.kind)
+                && n.geometric_bounds().is_some_and(|b| a.iter().any(|r| r.intersect(b).area() > 0.0 || r.contains_rect(b)))
+                && vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).overflow
+            {
+                p.overflow.insert(owner);
+            }
             return;
         }
         // The art that its opacity mask, pattern paints and brushed strokes draw.
@@ -584,20 +666,41 @@ impl Printed<'_> {
             }
         }
         match &n.kind {
-            NodeKind::Text(_) => {
+            NodeKind::Text(t) => {
                 if overflows && self.own {
                     self.overflow.insert(n.id);
                 }
+                if overflows && let (Some(p), Some(owner)) = (&mut self.preflight, self.owner) {
+                    p.overflow.insert(owner);
+                }
+                let file = in_file_fonts(t);
                 for r in runs {
-                    self.fonts.extend(run_fonts(r));
+                    // Drawn in a font its file carried: printed as the file drew it.
+                    if !file.contains(&(r.style.font_family.as_str(), r.style.font_style.as_str())) {
+                        let fonts = run_fonts(r);
+                        if let (Some(p), Some(owner)) = (&mut self.preflight, self.owner) {
+                            for font in &fonts {
+                                p.fonts.entry(font.clone()).or_default().insert(owner);
+                            }
+                        }
+                        self.fonts.extend(fonts);
+                    }
                     // Inline graphics draw their symbols' art.
                     if let Some(art) = r.inline.as_ref().filter(|_| draws_inline(r)) {
                         self.symbol(&art.symbol);
                     }
                 }
             }
+            NodeKind::Image(_) => {
+                if let (Some(p), Some(owner)) = (&mut self.preflight, self.owner) {
+                    p.images.entry(n.id).or_insert(owner);
+                }
+            }
             NodeKind::SymbolInstance { symbol, .. } => self.symbol(symbol),
             NodeKind::PlacedDocument(p) => {
+                if let (Some(report), Some(owner)) = (&mut self.preflight, self.owner) {
+                    report.images.entry(n.id).or_insert(owner);
+                }
                 for art in p.art(n) {
                     self.art(&art);
                 }
@@ -607,7 +710,7 @@ impl Printed<'_> {
                 let clipped = match (clip, areas) {
                     (false, _) => None,
                     (true, Some(a)) => Some(self.clip(n, a)),
-                    (true, None) => vectorcraft_render::painted_bounds(self.d, n).map(|c| vec![c]),
+                    (true, None) => vectorcraft_render::painted_bounds_with(&self.boxes.unmeasured(), n).map(|c| vec![c]),
                 };
                 for c in children {
                     self.node(c, clipped.as_deref().or(areas));
@@ -623,9 +726,8 @@ impl Printed<'_> {
 
     /// Adds the fonts of symbol `name`'s art, the first time it is shown.
     fn symbol(&mut self, name: &str) {
-        let d = self.d;
         if self.symbols.insert(name.to_string())
-            && let Some(s) = d.symbols.iter().find(|s| s.name == name)
+            && let Some(s) = self.boxes.symbol(name)
         {
             self.art(&s.art);
         }
@@ -642,12 +744,13 @@ impl Printed<'_> {
 
     /// Whether what `n` paints, its effects applied, meets one of `areas`.
     fn meets(&self, n: &Node, areas: &[Rect]) -> bool {
-        vectorcraft_render::painted_bounds(self.d, n).is_some_and(|b| areas.iter().any(|r| b.intersect(*r).area() > 0.0 || r.contains_rect(b)))
+        vectorcraft_render::painted_bounds_with(&self.boxes.unmeasured(), n)
+            .is_some_and(|b| areas.iter().any(|r| b.intersect(*r).area() > 0.0 || r.contains_rect(b)))
     }
 
     /// The parts of `areas` inside the bounds of clip group `n` (its clipping path's).
     fn clip(&self, n: &Node, areas: &[Rect]) -> Vec<Rect> {
-        let Some(c) = vectorcraft_render::painted_bounds(self.d, n) else { return areas.to_vec() };
+        let Some(c) = vectorcraft_render::painted_bounds_with(&self.boxes.unmeasured(), n) else { return areas.to_vec() };
         areas.iter().filter(|r| c.intersect(**r).area() > 0.0 || r.contains_rect(c)).map(|r| r.intersect(c)).collect()
     }
 }
@@ -665,9 +768,18 @@ fn drawn_runs(t: &vectorcraft_doc::TextObject) -> (Vec<&TextRun>, bool) {
 
 /// What an export that draws type (as outlines, embedded fonts or pixels) says when `d` uses font
 /// families that aren't available (their type is drawn in the fallback font, not the font it
-/// names) or styles that its family doesn't have (the closest style is drawn).
+/// names) or styles that its family doesn't have (the closest style is drawn). Type drawn in a
+/// font its file carried isn't substituted.
 pub(super) fn substitution_warning(d: &Document) -> Option<String> {
-    substitution_warning_of(used_fonts(d))
+    substitution_warning_of(fonts_of(d, &[], true))
+}
+
+/// The families and styles of the runs of `t` drawn in a font its file carried
+/// ([`vectorcraft_text::FontDb::file_faces`]): drawn as the file drew them, not in a substitute,
+/// though the font they name isn't available.
+fn in_file_fonts(t: &vectorcraft_doc::TextObject) -> Vec<(&str, &str)> {
+    let faces = vectorcraft_text::FontDb::global().file_faces(t);
+    t.runs.iter().zip(faces).filter(|(_, f)| f.is_some()).map(|(r, _)| (r.style.font_family.as_str(), r.style.font_style.as_str())).collect()
 }
 
 /// [`substitution_warning`] for type set in `fonts`.
@@ -1135,6 +1247,74 @@ fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
         }
         None => Ok(json!({ "families": *db.menu_family_list() })),
     }
+}
+
+/// The most families `text.similarFonts` takes as its `limit`.
+const MAX_SIMILAR: u64 = 100_000;
+
+fn similar_fonts(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.similarFonts";
+    let db = vectorcraft_text::FontDb::global();
+    let family = match p.get("family") {
+        Some(Value::String(f)) if !f.trim().is_empty() => f.as_str(),
+        Some(Value::String(_)) | None => return Err(bad(C, "`family` is required")),
+        Some(_) => return Err(bad(C, "`family` must be a string")),
+    };
+    let limit = match p.get("limit") {
+        None => None,
+        Some(v) => Some(
+            v.as_u64()
+                .filter(|n| (1..=MAX_SIMILAR).contains(n))
+                .ok_or_else(|| bad(C, format!("`limit` must be a whole number from 1 to {MAX_SIMILAR}")))?,
+        ),
+    };
+    // Any of the family's names, spelled as the font menus list it; a family they don't list is not available.
+    let menu = db.menu_family_list();
+    let listed = db.has_family(family).then(|| db.canonical(family, "").0).and_then(|c| menu.iter().find(|f| f.eq_ignore_ascii_case(&c)).cloned());
+    let Some(family) = listed else { return Err(bad(C, format!("font family `{family}` is not available"))) };
+    let mut families = db.similar_families(&family, &menu);
+    if let Some(n) = limit.and_then(|n| usize::try_from(n).ok()) {
+        families.truncate(n);
+    }
+    Ok(json!({ "family": family, "families": families }))
+}
+
+/// `text.glyphCategories`: the OpenType categories of a font's glyphs
+/// ([`vectorcraft_text::FontFace::glyph_categories`]).
+fn glyph_categories(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.glyphCategories";
+    let text = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.as_str())),
+        Some(_) => Err(bad(C, format!("`{key}` must be a string"))),
+    };
+    let family = text("family")?.ok_or_else(|| bad(C, "missing `family`"))?;
+    let db = vectorcraft_text::FontDb::global();
+    if !db.has_family(family) {
+        return Err(bad(C, format!("font family `{family}` is not available")));
+    }
+    let styles = db.styles(family);
+    let style = match text("style")? {
+        Some(style) => styles
+            .iter()
+            .find(|s| s.eq_ignore_ascii_case(style))
+            .cloned()
+            .ok_or_else(|| bad(C, format!("style `{style}` of `{family}` is not available")))?,
+        None => styles.first().cloned().unwrap_or_else(|| "Regular".into()),
+    };
+    let face = db.face(family, &style).ok_or_else(|| bad(C, format!("style `{style}` of `{family}` is not available")))?;
+    let categories: Vec<Value> = face
+        .glyph_categories()
+        .iter()
+        .map(|c| {
+            let mut v = json!({"id": c.kind.id(), "glyphs": c.glyphs});
+            if let Some(name) = &c.name {
+                v["name"] = json!(name);
+            }
+            v
+        })
+        .collect();
+    Ok(json!({"family": face.family, "style": face.style, "categories": categories}))
 }
 
 pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
@@ -2291,5 +2471,41 @@ mod dirty_tests {
         assert!(s.doc().unwrap().is_dirty());
         s.execute("edit.undo", &json!({})).unwrap();
         assert!(!s.doc().unwrap().is_dirty(), "back to the saved state");
+    }
+
+    /// The walk Print and the exports make over 300 instances with drop shadows, among 2,000
+    /// symbols, reads the symbol list once to find their symbols.
+    #[test]
+    fn printed_type_reads_the_symbol_list_once() {
+        let mut d = Document::new(200.0, 200.0);
+        for i in 0..2000 {
+            let art = Node::path(
+                d.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)),
+                vectorcraft_doc::Appearance::basic(Paint::None, Paint::None, 0.0),
+            );
+            d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+        }
+        let art = Node::path(
+            d.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
+            vectorcraft_doc::Appearance::basic(Paint::solid(vectorcraft_color::Color::BLACK), Paint::None, 0.0),
+        );
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+        let l = d.layers[0].id;
+        for i in 0..300 {
+            let xf = vectorcraft_geom::Affine::translate((f64::from(i % 20) * 10.0, f64::from(i / 20) * 10.0));
+            let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+            n.appearance.effects.push(vectorcraft_doc::Effect {
+                id: "stylize.dropShadow".into(),
+                params: json!({"x": 1, "y": 1, "blur": 0}),
+                visible: true,
+            });
+            d.insert(Some(l), usize::MAX, n).unwrap();
+        }
+        let before = vectorcraft_doc::symbols_read();
+        printed_type(&d, &d.layers, &[Rect::new(0.0, 0.0, 100.0, 100.0)]);
+        let read = vectorcraft_doc::symbols_read() - before;
+        assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
     }
 }

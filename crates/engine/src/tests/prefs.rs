@@ -109,6 +109,23 @@ fn grid_prefs_apply_to_open_documents() {
     assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
 }
 
+/// The grid preferences are not an undo step in the documents they apply to, so undo and redo
+/// leave the grid as the preferences set it.
+#[test]
+fn undo_and_redo_keep_the_grid_prefs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 36, "gridSubdivisions": 4}})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 18, "gridSubdivisions": 3}})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (18.0, 3));
+}
+
 /// Guides & Grid › Gridline every and Subdivisions (#394): set with no document open, as the
 /// desktop app restores them at launch, they give `file.new`'s document their grid.
 #[test]
@@ -197,6 +214,24 @@ fn reset_category_and_all() {
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.prefs, Prefs::default());
     assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
+}
+
+/// `prefs.reset` records each category it reset once, `None` for every category, and a failed
+/// reset records nothing.
+#[test]
+fn prefs_reset_records_the_categories_it_reset() {
+    let mut s = Session::new();
+    assert!(s.take_prefs_resets().is_empty());
+    s.execute("prefs.reset", &json!({"category": "general"})).unwrap();
+    s.execute("prefs.reset", &json!({"category": "General"})).unwrap();
+    assert_eq!(s.take_prefs_resets(), vec![Some("General")]);
+    assert!(s.take_prefs_resets().is_empty(), "taking clears the list");
+    assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
+    assert!(s.execute("prefs.reset", &json!({"category": 5})).is_err());
+    assert!(s.take_prefs_resets().is_empty(), "a failed reset records nothing");
+    s.execute("prefs.reset", &json!({})).unwrap();
+    s.execute("prefs.reset", &json!({"category": "Type"})).unwrap();
+    assert_eq!(s.take_prefs_resets(), vec![None, Some("Type")]);
 }
 
 /// A rectangle made into a guide path; nothing is selected after.
@@ -447,6 +482,69 @@ fn gpu_preference_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.gpu_preference, "automatic");
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: Normal by default, Large by value or
+/// label, kept through a save and load, and reset with its category. Setting another value is an
+/// error that changes nothing; a saved value that is missing, unknown or of another type reads as
+/// Normal and leaves the other saved preferences as they are.
+#[test]
+fn plugin_instruction_budget_defaults_to_normal_and_validates() {
+    let mut s = Session::new();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("normal"));
+    set_pref(&mut s, "pluginInstructionBudget", json!("Large"));
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("large"));
+    for bad in [json!("unlimited"), json!(""), json!(5), json!(null), json!(true), json!(["large"])] {
+        assert!(s.execute("prefs.set", &json!({"key": "pluginInstructionBudget", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large, "{bad}");
+    }
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert_eq!(back.plugin_instruction_budget, PluginBudget::Large);
+    let other_values = [json!("unlimited"), json!(5), json!(null), json!(["large"]), json!({"large": true}), json!("LARGE")];
+    let saved_files = other_values.map(|v| json!({"keyboardIncrement": 4, "pluginInstructionBudget": v}));
+    for saved in std::iter::once(json!({"keyboardIncrement": 4})).chain(saved_files) {
+        let read: Prefs = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!((read.plugin_instruction_budget, read.keyboard_increment), (PluginBudget::Normal, 4.0), "{saved}");
+    }
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "pluginInstructionBudget").unwrap().clone();
+    assert_eq!((row["category"].as_str(), row["section"].as_str()), (Some("Plug-ins & Scratch Disks"), Some("Plug-ins")));
+    assert_eq!((&row["options"], &row["value"]), (&json!(["normal", "large"]), &json!("large")));
+    s.execute("prefs.reset", &json!({"category": "Plug-ins & Scratch Disks"})).unwrap();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
+}
+
+/// Performance › Low-Latency Drawing (#6013): off by default and for preference files written
+/// before it, a boolean only, kept through a save/load round trip, listed under Performance and
+/// reset with it.
+#[test]
+fn low_latency_drawing_defaults_off_and_takes_only_a_boolean() {
+    let mut s = Session::new();
+    assert!(!s.prefs.low_latency_drawing);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "lowLatencyDrawing"})).unwrap(), json!(false));
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": true})).unwrap();
+    assert!(s.prefs.low_latency_drawing);
+    for bad in [json!(1), json!(null), json!("on"), json!("yes"), json!([true])] {
+        assert!(s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": bad})).is_err(), "{bad}");
+        assert!(s.prefs.low_latency_drawing);
+    }
+    // Booleans may be given as "true" and "false", as for every boolean preference.
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "false"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "true"})).unwrap();
+    assert_eq!(s.prefs.to_json()["lowLatencyDrawing"], json!(true));
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert!(back.low_latency_drawing);
+    let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
+    assert!(!old.low_latency_drawing);
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "lowLatencyDrawing").unwrap().clone();
+    assert_eq!(row["category"], "Performance");
+    assert_eq!(row["label"], "Low-Latency Drawing");
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
+}
+
 /// Performance › Linux Display Server (#1151): automatic by default, X11 by value or label, and
 /// anything else is an error that changes nothing.
 #[test]
@@ -543,10 +641,11 @@ fn selection_preferences_drive_the_selection_tool() {
     assert!(click(&mut s, 225.0, plain).is_empty(), "a click inside the fill selects nothing");
     assert_eq!(click(&mut s, 250.0, plain), vec![front], "a click on the path selects it");
     set(&mut s, "objectSelectionByPathOnly", json!(false));
-    // Command Click to Select Objects Behind (on by default): each Cmd/Ctrl-click goes one down,
-    // then back to the top.
+    // Command Click to Select Objects Behind (on by default): the first Cmd/Ctrl-click is Direct
+    // Selection's, then each one goes one down, then back to the top.
     let cmd = Mods { cmd: true, ..Mods::default() };
     assert_eq!(click(&mut s, 175.0, plain), vec![front]);
+    assert_eq!(click(&mut s, 175.0, cmd), vec![front], "the first Cmd-click arms Select Behind");
     assert_eq!(click(&mut s, 175.0, cmd), vec![back], "the object behind");
     assert_eq!(click(&mut s, 175.0, cmd), vec![front], "back to the topmost");
     set(&mut s, "ctrlClickSelectsBehind", json!(false));
@@ -619,7 +718,8 @@ fn double_clicking_a_single_object_isolates_it() {
 }
 
 /// General › Use Precise Cursors (#394): the Pen's pointer becomes a crosshair; the Selection
-/// tool's arrow stays.
+/// tool's arrow stays. The canvas applies the preference to the tool's own pointer
+/// (`Cursor::precise`).
 #[test]
 fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
     use vectorcraft_tools::{Cursor, Mods};
@@ -632,41 +732,31 @@ fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
     assert_eq!(cursor(&mut s, "pen"), Cursor::Pen);
     assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
-    assert_eq!(cursor(&mut s, "pen"), Cursor::Crosshair);
-    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Crosshair);
-    assert_eq!(cursor(&mut s, "selection"), Cursor::Arrow);
+    assert_eq!(cursor(&mut s, "pen").precise(), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "eyedropper").precise(), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "selection").precise(), Cursor::Arrow);
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": false})).unwrap();
     assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
 }
 
-/// Caps Lock gives the drawing tools the precise crosshair while it is on, and leaves the saved
-/// Use Precise Cursors preference as it was.
+/// Caps Lock is reported and set through `view.capsLock`, and leaves the saved Use Precise
+/// Cursors preference as it was; the canvas gives the drawing tools the crosshair while it is on.
 #[test]
 fn caps_lock_gives_drawing_tools_the_crosshair() {
-    use vectorcraft_tools::{Cursor, Mods};
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-    let cursor = |s: &mut Session, tool: &str| {
-        s.select_tool(tool, ViewInfo::default()).unwrap();
-        s.cursor(vectorcraft_geom::Point::new(300.0, 300.0), Mods::default(), ViewInfo::default())
-    };
     assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
     assert_eq!(s.execute("view.capsLock", &json!({"on": true})).unwrap(), json!({"on": true}));
     assert!(!s.prefs.use_precise_cursors, "Caps Lock leaves the preference off");
-    assert_eq!(cursor(&mut s, "pen"), Cursor::Crosshair);
-    assert_eq!(cursor(&mut s, "lasso"), Cursor::Crosshair);
-    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Crosshair);
-    assert_eq!(cursor(&mut s, "selection"), Cursor::Arrow);
+    assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": true}));
     assert_eq!(s.execute("view.capsLock", &json!({"on": false})).unwrap(), json!({"on": false}));
-    assert_eq!(cursor(&mut s, "pen"), Cursor::Pen);
-    assert_eq!(cursor(&mut s, "eyedropper"), Cursor::Eyedropper);
     assert!(s.execute("view.capsLock", &json!({"on": 1})).is_err());
     assert_eq!(s.execute("view.capsLock", &json!({})).unwrap(), json!({"on": false}));
 }
 
 /// Use Precise Cursors changes the pointer of the tools that have one of their own: off, each shows its own
-/// pointer; on, a crosshair. Every other drawing tool shows a crosshair either way, and the Type tool and the
-/// Scissors over no path keep theirs.
+/// pointer; on, a crosshair (the canvas applies `Cursor::precise` to it). Every other drawing tool shows a
+/// crosshair either way, and the Type tool and the Scissors over no path keep theirs.
 #[test]
 fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     use vectorcraft_tools::{Cursor, Mods};
@@ -724,13 +814,13 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     }
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
     for (tool, _) in own {
-        assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} on");
+        assert_eq!(cursor(&mut s, tool).precise(), Cursor::Crosshair, "{tool} on");
     }
     for tool in always {
-        assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} on");
+        assert_eq!(cursor(&mut s, tool).precise(), Cursor::Crosshair, "{tool} on");
     }
-    assert_eq!(cursor(&mut s, "type"), Cursor::Text);
-    assert_eq!(cursor(&mut s, "scissors"), Cursor::ScissorsNotAllowed);
+    assert_eq!(cursor(&mut s, "type").precise(), Cursor::Text);
+    assert_eq!(cursor(&mut s, "scissors").precise(), Cursor::ScissorsNotAllowed);
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": false})).unwrap();
     for (tool, c) in own {
         assert_eq!(cursor(&mut s, tool), c, "{tool} off again");
@@ -738,7 +828,8 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
 }
 
 /// With no selected path, the Smooth tool shows Not Allowed, and Use Precise Cursors leaves it so; with a
-/// selected path, it shows its own pointer, or a crosshair with the preference on.
+/// selected path, it shows its own pointer, or a crosshair with the preference on (the canvas applies
+/// `Cursor::precise`).
 #[test]
 fn use_precise_cursors_keeps_the_smooth_tools_not_allowed_pointer() {
     use vectorcraft_tools::{Cursor, Mods};
@@ -746,20 +837,21 @@ fn use_precise_cursors_keeps_the_smooth_tools_not_allowed_pointer() {
     s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
     let at = vectorcraft_geom::Point::new(300.0, 300.0);
     s.select_tool("smooth", ViewInfo::default()).unwrap();
+    let shown = |c: Cursor, precise: bool| if precise { c.precise() } else { c };
     for precise in [false, true] {
         s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": precise})).unwrap();
-        assert_eq!(s.cursor(at, Mods::default(), ViewInfo::default()), Cursor::NotAllowed, "precise {precise}");
+        assert_eq!(shown(s.cursor(at, Mods::default(), ViewInfo::default()), precise), Cursor::NotAllowed, "precise {precise}");
     }
     let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [id]})).unwrap();
     for (precise, c) in [(false, Cursor::Smooth), (true, Cursor::Crosshair)] {
         s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": precise})).unwrap();
-        assert_eq!(s.cursor(at, Mods::default(), ViewInfo::default()), c, "precise {precise}");
+        assert_eq!(shown(s.cursor(at, Mods::default(), ViewInfo::default()), precise), c, "precise {precise}");
     }
 }
 
 /// With Alt held while drawing, the Pencil and the Paintbrush show their closing cursors, and Use Precise Cursors
-/// turns those into a crosshair too.
+/// turns those into a crosshair too (the canvas applies `Cursor::precise`).
 #[test]
 fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
     use vectorcraft_tools::{Cursor, Mods, PointerEvent, PointerKind};
@@ -773,7 +865,9 @@ fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
             s.select_tool(tool, ViewInfo::default()).unwrap();
             s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 250.0), ViewInfo::default()).unwrap();
             s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 300.0), ViewInfo::default()).unwrap();
-            assert_eq!(s.cursor(at, alt, ViewInfo::default()), if precise { Cursor::Crosshair } else { c }, "{tool}, precise {precise}");
+            let shown = s.cursor(at, alt, ViewInfo::default());
+            assert_eq!(shown, c, "{tool}, precise {precise}");
+            assert_eq!(shown.precise(), Cursor::Crosshair, "{tool}");
             s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0), ViewInfo::default()).unwrap();
         }
     }
@@ -2087,10 +2181,14 @@ fn real_time_drawing_off_still_shows_a_dragged_nine_slice_guide() {
     let left = |s: &Session| s.doc().unwrap().doc.symbol_nine_slice("Box").unwrap().left;
     assert_eq!(left(&s), 0.25);
     let steps = s.doc().unwrap().history.undo.len();
-    s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 150.0), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Drag, 110.0, 150.0), v).unwrap();
+    let drag = crate::tests::symbol_nine_slice::guide_drag(
+        &mut s,
+        v,
+        vectorcraft_geom::Point::new(125.0, 150.0),
+        vectorcraft_geom::Point::new(110.0, 150.0),
+    );
     assert!((left(&s) - 0.1).abs() < 1e-9, "the guide moves while dragged: {}", left(&s));
-    s.pointer(&PointerEvent::new(PointerKind::Up, 110.0, 150.0), v).unwrap();
+    s.apply_actions(drag.finish()).unwrap();
     let d = s.doc().unwrap();
     assert!((left(&s) - 0.1).abs() < 1e-9);
     assert_eq!((d.history.undo.len(), d.history.undo.last().map(|e| e.label.as_str())), (steps + 1, Some("Symbol Options")));
@@ -2606,6 +2704,35 @@ fn settling_typing_for_a_tool_shows_its_preview_warning() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
 }
 
+/// Typing kept as its own step when a dialog or a panel begins its preview, or when the font menus
+/// end the typing session, returns its applied preview's warning for the status bar. A preview
+/// without a warning returns none, and with no typing in progress nothing is kept and no step is
+/// added.
+#[test]
+fn settling_typing_for_a_dialog_returns_its_preview_warning() {
+    let warned = |w: &[String]| w.iter().any(|m| m.contains("type"));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let before = steps(&s);
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "the typing is a step of its own");
+    assert_eq!(s.doc().unwrap().interaction.as_ref().map(|it| it.label.as_str()), Some("Offset Path"));
+
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let w = s.keep_typing().unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert!(!s.in_interaction());
+    assert_eq!(steps(&s), before + 1);
+    let w = s.keep_typing().unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "nothing in progress adds no step");
+
+    let mut s = deferred_bloat("Typing", false, "selection");
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(w.is_empty(), "{w:?}");
+}
+
 /// File Handling › Use Low Resolution Proxy for Linked EPS (#394): off by default; toggling it does
 /// not replace full-resolution pixels already in the document.
 #[test]
@@ -2868,6 +2995,26 @@ fn snap_to_glyph_options_read_set_and_reset() {
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), set);
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
+}
+
+/// File Handling › Use fonts embedded in imported PDFs (`pdfImportEmbeddedFonts`, on by default)
+/// reaches Open and Place as the `embeddedFonts` choice, unless a call gives its own (#4568).
+#[test]
+fn the_embedded_fonts_preference_reaches_the_import_options() {
+    use crate::cmd::fileio::LoadOptions;
+    let mut s = Session::new();
+    assert!(s.prefs.pdf_import_embedded_fonts, "on by default");
+    let on = s.prefs.with_pdf_font_choice(&json!({}));
+    assert!(LoadOptions::from_params("x", &on).unwrap().embedded_fonts);
+    s.execute("prefs.set", &json!({"key": "pdfImportEmbeddedFonts", "value": false})).unwrap();
+    let off = s.prefs.with_pdf_font_choice(&json!({"page": 2}));
+    assert_eq!(off["page"], 2, "the call's own params stay");
+    assert!(!LoadOptions::from_params("x", &off).unwrap().embedded_fonts);
+    assert!(!LoadOptions::from_params("x", &s.prefs.with_pdf_font_choice(&Value::Null)).unwrap().embedded_fonts);
+    // A call that says so wins over the preference.
+    let own = s.prefs.with_pdf_font_choice(&json!({"embeddedFonts": true}));
+    assert!(LoadOptions::from_params("x", &own).unwrap().embedded_fonts);
+    assert!(LoadOptions::from_params("x", &json!({"embeddedFonts": "yes"})).is_err());
 }
 
 /// Pixel Snapping Options: `view.snapToPixel.options` reads and sets While Drawing, While Moving

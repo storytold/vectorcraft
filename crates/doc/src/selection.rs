@@ -12,6 +12,9 @@ pub type AnchorRef = (usize, usize);
 /// (subpath index, segment index) inside a path.
 pub type SegmentRef = (usize, usize);
 
+/// The most objects [`Selection::add_all`] adds by looking for each one in the selected objects.
+const FEW_TO_ADD: usize = 8;
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Selection {
     /// Selected objects in selection order.
@@ -20,8 +23,9 @@ pub struct Selection {
     /// `objects` with no entry here is fully selected; `segments` distinguishes segment picks.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub anchors: BTreeMap<NodeId, BTreeSet<AnchorRef>>,
-    /// Explicitly selected segments. Their endpoints in `anchors` move with them, but are not
-    /// selected anchor points: Delete cuts connections and their anchor squares stay hollow.
+    /// Explicitly selected segments. Their endpoints in `anchors` move with them (the arrow keys
+    /// bend a curved one instead), but are not selected anchor points: Delete cuts connections and
+    /// their anchor squares stay hollow.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub segments: BTreeMap<NodeId, BTreeSet<SegmentRef>>,
     /// Key object for Align, one object of a selection of two or more. [`Selection::prune`] clears
@@ -50,10 +54,10 @@ pub struct Selection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_guide: Option<NodeId>,
     /// The key anchor for Align: one of two or more anchor points selected with Direct Selection,
-    /// the last one a Shift-click added (path, anchor in [`Self::anchors`]). Align and Distribute
-    /// move the other selected points relative to it, and it stays in place. Never set with `key`
-    /// or `key_guide`; [`Self::prune`] clears it when the point is no longer a selected anchor, or
-    /// fewer than two points are selected.
+    /// designated by clicking an already-selected anchor point without modifiers (path, anchor in
+    /// [`Self::anchors`]). Align and Distribute move the other selected points relative to it, and
+    /// it stays in place. Never set with `key` or `key_guide`; [`Self::prune`] clears it when the
+    /// point is no longer a selected anchor, or fewer than two points are selected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_anchor: Option<(NodeId, AnchorRef)>,
     /// The new art on a locked artboard that this selection keeps editable
@@ -183,23 +187,79 @@ impl Selection {
             self.key_anchor = None;
         }
     }
+    /// [`Self::add`] for each of `ids` in order, going through the selected objects once.
+    pub fn add_all(&mut self, ids: impl IntoIterator<Item = NodeId>) {
+        self.each(ids, false);
+    }
+    /// [`Self::toggle`] for each of `ids` in order, going through the selected objects once. An id
+    /// listed twice is removed and then added again at the end.
+    pub fn toggle_all(&mut self, ids: impl IntoIterator<Item = NodeId>) {
+        self.each(ids, true);
+    }
+    /// [`Self::add_all`], or [`Self::toggle_all`] when `toggle` is set. Each selected object slot
+    /// carries the number of the activation that made it; an id's slots are kept only when they
+    /// carry its current activation, so a removal drops every slot of the id at once.
+    fn each(&mut self, ids: impl IntoIterator<Item = NodeId>, toggle: bool) {
+        use std::collections::hash_map::{Entry, HashMap};
+        let ids: Vec<NodeId> = ids.into_iter().collect();
+        if ids.is_empty() {
+            return;
+        }
+        self.target = None;
+        self.slices.clear();
+        self.symbol_part = None;
+        self.on_path_member = None;
+        // Up to [`FEW_TO_ADD`] objects to add are each looked for in the selected objects; more go
+        // through a table of the selected objects.
+        if !toggle && ids.len() <= FEW_TO_ADD {
+            for id in ids {
+                if !self.objects.contains(&id) {
+                    self.objects.push(id);
+                }
+            }
+            return;
+        }
+        let mut live: HashMap<NodeId, usize> = self.objects.iter().map(|id| (*id, 0)).collect();
+        let mut added: Vec<(NodeId, usize)> = Vec::new();
+        let mut removed = false;
+        for id in ids {
+            match live.entry(id) {
+                Entry::Vacant(e) => {
+                    let activation = added.len() + 1;
+                    e.insert(activation);
+                    added.push((id, activation));
+                }
+                Entry::Occupied(e) if toggle => {
+                    e.remove();
+                    removed = true;
+                    self.anchors.remove(&id);
+                    self.segments.remove(&id);
+                    if self.key == Some(id) {
+                        self.key = None;
+                    }
+                    if self.key_anchor.is_some_and(|(k, _)| k == id) {
+                        self.key_anchor = None;
+                    }
+                }
+                Entry::Occupied(_) => {}
+            }
+        }
+        if removed {
+            self.objects.retain(|id| live.get(id) == Some(&0));
+        }
+        self.objects.extend(added.into_iter().filter(|(id, n)| live.get(id) == Some(n)).map(|(id, _)| id));
+    }
     /// Select slices `ids` (see [`Selection::slices`]) and nothing else.
     pub fn set_slices(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.clear();
-        for id in ids {
-            if !self.slices.contains(&id) {
-                self.slices.push(id);
-            }
-        }
+        let mut seen = HashSet::new();
+        self.slices.extend(ids.into_iter().filter(|id| seen.insert(*id)));
     }
     /// Select ruler guides `ids` (see [`Selection::guides`]) and nothing else.
     pub fn set_guides(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.clear();
-        for i in ids {
-            if !self.guides.contains(&i) {
-                self.guides.push(i);
-            }
-        }
+        let mut seen = HashSet::new();
+        self.guides.extend(ids.into_iter().filter(|id| seen.insert(*id)));
     }
     /// Add ruler guide `i` to the selection, or take it out, keeping the selected objects (a
     /// Shift-click on a guide).
@@ -311,7 +371,7 @@ impl Selection {
         let anchor_kept = self.key_anchor.is_some_and(|(id, (si, ai))| {
             self.objects.contains(&id)
                 && !self.segments.contains_key(&id)
-                && self.anchors.get(&id).is_some_and(|set| set.contains(&(si, ai)))
+                && (self.anchors.get(&id).is_some_and(|set| set.contains(&(si, ai))) || !self.anchors.contains_key(&id))
                 && found
                     .get(&id)
                     .and_then(|p| doc.node_at(p))
@@ -426,10 +486,33 @@ impl Selection {
         };
         let locks = doc.locked_artboards();
         ids.retain(|i| !locks.holds_id(*i));
-        if ids.iter().all(|i| self.contains(*i)) {
-            ids.iter().for_each(|i| self.remove(*i));
+        let selected: HashSet<NodeId> = self.objects.iter().copied().collect();
+        if ids.iter().all(|i| selected.contains(i)) {
+            self.remove_all(ids);
         } else {
-            ids.into_iter().for_each(|i| self.add(i));
+            self.add_all(ids);
+        }
+        self.target = None;
+    }
+    /// Shift-clicking a range of target circles: the art of every row in `ids` (a layer: its
+    /// visible, unlocked art, its sublayers' too; anything else: itself) is selected, or joins the
+    /// selection when `add` is set. Several objects are then selected, none targeted. Art on a
+    /// locked artboard is left out, as [`Selection::toggle_target`] leaves it out.
+    pub fn target_range(&mut self, doc: &Document, ids: &[NodeId], add: bool) {
+        let locks = doc.locked_artboards();
+        let mut art = Vec::new();
+        for &id in ids {
+            match doc.node(id) {
+                Some(n) if n.is_layer() => art.extend(n.layer_art(true)),
+                Some(_) => art.push(id),
+                None => {}
+            }
+        }
+        art.retain(|i| !locks.holds_id(*i));
+        if add {
+            self.add_all(art);
+        } else {
+            self.set(art);
         }
         self.target = None;
     }

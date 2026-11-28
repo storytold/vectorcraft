@@ -459,7 +459,24 @@ fn export_selection_keeps_the_effects_in_the_crop() {
         assert_eq!(plain["bounds"], json!([99.5, 99.5, 21.0, 21.0]), "a plain path keeps its crop: {plain}");
         s.execute("effect.apply", &json!({"effect": effect, "params": params})).unwrap();
         let png = |v: &serde_json::Value| {
-            image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8()
+            craft_image_codecs::decode(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap())
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgba8()
         };
         let v = s.execute("document.exportSelection", &json!({"format": "png", "background": "transparent"})).unwrap();
         let b: Vec<f64> = v["bounds"].as_array().unwrap().iter().map(|n| n.as_f64().unwrap()).collect();
@@ -485,7 +502,24 @@ fn a_screen_outer_glow_is_in_raster_exports() {
     s.execute("effect.apply", &json!({"effect": "stylize.outerGlow"})).unwrap();
     let mut pixel = |p: serde_json::Value| {
         let v = s.execute("document.export", &p).unwrap();
-        let img = image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+        let img = craft_image_codecs::decode(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap())
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         // 2 pt past the square's stroke, on the right.
         *img.get_pixel(122, 110)
     };
@@ -512,7 +546,24 @@ fn export_selection_keeps_a_groups_shadow_in_the_crop() {
     let b: Vec<f64> = v["bounds"].as_array().unwrap().iter().map(|n| n.as_f64().unwrap()).collect();
     // The shadow of the right square reaches x = 158.5.
     assert!(b[0] < 99.5 && b[0] + b[2] >= 158.5, "{v}");
-    let img = image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap())
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert!(img.get_pixel((155.0 - b[0]) as u32, img.height() / 2)[3] > 0, "the shadow is in the image");
 }
 
@@ -534,7 +585,24 @@ fn the_arts_bounds_take_in_the_shadow_of_a_group_and_of_type() {
         s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id], "params": {"x": 8, "y": 0, "blur": 0}})).unwrap();
         s.execute("select.set", &json!({"ids": [id]})).unwrap();
         let png = |v: &serde_json::Value| {
-            image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8()
+            craft_image_codecs::decode(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap())
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgba8()
         };
         let art = s.execute("document.export", &json!({"format": "png", "useArtboards": false, "background": "transparent"})).unwrap();
         let sel = s.execute("document.exportSelection", &json!({"format": "png", "background": "transparent"})).unwrap();
@@ -573,7 +641,7 @@ fn export_selection_reports_the_encoders_warnings() {
     assert_eq!(plain["format"], "svg");
     assert!(warnings(&plain).is_empty(), "{plain}");
     for (format, options, says) in [
-        ("webp", json!({"lossless": false}), "lossless"),
+        ("webp", json!({"interlaced": true}), "interlaced"),
         ("svg", json!({"profile": "tiny12"}), "blend"),
         ("pdf", json!({"createLayers": true, "compatibility": "1.4"}), "layers"),
     ] {

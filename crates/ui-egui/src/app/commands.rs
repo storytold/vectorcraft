@@ -1,5 +1,7 @@
+use serde_json::Value;
+
 use super::fonts::MAX_RECENT_FONTS;
-use super::{Value, VectorcraftApp, canvas, dialogs, fileio, io, menus, panels, picks, toolbar};
+use super::{VectorcraftApp, canvas, dialogs, fileio, io, menus, panels};
 use crate::placing;
 use crate::state::ReplaceFontWarning;
 
@@ -73,17 +75,26 @@ fn substitute_warnings_follow_current_font_inventory() {
 impl VectorcraftApp {
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        // A plug-in run that holds the documents (the web's worker runs of a filter that calls
+        // commands) lets only its Cancel through, and the `plugin.run` that applies its output.
+        if crate::plugin_runs::holds_documents(self) && id != "plugin.cancelRuns" && !self.session.plugin_calls_end_with(id) {
+            return Err(vectorcraft_engine::EngineError::PluginBusy.to_string());
+        }
+        // On the web a plug-in command runs in a worker ([`crate::plugin_runs`]).
+        if crate::plugin_runs::routes(self, id) {
+            return crate::plugin_runs::start_command(self, id, params);
+        }
         self.beacon.command(id);
         let touch_workspace = self.session.prefs.touch_workspace;
-        // A file dialog it shows off the UI thread runs it again with the path picked.
-        let result = if self.picks.is_entry_free() {
-            let entry = picks::Entry::Command(id.to_string(), params.clone());
-            picks::as_entry(self, move || entry, |app| app.run_now(id, params))
-        } else {
-            self.run_now(id, params)
-        };
+        // A `prefs.reset` that ran straight on the session applies before this command can switch workspaces.
+        crate::prefs_dialog::apply_prefs_resets(self);
+        let result = self.run_now(id, params);
+        crate::prefs_dialog::apply_prefs_resets(self);
         if id == "prefs.import" && result.is_ok() {
             crate::prefs_dialog::imported(self, touch_workspace);
+        }
+        if let Ok(r) = &result {
+            crate::plugin_runs::show_notice(self, id, r);
         }
         placing::settle_swatch_paste(self);
         result
@@ -134,9 +145,8 @@ impl VectorcraftApp {
         }
     }
 
-    /// [`Self::run`] it, inside what asks for file dialogs.
+    /// [`Self::run`]'s work.
     fn run_now(&mut self, id: &str, params: Value) -> Result<Value, String> {
-        crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
         self.run_count = self.run_count.wrapping_add(1);
         // In debug builds the app's own calls are held to the params descriptions too (#1442): a
         // panel passing a key its command doesn't read shows up in the tests. Saved steps aren't
@@ -214,9 +224,19 @@ impl VectorcraftApp {
                 Ok(Some(started)) => return Ok(started),
                 Ok(None) => {}
             }
+            // Edit › Color Settings' Ask When Pasting, then any swatch conflict.
+            if let Some(r) = dialogs::profile_mismatch::ask_paste(self, id, &params) {
+                return r;
+            }
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;
             }
+        }
+        // A drag from another document asks as Paste does (its swatches are always added).
+        if id == dialogs::profile_mismatch::DROP
+            && let Some(r) = dialogs::profile_mismatch::ask_paste(self, id, &params)
+        {
+            return r;
         }
         // Native files carry the view they reopen at.
         if fileio::SaveMode::of(id).is_some() {
@@ -228,32 +248,18 @@ impl VectorcraftApp {
             self.ui.status = e.clone();
             return Err(e);
         }
-        // A command that changes the edited text is an application edit (undo, a panel or menu
-        // edit, a control request). Capture the bounded committed context around it so `Other`
-        // dominates the frame even if an IME receipt follows. Selection/view commands that leave
-        // the committed text and caret unchanged record nothing.
-        let ime_view = self.view_info();
-        let ime_target = crate::ime::target(&mut self.session, ime_view);
-        let ime_before = crate::ime::stamp(&mut self.session, ime_view);
-        let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
+        let spot_base = panels::color_guide::before_command(self);
+        let plugins_before = dialogs::plugin::before_command();
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         let r = panels::actions::after_recorded_command(self, r);
-        if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
-            self.canvas.hover_cursor = None;
-        }
-        if r.is_ok()
-            && let Some(ctx) = self.ui_ctx.clone()
-        {
-            crate::ime::note_application_edit(self, &ctx, ime_view, ime_target, ime_before);
-        }
         if r.is_ok()
             && let Some(op) = completed_pathfinder_operation(id, &params)
         {
             self.last_pathfinder = Some(op.to_string());
         }
-        if r.is_ok() && matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut") {
-            self.publish_clipboard();
-        }
+        // A filter plug-in run becomes Object › Plug-ins › Apply Last Filter.
+        dialogs::plugin::after_command(self, id, &params, &r, plugins_before);
+        let copied = r.is_ok() && self.publish_copy(id);
         self.sync_views();
         self.refresh_replace_font_warning(false);
         // File › Revert replaces the document in its tab, keeps the tab's view and starts the tool afresh.
@@ -261,14 +267,15 @@ impl VectorcraftApp {
         match &r {
             Err(e) => self.ui.status = e.clone(),
             Ok(v) => {
-                // Image Trace's notes (a large image traces more slowly, or was scaled down).
-                if id.starts_with("imageTrace.make")
-                    && let Some(w) = v["warnings"].as_array().and_then(|w| w.first()).and_then(Value::as_str)
-                {
-                    self.ui.status = w.to_string();
+                if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
+                    self.show_trace_notes(v);
                 }
+                // A renamed spot color swatch stays the Color Guide's base; a deleted one ends the link.
+                panels::color_guide::after_command(self, id, &params, v, spot_base);
+                // A renamed color group stays selected in the Swatches panel.
+                panels::swatches::after_command(self, id, &params, v);
                 if id == "file.new" {
-                    self.ui.status.clear();
+                    self.status("");
                     // New Document's Pixel preview mode (Overprint Preview is the engine's).
                     if v["previewMode"] == "pixel" {
                         self.ui.view.pixel_preview = true;
@@ -277,7 +284,7 @@ impl VectorcraftApp {
                 // Choosing a data set, or stepping to one, clears the status bar. The reply's `warning`
                 // below then shows when no object is bound to a variable the data set has a value for.
                 if matches!(id, "dataset.select" | "dataset.next" | "dataset.prev") {
-                    self.ui.status.clear();
+                    self.status("");
                 }
                 // A font applied with Character's font menu or Find Font's Change becomes the newest recent font.
                 // Find Font's Change records the family the text now carries (any name of it is stored as its
@@ -309,7 +316,40 @@ impl VectorcraftApp {
                 }
             }
         }
+        // The message the Copy or Cut leaves is the one its clipboard formats' notes may replace.
+        if copied {
+            self.clipboard_publishing.ran_with_status(&self.ui);
+        }
         r
+    }
+
+    /// After a Copy or Cut `id` that ran: offer what it copied to other apps
+    /// ([`Self::publish_clipboard`]) → whether `id` is one.
+    fn publish_copy(&mut self, id: &str) -> bool {
+        let copy = matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut");
+        if copy {
+            self.publish_clipboard(matches!(id, "edit.cut" | "artboard.cut"));
+        }
+        copy
+    }
+
+    /// Image Trace's notes in `reply` (a large image traces more slowly, or was scaled down): the
+    /// first of them and how many there are, with the rest for the message's hover. A trace that
+    /// made no paths shows its first note as it is. Without notes, the message an earlier trace's
+    /// notes left is cleared while nothing has set the status since, and any other message stays.
+    fn show_trace_notes(&mut self, reply: &Value) {
+        let notes = io::notes_of(reply);
+        let left = self.trace_runs.notes_status.take();
+        let Some(first) = notes.first() else {
+            io::clear_notes_left(self, left);
+            return;
+        };
+        let status = match reply["paths"].as_u64() {
+            Some(0) => first.clone(),
+            _ => crate::trace_runs::traced_with_notes(notes.len(), first),
+        };
+        io::show_with_notes(self, status, notes);
+        self.trace_runs.notes_status = Some((self.ui.status.clone(), self.ui.status_sets));
     }
 
     fn set_command_warning(&mut self, id: &str, warning: &str) {
@@ -418,14 +458,25 @@ impl VectorcraftApp {
     /// and the tool remembered for the toolbar group and for the Touch workspace's drawing mode
     /// stays as it was.
     pub(crate) fn try_select_tool(&mut self, id: &str) -> Result<(), String> {
+        let back = self.ui.brush_key_color_pick.as_ref().map(|pick| pick.back.clone());
+        crate::dialogs::brush_art_options::end_key_color_pick(self, false);
         // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice, and
         // neither does letting go of a held tool shortcut.
         self.pen_end.forget_tool();
         self.held_tool.clear();
-        self.activate_tool(id, true)?;
+        if let Err(error) = self.activate_tool(id, true) {
+            if let Some(back) = back.filter(|_| self.session.tool_id() == "eyedropper") {
+                self.return_to_tool(&back);
+            }
+            return Err(error);
+        }
         let now = self.session.tool_id();
         if crate::touch::is_drawing_tool(now) {
             self.ui.touch_drawing_tool = Some(now.to_string());
+        }
+        // Selecting the Quick Pen tool shows its toolbar, even after Hide Toolbar.
+        if now == vectorcraft_tools::quickpen::ID {
+            self.ui.quick_pen_bar = true;
         }
         Ok(())
     }
@@ -465,14 +516,13 @@ impl VectorcraftApp {
         {
             panels::artboards::select(self, panels::artboards::selected(self, n));
         }
-        self.ui.flyout = None;
         switched?;
+        crate::panels::image_trace::cancel_ignore_sampler(self, false);
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
             && let Some(slot) = self.ui.group_tool.get_mut(g)
         {
             *slot = id.to_string();
         }
-        toolbar::remember(self, id);
         Ok(())
     }
 
@@ -480,5 +530,31 @@ impl VectorcraftApp {
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
         self.ui.status_sets = self.ui.status_sets.wrapping_add(1);
+    }
+
+    /// Begin the interaction a dialog or a panel previews on. Typing in progress is kept as its own
+    /// undo step first, and the warning of the preview that keeping it applied shows in the status
+    /// bar, as it does when a tool's drag begins. On an error no interaction begins, so the caller
+    /// runs no preview.
+    pub(crate) fn begin_interaction(&mut self, label: &str) -> Result<(), String> {
+        let warnings = self.session.begin_interaction_warned(label).map_err(|e| e.to_string())?;
+        self.show_warnings(warnings);
+        Ok(())
+    }
+
+    /// Keep typing in progress as one undo step and end the Type tool's typing session, with the
+    /// typing that Real-time Drawing off left unapplied applied first; its warning shows in the
+    /// status bar.
+    pub(crate) fn keep_typing(&mut self) -> Result<(), String> {
+        let warnings = self.session.keep_typing().map_err(|e| e.to_string())?;
+        self.show_warnings(warnings);
+        Ok(())
+    }
+
+    /// Each warning in the status bar in turn, as the tool's status requests show; the last stays.
+    fn show_warnings(&mut self, warnings: Vec<String>) {
+        for w in warnings {
+            self.status(w);
+        }
     }
 }

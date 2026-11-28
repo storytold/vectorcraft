@@ -22,11 +22,17 @@ pub(super) fn node_bezpath(n: &Node) -> Option<BezPath> {
     }
 }
 
+/// The box geometry effects on `bp` work from: the object's geometric bounds, lone anchors
+/// included, as [`vectorcraft_geom::PathData::bounds`] measures them.
+fn reference_box(bp: &BezPath) -> Rect {
+    vectorcraft_geom::path::anchored_curve_bounds(bp).unwrap_or_default()
+}
+
 pub(super) fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezPath {
     if !effects::has_geometry(effects) || bp.elements().is_empty() {
         return bp.clone();
     }
-    effects::apply_geometry_bez(effects, bp, bp.bounding_box(), ctx)
+    effects::apply_geometry_bez(effects, bp, reference_box(bp), ctx)
 }
 
 /// The object-level effected geometry of `n` (base path `bp`), with the swatches and patterns that
@@ -40,7 +46,7 @@ pub(super) fn apply_carrying(effects: &[Effect], bp: &BezPath, ctx: &GeomContext
     if !effects::has_geometry(effects) || bp.elements().is_empty() {
         return (bp.clone(), effects::Carry::default());
     }
-    effects::apply_geometry_bez_carrying(effects, bp, bp.bounding_box(), ctx)
+    effects::apply_geometry_bez_carrying(effects, bp, reference_box(bp), ctx)
 }
 
 /// [`effected_path`], and how `n`'s gradients follow its effects.
@@ -49,12 +55,13 @@ pub(crate) fn effected_path_carrying(doc: &Document, n: &Node, bp: &BezPath) -> 
 }
 
 /// `n`, a path or compound path whose own Rasterize effect is followed by Transform effects that
-/// move its image ([`effects::rasterize_stage`]), with those Transform effects hidden, and the map
-/// they move the image by ([`effects::stage_map`]): the image is made of that node's art on its
-/// own pixel grid, then drawn through the map. `None` for any other object, when the node without
-/// those Transform effects is drawn through its art ([`has_object_fx`]: a Transform effect that
-/// copies it, Crop Marks, a 3D effect…), and when the art before the Transform effects is empty.
-pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Affine)> {
+/// move or copy its image ([`effects::rasterize_stage`]), with those Transform effects hidden, and
+/// the maps they place the image by, the lowest first ([`effects::stage_maps`]): the image is made
+/// of that node's art on its own pixel grid, then drawn through each map. `None` for any other
+/// object, when the node without those Transform effects is drawn through its art
+/// ([`has_object_fx`]: Crop Marks, a 3D effect…), and when the art before the Transform effects is
+/// empty.
+pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Vec<Affine>)> {
     if !has_fx(n) {
         return None;
     }
@@ -65,15 +72,21 @@ pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Affine)
         return None;
     }
     let g = effected_path(doc, &stage, &node_bezpath(n)?);
-    let map = effects::stage_map(&n.appearance.effects, &at, &vectorcraft_geom::PathData::from_bezpath(&g))?;
-    Some((stage, map))
+    let maps = effects::stage_maps(&n.appearance.effects, &at, &vectorcraft_geom::PathData::from_bezpath(&g))?;
+    Some((stage, maps))
 }
 
-/// The box `map` ([`rasterize_stage`]) takes `b` to; `None` when it flattens it to a line or a
-/// point, which leaves nothing to draw.
-pub(crate) fn staged_reach(map: Affine, b: Rect) -> Option<Rect> {
+/// Does `map` ([`rasterize_stage`]) place an image? Not when it flattens it to a line or a point,
+/// which leaves nothing to draw.
+pub(crate) fn places(map: Affine) -> bool {
     let det = map.determinant();
-    (det.is_finite() && det.abs() > 1e-12).then(|| map.transform_rect_bbox(b))
+    det.is_finite() && det.abs() > 1e-12
+}
+
+/// The box the maps of [`rasterize_stage`] take `b` to, all placements together; `None` when each
+/// one flattens it ([`places`]).
+pub(crate) fn staged_reach(maps: &[Affine], b: Rect) -> Option<Rect> {
+    maps.iter().filter(|m| places(**m)).map(|m| m.transform_rect_bbox(b)).reduce(|a, r| a.union(r))
 }
 
 pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
@@ -96,16 +109,17 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         return art.visual_bounds_with(symbols).map(|r| with_raster_reach(symbols, n, r));
     }
     // Copies that each carry the raster effects listed before their Transform effect reach as far
-    // as each copy's raster effects paint, and the raster effects after it spread them all.
-    if effects::outer_effects(n).len() < n.appearance.effects.len()
+    // as each copy's raster effects paint, and the raster effects after it spread them all,
+    // as do copies whose fills and strokes each carry their own raster effects.
+    if (effects::outer_effects(n).len() < n.appearance.effects.len() || effects::has_copied_row_raster(n))
         && let Some(art) = effects::reshape(Some(symbols.document()), n, None)
     {
         return cull_bounds(symbols, &art);
     }
-    // A Rasterize image moved by the Transform effects after it reaches as far as the map takes
-    // what the art before them reaches, the image included.
-    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
-        return staged_reach(map, visual_bounds(symbols, &stage)?);
+    // A Rasterize image moved or copied by the Transform effects after it reaches as far as the
+    // maps take what the art before them reaches, the image included.
+    if let Some((stage, maps)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(&maps, visual_bounds(symbols, &stage)?);
     }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
@@ -116,7 +130,7 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if carry.skipped() {
         carry.hide_skipped(&mut ran.to_mut().appearance.effects);
     }
-    let mut r: Option<Rect> = (!g.elements().is_empty()).then(|| g.bounding_box());
+    let mut r: Option<Rect> = drawn_box(&g, n.appearance.painted_strokes().any(dotted));
     for (j, item) in n.appearance.items.iter().enumerate() {
         let fx = item_effects(item);
         if effects::has_geometry(fx) {
@@ -126,10 +140,7 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             {
                 c.hide_skipped(it.effects_mut());
             }
-            if !ig.elements().is_empty() {
-                let b = ig.bounding_box();
-                r = Some(r.map_or(b, |r| r.union(b)));
-            }
+            r = vectorcraft_geom::union_opt(r, drawn_box(&ig, item_dots(item)));
         }
     }
     let s = n.appearance.outset();
@@ -316,10 +327,29 @@ fn item_bounds(doc: &Document, n: &Node, item: &AppearanceItem) -> Option<Rect> 
     if effects::has_geometry(fx) {
         let ig = apply(fx, &g, &GeomContext { doc: Some(doc), ..GeomContext::of(n) }.item(item));
         let o = if let AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
-        return (!ig.elements().is_empty()).then(|| ig.bounding_box().inflate(o, o));
+        return drawn_box(&ig, item_dots(item)).map(|b| b.inflate(o, o));
     }
     let one = vectorcraft_doc::Appearance { items: vec![item.clone()], ..Default::default() };
-    (!g.elements().is_empty()).then(|| one.stroked_bounds(g.bounding_box(), || g.clone()))
+    drawn_box(&g, item_dots(item)).map(|b| one.stroked_bounds(b, || g.clone()))
+}
+
+/// The box of what `g` draws before the strokes' reach ([`vectorcraft_geom::path::drawn_curve_bounds`]),
+/// with the lone anchors of closed subpaths when `dots`; a path that draws nothing is measured by
+/// its anchors, as [`Node::visual_bounds`] measures one. `None` for a path with no elements.
+pub(super) fn drawn_box(g: &BezPath, dots: bool) -> Option<Rect> {
+    vectorcraft_geom::path::drawn_curve_bounds(g, dots)
+        .or_else(|| g.elements().iter().filter_map(|e| e.end_point()).map(|p| Rect::from_points(p, p)).reduce(|a, b| a.union(b)))
+}
+
+/// Does `s`, a painted stroke, draw a lone anchor of a closed subpath as a dot (a round or
+/// projecting cap)?
+pub(super) fn dotted(s: &vectorcraft_doc::StrokeLayer) -> bool {
+    matches!(s.cap, vectorcraft_doc::LineCap::Round | vectorcraft_doc::LineCap::Square)
+}
+
+/// Does `item` draw lone anchors as dots: a painted stroke with a round or projecting cap?
+fn item_dots(item: &AppearanceItem) -> bool {
+    matches!(item, AppearanceItem::Stroke(s) if paints(item) && dotted(s))
 }
 
 /// `b` grown by how far raster effects `fx` paint past it, each spreading what the ones before it
@@ -374,12 +404,13 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             let mut plain = n.appearance.clone();
             plain.items.retain(|i| !(paints(i) && effects::has_geometry(item_effects(i))));
             let on_path = !n.appearance.items.iter().any(paints) || plain.items.iter().any(paints);
-            let mut r = (on_path && !g.elements().is_empty()).then(|| plain.stroked_bounds(g.bounding_box(), || g.clone()));
+            let dots = plain.painted_strokes().any(dotted);
+            let mut r = on_path.then(|| drawn_box(&g, dots)).flatten().map(|b| plain.stroked_bounds(b, || g.clone()));
             let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
             for item in n.appearance.items.iter().filter(|i| paints(i) && effects::has_geometry(item_effects(i))) {
                 let ig = apply(item_effects(item), &g, &ctx.item(item));
                 let o = if let AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
-                r = vectorcraft_geom::union_opt(r, (!ig.elements().is_empty()).then(|| ig.bounding_box().inflate(o, o)));
+                r = vectorcraft_geom::union_opt(r, drawn_box(&ig, item_dots(item)).map(|b| b.inflate(o, o)));
             }
             r
         }
@@ -389,9 +420,7 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         // effects in a symbol's art and a live object's content paint past it.
         _ if has_object_fx(n) => {
             let symbol = match &n.kind {
-                NodeKind::SymbolInstance { symbol, .. } => {
-                    symbols.document().symbols.iter().find(|s| s.name == *symbol).map(|s| dynamic_art(&s.art, n))
-                }
+                NodeKind::SymbolInstance { symbol, .. } => symbols.symbol(symbol).map(|s| dynamic_art(&s.art, n)),
                 _ => None,
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
@@ -458,7 +487,7 @@ fn pieces_within(symbols: &SymbolBoxes, art: &Node, depth: usize, budget: &mut u
         NodeKind::Path { .. } | NodeKind::Compound { .. } if has_fx(art) => visual_bounds(symbols, art),
         NodeKind::SymbolInstance { symbol, .. } if depth < vectorcraft_doc::depth::MAX_DEPTH && has_instance_row_effects(art) => {
             let doc = symbols.document();
-            let reshaped = doc.symbols.iter().find(|s| s.name == *symbol).and_then(|s| {
+            let reshaped = symbols.symbol(symbol).and_then(|s| {
                 let count = s.art.count() as u64;
                 if count > *budget {
                     return None;
@@ -482,8 +511,8 @@ pub(crate) fn painted_reach(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if let Some(art) = effects::crop_marks_art(n) {
         return drawn_bounds(symbols, &art);
     }
-    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
-        return staged_reach(map, painted_reach(symbols, &stage)?);
+    if let Some((stage, maps)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(&maps, painted_reach(symbols, &stage)?);
     }
     let ran = ran(symbols.document(), n);
     let b = drawn_bounds_ran(symbols, n, Some(&ran))?;
@@ -493,13 +522,15 @@ pub(crate) fn painted_reach(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
 /// The outline the renderer clips `n`'s Feather, Inner Glow and Rasterize with Create Clipping
 /// Mask to: a path's or compound path's geometry with its object-level geometry effects applied,
 /// the outline of the art [`Renderer::fx_art`] makes for an object with object effects, and with
-/// Crop Marks the object's own. For other objects it is [`effects::clip_outline`].
-pub(crate) fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRule)> {
+/// Crop Marks the object's own. For other objects it is [`effects::clip_outline`]. The symbols of
+/// instances are found in `symbols`.
+pub(crate) fn drawn_outline(symbols: &SymbolBoxes, n: &Node) -> Option<(BezPath, FillRule)> {
+    let doc = symbols.document();
     if let Some(art) = effects::crop_marks_art(n) {
-        return drawn_outline(doc, art.children()?.first()?);
+        return drawn_outline(symbols, art.children()?.first()?);
     }
     if has_object_fx(n) {
-        let art = Renderer::new().fx_art(doc, &Arc::new(n.clone()), false);
+        let art = Renderer::new().fx_art(symbols, &Arc::new(n.clone()), false);
         return effects::clip_outline(&art);
     }
     match &n.kind {
@@ -537,7 +568,7 @@ pub(crate) fn drawn_outlines(doc: &Document, symbols: &SymbolBoxes, n: &Node, le
         if is_container(n) && !makes_art && !effects::has_item_geometry(n) {
             object.appearance.items.clear();
         }
-        let art = Renderer::new().fx_art(doc, &Arc::new(object), false);
+        let art = Renderer::new().fx_art(symbols, &Arc::new(object), false);
         if art.children().is_some() && !has_object_fx(&art) {
             return evaluated_outlines(doc, symbols, &art, left, out);
         }
@@ -562,7 +593,7 @@ pub(crate) fn drawn_outlines(doc: &Document, symbols: &SymbolBoxes, n: &Node, le
         NodeKind::SymbolInstance { .. } => {
             push_outline(n.geometric_bounds_with(symbols).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()), left, out)
         }
-        _ => push_outline(drawn_outline(doc, n).map(|(path, _)| path), left, out),
+        _ => push_outline(drawn_outline(symbols, n).map(|(path, _)| path), left, out),
     }
 }
 
@@ -641,6 +672,9 @@ pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnO
 /// linear part. With `brush` true, the members of a group or layer are measured with the room
 /// their brushed strokes leave for brush art ([`member_cull_bounds`]).
 fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: bool) -> Option<Rect> {
+    // A layer is measured in the mode its Layer Options draw it in, as the renderer measures the
+    // members of a group or layer without effects ([`crate::Renderer::bounds_of`]).
+    let _mode = crate::placed_document::enter_layer(n);
     let inner = |c: &Node| cull_bounds_in(symbols, c, after_reshape, false);
     let member = |c: &Node| member_cull_bounds(symbols, c, after_reshape, brush);
     // The art that a group's or layer's crop marks or Vector Halftone draw holds its members. The
@@ -682,12 +716,20 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
         // symbol instance's art paint past that art.
         _ if has_object_fx(n) => {
             let symbol = match &n.kind {
-                NodeKind::SymbolInstance { symbol, .. } => {
-                    symbols.document().symbols.iter().find(|s| s.name == *symbol).map(|s| dynamic_art(&s.art, n))
-                }
+                NodeKind::SymbolInstance { symbol, .. } => symbols.symbol(symbol).map(|s| dynamic_art(&s.art, n)),
                 _ => None,
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
+            // Copies that each carry the raster effects listed before their Transform effect reach
+            // as far as each copy's raster effects paint, and the raster effects after it spread
+            // them all: the art and each copy in it are groups with those raster effects, measured
+            // with their reach ([`effects::has_container_appearance`]).
+            if effects::outer_effects(n).len() < n.appearance.effects.len()
+                && let Some(r) = &reshaped
+            {
+                let a = live_content_reach(symbols, n);
+                return cull_bounds_in(symbols, r, after_reshape, false).map(|b| b.inflate(a, a));
+            }
             let b = match &reshaped {
                 Some(r) if has_instance_row_effects(n) => instance_piece_bounds(symbols, r),
                 Some(r) if matches!(n.kind, NodeKind::Text(_)) || (matches!(n.kind, NodeKind::Image(_)) && !r.clips()) => {
@@ -709,6 +751,12 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let b = n.visual_bounds_with(symbols)?;
             let a = art_effects_reach(symbols, n);
             Some(b.inflate(a, a))
+        }
+        // A spine can rotate a blend's keys and steps past their unrotated visual bounds.
+        NodeKind::Blend { .. } => {
+            let b = n.reach_bounds_with(symbols)?;
+            let a = live_content_reach(symbols, n);
+            vectorcraft_geom::union_opt(Some(b.inflate(a, a)), placed_blend_effect_bounds(symbols, n))
         }
         _ => {
             let b = n.visual_bounds_with(symbols)?;
@@ -780,20 +828,49 @@ pub(crate) fn three_d_art_bounds(symbols: &SymbolBoxes, art: &Node) -> Option<Re
     pieces(symbols, &art)
 }
 
-/// `b`, the bounds of what `n` draws, grown by how far `n`'s own raster effects paint past it.
+/// `b`, the bounds of what `n` draws, grown by how far `n`'s own raster effects paint past it: those
+/// around its whole art ([`effects::outer_effects`]), as the copies of a Transform effect that carry
+/// the ones listed before it are measured in `b`.
 pub(crate) fn with_own_raster_reach(symbols: &SymbolBoxes, n: &Node, b: Rect) -> Rect {
-    let o = outset(symbols, &n.appearance.effects, b);
+    let o = outset(symbols, effects::outer_effects(n), b);
     b.inflate(o, o)
 }
 
-/// `n`'s own visual box, type's grown to hold its glyphs ([`glyphs_box`]): what it draws when its
-/// object effects leave it as it is (Revolve builds no art from type).
+/// `n`'s own box, type's grown to hold its glyphs ([`glyphs_box`]) and a blend's to hold its
+/// spine-placed keys and steps: what it draws when its object effects leave it as it is
+/// (Revolve builds no art from type).
 fn own_box(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let b = n.visual_bounds_with(symbols)?;
+    let b = match &n.kind {
+        NodeKind::Blend { .. } => vectorcraft_geom::union_opt(n.reach_bounds_with(symbols), placed_blend_effect_bounds(symbols, n)),
+        _ => n.visual_bounds_with(symbols),
+    }?;
     Some(match &n.kind {
         NodeKind::Text(t) => vectorcraft_geom::union_opt(Some(b), glyphs_box(t, n.appearance.outset())).unwrap_or(b),
         _ => b,
     })
+}
+
+/// A rotated blend's effect-bearing content, measured after spine placement. Geometry effects
+/// run on the placed shapes, so their reach on the original keys need not cover what they paint.
+/// Effect-free blends keep the quick rail envelope without evaluating their steps.
+fn placed_blend_effect_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    let NodeKind::Blend { spec, .. } = &n.kind else { return None };
+    if spec.orientation != vectorcraft_doc::BlendOrientation::AlignToPath {
+        return None;
+    }
+    let mut has_effects = false;
+    n.walk(&mut |c| {
+        has_effects |= has_fx(c)
+            || has_object_fx(c)
+            || match &c.kind {
+                NodeKind::SymbolInstance { symbol, .. } => symbols.has_effects(symbol),
+                _ => false,
+            };
+    });
+    if !has_effects {
+        return None;
+    }
+    effects::expand_live(Some(symbols.document()), n).iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, cull_bounds(symbols, c)))
 }
 
 /// The box of type `t`'s glyphs as laid out (its layout bounds, else laid out now), grown by its

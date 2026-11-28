@@ -1,6 +1,6 @@
 use super::writer::{Sheet, Writer, date_time};
 use super::{Affine, Document, ExportReport, Exporter, HashSet, PageBoxes, PdfError, PdfOptions, Rect, krilla, write};
-use crate::{Compatibility, PdfSettings, Standard};
+use crate::{ActiveProfiles, Compatibility, PdfSettings, Standard, page_bleed, printer_marks};
 
 /// Export `doc` as PDF bytes: one page per artboard (or the artboards chosen in `opts`).
 pub fn export(doc: &Document, opts: &PdfOptions) -> Result<Vec<u8>, PdfError> {
@@ -43,7 +43,8 @@ pub(crate) fn leaving_out_undecodable<T>(doc: &Document, mut write: impl FnMut(&
 
 fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut HashSet<String>) -> Result<ExportReport, PdfError> {
     let set = &opts.settings;
-    set.check()?;
+    let profiles = ActiveProfiles::default();
+    set.check(&profiles)?;
     vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
     // The pages come from the artboards, which baking leaves as they are. The version a long page
     // raises the file to decides whether the layers are written, so it is settled before baking.
@@ -57,6 +58,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let layers = vectorcraft_effects::WrittenLayers {
         hidden: set.writes_layers() && !doc.page_knockout,
         non_printing: set.include_non_printing || set.create_layers,
+        hidden_objects: false,
     };
     let baked = vectorcraft_effects::bake_document_placing_symbols(doc, true, layers);
     // Baking stops early when cancelled, leaving a half-baked copy that must not be written.
@@ -74,7 +76,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let mut w = Writer::new(doc, set, &title, created_at, doc.color_mode == vectorcraft_doc::ColorMode::Cmyk)?;
     // Preserve Editing: the native document as an embedded file (`check` refused PDF/A with it).
     let mut warnings = vec![];
-    let mut settings = set.warnings();
+    let mut settings: Vec<String> = set.warnings(&profiles).into_iter().map(|w| w.message).collect();
     if raised.is_some() {
         settings.push(if opts.settings.compatibility == Compatibility::Pdf14 {
             "PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6".into()
@@ -99,8 +101,8 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
         settings.push("PDF layers can't be written with a knockout page group: every layer is plain page content".into());
     }
     ex.overprint = set.advanced.overprint == crate::Overprint::Preserve;
-    let bleed = set.bleed_of(doc);
-    let marks = set.marks.printer_marks();
+    let bleed = page_bleed(&set.bleed, doc);
+    let marks = printer_marks(&set.marks);
     let scales = writes_user_units(set);
     // PDF/X files have no annotations over the art (ISO 15930: only printer's mark and trap
     // network annotations, outside the bleed box): objects' URLs aren't written as links there.
@@ -186,7 +188,7 @@ fn pages(doc: &Document, opts: &PdfOptions) -> Result<Vec<(usize, PageBoxes)>, P
     if doc.artboards.is_empty() || indices.is_empty() {
         return Err(PdfError::NoArtboards);
     }
-    let (bleed, marks) = (opts.settings.bleed_of(doc), opts.settings.marks.printer_marks());
+    let (bleed, marks) = (page_bleed(&opts.settings.bleed, doc), printer_marks(&opts.settings.marks));
     indices.into_iter().map(|i| Ok((i, PageBoxes::new(doc.artboards.get(i).ok_or(PdfError::BadArtboard(i))?.rect, bleed, &marks)))).collect()
 }
 
@@ -368,38 +370,51 @@ fn long_page_warning(set: &PdfSettings, artboard: usize, w: f64, h: f64, unit: f
     }
 }
 
-/// The RGB colours and non-CMYK images a CMYK document carries, which the export separates into
-/// CMYK. Their darkest values come out as rich blacks, so the export says how many there are.
+/// The RGB colours and RGB images a CMYK document carries. Its RGB colours are always separated
+/// into CMYK; its RGB images only with a CMYK destination (Output › Color conversion, or a
+/// PDF/X-1a preset), else they are written in RGB (#1242). The export says how many of each
+/// there are: converted ones' darkest values come out as rich blacks, and kept ones aren't CMYK.
+/// Grey images stay grey either way and aren't counted.
 #[derive(Default)]
 pub(crate) struct RgbInCmyk {
     /// Distinct RGB colours, by the bits of their channels.
     pub(super) colours: HashSet<[u32; 3]>,
-    /// Keys of the raster images that aren't CMYK.
-    pub(super) images: HashSet<String>,
+    /// Keys of the RGB images converted to CMYK.
+    pub(super) converted: HashSet<String>,
+    /// Keys of the RGB images written in RGB.
+    pub(super) kept: HashSet<String>,
+}
+
+/// `n` `thing`s, in the plural unless `n` is 1.
+fn count(n: usize, thing: &str) -> String {
+    format!("{n} {thing}{}", if n == 1 { "" } else { "s" })
 }
 
 impl RgbInCmyk {
     pub(super) fn merge(&mut self, other: RgbInCmyk) {
         self.colours.extend(other.colours);
-        self.images.extend(other.images);
+        self.converted.extend(other.converted);
+        self.kept.extend(other.kept);
     }
 
     /// The warning for the export report; `None` when the document has nothing of the sort.
     pub(super) fn warning(&self) -> Option<String> {
-        let (c, i) = (self.colours.len(), self.images.len());
-        if c == 0 && i == 0 {
-            return None;
+        let (c, i, k) = (self.colours.len(), self.converted.len(), self.kept.len());
+        let mut sentences = vec![];
+        let converted: Vec<_> = [(c, "RGB colour"), (i, "RGB image")].into_iter().filter(|(n, _)| *n > 0).map(|(n, t)| count(n, t)).collect();
+        if !converted.is_empty() {
+            sentences.push(format!(
+                "{}: they are converted to CMYK through the colour settings, so dark ones can come out as rich blacks on several plates; paint them with CMYK colours (Edit › Edit Colors › Convert to CMYK) for pure black ink",
+                converted.join(" and ")
+            ));
         }
-        let mut parts = vec![];
-        if c > 0 {
-            parts.push(format!("{c} RGB colour{}", if c == 1 { "" } else { "s" }));
+        if k > 0 {
+            let (it, is) = if k == 1 { ("it", "is") } else { ("them", "are") };
+            sentences.push(format!(
+                "{} that {is} written in RGB, not CMYK: to write {it} in CMYK, choose Output › Color conversion › Convert to destination with a CMYK destination, or the PDF/X-1a:2001 preset",
+                count(k, "RGB image")
+            ));
         }
-        if i > 0 {
-            parts.push(format!("{i} RGB or grey image{}", if i == 1 { "" } else { "s" }));
-        }
-        Some(format!(
-            "this CMYK document has {}: they are converted to CMYK through the colour settings, so dark ones can come out as rich blacks on several plates; paint them with CMYK colours (Edit › Edit Colors › Convert to CMYK) for pure black ink",
-            parts.join(" and ")
-        ))
+        (!sentences.is_empty()).then(|| format!("this CMYK document has {}", sentences.join("; and ")))
     }
 }

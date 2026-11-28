@@ -27,20 +27,28 @@ use crate::EngineError;
 /// Whether Reset Transformation changes a symbol instance.
 pub use symbols::reset_transformation_changes;
 
+/// Whether an object is a symbol set.
+pub use symbols::is_symbol_set;
+
+/// The Symbols panel's current symbol, as `symbol.list` answers it.
+pub use symbols::current_symbol;
+
 mod brushes;
 mod dynamic;
+mod symbolism;
 mod symbols;
 
-pub(crate) use brushes::{apply_brush, brush_targets, stroke_paint};
+pub(crate) use brushes::{apply_brush, brush_targets, frame_marker, stroke_paint};
 use brushes::{
-    brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_place_art,
-    brush_remove, brush_replace_art, brush_selection_art, brush_set_current, brush_unused, expand_brush,
+    brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_object_options, brush_options,
+    brush_place_art, brush_remove, brush_replace_art, brush_selection_art, brush_set_current, brush_unused, expand_brush,
 };
 pub(crate) use dynamic::{edit_part, fit_parts, part_only, selected_part};
 use dynamic::{symbol_instance_reset, symbol_instance_select_part, symbol_instance_set_appearance};
+use symbolism::symbol_set_density;
 use symbols::selected_instances;
 pub(crate) use symbols::{
-    expand_instances_under, expandable_instances, instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol,
+    Placement, expand_instances_under, expandable_instances, instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol,
     stored_natural_size,
 };
 use symbols::{
@@ -162,9 +170,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Brush Options…",
             [],
             None,
-            "{name, params?: {…fields to change (brush.get shows them; values outside their ranges are clamped). calligraphic: angle −180..180° (counter-clockwise from level), roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure|tilt|bearing|rotation for angle, roundness, size] (pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest; tilt from value − variation with the pen lying flat to value + variation with it upright; bearing and rotation add variation × the pen's bearing (which way it leans, counter-clockwise from leaning right) or its barrel's counter-clockwise rotation over 180°; the angle turns on past ±180°). scatter: size [a, b] 1..10000%, spacing [a, b] 1..10000%, scatter [a, b] −1000..1000%, rotation [a, b] −180..180° (counter-clockwise), modes: [fixed|random|pressure|tilt|bearing|rotation for size, spacing, scatter, rotation] (fixed: a; random: between a and b; pressure: a at the lightest pen pressure to b at the heaviest; tilt: a with the pen lying flat to b upright; bearing and rotation: a at −180° to b at 180°), rotation_relative_to_path. art: width 1..1000%, width_mode: null (fixed)|pressure|tilt|bearing|rotation, width_max 1..1000% (pressure: width at the lightest pen pressure to width_max at the heaviest; tilt: width with the pen lying flat to width_max upright; bearing and rotation: width at −180° to width_max at 180°; half way on a stroke drawn without that input), scale: {mode: proportional|stretch|betweenGuides, start, end: 0..1 of the art length}, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flip_along, flip_across, overlap. pattern: scale 1..10000%, spacing 0..10000%, fit: stretch|addSpace|approximate, flip_along, flip_across, outer_corner and inner_corner: corner tile art (drawn as the corner that joins a side tile on its right to one below it) or null, outer_source and inner_source: what that kind of corner draws without its art: none|autoCentered|autoBetween|autoSliced|autoOverlap (a tile made from the side tile), or null (the other kind of corner's art); side_tile, outer_corner_tile, inner_corner_tile, start_tile, end_tile: a document pattern name, original, or none (side refuses none); corner tiles also take autoCentered|autoBetween|autoSliced|autoOverlap. Each tile also accepts {pattern: name} to select a swatch whose name is a reserved choice. scatter, art and pattern: colorization: {method: none|tints|tintsAndShades|hueShift, key: colour (hueShift: the art colour that becomes the stroke colour; without a key: the solid color the art's fills and strokes use most, black when they use none)}; colorization and the art brush's scale change only the fields given}, newName? (trimmed; blank: the name is kept; a new bristle brush name has at most 31 characters, and a longer name the brush has is kept)} edit a brush definition (strokes using it update) → {name}",
+            "{name, params?: {…fields to change (brush.get shows them; values outside their ranges are clamped). calligraphic: angle −180..180° (counter-clockwise from level), roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure|tilt|bearing|rotation|stylusWheel for angle, roundness, size] (pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest; tilt from value − variation with the pen lying flat to value + variation with it upright; bearing and rotation add variation × the pen's bearing (which way it leans, counter-clockwise from leaning right) or its barrel's counter-clockwise rotation over 180°; stylusWheel from value − variation at one end of an airbrush pen's finger wheel to value + variation at the other; the angle turns on past ±180°). scatter: size [a, b] 1..10000%, spacing [a, b] 1..10000%, scatter [a, b] −1000..1000%, rotation [a, b] −180..180° (counter-clockwise), modes: [fixed|random|pressure|tilt|bearing|rotation|stylusWheel for size, spacing, scatter, rotation] (fixed: a; random: between a and b; pressure: a at the lightest pen pressure to b at the heaviest; tilt: a with the pen lying flat to b upright; bearing and rotation: a at −180° to b at 180°; stylusWheel: a at one end of an airbrush pen's finger wheel to b at the other), rotation_relative_to_path, hue_jitter 0..180° (each copy turns the hue of its solid colors, after the colorization, by its own amount up to this far either way, the same on every redraw; colors without a hue stay; 0: off). art: width 1..1000%, width_mode: null (fixed)|pressure|tilt|bearing|rotation|stylusWheel, width_max 1..1000% (pressure: width at the lightest pen pressure to width_max at the heaviest; tilt: width with the pen lying flat to width_max upright; bearing and rotation: width at −180° to width_max at 180°; stylusWheel: width at one end of the finger wheel to width_max at the other; half way on a stroke drawn without that input), scale: {mode: proportional|stretch|betweenGuides, start, end: 0..1 of the art length}, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flip_along, flip_across, overlap. pattern: scale 1..10000%, spacing 0..10000%, fit: stretch|addSpace|approximate, flip_along, flip_across, outer_corner and inner_corner: corner tile art (drawn as the corner that joins a side tile on its right to one below it) or null, outer_source and inner_source: what that kind of corner draws without its art: none|autoCentered|autoBetween|autoSliced|autoOverlap (a tile made from the side tile), or null (the other kind of corner's art); side_tile, outer_corner_tile, inner_corner_tile, start_tile, end_tile: a document pattern name, original, or none (side refuses none); corner tiles also take autoCentered|autoBetween|autoSliced|autoOverlap. Each tile also accepts {pattern: name} to select a swatch whose name is a reserved choice. scatter, art and pattern: colorization: {method: none|tints|tintsAndShades|hueShift, key: colour (hueShift: the art colour that becomes the stroke colour; without a key: the solid color the art's fills and strokes use most, black when they use none)}; colorization and the art brush's scale change only the fields given}, newName? (trimmed; blank: the name is kept; a new bristle brush name has at most 31 characters, and a longer name the brush has is kept)} edit a brush definition (strokes using it update) → {name}",
             has_doc,
             brush_options
+        ),
+        cmd!(
+            "brush.objectOptions",
+            "Options of Selected Object…",
+            [],
+            None,
+            "{ids?|id?, params?: {…the fields brush.options takes that a path can set for itself: calligraphic angle (counter-clockwise from level), roundness, size, variation, modes; scatter size, spacing, scatter, rotation (counter-clockwise), modes, rotation_relative_to_path, colorization; art width, width_mode, width_max, flip_along, flip_across, overlap, colorization; pattern scale, spacing, fit, flip_along, flip_across, colorization (values outside their ranges are clamped; a colorization object changes only the fields it gives; a null item of an array such as size: [40, null] keeps each stroke's own item, else the brush's)}, reset?: bool} set the brush settings of the brushed strokes of the selected paths on those strokes only, leaving the brush and its other strokes as they are (the Brushes panel's Options of Selected Object); params add to each stroke's own settings, a mode params does not set (no modes, or a null item) stays the one each stroke draws with when a changed variation or range would change it, a setting equal to the brush's own value is dropped, and reset: true clears them so the strokes draw the brush again; without params or reset nothing changes; one undo step, none when nothing changes. The brushes' own edits (brush.options) still reach the settings a stroke does not set, applying a brush (brush.apply, stroke.setAdvanced or a brush.freehand extend with another brush) or removing it clears them, and a renamed brush keeps them. Refused with nothing painted with a brush selected, for paths painted with brushes of different types, for a bristle brush, for a field the type does not take and for a value of the wrong kind → {ids: the brushed paths, changed: the paths whose settings changed, options: the first stroke's own settings}",
+            has_doc,
+            brush_object_options
         ),
         cmd!(
             "object.expandBrush",
@@ -190,7 +207,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbols",
             [],
             None,
-            "{} → {symbols: [{name, instances, size: [w,h], registration: 0..8, exportType: movieClip|graphic, nineSlice, type: static|dynamic}], current}",
+            "{} → {symbols: [{name, instances, size: [w,h], registration: 0..8, exportType: movieClip|graphic, nineSlice, type: static|dynamic, alignToPixelGrid: bool}], current}",
             has_doc,
             symbol_list
         ),
@@ -199,7 +216,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Symbol…",
             [],
             None,
-            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions of the natural size in from each edge, each -16..16 (below 0 or above 1 puts a guide outside the art), with left + right < 1 and top + bottom < 1 (default a quarter each); an instance of a symbol with guides keeps its corners' size when scaled, its edges stretch along their length and its center in both directions → {name, id, registration, exportType, nineSlice, type}",
+            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type), alignToPixelGrid?: bool (default false; Symbol Options › Align to Pixel Grid), keepArt?: false} make a symbol from the selection and replace it with an instance, or with keepArt: true leave the selection as ordinary art where it is, still selected, with id null; a frame of threaded text in the selection that becomes an instance leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions of the natural size in from each edge, each -16..16 (below 0 or above 1 puts a guide outside the art), with left + right < 1 and top + bottom < 1 (default a quarter each); an instance of a symbol with guides keeps its corners' size when scaled, its edges stretch along their length and its center in both directions; alignToPixelGrid keeps the symbol's instances on the pixel grid as symbol.options describes → {name, id, registration, exportType, nineSlice, type, alignToPixelGrid}",
             has_selection,
             symbol_new
         ),
@@ -208,7 +225,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbol Options…",
             [],
             None,
-            "{name?, newName?, registration?: 0..8, exportType?: movieClip|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static|dynamic} rename a symbol (its instances and the graphics mapped onto 3D objects follow the new name) and/or set Symbol Options › Registration, Export Type, 9-slice guides (nineSliceGuides [left, top, right, bottom] fractions in from each edge, each -16..16, with left + right < 1 and top + bottom < 1) and Symbol Type (a dynamic symbol's instances may change the appearance of objects in its art and stay linked; making it static drops those changes); default name: current → {name, registration, exportType, nineSlice, type}",
+            "{name?, newName?, registration?: 0..8, exportType?: movieClip|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static|dynamic, alignToPixelGrid?: bool} rename a symbol (its instances and the graphics and Map Art maps on 3D objects follow the new name) and/or set Symbol Options › Registration, Export Type, 9-slice guides (nineSliceGuides [left, top, right, bottom] fractions in from each edge, each -16..16, with left + right < 1 and top + bottom < 1), Symbol Type (a dynamic symbol's instances may change the appearance of objects in its art and stay linked; making it static drops those changes) and Align to Pixel Grid (on: the horizontal and vertical straight segments of the paths in the symbol's art snap to whole points, or half points for an odd centered stroke, at the symbol's natural size, its stroke weights become whole points, and every instance placed at that size, reflected across one axis or not, moves to whole points and goes back to them after each move; a scaled, rotated (a half turn included) or sheared instance, and an instance in another symbol's art, is left where it is; the art snaps again after it is edited); alignToPixelGrid alone with the value the symbol already has changes nothing and adds no undo step; default name: current → {name, registration, exportType, nineSlice, type, alignToPixelGrid}",
             has_doc,
             symbol_options
         ),
@@ -217,7 +234,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place Symbol Instance",
             [],
             None,
-            "{name?, x?, y?} place an instance so its registration point is at (x, y) (default: artboard centre; name default: current) → {id}",
+            "{name?, x?, y?} place an instance so its registration point is at (x, y) (default: artboard centre; name default: current), on top of the current layer, or in Draw Behind directly below the bottommost selected object (at the bottom of the current layer with nothing selected) → {id}",
             has_doc,
             symbol_place
         ),
@@ -253,7 +270,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Symbol",
             [],
             None,
-            "{name, ids?|id?} replace the symbol's art with the selection (instances update, keeping their appearance changes to the objects at paths the new art still has; the selection becomes an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds) → {name, id}",
+            "{name, ids?|id?, keepArt?: false} replace the symbol's art with the selection (instances update, keeping their appearance changes to the objects at paths the new art still has; the selection becomes an instance, or with keepArt: true stays ordinary art where it is, still selected, and id is null; a frame of threaded text in the selection that becomes an instance leaves its thread with the text it shows, which the symbol's art holds; art that holds an instance of the symbol (opacity masks included), directly or through the symbols it nests, is refused) → {name, id}",
             has_selection,
             symbol_update
         ),
@@ -326,7 +343,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select All Unused",
             [],
             None,
-            "{} → {names: [the symbols nothing places, in panel order]} (the Symbols panel selects them): instances in the art (opacity masks included), graphics mapped onto 3D objects (threeD.mapGraphic), graph designs, pattern tiles (with the tiles that pattern editing's Cancel puts back) and brush art count, and so do instances in the art of a symbol that is used",
+            "{} → {names: [the symbols nothing places, in panel order]} (the Symbols panel selects them): instances in the art (opacity masks included), graphics and Map Art maps on 3D objects (threeD.mapGraphic, threeD.mapArt), graph designs, pattern tiles (with the tiles that pattern editing's Cancel puts back) and brush art count, and so do instances in the art of a symbol that is used",
             has_doc,
             symbol_unused
         ),
@@ -345,16 +362,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbol Sprayer",
             [],
             None,
-            "{points: [[x,y]…], name?, radius?: 40, density?: 1..10 (5), scale?: 1, alt?: bool (remove instances)} spray instances into a symbol set → {id, count}",
+            "{points: [[x,y]…] (a third value is a number or null and is not used), name?, radius?: 40, density?: 1..10 (5; a number outside 1..10 is taken as the nearer end), scale?: 1, alt?: bool (remove instances), attributes?: {scrunch?, size?, spin?, screen?, stain?, style?: average|userDefined (average)}, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), style?: name} spray instances into a symbol set → {id, count}. Each of `attributes` says what a new instance takes: average, the mean of the selected set's instances within `radius` of the stroke point (their spacing along the stroke, size, rotation, opacity, and the stain or style of the nearest one that has one with an amount above 0, at the mean amount), and with none there the symbol's size, no rotation, full opacity and no stain or style; or userDefined: spacing from the symbol's size and `density`, the symbol's size times `scale`, turned the way the stroke runs there (not turned for one point), full opacity, stained in full with `color` (default: the fill color), and the fill of graphic style `style` (default: the first style after the default one) in full; a `style` the document does not have is then an error. The stain and the style are both the instance's fill, and the style replaces the stain. Another key or value in `attributes` is an error",
             has_doc,
             symbol_spray
+        ),
+        cmd!(
+            "symbol.setDensity",
+            "Symbol Set Density",
+            [],
+            None,
+            "{from: 1..10, to: 1..10, ids?|id?} space the instances of the selected symbol sets (or those in `ids`) as Symbol Set Density `to` packs them, from the density each set was created at or last given (`from` for a set without one, such as one grouped by hand): each instance moves along the line from the middle of its set's instances, to (1.15 − 0.1·to) / (1.15 − 0.1·from) of its distance from it (each factor at least 0.1), as one undo step, and every set then has density `to`, also one whose instances do not move (one instance, or each locked); a higher density packs them closer, and a locked or hidden instance stays where it is. No undo step is added when no instance moves and every set already has density `to`. A `from` or `to` left out, not a number or outside 1..10, an id naming no object, or no symbol set among the objects is an error → {ids: the sets changed, count: the instances moved}",
+            has_doc,
+            symbol_set_density
         ),
         cmd!(
             "symbol.adjust",
             "Symbolism Tool",
             [],
             None,
-            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y]…], radius?: 40, intensity?: 1..10 (5), alt?: bool, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), style?: name} adjust instances near the points (selection, else all) → {count}",
+            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y,pressure?]…] (pen pressure 0..1, default 1), radius?: 40, intensity?: 1..10 (5), usePressure?: bool (each point's pressure is the intensity there, in place of `intensity`), method?: userDefined|average|random (userDefined; not used by shift), proportional?: bool (size; true), affectsDensity?: bool (size; false), alt?: bool, shift?: bool (shift, size, stain and style; false), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), style?: name (a graphic style's; left out, or naming no style in the document, the first style after the default one)} adjust instances near the points (selection, else all) → {count}. `method` userDefined changes each instance by the tool's amount at its distance from the point; random gives each instance its own share of that amount for the whole stroke, from none to twice it (spin: a turn either way; style without `shift`: from none to the userDefined amount); average moves each instance's value toward the mean of the instances within `radius` of the point (scrunch: its distance from their middle toward their mean distance; size: the geometric mean of their sizes; spin: their mean direction; stain and style: their mean amount; screen: their mean opacity), and `alt` does not reverse it; average leaves an instance without a size as it is. With `proportional` false a drag resizes along its own direction, the width by the drag's horizontal share and the height by its vertical share (a level drag the width, an upright one the height, a 45° drag both alike; the first point takes the direction to the second) and one point resizes both; average resizes both whatever `proportional` is. With `affectsDensity` an instance also moves away from the point as it grows and toward it as it shrinks. The style goes on by the brush's strength at each sample, and a stroke's samples add up. With `alt` and without `shift`, userDefined and random style remove all of an instance's appearance items under the brush at once, whatever the brush's strength. `shift` is the tool's Shift form: shift brings the instances within `radius` of any point one place forward among their siblings (with `alt`, one place backward), once for the stroke, and does not move them; size keeps the instances where they are, `affectsDensity` included; stain and style keep each instance's amount and move its paint toward `color` or the style (stain by the tool's amount at its distance from the point, style by the brush's strength there), whatever `method` is, and leave an instance without a stain or style as it is, and `alt` has no effect. An instance counts only when it changes, and no undo step is added when none does (none under the brush, average with each already at the mean, each already at the tool's limit, or shift with nothing to move or change). A `method` that is none of the three, or a pressure that isn't a number, is an error",
             has_doc,
             symbol_adjust
         ),

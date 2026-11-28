@@ -183,11 +183,16 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             if !["fill", "stroke", "strokeWidth"].iter().any(|k| a.contains_key(*k)) {
                 return Err("give at least one of `fill`, `stroke`, `strokeWidth`".into());
             }
-            let (applied, objects) = apply_paint(b, a, a.get("ids").cloned())?;
+            let (applied, objects, unpainted) = apply_paint(b, a, a.get("ids").cloned())?;
             let mut reply = json!({"applied": applied, "objects": objects});
             if objects == 0 {
                 reply["note"] = json!(
-                    "no object was painted (nothing selected, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
+                    "no object was painted (nothing selected, the Live Paint Bucket, or for a fill the Shape Builder, is the active tool and no `ids` were given, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
+                );
+            } else if !unpainted.is_empty() {
+                reply["unpainted"] = json!(unpainted);
+                reply["note"] = json!(
+                    "the commands in `unpainted` painted no object: no given or selected object takes that paint, or, for a fill, the Shape Builder is the active tool and no `ids` were given, and the fill changed for new art only"
                 );
             }
             j(reply)
@@ -275,7 +280,15 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             select_ids(b, a)?;
             j(exec(b, &format!("object.pathfinder.{}", req_str(a, "operation")?), json!({}))?)
         }
-        "transform" => j(transform(b, a)?),
+        "transform" => {
+            // Validate all numeric steps before the handler changes selection or runs a step.
+            for field in ["dx", "dy", "rotate", "scale", "scaleX", "scaleY", "shear"] {
+                if a.get(field).is_some_and(|value| !value.is_null() && value.as_f64().is_none()) {
+                    return Err(format!("`{field}` must be a number"));
+                }
+            }
+            j(transform(b, a)?)
+        }
         "create_graph" => {
             let mut p = Value::Object(a.clone());
             if p.get("type").is_none() {
@@ -465,7 +478,16 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     // The render was asked for at most 4096 a side.
     let img = super::handlers::decode_png(&png, 8192).map_err(|e| format!("read preview: {e}"))?;
     let img = if img.width() > max || img.height() > max { fitted(img, max, max, Resample::Average) } else { img };
-    let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| format!("encode preview: {e}"))?;
-    Ok(image_result(out.get_ref(), json!({"width":img.width(),"height":img.height()})))
+    let rgba = img.to_rgba8();
+    let raw = craft_image_codecs::Image::from_raw(
+        rgba.width(),
+        rgba.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.into_raw(),
+    )
+    .map_err(|e| format!("encode preview: {e}"))?;
+    let out = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| format!("encode preview: {e}"))?;
+    Ok(image_result(&out, json!({"width":img.width(),"height":img.height()})))
 }

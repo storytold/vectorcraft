@@ -39,14 +39,15 @@ impl Exporter<'_> {
             cover(&mut ms, page, if m.clip { 0 } else { 255 }, 1.0);
         }
         // Mask art is a picture of its own: it takes no part in a knockout group around the object,
-        // and has no inks to overprint.
+        // and has no inks to overprint (its characters do not darken either).
         let knockout = std::mem::take(&mut self.knockout);
         let overprint = std::mem::take(&mut self.overprint);
+        let darken = std::mem::take(&mut self.darken_overprints);
         let image_left_out = self.image_left_out.replace(false);
         self.node(&mut ms, &m.art, page, true);
         let incomplete = self.image_left_out.unwrap_or(false);
         self.image_left_out = image_left_out.map(|outer| outer || incomplete);
-        (self.knockout, self.overprint) = (knockout, overprint);
+        (self.knockout, self.overprint, self.darken_overprints) = (knockout, overprint, darken);
         if incomplete {
             ms.pop();
             ms.finish();
@@ -117,7 +118,7 @@ impl Exporter<'_> {
         if several && !elements.iter().skip(1).all(|(c, _)| shape_is_coverage(c)) {
             let doc = self.doc;
             let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
-            match knockout_masks(BrushSearch::new(doc, brushes), &elements) {
+            match knockout_masks(BrushSearch::new(&self.symbols, brushes), &elements) {
                 Ok(above) => {
                     // Every mask is made before anything is drawn: when the symbol objects the
                     // masks may hold run out, one would leave out art its element covers, and
@@ -372,8 +373,11 @@ impl Exporter<'_> {
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
         let (mut pushes, isolated_children) = transparency(s, n, page, container, knockout);
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
+        // A distorted image's art, when its masked image needs the size its pieces share.
+        let mut expanded = None;
         let alpha = match (&n.kind, mask) {
-            (NodeKind::Image(im), Some(m)) => self.masked_image(im, m, !n.extras().pixelated),
+            // The mask's image shares the pixel grid only when it has the same corners (or none).
+            (NodeKind::Image(im), Some(m)) if n.image_quad() == m.art.image_quad() => self.node_masked_image(n, im, m, &mut expanded),
             _ => None,
         };
         if let Some(m) = mask
@@ -426,22 +430,21 @@ impl Exporter<'_> {
                 self.shape(s, n, &bp, *rule, page);
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
-            NodeKind::Image(im) => match (n.extras().colorize.as_deref(), self.doc.shown_image(n, im)) {
+            NodeKind::Image(im) if !n.is_distorted_image() => match (n.extras().colorize.as_deref(), self.doc.shown_image(n, im)) {
                 (Some(p @ Paint::Solid { .. }), im) if self.doc.image_blob(&im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
                     let im = &*im;
                     if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
-                        if let Some(colorized) = self.colorized_image(im, p, !n.extras().pixelated) {
-                            self.image(s, im, Some(colorized), n.extras().pixelated);
-                        } else {
-                            self.image_left_out = self.image_left_out.map(|_| true);
-                            self.warn(UNDECODED);
-                        }
+                        self.colorized(s, n, im, p);
                     } else if self.image_left_out.is_some() {
                         self.image_left_out = Some(true);
                         self.warn(super::exporter::UNWRITABLE_IMAGE);
                     }
                 }
-                (_, im) => self.image(s, &im, alpha, n.extras().pixelated),
+                (_, im) => {
+                    // A piece of a distorted image draws the image its mask was written into.
+                    let alpha = alpha.or_else(|| self.piece_image.as_ref().filter(|(key, _)| *key == im.key).map(|(_, i)| i.clone()));
+                    self.image(s, &im, alpha, n.extras().pixelated)
+                }
             },
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested
@@ -451,7 +454,7 @@ impl Exporter<'_> {
                 // A dynamic symbol's instance shows its own appearance changes, and the instance's
                 // fill stains its art, as on the canvas.
                 let doc = self.doc;
-                if let Some(sym) = doc.symbols.iter().find(|x| &x.name == symbol) {
+                if let Some(sym) = self.symbols.symbol(symbol) {
                     let changed;
                     let art: &Node = if n.extras().symbol_overrides.is_empty() && vectorcraft_doc::symbol_overrides::stain(n).is_none() {
                         &sym.art
@@ -487,16 +490,27 @@ impl Exporter<'_> {
             }
             // A gradient mesh is a smooth patch shading where it can be written as one.
             NodeKind::Mesh(m) if self.mesh(s, m) => {}
-            // Live blends/envelopes/meshes export their evaluated (expanded) form.
+            // Live blends/envelopes/meshes (and distorted images) export their evaluated
+            // (expanded) form.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
-                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
+                let g = expanded.unwrap_or_else(|| vectorcraft_effects::expand_live_deep(Some(self.doc), n));
+                // The pieces draw the image as it is shown, under its color mask's key.
+                let piece = match (&n.kind, &alpha) {
+                    (NodeKind::Image(im), Some(img)) => Some((self.doc.shown_image(n, im).key.clone(), img.clone())),
+                    _ => None,
+                };
+                let outer = piece.map(|p| self.piece_image.replace(p));
                 for c in g.children().into_iter().flatten() {
                     self.node(s, c, page, false);
+                }
+                if let Some(outer) = outer {
+                    self.piece_image = outer;
                 }
             }
             // Ruler guides draw on screen only.
@@ -505,6 +519,26 @@ impl Exporter<'_> {
         self.knockout = enclosing;
         for _ in 0..pushes {
             s.pop();
+        }
+    }
+
+    /// Draw image `im` of node `n` colorized with `p` ([`Self::colorized_image`]), overprinting
+    /// when its color does ([`Node::colorize_overprints`]). A paper white color ([`Self::paper_white`])
+    /// that overprints (Discard White Overprint off) puts no ink down, so it paints nothing.
+    fn colorized(&mut self, s: &mut Surface, n: &Node, im: &vectorcraft_doc::ImageObject, p: &Paint) {
+        let overprint = n.colorize_overprints() && self.overprint;
+        if overprint && !self.doc.setup.discard_white_overprint && self.paper_white(p) {
+            return;
+        }
+        match self.colorized_image(im, p, !n.extras().pixelated, overprint) {
+            Some(colorized) => {
+                let pixelated = n.extras().pixelated;
+                self.overprinting(s, overprint, p, |ex, s| ex.image(s, im, Some(colorized), pixelated));
+            }
+            None => {
+                self.image_left_out = self.image_left_out.map(|_| true);
+                self.warn(UNDECODED);
+            }
         }
     }
 
@@ -599,16 +633,48 @@ impl Exporter<'_> {
     }
 
     /// Draw a fill or stroke of `paint` with `draw`: as a form marked to overprint when it
-    /// `overprints`, paints and overprints are kept (but not a white one with Discard White
-    /// Overprint).
+    /// `overprints`, paints and overprints are kept (but not a paper white one with Discard White
+    /// Overprint, [`Self::discards_white`]).
     pub(super) fn overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
-        let white = || self.doc.setup.discard_white_overprint && vectorcraft_doc::overprint::is_white(paint);
-        if overprints && self.overprint && !paint.is_none() && !white() {
+        if overprints && self.overprint && !paint.is_none() && !self.discards_white(paint) {
             self.overprinted = true;
             crate::forms::form(s, Mark::Overprint, |s| draw(self, s));
         } else {
             draw(self, s);
         }
+    }
+
+    /// [`Self::overprinting`] for a character fill or stroke, which has no blend mode of its own:
+    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a paper
+    /// white one with Discard White Overprint).
+    pub(super) fn char_overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
+        if overprints && self.darken_overprints && !paint.is_none() && !self.discards_white(paint) {
+            s.push_blend_mode(krilla::blend::BlendMode::Darken);
+            self.overprinting(s, overprints, paint, draw);
+            s.pop();
+        } else {
+            self.overprinting(s, overprints, paint, draw);
+        }
+    }
+
+    /// Whether paint `p` knocks out where it overprints under Document Setup → Discard White
+    /// Overprint ([`vectorcraft_doc::overprint::DiscardWhite::discards`]).
+    fn discards_white(&mut self, p: &Paint) -> bool {
+        self.doc.setup.discard_white_overprint && self.paper_white(p)
+    }
+
+    /// Whether paint `p` is paper white ([`vectorcraft_doc::overprint::DiscardWhite::paper_white`]):
+    /// white, and not a tint above 0% of one of the document's spot inks. The spot ink names are
+    /// read only for a white linked to a swatch.
+    fn paper_white(&mut self, p: &Paint) -> bool {
+        if !vectorcraft_doc::overprint::is_white(p) {
+            return false;
+        }
+        if !matches!(p, Paint::Solid { swatch: Some(_), .. }) {
+            return true;
+        }
+        let doc = self.doc;
+        self.discard_white.get_or_insert_with(|| vectorcraft_doc::overprint::DiscardWhite::of(doc)).paper_white(p)
     }
 
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
@@ -953,8 +1019,10 @@ enum SharedArt {
 
 /// A search for the brushed strokes drawing an object draws, whose brush art can hold many more
 /// objects than the stroked path.
-struct BrushSearch<'a> {
-    doc: &'a Document,
+struct BrushSearch<'a, 'd> {
+    doc: &'d Document,
+    /// `doc`'s symbols, found by name.
+    symbols: &'a vectorcraft_doc::SymbolBoxes<'d>,
     /// The brushes the export draws strokes with ([`Exporter::brush_art`]); a stroke whose brush
     /// is not among them is drawn as a plain stroke.
     brushes: &'a [vectorcraft_brush::Brush],
@@ -968,9 +1036,10 @@ struct BrushSearch<'a> {
     exhausted: bool,
 }
 
-impl<'a> BrushSearch<'a> {
-    fn new(doc: &'a Document, brushes: &'a [vectorcraft_brush::Brush]) -> Self {
-        Self { doc, brushes, seen: HashMap::new(), left: MAX_KNOCKOUT_MASK_OBJECTS, exhausted: false }
+impl<'a, 'd> BrushSearch<'a, 'd> {
+    /// A search through the document of `symbols`.
+    fn new(symbols: &'a vectorcraft_doc::SymbolBoxes<'d>, brushes: &'a [vectorcraft_brush::Brush]) -> Self {
+        Self { doc: symbols.document(), symbols, brushes, seen: HashMap::new(), left: MAX_KNOCKOUT_MASK_OBJECTS, exhausted: false }
     }
 
     /// Takes `n` objects from [`Self::left`]; false, and the search exhausted, when fewer are left.
@@ -1031,8 +1100,7 @@ impl<'a> BrushSearch<'a> {
             NodeKind::SymbolInstance { symbol, .. } => {
                 // A dynamic symbol's instance draws its art with its own appearance changes: the
                 // art is copied once for each set of changes, counted before it is copied.
-                let doc = self.doc;
-                match doc.symbols.iter().find(|s| &s.name == symbol) {
+                match self.symbols.symbol(symbol) {
                     Some(s) if !n.extras().symbol_overrides.is_empty() => {
                         let key = format!("{symbol}\u{0}{:?}", n.extras().symbol_overrides);
                         self.shared(SharedArt::Dynamic, &key, |search| {
@@ -1065,8 +1133,7 @@ impl<'a> BrushSearch<'a> {
 
     /// Whether the art of the symbol named `name` draws a brushed stroke.
     fn symbol(&mut self, name: &str, depth: usize) -> bool {
-        let doc = self.doc;
-        let Some(s) = doc.symbols.iter().find(|s| s.name == name) else { return false };
+        let Some(s) = self.symbols.symbol(name) else { return false };
         self.shared(SharedArt::Symbol, name, |search| search.node(&s.art, true, depth))
     }
 
@@ -1162,7 +1229,8 @@ mod tests {
         let square = Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
         let art = Node::group(NodeId(0), vec![Arc::new(square), Arc::new(instance())]);
         d.symbols.push(Symbol { dynamic: true, name: "Loop".into(), art: Arc::new(art) });
-        let mut search = BrushSearch::new(&d, &[]);
+        let symbols = d.symbol_boxes();
+        let mut search = BrushSearch::new(&symbols, &[]);
         assert!(!search.node(&instance(), true, 0));
         assert!(!search.exhausted);
         assert!(MAX_KNOCKOUT_MASK_OBJECTS - search.left < 10, "{} objects", MAX_KNOCKOUT_MASK_OBJECTS - search.left);
@@ -1190,11 +1258,12 @@ mod tests {
                 .collect();
             Node::group(NodeId(0), instances)
         };
-        let mut search = BrushSearch::new(&d, &[]);
+        let symbols = d.symbol_boxes();
+        let mut search = BrushSearch::new(&symbols, &[]);
         assert!(search.node(&group(true), true, 0));
         assert!(search.exhausted);
         assert_eq!(search.left, 0);
-        let mut search = BrushSearch::new(&d, &[]);
+        let mut search = BrushSearch::new(&symbols, &[]);
         assert!(!search.node(&group(false), true, 0));
         assert!(!search.exhausted);
         // The group, the 1,000 instances, and one copy of the art counted and looked through.
@@ -1232,6 +1301,6 @@ mod tests {
         vectorcraft_doc::placed_document::prime(&placed, Arc::new(vec![]), brushed_art());
         let n = Node::new(NodeId(0), NodeKind::PlacedDocument(Box::new(placed)));
         let brushes = vectorcraft_brush::library(&d);
-        assert!(BrushSearch::new(&d, &brushes).node(&n, true, 0));
+        assert!(BrushSearch::new(&d.symbol_boxes(), &brushes).node(&n, true, 0));
     }
 }

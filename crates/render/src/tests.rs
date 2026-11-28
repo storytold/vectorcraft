@@ -15,6 +15,7 @@ mod cmykblend;
 mod colorize;
 mod colrglyphs;
 mod container;
+mod curvedstrokeedges;
 mod dither;
 pub(super) mod fontchange;
 mod freeform;
@@ -29,6 +30,7 @@ mod meshwarp;
 mod movedstroke;
 mod objectfx;
 mod paintedbrush;
+mod paintedlook;
 mod placed_document;
 mod rasterize;
 mod setup;
@@ -223,6 +225,33 @@ fn hidden_and_culled() {
     assert_eq!(rr.stats.culled, 1);
 }
 
+#[test]
+fn a_render_leaves_out_every_object_of_a_large_hidden_set() {
+    // 2,000 one-pixel-wide strips; the strips in even columns are in `hidden`.
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let mut hidden = std::collections::HashSet::new();
+    for row in 0..20 {
+        for col in 0..100 {
+            let r = Rect::new(f64::from(col), f64::from(row * 5), f64::from(col + 1), f64::from(row * 5 + 5));
+            let n = rect_node(&mut d, r, Paint::solid(Color::BLACK), Paint::None, 0.0);
+            let id = d.insert(Some(l), usize::MAX, n).unwrap();
+            if col % 2 == 0 {
+                hidden.insert(id);
+            }
+        }
+    }
+    assert_eq!(hidden.len(), 1_000);
+    let opts = RenderOptions { hidden, ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    for row in 0..20 {
+        for col in 0..100 {
+            let want = if col % 2 == 0 { [0, 0, 0, 0] } else { [0, 0, 0, 255] };
+            assert_eq!(r.pixel(col, row * 5 + 2), want, "column {col}, row {row}");
+        }
+    }
+}
+
 /// A document with symbol "Far" holding a red rectangle `art`, and an instance of it moved by
 /// (-50, -50): its 20 × 20 square, (-60, -60) to (-40, -40), lies outside a view of the page.
 fn far_instance(art: Rect) -> Document {
@@ -311,6 +340,76 @@ fn past_the_measured_placements_an_instance_is_culled_by_an_estimate_of_its_art_
     d.insert(Some(l), 4100, Node::new(id, NodeKind::SymbolInstance { symbol: "Late".into(), xf: Affine::translate((-5.0, 20.0)) })).unwrap();
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
     assert!(img.pixel(3, 20)[3] > 0, "{:?}", img.pixel(3, 20));
+}
+
+/// 2,000 symbols, then two named "Mark" (a red square, then a blue one), and an instance of
+/// "Mark" at (25, 25) and one with a drop shadow at (70, 70). With `second` the blue square's
+/// symbol is named that instead.
+fn marks(second: &str) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    for i in 0..2000 {
+        let art = rect_node(&mut d, Rect::new(0.0, 0.0, 1.0, 1.0), Paint::solid(Color::BLACK), Paint::None, 0.0);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+    }
+    for (name, color) in [("Mark", Color::rgb(1.0, 0.0, 0.0)), (second, Color::rgb(0.0, 0.0, 1.0))] {
+        let art = rect_node(&mut d, Rect::new(-10.0, -10.0, 10.0, 10.0), Paint::solid(color), Paint::None, 0.0);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    let l = d.layers[0].id;
+    let plain = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((25.0, 25.0)) });
+    let mut shadowed = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((70.0, 70.0)) });
+    shadowed.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: serde_json::json!({"x": 4, "y": 4, "blur": 0}),
+        visible: true,
+    });
+    d.insert(Some(l), 0, plain).unwrap();
+    d.insert(Some(l), 1, shadowed).unwrap();
+    d
+}
+
+/// Instances among many symbols draw the first symbol of their name, the same pixels as when no
+/// other symbol has that name.
+#[test]
+fn instances_draw_the_first_symbol_of_their_name() {
+    let img = render(&marks("Mark"));
+    assert_eq!(img.pixel(25, 25), [255, 0, 0, 255]);
+    assert_eq!(img.pixel(70, 70), [255, 0, 0, 255]);
+    assert!(img.pixels == render(&marks("Other")).pixels, "the pixels differ");
+}
+
+/// A frame that draws 300 instances with drop shadows, among 2,000 symbols, and an envelope around
+/// instances reads the symbol list once to find their symbols.
+#[test]
+fn a_frame_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    let l = d.layers[0].id;
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 5.0, f64::from(i / 20) * 5.0)) * Affine::scale(0.2);
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        d.insert(Some(l), usize::MAX, n).unwrap();
+    }
+    let content = Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((50.0, 50.0)) }));
+    let kind = vectorcraft_doc::live::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+    let envelope = NodeKind::Envelope {
+        content: vec![content],
+        kind: Box::new(kind),
+        fidelity: 50.0,
+        editing: false,
+        options: Default::default(),
+        frame: Box::new(Affine::IDENTITY),
+    };
+    let envelope = Node::new(d.alloc_id(), envelope);
+    d.insert(Some(l), usize::MAX, envelope).unwrap();
+    let before = vectorcraft_doc::symbols_read();
+    render(&d);
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
 }
 
 /// Symbols 0 to 29 each hold two instances of the next, sheared two ways, so that the 2^30
@@ -505,6 +604,35 @@ fn outline_mode_no_fill() {
         Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { outline: true, background: Some([255; 4]), ..Default::default() });
     assert_eq!(r.pixel(50, 50), [255, 255, 255, 255]);
     assert!(r.pixel(10, 50)[0] < 200);
+}
+
+/// Outline view draws a distorted image's frame through its corners: a slanted side, and nothing
+/// inside or along the rectangle it was placed in.
+#[test]
+fn outline_mode_draws_a_distorted_images_frame_through_its_corners() {
+    let mut d = Document::new(100.0, 100.0);
+    let id = d.alloc_id();
+    let im = vectorcraft_doc::ImageObject {
+        key: "k".into(),
+        width: 10,
+        height: 10,
+        xf: Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(id, NodeKind::Image(Box::new(im)));
+    let q = [(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    n.set_image_corners(q).unwrap();
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let r =
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { outline: true, background: Some([255; 4]), ..Default::default() });
+    // On the left side, halfway down: from (40, 0) to (0, 100).
+    assert!(r.pixel(20, 50)[0] < 200, "the slanted side");
+    // The old rectangle's left edge and the inside of the quad stay blank.
+    assert_eq!(r.pixel(1, 30), [255; 4]);
+    assert_eq!(r.pixel(50, 50), [255; 4]);
 }
 
 /// A 100 × 100 document with each kind of path Outline view draws, and the ids of its objects by
@@ -768,6 +896,79 @@ fn trace_source_applies_the_hidden_image_mask() {
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
     assert_eq!(img.pixel(30, 50), [255, 0, 0, 255]);
     assert_eq!(img.pixel(70, 50), [255, 255, 255, 255]);
+}
+
+/// The Split view draws the source image left of its divider and the traced shapes right of it,
+/// along the image's own width (also when the image is turned), with traced art past any of the
+/// image's edges drawn whatever the divider, in the same frames a renderer that keeps its caches
+/// draws, and in a zoomed and scrolled view and a turned view; exports draw the tracing result.
+#[test]
+fn split_view_draws_the_source_on_one_side_of_the_divider_and_the_result_on_the_other() {
+    use vectorcraft_doc::{ImageBlob, ImageObject};
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let red = |p: [u8; 4]| p[0] > 200 && p[1] < 60 && p[2] < 60;
+    let blue = |p: [u8; 4]| p[2] > 200 && p[0] < 60;
+    // A red 80 × 80 source image at 10, 10, turned a half turn about its center when `turned`, with
+    // a blue traced square over all of it.
+    for turned in [false, true] {
+        let mut d = Document::new(100.0, 100.0);
+        d.images.insert("red".into(), ImageBlob::new("image/png", png.clone()));
+        let turn = if turned { Affine::rotate_about(std::f64::consts::PI, kurbo::Point::new(50.0, 50.0)) } else { Affine::IDENTITY };
+        let xf = turn * Affine::translate((10.0, 10.0)) * Affine::scale(80.0);
+        let im = ImageObject { key: "red".into(), width: 1, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+        let mut source = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+        source.visible = false;
+        let shape = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+        // Traced art past the image's right edge on the page (a stroke along it, say).
+        let past = rect_node(&mut d, Rect::new(92.0, 46.0, 98.0, 54.0), Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0);
+        // And above the image's top edge, near its left edge.
+        let above = rect_node(&mut d, Rect::new(14.0, 2.0, 26.0, 8.0), Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0);
+        let mut g = Node::group(d.alloc_id(), vec![Arc::new(source), Arc::new(shape), Arc::new(past), Arc::new(above)]);
+        let id = g.id;
+        g.extras_mut().trace = Some(Box::new(serde_json::json!({ "view": "split", "split": 0.25 })));
+        d.insert(Some(d.layers[0].id), 0, g).unwrap();
+        let screen = RenderOptions { trace_views: true, background: Some([255; 4]), ..Default::default() };
+        let export = RenderOptions { background: Some([255; 4]), ..Default::default() };
+        let mut kept = Renderer::new();
+        for split in [0.25, 0.0, 1.0, 0.25] {
+            if let Some(n) = d.node_mut(id) {
+                n.extras_mut().trace = Some(Box::new(serde_json::json!({ "view": "split", "split": split })));
+            }
+            // The divider in page space: 30 across from the image's left edge, or from its right
+            // edge on the page once the image is turned.
+            let at = if turned { 90.0 - 80.0 * split } else { 10.0 + 80.0 * split };
+            // The view: as is, zoomed in twice and scrolled, and turned a half turn about the page's
+            // middle; `px` finds the pixel showing page point (x, y).
+            let views: [(Affine, u32); 3] = [
+                (Affine::IDENTITY, 100),
+                (Affine::translate((5.0, 7.0)) * Affine::scale(2.0), 210),
+                (Affine::rotate_about(std::f64::consts::PI, kurbo::Point::new(50.0, 50.0)), 100),
+            ];
+            for (view, size) in views {
+                let px = |r: &Rendered, x: f64, y: f64| {
+                    let q = view * kurbo::Point::new(x, y);
+                    r.pixel(q.x.floor() as u32, q.y.floor() as u32)
+                };
+                for r in [kept.render(&d, size, size, view, &screen), Renderer::new().render(&d, size, size, view, &screen)] {
+                    for x in [12.5, 30.5, 48.5, 52.5, 70.5, 88.5] {
+                        let p = px(&r, x, 50.5);
+                        let source = if turned { x > at } else { x < at };
+                        assert!(if source { red(p) } else { blue(p) }, "turned {turned}, split {split}, view {view:?}, x = {x}: {p:?}");
+                    }
+                    assert_eq!(px(&r, 5.5, 50.5), [255; 4], "nothing outside the image");
+                    // The art past the image's edges shows on either side of the divider.
+                    let green = |p: [u8; 4]| p[1] > 200 && p[0] < 60 && p[2] < 60;
+                    for (x, y) in [(95.5, 50.5), (20.5, 5.5)] {
+                        let p = px(&r, x, y);
+                        assert!(green(p), "turned {turned}, split {split}, view {view:?}, ({x}, {y}): {p:?}");
+                    }
+                }
+            }
+            let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &export);
+            assert!([12u32, 50, 88].iter().all(|x| blue(r.pixel(*x, 50))), "exports draw the result");
+        }
+    }
 }
 
 #[test]
@@ -1686,16 +1887,18 @@ fn tiff_header(w: u32, h: u32) -> Vec<u8> {
 #[test]
 fn an_image_too_large_as_rgba_is_not_decoded() {
     let over = paint::decode_within_allowance(&png_header(23_171, 23_170));
-    assert!(matches!(over, Err(image::ImageError::Limits(_))), "{over:?}");
+    assert!(matches!(over, Err(paint::DecodeError::Limit(_))), "{over:?}");
+    assert!(over.unwrap_err().to_string().starts_with("the image is too large to decode: "));
     let failed = decode_failures();
     assert!(paint::decode_pixmap(&png_header(23_171, 23_170)).is_none());
     assert!(decode_failures() > failed);
     // Within the allowance: decoded, and its missing rows can't be read.
     let within = paint::decode_within_allowance(&png_header(23_170, 23_170));
-    assert!(matches!(within, Err(image::ImageError::Decoding(_))), "{within:?}");
+    assert!(matches!(within, Err(paint::DecodeError::Unreadable(_))), "{within:?}");
+    assert!(within.unwrap_err().to_string().starts_with("the image's pixels can't be read: "));
     // A header whose size as RGBA does not fit in 64 bits gets the same limit error.
     let huge = paint::decode_within_allowance(&tiff_header(1 << 31, 1 << 31));
-    assert!(matches!(huge, Err(image::ImageError::Limits(_))), "{huge:?}");
+    assert!(matches!(huge, Err(paint::DecodeError::Limit(_))), "{huge:?}");
 }
 
 /// A PNG of `w` × `h` noisy pixels cut off halfway through its bytes: its header reads, and its
@@ -1883,14 +2086,14 @@ fn a_png_past_the_allowance_draws_at_reduced_size() {
     assert_eq!((pm.width(), pm.height(), [c.r, c.g, c.b, c.a]), (300, 300, [200, 40, 40, 255]));
     // A row is read only while the reader's buffers fit the allowance, counting the stream buffer
     // three times for the moment it grows. Below 4,096 columns of 16-bit RGBA they take 516,103
-    // bytes and 60 a column: 1,398 columns take 599,983 bytes, within 600,000, and 1,399 columns
-    // take 600,043 and are not decoded (their samples, 8 bytes a pixel, are past it too).
+    // bytes plus 64 bytes a column: 1,310 columns take 599,943 bytes, within 600,000, and 1,311
+    // columns take 600,007 and are not decoded (their samples, 8 bytes a pixel, are past it too).
     let wide = |w: u32| {
         let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(w, 60, image::Rgba([51400, 10280, 10280, 65535]));
         encoded(image::DynamicImage::ImageRgba16(img), image::ImageFormat::Png)
     };
-    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1398))), Some((1398, 60)));
-    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1399))), None);
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1310))), Some((1310, 60)));
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1311))), None);
     // An image of more pixels than the allowance has bytes is not read: 1,000 × 400 8-bit gray
     // pixels are drawn at 500 × 200 within 400,000 bytes, and 1,000 × 401 are not.
     let gray = |h: u32| encoded(image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(1000, h, image::Luma([90]))), image::ImageFormat::Png);
@@ -1938,13 +2141,13 @@ fn a_reduced_decode_counts_what_reading_takes_beside_the_images_paints_hold() {
     // Decoded whole: 14,400 bytes of RGB and a 16-row band of 8,960 bytes, beside a 73 × 54 result
     // of 15,768 bytes.
     let jpeg = encoded(image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(80, 60, image::Rgb([30, 120, 200]))), image::ImageFormat::Jpeg);
-    // Read a row at a time: 540,103 bytes in the reader's buffers for 400 columns of 16-bit RGBA,
+    // Read a row at a time: 541,703 bytes in the reader's buffers for 400 columns of 16-bit RGBA,
     // beside a 387 × 387 result of 599,076 bytes.
     let png = encoded(
         image::DynamicImage::ImageRgba16(image::ImageBuffer::from_pixel(400, 400, image::Rgba([51400, 10280, 10280, 65535]))),
         image::ImageFormat::Png,
     );
-    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 600_000, 599_076 + 540_103, (387, 387))] {
+    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 600_000, 599_076 + 541_703, (387, 387))] {
         let failed = decode_failures();
         let none = with_allowance(allowance, || with_room(room - 1, || paint::decode_pixmap_or_why(bytes)));
         assert_eq!(none.err(), Some(paint::Undecoded::NoRoom), "not decoded with a byte too few, and tried again later");

@@ -1,7 +1,7 @@
-//! Shape Builder (Shift+M), Live Paint Bucket (K) and Live Paint Selection (Shift+L).
+//! Shape Builder (Shift+M), Live Paint Bucket (K), Fill Area and Live Paint Selection (Shift+L).
 //!
-//! The tools only emit commands (`shapeBuilder.merge`, `livePaint.fill`, `livePaint.strokeEdge`,
-//! `select.*`); the planar arrangement comes from `vectorcraft_pathops::shape_builder` (Shape
+//! The tools only emit commands (`shapeBuilder.merge`, `shapeBuilder.copyRegion`, `livePaint.fill`,
+//! `livePaint.strokeEdge`, `select.*`); the planar arrangement comes from `vectorcraft_pathops::shape_builder` (Shape
 //! Builder) and `vectorcraft_pathops::live_paint` (Live Paint).
 //!
 //! **Live Paint groups** are ordinary groups (no special node kind): the group's name starts with
@@ -28,11 +28,16 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 pub use po::SHAPE_BUILDER_MAX_GAP;
 
 mod cache;
+mod fill_area;
 mod live_paint;
 mod lookup;
 mod map;
 
+#[cfg(all(feature = "testing", not(target_arch = "wasm32")))]
+pub mod testing;
+
 use cache::{BACKGROUND_SEGMENTS, CacheKey, RegionCache};
+pub use fill_area::{AreaFinder, EnclosedArea, FillAreaTool, every_layer, fill_area_roots};
 #[cfg(test)]
 use live_paint::LpHover;
 pub use live_paint::{
@@ -44,7 +49,7 @@ pub use lookup::{
     EDGE_NAME, FACE_NAME, Face, LIVE_PAINT_NAME, LIVE_PAINT_PREFIX, LP_JOIN_TOL, SOURCES_NAME, builder_members, connected_edges,
     connected_edges_through, drawn_outlines, edge_near, edges, face_at, faces, flood_faces, is_live_paint, leaf_shapes, live_paint_at,
     live_paint_takes, lp_stroke_paint, node_outline, outline_snap, path_contains, shape_builder_shapes, shapes_for, sources, visible_edge_near,
-    visible_face_at,
+    visible_edges_along, visible_face_at,
 };
 pub use map::{
     BuilderMap, HATCH, HIGHLIGHT_RED, Hit, MergeGeometry, MergeInput, PreparedMerge, Rest, Touched, hatch, maps_built, merge_geometry, merge_inputs,
@@ -211,7 +216,25 @@ pub struct ShapeBuilderTool {
     prepared: Option<Arc<PreparedMerge>>,
     /// A gesture made while the map of a large selection is being built on another thread.
     deferred: Option<Deferred>,
+    /// The button went down with nothing selected: the release says what to select.
+    empty_press: bool,
+    /// The last gesture put one of [`SHAPE_BUILDER_STATUS`] in the status bar: the next gesture that
+    /// builds something clears it.
+    diagnosed: bool,
 }
+
+/// The status a Shape Builder gesture gives when the selection holds no path or compound path.
+pub const SELECT_PATHS: &str = "Shape Builder: select paths or compound paths";
+
+/// The status a Shape Builder gesture that touched nothing gives when it ends over a path or
+/// compound path that is not selected.
+pub const SELECT_ALL_PATHS: &str = "Shape Builder: select all paths you want to merge";
+
+/// The status a Shape Builder gesture that touched nothing gives anywhere else.
+pub const NO_REGION: &str = "Shape Builder: no region under the pointer";
+
+/// The status messages the Shape Builder tool gives.
+pub const SHAPE_BUILDER_STATUS: [&str; 3] = [SELECT_PATHS, SELECT_ALL_PATHS, NO_REGION];
 
 /// A Shape Builder gesture made while the map of the selection was being built on another
 /// thread: the map key and the inputs it was made over, its pointer events, which [`Tool::poll`]
@@ -240,7 +263,13 @@ struct PendingMerge {
 #[cfg(not(target_arch = "wasm32"))]
 fn spawn_merge(map: Arc<BuilderMap>, touched: Touched, gap: f64, inputs: Vec<MergeInput>) -> Option<Receiver<MergeGeometry>> {
     let (tx, done) = std::sync::mpsc::channel();
+    #[cfg(feature = "testing")]
+    let gate = testing::take();
     let spawned = std::thread::Builder::new().name("vectorcraft-shape-builder-merge".into()).spawn(move || {
+        #[cfg(feature = "testing")]
+        if let Some(gate) = gate {
+            gate.wait();
+        }
         // The tool may have dropped the receiver meanwhile (another tool, another document).
         let _ = tx.send(merge_geometry(&map, &touched, gap, &inputs));
     });
@@ -455,6 +484,26 @@ impl ShapeBuilderTool {
         }
     }
 
+    /// Why a gesture released at `p` that touched nothing built nothing: the selection gives no path
+    /// or compound path ([`SELECT_PATHS`]); the pointer is over a path or compound path that a click
+    /// can pick and that is neither selected nor inside a selected object ([`SELECT_ALL_PATHS`]); or
+    /// neither ([`NO_REGION`]).
+    fn nothing_built(&mut self, cx: &ToolContext, p: Point) -> Action {
+        self.diagnosed = true;
+        if self.cache.get(cx, self.opts.open_filled_as_closed).shapes.is_empty() {
+            return Action::Status(SELECT_PATHS.into());
+        }
+        let unselected = vectorcraft_doc::hit::hit_test(cx.doc, p, cx.hit_options()).is_some_and(|h| {
+            let chain: Vec<NodeId> = h.ancestry.iter().copied().chain([h.leaf]).collect();
+            let path = chain
+                .iter()
+                .filter_map(|id| cx.doc.node(*id))
+                .any(|n| matches!(n.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. }));
+            path && !chain.iter().any(|id| cx.selection.contains(*id))
+        });
+        Action::Status(if unselected { SELECT_ALL_PATHS } else { NO_REGION }.into())
+    }
+
     /// The cursor swatch preview: the swatch before the current fill, the current fill (ringed)
     /// and the swatch after it, side by side above the pointer.
     fn swatch_chips(&self, cx: &ToolContext) -> Vec<Overlay> {
@@ -479,7 +528,9 @@ impl Tool for ShapeBuilderTool {
                 vec![]
             }
             PointerKind::Down => {
-                // While a merge is being computed, a press starts no gesture.
+                // While a merge is being computed, a press starts no gesture. With nothing
+                // selected, the release says what to select.
+                self.empty_press = cx.selection.is_empty() && !self.editing();
                 if cx.selection.is_empty() || self.editing() {
                     return vec![];
                 }
@@ -564,7 +615,7 @@ impl Tool for ShapeBuilderTool {
                 let press = points.first().copied().filter(|s| marquee.is_none() && !self.far && s.distance(p) <= cx.tol(CLICK_TOL_PX));
                 let split = press.filter(|q| self.stroke_at(cx, *q, erase).is_some());
                 if std::mem::take(&mut self.touched).is_empty() && split.is_none() {
-                    return vec![];
+                    return vec![self.nothing_built(cx, p)];
                 }
                 self.stroke = None;
                 let roots = sorted_roots(cx.doc, &cx.selection.objects);
@@ -590,11 +641,17 @@ impl Tool for ShapeBuilderTool {
                 if self.opts.swatches {
                     params["pickColorFrom"] = json!("swatches");
                 }
+                // The gesture builds something: the reason the last one built nothing goes.
+                let mut acts: Vec<Action> = std::mem::take(&mut self.diagnosed).then(|| Action::Status(String::new())).into_iter().collect();
                 // A large selection's merge is computed on another thread; `poll` applies it.
-                if self.start_merge(cx, &params) {
-                    return vec![];
+                if !self.start_merge(cx, &params) {
+                    acts.push(Action::Exec("shapeBuilder.merge".into(), params));
                 }
-                vec![Action::Exec("shapeBuilder.merge".into(), params)]
+                acts
+            }
+            PointerKind::Up if std::mem::take(&mut self.empty_press) => {
+                self.diagnosed = true;
+                vec![Action::Status(SELECT_PATHS.into())]
             }
             _ => vec![],
         }
@@ -693,6 +750,7 @@ impl Tool for ShapeBuilderTool {
 
     /// Choosing another tool or another document applies the merge being computed first.
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.empty_press = false;
         self.finish_edit(cx)
     }
 
@@ -735,9 +793,11 @@ impl Tool for ShapeBuilderTool {
 
     /// With Pick Color From Color Swatches, the Left and Right arrow keys pick the color swatch
     /// before or after the current fill. Escape during a drag cancels it: the release after it
-    /// merges and deletes nothing.
+    /// merges and deletes nothing, and Escape while a press with nothing selected is held keeps its
+    /// release from showing a status.
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
-        (self.opts.swatches && !self.dragging && matches!(key, ToolKey::Left | ToolKey::Right)) || (self.dragging && key == ToolKey::Escape)
+        (self.opts.swatches && !self.dragging && matches!(key, ToolKey::Left | ToolKey::Right))
+            || ((self.dragging || self.empty_press) && key == ToolKey::Escape)
     }
 
     /// The arrows pick swatches only without modifiers; Shift, Alt and Cmd/Ctrl arrows keep their
@@ -753,6 +813,7 @@ impl Tool for ShapeBuilderTool {
         }
         if key == ToolKey::Escape {
             self.dragging = false;
+            self.empty_press = false;
             self.points.clear();
             self.touched = Touched::default();
             // A gesture recorded while the map is being built is canceled with it.
@@ -808,6 +869,9 @@ impl Tool for ShapeBuilderTool {
         self.cache.clear();
         self.cache.gap = self.gap();
     }
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        check_builder_options(self.id(), &serde_json::Map::from_iter([(key.to_string(), v.clone())]))
+    }
 }
 
 /// Why `tool.setOption` cannot give the builder-family tool `tool` the options `values`, checked
@@ -815,11 +879,16 @@ impl Tool for ShapeBuilderTool {
 /// is not true or false, a `pickColorFrom` other than `artwork` or `swatches`, a `selection` other
 /// than `freeform` or `straightLine`, a `highlightColor` that is not an RGB color without an alpha
 /// part and a `gapLength` that is not a finite number are errors. A finite gap length out of 0 to
-/// [`SHAPE_BUILDER_MAX_GAP`] is not an error: the tool clamps it. The Live Paint tools are checked
-/// by [`check_live_paint_options`]; Ok for every other tool. Saved settings go to the tools'
-/// `set_option` instead, which skips a value it cannot read.
+/// [`SHAPE_BUILDER_MAX_GAP`] is not an error: the tool clamps it. `fillArea` takes only
+/// `gapDetection`, `gapLength` and `openFilledAsClosed`, checked the same way. The Live Paint tools
+/// are checked by [`check_live_paint_options`]; Ok for every other tool. Saved settings go to the
+/// tools' `set_option` instead, which skips a value it cannot read.
 pub fn check_builder_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
-    if tool != "shapeBuilder" {
+    if tool == "fillArea" {
+        if let Some(key) = values.keys().find(|k| !matches!(k.as_str(), "gapDetection" | "gapLength" | "openFilledAsClosed")) {
+            return Err(format!("unknown Fill Area option `{key}`"));
+        }
+    } else if tool != "shapeBuilder" {
         return check_live_paint_options(tool, values);
     }
     let one_of = |key: &str, v: &Value, names: &[&str]| {
@@ -849,6 +918,7 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         "shapeBuilder" => Box::new(ShapeBuilderTool::default()),
         "livePaintBucket" => Box::new(LivePaintBucketTool::default()),
         "livePaintSelection" => Box::new(LivePaintSelectionTool::default()),
+        "fillArea" => Box::new(FillAreaTool::new()),
         _ => return None,
     })
 }
