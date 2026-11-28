@@ -14,7 +14,7 @@ use crate::VectorcraftApp;
 
 /// Opaque saved choice. Public so hosts can construct `UiState` with a struct update; its path
 /// has no public setter and is never read from the generic preference or dialog-field maps.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Choice {
     path: Option<String>,
 }
@@ -45,8 +45,11 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     app.original_editor.choice = app.ui.original_editor.clone();
 }
 
-pub(crate) fn commit(app: &mut VectorcraftApp) {
+/// Saves the dialog's choice; returns whether it differs from the saved one.
+pub(crate) fn commit(app: &mut VectorcraftApp) -> bool {
+    let changed = app.ui.original_editor != app.original_editor.choice;
     app.ui.original_editor = app.original_editor.choice.clone();
+    changed
 }
 
 pub(crate) fn reset(app: &mut VectorcraftApp) {

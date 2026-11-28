@@ -350,8 +350,21 @@ fn gradient_stop_mode_converts_only_selected_stop_and_unlinks_tint_with_one_undo
             scene.assert_modes(Some("RGB Sliders"));
             let row = scene.mode_rows().into_iter().find(|(label, _, _)| label == "Web Color Sliders").unwrap().2;
             let parent = scene.popover();
-            assert!(!parent.contains(row.center()), "compact editor must expose a real child row outside itself: parent={parent:?}, row={row:?}");
-            scene.choose_mode("Web Color Sliders");
+            // The row is picked by a click on its part outside the editor.
+            let outside = [
+                pos2(row.right() - 1.0, row.center().y),
+                pos2(row.center().x, row.bottom() - 1.0),
+                pos2(row.left() + 1.0, row.center().y),
+                pos2(row.center().x, row.top() + 1.0),
+            ]
+            .into_iter()
+            .find(|point| !parent.contains(*point));
+            let outside =
+                outside.unwrap_or_else(|| panic!("compact editor must expose a real child row outside itself: parent={parent:?}, row={row:?}"));
+            scene.click(outside);
+            scene.idle(3);
+            assert!(!scene.child_open(), "picking a mode closes only its dropdown");
+            scene.assert_editor();
             assert_eq!(scene.app.ui.color_panel.mode, Mode::WebColorSliders);
             assert_ne!(
                 scene.gradient().gradient.stops[0].color,

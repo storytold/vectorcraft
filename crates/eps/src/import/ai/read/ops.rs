@@ -9,6 +9,29 @@ use super::{
 use vectorcraft_doc::{ArrowAlign, Arrowhead};
 use vectorcraft_geom::PathData;
 
+#[cfg(test)]
+thread_local! {
+    /// The operand stack slots that `[` and `]` have looked at on this thread, to find the open
+    /// `[` or to take an array's items: their work.
+    static ARRAY_SLOTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// The point-to-segment distances [`draws_look_outline`] has worked out on this thread.
+    static OUTLINE_PAIRS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`ARRAY_SLOTS`] of this thread.
+#[cfg(test)]
+pub(crate) fn array_slots() -> u64 {
+    ARRAY_SLOTS.get()
+}
+
+/// Count `slots` that `[` or `]` looked at in [`ARRAY_SLOTS`]; nothing outside tests.
+fn array_slots_looked_at(slots: usize) {
+    #[cfg(test)]
+    ARRAY_SLOTS.set(ARRAY_SLOTS.get().saturating_add(u64::try_from(slots).unwrap_or(u64::MAX)));
+    #[cfg(not(test))]
+    let _ = slots;
+}
+
 impl<'a> Reader<'a> {
     // ---- operators -------------------------------------------------------------------------
 
@@ -16,11 +39,13 @@ impl<'a> Reader<'a> {
         // The innermost `[` still on the stack (the stack is cut back by operators).
         let mut at = self.stack.len();
         while let Some(m) = self.marks.pop() {
+            array_slots_looked_at(1);
             if matches!(self.stack.get(m), Some(V::Mark)) {
                 at = m;
                 break;
             }
         }
+        array_slots_looked_at(self.stack.len() - at);
         let items: Vec<V> = self.stack.split_off(at).into_iter().skip(1).collect();
         self.push(V::Arr(items))
     }
@@ -172,6 +197,7 @@ impl<'a> Reader<'a> {
             "[" => {
                 // Drop marks that operators have taken off, so `marks` is the open nesting.
                 while self.marks.last().is_some_and(|&m| !matches!(self.stack.get(m), Some(V::Mark))) {
+                    array_slots_looked_at(1);
                     self.marks.pop();
                 }
                 // Arrays nest as deep as their `[`s; dropping a deeper one would overflow the stack.
@@ -787,7 +813,7 @@ impl<'a> Reader<'a> {
         }
         let space = self.space();
         self.note_brushes_kept();
-        let page = self.page_in_doc();
+        let pages = self.pages_in_doc();
         let Some(f) = self.frames.last_mut() else { return };
         let n = f.children.len();
         let (Some(object), Some(look)) = (n.checked_sub(1).and_then(|i| f.children.get(i)), n.checked_sub(2).and_then(|i| f.children.get(i))) else {
@@ -873,7 +899,8 @@ impl<'a> Reader<'a> {
                     let layer = self.doc.alloc_id();
                     let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
                     let shown = !hidden && object.visible && look.visible;
-                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, page.filter(|_| shown), &mut self.envelope_spent)
+                    let on: &[Rect] = if shown { &pages } else { &[] };
+                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, on, &mut self.envelope_spent)
                 };
                 alike.then_some(ap)
             }
@@ -885,7 +912,7 @@ impl<'a> Reader<'a> {
                     let layer = self.doc.alloc_id();
                     let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
                     let mut spent = crate::import::ai::envelope::Spent::default();
-                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, None, &mut spent)
+                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, &[], &mut spent)
                 };
                 alike.then_some(ap)
             }
@@ -1314,7 +1341,7 @@ fn look_alike(
     hidden: bool,
     layer: NodeId,
     shared: &crate::import::ai::envelope::Shared<'_>,
-    page: Option<Rect>,
+    pages: &[Rect],
     spent: &mut crate::import::ai::envelope::Spent,
 ) -> bool {
     let mut live = object.clone();
@@ -1329,7 +1356,7 @@ fn look_alike(
     for n in [&mut live, &mut plain] {
         (n.visible, n.opacity, n.blend) = (true, 1.0, BlendMode::Normal);
     }
-    crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, page, spent)
+    crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, pages, spent)
 }
 
 /// Does `appearance` stroke with dashes aligned to corners and path ends?
@@ -1488,7 +1515,7 @@ fn painted_bounds(object: &Node, appearance: &Appearance) -> Option<Rect> {
     let mut out = None;
     for item in &appearance.items {
         let painted = match item {
-            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => path.bounds(),
+            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => path.drawn_bounds(false),
             AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => vectorcraft_effects::stroke::outline_region(&path, rule, s).bounds(),
             _ => None,
         };
@@ -1635,7 +1662,13 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
     /// projection onto it) is taken from `budget`: `false` once that runs out.
     fn near(a: &[kurbo::Line], b: &[kurbo::Line], budget: &mut usize) -> bool {
         use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
-        let close = |p: kurbo::Point| b.iter().any(|t| t.nearest(p, 1e-6).distance_sq <= OUTLINE_POINT_LIMIT * OUTLINE_POINT_LIMIT);
+        let close = |p: kurbo::Point| {
+            b.iter().any(|t| {
+                #[cfg(test)]
+                OUTLINE_PAIRS.set(OUTLINE_PAIRS.get() + 1);
+                t.nearest(p, 1e-6).distance_sq <= OUTLINE_POINT_LIMIT * OUTLINE_POINT_LIMIT
+            })
+        };
         for s in a {
             let steps = (s.arclen(1e-6) / OUTLINE_SPACING).ceil();
             let steps = if steps.is_finite() && steps >= 1.0 { steps as usize } else { 1 };
@@ -1658,7 +1691,7 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
     }
     // The object's outline reshaped as it is drawn: its effects from its own bounds.
     for path in &mut ours {
-        let bounds = kurbo::Shape::bounding_box(&path.to_bezpath());
+        let bounds = path.bounds().unwrap_or_default();
         *path = vectorcraft_effects::apply_geometry(&appearance.effects, path, bounds);
     }
     let max = MAX_OUTLINE_PAIRS.isqrt();
@@ -1761,6 +1794,14 @@ pub(crate) struct ParsedStyle {
 /// parses it. `None` when the section doesn't define it.
 pub(crate) fn parse_art_style(section: &[u8], name: &str) -> Option<ParsedStyle> {
     crate::import::ai::style::art_styles(section).remove(name).map(|style| ParsedStyle { style })
+}
+
+/// The color type takes from art style `parsed` when a character's fill or stroke names it (key 5
+/// of its paint, `ate`): a style of one paint whose paint is a color with a swatch, at its tint and
+/// linked to that swatch ([`crate::import::ai::style::ArtStyle::simple_color`]). `None` for any
+/// other style.
+pub(crate) fn parsed_type_color(parsed: &ParsedStyle) -> Option<&Paint> {
+    parsed.style.simple_color.as_ref().map(|(paint, _)| paint)
 }
 
 /// Art style `parsed` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`], with a
@@ -1984,9 +2025,35 @@ mod tests {
         Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
     }
 
+    /// A lone anchor, which a fill does not paint, does not move what the fill paints when the
+    /// arrowheads are placed against the drawn look: a filled line with a head and a stray anchor
+    /// well outside it still fits a look of the line and its head alone.
+    #[test]
+    fn a_lone_anchor_does_not_move_the_painted_box_heads_are_placed_by() {
+        use vectorcraft_doc::{ArrowAlign, Arrowhead, CustomArrowhead, FillLayer, StrokeLayer};
+        use vectorcraft_geom::{Point, SubPath};
+        let wedge = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(3.0, 2.0), Point::new(3.0, -1.0)], true));
+        let mut stroke = StrokeLayer::new(Paint::solid(vectorcraft_doc::color::Color::BLACK), 2.0);
+        stroke.end_arrow = Some(Arrowhead::Custom(Arc::new(CustomArrowhead::new("Wedge".into(), wedge))));
+        stroke.arrow_align = ArrowAlign::Tip;
+        let mut appearance = Appearance::default();
+        appearance.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(vectorcraft_doc::color::Color::BLACK))));
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        let line = SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false);
+        let plain = Node::path(NodeId(1), PathData::single(line.clone()), appearance.clone());
+        let want = painted_bounds(&plain, &appearance).unwrap();
+        let look =
+            Node::path(NodeId(2), shapes::rectangle(want), Appearance::basic(Paint::solid(vectorcraft_doc::color::Color::BLACK), Paint::None, 0.0));
+        let stray = SubPath::new(vec![vectorcraft_geom::Anchor::corner(Point::new(50.0, 200.0))], false);
+        let object = Node::path(NodeId(3), PathData::new(vec![line, stray]), appearance.clone());
+        let placed = heads_placed(&object, &look, appearance, Affine::IDENTITY).expect("the heads fit the look");
+        assert!(placed.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.arrow_align == ArrowAlign::Tip)));
+    }
+
     /// The outline check works from one budget for the object: a look of the outline drawn twice
     /// (a fill and a stroke) matches, one drawn thousands of times gives up and keeps the drawn
-    /// look instead of comparing every copy.
+    /// look instead of comparing every copy, having worked out no more distances than the budget
+    /// holds.
     #[test]
     fn the_outline_check_has_one_budget_for_the_object() {
         let zig = vectorcraft_doc::Effect {
@@ -2002,10 +2069,40 @@ mod tests {
             let drawn = (0..copies).map(|i| Arc::new(Node::path(NodeId(10 + i), outline.clone(), Appearance::default()))).collect();
             Node::group(NodeId(2), drawn)
         };
-        assert!(draws_look_outline(&object, &appearance, &look(2)));
-        let started = std::time::Instant::now();
-        assert!(!draws_look_outline(&object, &appearance, &look(5_000)));
-        assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+        // Whether the object draws `look`, and how many distances the check worked out.
+        let check = |look: &Node| {
+            let before = OUTLINE_PAIRS.get();
+            let drawn = draws_look_outline(&object, &appearance, look);
+            (drawn, OUTLINE_PAIRS.get() - before)
+        };
+        let (drawn, two) = check(&look(2));
+        assert!(drawn);
+        let (drawn, many) = check(&look(5_000));
+        assert!(many <= u64::try_from(MAX_OUTLINE_PAIRS).unwrap(), "5,000 copies: {many} distances; 2 copies: {two}");
+        assert!(!drawn);
+    }
+
+    /// The outline check reshapes the object as it is drawn, its effects working from its bounds
+    /// with its lone anchors: a 10 pt line with a lone anchor at (100, 50), scaled 200% about
+    /// (50, 25), matches a look of that line drawn from (-50, -25), and not one of the line scaled
+    /// about its own center.
+    #[test]
+    fn the_outline_check_reshapes_from_bounds_with_lone_anchors() {
+        use vectorcraft_geom::{Point, SubPath};
+        let scale =
+            vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"scaleH": 200, "scaleV": 200}), visible: true };
+        let path = PathData::new(vec![
+            SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0)], false),
+            SubPath::polyline(&[Point::new(100.0, 50.0)], false),
+        ]);
+        let appearance = Appearance { effects: vec![scale], ..Appearance::basic(Paint::None, Paint::None, 0.0) };
+        let object = Node::path(NodeId(1), path, appearance.clone());
+        let look = |from: Point, to: Point| {
+            let drawn = PathData::single(SubPath::polyline(&[from, to], false));
+            Node::group(NodeId(2), vec![Arc::new(Node::path(NodeId(3), drawn, Appearance::default()))])
+        };
+        assert!(draws_look_outline(&object, &appearance, &look(Point::new(-50.0, -25.0), Point::new(-30.0, -25.0))));
+        assert!(!draws_look_outline(&object, &appearance, &look(Point::new(-5.0, 0.0), Point::new(15.0, 0.0))));
     }
 
     /// The outline check holds for every point of the outlines, not only the points it checks: a

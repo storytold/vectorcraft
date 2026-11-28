@@ -94,6 +94,7 @@ mod interaction_commands;
 mod interactivity;
 mod interpolate_handles;
 mod intertwine;
+mod isolation_removed;
 mod journal;
 mod keyanchor;
 mod keyguide;
@@ -186,6 +187,7 @@ mod script_include;
 mod script_io;
 mod script_run;
 mod script_tags;
+mod script_variables;
 mod script_xmp;
 mod scripts;
 mod segment_nudge;
@@ -376,15 +378,23 @@ fn unknown_command_names_the_nearest_id() {
     assert!(e.to_string().contains("did you mean `select.all`?"), "{e}");
 }
 
+/// An unknown command id or parameter key of 200,000 characters is answered without measuring
+/// its distance to every id and key: it takes no more character comparisons than one of 20.
 #[test]
 fn a_long_unknown_command_id_is_answered_at_once() {
+    use crate::cmd::params::DISTANCE_CELLS;
     let mut s = session();
-    let long = "x".repeat(200_000);
-    let start = std::time::Instant::now();
-    assert!(matches!(s.execute(&long, &json!({})), Err(EngineError::UnknownCommand(_))));
-    let e = crate::check_params("file.new", &json!({ long.as_str(): 1 })).unwrap_err();
-    assert!(e.to_string().contains("the command takes:"), "{e}");
-    assert!(start.elapsed() < std::time::Duration::from_secs(2), "{:?}", start.elapsed());
+    let mut compared = |id: &str| {
+        DISTANCE_CELLS.set(0);
+        assert!(matches!(s.execute(id, &json!({})), Err(EngineError::UnknownCommand(_))), "{}", id.len());
+        let e = crate::check_params("file.new", &json!({ id: 1 })).unwrap_err();
+        assert!(e.to_string().contains("the command takes:"), "{e}");
+        DISTANCE_CELLS.get()
+    };
+    let short = compared(&"x".repeat(20));
+    let long = compared(&"x".repeat(200_000));
+    assert!(short > 0, "a 20-character id is measured against the ids near its length");
+    assert!(long <= short, "200,000 characters: {long} comparisons, 20 characters: {short}");
 }
 
 #[cfg(not(target_arch = "wasm32"))]

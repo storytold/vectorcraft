@@ -144,6 +144,58 @@ fn select_range(app: &mut VectorcraftApp, start: usize, end: usize) {
 }
 
 #[test]
+fn canceling_paragraph_dropdown_choices_preserves_text_and_undo_history() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+
+    enum Setting {
+        Kashida,
+        Mojikumi,
+        Kinsoku,
+    }
+
+    for (label, setting) in [("Insert Kashidas", Setting::Kashida), ("Mojikumi Set", Setting::Mojikumi), ("Kinsoku Set", Setting::Kinsoku)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "One\nTwo"})).unwrap()["id"].clone();
+        app.run("text.setFormat", json!({"id": id, "kashida": "none", "mojikumi": "none", "kinsoku": "none"})).unwrap();
+        app.session.prefs.show_indic_options = true;
+        app.session.prefs.show_east_asian_options = true;
+        app.ui.paragraph_hide_options = false;
+        let original = app.session.active().unwrap().doc.clone();
+        let revision = app.session.active().unwrap().revision;
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, show);
+        panel.room(egui::vec2(400.0, 1000.0));
+        panel.click_role(label, Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "highlighting {label} does not apply formatting");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        {
+            let app = panel.app();
+            let state = app.session.active().unwrap();
+            assert_eq!(state.doc, original, "canceling {label} keeps the text");
+            assert_eq!(state.revision, revision);
+            assert_eq!(state.history.undo.len(), undo);
+        }
+        panel.click_role(label, Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        {
+            let app = panel.app();
+            match setting {
+                Setting::Kashida => assert_eq!(shared_para(&app, |para| para.kashida), Some(Kashida::Short)),
+                Setting::Mojikumi => assert_eq!(shared_para(&app, |para| para.mojikumi), Some(Mojikumi::YakumonoHankaku)),
+                Setting::Kinsoku => assert_eq!(shared_para(&app, |para| para.kinsoku), Some(Kinsoku::Hard)),
+            }
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "accepting {label} is one formatting edit");
+        }
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "one Undo restores the original paragraph after {label}");
+    }
+}
+
+#[test]
 fn paragraph_mixed_direction_buttons_show_neither() {
     let (mut app, id) = editing_text("A\nB");
     app.session.prefs.show_indic_options = true;

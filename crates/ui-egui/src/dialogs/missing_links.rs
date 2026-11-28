@@ -109,6 +109,8 @@ impl<W: Copy> Asked<W> {
 pub(crate) struct LinkAsk {
     /// The document that owns the linked-file IDs.
     pub(crate) document: u64,
+    /// That document's revert count when it was asked: File > Revert keeps the uid and replaces the content.
+    pub(crate) reverts: u64,
     /// The missing files still asked about (`[{name, path, ids}]`), the next one first.
     pub(crate) missing: Vec<Value>,
     /// The ids of the images whose file was modified.
@@ -355,8 +357,8 @@ fn questions_for(app: &VectorcraftApp, r: &Value, web: bool) -> (Vec<String>, Ve
 /// Opens the dialog about the first of `missing`, keeping what the questions after it need
 /// ([`LinkAsk`]). A window that isn't up has nothing to show a question in.
 fn open(app: &mut VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>, notes: &[String]) {
-    let Some(document) = app.session.active().map(|st| st.uid) else { return };
-    open_ask(app, LinkAsk { document, missing, modified, notes: notes.to_vec(), back: false });
+    let Some((document, reverts)) = app.session.active().map(|st| (st.uid, st.reverts)) else { return };
+    open_ask(app, LinkAsk { document, reverts, missing, modified, notes: notes.to_vec(), back: false });
 }
 
 fn open_ask(app: &mut VectorcraftApp, ask: LinkAsk) {
@@ -451,7 +453,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         }
         return;
     }
-    let LinkAsk { document, missing, modified, notes, .. } = ask;
+    // The ids asked about named objects of the content File > Revert threw away.
+    if app.session.active().is_some_and(|st| st.reverts != ask.reverts) {
+        app.status(tl!("The document was reverted. Reopen this dialog to continue."));
+        return;
+    }
+    let LinkAsk { document, reverts, missing, modified, notes, .. } = ask;
     let done = match answer {
         MissingLinksAnswer::FindInFolder(folder) => {
             super::find_links::from_missing_links(app, missing.clone(), modified.clone(), notes.clone(), &folder).map(|()| None)
@@ -463,7 +470,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         Ok(None) => {}
         Err(e) => {
             app.status(e);
-            open_ask(app, LinkAsk { document, missing, modified, notes, back: false });
+            open_ask(app, LinkAsk { document, reverts, missing, modified, notes, back: false });
         }
     }
 }
@@ -675,6 +682,43 @@ mod tests {
         assert!(drive::is_open::<FindLinksDialog>(&app));
         assert_eq!(app.session.active_index(), Some(0));
         drive::answer::<FindLinksDialog>(&mut app, &[], false);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// After File > Revert, Replace leaves the restored document's links as they are: the ids it asked about named
+    /// objects of the content thrown away.
+    #[test]
+    fn a_missing_file_replacement_is_refused_after_file_revert() {
+        let (mut app, dir, _) = opened_without_links("revert-replace");
+        let replacement = dir.join("replacement.png");
+        std::fs::write(&replacement, png([0, 0, 200])).unwrap();
+        app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 20, "height": 20})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+
+        drive::answer::<MissingLinksDialog>(&mut app, &[("path", json!(replacement.to_string_lossy()))], true);
+        assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 2, "the restored links stay as they are");
+        assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+        assert!(!drive::is_open::<MissingLinksDialog>(&app));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// After File > Revert, Find Linked Files opened from Find in Folder… relinks nothing in the restored document.
+    #[test]
+    fn find_linked_files_relinks_nothing_after_file_revert() {
+        use crate::dialogs::find_links::FindLinksDialog;
+
+        let (mut app, dir, _) = opened_without_links("revert-find");
+        drive::answer::<MissingLinksDialog>(&mut app, &[("searchFolder", json!(dir.to_string_lossy()))], true);
+        assert!(drive::is_open::<FindLinksDialog>(&app));
+        let replacement = dir.join("replacement.png");
+        std::fs::write(&replacement, png([0, 0, 200])).unwrap();
+        app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 20, "height": 20})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+
+        let picks = json!([replacement.to_string_lossy(), replacement.to_string_lossy()]);
+        drive::answer::<FindLinksDialog>(&mut app, &[("picks", picks)], true);
+        assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 2, "the restored links stay as they are");
+        assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
         let _ = std::fs::remove_dir_all(dir);
     }
 

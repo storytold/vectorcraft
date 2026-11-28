@@ -198,6 +198,7 @@ impl Renderer {
         let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
         let plates = proof::plate_lut(opts, doc);
         let frame = Frame { mt: threads > 0, patch, doc, symbols: &symbols, view, visible, px, opts, ink: screen, output, plates: plates.as_deref() };
+        let _crossed = self.cross_placed(&frame);
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.extras().mask.as_deref()) {
@@ -484,6 +485,7 @@ impl Renderer {
         let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
         let frame = Frame { mt: false, patch: None, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, output, plates: None };
         let raster = std::mem::replace(&mut self.raster, raster_settings(opts));
+        let _crossed = self.cross_placed(&frame);
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();

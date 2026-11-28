@@ -1038,19 +1038,5 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-/// Tests only: while a test starts another program, the child briefly holds a copy of every file
-/// this process has open, until it runs that program. A file lock held through such a copy outlives
-/// its own handle, so a GPU start test that released the start file and opened it again found it
-/// still locked, as if another copy of the app were running, and failed. A test that starts a
-/// program holds its write side; a test that depends on the start file's lock holds [`no_spawns`].
-#[cfg(all(test, feature = "wgpu"))]
-static CHILD_SPAWN: std::sync::RwLock<()> = std::sync::RwLock::new(());
-
-/// Held by a test that releases a locked file and opens it again (see [`CHILD_SPAWN`]).
-#[cfg(all(test, feature = "wgpu"))]
-fn no_spawns() -> std::sync::RwLockReadGuard<'static, ()> {
-    CHILD_SPAWN.read().unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
 #[cfg(all(test, feature = "wgpu"))]
 mod tests;

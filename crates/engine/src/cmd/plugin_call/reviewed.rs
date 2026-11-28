@@ -489,6 +489,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "pattern.delete",
     "pattern.list",
     "pattern.options",
+    "pattern.placeArt",
     "pattern.transform",
     "perspective.attach",
     "perspective.draw",
@@ -736,6 +737,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "variable.makeTextDynamic",
     "variable.makeVisibilityDynamic",
     "variable.rename",
+    "variable.setBinding",
     "variable.sort",
     "variable.unbind",
 ];

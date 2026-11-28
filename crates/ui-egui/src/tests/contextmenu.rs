@@ -627,6 +627,214 @@ fn every_context_label_is_a_menu_string() {
     }
 }
 
+/// A canvas in the same fixture and command lifecycle as a window.
+struct CanvasMenu {
+    app: std::rc::Rc<std::cell::RefCell<VectorcraftApp>>,
+    fixture: craft::ui::testing::Fixture,
+}
+
+impl CanvasMenu {
+    fn new(app: VectorcraftApp) -> Self {
+        let app = std::rc::Rc::new(std::cell::RefCell::new(app));
+        let shown = std::rc::Rc::clone(&app);
+        let mut fixture = craft::ui::testing::Fixture::new(move |ui| canvas::show(&mut shown.borrow_mut(), ui));
+        fixture.room(vec2(800.0, 600.0));
+        app.borrow_mut().ui_ctx = Some(fixture.ctx().clone());
+        let mut canvas = Self { app, fixture };
+        canvas.frame(vec![]);
+        canvas
+    }
+
+    fn frame(&mut self, events: Vec<Event>) {
+        crate::testing::fixture_input(&mut self.app.borrow_mut(), &mut self.fixture);
+        self.fixture.frame(events);
+        crate::testing::fixture_input(&mut self.app.borrow_mut(), &mut self.fixture);
+    }
+
+    fn right_click(&mut self, x: f64, y: f64) {
+        let p = screen(&self.app.borrow(), x, y);
+        self.frame(vec![Event::PointerMoved(p)]);
+        self.frame(vec![press(p, PointerButton::Secondary, true)]);
+        self.frame(vec![press(p, PointerButton::Secondary, false)]);
+        self.frame(vec![]);
+        assert!(self.app.borrow().ui.context_menu_at.is_some(), "the menu opened");
+    }
+
+    fn outline_item(&self) -> Option<craft::ui::testing::Target> {
+        let app = self.app.borrow();
+        let entry = menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("object.path.outlineStroke")).unwrap();
+        let label = menus::shown_label(&app, entry.command.as_deref().unwrap(), &entry.params, &entry.label);
+        let tree = self.fixture.tree();
+        self.fixture.by_role(craft::ui::contract::Role::MENU_ITEM).into_iter().find(|item| tree.name_of(item.node) == Some(label.as_str()))
+    }
+
+    fn click_outline(&mut self) {
+        let item = self.outline_item().expect("the rendered outline item is present");
+        assert!(!self.fixture.tree().is_disabled_key(item.node), "the rendered outline item is enabled");
+        self.fixture.click(&item);
+        crate::testing::fixture_input(&mut self.app.borrow_mut(), &mut self.fixture);
+        self.frame(vec![]);
+    }
+
+    fn escape(&mut self) {
+        self.frame(vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    }
+}
+
+/// #5267: a right-click on a stroked object offers Outline Stroke, which runs
+/// `object.path.outlineStroke` (the Object › Path item) and leaves filled art; an object with no
+/// stroke to outline has no such item.
+#[test]
+fn the_canvas_context_menu_offers_outline_stroke_for_a_stroked_selection() {
+    use vectorcraft_doc::AppearanceItem;
+    let mut app = app();
+    let id = rect(&mut app, 50.0, 50.0);
+    // Stroked: a visible stroke of some weight.
+    app.run("stroke.set", json!({"weight": 6})).unwrap();
+    let strokes = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        n.appearance.items.iter().filter(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0)).count()
+    };
+    assert!(strokes(&app) > 0, "the rectangle starts with a stroke");
+    app.run("select.none", json!({})).unwrap();
+    let mut canvas = CanvasMenu::new(app);
+    canvas.right_click(100.0, 100.0);
+    canvas.click_outline();
+    {
+        let app = canvas.app.borrow();
+        let st = app.session.active().unwrap();
+        assert!(st.doc.node(id).is_none(), "the stroked rectangle was replaced by its outline");
+        assert_eq!(strokes(&app), 0, "the outline is filled art with no stroke left");
+    }
+
+    // The outline has no stroke any more: nothing to outline, so no item.
+    canvas.right_click(100.0, 100.0);
+    assert!(canvas.outline_item().is_none(), "no stroke, no rendered outline item");
+}
+
+#[test]
+fn outline_stroke_menu_ignores_a_point_with_a_nonpainting_cap() {
+    for (cap, closed) in [("butt", false), ("round", false), ("square", false), ("butt", true), ("round", true), ("square", true)] {
+        let mut app = app();
+        let point = NodeId(
+            app.run("path.create", json!({"closed": closed, "anchors": [{"x": 250, "y": 200}, {"x": 250, "y": 200}]})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        app.run("paint.setFill", json!({"none": true})).unwrap();
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
+        app.run("stroke.set", json!({"weight": 8, "cap": cap})).unwrap();
+        let visible = rect(&mut app, 50.0, 50.0);
+        app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        app.run("select.set", json!({"ids": [point.0, visible.0]})).unwrap();
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        let mut canvas = CanvasMenu::new(app);
+        canvas.right_click(100.0, 100.0);
+        assert_eq!(canvas.app.borrow().session.active().unwrap().selection.objects, selected);
+        if cap == "butt" {
+            assert!(canvas.outline_item().is_none(), "the point paints nothing with a butt cap");
+        } else {
+            canvas.click_outline();
+            let app = canvas.app.borrow();
+            let st = app.session.active().unwrap();
+            assert!(st.doc.node(point).is_none(), "{cap} cap was outlined");
+            assert!(st.doc.node(visible).is_some(), "the fill-only object is unchanged");
+            let outlined = st.selection.objects.iter().find(|&&id| id != visible).and_then(|&id| st.doc.node(id)).expect("selected outline art");
+            assert!(
+                outlined.appearance.items.iter().any(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(f) if f.visible && !f.paint.is_none())),
+                "{cap} cap becomes filled art"
+            );
+            let bounds = outlined.geometric_bounds().expect("the cap outline has geometry");
+            assert!(bounds.width() > 0.0 && bounds.height() > 0.0, "{cap} cap paints an area");
+        }
+    }
+}
+
+/// A compound path of two rectangles, filled and stroked with `weight`, isolated, with a member
+/// right-clicked. The member stays selected and has no appearance of its own: the compound holds
+/// the paint.
+fn right_click_member_of_compound(weight: f64) -> (CanvasMenu, NodeId) {
+    let mut app = app();
+    let (a, b) = (rect(&mut app, 50.0, 50.0), rect(&mut app, 200.0, 50.0));
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let compound = app.session.active().unwrap().selection.objects[0];
+    // Filled, so that a click inside a member hits it whether or not the compound has a stroke.
+    app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+    app.run("stroke.set", json!({"weight": weight})).unwrap();
+    app.run("object.isolate", json!({"id": compound.0})).unwrap();
+    let member = app.session.active().unwrap().doc.node(compound).and_then(|n| n.children().and_then(|c| c.first()).map(|m| m.id)).unwrap();
+    app.run("select.set", json!({"ids": [member.0]})).unwrap();
+    let mut canvas = CanvasMenu::new(app);
+    canvas.right_click(100.0, 100.0);
+    {
+        let app = canvas.app.borrow();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.selection.objects, [member], "the right-click leaves the member selected");
+        assert!(st.doc.node(member).is_some_and(|m| m.appearance.items.is_empty()), "a member has no appearance of its own");
+    }
+    (canvas, compound)
+}
+
+/// With a member of an isolated compound path selected (a right-click inside the isolated compound
+/// leaves a member selected), the member's own appearance is empty: the compound holds the paint.
+/// `object.path.outlineStroke` promotes the member to its compound, so the menu offers Outline
+/// Stroke exactly when the compound has a stroke to outline.
+#[test]
+fn outline_stroke_is_offered_for_a_member_of_a_stroked_compound_path() {
+    // No stroke on the compound path: nothing to outline.
+    let (canvas, _) = right_click_member_of_compound(0.0);
+    assert!(canvas.outline_item().is_none(), "no stroke, no rendered outline item");
+
+    // Stroked: the item is offered for the member, and the command outlines the compound.
+    let (mut canvas, compound) = right_click_member_of_compound(6.0);
+    canvas.click_outline();
+    assert!(canvas.app.borrow().session.active().unwrap().doc.node(compound).is_none(), "the stroked compound path was replaced by its outline");
+}
+
+#[test]
+fn outline_stroke_ignores_a_linked_dimensions_lines_when_its_source_is_selected() {
+    for grouped in [false, true] {
+        let mut app = app();
+        let source = rect(&mut app, 50.0, 50.0);
+        app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        let dimension =
+            NodeId(
+                app.run("dimension.create", json!({"source": {"kind": "segment", "edge": {"node": source.0, "subpath": 0, "segment": 0}}})).unwrap()
+                    ["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+        app.run("select.set", json!({"ids": [source.0, dimension.0]})).unwrap();
+        if grouped {
+            app.run("object.group", json!({})).unwrap();
+        }
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        let mut canvas = CanvasMenu::new(app);
+        canvas.right_click(100.0, 125.0);
+        assert_eq!(canvas.app.borrow().session.active().unwrap().selection.objects, selected, "grouped: {grouped}");
+        assert!(canvas.outline_item().is_none(), "only the protected dimension has strokes");
+        canvas.escape();
+
+        let dimension_art = {
+            let mut app = canvas.app.borrow_mut();
+            app.run("paint.setStroke", json!({"ids": [source.0], "color": "#000000"})).unwrap();
+            app.run("stroke.set", json!({"ids": [source.0], "weight": 6})).unwrap();
+            app.session.active().unwrap().doc.node(dimension).unwrap().children().unwrap().to_vec()
+        };
+        canvas.right_click(100.0, 125.0);
+        assert_eq!(canvas.app.borrow().session.active().unwrap().selection.objects, selected, "grouped: {grouped}");
+        canvas.click_outline();
+        let app = canvas.app.borrow();
+        let st = app.session.active().unwrap();
+        assert!(st.doc.node(source).is_none(), "the source was replaced by filled outlines");
+        assert_eq!(st.doc.node(dimension).unwrap().children().unwrap(), dimension_art.as_slice(), "the dimension keeps its own art");
+    }
+}
+
 /// Point type holding `t` at (20, 60), with Auto Spell Check on.
 fn spelled(app: &mut VectorcraftApp, t: &str) -> NodeId {
     let id = NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": t, "size": 24})).unwrap()["id"].as_u64().unwrap());

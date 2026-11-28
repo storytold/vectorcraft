@@ -199,7 +199,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Info",
             [],
             None,
-            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, version (a warp's map: 1, each style as one Bézier patch; 0, the earlier map), rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
+            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, version (a warp's map: 1, each style as one Bézier patch; 0, the earlier map), rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, a side shorter than 1e-6 pt taking the other side's, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
             has_doc,
             env_info
         ),

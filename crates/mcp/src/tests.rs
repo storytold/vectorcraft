@@ -1419,24 +1419,27 @@ fn remote_reports_the_reason_of_a_refusal_without_an_id() {
     h.join().unwrap();
 }
 
-/// How long a refused connect to the app may take: longer than the 800 ms connect timeout of
-/// [`Remote`], and shorter than the 2 s a refused local connect takes on Windows without one.
-const FAILED_CONNECT: std::time::Duration = std::time::Duration::from_millis(1500);
+thread_local! {
+    /// How many connections [`counted_connect`] opened or tried to open on this thread.
+    static CONNECT_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
-/// Runs `attempt` until one run takes less than `bound`, at most five times, and returns how long
-/// each run took. A machine busy with other builds can hold the test's thread for seconds in one
-/// run; a connect that waits longer than its own timeout is slow in every run.
-fn runs_until_faster_than(bound: std::time::Duration, mut attempt: impl FnMut()) -> Vec<std::time::Duration> {
-    let mut took = Vec::new();
-    while took.len() < 5 {
-        let start = std::time::Instant::now();
-        attempt();
-        took.push(start.elapsed());
-        if took.last() < Some(&bound) {
-            break;
-        }
-    }
-    took
+/// [`ControlClient::connect`](craft::automation::client::ControlClient::connect), the connect
+/// [`Remote`] uses, counted in [`CONNECT_ATTEMPTS`].
+fn counted_connect(
+    addr: std::net::SocketAddr,
+    token: &str,
+) -> Result<craft::automation::client::ControlClient, craft::automation::client::ConnectError> {
+    CONNECT_ATTEMPTS.with(|n| n.set(n.get() + 1));
+    craft::automation::client::ControlClient::connect(addr, token)
+}
+
+/// Whether `error` is a connect that never reached a server, rather than one a server answered.
+fn not_reached(error: &std::io::Error) -> bool {
+    matches!(
+        error.get_ref().and_then(|e| e.downcast_ref::<craft::automation::client::ConnectError>()),
+        Some(craft::automation::client::ConnectError::Transport(_))
+    )
 }
 
 #[test]
@@ -1446,8 +1449,14 @@ fn remote_connect_fails_fast() {
     let held = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
     held.bind(&std::net::SocketAddr::from(([127, 0, 0, 1], 0)).into()).unwrap();
     let port = held.local_addr().unwrap().as_socket().unwrap().port();
-    let took = runs_until_faster_than(FAILED_CONNECT, || assert!(Remote::connect(&format!("127.0.0.1:{port}"), TOKEN).is_err()));
-    assert!(took.last() < Some(&FAILED_CONNECT), "took {took:?}");
+    let addr = format!("127.0.0.1:{port}");
+    // One connect with the client's own bounded wait, and no second try.
+    let before = CONNECT_ATTEMPTS.with(std::cell::Cell::get);
+    let error = Remote::connect_with(&addr, TOKEN, counted_connect).err().expect("a refused connect is an error");
+    assert!(not_reached(&error), "{error}");
+    assert_eq!(CONNECT_ATTEMPTS.with(std::cell::Cell::get) - before, 1, "{error}");
+    let error = Remote::connect(&addr, TOKEN).err().expect("a refused connect is an error");
+    assert!(not_reached(&error), "{error}");
     // Nothing else could listen there meanwhile.
     assert!(std::net::TcpListener::bind(format!("127.0.0.1:{port}")).is_err());
     drop(held);
@@ -1473,6 +1482,11 @@ fn accept_sign_in(reader: &mut impl BufRead, mut out: impl Write) {
 /// A `Remote` connected to `listener`, and the app's end of its connection: a thread takes the
 /// connection and answers its sign-in, which `Remote::connect` waits for.
 fn signed_in(listener: &std::net::TcpListener) -> (Remote, std::net::TcpStream) {
+    signed_in_with(listener, craft::automation::client::ControlClient::connect)
+}
+
+/// [`signed_in`], with the remote opening every connection through `connect`.
+fn signed_in_with(listener: &std::net::TcpListener, connect: crate::backend::Connect) -> (Remote, std::net::TcpStream) {
     let addr = listener.local_addr().unwrap().to_string();
     std::thread::scope(|scope| {
         let app = scope.spawn(|| {
@@ -1481,7 +1495,7 @@ fn signed_in(listener: &std::net::TcpListener) -> (Remote, std::net::TcpStream) 
             accept_sign_in(&mut BufReader::new(stream.try_clone().unwrap()), &stream);
             stream
         });
-        let remote = Remote::connect(&addr, TOKEN).unwrap();
+        let remote = Remote::connect_with(&addr, TOKEN, connect).unwrap();
         (remote, app.join().unwrap())
     })
 }
@@ -1594,38 +1608,25 @@ fn remote_does_not_send_on_a_connection_with_a_stray_line() {
 #[test]
 fn remote_call_reports_nothing_sent_when_reconnect_is_refused() {
     // A remote whose connection the app closed, and the app's port bound but not listening.
-    let closed_remote = || {
-        let listener = reusable_listener(std::net::SocketAddr::from(([127, 0, 0, 1], 0)));
-        let addr = listener.local_addr().unwrap();
-        let (remote, old_connection) = signed_in(&listener);
-        drop(old_connection);
-        drop(listener);
-        wait_until_unusable(&remote);
-        let held = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
-        held.set_reuse_address(true).unwrap();
-        held.bind(&addr.into()).unwrap();
-        (remote, held)
-    };
+    let listener = reusable_listener(std::net::SocketAddr::from(([127, 0, 0, 1], 0)));
+    let addr = listener.local_addr().unwrap();
+    let (mut remote, old_connection) = signed_in_with(&listener, counted_connect);
+    drop(old_connection);
+    drop(listener);
+    wait_until_unusable(&remote);
+    let held = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
+    held.set_reuse_address(true).unwrap();
+    held.bind(&addr.into()).unwrap();
 
-    // Each run finds the old connection closed and connects again; only the call is timed.
-    let mut errors = Vec::new();
-    let mut took = Vec::new();
-    while took.len() < 5 {
-        let (mut remote, _held) = closed_remote();
-        let start = std::time::Instant::now();
-        errors.push(remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {"width": 20, "height": 20}})).unwrap_err());
-        took.push(start.elapsed());
-        if took.last() < Some(&FAILED_CONNECT) {
-            break;
-        }
-    }
-
-    assert!(took.last() < Some(&FAILED_CONNECT), "took {took:?}");
-    for error in errors {
-        assert!(error.contains("not reachable"), "{error}");
-        assert!(error.contains("nothing was sent"), "{error}");
-        assert!(!error.contains("operation may have completed"), "{error}");
-    }
+    // The call finds the old connection closed and tries one new connection, with the client's
+    // own bounded wait, and no second.
+    let before = CONNECT_ATTEMPTS.with(std::cell::Cell::get);
+    let error = remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {"width": 20, "height": 20}})).unwrap_err();
+    assert_eq!(CONNECT_ATTEMPTS.with(std::cell::Cell::get) - before, 1, "{error}");
+    assert!(error.contains("not reachable"), "{error}");
+    assert!(error.contains("nothing was sent"), "{error}");
+    assert!(!error.contains("operation may have completed"), "{error}");
+    drop(held);
 }
 
 #[test]
@@ -1916,7 +1917,7 @@ fn oversized_screenshot_and_png_export_are_errors() {
 }
 
 /// Preferences reach agents' gestures (#394): `prefs.set` Object Selection by Path Only, then a
-/// click inside a filled square selects nothing; Command Click to Select Objects Behind, a
+/// click inside a filled square selects nothing; Command Click to Select Objects Behind, a second
 /// Cmd-click selects the square underneath.
 #[test]
 fn selection_preferences_apply_to_pointer_gestures() {
@@ -1926,18 +1927,45 @@ fn selection_preferences_apply_to_pointer_gestures() {
         serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].as_u64().unwrap()
     };
     let (back, front) = (square(&mut s, 1, 100), square(&mut s, 2, 150));
-    let click = |s: &mut Server, id: u64, x: f64, mods: Value| {
-        let events = json!([{"kind": "down", "x": x, "y": 125}, {"kind": "up", "x": x, "y": 125}]);
+    let clicks = |s: &mut Server, id: u64, x: f64, mods: Value, n: usize| {
+        let events: Vec<Value> = (0..n).flat_map(|_| [json!({"kind": "down", "x": x, "y": 125}), json!({"kind": "up", "x": x, "y": 125})]).collect();
         let r = call(s, id, "pointer_gesture", json!({"tool": "selection", "events": events, "mods": mods}));
         assert_eq!(r["isError"], false, "{r}");
         serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"].clone()
     };
+    let click = |s: &mut Server, id: u64, x: f64, mods: Value| clicks(s, id, x, mods, 1);
     assert_eq!(click(&mut s, 3, 175.0, json!({})), json!([front]));
-    assert_eq!(click(&mut s, 4, 175.0, json!({"cmd": true})), json!([back]), "Cmd-click selects behind");
+    assert_eq!(clicks(&mut s, 4, 175.0, json!({"cmd": true}), 2), json!([back]), "the second Cmd-click selects behind");
     let r = call(&mut s, 5, "run_command", json!({"command": "prefs.set", "params": {"key": "objectSelectionByPathOnly", "value": true}}));
     assert_eq!(r["isError"], false, "{r}");
     assert_eq!(click(&mut s, 6, 225.0, json!({})), json!([]), "path only: the fill doesn't select");
     assert_eq!(click(&mut s, 7, 250.0, json!({})), json!([front]), "the path does");
+}
+
+/// A Selection tool click inside a closed shape with no fill selects it (#9175), and with Object
+/// Selection by Path Only on it selects nothing.
+#[test]
+fn a_click_inside_an_unfilled_shape_selects_it_unless_by_path_only() {
+    let mut s = server();
+    let r = call(
+        &mut s,
+        1,
+        "draw_shape",
+        json!({"shape": "rectangle", "x": 100, "y": 100, "width": 100, "height": 100, "fill": "none", "stroke": "#000000"}),
+    );
+    let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].as_u64().unwrap();
+    let click = |s: &mut Server, n: u64| {
+        let r = call(s, n, "run_command", json!({"command": "select.none", "params": {}}));
+        assert_eq!(r["isError"], false, "{r}");
+        let events = json!([{"kind": "down", "x": 150, "y": 150}, {"kind": "up", "x": 150, "y": 150}]);
+        let r = call(s, n + 1, "pointer_gesture", json!({"tool": "selection", "events": events}));
+        assert_eq!(r["isError"], false, "{r}");
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"].clone()
+    };
+    assert_eq!(click(&mut s, 2), json!([id]));
+    let r = call(&mut s, 4, "run_command", json!({"command": "prefs.set", "params": {"key": "objectSelectionByPathOnly", "value": true}}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(click(&mut s, 5), json!([]), "path only");
 }
 
 #[test]

@@ -106,7 +106,7 @@ type PlacedPages = Vec<(u32, bool, vectorcraft_doc::PageBox)>;
 
 #[cfg(test)]
 thread_local! {
-    /// Tests: how many placed PDF or `.ai` pages [`page_fonts`] read on this thread.
+    /// Tests: how many placed PDF, `.ai` or EPS pages [`page_fonts`] read on this thread.
     pub(crate) static PAGES_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Tests: how many linked `.vectorcraft` files had their preview and PDF read on this thread,
     /// to keep them in the rewritten copy.
@@ -196,16 +196,41 @@ fn check_carried_folder(name: &str, bytes: &[u8]) -> Result<()> {
     }
 }
 
-/// The fonts of the type on `pages` of the PDF or `.ai` file `name` (`bytes`, found at `path`);
-/// none for other files.
+/// The fonts of the type on `pages` of the PDF, `.ai` or EPS file `name` (`bytes`, found at
+/// `path`), and on the placed documents that art holds (an EPS file whose bytes a legacy `.ai` or
+/// EPS file includes), [`MAX_NESTED_PAGES`] deep; none for other files.
 fn page_fonts(name: &str, bytes: &[u8], path: &str, pages: &PlacedPages) -> BTreeSet<super::fonts::UsedFont> {
+    nested_page_fonts(name, bytes, path, pages, 0)
+}
+
+/// The most placed documents [`page_fonts`] reads inside one another.
+const MAX_NESTED_PAGES: usize = 8;
+
+/// [`page_fonts`], `depth` placed documents in.
+fn nested_page_fonts(name: &str, bytes: &[u8], path: &str, pages: &PlacedPages, depth: usize) -> BTreeSet<super::fonts::UsedFont> {
     let mut fonts = BTreeSet::new();
-    if super::place::document::is_pdf(name, bytes) {
+    if super::place::document::is_pdf(name, bytes) || super::place::document::is_postscript(bytes) {
         for &(page, bounding, page_box) in pages {
             #[cfg(test)]
             PAGES_READ.with(|c| c.set(c.get() + 1));
-            if let Ok(a) = super::place::document::document_art(name, bytes, Some(path), page, bounding, page_box, C) {
-                fonts.extend(super::fonts::art_fonts(&a.doc, &a.nodes));
+            let Ok(a) = super::place::document::document_art(name, bytes, Some(path), page, bounding, page_box, C) else { continue };
+            fonts.extend(super::fonts::art_fonts(&a.doc, &a.nodes));
+            if depth + 1 >= MAX_NESTED_PAGES {
+                continue;
+            }
+            let mut inner = Vec::new();
+            let patterns = a.doc.patterns.iter().flat_map(|p| p.art.iter().map(|n| &**n));
+            for n in a.doc.layers.iter().map(|l| &**l).chain(a.doc.symbols.iter().map(|s| &*s.art)).chain(patterns).chain(&a.nodes) {
+                vectorcraft_doc::swatches::walk_with_masks(n, &mut |n| {
+                    if let vectorcraft_doc::NodeKind::PlacedDocument(p) = &n.kind {
+                        inner.push(p.clone());
+                    }
+                });
+            }
+            for p in inner {
+                // Only the bytes the art keeps: its own file isn't looked for.
+                let Some(blob) = a.doc.images.get(&p.key).filter(|b| !b.is_proxy()) else { continue };
+                fonts.extend(nested_page_fonts(p.link.name(), &blob.bytes, &p.link.path, &vec![(p.page(), p.bounding, p.page_box)], depth + 1));
             }
         }
     }
@@ -319,7 +344,7 @@ impl<'a> Collector<'a> {
         // Different linked documents can reuse the same stale absolute path yet
         // resolve it to distinct local assets. Keep a mapping per document.
         let mut local = BTreeMap::<String, Copied>::new();
-        // The fonts of the type on the PDF and `.ai` pages placed linked.
+        // The fonts of the type on the PDF, `.ai` and EPS pages placed linked.
         let mut placed_fonts = BTreeSet::new();
         let mut placed = BTreeMap::<String, PlacedPages>::new();
         let linked_files = |doc: &Document| match lookup {
