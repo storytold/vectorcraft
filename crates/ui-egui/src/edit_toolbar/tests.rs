@@ -152,11 +152,9 @@ fn the_drawer_labels_its_show_toggles() {
     let nodes = settle(&mut app, &ctx, 1.0);
     let open = drawer(&nodes);
     let first = inside(&nodes, "Fill and Stroke Controls", open);
-    let label = named(&nodes, "Show")
-        .into_iter()
-        .chain(named(&nodes, "Show:"))
-        .find(|r| open.contains(r.center()))
-        .unwrap_or_else(|| panic!("the drawer shows a Show label: {:?}", nodes.iter().filter(|(_, r)| open.contains(r.center())).collect::<Vec<_>>()));
+    let label = named(&nodes, "Show").into_iter().chain(named(&nodes, "Show:")).find(|r| open.contains(r.center())).unwrap_or_else(|| {
+        panic!("the drawer shows a Show label: {:?}", nodes.iter().filter(|(_, r)| open.contains(r.center())).collect::<Vec<_>>())
+    });
     assert!(label.expand(0.5).contains_rect(first), "the Show field {label:?} holds the toggles {first:?}");
     assert!(label.left() < first.left(), "the Show label in {label:?} comes before the toggles {first:?}");
 }
