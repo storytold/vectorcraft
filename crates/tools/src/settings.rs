@@ -117,7 +117,7 @@ const ROWS: &[Row] = &[
     ),
     (&[crate::addons::smart_pen::ID], None, &["next"]),
     // The kind first: a new kind resets the values after it.
-    (&[crate::addons::parametric_shape::ID], None, &["kind", "count", "a", "b", "radius", "width", "height", "rotation"]),
+    (&[crate::addons::parametric_shape::ID], None, &["kind", "count", "a", "b", "radius", "width", "height", "rotation", "sliceStart", "sliceEnd"]),
     // Flare Tool Options (`extra::FLARE_OPTIONS` and the Rays and Rings checkboxes).
     (
         &["flare"],
