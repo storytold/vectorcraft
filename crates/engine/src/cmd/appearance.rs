@@ -253,6 +253,7 @@ pub(crate) fn item_target(s: &Session, p: &Value, cmd: &str) -> Result<ItemTarge
 /// [`item_target`] read from param `key` (e.g. `fromItem`).
 pub(crate) fn item_target_at(s: &Session, p: &Value, key: &str, cmd: &str) -> Result<ItemTarget> {
     let aligned = aligned(p, cmd)?;
+    let contents = targets_contents(p)?;
     match p.get(key) {
         Some(Value::Null) => Ok(ItemTarget::Top),
         Some(v) => v
@@ -260,7 +261,7 @@ pub(crate) fn item_target_at(s: &Session, p: &Value, key: &str, cmd: &str) -> Re
             .map(|i| ItemTarget::Item { index: index(i), explicit: true, aligned })
             .ok_or_else(|| bad(cmd, format!("`{key}` must be an appearance item index (paint order) or null"))),
         // The active item is a row of the first selected object's own stack.
-        None if p.get("ids").is_some() || p.get("id").is_some() || targets_contents(p)? => Ok(ItemTarget::Top),
+        None if p.get("ids").is_some() || p.get("id").is_some() || contents => Ok(ItemTarget::Top),
         // A row of a graph design's art in a series stands for nothing: the commands leave that art out.
         None if s.active().and_then(|st| st.selection.subjects().first().map(|id| super::graph::is_design_art(&st.doc, *id))) == Some(true) => {
             Ok(ItemTarget::Top)
