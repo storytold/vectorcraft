@@ -3,10 +3,15 @@
 
     python3 scripts/ci-clear-rolling-cache-tests.py
 """
+import contextlib
 from datetime import datetime, timedelta, timezone
 import importlib.util
+import io
+import os
 from pathlib import Path
+import subprocess
 import unittest
+from unittest import mock
 
 _spec = importlib.util.spec_from_file_location("clear", Path(__file__).with_name("ci-clear-rolling-cache.py"))
 clear = importlib.util.module_from_spec(_spec)
@@ -136,6 +141,55 @@ class Caches(unittest.TestCase):
         rolling = lambda created: {"key": "v2-rust-ab-gate-crates-Linux-x64-1", "created_at": created}
         old, same_minute_push = rolling("2026-11-27T03:00:00.5Z"), rolling("2026-11-28T03:40:00Z")
         self.assertEqual(clear.created_before([old, same_minute_push], "2026-11-28T03:37:10Z"), [old])
+
+
+class Clock(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 11, 28, 4, 0, tzinfo=timezone.utc)
+
+
+class AfterDeletion(unittest.TestCase):
+    SAVING = [("Gate", "completed", "success"), ("Post Setup", "in_progress", None)]
+
+    def run_main(self, after):
+        """Runs main() with the warm leg's save starting at the first poll and `after` at every later poll."""
+        polls = [warm_job("in_progress", steps=self.SAVING), after]
+        deleted = []
+
+        def gh(url):
+            if "/jobs?" in url:
+                return {"jobs": ME + [polls.pop(0) if len(polls) > 1 else polls[0]]}
+            if "/caches?" in url:
+                old = {"id": 7, "key": "v2-rust-ab-gate-crates-Linux-x64-1", "created_at": "2026-11-27T03:40:00Z", "size_in_bytes": 4.6e9}
+                return {"actions_caches": [old]}
+            return {"run_started_at": "2026-11-28T03:37:10Z"}
+
+        def run(args, **kwargs):
+            deleted.append(args[-1])
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        env = {"GITHUB_REPOSITORY": "storytold/vectorcraft", "GITHUB_RUN_ID": "1", "GITHUB_RUN_ATTEMPT": "1"}
+        with mock.patch.object(clear, "gh", gh), mock.patch.object(clear.subprocess, "run", run), mock.patch.object(clear.time, "sleep"), \
+                mock.patch.object(clear, "datetime", Clock), mock.patch.dict(os.environ, env), contextlib.redirect_stdout(io.StringIO()):
+            status = clear.main()
+        self.assertEqual(deleted, ["repos/storytold/vectorcraft/actions/caches/7"])
+        return status
+
+    def test_a_save_that_succeeds_after_the_deletion_exits_0(self):
+        saved = warm_job("completed", "success", [("Gate", "completed", "success"), ("Post Setup", "completed", "success")])
+        later_post_failure = warm_job("completed", "failure", [("Gate", "completed", "success"), ("Post Setup", "completed", "success"),
+                                                                ("Post Harden runner", "completed", "failure")])
+        self.assertFalse(self.run_main(saved))
+        self.assertFalse(self.run_main(later_post_failure))
+
+    def test_a_save_canceled_after_the_deletion_exits_1(self):
+        canceled = warm_job("completed", "cancelled", [("Gate", "completed", "success"), ("Post Setup", "completed", "cancelled")])
+        self.assertEqual(self.run_main(canceled), 1)
+
+    def test_a_save_that_fails_after_the_deletion_exits_1(self):
+        failed = warm_job("completed", "failure", [("Gate", "completed", "success"), ("Post Setup", "completed", "failure")])
+        self.assertEqual(self.run_main(failed), 1)
 
 
 if __name__ == "__main__":
