@@ -8699,6 +8699,8 @@ dependencies = [
  "craft-codepage",
  "craft-doc",
  "craft-docpath",
+ "craft-font-catalog",
+ "craft-font-store",
  "craft-image-codecs",
  "craft-jxl",
  "craft-proof",

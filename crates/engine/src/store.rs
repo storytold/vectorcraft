@@ -1093,6 +1093,44 @@ impl Session {
         self.plugin_loads_in_background = on;
     }
 
+    /// Lays every document out again when the installed Language packs changed since the last
+    /// call (an install in the background ended, or a pack was removed), since spelling and
+    /// hyphenation in their languages change → whether an install or index fetch is still running,
+    /// so the app looks again. The app calls it as its frames go by.
+    pub fn poll_language_packs(&mut self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Busy first: an install moves the generation on before it ends, so when none is
+            // running any more its change is read below.
+            let busy = crate::packs::busy();
+            let now = crate::packs::generation();
+            if now != self.packs_seen {
+                self.packs_seen = now;
+                for index in 0..self.docs.len() {
+                    // A document in the back is measured in its own composite fonts, lent for the
+                    // measuring, as `measure_back_document` does: the front document's are the
+                    // ones registered, and one of the same name may differ.
+                    let back_fonts = (self.active != Some(index)).then(|| self.docs.get(index).map(|st| st.doc.composite_fonts.clone())).flatten();
+                    let lent = back_fonts.as_ref().map(|fonts| vectorcraft_text::FontDb::global().lend_document_composite_fonts(fonts));
+                    // Type in a language of its own may break its lines elsewhere now: it is
+                    // measured again (not an edit), so its selection box and hits follow.
+                    self.refresh_document_text_bounds(index, |t| t.runs.iter().any(|r| r.style.language.is_some()));
+                    drop(lent);
+                    if let Some(st) = self.docs.get_mut(index) {
+                        st.revision += 1;
+                    }
+                }
+            }
+            busy
+        }
+        // The web build has no packs.
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = self.packs_seen;
+            false
+        }
+    }
+
     /// Installs what the plug-in loads have loaded so far, in the order the loads started and each
     /// load's file-name order, up to the first module still loading, without waiting → whether
     /// some are still loading. A load starts once the loads before it are done. When another

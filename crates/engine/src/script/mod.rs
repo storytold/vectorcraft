@@ -161,6 +161,7 @@ pub fn refused_to_scripts(id: &str) -> bool {
         "edit.undoGroup.",
         "file.recovery.",
         "stroke.widthProfile.",
+        "proof.",
     ];
     const IDS: &[&str] = &[
         "text.addFontFiles",

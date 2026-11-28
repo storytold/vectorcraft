@@ -89,6 +89,10 @@ windows-native-keyring-store = "1.1"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 heic-rs = { version = "=0.1.4", default-features = false, features = ["std", "parallel"], optional = true }
 rayon = { version = "1.12", optional = true }
+# Language packs (packs.rs): the shared font store installs them and finds its folder. Already in
+# Cargo.lock (craft-font-manager), so this adds no new crate.
+craft-font-store = { workspace = true }
+craft-font-catalog = { workspace = true }
 # The MAC that `grants.json` carries (grant_keys.rs) and the random key it is made with, which the
 # user's key store keeps: Keychain on macOS, Credential Manager on Windows, the Secret Service on
 # Linux. All MIT OR Apache-2.0.

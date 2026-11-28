@@ -12,6 +12,8 @@ pub mod guard;
 pub mod inspect;
 pub mod journal;
 pub mod link_watch;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod packs;
 pub mod schemas;
 pub mod steps;
 pub mod store;
@@ -220,6 +222,9 @@ pub struct Session {
     /// Whether the loads of the stored plug-ins and of the plug-ins folder go on after the call
     /// that starts them ([`Session::load_plugins_in_background`]).
     plugin_loads_in_background: bool,
+    /// The Language packs' generation the documents were last laid out for
+    /// ([`Session::poll_language_packs`]).
+    packs_seen: u64,
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,

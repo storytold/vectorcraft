@@ -571,6 +571,10 @@ fn main() -> std::process::ExitCode {
     mac_fonts::install();
     // VectorCraft's own Fonts folder, which text.addFontFiles copies fonts into.
     prefs_dir::install_fonts();
+    // Language packs: installs and index fetches run on their own threads, so the window keeps
+    // working while a pack downloads.
+    prefs_dir::use_language_packs();
+    vectorcraft_engine::packs::run_in_background(true);
     // The log file lives in the settings directory, next to the preferences; opened after the
     // arguments, so `--version` leaves no file behind. Records logged until now are written to it
     // first. Runs without preferences (agents' test runs) log to standard error only, so they

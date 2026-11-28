@@ -3166,7 +3166,7 @@ returns `{stopped}`. `notifications/cancelled` stops a run only while the `tools
 for it, as in a headless server; use `script.stop` for a run the app started. A script cannot run commands that
 change anything outside the documents: `script.*` except `script.check`, `plugin.*`, `prefs.*`, `actionSet.*`,
 `shortcutSet.*`, `help.*`, `print.*`, `library.*`, `importMatches.*`, `edit.undoGroup.*`, `file.recovery.*`,
-`stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
+`stroke.widthProfile.*`, `proof.*` (Language packs), saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
 `text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
 `view.proofSetup`, `view.proofSetup.save`, `view.proofSetup.load`, `view.proofColors`, `view.overprintPreview` and
 `view.separationsPreview`. It also cannot run
@@ -13043,7 +13043,7 @@ returns the new value.
 `text.spelling.check {ids?}` lists the words of the document's type that its dictionaries don't know: every
 visible, unlocked type object in paint order, or those in `ids` (and in the groups `ids` names). Each run is checked
 in its Character panel Language (English when it has none) by craft-proof, one paragraph at a time; a language without
-a spelling dictionary marks nothing. English words come from the first dictionary craft-proof finds: a Hunspell
+a spelling dictionary marks nothing (see [Language packs](#language-packs)). English words come from the first dictionary craft-proof finds: a Hunspell
 dictionary in the user's dictionaries folder, the SCOWL dictionary for that English built in from craft-i18n, a
 system Hunspell dictionary, and last the public-domain Moby word list built into craft-proof. Words in capitals, words with digits and web addresses are taken as correct. The result is
 `{words: [{id, start, end, word, lang}], more}`: `start` and `end` are byte offsets in the type object's text, the
@@ -13093,6 +13093,40 @@ A right-click on an underlined word puts at the top of the canvas context menu t
 for it (each a `text.editRange {id, start, end, insert}` item labelled with its word), or No Suggestions, then Ignore
 All (`text.spelling.ignoreAll {word}`) and Add to Dictionary (`text.spelling.addWord {word}`); the context menu's
 entries list them with their params. A right-click on type also has Spelling › Auto Spell Check (`edit.autoSpellCheck`).
+
+### Language packs
+
+Languages other than English are spell-checked, and hyphenated, from **Language packs**: one per language, with its
+Hunspell dictionary, hyphenation patterns and licence texts, published by storytold/craft-i18n (release
+`language-packs-2`, whose `index.json` VectorCraft pins by its sha256). They are installed into the font store folder
+the Craft apps share, so a pack installed in another Craft app is used here too. A language's dictionary is looked up
+in an installed pack, then in the system's Hunspell dictionaries. The desktop app and `vectorcraft-cli` read the
+installed packs; the web app has none, and no `proof.*` commands.
+
+- `proof.packs {refresh?}` lists the packs of the index fetched last (`packs`, each with `locale`, `name`, `size` in
+  bytes, `licence`, `class`, `spelling`, `hyphenation` and `installed`), the packs in use (`installed`), the installs
+  running (`installing`, with bytes `done` of `total`), whether the index is being fetched (`refreshing`), the last
+  failure of each locale (`errors`; `""` is the index fetch), whether downloading is on (`downloads`), a test index
+  used instead of the pinned one (`indexOverride`, from `CRAFT_LANGUAGE_PACK_INDEX`) and whether there is a store to
+  install into (`available`). `refresh: true` fetches the index again.
+- `proof.installPack {locale}` downloads a pack, checks its sha256 and installs it (fetching the index first when it
+  doesn't list the locale). Every open document is laid out and checked again with it. `locale` is the pack's tag,
+  like `nl` or `pt-br` (`pt_BR` reads as `pt-br`).
+- `proof.removePack {locale}` removes an installed pack, not while it installs.
+
+Installs and index fetches need downloading on. Only the person using a Craft app turns it on, with their own click
+(the setting is the font store's, shared by the apps): no command turns it on, and until then an install is an error
+that says so. A caller with automation roots (`--automation-read-root`, `--automation-write-root`) can list packs
+but not fetch, install or remove them, since the store is outside its roots. A script cannot run the `proof.*`
+commands at all, since a run's rollback cannot put the store back. In the desktop app installs and fetches
+run in the background: `proof.installPack` returns
+`{locale, started: true}` and `proof.packs` shows the install in `installing`, then in `installed` or `errors`. In
+`vectorcraft-cli` they return once done.
+
+```json
+{"name":"run_command","arguments":{"command":"proof.packs","params":{"refresh":true}}}
+{"name":"run_command","arguments":{"command":"proof.installPack","params":{"locale":"nl"}}}
+```
 
 ## Find and Replace
 

@@ -552,6 +552,11 @@ impl VectorcraftApp {
         // what waits for them. They install after the control requests are drained, so the frame
         // after the last one opens the files held for them (the desktop app does that before this
         // pass) before a control request waiting for them runs.
+        // A Language pack installed or removed lays the documents out again; while one downloads
+        // the host keeps coming back to look.
+        if self.session.poll_language_packs() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        }
         if self.session.plugins_loading() {
             if self.session.poll_plugin_loads() {
                 ctx.request_repaint_after(std::time::Duration::from_millis(50));

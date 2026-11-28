@@ -24,6 +24,14 @@ pub fn install_fonts() {
     }
 }
 
+/// Have spelling and hyphenation read the Language packs installed in the Craft apps' shared font
+/// store (`proof.installPack`, or another Craft app), and install new ones there (#4936). Like the
+/// Fonts folder, whether or not `VECTORCRAFT_NO_PREFS` is set: the packs are the store's, not
+/// VectorCraft's preferences.
+pub fn use_language_packs() {
+    vectorcraft_engine::packs::use_font_store();
+}
+
 /// The folder `name` next to the settings, for what the user keeps: none in a run without
 /// preferences (`VECTORCRAFT_NO_PREFS`), which keeps nothing.
 fn store_dir(name: &str) -> Option<PathBuf> {

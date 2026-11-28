@@ -65,6 +65,8 @@ pub(crate) mod objects_on_path;
 mod opacitymask;
 mod overprint;
 pub mod package;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod packs;
 mod paint;
 mod panelcmds;
 pub mod params;
@@ -382,6 +384,9 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(tags::specs());
         v.extend(interactivity::specs());
         v.extend(spelling::specs());
+        // Language packs need a font store, which the web build has none of.
+        #[cfg(not(target_arch = "wasm32"))]
+        v.extend(packs::specs());
         v.extend(svgfilter::specs());
         v.extend(newart::specs());
         v.extend(colortheme::specs());
