@@ -37,6 +37,11 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("Preferences.prototype.setBooleanPreference", "app.preferences.setBooleanPreference(k, true);", "preferences"),
+    ("Preferences.prototype.setIntegerPreference", "app.preferences.setIntegerPreference(k, 1);", "preferences"),
+    ("Preferences.prototype.setRealPreference", "app.preferences.setRealPreference(k, 0.5);", "preferences"),
+    ("Preferences.prototype.setStringPreference", "app.preferences.setStringPreference(k, s);", "preferences"),
+    ("Preferences.prototype.removePreference", "app.preferences.removePreference(k);", "preferences"),
     ("Document.prototype.exportVariables", "app.activeDocument.exportVariables(f);", "filesWritten"),
     ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
 ];
@@ -44,7 +49,9 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.saveAs` and `close` throw "not available yet".
+/// documents; `Document.saveAs` and `close` throw "not available yet". Reading a preference changes
+/// nothing, and the matrix functions return new records. `app.copy` and `app.cut` fill VectorCraft's
+/// clipboard, which the desktop app offers to other apps after the run as Edit › Copy does.
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "reflect toSource"),
@@ -81,14 +88,18 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
          DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
-         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= Tag Tags ZOrderMethod",
+         Documents ElementPlacement Layer PageItem PageItems Preferences RulerUnits selection selection= Tag Tags ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
-        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents executeMenuCommand \
-         getIsFileOpen selection selection= toString typename",
+        "activeDocument activeDocument= beep beep= concatenateMatrix concatenateRotationMatrix concatenateScaleMatrix \
+         concatenateTranslationMatrix constructor coordinateSystem coordinateSystem= copy cut documents executeMenuCommand \
+         getIdentityMatrix getIsFileOpen getRotationMatrix getScaleMatrix getTranslationMatrix invertMatrix isEqualMatrix \
+         isSingularMatrix paste preferences selection selection= toString typename",
     ),
+    ("Preferences.", "prototype"),
+    ("Preferences.prototype.", "constructor getBooleanPreference getIntegerPreference getRealPreference getStringPreference typename"),
     ("DocumentPreset.", "prototype"),
     (
         "DocumentPreset.prototype.",

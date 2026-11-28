@@ -44,8 +44,8 @@
 //! - `app.activeDocument` with no document open throws `No active document`.
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
 //!   must be one of that document's that can be selected, or nothing changes. `undefined` throws.
-//! - `controlBounds` is the visible bounds, widened to take in the direction points of every path
-//!   in the object.
+//! - `controlBounds` is the visible bounds, widened to take in the anchors and direction points of
+//!   the paths in the object; a clipping group counts its clipping path only.
 //! - Members the help pages list that are not here yet throw an error that says so, and `reflect`
 //!   leaves them out.
 //! - Assigning `hidden`, `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an
@@ -78,6 +78,9 @@ use vectorcraft_js::{
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod clipboard;
+mod matrix;
+pub mod preferences;
 mod tags;
 mod variables;
 
@@ -1881,24 +1884,37 @@ fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
 }
 
-/// `controlBounds`: the visible bounds, widened to take in the direction points of every path in
-/// the object.
+/// The visible bounds with the control points of the item's paths, or of the paths in it. An
+/// object with no bounds reads zeros, as [`bounds`] gives.
 fn item_control(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    // An object with nothing in it reads zeros, as its other bounds do.
-    let (Some(r), f) = item_rect(h, item, true)? else { return Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])) };
-    let r = with_doc(h, item.doc, |_, st| {
-        let mut r = r;
-        if let Some(n) = st.doc.node(item.id) {
-            n.walk(&mut |c| {
-                if let Some(handles) = c.path_data().and_then(vectorcraft_geom::PathData::control_bounds) {
-                    r = r.union(handles);
-                }
-            });
-        }
-        r
-    });
-    Ok(f.bounds(h.dom.coords.get(), r))
+    let (r, f) = with_doc(h, item.doc, |_, st| {
+        let controls = st.doc.node(item.id).and_then(control_points_box);
+        Ok((vectorcraft_geom::union_opt(st.doc.bounds_of(&[item.id], true), controls), frame(st)?))
+    })?;
+    match r {
+        Some(r) => Ok(f.bounds(h.dom.coords.get(), r)),
+        None => Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])),
+    }
+}
+
+/// The box of the anchors and direction points of every path in `n`, taking the members its
+/// geometric bounds take: a clipping group or layer counts its clipping path only, a group or
+/// compound path its editing children (not a Shaper group's source shapes), and a layer its
+/// visible ones.
+fn control_points_box(n: &vectorcraft_doc::Node) -> Option<Rect> {
+    let union = |nodes: &mut dyn Iterator<Item = &Arc<vectorcraft_doc::Node>>| {
+        nodes.fold(None, |acc, c| vectorcraft_geom::union_opt(acc, control_points_box(c)))
+    };
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => union(&mut children.iter().take(1)),
+        NodeKind::Layer { .. } => union(&mut n.editing_children().iter().filter(|c| c.visible)),
+        NodeKind::Group { .. } | NodeKind::Compound { .. } => union(&mut n.editing_children().iter()),
+        // A live object (a blend, envelope, repeat and the like) draws other paths than the ones it
+        // holds, so it adds its visible bounds only.
+        _ => None,
+    }
 }
 
 fn item_position(h: &Host, a: &[Data]) -> Answer {
@@ -2144,7 +2160,12 @@ fn place(h: &Host, doc: Doc, id: NodeId, to: &Destination) -> std::result::Resul
             }
             (_, None) => count,
         };
-        Ok::<_, HostError>(if clips { at.max(1) } else { at })
+        let at = if clips { at.max(1) } else { at };
+        // The index `node.move` puts the object at: art stays below the ruler guides.
+        let node = d.node(id).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+        let rest: Vec<Arc<crate::doc::Node>> =
+            d.children(Some(to.parent)).map(|c| c.iter().filter(|n| n.id != id).cloned().collect()).unwrap_or_default();
+        Ok::<_, HostError>(crate::doc::Node::insert_index(&rest, at, node))
     })?;
     let now = with_doc(h, doc, |_, st| st.doc.position(id));
     if now.is_some_and(|(p, i, _)| p == Some(to.parent) && i == index) {
@@ -2382,6 +2403,9 @@ fn classes(link: &Link) -> Vec<HostClass> {
         ("toString", class_text("Application"), returns("string", &[])),
     ]);
     application.push(later(l, "Application", "beep"));
+    application.extend(preferences::app_members());
+    application.extend(matrix::app_members(l));
+    application.extend(clipboard::app_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |_: Vec<Data>| {
@@ -2398,6 +2422,7 @@ fn classes(link: &Link) -> Vec<HostClass> {
     };
     let mut classes = vec![
         class("Application", None, application, None),
+        preferences::class(l),
         preset,
         class(
             "Documents",

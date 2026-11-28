@@ -62,6 +62,10 @@ pub struct Session {
     pub fill_active: bool,
     /// Internal clipboard: the copied objects and the document resources they use.
     pub clipboard: Clipboard,
+    /// How many times Copy or Cut has put art, guides or artboards on [`Self::clipboard`].
+    pub(crate) copies: u64,
+    /// [`Self::clipboard`] holds what the last Copy or Cut put there, not what an import put there.
+    pub(crate) clipboard_copied: bool,
     /// Executed commands (for actions and debugging), the most recent ones kept ([`Journal`]).
     pub journal: Journal,
     /// About the most memory the undo steps of all the open documents may keep together
@@ -506,7 +510,7 @@ use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
 pub(crate) use interaction::{HeldInteraction, PreviewCopies};
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
-pub use prefs::{DrawMode, KEY_HOLD_DELAY, KEY_HOLD_DELAY_RANGE, PluginBudget, Prefs};
+pub use prefs::{DrawMode, KEY_HOLD_DELAY, KEY_HOLD_DELAY_RANGE, PluginBudget, Prefs, ScriptPreference};
 pub use sanity::TOO_DEEP;
 pub(crate) use sanity::{deselect_hidden, is_guide_path};
 #[cfg(test)]

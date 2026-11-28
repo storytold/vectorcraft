@@ -1131,6 +1131,7 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
     }
     clip.guides = guides;
     s.clipboard = clip;
+    s.note_copy();
     Ok(json!({ "copied": s.clipboard.nodes.len(), "guides": s.clipboard.guides.len() }))
 }
 

@@ -4692,6 +4692,7 @@ axis	Both	Her İkisi
 @msg	a drag or an undo group is open; finish it before running a script	bir sürükleme veya geri alma grubu açık; betiği çalıştırmadan önce tamamlayın
 @msg	the script left a document that cannot be kept	betik, saklanamayan bir belge bıraktı
 @msg	the script is no longer in the Scripts folder	betik artık Scripts klasöründe değil
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	Komut dosyası, Dosya › Komut dosyaları › Diğer Komut Dosyası… ile seçilen bir komut dosyası çalışmadan önce gösterilen uyarıyı kapatmak istiyor. Daha sonra seçilen komut dosyaları bu durumda uyarı olmadan çalışır. Uyarı kapatılsın mı?
 	Some scripts were not listed	Bazı komut dosyaları listelenmedi
 	The Scripts folder cannot be read	Scripts klasörü okunamıyor
 	Loading scripts…	Betikler yükleniyor…

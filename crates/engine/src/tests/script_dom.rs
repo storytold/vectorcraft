@@ -135,6 +135,18 @@ fn page_item_geometry_uses_document_coordinates_with_y_up() {
 }
 
 #[test]
+fn control_bounds_take_in_the_direction_points() {
+    let (mut s, _, _) = doc();
+    // An arch whose top is at y 40 and whose direction points are at y 20.
+    let id = s.execute("path.create", &json!({"d": "M100 100C100 20 200 20 200 100"})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let out = log(&mut s, "var i = app.activeDocument.selection[0]; vc.log(i.visibleBounds); vc.log(i.controlBounds);");
+    let top = |v: &Value| v[1].as_f64().unwrap_or(f64::NAN);
+    assert!(top(&out[0]) < 265.0, "{out:?}");
+    assert_eq!(top(&out[1]), 280.0, "{out:?}");
+}
+
+#[test]
 fn page_item_size_setters_on_a_rotated_object_give_the_page_aligned_size() {
     let (mut s, a, b) = doc();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
@@ -334,6 +346,24 @@ fn control_bounds_take_in_direction_points_past_the_curve() {
     assert!(top(&out[1]) > -90.0, "{out:?}");
     // A rectangle's direction points lie on its edges.
     assert_eq!(out[2], out[3]);
+}
+
+#[test]
+fn a_failed_selection_assignment_leaves_the_selection_within_the_run() {
+    let (mut s, _, b) = doc();
+    s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
+    // The run goes on after the failed assignment, so nothing it ends with puts the selection back.
+    let c = rect(&mut s, 200.0, 20.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pageItems, open, shut;\
+         for (var i = 0; i < p.length; i++) { if (p[i].locked) shut = p[i]; else if (!p[i].selected) open = p[i]; }\
+         try { d.selection = [open, shut]; vc.log('assigned'); } catch (e) { vc.log(String(e.message).indexOf('Cannot select') >= 0); }\
+         vc.log([d.selection.length, open.selected, d.selection[0].locked]);",
+    );
+    assert_eq!(out, vec![json!(true), json!([1, false, false])]);
+    assert_eq!(s.active().unwrap().selection.objects, vec![c]);
 }
 
 #[test]
@@ -1521,6 +1551,37 @@ fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
     assert_eq!(log(&mut s, editable), vec![json!([true, true, true])]);
     let out = log(&mut s, "var p = app.activeDocument.pageItems; p[1].remove(); p.removeAll(); vc.log(p.length);");
     assert_eq!(out, vec![json!(0)]);
+}
+
+/// `move` leaves art on a locked artboard where it is, and a move that leaves an object where it
+/// is runs no command, also in a layer whose ruler guides are above its art.
+#[test]
+fn move_refuses_art_on_a_locked_artboard_and_skips_a_move_to_the_same_place() {
+    let (mut s, a, b) = doc();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 120})).unwrap();
+    let steps = undo_steps(&s);
+    // The topmost art, moved to the top of its layer, stays where it is.
+    log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pageItems, top = p[0];\
+         for (var i = 1; i < p.length; i++) { if (p[i].zOrderPosition > top.zOrderPosition) top = p[i]; }\
+         top.move(top.parent);",
+    );
+    assert_eq!(undo_steps(&s), steps, "a move to the same place adds no step");
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let order = |s: &Session| format!("{:?}", (s.active().unwrap().doc.position(a), s.active().unwrap().doc.position(b)));
+    let before = order(&s);
+    let e = failure(&mut s, "var p = app.activeDocument.pageItems; p[0].move(p[0].parent, ElementPlacement.PLACEATBEGINNING);");
+    assert!(e.contains("Cannot move PathItem"), "{e}");
+    let e = failure(&mut s, "var p = app.activeDocument.pageItems; p[1].move(p[1].parent, ElementPlacement.PLACEATEND);");
+    assert!(e.contains("Cannot move PathItem"), "{e}");
+    assert_eq!(order(&s), before);
+    assert_eq!(undo_steps(&s), steps);
 }
 
 #[test]

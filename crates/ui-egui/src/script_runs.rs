@@ -36,9 +36,14 @@ pub fn poll(app: &mut VectorcraftApp) {
     script_run::settle_close(app);
     match result {
         // The commands it ran are journaled now: a recording they no longer fit in names its limit.
-        Ok(_) => {
+        Ok(report) => {
             if !crate::panels::actions::after_journaled_edit(app) {
                 app.status(format!("Ran {name}"));
+            }
+            // What the script's Copy or Cut left on the clipboard is offered to other apps, as
+            // Edit › Copy does.
+            if report["copied"] == true {
+                app.publish_clipboard(false);
             }
         }
         Err(e) => ended_with_error(app, startup, e.to_string()),

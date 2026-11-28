@@ -384,6 +384,7 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
         }
     }
     s.clipboard = clip;
+    s.note_copy();
     Ok(json!({"copied": copied}))
 }
 

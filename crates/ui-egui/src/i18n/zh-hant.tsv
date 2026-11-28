@@ -2829,6 +2829,7 @@ file-filter	Templates	範本
 @msg	a drag or an undo group is open; finish it before running a script	拖曳或還原群組尚未結束；請在執行指令碼前完成
 @msg	the script left a document that cannot be kept	指令碼留下了無法保留的文件
 @msg	the script is no longer in the Scripts folder	指令碼已不在 Scripts 資料夾中
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	指令碼要求關閉在執行透過 檔案 › 指令碼 › 其他指令碼… 選擇的指令碼前顯示的警告。關閉後，之後選擇的指令碼將在沒有警告的情況下執行。要關閉警告嗎？
 	Some scripts were not listed	部分指令碼未列出
 	The Scripts folder cannot be read	無法讀取 Scripts 資料夾
 	Loading scripts…	正在載入指令碼…

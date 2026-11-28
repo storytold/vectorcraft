@@ -5799,6 +5799,7 @@ imageTrace	Outline	Körvonal
 @msg	a drag or an undo group is open; finish it before running a script	húzás vagy visszavonási csoport van folyamatban; fejezze be a parancsfájl futtatása előtt
 @msg	the script left a document that cannot be kept	a parancsfájl olyan dokumentumot hagyott hátra, amely nem tartható meg
 @msg	the script is no longer in the Scripts folder	a parancsfájl már nincs a Scripts mappában
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	A parancsfájl ki szeretné kapcsolni azt a figyelmeztetést, amely a Fájl › Szkriptek › Másik szkript… paranccsal kiválasztott parancsfájl futása előtt jelenik meg. A később kiválasztott parancsfájlok ezután nélküle futnának. Kikapcsolja a figyelmeztetést?
 	Some scripts were not listed	Néhány szkript nem szerepel a listában
 	The Scripts folder cannot be read	A Scripts mappa nem olvasható
 	Loading scripts…	Szkriptek betöltése…

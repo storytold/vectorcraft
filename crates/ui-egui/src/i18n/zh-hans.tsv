@@ -5494,6 +5494,7 @@ imageTrace	Outline	轮廓
 @msg	a drag or an undo group is open; finish it before running a script	拖动或撤销组尚未结束；请在运行脚本前完成
 @msg	the script left a document that cannot be kept	脚本留下了无法保留的文档
 @msg	the script is no longer in the Scripts folder	脚本已不在 Scripts 文件夹中
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	脚本请求关闭在运行通过“文件 › 脚本 › 其他脚本…”选择的脚本前显示的警告。关闭后，之后选择的脚本将在没有警告的情况下运行。要关闭警告吗？
 	Some scripts were not listed	部分脚本未列出
 	The Scripts folder cannot be read	无法读取 Scripts 文件夹
 	Loading scripts…	正在载入脚本…

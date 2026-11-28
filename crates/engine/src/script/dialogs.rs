@@ -184,6 +184,13 @@ fn answer(a: &Value) -> Result<DialogAnswer, &'static str> {
     }
 }
 
+/// What the app does when the person answers Yes to a confirm it opens for a script ([`Dialogs::ask`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OnYes {
+    /// Turn off the warning before a script picked with File › Scripts › Other Script… runs.
+    ExternalScriptWarningOff,
+}
+
 /// The dialogs of one run: the answers left for a run with nobody to ask, the dialog that waits
 /// for the person's answer, and the list the report gives.
 pub(crate) struct Dialogs {
@@ -193,6 +200,10 @@ pub(crate) struct Dialogs {
     can_wait: Rc<Cell<bool>>,
     answers: RefCell<VecDeque<DialogAnswer>>,
     waiting: RefCell<Option<ScriptDialog>>,
+    /// What Yes to the waiting dialog does, when the app opened it with [`Dialogs::ask`].
+    on_yes: Cell<Option<OnYes>>,
+    /// What the person approved with Yes, until [`Dialogs::take_approved`] takes it.
+    approved: Cell<Option<OnYes>>,
     /// The error that ended the run when an answer could not reach the script.
     failed: RefCell<Option<RunError>>,
     records: RefCell<Vec<Value>>,
@@ -208,6 +219,8 @@ impl Dialogs {
             can_wait: realm.wait_flag(),
             answers: RefCell::new(answers.into()),
             waiting: RefCell::default(),
+            on_yes: Cell::new(None),
+            approved: Cell::new(None),
             failed: RefCell::default(),
             records: RefCell::default(),
             record_bytes: Cell::new(0),
@@ -246,14 +259,39 @@ impl Dialogs {
         let Some(d) = waiting.as_ref().filter(|d| d.kind == answer.kind() && fits) else { return false };
         self.record(d, answer.json());
         *waiting = None;
-        if let Err(e) = realm.answer(answer.data()) {
+        let on_yes = self.on_yes.take();
+        // A confirm the app opened returns `undefined` to the call that opened it.
+        let data = if on_yes.is_some() { Data::Undefined } else { answer.data() };
+        if answer == DialogAnswer::Confirm(true) {
+            self.approved.set(on_yes);
+        }
+        if let Err(e) = realm.answer(data) {
             *self.failed.borrow_mut() = Some(e);
         }
         true
     }
 
+    /// Opens `dialog`, a confirm the app shows for the script, whose Yes does `on_yes`; the call
+    /// that opens it then waits ([`HostError::Wait`]) and returns `undefined`. Only a person answers
+    /// it, never `script.run`'s `answers`. → false when it cannot open: the run has nobody to ask,
+    /// or the call comes from a callback, a getter, a conversion or a file `$.evalFile` runs.
+    pub(crate) fn ask(&self, dialog: ScriptDialog, on_yes: OnYes) -> bool {
+        if !self.framed || !self.can_wait.get() {
+            return false;
+        }
+        *self.waiting.borrow_mut() = Some(dialog);
+        self.on_yes.set(Some(on_yes));
+        true
+    }
+
+    /// What the person approved with Yes to a confirm from [`Dialogs::ask`], once.
+    pub(crate) fn take_approved(&self) -> Option<OnYes> {
+        self.approved.take()
+    }
+
     /// The run ends while a dialog waits: the report lists it with the answer `"stop"`.
     pub(crate) fn stopped(&self) {
+        self.on_yes.set(None);
         if let Some(d) = self.waiting.borrow_mut().take() {
             self.record(&d, json!("stop"));
         }

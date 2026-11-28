@@ -121,7 +121,9 @@ fn chain(interp: &Interp, obj: ObjId) -> Vec<(ObjId, usize)> {
 impl Indices {
     fn new(interp: &mut Interp, obj: ObjId, lo: u64, hi: u64, ascending: bool, maps: Vec<Map>) -> JsResult<Self> {
         let mut it = Indices { obj, lo, hi, ascending, maps, sparse: None };
-        if hi.saturating_sub(lo) > DENSE_SPAN {
+        // An object of a host class with an indexer has elements that are not properties, so each
+        // index of its range is visited.
+        if hi.saturating_sub(lo) > DENSE_SPAN && interp.host_indexer(obj)?.is_none() {
             let present: usize = chain(interp, obj).iter().map(|(_, n)| *n).fold(0, usize::saturating_add);
             if hi - lo > (present as u64).saturating_mul(8) {
                 it.sparse = Some(it.gather(interp)?);

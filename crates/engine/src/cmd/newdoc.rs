@@ -1028,8 +1028,15 @@ impl Session {
                 Ok(m) if !m.file_type().is_file() => return Err("not a plain file".to_string()),
                 _ => {}
             }
+            // The file is opened once and checked after it is open: the roots in force must allow
+            // its path then, and the path must still name the plain file that was opened, so a file
+            // put in its place between the checks and the open is not read.
+            let opened = std::fs::File::open(&path).map_err(|e| e.to_string())?;
             crate::file_access::check_read(&file).map_err(denied)?;
-            crate::store::read_capped(&path, MAX_PROFILE_BYTES).map(Some)
+            if !opened.metadata().is_ok_and(|m| m.is_file()) || !still_names(&opened, &path) {
+                return Err("not a plain file".to_string());
+            }
+            crate::store::read_open_capped(opened, MAX_PROFILE_BYTES).map(Some)
         })?;
         let Some(bytes) = read else { return Ok(None) };
         // The color profiles the file carries are installed where missing, as opening it installs
@@ -1041,6 +1048,18 @@ impl Session {
         warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
         Ok(Some(ReadProfile { doc, file, warnings }))
     }
+}
+
+/// Whether `path` still names `file` ([`super::recovery::FolderStore::still_named`]).
+#[cfg(not(target_arch = "wasm32"))]
+fn still_names(file: &std::fs::File, path: &std::path::Path) -> bool {
+    super::recovery::FolderStore::still_named(file, path)
+}
+
+/// The web build has no profile folder.
+#[cfg(target_arch = "wasm32")]
+fn still_names(_: &std::fs::File, _: &std::path::Path) -> bool {
+    false
 }
 
 /// The shipped profile of category `name`: the defaults, as a document of the category's first

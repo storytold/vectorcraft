@@ -5279,6 +5279,7 @@ imageTrace	Outline	Obrys
 @msg	a drag or an undo group is open; finish it before running a script	je otevřené tažení nebo skupina kroků zpět; před spuštěním skriptu ji dokončete
 @msg	the script left a document that cannot be kept	skript zanechal dokument, který nelze zachovat
 @msg	the script is no longer in the Scripts folder	skript už není ve složce Scripts
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	Skript žádá o vypnutí upozornění, které se zobrazí před spuštěním skriptu vybraného příkazem Soubor › Skripty › Jiný skript… Později vybrané skripty by se pak spouštěly bez něj. Vypnout upozornění?
 	Some scripts were not listed	Některé skripty nebyly uvedeny
 	The Scripts folder cannot be read	Složku Scripts nelze přečíst
 	Loading scripts…	Načítání skriptů…

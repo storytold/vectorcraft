@@ -561,6 +561,8 @@ struct Saved {
     draw_mode: crate::DrawMode,
     draw_inside: Option<vectorcraft_doc::NodeId>,
     clipboard: crate::Clipboard,
+    clipboard_copied: bool,
+    copies: u64,
     untitled_counter: u32,
     explicit_undo_group: Option<Option<String>>,
     prefs: crate::Prefs,
@@ -586,6 +588,8 @@ impl Saved {
             draw_mode: s.draw_mode,
             draw_inside: s.draw_inside,
             clipboard: s.clipboard.clone(),
+            clipboard_copied: s.clipboard_copied,
+            copies: s.copies,
             untitled_counter: s.untitled_counter,
             explicit_undo_group: s.explicit_undo_group.clone(),
             prefs: s.prefs.clone(),
@@ -610,6 +614,8 @@ impl Saved {
         s.draw_mode = self.draw_mode;
         s.draw_inside = self.draw_inside;
         s.clipboard = self.clipboard;
+        s.clipboard_copied = self.clipboard_copied;
+        s.copies = self.copies;
         s.untitled_counter = self.untitled_counter;
         s.explicit_undo_group = self.explicit_undo_group;
         s.prefs = self.prefs;

@@ -2824,15 +2824,17 @@ other files through `$`:
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds, widened to take in the direction points of every path in the object), `editable` (false for an
-  object that is hidden or locked, in a hidden or locked layer or group, or on a locked artboard), `zOrderPosition`,
-  `duplicate(relativeObject?, insertionLocation?)`,
+  visible bounds together with the anchors and direction points of the paths in the object; a clipping group counts
+  its clipping path only, and a blend, envelope or other live object gives its visible bounds), `editable` (false
+  for an object that is hidden or locked, in a hidden or locked layer or group, or on a locked artboard),
+  `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
   document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
   group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
-  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  directly below it. A move that leaves the object where it is runs no command. An object of another document throws `Cross-document
+  placement is not available`, and when
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
   the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
@@ -2906,6 +2908,44 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `app.preferences` (https://ai-scripting.docsforadobe.dev/jsobjref/Preferences/) has `getBooleanPreference(key)`,
+  `getIntegerPreference(key)`, `getRealPreference(key)`, `getStringPreference(key)`, the four matching `set…(key,
+  value)` and `removePreference(key)`. The key `ShowExternalJSXWarning` is the preference `showExternalScriptWarning`.
+  Setting it to `true` or removing it turns the warning on. VectorCraft's own rule: setting it to `false` while the
+  warning is on shows a confirm, with No as its default, and turns the warning off only after Yes; with nobody to ask
+  (a run with `script.run` outside the app, or a call from a callback of a built-in function) it throws an error that
+  names `ShowExternalJSXWarning` and changes nothing, and `answers` cannot answer that confirm. Other keys are
+  stored with the preferences under `scriptPreferences`, with the type they were set as, and are kept across runs and restarts; a run that fails or is stopped puts them back.
+  VectorCraft's own rules: a key that was never set reads as `false`, `0`, `0` or `""`; a getter of another type
+  converts the value as `Boolean`, `Number` and `String` do, and `getIntegerPreference` drops the fraction and gives
+  `0` for a value that is not a number. A key has a `length` of 1 to 256 UTF-16 code units (a character outside
+  the Basic Multilingual Plane, such as an emoji, counts 2) and no control characters, a string value at most
+  65,536 bytes, and the store at most 4,096 keys and 1,048,576 bytes (each value that is not a string counts 8);
+  `setIntegerPreference` takes a whole number within ±2^53 and `setRealPreference` a finite number. A value of the
+  wrong type or past a limit throws an error and stores nothing, and removing a key that is not stored does nothing.
+- `app.getIdentityMatrix()`, `getTranslationMatrix(deltaX?, deltaY?)` (points), `getScaleMatrix(scaleX?, scaleY?)`
+  (percent), `getRotationMatrix(angle?)` (degrees, counterclockwise), `concatenateMatrix(matrix, secondMatrix)`,
+  `concatenateTranslationMatrix(matrix, deltaX?, deltaY?)`, `concatenateScaleMatrix(matrix, scaleX?, scaleY?)`,
+  `concatenateRotationMatrix(matrix, angle?)`, `invertMatrix(matrix)`, `isEqualMatrix(matrix, secondMatrix)` and
+  `isSingularMatrix(matrix)` work on `Matrix` records (https://ai-scripting.docsforadobe.dev/jsobjref/Matrix/): plain
+  objects with `mValueA`, `mValueB`, `mValueC`, `mValueD`, `mValueTX`, `mValueTY` and `typename` `"Matrix"`. Each
+  function other than `isEqualMatrix` and `isSingularMatrix` gives a new record; those two give `true` or `false`.
+  No function changes the records passed to it. A record maps `(x, y)` to
+  `(a·x + c·y + tx, b·x + d·y + ty)`, as a PDF `cm` matrix does (ISO 32000-1, 8.3.4), with Y up. VectorCraft's own
+  rules: `concatenateMatrix(m, n)` applies `m` and then `n`, and the other `concatenate…` functions apply the record
+  and then the transformation they make; a left-out move or angle is 0, a left-out `scaleX` is 100 and a left-out
+  `scaleY` is `scaleX`; quarter turns are exact; a matrix whose determinant is 0 is singular, and `invertMatrix` of one
+  throws; `isEqualMatrix` compares the six values exactly. A value that is not a finite number throws a `TypeError`,
+  and a result too large for a number throws a `RangeError`.
+- `app.copy()`, `app.cut()` and `app.paste()` (https://ai-scripting.docsforadobe.dev/jsobjref/Application/) run
+  `edit.copy`, `edit.cut` and `edit.paste` on the active document inside the run's transaction. With nothing selected
+  `copy` and `cut` do nothing, and with the clipboard empty `paste` does nothing; `paste` with no document open throws
+  `No active document`. VectorCraft's own rules: `paste` takes what VectorCraft's clipboard holds (a Copy or Cut in
+  VectorCraft, or what the last Paste took from another app), not art another app copied since. A run that finishes
+  after a Copy or Cut (these functions, or `edit.copy`, `edit.cut`, `artboard.copy` or `artboard.cut` through
+  `vc.run`, also inside `command.batch` or an action), with the clipboard still holding what the Copy or Cut put
+  there and not what a `clipboard.import…` command put there since, has `copied: true` in its report, and the desktop
+  app then offers the clipboard to other apps as Edit › Copy does.
 - A `Document` also has `variables`, `dataSets`, `activeDataset`, `variablesLocked`, `importVariables(file)` and
   `exportVariables(file)` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/). `variables`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Variables/) and `dataSets`
@@ -3130,7 +3170,9 @@ while the run went on keeps that change. On an uncaught error, a limit or `scrip
 session go back to their state before the run. A script can write files through the commands it runs, such as
 export commands. A file written before the run failed stays on disk, and the error names it. A run from the menu
 shows a warning first, unless you ticked Do not show this warning again or set the preference
-`showExternalScriptWarning` to false.
+`showExternalScriptWarning` to false. A script asks for it with
+`app.preferences.setBooleanPreference("ShowExternalJSXWarning", false)`, which turns the warning off only after you
+answer Yes.
 
 While a script runs, every other command that changes anything ends with the error `a script is running: stop it or
 wait for it to finish`. MCP reports that error as JSON-RPC error `-32003`. `script.stop {}` stops the run and
@@ -3215,7 +3257,8 @@ In the app, a script past the growth limit stops at a question to continue or to
 `ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
 runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`, with
-`unhandledRejections` and `unhandledRejectionCount` as well when a `.js` script left rejected promises unhandled. In
+`copied: true` after a Copy or Cut whose art the clipboard still holds, and `unhandledRejections` and
+`unhandledRejectionCount` as well when a `.js` script left rejected promises unhandled. In
 the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`. The
 report of a failed run has the same fields after `kind`, `message`, `messageOrigin`, `line`, `column`, `file` (when
 the error is in another file than the script) and `fuelLeft`. `messageOrigin` is `script` when `message` is text the

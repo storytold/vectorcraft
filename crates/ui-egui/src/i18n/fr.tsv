@@ -4923,6 +4923,7 @@ axis	Both	Les deux
 @msg	a drag or an undo group is open; finish it before running a script	un glissement ou un groupe d’annulation est ouvert ; terminez-le avant d’exécuter un script
 @msg	the script left a document that cannot be kept	le script a laissé un document qui ne peut pas être conservé
 @msg	the script is no longer in the Scripts folder	le script ne se trouve plus dans le dossier Scripts
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	Le script demande à désactiver l’avertissement affiché avant l’exécution d’un script choisi avec Fichier › Scripts › Autre script… Les scripts choisis ensuite s’exécuteraient alors sans lui. Désactiver l’avertissement ?
 	Some scripts were not listed	Certains scripts ne sont pas répertoriés
 	The Scripts folder cannot be read	Impossible de lire le dossier Scripts
 	Loading scripts…	Chargement des scripts…

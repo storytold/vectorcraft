@@ -468,6 +468,7 @@ struct World {
     draw_mode: DrawMode,
     draw_inside: Option<NodeId>,
     clipboard: Clipboard,
+    clipboard_copied: bool,
     untitled_counter: u32,
     menu: cmd::menucmds::MenuState,
     last_solid: crate::Color,
@@ -544,19 +545,35 @@ impl Choices {
 }
 
 /// The preferences after a run: `current`, the session's, which the app may have changed while the
-/// run went on, with each preference the run changed from `start` set to the run's value.
+/// run went on, with each preference the run changed from `start` set to the run's value. A
+/// preference the run emptied, which is then left out of the saved form, is left out of the result.
+/// The values scripts store with `app.preferences` are merged the same way one key at a time.
 fn merged_prefs(start: &crate::Prefs, run: &crate::Prefs, current: &crate::Prefs) -> crate::Prefs {
-    let (Ok(Value::Object(start)), Ok(Value::Object(run)), Ok(Value::Object(mut out))) =
+    const SCRIPT_KEYS: &str = "scriptPreferences";
+    let (Ok(Value::Object(start_json)), Ok(Value::Object(run_json)), Ok(Value::Object(mut out))) =
         (serde_json::to_value(start), serde_json::to_value(run), serde_json::to_value(current))
     else {
         return current.clone();
     };
-    for (key, value) in run {
-        if start.get(&key) != Some(&value) {
+    for key in start_json.keys().filter(|k| *k != SCRIPT_KEYS && !run_json.contains_key(*k)) {
+        out.remove(key);
+    }
+    for (key, value) in run_json {
+        if key != SCRIPT_KEYS && start_json.get(&key) != Some(&value) {
             out.insert(key, value);
         }
     }
-    serde_json::from_value(Value::Object(out)).unwrap_or_else(|_| current.clone())
+    let mut merged: crate::Prefs = serde_json::from_value(Value::Object(out)).unwrap_or_else(|_| current.clone());
+    let script = &mut merged.script_preferences;
+    for key in start.script_preferences.keys().filter(|k| !run.script_preferences.contains_key(*k)) {
+        script.remove(key);
+    }
+    for (key, value) in &run.script_preferences {
+        if start.script_preferences.get(key) != Some(value) {
+            script.insert(key.clone(), value.clone());
+        }
+    }
+    merged
 }
 
 impl World {
@@ -576,6 +593,7 @@ impl World {
             draw_mode: s.draw_mode,
             draw_inside: s.draw_inside,
             clipboard: s.clipboard.clone(),
+            clipboard_copied: s.clipboard_copied,
             untitled_counter: s.untitled_counter,
             menu: s.menu.clone(),
             last_solid: s.last_solid,
@@ -599,6 +617,7 @@ impl World {
         swap(&mut self.draw_mode, &mut s.draw_mode);
         swap(&mut self.draw_inside, &mut s.draw_inside);
         swap(&mut self.clipboard, &mut s.clipboard);
+        swap(&mut self.clipboard_copied, &mut s.clipboard_copied);
         swap(&mut self.untitled_counter, &mut s.untitled_counter);
         swap(&mut self.menu, &mut s.menu);
         swap(&mut self.last_solid, &mut s.last_solid);
@@ -610,9 +629,10 @@ impl World {
     }
 }
 
-/// The commands that can change the clipboard and still fail, and that do not put it back
-/// themselves. The clipboard can hold a great deal, so a savepoint copies it only for these.
-const CAN_FAIL_AFTER_COPYING: &[&str] = &["action.batch", "edit.cut"];
+/// The commands that can change the clipboard and still fail, or still be put back because their
+/// result cannot reach the script, and that do not put it back themselves. The clipboard can hold
+/// a great deal, so a savepoint copies it only for these.
+const CAN_FAIL_AFTER_COPYING: &[&str] = &["action.batch", "artboard.copy", "artboard.cut", "command.batch", "edit.copy", "edit.cut"];
 
 /// The commands that remove a document's undo history, or the document: a savepoint keeps a whole
 /// copy of the histories for these. Any other command that removes or changes a step under the
@@ -636,7 +656,8 @@ pub(crate) struct Savepoint {
     fill_active: bool,
     draw_mode: DrawMode,
     draw_inside: Option<NodeId>,
-    clipboard: Option<Clipboard>,
+    /// The clipboard, [`Session::clipboard_copied`] and [`Session::copies`].
+    clipboard: Option<(Clipboard, bool, u64)>,
     untitled_counter: u32,
     menu: cmd::menucmds::MenuState,
     last_solid: crate::Color,
@@ -670,7 +691,7 @@ impl Savepoint {
             fill_active: s.fill_active,
             draw_mode: s.draw_mode,
             draw_inside: s.draw_inside,
-            clipboard: CAN_FAIL_AFTER_COPYING.contains(&id).then(|| s.clipboard.clone()),
+            clipboard: CAN_FAIL_AFTER_COPYING.contains(&id).then(|| (s.clipboard.clone(), s.clipboard_copied, s.copies)),
             untitled_counter: s.untitled_counter,
             menu: s.menu.clone(),
             last_solid: s.last_solid,
@@ -720,8 +741,10 @@ impl Savepoint {
         s.fill_active = self.fill_active;
         s.draw_mode = self.draw_mode;
         s.draw_inside = self.draw_inside;
-        if let Some(clipboard) = self.clipboard {
+        if let Some((clipboard, copied, copies)) = self.clipboard {
             s.clipboard = clipboard;
+            s.clipboard_copied = copied;
+            s.copies = copies;
         }
         s.untitled_counter = self.untitled_counter;
         s.menu = self.menu;
@@ -757,6 +780,9 @@ struct Host {
     log: RefCell<Vec<Value>>,
     log_bytes: Cell<usize>,
     written: RefCell<Written>,
+    /// A command ran a Copy or Cut ([`Session::copies`]), also inside a batch or an action, and
+    /// the run kept it.
+    copied: Cell<bool>,
     /// The run's number in its session, and the script's name, which its console lines carry.
     run: u64,
     name: Arc<str>,
@@ -1367,9 +1393,9 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
     let session = host.session.clone();
     let started = clock();
     let before = dom::before_command(host, id);
-    let r = {
+    let (copies, r) = {
         let mut s = session.borrow_mut();
-        step(&mut s, host, id, params)
+        (s.copies, step(&mut s, host, id, params))
     };
     // Only commands that exist are timed, so the table holds at most one row per command.
     if let (Some(started), Some(spec)) = (started, crate::find_command(id)) {
@@ -1397,14 +1423,19 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
     if crossed.is_err() {
         host.put_growth_back(mark);
     }
+    let mut s = session.borrow_mut();
     if let Some(save) = save {
-        let mut s = session.borrow_mut();
         if crossed.is_ok() {
             save.keep(&mut s);
         } else if !save.restore(&mut s) {
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
+    // A Copy or Cut counts for the run only once what it put on the clipboard is kept.
+    if s.copies != copies {
+        host.copied.set(true);
+    }
+    drop(s);
     dom::after_command(host, before);
     crossed.map(|data| (data, value))
 }
@@ -1902,10 +1933,19 @@ impl Session {
 
     /// Gives the dialog the running script waits at its answer; the next [`Session::script_pump`]
     /// goes on from the call. → false when nothing waits, the answer is for another kind of
-    /// dialog, or a prompt's text is longer than [`dialogs::MAX_PROMPT_BYTES`].
+    /// dialog, or a prompt's text is longer than [`dialogs::MAX_PROMPT_BYTES`]. Yes to a confirm the
+    /// app opened for the script ([`dialogs::Dialogs::ask`]) also does what it asked.
     pub fn script_answer(&mut self, answer: DialogAnswer) -> bool {
         let Some(k) = self.script_key.as_ref().filter(|_| !self.script_stop.is_set()) else { return false };
-        with_job(k, |j| j.host.dialogs.answer(&mut j.realm, answer)).unwrap_or(false)
+        with_job(k, |j| {
+            let given = j.host.dialogs.answer(&mut j.realm, answer);
+            // Between slices the run's preferences are in its working copy.
+            if let Some(dialogs::OnYes::ExternalScriptWarningOff) = j.host.dialogs.take_approved() {
+                j.world.choices.prefs.show_external_script_warning = false;
+            }
+            given
+        })
+        .unwrap_or(false)
     }
 
     /// The file dialog (`File.openDialog`, `File.saveDialog`, `Folder.selectDialog` and the objects'
@@ -2118,6 +2158,7 @@ impl Session {
             log: RefCell::new(Vec::new()),
             log_bytes: Cell::new(0),
             written: RefCell::new(Written::default()),
+            copied: Cell::new(false),
             run: self.script_runs,
             name: console::line_name(&name),
             console: RefCell::default(),
@@ -2414,6 +2455,13 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         host.more_written(&mut report);
+        // The run ran a Copy or Cut, and the clipboard still holds what one put there.
+        if host.copied.get()
+            && self.clipboard_copied
+            && let Some(o) = report.as_object_mut()
+        {
+            o.insert("copied".into(), json!(true));
+        }
         let rejections = rejections_report(host, &job.realm);
         if let (false, Some(o)) = (rejections.is_empty(), report.as_object_mut()) {
             o.insert("unhandledRejections".into(), Value::Array(rejections));

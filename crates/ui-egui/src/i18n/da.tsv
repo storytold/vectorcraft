@@ -64,6 +64,7 @@
 @msg	a drag or an undo group is open; finish it before running a script	en trækning eller en fortrydelsesgruppe er åben; afslut den, før du kører et script
 @msg	the script left a document that cannot be kept	scriptet efterlod et dokument, der ikke kan beholdes
 @msg	the script is no longer in the Scripts folder	scriptet ligger ikke længere i mappen Scripter
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	Scriptet beder om at slå advarslen fra, som vises, før et script, der er valgt med Filer › Scripter › Andet script…, køres. Scripter, der vælges senere, ville så køre uden den. Vil du slå advarslen fra?
 @msg	the script's run is no longer available	scriptets kørsel er ikke længere tilgængelig
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	en mislykket kommando ændrede fortrydelsestrin, der ikke kunne genskabes, så scriptet blev stoppet
 @msg	a recovery copy could not be written, so the script was not run	en gendannelseskopi kunne ikke skrives, så scriptet blev ikke kørt

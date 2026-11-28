@@ -54,6 +54,8 @@ impl Session {
             paint: PaintDefaults::default(),
             fill_active: true,
             clipboard: Clipboard::default(),
+            copies: 0,
+            clipboard_copied: false,
             journal: Journal::default(),
             history_budget: crate::default_history_budget(),
             histories_seen: None,

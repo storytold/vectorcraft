@@ -401,6 +401,17 @@ pub fn undo_labels() -> std::collections::BTreeSet<String> {
     undo_scan().labels
 }
 
+/// The confirm a run shows before a script turns off the external script warning, which the message
+/// scan doesn't read, is translated in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn script_warning_off_question_is_translated() {
+    let question = vectorcraft_engine::script::dom::preferences::WARNING_OFF_QUESTION;
+    for code in COMPLETE_MESSAGES {
+        let lang = lang(code);
+        assert_ne!(message(lang, question), question, "{code}");
+    }
+}
+
 /// What [`undo_scan`] finds in [`UNDO_CRATES`].
 struct UndoScan {
     /// The step names written as literals ([`undo_labels`]).

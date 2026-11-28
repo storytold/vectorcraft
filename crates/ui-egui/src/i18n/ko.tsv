@@ -5758,6 +5758,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	a drag or an undo group is open; finish it before running a script	드래그 또는 실행 취소 그룹이 열려 있습니다. 스크립트를 실행하기 전에 완료하세요
 @msg	the script left a document that cannot be kept	스크립트가 유지할 수 없는 문서를 남겼습니다
 @msg	the script is no longer in the Scripts folder	스크립트가 더 이상 Scripts 폴더에 없습니다
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	스크립트가 파일 › 스크립트 › 다른 스크립트…로 선택한 스크립트를 실행하기 전에 표시되는 경고를 끄려고 합니다. 그러면 이후에 선택한 스크립트는 경고 없이 실행됩니다. 경고를 끌까요?
 	Some scripts were not listed	일부 스크립트가 나열되지 않았습니다
 	The Scripts folder cannot be read	Scripts 폴더를 읽을 수 없습니다
 	Loading scripts…	스크립트 불러오는 중…

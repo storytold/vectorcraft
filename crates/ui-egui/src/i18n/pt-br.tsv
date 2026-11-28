@@ -6150,6 +6150,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msg	a drag or an undo group is open; finish it before running a script	há um arraste ou um grupo de desfazer aberto; conclua-o antes de executar um script
 @msg	the script left a document that cannot be kept	o script deixou um documento que não pode ser mantido
 @msg	the script is no longer in the Scripts folder	o script não está mais na pasta Scripts
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	O script pede para desativar o aviso mostrado antes de executar um script escolhido em Arquivo › Scripts › Outro Script… Os scripts escolhidos depois seriam executados sem ele. Desativar o aviso?
 	Some scripts were not listed	Alguns scripts não foram listados
 	The Scripts folder cannot be read	Não é possível ler a pasta Scripts
 	Loading scripts…	Carregando scripts…

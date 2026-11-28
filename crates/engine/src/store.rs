@@ -211,6 +211,16 @@ pub(crate) fn read_capped(path: &Path, max: u64) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+/// [`read_capped`] of a file already open.
+pub(crate) fn read_open_capped(file: std::fs::File, max: u64) -> Result<Vec<u8>, String> {
+    let mut bytes = vec![];
+    file.take(max + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > max {
+        return Err(too_large(max));
+    }
+    Ok(bytes)
+}
+
 /// The first `max + 1` bytes of `path` at most, so that a result longer than `max` shows the file is
 /// over its cap.
 fn read_past_cap(path: &Path, max: u64) -> std::io::Result<Vec<u8>> {

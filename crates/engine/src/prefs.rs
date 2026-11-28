@@ -457,6 +457,21 @@ pub struct Prefs {
     /// preferences keeps it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub import_matches: Vec<cmd::importmatches::ImportMatch>,
+    /// The values scripts store with `app.preferences` under keys that are not VectorCraft
+    /// preferences. Not a Preferences dialog field: it has no [`cmd::prefscmds::PREF_SPECS`] row,
+    /// and resetting the preferences keeps it.
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub script_preferences: std::collections::BTreeMap<String, ScriptPreference>,
+}
+
+/// A value a script stored with `app.preferences`, with the type it was stored as.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ScriptPreference {
+    Boolean(bool),
+    Integer(i64),
+    Real(f64),
+    String(String),
 }
 
 /// The default Hold Shortcut Delay, in seconds (VectorCraft's own value).
@@ -676,6 +691,7 @@ impl Default for Prefs {
             blend_options: None,
             perspective_widget: Default::default(),
             import_matches: vec![],
+            script_preferences: Default::default(),
         }
     }
 }

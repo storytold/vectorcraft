@@ -2771,7 +2771,7 @@ file-filter	Templates	Шаблони
 	Other Layers	Інші шари
 	Other Libraries	Інші бібліотеки
 	Other Library…	Інша бібліотека…
-	Other Script…	Інша писемність…
+	Other Script…	Інший скрипт…
 	Out of Gamut Warning	Попередження про вихід із колірного охоплення
 	Out of Web Color Warning	Попередження про колір, що не підтримується web
 	Out Tangent Handles	Маркери вихідної дотичної
@@ -4987,6 +4987,7 @@ axis	Both	Обидві
 @msg	a drag or an undo group is open; finish it before running a script	відкрито перетягування або групу скасування; завершіть їх перед запуском скрипта
 @msg	the script left a document that cannot be kept	скрипт залишив документ, який не можна зберегти
 @msg	the script is no longer in the Scripts folder	скрипт більше не міститься в папці Scripts
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	Скрипт просить вимкнути попередження, яке показується перед запуском скрипту, вибраного командою Файл › Сценарії › Інший скрипт… Вибрані пізніше скрипти тоді запускатимуться без нього. Вимкнути попередження?
 	Some scripts were not listed	Деякі сценарії не показано
 	The Scripts folder cannot be read	Не вдалося прочитати папку Scripts
 	Loading scripts…	Завантаження сценаріїв…

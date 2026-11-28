@@ -1166,17 +1166,24 @@ fn a_damaged_or_oversized_profile_leaves_the_defaults_and_is_reported() {
 #[cfg(unix)]
 #[test]
 fn a_profile_that_is_a_link_is_not_followed() {
+    /// Removes the folder and the file when dropped, also when an assertion fails.
+    struct Removed(std::path::PathBuf, std::path::PathBuf);
+    impl Drop for Removed {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+            let _ = std::fs::remove_file(&self.1);
+        }
+    }
     let (mut s, dir) = with_profiles("link");
-    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
     // A profile the folder held, moved out and linked back in.
     let outside = std::env::temp_dir().join(format!("vc-newdoc-profile-outside-{}.vectorcraft", std::process::id()));
+    let _removed = Removed(dir.clone(), outside.clone());
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
     std::fs::rename(dir.join("Print.vectorcraft"), &outside).unwrap();
     std::os::unix::fs::symlink(&outside, dir.join("Print.vectorcraft")).unwrap();
     let r = s.execute("file.new", &json!({"preset": "Letter"})).unwrap();
     assert_eq!(r["profileError"]["reason"], "not a plain file", "{r}");
     assert!(r.get("profile").is_none(), "{r}");
-    let _ = std::fs::remove_file(&outside);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

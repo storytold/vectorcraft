@@ -7673,6 +7673,7 @@ arrowhead	Feather	पंख
 @msg	a drag or an undo group is open; finish it before running a script	कोई ड्रैग या पूर्ववत समूह खुला है; स्क्रिप्ट चलाने से पहले उसे पूरा करें
 @msg	the script left a document that cannot be kept	स्क्रिप्ट ने ऐसा दस्तावेज़ छोड़ा है जिसे रखा नहीं जा सकता
 @msg	the script is no longer in the Scripts folder	स्क्रिप्ट अब Scripts फ़ोल्डर में नहीं है
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	स्क्रिप्ट उस चेतावनी को बंद करना चाहती है जो फ़ाइल › स्क्रिप्ट्स › अन्य स्क्रिप्ट… से चुनी गई स्क्रिप्ट चलने से पहले दिखाई जाती है। इसके बाद चुनी गई स्क्रिप्ट्स उसके बिना चलेंगी। चेतावनी बंद करें?
 	Some scripts were not listed	कुछ स्क्रिप्ट सूचीबद्ध नहीं की गईं
 	The Scripts folder cannot be read	Scripts फ़ोल्डर पढ़ा नहीं जा सकता
 	Loading scripts…	स्क्रिप्ट लोड हो रही हैं…

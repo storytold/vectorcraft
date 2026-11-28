@@ -5184,6 +5184,7 @@ imageTrace	Outline	Ääriviiva
 @msg	a drag or an undo group is open; finish it before running a script	vetäminen tai kumousryhmä on kesken; viimeistele se ennen komentosarjan suorittamista
 @msg	the script left a document that cannot be kept	komentosarja jätti asiakirjan, jota ei voi säilyttää
 @msg	the script is no longer in the Scripts folder	komentosarja ei ole enää Scripts-kansiossa
+@msg	The script asks to turn off the warning shown before a script picked with File › Scripts › Other Script… runs. Scripts picked later would then run without it. Turn the warning off?	Komentosarja pyytää poistamaan käytöstä varoituksen, joka näytetään ennen kuin komennolla Tiedosto › Komentosarjat › Muu komentosarja… valittu komentosarja suoritetaan. Myöhemmin valitut komentosarjat suoritettaisiin silloin ilman sitä. Poistetaanko varoitus käytöstä?
 	Some scripts were not listed	Kaikkia komentosarjoja ei ole lueteltu
 	The Scripts folder cannot be read	Scripts-kansiota ei voi lukea
 	Loading scripts…	Ladataan komentosarjoja…
