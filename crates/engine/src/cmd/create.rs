@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Three-Point Arc",
             [],
             None,
-            "{start: [x, y], end: [x, y], through?: [x, y], toward?: [x, y], at?: \"start\"|\"end\" (default \"start\"; only with `toward`)} → {id, cx, cy, radius, sweep}: an open circular arc from `start` to `end` in the current stroke (black when it is none) with no fill, its ends exactly at the two points (not pixel-aligned). With `through`, the arc passes through that point, an anchor of the path; with `toward`, it leaves the end `at` names heading toward that point (its tangent there). Give exactly one of `through` and `toward`; `at` with `through` is an error. `sweep` is the arc's turn in degrees, positive clockwise on the page. Two points that are the same, three on one line, or an arc reaching past the canvas are an error, and nothing is drawn",
+            "{start: [x, y], end: [x, y], through?: [x, y], toward?: [x, y], at?: \"start\"|\"end\" (default \"start\"; only with `toward`), join?: bool (default false)} → {id, cx, cy, radius, sweep, joined?}: an open circular arc from `start` to `end` in the current stroke (black when it is none) with no fill, its ends exactly at the two points (not pixel-aligned). With `through`, the arc passes through that point, an anchor of the path; with `toward`, it leaves the end `at` names heading toward that point (its tangent there). Give exactly one of `through` and `toward`; `at` with `through` is an error. `sweep` is the arc's turn in degrees, positive clockwise on the page. With `join`, an end of the arc on an end of an editable open path (inside the isolated group in isolation mode) joins the arc to that path, which keeps its look and, when one end joins, its direction (a path in the selection comes first); with both ends on open path ends the second path joins too, or the path closes when both are its own ends. The result then has `joined: true` and `id` is the joined path (or its compound path). A `join` that is not true or false is an error. Two points that are the same, three on one line, or an arc reaching past the canvas are an error, and nothing is drawn",
             has_doc,
             three_point_arc
         ),
@@ -747,7 +747,8 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// An open circular arc from `start` to `end` ([`shapes::CircularArc`]): through `through`, or
-/// leaving the end `at` names toward `toward`. One undo step, named as an Arc tool drag is.
+/// leaving the end `at` names toward `toward`. With `join`, joined to the open paths whose ends
+/// its ends lie on ([`super::path::join_arc`]). One undo step, named as an Arc tool drag is.
 fn three_point_arc(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "shape.threePointArc";
     let point = |key: &str| finite_numbers::<2>(&p[key]).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(C, format!("`{key}` must be [x, y]")));
@@ -774,8 +775,32 @@ fn three_point_arc(s: &mut Session, p: &Value) -> Result<Value> {
         }
         _ => return Err(bad(C, "give exactly one of `through` and `toward`")),
     };
+    let join = match p.get("join") {
+        None => false,
+        Some(Value::Bool(on)) => *on,
+        Some(_) => return Err(bad(C, "`join` must be true or false")),
+    };
     let arc = arc.ok_or_else(|| bad(C, "no arc fits these points: two are the same or all three lie on one line"))?;
     let path = via.map_or_else(|| arc.to_path(), |v| arc.to_path_via(v));
+    let ends = if join {
+        let st = s.doc()?;
+        let selected = st.selection.objects.clone();
+        let find = |at| super::path::open_end_at(&st.doc, st.isolation, &selected, at);
+        (find(start), find(end))
+    } else {
+        (None, None)
+    };
+    if ends.0.is_some() || ends.1.is_some() {
+        let sub = path.subpaths.first().cloned().ok_or_else(|| bad(C, "no arc fits these points"))?;
+        let id = s.edit("Arc", |d, sel| {
+            let id = super::path::join_arc(d, &sub, ends.0, ends.1)?;
+            sel.set([id]);
+            Ok(id)
+        })?;
+        return Ok(
+            json!({ "id": id.0, "joined": true, "cx": arc.center.x, "cy": arc.center.y, "radius": arc.radius, "sweep": arc.sweep.to_degrees() }),
+        );
+    }
     let look = s.new_art_look(
         vectorcraft_color::Paint::None,
         if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },

@@ -166,11 +166,11 @@ fn in_direction_mode_the_third_point_sets_the_tangent_at_an_end() {
     let mut t = ThreePointArcTool::default();
     assert!(!t.claims_key(&cx, ToolKey::BracketRight), "no ends: ] is left to the app");
     t.key(&cx, ToolKey::BracketRight, Mods::default());
-    assert_eq!(t.options(), json!({ "direction": false }));
+    assert_eq!(t.options()["direction"], json!(false));
     drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 300.0)], Mods::default());
     assert!(t.claims_key(&cx, ToolKey::BracketRight));
     t.key(&cx, ToolKey::BracketRight, Mods::default());
-    assert_eq!(t.options(), json!({ "direction": true }));
+    assert_eq!(t.options()["direction"], json!(true));
     // Straight up the page from (300, 300): the upper half circle about (340, 300).
     hover(&mut t, &cx, (300.0, 250.0), Mods::default());
     let o = t.overlays(&cx);
@@ -201,10 +201,10 @@ fn the_direction_option_takes_a_bool() {
     t.set_option("direction", &json!(true));
     for v in [json!("false"), json!(0), json!(null)] {
         t.set_option("direction", &v);
-        assert_eq!(t.options(), json!({ "direction": true }), "{v}");
+        assert_eq!(t.options()["direction"], json!(true), "{v}");
     }
     t.set_option("direction", &json!(false));
-    assert_eq!(t.options(), json!({ "direction": false }));
+    assert_eq!(t.options(), json!({ "direction": false, "join": false, "tangentSnap": true }));
 }
 
 /// `]` pressed while the third point is held down places the point as the new mode keeps it: the
@@ -371,6 +371,120 @@ fn escape_history_and_a_double_click_drop_or_keep_the_ends() {
     drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 300.0)], Mods::default());
     t.drop_press(&cx);
     assert!(!t.busy() && t.overlays(&cx).is_empty());
+}
+
+/// A document holding an open straight path from (100, 100) to (200, 100), unselected.
+fn doc_with_open_line() -> vectorcraft_doc::Document {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let path = vectorcraft_geom::shapes::line(Point::new(100.0, 100.0), Point::new(200.0, 100.0));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    d
+}
+
+/// The arc command's params in `acts`, its only action.
+fn params_of(acts: &[Action]) -> Value {
+    let [Action::Exec(name, params)] = acts else { panic!("{acts:?}") };
+    assert_eq!(name, "shape.threePointArc");
+    params.clone()
+}
+
+/// With `join` on, an end placed near an open path's end lands on it and the command asks for the
+/// join; with it off, the end stays where it was placed and the command asks for none. J while
+/// the ends are placed switches `join`, moving a placed end onto the path's end.
+#[test]
+fn with_join_an_end_near_an_open_path_end_lands_on_it() {
+    let d = doc_with_open_line();
+    let (s, p) = (Selection::default(), paint());
+    // Snap to Point off, so only `join` moves an end onto the path's end.
+    let isolated = ToolContext { smart_guides: false, snap_to_point: false, isolation: Some(vectorcraft_doc::NodeId(u64::MAX)), ..cx(&d, &s, &p) };
+    let cx = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+    let mut t = ThreePointArcTool::default();
+    assert!(!t.claims_key(&cx, ToolKey::Letter('j')), "no ends: J is left to the app");
+    click(&mut t, &cx, (198.5, 100.5));
+    click(&mut t, &cx, (280.0, 180.0));
+    let off = params_of(&click(&mut t, &cx, (280.0, 100.0)));
+    assert_eq!((off["start"].clone(), off.get("join")), (json!([198.5, 100.5]), None), "{off}");
+    t.set_option("join", &json!(true));
+    click(&mut t, &cx, (198.5, 100.5));
+    click(&mut t, &cx, (280.0, 180.0));
+    let on = params_of(&click(&mut t, &cx, (280.0, 100.0)));
+    assert_eq!((on["start"].clone(), on["join"].clone()), (json!([200.0, 100.0]), json!(true)), "{on}");
+    // The second end lands on the path's first end.
+    click(&mut t, &cx, (20.0, 180.0));
+    click(&mut t, &cx, (101.5, 100.5));
+    let on = params_of(&click(&mut t, &cx, (20.0, 100.0)));
+    assert_eq!(on["end"], json!([100.0, 100.0]), "{on}");
+    // In isolation mode, a path outside the isolated node is left alone.
+    click(&mut t, &isolated, (198.5, 100.5));
+    assert_eq!(t.start, Some(Point::new(198.5, 100.5)));
+    t.key(&cx, ToolKey::Escape, Mods::default());
+    // Past the path's end, off its stroke, but within reach of the end.
+    click(&mut t, &cx, (203.5, 102.0));
+    assert_eq!(t.start, Some(Point::new(200.0, 100.0)));
+    t.key(&cx, ToolKey::Escape, Mods::default());
+    // A second end that would land on the first end is not placed, by a click or by a drag.
+    click(&mut t, &cx, (200.0, 100.0));
+    click(&mut t, &cx, (196.0, 100.0));
+    assert_eq!((t.start, t.end), (Some(Point::new(200.0, 100.0)), None));
+    t.key(&cx, ToolKey::Escape, Mods::default());
+    drag(&mut t, &cx, (200.0, 100.0), &[(196.0, 100.0)], Mods::default());
+    assert_eq!((t.start, t.end), (Some(Point::new(200.0, 100.0)), None));
+    t.key(&cx, ToolKey::Escape, Mods::default());
+    // J switches `join` off and on again while the ends are placed.
+    t.set_option("join", &json!(false));
+    click(&mut t, &cx, (198.5, 100.5));
+    assert!(t.claims_key(&cx, ToolKey::Letter('j')));
+    t.key(&cx, ToolKey::Letter('j'), Mods::default());
+    assert_eq!((t.options()["join"].clone(), t.start), (json!(true), Some(Point::new(200.0, 100.0))));
+    click(&mut t, &cx, (280.0, 180.0));
+    let on = params_of(&click(&mut t, &cx, (280.0, 100.0)));
+    assert_eq!((on["start"].clone(), on["join"].clone()), (json!([200.0, 100.0]), json!(true)), "{on}");
+}
+
+/// In direction mode, with the first end on an open path's end, a third point near the line along
+/// which the arc carries the path on (here the line y = 100) snaps onto it, the same way or turned
+/// back, and the tool shows the line dashed; farther away, with Shift, with `tangentSnap` off, or
+/// away from a path's end, the point stays where it is.
+#[test]
+fn in_direction_mode_the_third_point_snaps_to_carry_the_path_on() {
+    let d = doc_with_open_line();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ThreePointArcTool::default();
+    t.set_option("direction", &json!(true));
+    let dashed_through = |o: &[Overlay]| {
+        o.iter().any(|o| matches!(o, Overlay::Line { a, b, dashed: true, .. } if (a.y - 100.0).abs() < 1e-9 && (b.y - 100.0).abs() < 1e-9 && a.midpoint(*b) == Point::new(200.0, 100.0)))
+    };
+    for (third, want) in [((260.0, 103.0), (260.0, 100.0)), ((140.0, 97.0), (140.0, 100.0)), ((260.0, 120.0), (260.0, 120.0))] {
+        click(&mut t, &cx, (200.0, 100.0));
+        click(&mut t, &cx, (200.0, 200.0));
+        hover(&mut t, &cx, third, Mods::default());
+        assert_eq!(dashed_through(&t.overlays(&cx)), third != want, "{third:?}");
+        assert_eq!(params_of(&click(&mut t, &cx, third))["toward"], json!([want.0, want.1]), "{third:?}");
+    }
+    // Shift keeps the line at 45° steps instead: the pointer just off 45° goes onto 45°.
+    click(&mut t, &cx, (200.0, 100.0));
+    click(&mut t, &cx, (200.0, 200.0));
+    let shift = Mods { shift: true, ..Mods::default() };
+    let toward = params_of(&click_with(&mut t, &cx, (240.0, 63.0), shift))["toward"].clone();
+    assert!((toward[0].as_f64().unwrap() - 200.0 + toward[1].as_f64().unwrap() - 100.0).abs() < 1e-9, "{toward}");
+    // From an end away from the path, or with the snap off, no snap.
+    for (first, snap) in [((200.0, 140.0), true), ((200.0, 100.0), false)] {
+        t.set_option("tangentSnap", &json!(snap));
+        click(&mut t, &cx, first);
+        click(&mut t, &cx, (200.0, 220.0));
+        let toward = params_of(&click(&mut t, &cx, (260.0, first.1 + 3.0)))["toward"].clone();
+        assert_eq!(toward, json!([260.0, first.1 + 3.0]), "{first:?}");
+    }
+    // With Alt, the line from the second end, on the path's first end, carries the path on to the
+    // left.
+    t.set_option("tangentSnap", &json!(true));
+    click(&mut t, &cx, (100.0, 200.0));
+    click(&mut t, &cx, (100.0, 100.0));
+    let alt = Mods { alt: true, ..Mods::default() };
+    let acts = click_with(&mut t, &cx, (40.0, 98.0), alt);
+    assert_eq!((params_of(&acts)["toward"].clone(), params_of(&acts)["at"].clone()), (json!([40.0, 100.0]), json!("end")));
 }
 
 /// The catalog lists the tool in the Line Segment tool's group, after the Arc tool, with no

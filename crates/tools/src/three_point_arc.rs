@@ -8,6 +8,11 @@
 //! the second end along the line from that end to the point, and Shift keeps the line at 45°
 //! steps). `direction` is set in the tool's Tool Options and kept with the preferences; `]` (with
 //! or without Shift) switches it while the ends are placed. Every point snaps to Smart Guides.
+//! With the `join` option on (Tool Options, or J while the ends are placed), an end placed within
+//! reach of an end of an open path lands on it, and the arc is joined to that path. With
+//! `tangentSnap` on (the default), in direction mode, when the direction line starts at an end of
+//! an open path, the third point snaps onto the line along which the arc carries on the path, the
+//! same way or turned back, and the tool shows that line dashed.
 //! Until the third point is placed, the tool shows the arc as a dashed outline with its ends, its
 //! center as a small cross, the direction line in direction mode and, with Measurement Labels on,
 //! the radius by the pointer. Where no arc fits (the third point lies on the line through the
@@ -17,9 +22,9 @@
 //! the ends; a second click on the first end (a double-click) places nothing.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::MAX_COORD;
+use vectorcraft_doc::{MAX_COORD, NodeKind};
 use vectorcraft_geom::shapes::CircularArc;
-use vectorcraft_geom::{PathData, Point, Vec2};
+use vectorcraft_geom::{PathData, Point, SubPath, Vec2};
 
 use crate::guides::{DrawSnap, Leave};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
@@ -34,6 +39,12 @@ const CROSS_PX: f64 = 4.0;
 const REACH_PX: f64 = 3.0;
 /// The label the tool shows by the pointer where no arc fits.
 pub const TOO_LARGE: &str = "Arc too large";
+/// How near (screen points) an end of an open path an end of the arc counts as on it, the Pen's
+/// reach for the path ends it joins.
+const END_PX: f64 = 5.0;
+/// How near (screen points) the line along which the arc carries on an open path the third point
+/// snaps onto it.
+const TANGENT_PX: f64 = 5.0;
 
 /// The press in progress.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -47,21 +58,106 @@ enum Press {
     Third,
 }
 
-#[derive(Default)]
+/// An end of an open path under an end of the arc: where it is, and the direction a path carrying
+/// on from it heads in (none for a path of one anchor).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct OpenEnd {
+    at: Point,
+    out: Option<Vec2>,
+}
+
+/// The end of an open subpath of an editable path (not a guide) within reach of `p`.
+fn open_end(cx: &ToolContext, p: Point) -> Option<OpenEnd> {
+    let tol = cx.tol(END_PX).max(cx.point_tol());
+    let editable = cx.doc.editable();
+    // The nearest end; among ends equally near, as `shape.threePointArc`'s `join` picks among the
+    // ends at a point: one in the selection first, then the last in paint order, and of one
+    // subpath's two ends its last anchor.
+    let mut best: Option<(OpenEnd, f64, bool)> = None;
+    cx.doc.walk(|n| {
+        let NodeKind::Path { path, guide: false, .. } = &n.kind else { return };
+        if !editable(n.id) {
+            return;
+        }
+        // In isolation mode, only art inside the isolated node.
+        let chain = cx.doc.ancestry(n.id).unwrap_or_default();
+        if cx.isolation.is_some_and(|s| !chain.contains(&s)) {
+            return;
+        }
+        let chosen = chain.iter().any(|id| cx.selection.objects.contains(id));
+        for sp in path.subpaths.iter().filter(|sp| !sp.closed) {
+            let ends = [false, true].map(|at_first| end_of(sp, at_first));
+            let near = match ends {
+                [Some(last), Some(first)] => Some(if last.at.distance(p) <= first.at.distance(p) { last } else { first }),
+                [last, first] => last.or(first),
+            };
+            let Some(e) = near else { continue };
+            let d = e.at.distance(p);
+            if d <= tol && best.is_none_or(|(_, bd, was)| d < bd || (d == bd && (chosen || !was))) {
+                best = Some((e, d, chosen));
+            }
+        }
+    });
+    best.map(|(e, _, _)| e)
+}
+
+/// The end of the open subpath `sp` (its first anchor when `at_first`), with the direction a path
+/// carrying on from it heads in.
+fn end_of(sp: &SubPath, at_first: bool) -> Option<OpenEnd> {
+    let n = sp.anchors.len();
+    let (end, next) =
+        if at_first { (sp.anchors.first()?, sp.anchors.get(1)) } else { (sp.anchors.last()?, n.checked_sub(2).and_then(|i| sp.anchors.get(i))) };
+    // The path reaches the end along the first of its control points that is off the end.
+    let mut back = vec![if at_first { end.h_out } else { end.h_in }];
+    if let Some(q) = next {
+        back.extend([if at_first { q.h_in } else { q.h_out }, q.p]);
+    }
+    let out = back.into_iter().map(|q| end.p - q).find(|v| v.hypot() > 0.0).map(|v| v / v.hypot());
+    Some(OpenEnd { at: end.p, out })
+}
+
 pub struct ThreePointArcTool {
     snap: DrawSnap,
     /// The third point gives the arc's direction at an end instead of a point it passes through.
     direction: bool,
+    /// An end of the arc on an end of an open path joins the arc to that path.
+    join: bool,
+    /// In direction mode, the third point snaps to where the arc carries on the open path its
+    /// direction line starts at, the same way or turned back.
+    tangent_snap: bool,
     start: Option<Point>,
     end: Option<Point>,
+    /// The open path ends found under the first and the second end as each was placed.
+    open: [Option<OpenEnd>; 2],
     press: Option<Press>,
     /// Where the pointer is, snapped: the point the next press or release places.
     pointer: Option<Point>,
+    /// The line the third point snapped to: the end it runs through and its direction.
+    tangent: Option<(Point, Vec2)>,
     /// Alt was held at the last pointer event: in direction mode, the direction is at the second end.
     at_end: bool,
     /// Where the pointer was at its last event, pressed or hovering, before snapping, and the keys
     /// held then.
     raw: Option<(Point, Mods)>,
+}
+
+impl Default for ThreePointArcTool {
+    fn default() -> Self {
+        Self {
+            snap: DrawSnap::default(),
+            direction: false,
+            join: false,
+            tangent_snap: true,
+            start: None,
+            end: None,
+            open: [None; 2],
+            press: None,
+            pointer: None,
+            tangent: None,
+            at_end: false,
+            raw: None,
+        }
+    }
 }
 
 /// The arc from `start` to `end` shaped by `third`, as `shape.threePointArc` draws it: through
@@ -81,14 +177,18 @@ pub fn arc_of(start: Point, end: Point, third: Point, direction: bool, at_end: b
     on_canvas.then_some((arc, path))
 }
 
-/// The command the tool runs for the arc from `start` to `end` shaped by `third`.
-fn command(start: Point, end: Point, third: Point, direction: bool, at_end: bool) -> (String, Value) {
+/// The command the tool runs for the arc from `start` to `end` shaped by `third`, joined to the
+/// open paths at its ends with `join`.
+fn command(start: Point, end: Point, third: Point, direction: bool, at_end: bool, join: bool) -> (String, Value) {
     let pair = |p: Point| json!([p.x, p.y]);
-    let params = if direction {
+    let mut params = if direction {
         json!({ "start": pair(start), "end": pair(end), "toward": pair(third), "at": if at_end { "end" } else { "start" } })
     } else {
         json!({ "start": pair(start), "end": pair(end), "through": pair(third) })
     };
+    if join {
+        params["join"] = json!(true);
+    }
     ("shape.threePointArc".into(), params)
 }
 
@@ -96,9 +196,35 @@ impl ThreePointArcTool {
     fn clear(&mut self) {
         self.start = None;
         self.end = None;
+        self.open = [None; 2];
         self.press = None;
         self.pointer = None;
+        self.tangent = None;
         self.snap.clear();
+    }
+
+    /// The end `which` (0 the first, 1 the second) placed at `p`: the open path end under it is
+    /// noted, and with `join` on the end lands on it.
+    fn place(&mut self, cx: &ToolContext, which: usize, p: Point) -> Point {
+        let found = open_end(cx, p);
+        if let Some(slot) = self.open.get_mut(which) {
+            *slot = found;
+        }
+        match found {
+            Some(e) if self.join => e.at,
+            _ => p,
+        }
+    }
+
+    /// The second end let go at `b`, with the first at `a`: placed, unless landing on an open path
+    /// end puts it on the first end, which leaves it to another try.
+    fn place_end(&mut self, cx: &ToolContext, a: Point, b: Point) {
+        let at = self.place(cx, 1, b);
+        if at.distance(a) > cx.tol(REACH_PX) {
+            self.end = Some(at);
+        } else {
+            self.open[1] = None;
+        }
     }
 
     /// How the point being placed keeps to the points before it: the second end to the first, and
@@ -108,6 +234,28 @@ impl ThreePointArcTool {
             (Some(a), None) => Some(Leave::segment(cx, a, mods.shift)),
             (Some(a), Some(b)) if self.direction => Some(Leave::segment(cx, if mods.alt { b } else { a }, mods.shift)),
             _ => None,
+        }
+    }
+
+    /// The third point at `q`, snapped: in direction mode with `tangentSnap` on, near the line
+    /// along which the arc carries on the open path its direction line starts at, it moves onto
+    /// that line. Shift keeps the line at 45° steps instead.
+    fn third(&mut self, cx: &ToolContext, q: Point, mods: Mods) -> Point {
+        self.tangent = None;
+        let (Some(a), Some(b)) = (self.start, self.end) else { return q };
+        if !self.direction || !self.tangent_snap || mods.shift {
+            return q;
+        }
+        let (o, end) = if self.at_end { (b, self.open[1]) } else { (a, self.open[0]) };
+        // The direction line starts on the path's end itself, so the arc carries the path on.
+        let Some(OpenEnd { at, out: Some(t) }) = end.filter(|e| e.at == o) else { return q };
+        let k = (q - at).dot(t);
+        let foot = at + t * k;
+        if k != 0.0 && q.distance(foot) <= cx.tol(TANGENT_PX) {
+            self.tangent = Some((at, t));
+            foot
+        } else {
+            q
         }
     }
 
@@ -122,9 +270,14 @@ impl ThreePointArcTool {
                 let leave = Leave::segment(cx, *at, ev.mods.shift);
                 self.pointer = Some(self.snap.drag(cx, ev.pos, Some(&leave)));
             }
-            Some(Press::End | Press::Third) => {
+            Some(Press::End) => {
                 let leave = self.leave(cx, ev.mods);
                 self.pointer = Some(self.snap.drag(cx, ev.pos, leave.as_ref()));
+            }
+            Some(Press::Third) => {
+                let leave = self.leave(cx, ev.mods);
+                let q = self.snap.drag(cx, ev.pos, leave.as_ref());
+                self.pointer = Some(self.third(cx, q, ev.mods));
             }
             None => {}
         }
@@ -153,7 +306,8 @@ impl Tool for ThreePointArcTool {
             PointerKind::Move => {
                 self.raw = Some((ev.pos, ev.mods));
                 let leave = self.leave(cx, ev.mods);
-                self.pointer = Some(self.snap.hover(cx, ev.pos, &[], leave.as_ref()));
+                let q = self.snap.hover(cx, ev.pos, &[], leave.as_ref());
+                self.pointer = Some(self.third(cx, q, ev.mods));
                 vec![]
             }
             PointerKind::Down => {
@@ -161,7 +315,8 @@ impl Tool for ThreePointArcTool {
                 let leave = self.leave(cx, ev.mods);
                 match (self.start, self.end) {
                     (None, _) => {
-                        let at = self.snap.press(cx, ev.pos, &[], None);
+                        let snapped = self.snap.press(cx, ev.pos, &[], None);
+                        let at = self.place(cx, 0, snapped);
                         self.start = Some(at);
                         self.press = Some(Press::Start { at, from: ev.pos, dragged: false });
                         self.pointer = Some(at);
@@ -177,7 +332,8 @@ impl Tool for ThreePointArcTool {
                         self.pointer = Some(at);
                     }
                     (Some(_), Some(_)) => {
-                        self.pointer = Some(self.snap.press(cx, ev.pos, &[], leave.as_ref()));
+                        let q = self.snap.press(cx, ev.pos, &[], leave.as_ref());
+                        self.pointer = Some(self.third(cx, q, ev.mods));
                         self.press = Some(Press::Third);
                     }
                 }
@@ -195,8 +351,8 @@ impl Tool for ThreePointArcTool {
                     self.follow(cx, ev);
                 }
                 match (self.press.take(), self.start, self.pointer) {
-                    (Some(Press::Start { at, dragged: true, .. }), _, Some(b)) if b.distance(at) >= cx.tol(DRAG_PX) => self.end = Some(b),
-                    (Some(Press::End), Some(a), Some(b)) if b.distance(a) > cx.tol(REACH_PX) => self.end = Some(b),
+                    (Some(Press::Start { at, dragged: true, .. }), _, Some(b)) if b.distance(at) >= cx.tol(DRAG_PX) => self.place_end(cx, at, b),
+                    (Some(Press::End), Some(a), Some(b)) if b.distance(a) > cx.tol(REACH_PX) => self.place_end(cx, a, b),
                     (Some(Press::Third), Some(a), Some(c)) => {
                         let Some(b) = self.end else { return vec![] };
                         // Where no arc fits, nothing is drawn and the ends stay for another try.
@@ -204,7 +360,7 @@ impl Tool for ThreePointArcTool {
                             self.snap.clear();
                             return vec![];
                         }
-                        let (name, params) = command(a, b, c, self.direction, self.at_end);
+                        let (name, params) = command(a, b, c, self.direction, self.at_end, self.join);
                         self.clear();
                         return vec![Action::Exec(name, params)];
                     }
@@ -229,9 +385,31 @@ impl Tool for ThreePointArcTool {
                     (Some(_), Some((p, mods))) => self.follow(cx, &PointerEvent::new(PointerKind::Drag, p.x, p.y).with_mods(mods)),
                     (None, Some((p, mods))) if self.end.is_some() && self.pointer.is_some() => {
                         let leave = self.leave(cx, mods);
-                        self.pointer = Some(self.snap.hover(cx, p, &[], leave.as_ref()));
+                        let q = self.snap.hover(cx, p, &[], leave.as_ref());
+                        self.pointer = Some(self.third(cx, q, mods));
                     }
                     _ => {}
+                }
+            }
+            ToolKey::Letter('j') if self.start.is_some() => {
+                self.join = !self.join;
+                // Switched on: the ends placed on open path ends land on them, unless that would
+                // put one end on the other.
+                if self.join {
+                    let reach = cx.tol(REACH_PX);
+                    if let Some(e) = self.open[0]
+                        && self.end.is_none_or(|b| b.distance(e.at) > reach)
+                    {
+                        self.start = Some(e.at);
+                        if let Some(Press::Start { at, .. }) = &mut self.press {
+                            *at = e.at;
+                        }
+                    }
+                    if let (Some(a), Some(_), Some(e)) = (self.start, self.end, self.open[1])
+                        && a.distance(e.at) > reach
+                    {
+                        self.end = Some(e.at);
+                    }
                 }
             }
             _ => {}
@@ -240,7 +418,7 @@ impl Tool for ThreePointArcTool {
     }
 
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
-        matches!(key, ToolKey::Escape | ToolKey::BracketRight) && self.start.is_some()
+        matches!(key, ToolKey::Escape | ToolKey::BracketRight | ToolKey::Letter('j')) && self.start.is_some()
     }
 
     /// An end placed: Escape drops it.
@@ -266,6 +444,7 @@ impl Tool for ThreePointArcTool {
     fn hover_ended(&mut self, _cx: &ToolContext) {
         if self.press.is_none() {
             self.pointer = None;
+            self.tangent = None;
             self.snap.clear();
         }
     }
@@ -284,6 +463,11 @@ impl Tool for ThreePointArcTool {
             (Some(a), Some(b), Some(p)) => {
                 if self.direction {
                     o.push(Overlay::Line { a: if self.at_end { b } else { a }, b: p, color, dashed: false });
+                }
+                // The line the third point snapped to, as far past its end as the pointer is.
+                if let Some((at, t)) = self.tangent {
+                    let reach = t * p.distance(at);
+                    o.push(Overlay::Line { a: at - reach, b: at + reach, color, dashed: true });
                 }
                 match self.arc() {
                     Some((arc, path)) => {
@@ -313,21 +497,23 @@ impl Tool for ThreePointArcTool {
     }
 
     fn options(&self) -> Value {
-        json!({ "direction": self.direction })
+        json!({ "direction": self.direction, "join": self.join, "tangentSnap": self.tangent_snap })
     }
 
     fn set_option(&mut self, key: &str, value: &Value) {
-        if key == "direction"
-            && let Some(on) = value.as_bool()
-        {
-            self.direction = on;
+        let Some(on) = value.as_bool() else { return };
+        match key {
+            "direction" => self.direction = on,
+            "join" => self.join = on,
+            "tangentSnap" => self.tangent_snap = on,
+            _ => {}
         }
     }
 
     fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
         use crate::option_check as c;
         match key {
-            "direction" => c::boolean(key, v),
+            "direction" | "join" | "tangentSnap" => c::boolean(key, v),
             _ => Err(c::unknown(key)),
         }
     }

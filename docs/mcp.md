@@ -856,7 +856,7 @@ from −100 to 100 and is 50 when left out with `lengthX` and `lengthY`, or 100 
 `` `baseAlong` must be one of x, y ``), as is a `slope` outside its range; the arc is not drawn and no undo step is
 added.
 
-`shape.threePointArc {start: [x, y], end: [x, y], through?: [x, y], toward?: [x, y], at?: "start"|"end"}` draws an
+`shape.threePointArc {start: [x, y], end: [x, y], through?: [x, y], toward?: [x, y], at?: "start"|"end", join?: bool}` draws an
 open circular arc from `start` to `end` and selects it. With `through`, the arc passes through that point. With
 `toward`, the arc leaves `start` heading toward that point, so the line from `start` to the point is the arc's tangent
 there. With `at: "end"`, the line from `end` to the point is the tangent at `end` instead. `at` is `"start"` when left
@@ -869,14 +869,31 @@ when the third point lies on the line through the ends, when the arc would reach
 `[x, y]`, when both or neither of `through` and `toward` are given, when `at` is anything but `"start"` or `"end"`, and
 when `at` is given with `through`.
 
+With `join: true`, an end of the arc that lies on an end of an open subpath of an editable path (not a guide, and in
+isolation mode inside the isolated group) joins the arc to that path, as the published arc tool documentation describes for arcs started or ended on an open path's end
+(https://docs.astutegraphics.com/subscribe/arc-by-points-tool/arc-by-points-preferences). When several open path ends
+lie there, one in the selection comes first, then the last in paint order. The path keeps its look, and when one end
+joins, its direction: the arc is added after the path's last anchor or before its first, and the anchor where they meet
+is the path's own, with the handle on the arc's side taken from the arc. When the other end of the arc lies on an end of
+another open path, that path is joined on as `path.join` joins two paths; when it lies on the other end of the
+same subpath, the path closes. It is one undo step, the joined path (or its compound path) is selected, and the result
+is `{id, cx, cy, radius, sweep, joined: true}` with `id` the joined path. With no open path end at either end, the arc
+is drawn as a new path. A `join` that is not true or false is an error.
+
 The Three-Point Arc tool, in the Line Segment tool's group after the Arc tool, runs this command. A drag from one end to
 the other, or a click on each, places the ends; Shift keeps the second end at 45° steps from the first (from General ›
 Constrain Angle). A click on a third point, or a press dragged to it, then draws the arc through it. With the tool's
 `direction` option on, the third point gives the direction the arc leaves the first end in; with `mods.alt`, the
 direction is at the second end, and Shift keeps the direction at 45° steps. Three-Point Arc Tool Options (`tool.options`,
 or a double-click on the tool) sets `direction` with its Third Point Sets Direction box, and
-`]` (with or without Shift) switches it while the ends are placed; the option is saved with the preferences. Until the
-third point is placed, the tool shows the arc as a dashed outline, its center as a small cross, the direction line in
+`]` (with or without Shift) switches it while the ends are placed; the option is saved with the preferences. The
+`join` option (Join to Open Path Ends in Tool Options, off by default; J switches it while the ends are placed) makes an
+end placed within 5 screen points of an end of an open path land on that end (the nearest one, picked among ends equally
+near as the command picks), and the tool then runs the command with
+`join: true`. The `tangentSnap` option (Snap Where the Arc Continues a Path, on by default) works in direction mode:
+when the direction line starts on an end of an open path, a third point within 5 screen points of the line along which
+the arc carries the path on, the same way or turned back, snaps onto it, and the tool shows that line dashed. Shift
+keeps the direction at 45° steps instead. Until the third point is placed, the tool shows the arc as a dashed outline, its center as a small cross, the direction line in
 direction mode and, with Measurement Labels on, the radius. Where no arc fits, the tool shows "Arc too large" by the
 pointer (nothing while the pointer is on an end), and a click there draws nothing and keeps the ends. Escape, and an
 edit, Undo or Redo made outside the tool, remove the ends.

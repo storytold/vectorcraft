@@ -1,8 +1,12 @@
 //! Three-Point Arc Tool Options (double-click the Three-Point Arc tool, or `tool.options`):
 //! Third Point Sets Direction, the tool's `direction` option. With it on, the third point gives the
-//! direction the arc leaves an end in; with it off, the arc passes through the third point. OK
-//! sets it with `tool.setOption {tool: "threePointArc", values: {direction}}`; it lasts across
-//! tool switches and is saved with the preferences. `]` also switches it while an arc is drawn.
+//! direction the arc leaves an end in; with it off, the arc passes through the third point. Snap
+//! Where the Arc Continues a Path (`tangentSnap`, on by default) snaps the third point, in
+//! direction mode, to where the arc carries on an open path it starts at. Join to Open Path Ends
+//! (`join`) joins the arc to the open paths whose ends its ends are placed on. OK sets them with
+//! `tool.setOption {tool: "threePointArc", values: {direction, tangentSnap, join}}`; they last
+//! across tool switches and are saved with the preferences. `]` also switches `direction`, and J
+//! `join`, while an arc is drawn.
 
 use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
@@ -17,7 +21,11 @@ pub const KIND: &str = "threePointArcOptions";
 
 /// Open the tool's options with their current values.
 pub fn open(app: &mut VectorcraftApp) -> Value {
-    let params = vec![Param::new("direction", tl!("Third Point Sets Direction"), ParamKind::bool(false))];
+    let params = vec![
+        Param::new("direction", tl!("Third Point Sets Direction"), ParamKind::bool(false)),
+        Param::new("tangentSnap", tl!("Snap Where the Arc Continues a Path"), ParamKind::bool(true)),
+        Param::new("join", tl!("Join to Open Path Ends"), ParamKind::bool(false)),
+    ];
     let options = app.session.tool_options_of(TOOL);
     let fields = options.as_object().map(|m| form::fields_of(&params, m)).unwrap_or_default();
     let (title, shown) = (tool_options::title(TOOL), params.clone());
