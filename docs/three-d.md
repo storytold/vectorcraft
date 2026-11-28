@@ -262,8 +262,8 @@ The rest is our reading:
   a face is walked again, so a large ring can cost about the square of its faces (some 4,000 faces tangled at
   random reach the limit). The lists a ring is looked for in are made only when the steps left are at least a
   quarter of the pairs, so a solid whose comparing uses nearly all of the limit breaks its rings as before; and a
-  face that waits only for a face drawn last goes in its turn with no search. Past the limit the first face left by
-  depth goes next, ring or not. Inflate's curved surfaces follow this only as closely as their flat facets do. A
+  face that waits only for a face drawn last goes in its turn with no search. Past the limit, a face that can go
+  next still goes (before the next cap, when a cap is left), and the first face left by depth goes next only when no such face can. Inflate's curved surfaces follow this only as closely as their flat facets do. A
   solid painted with a gradient that has transparent stops under a light that is not white is drawn with an opacity
   mask: its faces keep their places in this order, in runs that each carry the mask, and a graphic drawn after one
   of its faces carries the mask too ([Graphics](#graphics)). Such a gradient, and a gradient with transparent stops

@@ -1806,11 +1806,11 @@ impl RingFinder {
             return false;
         };
         *room = left;
-        #[cfg(test)]
-        LIST_ENTRIES_READ.with(|read| read.set(read.get() + (end - start)));
         let mut kept = start;
         for entry in start..end {
             let earlier = self.before.faces[entry];
+            #[cfg(test)]
+            LIST_ENTRIES_READ.with(|read| read.set(read.get() + 1));
             if !drawn[earlier as usize] {
                 self.before.faces[kept] = earlier;
                 kept += 1;
