@@ -1441,6 +1441,7 @@ impl<'a> Reader<'a> {
             placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
             placed_pages: self.placed_pages,
+            placed_eps: self.placed_eps,
             envelopes_drawn: self.envelopes_drawn,
             warped_type: super::super::envelope::WarpedType {
                 looks: self.warped_type,

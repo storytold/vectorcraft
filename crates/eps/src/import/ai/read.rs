@@ -57,8 +57,13 @@
 //!   The version 7 form (§16) has no `%AI5_BeginPlace`: `[matrix] llx lly urx ury (path)` and
 //!   `` ` ``, then `%%IncludeFile:` or the file between `%%BeginDocument:` and `%%EndDocument`,
 //!   then `~`; its box is the file's `%%BoundingBox`. Newer files have three more numbers before
-//!   the path. Operands of any other shape, a second `` ` `` before `~` or an included document
-//!   that doesn't end leave the placed file unread.
+//!   the path. A placed EPS file whose bytes are included between `%%BeginDocument:` and
+//!   `%%EndDocument` (DSC 3.0 p. 68) is a placed document that keeps those bytes and draws them,
+//!   its file found or not; its box is the
+//!   file's bounding box, which the matrix takes from the file's own space (y up) into art space,
+//!   as in the version 7 form.
+//!   Operands of any other shape, a second `` ` `` before `~` or an included document that
+//!   doesn't end leave the placed file unread.
 //! - Art with an appearance the format can't write as plain art (several fills or strokes,
 //!   effects, brushes) comes first as that look, drawn (a group, or an image where an effect
 //!   rasterizes it), then the object itself on `%_`
@@ -148,7 +153,7 @@ mod raster;
 mod types;
 
 pub(crate) use art::join_and;
-use art::preview_png;
+use art::{included_document, preview_png};
 pub use document::{
     BindingRef, Brushes, PaletteSwatches, Symbols, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette,
     symbols, variables,
@@ -159,11 +164,12 @@ pub(crate) use ops::{ParsedStyle, parse_art_style, parsed_moves_with, parsed_typ
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
 pub(crate) use types::BLEND_BUDGET;
+pub(crate) use types::LINKED_PREVIEWS;
 pub(crate) use types::MAX_NODES;
-pub use types::PlacedPage;
-use types::{BrushArtColors, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
+use types::{BrushArtColors, FLIP, Frame, GState, Kind, MAX_PLACED_DOCUMENT, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
+pub use types::{PlacedEps, PlacedPage};
 pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
@@ -212,6 +218,8 @@ pub struct Structure {
     pub placed_elsewhere: Vec<(NodeId, Affine)>,
     /// The placed files that are pages of PDF or `.ai` files.
     pub placed_pages: Vec<PlacedPage>,
+    /// Included EPS files whose previews wait for variable binding before conversion.
+    pub placed_eps: Vec<PlacedEps>,
     /// The live envelopes read from the editing data, by id, with the drawn art each took the place
     /// of: the importer puts that art back when the layers with the envelopes don't draw as the page.
     pub envelopes_drawn: Vec<(NodeId, Node)>,
@@ -667,6 +675,8 @@ struct Reader<'a> {
     placed_elsewhere: Vec<(NodeId, Affine)>,
     /// See [`Structure::placed_pages`].
     placed_pages: Vec<PlacedPage>,
+    /// See [`Structure::placed_eps`].
+    placed_eps: Vec<PlacedEps>,
     unread_elsewhere: Vec<(NodeId, Rect)>,
     /// CMYK samples converted, by value.
     cmyk_cache: HashMap<[u8; 4], [u8; 3]>,
@@ -901,6 +911,7 @@ impl<'a> Reader<'a> {
             placeholders: vec![],
             placed_elsewhere: vec![],
             placed_pages: vec![],
+            placed_eps: vec![],
             placed_tails: vec![],
             unread_elsewhere: vec![],
             mesh: None,
@@ -939,6 +950,15 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// The line end just before `doc`, an included document the lexer has just read: the one that
+    /// ends its `%%BeginDocument:` line. `None` when `doc` isn't in the data read so far.
+    fn line_end_before(&self, doc: &[u8]) -> Option<&'static [u8]> {
+        let read = self.lex.slice(0, self.lex.offset());
+        let at = doc.as_ptr().addr().checked_sub(read.as_ptr().addr())?;
+        let before = read.get(..at)?;
+        [&b"\r\n"[..], b"\r", b"\n"].into_iter().find(|e| before.ends_with(e))
+    }
+
     fn run(&mut self) -> Result<(), String> {
         while let Some(t) = self.lex.next_token() {
             if self.done {
@@ -961,11 +981,14 @@ impl<'a> Reader<'a> {
                         p.preview = preview_png(d);
                     }
                 }
-                // A placed file's document, included whole: its art isn't read here. When no
-                // `%%EndDocument` ends it, the placed file isn't read.
+                // A placed file's document, included whole: its art isn't read here, its bytes are
+                // kept for the placed file. When no `%%EndDocument` ends it, the placed file isn't
+                // read.
                 Tok::Document(d) => {
+                    let sep = d.and_then(|d| self.line_end_before(d));
                     if let Some(p) = self.place.as_mut() {
                         p.broken |= d.is_none();
+                        p.document = d.filter(|d| d.len() <= MAX_PLACED_DOCUMENT).map(|d| included_document(d, hidden, sep));
                     }
                 }
             }

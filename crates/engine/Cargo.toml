@@ -122,7 +122,8 @@ proptest = { workspace = true }
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 # How many times an open reads a PDF, and the work its import takes.
 vectorcraft-pdf = { workspace = true, features = ["read-count"] }
-# The work `.ai` blends take to be checked and made live.
+# The work `.ai` blends take to be checked and made live, and how many included EPS open checks
+# an open performs.
 vectorcraft-eps = { workspace = true, features = ["work-count"] }
 # How many times the symbol list is read to find symbols by name, and how many objects are
 # measured against locked artboards.

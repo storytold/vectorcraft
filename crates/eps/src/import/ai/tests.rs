@@ -12,7 +12,9 @@ use super::*;
 
 /// [`super::read`] as an EPS reads it.
 fn read(data: &[u8]) -> Result<Structure, String> {
-    super::read(data, true)
+    let mut r = super::read(data, true)?;
+    super::super::native::placed_documents(&mut r.doc, &[], &r.placed_eps);
+    Ok(r)
 }
 
 /// Editing data: header comments (crop marks 0 0 200 100), then `body`.
@@ -3495,6 +3497,178 @@ fn a_placed_file_keeps_its_folder_relative_to_the_document() {
     assert_eq!(relative_of(&cut), None);
 }
 
+/// An EPS file of `w` × `h` points filled red, its lines ended by `eol`.
+fn red_eps(w: u32, h: u32, eol: &str) -> Vec<u8> {
+    format!("%!PS-Adobe-3.0 EPSF-3.0{eol}%%BoundingBox: 0 0 {w} {h}{eol}%%EndComments{eol}1 0 0 setrgbcolor{eol}0 0 {w} {h} rectfill{eol}%%EOF{eol}")
+        .into_bytes()
+}
+
+/// `data` with the first `from` in it replaced by `to`.
+fn splice(data: &[u8], from: &[u8], to: &[u8]) -> Vec<u8> {
+    let at = data.windows(from.len()).position(|w| w == from).unwrap();
+    [&data[..at], to, &data[at + from.len()..]].concat()
+}
+
+/// [`placed`]'s file with the placed file `/old/place/src/shape.eps` in the box 0 0 80 50, in the
+/// folder `src/`, without a preview, and `doc` included between `%%BeginDocument:` and
+/// `%%EndDocument` in place of `%%IncludeFile:` (`%%FileType: 0`).
+fn placed_eps_file(doc: &[u8]) -> Vec<u8> {
+    let data = placed(true, "[5 0 0 -5 0 200]", "/old/place/src/shape.eps", None, "");
+    let data = splice(&data, b"10 20 14 22 4 4 0", b"0 0 80 50 4 4 0");
+    let data = splice(&data, b"\r()\r", b"\r(src/)\r");
+    let data = splice(&data, b"%%FileType: 1", b"%%FileType: 0");
+    let included = [&b"%%BeginDocument: /old/place/src/shape.eps\r"[..], doc, b"\r%%EndDocument\r"].concat();
+    splice(&data, b"%%IncludeFile:/old/place/src/shape.eps\r", &included)
+}
+
+/// The one placed document of `data`, with the blob its key names.
+fn one_placed(data: &[u8]) -> (Node, vectorcraft_doc::PlacedDocument, vectorcraft_doc::ImageBlob, Structure) {
+    let r = read(data).unwrap();
+    let a = art(&r.doc);
+    let [n] = &a[..] else { panic!("one object: {a:?}") };
+    let NodeKind::PlacedDocument(p) = &n.kind else { panic!("a placed document: {:?}", n.kind) };
+    let blob = r.doc.images[&p.key].clone();
+    ((**n).clone(), (**p).clone(), blob, r)
+}
+
+#[test]
+fn a_placed_eps_file_whose_bytes_the_data_includes_is_a_placed_document_of_them() {
+    let eps = red_eps(80, 50, "\n");
+    let (_, p, blob, r) = one_placed(&placed_eps_file(&eps));
+    assert_eq!(*blob.bytes, eps, "the file's own bytes, without the line end the data adds");
+    assert_eq!((blob.mime.as_str(), blob.proxy.is_none()), ("application/postscript", true));
+    assert_eq!((p.link.path.as_str(), p.link.relative.as_deref()), ("/old/place/src/shape.eps", Some("src/shape.eps")));
+    assert_eq!((p.link.page, p.link.size, p.link.hash.clone()), (Some(1), Some(eps.len() as u64), Some(vectorcraft_doc::links::hash_bytes(&eps))));
+    assert_eq!((p.width, p.height, p.bounding, p.page_box), (80.0, 50.0, false, vectorcraft_doc::PageBox::Crop));
+    assert!(r.unread.is_empty() && r.hidden_unread.is_empty() && r.unread_elsewhere.is_empty(), "{:?}", r.unread);
+    assert!(!r.warnings.iter().any(|w| w == read::LINKED_PLACEHOLDERS), "{:?}", r.warnings);
+    // The matrix takes the file's own space (y up) into art space; the box's top left corner is the
+    // file's (0, 50).
+    let m = Affine::new([5.0, 0.0, 0.0, -5.0, 0.0, 200.0]);
+    for (corner, file) in [((0.0, 0.0), (0.0, 50.0)), ((80.0, 50.0), (80.0, 0.0)), ((80.0, 0.0), (80.0, 50.0))] {
+        let (got, want) = (p.xf * Point::from(corner), r.to_doc * m * Point::from(file));
+        assert!((got - want).hypot() < 1e-9, "{corner:?}: {got:?} {want:?}");
+    }
+}
+
+#[test]
+fn a_placed_eps_file_with_included_bytes_and_a_preview_keeps_only_the_bytes() {
+    let eps = red_eps(80, 50, "\n");
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let section =
+        [&b"%AI17_Begin_Content_if_version_gt:24 5\r%AI26_BeginPlacedObjectPreview\r"[..], &preview, b"\r%AI26_EndPlacedObjectPreview\r"].concat();
+    let data = splice(&placed_eps_file(&eps), b"%AI17_Begin_Content_if_version_gt:24 5\r", &section);
+    // The placed document has no preview, so a save keeps its bytes.
+    let (_, _, blob, _) = one_placed(&data);
+    assert_eq!((&*blob.bytes, blob.proxy.is_none()), (&eps, true));
+    // The same bytes placed twice share the blob.
+    let one = placed_eps_file(&eps);
+    let (from, to) = (|d: &[u8], w: &[u8]| d.windows(w.len()).position(|x| x == w).unwrap(), b"%AI5_EndPlace\r");
+    let first = &one[from(&one, b"%AI5_BeginPlace")..from(&one, to) + to.len()];
+    let twice = splice(&data, b"%AI5_BeginPlace", &[first, b"%AI5_BeginPlace"].concat());
+    let r = read(&twice).unwrap();
+    let a = art(&r.doc);
+    let keys: Vec<_> = a.iter().filter_map(|n| if let NodeKind::PlacedDocument(p) = &n.kind { Some(p.key.clone()) } else { None }).collect();
+    assert!(keys.len() == 2 && keys[0] == keys[1], "{keys:?}");
+    assert!(r.doc.images[&keys[0]].proxy.is_none());
+}
+
+#[test]
+fn a_placed_eps_files_box_is_its_high_resolution_bounding_box() {
+    let eps = splice(&red_eps(80, 50, "\n"), b"%%EndComments", b"%%HiResBoundingBox: 0.5 0.5 79.5 49.5\n%%EndComments");
+    let (_, p, _, r) = one_placed(&placed_eps_file(&eps));
+    assert_eq!((p.width, p.height), (79.0, 49.0));
+    // The box's top left corner is the file's (0.5, 49.5), where the matrix puts it.
+    let m = Affine::new([5.0, 0.0, 0.0, -5.0, 0.0, 200.0]);
+    let (got, want) = (p.xf * Point::ZERO, r.to_doc * m * Point::new(0.5, 49.5));
+    assert!((got - want).hypot() < 1e-9, "{got:?} {want:?}");
+}
+
+#[test]
+fn a_placed_eps_files_box_with_its_corners_reversed_leaves_it_unread() {
+    let data = splice(&placed_eps_file(&red_eps(80, 50, "\n")), b"0 0 80 50 4 4 0", b"80 50 0 0 4 4 0");
+    let r = read(&data).unwrap();
+    assert!(!art(&r.doc).iter().any(|n| matches!(n.kind, NodeKind::PlacedDocument(_))), "{:?}", art(&r.doc));
+}
+
+#[test]
+fn an_included_eps_files_own_last_line_end_is_kept() {
+    // The data's line end after the file's own is taken off; a single one is the file's.
+    let (lf, crlf) = ("%!PS\n%%BoundingBox: 0 0 80 50\n%%EOF\n", "%!PS\r\n%%BoundingBox: 0 0 80 50\r\n%%EOF\r\n");
+    for (eps, written) in [(lf, format!("{lf}\r")), (lf, lf.to_string()), (crlf, format!("{crlf}\r\n"))] {
+        let data = splice(&placed_eps_file(b"%!@@"), b"%!@@\r%%EndDocument", format!("{written}%%EndDocument").as_bytes());
+        let (_, _, blob, _) = one_placed(&data);
+        assert_eq!(String::from_utf8_lossy(&blob.bytes), eps, "{written:?}");
+    }
+    // The line end added is the one the `%%BeginDocument:` line ends with: an LF after a file whose
+    // lines end with CR isn't read as a CRLF of the file's.
+    let data =
+        splice(&placed_eps_file(b"%!@@"), b"shape.eps\r%!@@\r%%EndDocument", b"shape.eps\n%!PS\r%%BoundingBox: 0 0 80 50\r%%EOF\r\n%%EndDocument");
+    let (_, _, blob, _) = one_placed(&data);
+    assert_eq!(String::from_utf8_lossy(&blob.bytes), "%!PS\r%%BoundingBox: 0 0 80 50\r%%EOF\r");
+    // A file whose lines end with CRLF, included as it is after an LF: its last CRLF is its own.
+    let data = splice(&placed_eps_file(b"%!@@"), b"shape.eps\r%!@@\r%%EndDocument", format!("shape.eps\n{crlf}%%EndDocument").as_bytes());
+    let (_, _, blob, _) = one_placed(&data);
+    assert_eq!(String::from_utf8_lossy(&blob.bytes), crlf);
+}
+
+#[test]
+fn a_placed_eps_file_on_commented_lines_keeps_its_bytes() {
+    let eps = red_eps(80, 50, "\r");
+    let hidden = hide_placed(&placed_eps_file(&eps));
+    let (_, _, blob, _) = one_placed(&hidden);
+    assert_eq!(String::from_utf8_lossy(&blob.bytes), String::from_utf8_lossy(&eps), "the `%_` that starts each line taken off");
+    // The line end added before `%%EndDocument` on a `%_` line of its own.
+    let (_, _, blob, _) = one_placed(&splice(&hidden, b"%%EOF\r\r%_%%EndDocument", b"%%EOF\r%_\r%_%%EndDocument"));
+    assert_eq!(String::from_utf8_lossy(&blob.bytes), String::from_utf8_lossy(&eps), "the added line end taken off");
+}
+
+#[test]
+fn an_included_postscript_file_named_as_an_ai_file_stays_unread() {
+    // Read through its name with the artboard its header gives, not the box the placed one shows.
+    for name in ["shape.ai", "SHAPE.AIT"] {
+        let mut data = placed_eps_file(&red_eps(80, 50, "\n"));
+        while data.windows(9).any(|w| w == b"shape.eps") {
+            data = splice(&data, b"shape.eps", name.as_bytes());
+        }
+        let r = read(&data).unwrap();
+        assert!(!art(&r.doc).iter().any(|n| matches!(n.kind, NodeKind::PlacedDocument(_))), "{name}: {:?}", art(&r.doc));
+        assert!(r.unread.iter().any(|(_, kinds)| kinds.iter().any(|k| k == "placed files")), "{name}: {:?}", r.unread);
+    }
+}
+
+#[test]
+fn included_eps_with_a_native_document_leaves_the_placed_file_unread() {
+    // Even unreadable native data leaves the file unread: the loader can read an artboard
+    // larger than the EPS bounding box, which would shrink and offset the art when placed.
+    for eol in ["\n", "\r", "\r\n"] {
+        let section = format!("%VectorCraft_BeginData: native \t{eol}%unreadable native data{eol}%VectorCraft_EndData{eol}%%EOF");
+        let eps = splice(&red_eps(80, 50, eol), b"%%EOF", section.as_bytes());
+        let r = read(&placed_eps_file(&eps)).unwrap();
+        assert!(
+            !art(&r.doc).iter().any(|n| matches!(n.kind, NodeKind::PlacedDocument(_))),
+            "included EPS with a native document must stay on the fallback path"
+        );
+        assert!(r.unread.iter().any(|(_, kinds)| kinds.iter().any(|k| k == "placed files")), "{:?}", r.unread);
+    }
+}
+
+#[test]
+fn included_bytes_that_arent_an_eps_file_leave_the_placed_file_unread() {
+    // A DCS file, which the placed document reader doesn't read (File › Place makes it a linked
+    // image), stays unread too.
+    let dcs = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%PlateFile: (Black) EPS Local pic.K\n%%EndComments\n%%EOF\n";
+    // An EPS file without a bounding box, whose art is read on a page of another size, stays unread.
+    let boxless = b"%!PS-Adobe-3.0 EPSF-3.0\n%%EndComments\n1 0 0 setrgbcolor\n0 0 80 50 rectfill\n%%EOF\n";
+    // An EPS file whose program doesn't read draws nothing, so it stays unread too.
+    let broken = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 80 50\n%%EndComments\n0 0 80 50 nosuchoperator\n%%EOF\n";
+    for bytes in [&b"hello\rworld"[..], dcs, boxless, broken] {
+        let r = read(&placed_eps_file(bytes)).unwrap();
+        assert!(!art(&r.doc).iter().any(|n| matches!(n.kind, NodeKind::PlacedDocument(_))), "{:?}", art(&r.doc));
+        assert!(r.unread.iter().any(|(_, kinds)| kinds.iter().any(|k| k == "placed files")), "{:?}", r.unread);
+    }
+}
+
 #[test]
 fn hidden_placed_file_ended_by_comment_stays_hidden() {
     let mut data = hide_placed(&placed(true, "[5 0 0 -5 0 200]", "/pics/photo.png", None, ""));
@@ -3588,6 +3762,7 @@ fn art_kinds(doc: &Document) -> Vec<&'static str> {
             NodeKind::Group { .. } => "group",
             NodeKind::Path { .. } => "path",
             NodeKind::Image(_) => "image",
+            NodeKind::PlacedDocument(_) => "placed",
             _ => "other",
         })
         .collect()
@@ -3596,13 +3771,16 @@ fn art_kinds(doc: &Document) -> Vec<&'static str> {
 #[test]
 fn version7_placed_file_included_whole_is_read() {
     // The included document's operators, a `~`, a nested document and counted data in it aren't
-    // the editing data's.
-    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n1 0 0 setrgbcolor frobnicate ~\n\
+    // the editing data's (the file defines them, so its program reads).
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n/frobnicate {} def /~ {} def\n1 0 0 setrgbcolor frobnicate ~\n\
                %%BeginDocument: inner.eps\n~\n%%EndDocument\n%%BeginData: 14 Binary Bytes\n%%EndDocument\n%%EOF\n";
     let body = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}%%EndDocument\n~\n");
     let r = placed_read7(true, &body).unwrap();
-    assert_eq!(art_kinds(&r.doc), ["path"]);
-    assert_unread(&r, "placed files");
+    // A placed document of the file's bytes.
+    assert_eq!(art_kinds(&r.doc), ["placed"]);
+    let NodeKind::PlacedDocument(p) = &art(&r.doc)[0].kind else { panic!() };
+    assert_eq!(r.doc.images[&p.key].bytes.as_slice(), eps.as_bytes());
+    assert!(r.unread.is_empty(), "{:?}", r.unread);
     // One that doesn't end leaves the layer without its end.
     let cut = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}~\n");
     assert!(placed_read7(true, &cut).is_err());
