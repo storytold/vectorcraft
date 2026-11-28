@@ -8789,6 +8789,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-geom 0.24.1",
  "vectorcraft-js",
+ "vectorcraft-plugins",
  "wasmi",
  "wasmparser 0.228.0",
  "wat",

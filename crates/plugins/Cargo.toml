@@ -37,6 +37,9 @@ rustix = { workspace = true, features = ["std", "fs"] }
 
 [dev-dependencies]
 wat = { workspace = true }
+# The `steady` gate vectorcraft-engine's tests turn on, also when this crate is tested without
+# vectorcraft-engine (`cargo xtask ci shard`).
+vectorcraft-plugins = { path = ".", features = ["test-steady"] }
 
 [features]
 # `vectorcraft_plugins::steady` for other crates' tests (dev-dependencies only).
