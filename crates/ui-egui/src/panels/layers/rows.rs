@@ -463,8 +463,8 @@ fn drop_command(tree: &DocLayers<'_>, mv: &LayerMove<RowId>) -> Option<(String, 
 /// The selected art carried by a row's selection square, dropped on `target`: the selection's top
 /// objects, as Arrange and Group take them, move there (Alt copies them).
 fn art_drop(st: &DocState, payload: &DropPayload, target: NodeId, position: LayerPosition, copy: bool) -> Option<(String, Value)> {
-    let art = payload.get::<ArtDrag>()?;
-    let ids: Vec<u64> = st.doc.paint_order(art.0.iter().copied()).iter().map(|i| i.0).collect();
+    let art = payload.get::<ArtDrag>().filter(|art| art.document == (st.uid, st.reverts))?;
+    let ids: Vec<u64> = st.doc.paint_order(art.ids.iter().copied()).iter().map(|i| i.0).collect();
     Some(("layer.move".into(), json!({"ids": ids, "target": target.0, "place": place(position), "copy": copy})))
 }
 

@@ -64,7 +64,9 @@ use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{IconButton, Link, PopupMark};
 use craft::ui::choice::{Radio, RadioGroup, SwatchSpacing};
-use craft::ui::contract::{Bind, CommandSet as _, Entry, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger};
+use craft::ui::contract::{
+    Bind, CaptionColumn, CommandSet as _, Entry, LabelScheme, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger,
+};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::{Row, Stack};
@@ -74,7 +76,7 @@ use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::CommandStates;
-use craft::ui::runtime::env::Label;
+use craft::ui::runtime::env::{Label, with_env};
 use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::text::{NumberField, link_toggle};
 use egui::Ui;
@@ -165,9 +167,10 @@ fn corner_kind_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
 }
 
 /// A select of the corner kinds named `name`, showing `current` (blank for None), as wide as its
-/// widest kind, so it fits beside a corner's radius field. Returns the kind picked.
+/// widest kind, so it fits beside a corner's radius field. Returns the kind chosen, not one only
+/// highlighted in the open list.
 fn corner_select(ui: &mut Ui, name: &'static str, current: Option<CornerKind>, entries: &[Entry<CornerKind>]) -> Option<CornerKind> {
-    Select::new(name, Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), entries).sizing(Sizing::Content).show(ui).value().copied()
+    Select::new(name, Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), entries).sizing(Sizing::Content).show(ui).events.committed().copied()
 }
 
 /// Set `kind` on corner `corner` (every corner for None) of each selected live rectangle
@@ -213,27 +216,37 @@ fn rectangle_corners() -> [(usize, &'static str, &'static str); 4] {
 }
 
 /// One Corner Radius field and one Corner select per corner of a live rectangle, each pair on its
-/// own row after the corner's label, the labels in one column; in a panel too narrow for that,
-/// each select wraps under its field. A value typed or a kind picked is set on that corner alone,
-/// of each selected live rectangle ([`set_rectangle_corners`]).
+/// own row after the corner's label, the labels in one column at its start; in a panel too narrow
+/// for that, each select wraps under its field. A value typed or a kind picked is set on that
+/// corner alone, of each selected live rectangle ([`set_rectangle_corners`]).
 fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     let Some(lc) = LiveCorners::of(n) else { return };
     let lengths = general_lengths(app);
     let entries = corner_entries();
     let mut radii = Vec::new();
     let mut kinds = Vec::new();
-    FieldGroup::new(tl!("Corners")).show(ui, |ui, _| {
-        for (k, label, corner) in rectangle_corners() {
-            Field::new(label).show(ui, |ui, _| {
-                Row::new().wrap(true).show(ui, |ui, _| {
-                    radii.push((k, NumberField::length(label, Bind::given(Some(corner_length(&lc, k))), lengths).show(ui).edit));
-                    if let Some(kind) = corner_select(ui, corner, Some(lc.kind(k)), &entries) {
-                        kinds.push((k, kind));
-                    }
-                });
+    // An inline form whose captions share one column: each label starts the column and the fields
+    // after the labels line up.
+    with_env(
+        ui,
+        |scope| {
+            scope.values.set(CaptionColumn::SHARED);
+        },
+        |ui| {
+            FieldGroup::new(tl!("Corners")).labels(LabelScheme::Inline).show(ui, |ui, _| {
+                for (k, label, corner) in rectangle_corners() {
+                    Field::new(label).show(ui, |ui, _| {
+                        Row::new().wrap(true).show(ui, |ui, _| {
+                            radii.push((k, NumberField::length(label, Bind::given(Some(corner_length(&lc, k))), lengths).show(ui).edit));
+                            if let Some(kind) = corner_select(ui, corner, Some(lc.kind(k)), &entries) {
+                                kinds.push((k, kind));
+                            }
+                        });
+                    });
+                }
             });
-        }
-    });
+        },
+    );
     for (k, edit) in &radii {
         apply_edits(app, edit, EditPath::Scope, |app, v: &Option<f64>, _| {
             // A negative radius typed in rounds nothing: the command takes 0 or more.
@@ -530,8 +543,7 @@ static PANEL_MENUS: &[PanelMenuSource] = &[
         },
         run: |app, id, _| {
             let command = HarmonyCommand::from_ref(&CommandRef::new(id))?;
-            color_guide::run(app, command);
-            Some(Ok(Value::Null))
+            Some(color_guide::run(app, command).map(|()| Value::Null))
         },
     },
     menu!("stroke", stroke),
@@ -790,9 +802,19 @@ fn takes_drop(mixed: (bool, bool), well: Well, drag: &PanelDrag) -> bool {
 
 /// Paints the fill (the primary well) or the stroke with the paint `drag` carries.
 fn drop_paint(app: &mut VectorcraftApp, well: Well, drag: &PanelDrag) {
-    if let PanelDrag::Paint { params, .. } = drag {
+    let destination = app.session.active().map(|st| st.uid);
+    if let PanelDrag::Paint { paint, rows: Some(rows), .. } = drag
+        && !rows.unlinked_process_color
+        && destination.is_some_and(|uid| uid != rows.document)
+        && paint.color().is_some()
+        && !paint.is_registration()
+    {
+        app.status(tl!("A linked color swatch can only be applied in its own document."));
+        return;
+    }
+    if let Some(params) = drag.paint_drop_params(destination) {
         let cmd = if well == Well::Primary { "paint.setFill" } else { "paint.setStroke" };
-        app.run(cmd, params.clone()).ok();
+        app.run(cmd, params).ok();
     }
 }
 
@@ -1083,6 +1105,78 @@ mod tests {
         assert_eq!(fill.color().map(|c| c.to_hex()), Some("#ff0000".into()), "a drop on the stroke leaves the fill");
         drop_paint(&mut app, Well::Primary, &green);
         assert_eq!(current_paints(&app).0.color().map(|c| c.to_hex()), Some("#00ff00".into()));
+    }
+
+    #[test]
+    fn proxy_drops_keep_the_dragged_process_color_after_switching_documents() {
+        use crate::panel_drag::SwatchRows;
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let name = "Shared Swatch";
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        app.run("swatch.new", json!({"name": name, "color": "#ff0000"})).unwrap();
+        let source = app.session.active().unwrap();
+        let paint = source.doc.swatch(name).unwrap().paint.clone();
+        let rows = SwatchRows { document: source.uid, grabbed: name.into(), names: vec![name.into()], groups: false, unlinked_process_color: true };
+        let drag = PanelDrag::Paint { paint: paint.clone(), params: json!({"swatch": name}), rows: Some(rows), library: None };
+        app.run("swatch.edit", json!({"name": name, "color": "#ff8800"})).unwrap();
+        drop_paint(&mut app, Well::Primary, &drag);
+        assert_eq!(current_paints(&app).0, app.session.active().unwrap().doc.swatch(name).unwrap().paint);
+
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        app.run("swatch.new", json!({"name": name, "color": "#0000ff"})).unwrap();
+        let destination = app.session.active().unwrap().doc.swatch(name).unwrap().paint.clone();
+        drop_paint(&mut app, Well::Primary, &drag);
+        drop_paint(&mut app, Well::Secondary, &drag);
+        assert_eq!(current_paints(&app), (paint.clone(), paint));
+        assert_eq!(app.session.active().unwrap().doc.swatch(name).unwrap().paint, destination);
+    }
+
+    #[test]
+    fn proxy_linked_swatches_stay_in_their_source_drawing() {
+        use crate::panel_drag::SwatchRows;
+
+        let name = "Shared Swatch";
+        for spot in [false, true] {
+            for (different_drawing, collision) in [(false, false), (true, false), (true, true)] {
+                let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+                app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+                app.run("swatch.new", json!({"name": name, "color": "#ff0000", "global": true, "spot": spot})).unwrap();
+                let source = app.session.active().unwrap();
+                let paint = source.doc.swatch(name).unwrap().paint.clone();
+                let rows =
+                    SwatchRows { document: source.uid, grabbed: name.into(), names: vec![name.into()], groups: false, unlinked_process_color: false };
+                let drag = PanelDrag::Paint { paint, params: json!({"swatch": name}), rows: Some(rows), library: None };
+                if different_drawing {
+                    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+                }
+                if collision {
+                    app.run("swatch.new", json!({"name": name, "color": "#0000ff", "global": true})).unwrap();
+                }
+                app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+                app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+                app.run("paint.setStroke", json!({"color": "#ffff00"})).unwrap();
+
+                let initial = current_paints(&app);
+                let target = app.session.active().unwrap();
+                let palette = target.doc.swatch(name).map(|swatch| swatch.paint.clone());
+                let initial_undo = target.history.undo.len();
+                drop_paint(&mut app, Well::Primary, &drag);
+                drop_paint(&mut app, Well::Secondary, &drag);
+                let target = app.session.active().unwrap();
+                assert_eq!(target.doc.swatch(name).map(|swatch| swatch.paint.clone()), palette);
+                if different_drawing {
+                    assert_eq!(current_paints(&app), initial, "spot={spot}, collision={collision}");
+                    assert_eq!(target.history.undo.len(), initial_undo);
+                    assert_eq!(app.ui.status, tl!("A linked color swatch can only be applied in its own document."));
+                } else {
+                    let linked = target.doc.tint_paint(name, 1.0).unwrap();
+                    assert_eq!(current_paints(&app), (linked.clone(), linked));
+                }
+            }
+        }
     }
 
     #[test]

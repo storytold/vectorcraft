@@ -165,7 +165,7 @@ fn an_error_names_the_script_its_place_and_kind() {
     assert_eq!(e, "t.js: line 2, column 3: TypeError: no (thrown)");
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
-    assert!(run(&mut s, "new Window('dialog');").unwrap_err().to_string().contains("`vc`"));
+    assert!(run(&mut s, "new BridgeTalk();").unwrap_err().to_string().contains("`vc`"));
     // The application's members need no `app.`, so naming one alone is not an error.
     assert_eq!(run(&mut s, "activeDocument;").unwrap()["ok"], true);
     assert!(run(&mut s, "#targetengine 9x\n1").unwrap_err().to_string().contains("#targetengine needs a name of letters, digits and _"));
@@ -206,7 +206,7 @@ fn failed_script_report_keeps_message_and_adds_origin() {
         assert_eq!(error, Some(json!(format!("t.js:{line}:{column}: {message}"))), "{source}");
     }
     // The app's own reference error names the `vc` object; the same text a script threw does not.
-    run(&mut s, "new Window('dialog');").unwrap_err();
+    run(&mut s, "new BridgeTalk();").unwrap_err();
     assert!(s.script_report().unwrap()["message"].as_str().unwrap().contains("`vc`"));
     assert_eq!(s.script_report().unwrap()["messageOrigin"], "built-in");
     // An error in code `eval` compiled keeps where its message came from.
@@ -394,6 +394,33 @@ fn a_js_script_reads_optional_chains_and_coalescing_and_a_jsx_script_does_not() 
 }
 
 #[test]
+fn a_js_script_runs_generators_and_a_jsx_script_does_not_read_them() {
+    let dir = fresh_folder("generators");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let source = "function* ids(n) { for (let i = 0; i < n; i++) yield `id${i}`; }\n\
+                  function* all() { yield* ids(2); yield* [vc.document ? 'doc' : 'none']; return 'end'; }\n\
+                  const it = all(); let s;\nwhile (!(s = it.next()).done) vc.log(s.value);\nvc.log(s.value);\n";
+    let r = s.execute("script.run", &path(&write("gen.js", source))).unwrap();
+    assert_eq!(r["log"], json!(["id0", "id1", "doc", "end"]), "{r}");
+    let e = s.execute("script.run", &path(&write("gen.jsx", "function* g() {}"))).unwrap_err().to_string();
+    assert!(e.contains("SyntaxError"), "{e}");
+    // `yield` stays a name in a `.jsx` script.
+    let r = s.execute("script.run", &path(&write("name.jsx", "var yield = 4; vc.log(yield);"))).unwrap();
+    assert_eq!(r["log"], json!([4]), "{r}");
+    // An engine a `.jsx` run made has no generator built-ins for a later `.js` run.
+    s.execute("script.run", &path(&write("keep.jsx", "#targetengine genkept\nvar a = 1;"))).unwrap();
+    let e = s.execute("script.run", &path(&write("keep.js", "#targetengine genkept\nfunction* g() {}\ng();"))).unwrap_err().to_string();
+    assert!(e.contains("TypeError"), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn every_script_reads_e4x_and_has_the_xml_objects() {
     let dir = fresh_folder("e4x");
     let write = |name: &str, text: &str| {
@@ -424,6 +451,29 @@ fn every_script_reads_e4x_and_has_the_xml_objects() {
     s.execute("script.run", &path(&write("first.js", "#targetengine xmlkept\nlet k = 1;"))).unwrap();
     let later = s.execute("script.run", &path(&write("second.jsx", "#targetengine xmlkept\nvc.log(XML('<k>2</k>').toString());"))).unwrap();
     assert_eq!(later["log"], json!(["2"]), "{later}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_js_script_defines_classes_and_a_jsx_script_cannot() {
+    let dir = fresh_folder("es2015-classes");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let modern = "class Shape { constructor(n) { this.n = n; } sides() { return this.n; } }\n\
+                  class Square extends Shape { constructor() { super(4); } sides() { return super.sides() * 10; } }\n\
+                  vc.log(new Square().sides());\nvc.log(eval('class E {} typeof E'));\n";
+    let r = s.execute("script.run", &path(&write("shapes.js", modern))).unwrap();
+    assert_eq!(r["log"], json!([40, "function"]), "{r}");
+    for (name, text) in [("legacy.jsx", "class A {}"), ("object.jsx", "var o = { m() {} };")] {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    assert!(run(&mut s, "var C = class {};").unwrap_err().to_string().contains("SyntaxError"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

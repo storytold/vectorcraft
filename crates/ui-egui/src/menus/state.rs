@@ -306,10 +306,12 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
         "file.cancelPlace" => crate::placing::can_cancel(app),
+        crate::dialogs::failed_plugins::COMMAND => vectorcraft_engine::cmd::plugin::failed_load_count(&app.session) > 0,
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
         "imageTrace.hideRuns" => crate::trace_runs::any_shown(app),
+        "retype.cancelSearch" => crate::retype_runs::any_running(app),
         "file.place"
         | "file.export.svg"
         | "file.export.png"
@@ -401,6 +403,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.guides" | "view.grid" => !app.ui.view.trim_view,
         "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
+        crate::dialogs::plugin::EDIT_COMMAND => crate::dialogs::plugin::one_generated_selected(app),
         // A filter may take no objects and add new ones, so no selection is needed.
         crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => {
             app.session.active().is_some() && crate::dialogs::plugin::last_filter(app).is_some()

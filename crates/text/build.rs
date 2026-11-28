@@ -1,7 +1,9 @@
 //! The optional craft-fonts build input (https://github.com/storytold/craft-fonts,
 //! `docs/integration.md`): with `CRAFT_FONTS_DIR=<checkout>` set, every font in its
 //! `fonts/manifest.txt` is embedded as `CRAFT_FONTS` (the framework's `craft_fonts_build::Embed`);
-//! unset, `CRAFT_FONTS` is empty and the app uses its own and the installed fonts.
+//! unset, `CRAFT_FONTS` is empty and the app uses its own and the installed fonts. Desktop builds
+//! also embed the Noto Sans Condensed SemiBold row of the checkout's `fonts/latin-manifest.txt`
+//! (`Embed::tab_face`), which document tab titles draw in; a checkout without it gives a warning.
 //! `CRAFT_FONTS_REQUIRED=1` turns a bad checkout into a build error (release builds). Nothing is
 //! fetched: the build reads only the local checkout.
 //!
@@ -40,7 +42,10 @@ fn main() {
             None => embed,
         }
     };
-    if let Err(e) = fonts().filter(move |f| !wasm || (f.family == WEB_FONT.0 && f.style == WEB_FONT.1)).write("craft_fonts.rs") {
+    // Desktop builds also embed the checkout's condensed face for document tab titles.
+    let embedded = fonts().filter(move |f| !wasm || (f.family == WEB_FONT.0 && f.style == WEB_FONT.1));
+    let embedded = if wasm { embedded } else { embedded.tab_face() };
+    if let Err(e) = embedded.write("craft_fonts.rs") {
         println!("cargo::error={e}");
     }
     let mut web = String::new();

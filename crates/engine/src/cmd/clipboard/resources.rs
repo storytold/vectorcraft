@@ -758,14 +758,21 @@ impl Relink {
             }
         }
     }
-    /// Relink a node tree (the mirror of [`node_refs`]).
+    /// Relink a node tree (the mirror of [`node_refs`]). A pie's legend labels in wedges that now show a color of the
+    /// other darkness take the contrast a redraw sets there.
     fn node(&self, n: &mut Node) {
+        let shades = crate::cmd::graph::wedge_shades(n);
+        self.links(n);
+        crate::cmd::graph::follow_wedge_shades(n, &shades);
+    }
+    /// [`Self::node`] without the legend labels' contrast.
+    fn links(&self, n: &mut Node) {
         self.appearance(&mut n.appearance);
         if !self.keep_styles {
             n.extras_mut().graphic_style = n.extras().graphic_style.and_then(|id| self.styles.get(&id).copied());
         }
         if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
-            self.node(Arc::make_mut(&mut m.art));
+            self.links(Arc::make_mut(&mut m.art));
         }
         if let Some(cm) = n.extras_if_any().and_then(|e| e.color_mask.as_deref_mut()) {
             self.name(Res::Image, &mut cm.key);
@@ -831,7 +838,7 @@ impl Relink {
             _ => {}
         }
         for c in n.children_mut().into_iter().flatten() {
-            self.node(Arc::make_mut(c));
+            self.links(Arc::make_mut(c));
         }
     }
 }
@@ -1183,9 +1190,7 @@ impl Imported {
     /// other darkness take the contrast a redraw sets there. Fonts the copy carries are bound to the faces `d` holds.
     pub(crate) fn apply(&mut self, n: &mut Node, d: &Document) {
         if self.relinks {
-            let shades = super::super::graph::wedge_shades(n);
             self.relink.node(n);
-            super::super::graph::follow_wedge_shades(n, &shades);
         }
         for note in vectorcraft_text::FontDb::global().bind_node_file_fonts(n, &|key| d.images.get(key)) {
             if !self.warnings.contains(&note) {
@@ -1601,7 +1606,8 @@ impl Clipboard {
     /// How the pasted SVG filter effects relink ([`Relink::filters`]). Each names the document's
     /// filter of its name; one that draws another definition than that filter takes the document's
     /// filter when pasted back into the document it came from, and elsewhere keeps its own under a
-    /// name no filter or effect of the document gives, so editing or deleting the document's filter leaves it alone. When that name would
+    /// name no filter or effect of the document gives, so editing or deleting the document's filter leaves it alone; an
+    /// effect of the document that draws the same definition under a name no filter has gives that name. When that name would
     /// make the filter too long to draw, the free name is a shorter start of its name ("Shif"), else
     /// a free letter, digit or other printable ASCII character; the filter's id is always its name. An error when no free name fits.
     fn filter_links(&self, d: &Document, same_doc: bool) -> Result<BTreeMap<(String, String), (String, String)>> {
@@ -1627,6 +1633,8 @@ impl Clipboard {
         }
         let mut taken: BTreeSet<String> = d.svg_filters.iter().map(|f| f.name.clone()).chain(found.iter().map(|(n, _)| n.clone())).collect();
         let mut effects_read = false;
+        // The filter effects of the document, by name and definition.
+        let mut held_effects = BTreeSet::new();
         let mut links = BTreeMap::new();
         for (name, xml) in found {
             let Some(held) = d.svg_filters.iter().find(|f| f.name == name).filter(|f| f.xml != xml.trim()) else { continue };
@@ -1640,13 +1648,27 @@ impl Clipboard {
                     effects_read = true;
                     for root in d.art_roots() {
                         node_filter_names(root, &mut taken);
+                        node_filters(root, &mut held_effects);
                     }
                     for a in vectorcraft_brush::library(d).iter().flat_map(Brush::art) {
                         node_filter_names(a, &mut taken);
+                        node_filters(a, &mut held_effects);
                     }
                     for g in &d.graphic_styles {
                         appearance_filter_names(&g.appearance, &mut taken);
+                        appearance_filters(&g.appearance, &mut held_effects);
                     }
+                }
+                // An effect of the document that already draws this filter under a name no filter
+                // of the document has (one pasted or loaded before) gives its name, so pasting or
+                // loading the same filter again adds no other name.
+                let earlier = held_effects.iter().find(|(n, x)| {
+                    !d.svg_filters.iter().any(|f| &f.name == n)
+                        && vectorcraft_render::effects::svg_filter::with_id(&xml, n).is_some_and(|drawn| drawn == *x)
+                });
+                if let Some((n, x)) = earlier {
+                    links.insert((name, xml), (n.clone(), x.clone()));
+                    continue;
                 }
                 // Free names made from the starts of the name, longest first, then free letters and
                 // digits, then other single printable ASCII characters: the first under which the
@@ -1845,6 +1867,8 @@ pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, 
     let clip = Clipboard::with_used(src, &used, &library, vec![]);
     let before = [&d.char_styles, &d.para_styles].map(|l| l.iter().map(|s| s.name.clone()).collect::<BTreeSet<_>>());
     let out = clip.import_used(d, &used, &SwatchChoices::default(), false)?;
+    // Graphs in the symbols added draw with the designs `d` kept, as pasted ones do.
+    crate::cmd::graph::redraw_symbols_with_designs(d, &out.added_symbols, &out.kept_designs);
     let mut placed: Vec<LoadedStyle> = vec![];
     for (para, r, list) in [(false, Res::CharStyle, &clip.char_styles), (true, Res::ParaStyle, &clip.para_styles)] {
         for s in list {
@@ -1855,6 +1879,35 @@ pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, 
         }
     }
     Ok(placed)
+}
+
+/// Add to `d` the swatches, patterns, symbols and brushes (and what their art uses) that the
+/// appearance `look` of `src` and the character style attributes `attrs` of `src` paint with, as
+/// [`import_text_styles`] adds those of loaded styles, and give back `look` and `attrs` relinked to
+/// them (a resource `d` has under the same name and with the same contents is used; another is
+/// added under a free name; a global or spot color whose name `d` gives another color is `d`'s;
+/// an SVG filter whose name `d` gives another filter is renamed).
+pub(crate) fn import_looks(
+    src: &Document,
+    d: &mut Document,
+    look: &Appearance,
+    attrs: &Map<String, Value>,
+) -> Result<(Appearance, Map<String, Value>)> {
+    let library = OnceCell::new();
+    let defs = Defs::of(src, &library);
+    let mut used = Used::default();
+    used.follow(&defs, vec![Source::Appearance(look), Source::Attrs(attrs)]);
+    // The look goes on an empty path, so that its SVG filters are renamed where `d` gives their
+    // names other filters, as a pasted object's are.
+    let carrier = Node::path(vectorcraft_doc::NodeId(0), vectorcraft_geom::PathData::default(), look.clone());
+    let clip = Clipboard::with_used(src, &used, &library, vec![carrier]);
+    let out = clip.import_used(d, &used, &SwatchChoices::default(), false)?;
+    // Graphs in the symbols added draw with the designs `d` kept, as pasted ones do.
+    crate::cmd::graph::redraw_symbols_with_designs(d, &out.added_symbols, &out.kept_designs);
+    let (mut look, mut attrs) = (look.clone(), attrs.clone());
+    out.relink.appearance(&mut look);
+    out.relink.attrs(&mut attrs);
+    Ok((look, attrs))
 }
 
 /// The resources graph designs `names` of `src` use, through the definitions they lead to.

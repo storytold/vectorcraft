@@ -37,19 +37,25 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("Document.prototype.exportVariables", "app.activeDocument.exportVariables(f);", "filesWritten"),
+    ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
-/// Reading a file or a folder, a file dialog and a message to the person do not change anything
-/// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.saveAs` and `close` throw "not available yet".
+/// Reading a file or a folder, a file dialog, a message to the person and a ScriptUI dialog do not
+/// change anything outside it. The document model (`app`, its classes and the enumerations) acts on
+/// the open documents; `Document.saveAs` and `close` throw "not available yet".
 const INSIDE: &[(&str, &str)] = &[
-    ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
-    ("Object.prototype.", "toSource"),
+    ("", "$ File Folder UnitValue Window alert confirm localize prompt toSource"),
+    ("Window.", "alert confirm length prompt prototype"),
+    ("Window.prototype.", "add addEventListener center close constructor findElement hide remove removeEventListener show"),
+    ("Object.prototype.", "reflect toSource"),
     ("UnitValue.", "baseUnit baseUnit= length prototype"),
     ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
+    ("ExternalObject.", "length prototype search"),
+    ("ExternalObject.prototype.", "constructor terminate"),
     (
         "$.",
         "about appEncoding appEncoding= bp build buildDate colorPicker decimalPoint engineName error fileName flags \
@@ -77,7 +83,8 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
          DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
-         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= ZOrderMethod",
+         Documents ElementPlacement Layer PageItem PageItems RulerUnits ScreenMode selection selection= Tag Tags View Views \
+         ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -100,9 +107,13 @@ const INSIDE: &[(&str, &str)] = &[
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
          groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= toString \
-         typename views views= width",
+         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= toString \
+         typename views width",
     ),
+    ("Views.", "prototype"),
+    ("Views.prototype.", "constructor index length parent toString typename"),
+    ("View.", "prototype"),
+    ("View.prototype.", "bounds centerPoint centerPoint= constructor parent screenMode screenMode= toString typename zoom zoom="),
     ("Layer.", "prototype"),
     ("Layer.prototype.", "constructor name toString typename"),
     ("PageItems.", "prototype"),
@@ -113,10 +124,14 @@ const INSIDE: &[(&str, &str)] = &[
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
          controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer layer= \
          left left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
-         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= toString top top= transform \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
+    ("Tags.", "prototype"),
+    ("Tags.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Tag.", "prototype"),
+    ("Tag.prototype.", "constructor name name= parent remove typename value value="),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
     ("DocumentColorSpace.", "CMYK RGB"),
@@ -130,7 +145,25 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("ScreenMode.", "DESKTOP FULLSCREEN MULTIWINDOW"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
+    // Variables and data sets. `importVariables` reads the library file it is given. `PageItem`'s
+    // `visibilityVariable` is in its row above.
+    ("", "Dataset Datasets Variable VariableKind Variables"),
+    ("VariableKind.", "GRAPH IMAGE TEXTUAL Unknown VISIBILITY"),
+    ("Variables.", "prototype"),
+    ("Variables.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Variable.", "prototype"),
+    ("Variable.prototype.", "constructor kind kind= name name= pageItems parent remove typename"),
+    ("Datasets.", "prototype"),
+    ("Datasets.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Dataset.", "prototype"),
+    ("Dataset.prototype.", "constructor display name name= parent remove typename update"),
+    ("Document.prototype.", "activeDataset activeDataset= dataSets importVariables variables variablesLocked variablesLocked="),
+    ("GraphItem.prototype.", "contentVariable contentVariable="),
+    ("PlacedItem.prototype.", "contentVariable contentVariable="),
+    ("RasterItem.prototype.", "contentVariable contentVariable="),
+    ("TextFrame.prototype.", "contentVariable contentVariable="),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types.

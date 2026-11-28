@@ -12,7 +12,7 @@ pub const CHROMA_FULL: f64 = 0.4;
 pub const POWERLESS_CHROMA: f64 = 0.000_004;
 
 /// How far outside 0..=1 an sRGB component may be and still count as inside the gamut.
-const GAMUT_SLACK: f64 = 1e-4;
+const GAMUT_SLACK: f64 = 1e-5;
 
 /// OKLCH `[l, c, h°]` of sRGB `rgb` (gamma encoded). Values outside 0..=1 are converted as they
 /// are. The hue is in 0..360, and 0 while the chroma is powerless.
@@ -46,7 +46,7 @@ pub fn max_chroma(l: f64, h: f64) -> f64 {
 ///
 /// The chromas sRGB holds along the ray can come in several stretches: at the lightness and hue of
 /// blue the ray leaves sRGB at a chroma of about 0.266 and comes back at blue itself, about 0.313,
-/// and near black the gamut slack opens stretches of its own. Each linear sRGB channel is a cubic
+/// and the ray can leave and return near black as well. Each linear sRGB channel is a cubic
 /// in the chroma, so every stretch ends where a channel's cubic meets a bound of the gamut. The
 /// search finds each such chroma between the cubic's turning points and takes the largest one that
 /// fits.
@@ -112,11 +112,16 @@ fn turning_points(a: f64, b: f64, c: f64) -> Vec<f64> {
 
 /// The sRGB color (gamma encoded, 0..=1) of OKLCH `(l, c, h°)`, and whether its chroma was lowered:
 /// a color outside sRGB keeps its lightness and hue and takes the largest chroma below it that
-/// fits. Lightness is clamped to 0..=1 and chroma to 0 or more.
+/// fits. Lightness is clamped to 0..=1 and chroma to 0 or more. Lightness 0 gives exactly black and
+/// lightness 1 exactly white, as CSS Color 4 specifies, and a positive chroma there counts as
+/// lowered.
 pub fn from_oklch(l: f64, c: f64, h: f64) -> ([f32; 3], bool) {
     let l = if l.is_nan() { 0.0 } else { l.clamp(0.0, 1.0) };
     let c = if c.is_nan() { 0.0 } else { c.max(0.0) };
     let h = if h.is_finite() { h } else { 0.0 };
+    if l == 0.0 || l == 1.0 {
+        return ([l as f32; 3], c > 0.0);
+    }
     let exact = oklch_to_srgb(l, c, h);
     let (rgb, lowered) = if in_srgb(exact) { (exact, false) } else { (oklch_to_srgb(l, largest_fitting_chroma(l, h, c), h), true) };
     (rgb.map(|v| v.clamp(0.0, 1.0) as f32), lowered)
@@ -239,12 +244,10 @@ mod tests {
     }
 
     /// The largest chroma fits and is at least the largest one a scan in steps of 0.0005 finds, at
-    /// every hue and at lightnesses near black too, where the ray can come back into sRGB away from
-    /// any primary color's hue (L 0.02 and H 242° fit up to about 0.022 after leaving near 0.012).
+    /// every hue and at lightnesses near black too.
     #[test]
     fn the_largest_chroma_is_never_below_a_scan_of_the_ray() {
         let scan = |l: f64, h: f64| (0..=1000).map(|i| f64::from(i) * 0.0005).filter(|c| in_srgb(oklch_to_srgb(l, *c, h))).fold(0.0, f64::max);
-        assert!(max_chroma(0.02, 242.0) > 0.02, "{}", max_chroma(0.02, 242.0));
         for l in [0.005, 0.02, 0.05, 0.1, 0.3, 0.44, 0.6, 0.8, 0.95, 0.99] {
             for h in (0..72).map(|i| f64::from(i) * 5.0 + 2.0) {
                 let max = max_chroma(l, h);
@@ -261,5 +264,27 @@ mod tests {
         assert_eq!(max_chroma(0.5, f64::INFINITY), 0.0);
         assert_eq!(eight(from_oklch(f64::NAN, f64::NAN, f64::NAN).0), [0, 0, 0]);
         assert_eq!(eight(from_oklch(2.0, -1.0, 0.0).0), [255, 255, 255]);
+    }
+
+    /// The lightness endpoints give exactly black and white at any chroma and hue, and report a
+    /// positive chroma as lowered. A rounded 8-bit comparison would hide a small leftover channel.
+    #[test]
+    fn the_lightness_endpoints_give_exact_black_and_white() {
+        assert_eq!(from_oklch(0.0, 0.04, 0.0), ([0.0; 3], true));
+        assert_eq!(from_oklch(0.0, 0.0, 120.0), ([0.0; 3], false));
+        assert_eq!(from_oklch(1.0, 0.1, 250.0), ([1.0; 3], true));
+        assert_eq!(from_oklch(1.0, 0.0, 0.0), ([1.0; 3], false));
+    }
+
+    /// A color whose green is 0.000024 below sRGB is outside it: it is lowered to the chroma that
+    /// fits, not clipped at its own chroma.
+    #[test]
+    fn a_channel_just_below_zero_is_outside_the_gamut() {
+        assert!(!in_srgb(oklch_to_srgb(0.01, 0.01, 0.0)));
+        let (rgb, lowered) = from_oklch(0.01, 0.01, 0.0);
+        assert!(lowered, "{rgb:?}");
+        let [_, c, _] = to_oklch(rgb);
+        assert!(c < 0.01, "{c}");
+        assert!(in_srgb(oklch_to_srgb(0.01, max_chroma(0.01, 0.0), 0.0)));
     }
 }

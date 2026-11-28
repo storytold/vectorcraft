@@ -546,6 +546,8 @@ fn variable_table(ui: &mut Ui, vars: &[VarRow], sort: VariableSort, states: &Row
             CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } if !opening_menu => {
                 acts.extend(keys.into_iter().next().map(Act::Click));
             }
+            // A click on the highlighted row changes no selection, and still selects what it drives.
+            CollectionEvent::Picked { key, .. } if !opening_menu => acts.push(Act::Click(key)),
             CollectionEvent::Activate(name) if !states.locked => acts.push(Act::Options(name)),
             _ => {}
         }
@@ -693,19 +695,40 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
 fn ask_open(app: &mut VectorcraftApp, filters: &[(&str, &[&str])], command: &'static str) -> Value {
     let request = filters.iter().fold(PickRequest::open("variables"), |r, (name, exts)| r.filter(*name, exts));
     file_asks::ask(app, request, Owner::Document, move |app, picked| match file_asks::open_params(&picked) {
-        Some(params) => app.run(command, Value::Object(params)),
+        Some(mut params) => {
+            // The combined importer uses the file name to choose a reader. The dedicated readers already know the format.
+            if command != "variable.import" {
+                params.remove("name");
+            }
+            app.run(command, Value::Object(params))
+        }
         None => Ok(Value::Null),
     })
 }
 
-/// Asks for a file `name` to write with `filters` and runs `command` with its path; a cancelled
-/// dialog does nothing → what [`file_asks::ask`] returns.
-fn ask_save(app: &mut VectorcraftApp, name: &str, filters: &[(&str, &[&str])], command: &'static str) -> Value {
+/// Desktop saves run the path command after the picker; browser saves serialize through the
+/// command and give the bytes to the file service for a save or download.
+fn ask_save(app: &mut VectorcraftApp, name: &str, filters: &[(&str, &[&str])], command: &'static str, field: &str) -> Value {
     let request = filters.iter().fold(PickRequest::save("variables").file_name(name), |r, (name, exts)| r.filter(*name, exts));
-    file_asks::ask(app, request, Owner::Document, move |app, picked| match picked.first_path() {
-        Some(path) => app.run(command, json!({"path": path.to_string_lossy()})),
-        None => Ok(Value::Null),
-    })
+    if !app.host.files().browser_saves() {
+        return file_asks::ask(app, request, Owner::Document, move |app, picked| match picked.first_path() {
+            Some(path) => app.run(command, json!({"path": path.to_string_lossy()})),
+            None => Ok(Value::Null),
+        });
+    }
+    let output = match app.run(command, json!({})) {
+        Ok(output) => output,
+        Err(error) => {
+            app.status(error);
+            return Value::Null;
+        }
+    };
+    let Some(text) = output.get(field).and_then(Value::as_str) else {
+        app.status("The export returned no file contents");
+        return Value::Null;
+    };
+    let bytes = text.as_bytes().to_vec();
+    file_asks::save(app, request, bytes, Owner::Document, |_, _| Ok(Value::Null))
 }
 
 /// Import…: one file dialog for a CSV, TSV, TXT or XML file, and `variable.import` on the chosen
@@ -719,9 +742,9 @@ fn import_datasets(app: &mut VectorcraftApp) -> Value {
     ask_open(app, &[CSV], "dataset.import")
 }
 
-/// Export Data Sets…: a path, and `dataset.export` to it.
+/// Export Data Sets…: save or download the CSV from `dataset.export`.
 fn export_datasets(app: &mut VectorcraftApp) -> Value {
-    ask_save(app, "datasets.csv", &[("CSV", &["csv"])], "dataset.export")
+    ask_save(app, "datasets.csv", &[("CSV", &["csv"])], "dataset.export", "csv")
 }
 
 /// Load Variable Library…: an XML file, and `variable.loadLibrary` on it.
@@ -729,15 +752,129 @@ fn load_library(app: &mut VectorcraftApp) -> Value {
     ask_open(app, &[XML], "variable.loadLibrary")
 }
 
-/// Save Variable Library…: a path for an XML file, and `variable.saveLibrary` to it.
+/// Save Variable Library…: save or download the XML from `variable.saveLibrary`.
 fn save_library(app: &mut VectorcraftApp) -> Value {
-    ask_save(app, "variables.xml", &[XML], "variable.saveLibrary")
+    ask_save(app, "variables.xml", &[XML], "variable.saveLibrary", "xml")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pick_variable_source(command: fn(&mut VectorcraftApp) -> Value, name: &str, bytes: &[u8]) -> VectorcraftApp {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let picker = crate::tests::picks::scripted(&mut app);
+        assert_eq!(command(&mut app), json!({"pending": "fileDialog"}));
+        picker.answer_contents(&[(name, bytes)]);
+        let ctx = app.ui_ctx.clone().unwrap();
+        crate::tests::picks::poll(&mut app, &ctx);
+        app
+    }
+
+    fn browser_xml() -> String {
+        let mut source = vectorcraft_engine::Session::new();
+        source.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        source.execute("variable.define", &json!({"name": "Caption", "kind": "text"})).unwrap();
+        source.execute("variable.saveLibrary", &json!({})).unwrap()["xml"].as_str().unwrap().to_owned()
+    }
+
+    #[test]
+    fn browser_variable_import_reads_csv_and_tsv_from_the_file_name() {
+        for (name, bytes) in [("rows.CSV", &b"Caption,Other\nHello,World\n"[..]), ("rows.tsv", &b"Caption\tOther\nHello\tWorld\n"[..])] {
+            let app = pick_variable_source(import_data_source, name, bytes);
+            let data = &app.session.active().unwrap().doc.variables;
+            assert_eq!(data.datasets.len(), 1, "{name}");
+            assert!(data.variables.iter().any(|v| v.name == "Caption"));
+        }
+    }
+
+    #[test]
+    fn browser_variable_import_reads_xml_from_the_file_name() {
+        let app = pick_variable_source(import_data_source, "variables.XML", browser_xml().as_bytes());
+        assert!(app.session.active().unwrap().doc.variables.variables.iter().any(|v| v.name == "Caption"));
+    }
+
+    #[test]
+    fn browser_dedicated_variable_importers_accept_file_bytes() {
+        let csv = pick_variable_source(import_datasets, "rows.csv", b"Caption\nHello\n");
+        assert_eq!(csv.session.active().unwrap().doc.variables.datasets.len(), 1);
+        let xml = pick_variable_source(load_library, "variables.xml", browser_xml().as_bytes());
+        assert!(xml.session.active().unwrap().doc.variables.variables.iter().any(|v| v.name == "Caption"));
+    }
     use crate::i18n::LangExt;
+
+    #[test]
+    fn exports_give_the_file_service_the_csv_and_xml_contents() {
+        for (command, path, marker) in [(EXPORT_DATA_SETS, "/datasets.csv", "Alice"), (SAVE_LIBRARY, "/variables.xml", "Alice")] {
+            let mut app = app_with_data();
+            let revision = app.session.active().unwrap().revision;
+            let files = Arc::new(craft::host::ScriptedFiles::held().in_browser());
+            crate::tests::picks::install_files(&mut app, files.clone());
+            run(&mut app, command, &json!({})).unwrap().unwrap();
+            files.answer(craft::host::Picked::Saved { path: path.into(), file_type: None });
+            crate::file_asks::poll(&mut app);
+            let bytes = files.file(std::path::Path::new(path)).expect("the file service saved the serialized export");
+            let text = String::from_utf8(bytes).unwrap();
+            assert!(text.contains(marker), "the export keeps the captured text value");
+            assert_eq!(app.session.active().unwrap().revision, revision, "export does not change the drawing");
+            let import = if command == EXPORT_DATA_SETS { "dataset.import" } else { "variable.loadLibrary" };
+            let params = if command == EXPORT_DATA_SETS { json!({"csv": text}) } else { json!({"xml": text}) };
+            app.run(import, params).unwrap();
+            let datasets = app.run("dataset.list", json!({})).unwrap();
+            assert_eq!(datasets["datasets"].as_array().unwrap().len(), 1);
+        }
+    }
+
+    #[test]
+    fn browser_export_completion_keeps_the_drawing_and_reports_write_failures() {
+        use craft::host::{Picked, ScriptedFiles};
+        for command in [EXPORT_DATA_SETS, SAVE_LIBRARY] {
+            for answer in [Picked::Downloaded("export".into()), Picked::Cancelled, Picked::Failed("save was refused".into())] {
+                let mut app = app_with_data();
+                let revision = app.session.active().unwrap().revision;
+                let datasets = app.run("dataset.list", json!({})).unwrap();
+                let files = Arc::new(ScriptedFiles::held().in_browser());
+                crate::tests::picks::install_files(&mut app, files.clone());
+                run(&mut app, command, &json!({})).unwrap().unwrap();
+                let failed = matches!(answer, Picked::Failed(_));
+                files.answer(answer);
+                crate::file_asks::poll(&mut app);
+                assert_eq!(app.session.active().unwrap().revision, revision);
+                assert_eq!(app.run("dataset.list", json!({})).unwrap(), datasets);
+                if failed {
+                    assert_eq!(app.ui.status, "save was refused");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_failed_variables_download_reports_its_error_after_the_source_closes() {
+        use craft::host::{Picked, ScriptedFiles};
+
+        for command in [EXPORT_DATA_SETS, SAVE_LIBRARY] {
+            for answer in [Picked::Failed("downloads are blocked".into()), Picked::Cancelled, Picked::Downloaded("export".into())] {
+                let mut app = app_with_data();
+                let files = Arc::new(ScriptedFiles::held().in_browser());
+                crate::tests::picks::install_files(&mut app, files.clone());
+                run(&mut app, command, &json!({})).unwrap().unwrap();
+                app.session.execute("file.close", &json!({"index": 0})).unwrap();
+                app.run("file.new", json!({"width": 80, "height": 80})).unwrap();
+                app.status("another drawing");
+                let before = app.session.active().unwrap().doc.clone();
+                let expected = match &answer {
+                    Picked::Failed(error) => error.as_str(),
+                    Picked::Cancelled => "another drawing",
+                    _ => file_asks::closed(),
+                };
+                files.answer(answer.clone());
+                file_asks::poll(&mut app);
+                assert_eq!(app.ui.status, expected);
+                assert_eq!(app.session.active().unwrap().doc, before);
+            }
+        }
+    }
 
     fn app_with_data() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -1238,6 +1375,30 @@ mod tests {
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!(sets["datasets"].as_array().unwrap().len(), 1);
         assert_eq!(sets["datasets"][0]["name"], "Data Set 2");
+    }
+
+    /// A click on the highlighted row selects what it drives again, as a click on any other row
+    /// does: after the art is deselected on the canvas, the row stays highlighted, and a second
+    /// click on it selects the bound object.
+    #[test]
+    fn a_click_on_the_highlighted_row_selects_its_bound_object_again() {
+        use crate::tests::panel_harness::Panel;
+        let mut app = app_with_data();
+        let bound = app.session.doc().unwrap().doc.variables.objects_of("Name")[0];
+        app.session.execute("select.set", &json!({"ids": []})).unwrap();
+        let mut p = Panel::new(app, show);
+        let selected = |p: &Panel| p.app().session.doc().unwrap().selection.objects.clone();
+        let highlighted = |p: &Panel| highlighted_row(p.app().session.doc().unwrap());
+        p.click("Name");
+        assert_eq!(highlighted(&p).as_deref(), Some("Name"));
+        assert_eq!(selected(&p), vec![bound], "the first click selects the bound object");
+        p.app().session.execute("select.set", &json!({"ids": []})).unwrap();
+        assert!(selected(&p).is_empty());
+        // A second later, so the two clicks are not a double click.
+        p.advance(1.0);
+        p.click("Name");
+        assert_eq!(highlighted(&p).as_deref(), Some("Name"));
+        assert_eq!(selected(&p), vec![bound], "a click on the highlighted row selects the bound object again");
     }
 
     /// The rows as the panel built them on every frame before [`cached_rows`] kept them: the

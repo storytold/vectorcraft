@@ -11,6 +11,65 @@ fn realm(fuel: u64) -> Realm {
     r
 }
 
+#[test]
+fn non_finite_indexer_keys_reach_the_host_unchanged() {
+    let mut r = realm(1_000_000);
+    let index: HostFunction = Rc::new(|args| {
+        assert!(matches!(args.get(1), Some(Data::Number(n)) if !n.is_finite()), "{args:?}");
+        Ok(Data::Bool(true))
+    });
+    let class = HostClass { name: "Indexed".into(), parent: None, members: vec![], info: Vec::new(), index: Some(index), construct: None };
+    r.define_host_classes(vec![class], vec![("it".into(), host_ref("Indexed", &[1.0]))]).unwrap();
+    let source = "[it[NaN], it[Infinity], it[-Infinity], NaN in it, Infinity in it, -Infinity in it].join('|')";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("true|true|true|true|true|true".into()));
+}
+
+#[test]
+fn host_receivers_obey_limits_lowered_after_the_object_was_created() {
+    for limits in [DataLimits { depth: 64, bytes: 1_000, entries: 2 }, DataLimits { depth: 64, bytes: 1, entries: 100 }] {
+        for expression in ["it[0]", "0 in it", "it.method()", "it.take(it)"] {
+            let mut r = realm(1_000_000);
+            let calls = Rc::new(Cell::new(0));
+            let called = calls.clone();
+            let function: HostFunction = Rc::new(move |_| {
+                called.set(called.get() + 1);
+                Ok(Data::Undefined)
+            });
+            let class = HostClass {
+                name: "Indexed".into(),
+                parent: None,
+                members: vec![("method".into(), HostMember::Method(function.clone())), ("take".into(), HostMember::Method(function.clone()))],
+                info: Vec::new(),
+                index: Some(function),
+                construct: None,
+            };
+            r.define_host_classes(vec![class], vec![("it".into(), host_ref("Indexed", &[1.0, 2.0, 3.0]))]).unwrap();
+            r.set_data_limits(limits);
+            let source = format!("var result = 'called'; try {{ {expression}; }} catch (e) {{ result = e.name; }} result");
+            assert_eq!(r.run(&source).unwrap(), JsValue::String("RangeError".into()), "{expression}: {limits:?}");
+            assert_eq!(calls.get(), 0, "{expression}");
+        }
+    }
+}
+
+#[test]
+fn index_keys_share_the_receivers_data_budget() {
+    let mut r = realm(1_000_000);
+    let class = HostClass {
+        name: "Indexed".into(),
+        parent: None,
+        members: vec![],
+        info: Vec::new(),
+        index: Some(Rc::new(|_| Ok(Data::Bool(true)))),
+        construct: None,
+    };
+    r.define_host_classes(vec![class], vec![("it".into(), host_ref("Indexed", &[1.0]))]).unwrap();
+    r.set_data_limits(DataLimits { depth: 64, bytes: 256, entries: 100 });
+    assert_eq!(r.run("it['short']").unwrap(), JsValue::Bool(true));
+    let source = "var result = 'called'; try { it[new Array(71).join('x')]; } catch (e) { result = e.name; } result";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("RangeError".into()));
+}
+
 /// A realm with `host.take(value)`, which records what it was given and returns it.
 fn with_take(r: &mut Realm) -> Rc<RefCell<Vec<Data>>> {
     let seen: Rc<RefCell<Vec<Data>>> = Rc::default();
@@ -773,7 +832,7 @@ fn with_thing(r: &mut Realm, make: Option<HostFunction>) {
     let fetch: HostFunction = Rc::new(move |_| if can_wait.get() { Err(HostError::Wait) } else { Err(HostError::Error("cannot wait here".into())) });
     let id: HostFunction = Rc::new(|a| Ok(a.first().and_then(host_ref_parts).and_then(|(_, h)| h.first().copied()).map_or(Data::Null, Data::Number)));
     let members = vec![("fetch".to_string(), HostMember::Method(fetch)), ("id".to_string(), HostMember::Get(id))];
-    let class = HostClass { name: "Thing".into(), parent: None, members, index: None, construct: make };
+    let class = HostClass { name: "Thing".into(), parent: None, members, info: Vec::new(), index: None, construct: make };
     r.define_host_classes(vec![class], vec![("thing".into(), host_ref("Thing", &[1.0]))]).unwrap();
 }
 
@@ -819,6 +878,7 @@ fn objects_of_a_host_class_report_its_available_members_as_their_own() {
             ("grow".to_string(), HostMember::Method(value.clone())),
             ("later".to_string(), HostMember::Unavailable(missing)),
         ],
+        info: Vec::new(),
         index: None,
         construct: None,
     };
@@ -826,6 +886,7 @@ fn objects_of_a_host_class_report_its_available_members_as_their_own() {
         name: "Leaf".into(),
         parent: Some("Base".into()),
         members: vec![("leaf".to_string(), HostMember::Get(value))],
+        info: Vec::new(),
         index: None,
         construct: None,
     };
@@ -855,6 +916,7 @@ fn a_member_a_class_declares_unavailable_is_not_its_own_when_its_parent_has_it()
         name: "Base".into(),
         parent: None,
         members: vec![("size".to_string(), HostMember::Get(value.clone())), ("grow".to_string(), HostMember::Method(value))],
+        info: Vec::new(),
         index: None,
         construct: None,
     };
@@ -862,6 +924,7 @@ fn a_member_a_class_declares_unavailable_is_not_its_own_when_its_parent_has_it()
         name: "Leaf".into(),
         parent: Some("Base".into()),
         members: vec![("size".to_string(), HostMember::Unavailable(missing))],
+        info: Vec::new(),
         index: None,
         construct: None,
     };
@@ -882,7 +945,7 @@ fn assigning_a_name_a_prototype_has_does_not_call_the_indexer() {
             _ => Err(HostError::Error("no such member".into())),
         }
     });
-    let class = HostClass { name: "List".into(), parent: None, members: Vec::new(), index: Some(index), construct: None };
+    let class = HostClass { name: "List".into(), parent: None, members: Vec::new(), info: Vec::new(), index: Some(index), construct: None };
     r.define_host_classes(vec![class], vec![("it".into(), host_ref("List", &[1.0]))]).unwrap();
     r.start("Object.prototype.extra = 1; it.extra = 2; it.extra").unwrap();
     assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::Number(1.0));
@@ -1016,6 +1079,63 @@ fn an_evaluators_whole_source_must_fit_in_the_heap_before_it_is_parsed() {
     // With room for the whole source, it is parsed.
     r.set_limits(Limits { fuel: 1_000_000, ..Limits::default() });
     assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Thrown);
+}
+
+/// A realm with the host class `Big` and `host.make(i, len)`, which gives the object of `Big` whose
+/// handle is `i` followed by `len - 1` zeros.
+fn big_handles() -> Realm {
+    let mut r = realm(10_000_000);
+    let make: HostFunction = Rc::new(|args| {
+        let (Some(Data::Number(i)), Some(Data::Number(len))) = (args.get(1), args.get(2)) else { panic!("{args:?}") };
+        let mut handle = vec![0.0; *len as usize];
+        handle[0] = *i;
+        Ok(host_ref("Big", &handle))
+    });
+    let big = HostClass { name: "Big".into(), parent: None, members: vec![], info: Vec::new(), index: None, construct: None };
+    let maker = HostClass {
+        name: "Maker".into(),
+        parent: None,
+        members: vec![("make".into(), HostMember::Method(make))],
+        info: Vec::new(),
+        index: None,
+        construct: None,
+    };
+    r.define_host_classes(vec![big, maker], vec![("host".into(), host_ref("Maker", &[0.0]))]).unwrap();
+    r
+}
+
+#[test]
+fn a_host_objects_handle_must_fit_in_the_heap() {
+    let len = 8192;
+    let mut r = big_handles();
+    r.interp().collect_for_room();
+    // Room for the object and the call, and not for its handle.
+    let heap_bytes = r.interp().heap.bytes + crate::heap::OBJECT_BYTES + (32 << 10);
+    assert!(crate::host_classes::handle_bytes(len) > 2 * (32 << 10));
+    r.set_limits(Limits { fuel: 10_000_000, heap_bytes, ..Limits::default() });
+    assert_eq!(r.run(&format!("host.make(1, {len})")).unwrap_err().kind, RunErrorKind::Limit(LimitKind::Heap));
+    r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
+    assert!(r.run(&format!("host.make(1, {len})")).is_ok());
+}
+
+#[test]
+fn each_host_objects_handle_counts_toward_the_heap() {
+    let mut r = big_handles();
+    // The growth from 100 objects to 200, so the script's own code and strings cancel out.
+    let mut per_hundred = |len: usize| {
+        let mut grown = |count: usize| {
+            r.run("var kept = [];").unwrap();
+            let before = r.collect_garbage();
+            r.run(&format!("for (var i = 0; i < {count}; i++) kept.push(host.make(i, {len}));")).unwrap();
+            r.collect_garbage() - before
+        };
+        grown(200) - grown(100)
+    };
+    // The first runs also leave bindings and names the later ones reuse.
+    per_hundred(1);
+    let short = per_hundred(1);
+    let long = per_hundred(65);
+    assert_eq!(long - short, 100 * crate::host_classes::handle_bytes(64));
 }
 
 proptest::proptest! {

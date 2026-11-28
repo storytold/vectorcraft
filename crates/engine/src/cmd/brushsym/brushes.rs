@@ -33,9 +33,12 @@ pub(super) fn brush_get(s: &mut Session, p: &Value) -> Result<Value> {
     let name = name_param(p, "brush.get")?;
     let b = brush::find(&s.doc()?.doc, name).ok_or_else(|| EngineError::Other(format!("no brush named `{name}`")))?;
     let mut v = serde_json::to_value(&b).unwrap_or_default();
-    // A scatter brush saves its hue jitter only when it is not 0; brush.get shows it either way.
+    // A scatter brush saves its hue, saturation and brightness jitter only when they are not 0;
+    // brush.get shows them either way.
     if let (BrushKind::Scatter(sc), Some(o)) = (&b.kind, v.as_object_mut()) {
         o.entry("hue_jitter").or_insert(json!(sc.hue_jitter));
+        o.entry("saturation_jitter").or_insert(json!(sc.saturation_jitter));
+        o.entry("brightness_jitter").or_insert(json!(sc.brightness_jitter));
     }
     Ok(v)
 }
@@ -766,10 +769,12 @@ pub(super) fn brush_place_art(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0 }))
 }
 
-/// The repeat frame an unpainted rectangle at the back of a tile group marks ([`placed_art`]): the
+/// The repeat frame an unpainted rectangle at the back of a tile group marks ([`placed_art`]), and
+/// the tile such a rectangle at the back of a pattern's art marks (`object.pattern.replaceArt`): the
 /// rectangle's bounds, when `n` is a path of one closed subpath through the four corners of its
-/// bounds, without curves, whose fills and strokes paint nothing and that has no other appearance.
-fn frame_marker(n: &Node) -> Option<vectorcraft_geom::Rect> {
+/// bounds in order around them (either way), without curves, whose fills and strokes paint nothing
+/// and that has no other appearance.
+pub(crate) fn frame_marker(n: &Node) -> Option<vectorcraft_geom::Rect> {
     let NodeKind::Path { path, guide: false, clipping: false, .. } = &n.kind else { return None };
     let unpainted = n.appearance.effects.is_empty()
         && n.appearance.items.iter().all(|i| match i {
@@ -781,7 +786,9 @@ fn frame_marker(n: &Node) -> Option<vectorcraft_geom::Rect> {
     let corners = [(r.x0, r.y0), (r.x1, r.y0), (r.x1, r.y1), (r.x0, r.y1)];
     let at_corners = sp.anchors.len() == 4
         && sp.anchors.iter().all(|a| a.h_in == a.p && a.h_out == a.p)
-        && corners.iter().all(|c| sp.anchors.iter().any(|a| (a.p.x, a.p.y) == *c));
+        && corners.iter().all(|c| sp.anchors.iter().any(|a| (a.p.x, a.p.y) == *c))
+        // Each side, the closing one included, joins two corners that share an edge.
+        && sp.anchors.iter().zip(sp.anchors.iter().cycle().skip(1)).all(|(a, b)| a.p.x == b.p.x || a.p.y == b.p.y);
     (unpainted && sp.closed && at_corners && r.width() > 1e-9 && r.height() > 1e-9).then_some(r)
 }
 

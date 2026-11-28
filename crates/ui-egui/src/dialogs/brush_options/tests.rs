@@ -87,6 +87,135 @@ fn escape(app: &mut VectorcraftApp) {
     frame(app, vec![key(false)]);
 }
 
+fn draw_hosted_options(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    if let Some(dialogs) = app.dialogs() {
+        dialogs.with(|host| host.run(ui));
+    }
+    super::super::host::pump(app, ui.ctx());
+}
+
+#[test]
+fn canceled_custom_numbers_and_variation_choices_do_not_reach_the_brush() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    for (brush, key, label, typed, value, pointer) in [
+        ("6 pt. Flat", "angle", "Angle:", "30", 30.0, "/angle"),
+        ("Bristle Round", "density", "Bristle Density:", "88", 88.0, "/density"),
+        ("Confetti", "hueJitter", "Hue Jitter", "30", 30.0, "/hue_jitter"),
+        ("Confetti", "saturationJitter", "Saturation Jitter", "30", 30.0, "/saturation_jitter"),
+        ("Confetti", "brightnessJitter", "Brightness Jitter", "30", 30.0, "/brightness_jitter"),
+    ] {
+        let mut app = app();
+        app.run("brush.options", json!({"name": brush, "params": {}})).unwrap();
+        let original = app.run("brush.get", json!({"name": brush})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, draw_hosted_options);
+        panel.room(egui::vec2(1000.0, 1000.0));
+        open(&mut panel.app(), brush);
+        panel.frame();
+        let initial = fields_of(&panel.app()).number(key).unwrap();
+        panel.click_role(label, Role::SPIN_BUTTON);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text(typed);
+        assert_eq!(fields_of(&panel.app()).number(key), Some(value), "typing previews the {brush} field");
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert!(!is_open(&panel.app()));
+        assert_eq!(panel.app().run("brush.get", json!({"name": brush})).unwrap(), original);
+        open(&mut panel.app(), brush);
+        panel.frame();
+        assert_eq!(fields_of(&panel.app()).number(key), Some(initial));
+        if key == "angle" {
+            let mode = fields_of(&panel.app()).text("angleMode").unwrap().to_owned();
+            panel.click_role(label, Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert_eq!(fields_of(&panel.app()).text("angleMode"), Some(mode.as_str()));
+        }
+        panel.click("Cancel");
+        panel.frame();
+        assert!(!is_open(&panel.app()));
+        assert_eq!(panel.app().run("brush.get", json!({"name": brush})).unwrap(), original);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+
+        open(&mut panel.app(), brush);
+        panel.frame();
+        panel.click_role(label, Role::SPIN_BUTTON);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text(typed);
+        panel.key(Key::Tab, Modifiers::NONE);
+        panel.click("Cancel");
+        assert_eq!(panel.app().run("brush.get", json!({"name": brush})).unwrap(), original);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+
+        open(&mut panel.app(), brush);
+        panel.frame();
+        panel.click_role(label, Role::SPIN_BUTTON);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text(typed);
+        panel.key(Key::Tab, Modifiers::NONE);
+        if key == "angle" {
+            panel.click_role(label, Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Enter, Modifiers::NONE);
+            assert_eq!(fields_of(&panel.app()).text("angleMode"), Some("random"));
+        }
+        panel.click("OK");
+        panel.frame();
+        let after = panel.app().run("brush.get", json!({"name": brush})).unwrap();
+        assert_eq!(after.pointer(pointer).unwrap(), value);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(panel.app().run("brush.get", json!({"name": brush})).unwrap(), original);
+    }
+}
+
+#[test]
+fn canceled_art_width_drag_restores_the_opening_width() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    let mut app = app();
+    app.run("brush.options", json!({"name": "Arrow", "params": {"width": 100.25}})).unwrap();
+    let original = app.run("brush.get", json!({"name": "Arrow"})).unwrap();
+    let undo = app.session.active().unwrap().history.undo.len();
+    let mut panel = Panel::new(app, draw_hosted_options);
+    panel.room(egui::vec2(1000.0, 1000.0));
+    open(&mut panel.app(), "Arrow");
+    panel.frame();
+    let initial = fields_of(&panel.app()).number("width").unwrap();
+    assert_eq!(initial, 100.25, "Cancel must preserve a valid fractional stored width");
+    let mode = fields_of(&panel.app()).text("widthMode").map(str::to_owned);
+    panel.click_role("Width", Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Escape, Modifiers::NONE);
+    assert_eq!(fields_of(&panel.app()).text("widthMode").map(str::to_owned), mode);
+    panel.drag_hold_role("Width", Role::SLIDER, egui::vec2(40.0, 0.0));
+    assert_ne!(fields_of(&panel.app()).number("width"), Some(initial), "the held drag previews another width");
+    panel.key(Key::Escape, Modifiers::NONE);
+    panel.release();
+    assert_eq!(fields_of(&panel.app()).number("width"), Some(initial));
+    panel.click("Cancel");
+    panel.frame();
+    assert_eq!(panel.app().run("brush.get", json!({"name": "Arrow"})).unwrap(), original);
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+
+    open(&mut panel.app(), "Arrow");
+    panel.frame();
+    panel.drag_hold_role("Width", Role::SLIDER, egui::vec2(40.0, 0.0));
+    panel.release();
+    let accepted = fields_of(&panel.app()).number("width").unwrap();
+    assert_ne!(accepted, initial);
+    panel.click("OK");
+    panel.frame();
+    assert_eq!(panel.app().run("brush.get", json!({"name": "Arrow"})).unwrap()["width"], accepted);
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(panel.app().run("brush.get", json!({"name": "Arrow"})).unwrap(), original);
+}
+
 /// What a step of the table expects at a JSON pointer of the saved brush.
 enum Expect {
     Is(Value),
@@ -151,13 +280,16 @@ fn dialog_fields_become_brush_options_params() {
         vec![
             (
                 vec![json!({"sizeMode": "fixed", "sizeMin": 5000, "spacingMode": "pressure", "scatterMode": "random", "rotationMode": "random",
-                    "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift", "hueJitter": 400})],
+                    "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift", "hueJitter": 400, "saturationJitter": 400,
+                    "brightnessJitter": 400})],
                 vec![
                     ("/size", Is(json!([5000.0, 140.0]))),
                     ("/rotation/0", Is(json!(-180.0))),
                     ("/modes", Is(json!(["fixed", "pressure", "random", "random"]))),
                     ("/rotation_relative_to_path", Is(json!(true))),
                     ("/hue_jitter", Is(json!(180.0))),
+                    ("/saturation_jitter", Is(json!(100.0))),
+                    ("/brightness_jitter", Is(json!(100.0))),
                     ("/colorization/method", Is(json!("hueShift"))),
                     ("/colorization/key", Object),
                 ],
@@ -772,6 +904,32 @@ fn options_of_selected_object_set_one_paths_art_brush_settings() {
     assert_eq!(own_options(&app, a), json!({"width": 50.0}));
 }
 
+/// Options of Selected Object shows a scatter path's hue, saturation and brightness jitter, and OK
+/// sets them on that path only.
+#[test]
+fn options_of_selected_object_set_one_paths_scatter_jitter() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Confetti");
+    let b = brushed_line(&mut app, 100.0, "Confetti");
+    select(&mut app, &[a]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"hueJitter": 45, "saturationJitter": 30, "brightnessJitter": 20}));
+    confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"hue_jitter": 45.0, "saturation_jitter": 30.0, "brightness_jitter": 20.0}));
+    assert_eq!(own_options(&app, b), json!({}));
+    let brush = app.run("brush.get", json!({"name": "Confetti"})).unwrap();
+    assert_eq!(
+        (brush["hue_jitter"].clone(), brush["saturation_jitter"].clone(), brush["brightness_jitter"].clone()),
+        (json!(0.0), json!(0.0), json!(0.0)),
+        "the brush keeps its own"
+    );
+    // Opened again, it shows the path's own values.
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert_eq!(fields_of(&app).number("saturationJitter"), Some(30.0));
+    assert_eq!(fields_of(&app).number("hueJitter"), Some(45.0));
+    assert_eq!(fields_of(&app).number("brightnessJitter"), Some(20.0));
+}
+
 #[test]
 fn options_of_selected_object_change_only_the_values_edited_on_each_path() {
     let mut app = app();
@@ -839,9 +997,10 @@ fn options_of_selected_object_show_what_a_path_can_set_for_each_type() {
         assert!(keys.iter().any(|k| k == key), "{key} in {keys:?}");
     }
     assert!(!keys.iter().any(|k| k.ends_with("Tile")), "{keys:?}");
-    // Scatter: the four values with their modes, the rotation reference and the hue jitter.
+    // Scatter: the four values with their modes, the rotation reference and the hue, saturation and
+    // brightness jitter.
     let keys = object_keys("scatter");
-    for key in ["sizeMin", "spacingMin", "scatterMin", "rotationMin", "rotationRelativeTo", "hueJitter"] {
+    for key in ["sizeMin", "spacingMin", "scatterMin", "rotationMin", "rotationRelativeTo", "hueJitter", "saturationJitter", "brightnessJitter"] {
         assert!(keys.iter().any(|k| k == key), "{key} in {keys:?}");
     }
     let p = brushed_line(&mut app, 80.0, "Diamonds");

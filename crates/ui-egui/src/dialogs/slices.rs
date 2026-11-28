@@ -12,8 +12,8 @@ use craft::draw::ui::slice::{
     DivideBy, DivideSlices, DivideSlicesDialog, SliceBackground, SliceCellAlign, SliceCellVAlign, SliceKind, SliceOptions, SliceOptionsDialog,
 };
 use craft::theme::Srgba;
-use craft::ui::dialog::DialogResult;
 use serde_json::{Map, Value, json};
+use vectorcraft_doc::NodeId;
 
 use crate::VectorcraftApp;
 // PLAN: assumed `crate::canvas::general_lengths(app: &VectorcraftApp) -> LengthUnits` (cv.B5b)
@@ -23,6 +23,37 @@ use crate::canvas::general_lengths;
 pub const OPTIONS: &str = "sliceOptions";
 /// The dialog kind of Divide Slices.
 pub const DIVIDE: &str = "divideSlices";
+
+#[derive(Default)]
+pub(crate) struct SliceDialogs {
+    options: Option<Target>,
+    divide: Option<Target>,
+}
+
+/// The document, its revert count and the effective slice selection used when opening either dialog.
+#[derive(PartialEq)]
+struct Target {
+    document: u64,
+    reverts: u64,
+    slices: Vec<NodeId>,
+}
+
+impl Target {
+    fn new(document: u64, reverts: u64, mut slices: Vec<NodeId>) -> Self {
+        slices.sort_unstable();
+        Self { document, reverts, slices }
+    }
+
+    fn current(app: &VectorcraftApp) -> Option<Self> {
+        let st = app.session.active()?;
+        Some(Self::new(st.uid, st.reverts, app.session.selected_slice_ids()))
+    }
+
+    /// Whether the active document is the opening one, reverted since the dialog opened.
+    fn reverted(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().is_some_and(|st| st.uid == self.document && st.reverts != self.reverts)
+    }
+}
 
 /// The command's key of each slice type, alignment and vertical alignment.
 const KINDS: [(&str, SliceKind); 3] = [("image", SliceKind::Image), ("noImage", SliceKind::NoImage), ("htmlText", SliceKind::HtmlText)];
@@ -95,6 +126,7 @@ fn divide_json(d: &DivideSlices) -> Value {
 
 /// Open Slice Options on the selected slices' options (those of the first one).
 pub fn open_options(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let source = Target::current(app).ok_or("no document open")?;
     let v = app.session.execute("object.slice.options", &json!({})).map_err(|e| e.to_string())?;
     let map = v.as_object().cloned().unwrap_or_default();
     let mut kinds = vec![SliceKind::Image, SliceKind::NoImage];
@@ -102,7 +134,12 @@ pub fn open_options(app: &mut VectorcraftApp) -> Result<Value, String> {
         kinds.push(SliceKind::HtmlText);
     }
     let dialog = SliceOptionsDialog::new(options_of(&map)).kinds(&kinds);
-    app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
+    app.dialogs().ok_or("no window")?.with(|host| {
+        host.open(dialog);
+        // Replacing a still-open dialog leaves its Cancel behind.
+        let _ = host.take::<SliceOptionsDialog>();
+    });
+    app.slice_dialogs.options = Some(source);
     Ok(Value::Null)
 }
 
@@ -110,10 +147,16 @@ pub fn open_options(app: &mut VectorcraftApp) -> Result<Value, String> {
 pub fn open_divide(app: &mut VectorcraftApp) -> Result<Value, String> {
     let lengths = general_lengths(app);
     let st = app.session.active().ok_or("no document open")?;
-    let first = st.selection.slices.iter().chain(&st.selection.objects).find_map(|id| st.doc.slice_bounds(*id));
+    let selected = app.session.selected_slice_ids();
+    let first = selected.iter().find_map(|id| st.doc.slice_bounds(*id));
+    let source = Target::new(st.uid, st.reverts, selected);
     let (w, h) = first.map_or((50.0, 50.0), |r| (r.width() / 2.0, r.height() / 2.0));
     let dialog = DivideSlicesDialog::new(DivideSlices::new(Some(DivideBy::Count(2)), Some(DivideBy::Count(2)))).lengths(lengths).start_sizes(h, w);
-    app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
+    app.dialogs().ok_or("no window")?.with(|host| {
+        host.open(dialog);
+        let _ = host.take::<DivideSlicesDialog>();
+    });
+    app.slice_dialogs.divide = Some(source);
     Ok(Value::Null)
 }
 
@@ -123,11 +166,21 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(host) = app.dialogs() else { return };
     let (options, divide) = host.with(|h| (h.take::<SliceOptionsDialog>(), h.take::<DivideSlicesDialog>()));
     let answers = [
-        options.and_then(|r| if let DialogResult::Ok(o) = r { Some(("object.slice.options", options_json(&o))) } else { None }),
-        divide.and_then(|r| if let DialogResult::Ok(d) = r { Some(("object.slice.divide", divide_json(&d))) } else { None }),
+        options.and_then(|r| {
+            let source = app.slice_dialogs.options.take();
+            r.ok().map(|o| (source, "object.slice.options", options_json(&o)))
+        }),
+        divide.and_then(|r| {
+            let source = app.slice_dialogs.divide.take();
+            r.ok().map(|d| (source, "object.slice.divide", divide_json(&d)))
+        }),
     ];
-    for (cmd, params) in answers.into_iter().flatten() {
-        if let Err(e) = app.run(cmd, params) {
+    for (source, cmd, params) in answers.into_iter().flatten() {
+        if source.as_ref().is_some_and(|source| source.reverted(app)) {
+            app.status(tl!("The document was reverted. Reopen this dialog to continue."));
+        } else if !source.is_some_and(|source| Some(source) == Target::current(app)) {
+            app.status(tl!("The slice selection changed while the dialog was open."));
+        } else if let Err(e) = app.run(cmd, params) {
             app.status(e);
         }
     }
@@ -137,6 +190,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 mod tests {
     use super::*;
     use craft::ui::dialog::{DialogHost, DialogId};
+    use vectorcraft_doc::NodeId;
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
@@ -169,6 +223,146 @@ mod tests {
         let enabled = host(app, |h| h.confirm_by_id(&ctx, id));
         crate::dialogs::host::pump(app, &ctx);
         enabled
+    }
+
+    fn add_slice(app: &mut VectorcraftApp, x: f64) -> NodeId {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 60, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.slice.make", json!({"ids": [id]})).unwrap();
+        NodeId(id)
+    }
+
+    fn select_slice(app: &mut VectorcraftApp, id: NodeId) {
+        app.run("object.slice.select", json!({"slices": [id.0]})).unwrap();
+    }
+
+    fn check_changed_selection(dialog: &str, divide: bool) {
+        let mut app = app();
+        let source = app.session.active().unwrap().doc.slice_ids()[0];
+        let destination = add_slice(&mut app, 80.0);
+        select_slice(&mut app, source);
+        app.run(dialog, json!({})).unwrap();
+        if !divide {
+            set(&app, "name", json!("Original"));
+        }
+        select_slice(&mut app, destination);
+        let st = app.session.active().unwrap();
+        let undo = st.history.undo.len();
+        let document = st.doc.clone();
+
+        assert!(ok(&mut app));
+        let st = app.session.active().unwrap();
+        assert_eq!(*st.doc, *document, "the changed selection is untouched");
+        assert_eq!(st.history.undo.len(), undo);
+        assert_eq!(app.ui.status, "The slice selection changed while the dialog was open.");
+    }
+
+    #[test]
+    fn stale_slice_dialog_options_leaves_the_new_selection_untouched() {
+        check_changed_selection("object.slice.options", false);
+    }
+
+    #[test]
+    fn stale_slice_dialog_divide_leaves_the_new_selection_untouched() {
+        check_changed_selection("object.slice.divide", true);
+    }
+
+    /// Opens `dialog` on the saved document's slice, edits the document, reverts it and reselects the same slice id;
+    /// OK then leaves the restored document as it is and reports the revert. Returns the app and the slice.
+    fn check_refused_after_file_revert(dialog: &str, divide: bool, tag: &str) -> (VectorcraftApp, NodeId) {
+        let mut app = app();
+        let slice = app.session.active().unwrap().doc.slice_ids()[0];
+        let dir = vectorcraft_testkit::TempDir::new(tag);
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        select_slice(&mut app, slice);
+        app.run(dialog, json!({})).unwrap();
+        if !divide {
+            set(&app, "name", json!("Draft"));
+        }
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        select_slice(&mut app, slice);
+        let st = app.session.active().unwrap();
+        assert!(st.doc.slice_options(slice).is_some(), "the same id names a slice of the restored document");
+        let (restored, undo) = (st.doc.clone(), st.history.undo.len());
+
+        assert!(ok(&mut app));
+        let st = app.session.active().unwrap();
+        assert_eq!(*st.doc, *restored, "OK leaves the restored document's slices unchanged");
+        assert_eq!(st.history.undo.len(), undo);
+        assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+        (app, slice)
+    }
+
+    #[test]
+    fn slice_options_refuses_its_draft_after_file_revert() {
+        let (mut app, slice) = check_refused_after_file_revert("object.slice.options", false, "slice-options-revert");
+        // Reopened on the restored document, the dialog applies again.
+        app.run("object.slice.options", json!({})).unwrap();
+        set(&app, "name", json!("Reopened"));
+        assert!(ok(&mut app));
+        assert_eq!(app.session.active().unwrap().doc.slice_options(slice).unwrap().name, "Reopened");
+    }
+
+    #[test]
+    fn divide_slices_refuses_its_draft_after_file_revert() {
+        let (mut app, _) = check_refused_after_file_revert("object.slice.divide", true, "divide-slices-revert");
+        let slices = app.session.active().unwrap().doc.slices.len();
+        app.run("object.slice.divide", json!({})).unwrap();
+        assert!(ok(&mut app));
+        assert!(app.session.active().unwrap().doc.slices.len() > slices, "reopened, Divide Slices divides again");
+    }
+
+    #[test]
+    fn stale_slice_dialog_refuses_a_different_document_with_matching_selected_ids() {
+        let mut app = app();
+        let from = app.session.active().unwrap().doc.slice_ids()[0];
+        app.run("object.slice.options", json!({})).unwrap();
+        set(&app, "name", json!("Source"));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let to = add_slice(&mut app, 0.0);
+        select_slice(&mut app, to);
+        assert_eq!(from, to, "selection IDs are local to each document");
+        let st = app.session.active().unwrap();
+        let undo = st.history.undo.len();
+
+        assert!(ok(&mut app));
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.slice_options(to).unwrap().name, "");
+        assert_eq!(st.history.undo.len(), undo);
+    }
+
+    #[test]
+    fn replacing_slice_options_keeps_the_new_dialogs_target() {
+        let mut app = app();
+        app.run("object.slice.options", json!({})).unwrap();
+        let other = add_slice(&mut app, 80.0);
+        select_slice(&mut app, other);
+        app.run("object.slice.options", json!({})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        pump(&mut app, &ctx);
+        set(&app, "name", json!("Replacement"));
+
+        assert!(ok(&mut app));
+        assert_eq!(app.session.active().unwrap().doc.slice_options(other).unwrap().name, "Replacement");
+    }
+
+    #[test]
+    fn confirming_slice_options_still_works_when_the_same_slices_are_selected_in_a_different_order() {
+        let mut app = app();
+        let first = app.session.active().unwrap().doc.slice_ids()[0];
+        let second = add_slice(&mut app, 80.0);
+        app.run("object.slice.select", json!({"slices": [first.0, second.0]})).unwrap();
+        app.run("object.slice.options", json!({})).unwrap();
+        set(&app, "alt", json!("Two slices"));
+        app.run("object.slice.select", json!({"slices": [second.0, first.0]})).unwrap();
+
+        assert!(ok(&mut app));
+        let document = &app.session.active().unwrap().doc;
+        assert_eq!(document.slice_options(first).unwrap().alt, "Two slices");
+        assert_eq!(document.slice_options(second).unwrap().alt, "Two slices");
     }
 
     #[test]

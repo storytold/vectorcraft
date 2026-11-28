@@ -49,6 +49,7 @@ pub enum ViewMove {
 #[derive(Clone, Debug)]
 pub struct RearrangePlacement {
     pub doc: u64,
+    pub reverts: u64,
     pub tool: String,
     pub params: Value,
     pub ids: Vec<u32>,
@@ -58,6 +59,8 @@ pub struct RearrangePlacement {
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
+    #[serde(skip, default = "next_view_id")]
+    pub(crate) runtime_id: u64,
     /// The zoom (1.0 = 100%): points of the screen per document point, counted before
     /// Preferences › User Interface › UI Scaling, which scales the interface and not the art.
     /// [`Self::canvas`] gives the zoom in the interface's points.
@@ -106,6 +109,7 @@ pub struct View {
 impl Default for View {
     fn default() -> Self {
         Self {
+            runtime_id: next_view_id(),
             zoom: 1.0,
             center: Point::new(306.0, 396.0),
             fitted: false,
@@ -122,7 +126,16 @@ impl Default for View {
     }
 }
 
+fn next_view_id() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 impl View {
+    pub(crate) fn copy_for_window(&self) -> Self {
+        Self { runtime_id: next_view_id(), ..*self }
+    }
+
     /// The view a document opens at: the one it was saved with, else fitted on first display, on
     /// the artboard the opened file names as its active one ([`vectorcraft_doc::Document::opened_artboard`]),
     /// else the first.
@@ -707,6 +720,11 @@ pub struct UiState {
     /// Not saved.
     #[serde(skip)]
     pub status_notes: Option<(String, Vec<String>)>,
+    /// What the startup scripts' round under way left out ([`crate::script_runs`]): the runs that
+    /// could not start and the notes on the Startup Scripts folder, shown again when its last run
+    /// ends. Not saved.
+    #[serde(skip)]
+    pub startup_notes: Vec<String>,
     /// The status text a plug-in wrote, with the app's words before and after it: while the status
     /// is these three together, the status bar translates the app's words and shows the plug-in's
     /// as they are ([`crate::plugin_runs::show_notice`]). Not saved.
@@ -1242,6 +1260,15 @@ pub struct CustomToolbar {
     /// Older files: the groups torn off it. Read by the conversion, never written.
     #[serde(default, skip_serializing)]
     pub floating: Vec<FloatingFlyout>,
+    /// Its command buttons, after its tools: Command Palette result ids (a command's id, or
+    /// `plugin:`, `effect:` or `panel:` and an id). A command that is gone, such as an uninstalled
+    /// plug-in's, is kept and shows as unavailable until it comes back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<String>,
+    /// The labels given to its command buttons with Rename Button…, keyed by the command's id. A
+    /// button without one shows its command's label.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub labels: std::collections::BTreeMap<String, String>,
 }
 
 /// A category of an edited toolbar: its name (one of the Basic toolbar's; none in the Advanced
@@ -1482,6 +1509,7 @@ impl Default for UiState {
             replace_font_warning: None,
             last_find: None,
             status_notes: None,
+            startup_notes: Vec::new(),
             status_kept: None,
             palette_open: false,
             palette_query: String::new(),

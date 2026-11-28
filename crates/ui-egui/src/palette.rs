@@ -44,8 +44,8 @@ const WRAPPED: &[(&str, &str)] = &[
 /// every preference, Forget Import Matches forgets every saved match, Begin Undo Group and End
 /// Undo Group begin and end a group, the six Save … Preset commands save a new preset (Save
 /// Gradient Preset the selection's gradient), Delete Gradient Preset deletes the saved preset the
-/// selection's gradient matches, Pixel Snapping Options…
-/// opens its dialog, the three Asset Export commands open the Asset Export panel (#4864), New
+/// selection's gradient matches, the six Asset Export commands open the Asset Export panel (#4864),
+/// Rename Artboards opens the Rename dialog for the selected artboards, New
 /// Symbol makes a symbol of the selection, Gradient Vector gives the selection the default
 /// gradient, Define Perspective Grid makes the document's grid, Select Slice deselects the
 /// slices, and Find Next goes on from the last Find and Replace search or opens its dialog, as
@@ -65,10 +65,13 @@ const PICK_RUNS: &[&str] = &[
     "perspective.presets.save",
     "gradient.presets.save",
     "gradient.presets.delete",
-    "view.snapToPixel.options",
     "assets.export",
+    "assets.remove",
+    "assets.rename",
     "assets.export3D",
+    "assets.set3DFormat",
     "assets.settings.set",
+    "artboard.rename",
     "symbol.new",
     "paint.setGradientGeom",
     "perspective.grid.set",
@@ -82,23 +85,11 @@ const PANEL_PATH: &str = "Window › Show Panel";
 /// The menu path ([`context`]) a result takes when another result has its name: (id, English
 /// path), for commands that no item of the menu bar runs and whose id names no parent command.
 const CONTEXTS: &[(&str, &str)] = &[
-    ("addon.pen.close", "Pen"),
-    ("addon.pen.reshape", "Pen"),
-    ("addon.pen.togglePoint", "Pen"),
-    ("charStyle.setAttrs", "Character Styles"),
     ("file.exportInBackground", "Export"),
     ("file.openInBackground", "Open"),
     ("imageTrace.hideRuns", "Image Trace"),
     ("links.reveal", "Links"),
-    ("livePaint.fill", "Live Paint"),
-    ("object.blend.spine.convertAnchor", "Blend"),
-    ("paraStyle.setAttrs", "Paragraph Styles"),
-    ("path.close", "Path"),
-    ("path.convertAnchor", "Path"),
-    ("path.knife", "Path"),
-    ("path.reshapeSegment", "Path"),
     ("plugin.hideRuns", "Plug-ins"),
-    ("text.editRange", "Text"),
     ("ui.layersPanelOptions", "Layers"),
     ("ui.navigatorPanelOptions", "Navigator"),
 ];
@@ -578,6 +569,8 @@ pub(crate) struct Built {
     // PLAN: an `Arc`, not the `SearchIndex` the decision names: `SearchIndex` is not `Clone`, and re-homing a tool entry goes through `Arc::make_mut` on `Built`
     index: Arc<SearchIndex>,
     tool_homes: Vec<String>,
+    /// Where each result id is in `entries`.
+    by_id: Arc<HashMap<String, usize>>,
 }
 
 /// The entries in the UI language and their index, which `ui`'s words fold and expand.
@@ -586,7 +579,115 @@ fn build(app: &VectorcraftApp, ui: &egui::Ui) -> Built {
     let env = Env::of(ui);
     let view = env.view();
     let index = SearchIndex::new(&view, &entries, &Synonyms::of(&view.words::<SearchWords>()));
-    Built { entries, index: Arc::new(index), tool_homes: tool_homes(app) }
+    let by_id = entries.iter().enumerate().filter_map(|(i, e)| Some((e.ids().first()?.clone(), i))).collect();
+    Built { entries, index: Arc::new(index), tool_homes: tool_homes(app), by_id: Arc::new(by_id) }
+}
+
+/// What a command button on a toolbar made with New Toolbar shows for the result `id`
+/// ([`button_text`]).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ButtonText {
+    /// The result's label in the interface language, without the menu path in front of it and
+    /// without a closing ellipsis.
+    pub label: String,
+    /// The result's full name in the interface language: its menu path and its label.
+    pub name: String,
+    /// What a click runs: what a pick of the result in the palette runs.
+    pub command: CommandRef,
+}
+
+/// The label, name and command of the palette result `id` in the interface language, from the
+/// entries built once per catalog generation; none when the palette lists no result with that id
+/// now (an uninstalled plug-in's command).
+#[cfg(test)]
+pub(crate) fn button_text(app: &mut VectorcraftApp, ui: &egui::Ui, id: &str) -> Option<ButtonText> {
+    let built = kept_build(app, ui);
+    let e = built.by_id.get(id).and_then(|&i| built.entries.get(i))?;
+    Some(button_text_of(e))
+}
+
+/// The [`ButtonText`] of each result id in `ids`, in order, from one kept build: none for an id
+/// that [`is_command`] does not allow or that the palette lists no longer (an uninstalled plug-in's
+/// command). A toolbar's footer draws all its command buttons from one call.
+pub(crate) fn button_texts(app: &mut VectorcraftApp, ui: &egui::Ui, ids: &[String]) -> Vec<Option<ButtonText>> {
+    if ids.is_empty() {
+        return Vec::new();
+    }
+    let built = kept_commands(app, ui);
+    ids.iter().map(|id| if is_command(id) { built.by_id.get(id).and_then(|&i| built.entries.get(i)).map(button_text_of) } else { None }).collect()
+}
+
+/// [`ButtonText`] of the entry `e`.
+fn button_text_of(e: &HelpEntry) -> ButtonText {
+    let label = e.label().as_str().trim_end();
+    let label = label.rsplit(" › ").next().unwrap_or(label);
+    let label = label.strip_suffix('…').or_else(|| label.strip_suffix("...")).unwrap_or(label).trim_end();
+    let path: Vec<&str> = e.path().iter().map(|p| p.as_str()).collect();
+    // A label that already starts with its menu path (a plug-in command's) is the full name.
+    let joined = path.join(" › ");
+    let full = e.label().as_str();
+    let name = if path.is_empty() || full.starts_with(&format!("{joined} › ")) { full.to_string() } else { format!("{joined} › {full}") };
+    ButtonText { label: label.to_string(), name, command: e.command().clone() }
+}
+
+/// The results a toolbar made with New Toolbar can hold as command buttons that the query `q`
+/// matches, best first, at most `most`: the results [`is_command`] allows. Each is its id and its
+/// name in the interface language ([`ButtonText::name`]).
+pub(crate) fn command_matches(app: &mut VectorcraftApp, ui: &egui::Ui, q: &str, most: usize) -> Vec<(String, String)> {
+    if q.trim().is_empty() {
+        return Vec::new();
+    }
+    let built = kept_build(app, ui);
+    let mut seen = std::collections::HashSet::new();
+    craft::ui::menu::rank(&built.index, q, &[], &|_| 0)
+        .into_iter()
+        .filter_map(|at| built.entries.get(at))
+        .filter_map(|e| Some((e.ids().first()?.clone(), e)))
+        .filter(|(id, _)| is_command(id) && seen.insert(id.clone()))
+        .take(most)
+        .map(|(id, e)| (id, button_text_of(e).name))
+        .collect()
+}
+
+/// Can a toolbar made with New Toolbar hold the result `id` as a command button now: is it a
+/// palette result other than a tool, and not a UI command that fails without params a click does
+/// not give ([`crate::shortcut_editor::ui_command_needs_params`]: `toolbar.addTool` needs a
+/// `tool`)? The ids are listed again when the plug-ins change, not on every call.
+pub(crate) fn is_command(id: &str) -> bool {
+    type Ids = (u64, Arc<std::collections::HashSet<String>>);
+    static IDS: std::sync::Mutex<Option<Ids>> = std::sync::Mutex::new(None);
+    if id.starts_with("tool:") {
+        return false;
+    }
+    let key = menus::plugin_revision();
+    let kept = IDS.lock().ok().and_then(|ids| ids.as_ref().filter(|(k, _)| *k == key).map(|(_, v)| v.clone()));
+    let ids = kept.unwrap_or_else(|| {
+        let filters: Vec<String> = crate::shortcut_editor::filter_items().iter().map(|f| format!("plugin:{}", f.id)).collect();
+        let ids = drafts()
+            .into_iter()
+            .map(|d| d.id)
+            .filter(|id| !id.starts_with("tool:") && id != menus::TODO && !crate::shortcut_editor::ui_command_needs_params(id));
+        let ids: Arc<std::collections::HashSet<String>> = Arc::new(ids.chain(filters).collect());
+        if let Ok(mut kept) = IDS.lock() {
+            *kept = Some((key, ids.clone()));
+        }
+        ids
+    });
+    ids.contains(id)
+}
+
+/// The kept build for the current [`BuildKey`] as it is, without re-homing its tool entries, for
+/// looking up results other than tools, whose entries a toolbar's change leaves as they are: a
+/// toolbar's footer looks its command buttons up on every pass. Without a build for the key, it is
+/// [`kept_build`].
+fn kept_commands(app: &mut VectorcraftApp, ui: &egui::Ui) -> Arc<Built> {
+    let key = BuildKey { catalog: app.menus.catalog_generation(), native: app.services.native_menu.is_some() };
+    if let Some((kept, built)) = &app.canvas.palette
+        && *kept == key
+    {
+        return built.clone();
+    }
+    kept_build(app, ui)
 }
 
 /// The built entries for the current [`BuildKey`]: built again when the key moves (the index is
@@ -1057,7 +1158,7 @@ mod tests {
     fn a_pick_opens_the_dialog_its_menu_item_opens() {
         type Opened = fn(&VectorcraftApp) -> bool;
         let any: Opened = |app| app.any_dialog_open();
-        let expected: [(&str, Opened); 5] = [
+        let expected: [(&str, Opened); 6] = [
             ("object.path.cleanUp", any),
             ("object.mesh.create", any),
             ("type.smartPunctuation", |app| {
@@ -1067,6 +1168,10 @@ mod tests {
             }),
             ("edit.findReplace", |app| app.dialogs().is_some_and(|d| d.with(|h| h.is_open::<craft::text::ui::find::FindReplaceDialog>()))),
             ("object.path.smooth", crate::dialogs::smooth_slider::showing),
+            ("view.snapToPixel.options", |app| {
+                app.dialogs()
+                    .is_some_and(|d| d.with(|h| h.open_dialogs().iter().any(|d| d.key.as_deref() == Some(crate::dialogs::pixel_snap_options::KIND))))
+            }),
         ];
         for (id, opened) in expected {
             assert!(items().iter().any(|(_, item)| item == id), "{id} is in the palette");
@@ -1451,15 +1556,8 @@ mod tests {
             ("ui.paraStyleOptions.resetPanel", "Paragraph Style Options › Reset Panel"),
             ("window.swatchLibrary.other", "Window › Swatch Libraries › Other Library…"),
             ("window.brushLibrary.other", "Window › Brush Libraries › Other Library…"),
-            ("tool:knife", "Tools › Knife"),
-            ("path.knife", "Path › Knife"),
-            ("addon.pen.close", "Pen › Close Path"),
-            ("path.close", "Path › Close Path"),
             ("type.fitHeadline", "Type › Fit Headline (type.fitHeadline)"),
             ("text.fitHeadline", "Type › Fit Headline (text.fitHeadline)"),
-            ("shape.ellipse", "Ellipse (shape.ellipse)"),
-            ("addon.shapes.ellipse", "Ellipse (addon.shapes.ellipse)"),
-            ("perspective.editText", "Object › Perspective › Edit Text"),
             ("ui.action.play", "Play Action (ui.action.play)"),
             ("ui.action.playAt", "Play Action (ui.action.playAt)"),
             ("ui.batchDialog", "Batch…"),
@@ -1578,7 +1676,8 @@ mod tests {
 
     /// Of the engine commands the palette listed before, it leaves out only the ones
     /// [`crate::shortcut_editor::needs_a_value`] marks: queries with no default key and no item of
-    /// the menu bar, and commands that need a value no menu item gives. A pick of each one it leaves
+    /// the menu bar, and commands that need a value no menu item gives, with a menu path of their own
+    /// or without one. A pick of each one it leaves
     /// out (with no document, one object selected or several) changes neither the document, its
     /// selection, history and layer state, nor the interface. Every [`PICK_RUNS`] query is still
     /// listed.
@@ -1594,7 +1693,8 @@ mod tests {
         let listed: std::collections::HashSet<String> = items().into_iter().map(|(_, id)| id).collect();
         let dropped: Vec<&vectorcraft_engine::CommandSpec> = before.iter().copied().filter(|c| !listed.contains(c.id)).collect();
         let ids: Vec<&str> = dropped.iter().map(|c| c.id).collect();
-        for id in ["document.json", "brush.unused", "symbol.unused", "transparency.set"] {
+        // Close Path, Set Handle and Knife have no menu path, and each needs an `id`.
+        for id in ["document.json", "brush.unused", "symbol.unused", "transparency.set", "path.close", "path.setHandle", "path.knife"] {
             assert!(ids.contains(&id), "{id} is left out: {ids:?}");
         }
         // What a pick can change: the document with its selection, history, revision and layer
@@ -1621,8 +1721,7 @@ mod tests {
                 look(&app) != before
             })
         };
-        // `layer.setProps {}` records an undo step that changes nothing.
-        let changed: Vec<&str> = ids.iter().copied().filter(|id| *id != "layer.setProps" && acts(id)).collect();
+        let changed: Vec<&str> = ids.iter().copied().filter(|id| acts(id)).collect();
         assert!(changed.is_empty(), "a pick of these does something: {changed:?}");
         for c in &dropped {
             assert!(c.shortcut.is_none() && crate::shortcut_editor::menu_bar_path(c.id).is_none(), "{}", c.id);
@@ -1655,7 +1754,7 @@ mod tests {
         for id in PICK_RUNS.iter().filter(|id| !session_only.contains(id)) {
             assert!(acts(id), "a pick of {id} does something");
         }
-        for id in PICK_RUNS.iter().chain(&["object.group", "select.key", "view.preciseCursors", "path.close"]) {
+        for id in PICK_RUNS.iter().chain(&["object.group", "select.key", "view.preciseCursors"]) {
             assert!(listed.contains(*id), "{id} stays");
         }
     }

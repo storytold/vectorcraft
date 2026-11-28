@@ -5735,6 +5735,14 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 	The script asks to read and write a folder you choose, with everything in it.	스크립트가 선택한 폴더와 그 안의 모든 항목을 읽고 쓰도록 요청합니다.
 	Allow Once	한 번 허용
 	Always Allow This Script	이 스크립트 항상 허용
+	No script has kept file access.	파일 접근을 유지한 스크립트가 없습니다.
+	Read file	파일 읽기
+	Read and write file	파일 읽기 및 쓰기
+	Read and write folder	폴더 읽기 및 쓰기
+	Revoke	권한 취소
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	권한 취소는 스크립트의 모든 버전에 유지된 접근을 제거합니다. 폴더 접근에는 폴더 안의 모든 항목이 포함됩니다.
+@msg	Script file access revoked	스크립트 파일 접근 권한을 취소했습니다
+@msg	The script file access was already revoked	스크립트 파일 접근 권한이 이미 취소되었습니다
 	Deny	거부
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
 	Do not show this warning again	이 경고를 다시 표시하지 않음
@@ -5909,6 +5917,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	스크립트 파일 대화 상자의 `answer`는 once, always, deny, stop 중 하나여야 합니다
 @msg	choose a file or folder first, or deny	먼저 파일이나 폴더를 선택하거나 거부하세요
 @msg	the script file permissions could not be saved: {e}	스크립트 파일 권한을 저장할 수 없습니다: {e}
+@msg	the script file permissions could not be read: {e}	스크립트 파일 권한을 읽을 수 없습니다: {e}
 @msg	this script's file access can be allowed only once	이 스크립트의 파일 접근은 한 번만 허용할 수 있습니다
 @msg	Only the person at the keyboard can allow a script's file access	스크립트의 파일 접근은 키보드 앞에 있는 사람만 허용할 수 있습니다
 @msg	A script is given at most 2,048 files: the files picked after them were left out	스크립트에는 파일이 최대 2,048개까지 전달됩니다: 그 뒤에 고른 파일은 제외되었습니다
@@ -7024,6 +7033,15 @@ axis	Y Axis	Y축
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	읽기 전용 개체가 빠졌습니다: {{"id": …}}만 있는 형태나 받은 그대로 반환하십시오
 @msg	a string	문자열
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`만 있습니다
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend`, `effects`만 있습니다
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend`, `effects`만 있습니다
+@msg	`appearanceOutput` may only be true	`appearanceOutput`에는 true만 지정할 수 있습니다
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput`은 `paintOutput`을 선언한 `api` 3의 라이브 효과에만 쓸 수 있습니다
+@msg	`opacity` must be a number from 0 to 1	`opacity`는 0에서 1 사이의 숫자여야 합니다
+@msg	unknown blending mode; `blend` is one of {_1}	알 수 없는 혼합 모드입니다. `blend`는 {_1} 중 하나입니다
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects`는 최대 {MAX_LOOK_EFFECTS}개 레코드의 배열이어야 합니다
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	결과 하나에는 효과 레코드가 최대 {MAX_RESULT_EFFECTS}개까지 들어갑니다
+@msg	this host takes no effects here	이 호스트는 여기서 효과를 받지 않습니다
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	선은 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 형태여야 합니다
 @msg	an effect must be {{"id", "params"?, "visible"?}}	효과는 {{"id", "params"?, "visible"?}} 형태여야 합니다
 @msg	an effect on a fill returns only `fills`	칠에 적용된 효과는 `fills`만 반환합니다
@@ -7175,6 +7193,21 @@ axis	Y Axis	Y축
 @msg	time budget	시간 예산
 @msg	memory budget (the selection is too large to hand over)	메모리 예산(선택 항목이 너무 커서 넘길 수 없음)
 @msg	output size ({what} is {len} bytes, limit {max})	출력 크기({what}: {len}바이트, 제한 {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason}({id}, {script} {line}행 {column}열)
+@msg	{reason} ({id}, {script})	{reason}({id}, {script})
+@msg	memory budget	메모리 예산
+@msg	call depth	호출 깊이
+@msg	run(input, params) returned no output object	run(input, params)이 출력 개체를 반환하지 않았습니다
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js"에는 `script`가 필요합니다: 매니페스트 옆에 있는 플러그인 .js 파일의 이름
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script`는 매니페스트 폴더에 있는 .js 파일의 이름이어야 합니다: 1-128바이트, 폴더 없음, `:` 없음, `.`으로 시작하지 않음
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source`는 스크립트의 텍스트이며 plugin.install의 dataBase64가 받는 JSON에서만 지정합니다: .vcplugin 파일은 스크립트를 `script`에 지정합니다
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript 플러그인의 매니페스트는 `runtime` "js"를 지정합니다
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js"는 개체 필터(`kind` "filter")용이며 `kind` "{kind}"용이 아닙니다
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript 플러그인은 권한 `{name}`을(를) 나열할 수 없습니다: 호스트 권한 중에서 `progress`를 나열할 수 있습니다
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly 모듈의 매니페스트는 `runtime`을 생략합니다: "js"는 JavaScript 플러그인용입니다
+@msg	a JavaScript plug-in makes no command calls	JavaScript 플러그인은 명령을 호출하지 않습니다
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total)는 숫자 두 개를 받습니다
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text)는 수준 0(오류), 1(경고), 2(정보), 3(디버그) 중 하나와 문자열을 받습니다
 @msg	the plug-in's grant can't be removed from the plug-in store	플러그인 저장소에서 플러그인의 권한을 제거할 수 없습니다
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
@@ -8105,6 +8138,7 @@ breakText	Glyphs	글리프
 	Place Brush Art	브러시 아트 배치
 	Replace Brush Art	브러시 아트 바꾸기
 	Replace Pattern Art	패턴 아트 바꾸기
+	Place Pattern Art	패턴 아트 배치
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	선에서 이 브러시를 사용합니다. 새 아트를 해당 선에 적용하시겠습니까, 아니면 선을 그대로 두고 새 아트로 브러시 사본을 추가하시겠습니까?
 	Apply to Strokes	선에 적용
 	Leave Strokes	선 유지
@@ -8174,6 +8208,8 @@ breakText	Glyphs	글리프
 	Tangent Circle	접원
 	Tangent Circle Tool	접원 도구
 	No tangent circle here	여기에는 접원이 없음
+	Ask For Circle Radius	원 반지름 묻기
+	Auto-Update Default	기본값 자동 업데이트
 	Circle:	원:
 @msg	`ids` names an object twice	`ids`에 같은 오브젝트가 두 번 있습니다
 @msg	select two or three paths or compound paths	패스나 컴파운드 패스를 두 개 또는 세 개 선택하세요
@@ -9601,7 +9637,9 @@ breakText	Glyphs	글리프
 @msg	more than {MAX_IMPORT} presets	사전 설정이 {MAX_IMPORT}개보다 많습니다
 @msg	moved must be [[x,y]…]	moved는 [[x,y]…]여야 합니다
 @msg	must be an object with `kind` and `value`	`kind`와 `value`가 있는 개체여야 합니다
-@msg	must have `kind` alert, confirm or prompt	`kind`가 alert, confirm 또는 prompt여야 합니다
+@msg	must have `kind` alert, confirm, prompt or window	`kind`가 alert, confirm, prompt 또는 window여야 합니다
+@msg	is a window's answer, whose `value` must be a list of steps	창의 답이며, `value`는 단계 목록이어야 합니다
+@msg	has a step {i} that is not a valid click, change or close	단계 {i}이(가) 올바른 클릭, 변경 또는 닫기가 아닙니다
 @msg	must have exactly `kind` and `value`	`kind`와 `value`만 있어야 합니다
 @msg	name (a toolbar's name) is required	name(도구 막대 이름)이 필요합니다
 @msg	name (a toolbar's name) must be a string	name(도구 막대 이름)은 문자열이어야 합니다

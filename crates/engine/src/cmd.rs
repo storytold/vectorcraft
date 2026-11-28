@@ -77,6 +77,7 @@ pub mod perspgrid;
 pub mod place;
 pub mod plugin;
 pub(crate) mod plugin_call;
+pub mod plugin_generated;
 mod preflight;
 pub mod prefscmds;
 pub mod print;
@@ -97,11 +98,13 @@ mod style;
 pub use style::styled_node;
 pub mod stylelib;
 mod svgfilter;
+pub use svgfilter::MAX_IMPORT_BYTES as MAX_SVG_FILTER_IMPORT_BYTES;
 mod swatch;
 pub mod swatchlib;
 pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
+pub(crate) mod tags;
 mod textedit;
 
 pub use textedit::effective_kerning;
@@ -376,6 +379,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(library::specs());
         v.extend(expand::specs());
         v.extend(attributes::specs());
+        v.extend(tags::specs());
         v.extend(interactivity::specs());
         v.extend(spelling::specs());
         v.extend(svgfilter::specs());
@@ -402,6 +406,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(printpresets::specs());
         v.extend(printtiling::specs());
         v.extend(plugin::specs());
+        v.extend(plugin_generated::specs());
         v.extend(scripts::specs());
         v.extend(cut::specs());
         v.extend(halftone::specs());
@@ -860,6 +865,8 @@ pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
 
+#[cfg(test)]
+pub(crate) use paint::PAINTS_READ;
 /// What the fill and stroke proxies read from the selected objects, kept with the selection
 /// ([`crate::doc_state::SelectionRecord`]).
 pub(crate) use paint::SelectionPaints;
@@ -924,6 +931,9 @@ pub use buildcmds::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYT
 /// An Image Trace made off the UI thread, and what it traced (#3098).
 pub use buildcmds::{TraceRun, Traced, image_trace_target};
 
+/// Retype's search of the installed fonts, made off the UI thread.
+pub use retype::{RetypeFound, RetypeRun, RetypeSearch};
+
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;
 
@@ -958,6 +968,8 @@ pub use variablecmds::utf16_order_without_mark;
 /// file: its size limit, its text, its cells and the data `graph.setData` takes from them.
 pub use graph::{MAX_GRAPH_DATA_FILE, graph_cell_text, graph_data_from_grid, graph_data_text, graph_grid_from_text};
 
+/// The kind of variable that drives an object's content (`variable.setBinding`).
+pub(crate) use variablecmds::content_kind;
 /// The Variables panel's sort (`variable.sort`) and its rows in that order.
 pub use variablecmds::{VariableSort, VariableSortKey, variable_order};
 

@@ -243,6 +243,22 @@ pub fn art_bounds(doc: &Document) -> Option<Rect> {
     doc.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, drawn_bounds(&symbols, l)))
 }
 
+/// The first artboard (else the art, [`art_bounds`]) rendered with a transparent background, its
+/// longer side `max_side` pixels: the picture of a native file's embedded preview, and of the
+/// thumbnail `vectorcraft-cli thumbnail` writes for file managers. `None` when the document has
+/// no artboard and no art, or the region can't be rendered at that size ([`crate::raster_size`]).
+pub fn first_artboard(doc: &Document, max_side: u32) -> Option<Rendered> {
+    let r = doc.artboards.first().map(|a| a.rect).or_else(|| art_bounds(doc))?;
+    let scale = f64::from(max_side) / r.width().max(r.height());
+    crate::raster_size(r, scale).ok()?;
+    Some(Renderer::new().render_region(doc, r, scale, false))
+}
+
+/// [`first_artboard`] as a PNG.
+pub fn first_artboard_png(doc: &Document, max_side: u32) -> Result<Option<Vec<u8>>, String> {
+    first_artboard(doc, max_side).map(|img| img.to_png()).transpose()
+}
+
 /// Bounds of the art an export draws ([`art_bounds`]) that is on artboard rectangle `rect`: each
 /// object of a layer or sublayer whose drawn bounds overlap `rect`, with all of its bounds; a group
 /// or a clipping layer counts as one object. `None` when no object overlaps `rect`.

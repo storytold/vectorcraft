@@ -50,13 +50,18 @@ mod slots;
 #[cfg(test)]
 pub(crate) use build::READ_AFRESH;
 #[cfg(test)]
+pub(super) use build::placed_documents;
+#[cfg(test)]
 use build::{Frame, MADE, prune_unseen};
 pub(crate) use build::{MAX_WRAP_WORK, scale_document, scale_symbols};
 #[cfg(test)]
 use compare::{
     MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, Shares, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour,
 };
-pub use layers::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, layered_ai, layered_ai_from};
+pub use layers::{
+    AiLayers, ai_alone, ai_alone_decoded, ai_alone_on_page, ai_alone_on_page_decoded, ai_alone_with, ai_layers_alone, ai_layers_alone_decoded,
+    ai_opened_artboard, ai_opened_artboard_decoded, decode_ai_private, layered_ai, layered_ai_from,
+};
 pub(super) use layers::{layered, program_alone};
 pub(crate) use slots::MAX_TEXT;
 pub use slots::is_loss;

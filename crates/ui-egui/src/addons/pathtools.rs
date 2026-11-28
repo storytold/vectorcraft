@@ -3,8 +3,9 @@
 //! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle…, Add Bounding Circle… and Add Inscribed Circle; the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
-//! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
-//! `tool.setOption`.
+//! ([`shape`]); its tools' options dialog (a double-click on the tool); and the Tangent Circle Tool's radius dialog
+//! ([`tangent_circle_radius`]). Everything acts through `addon.pathtools.*` and `tool.setOption`, except that the radius
+//! dialog draws its circle with `shape.circleThroughPoints`.
 
 pub mod bridge;
 pub mod corner;
@@ -13,14 +14,15 @@ pub mod set_corners;
 pub mod shape;
 pub mod shared_edge;
 pub mod tangent_circle;
+pub mod tangent_circle_radius;
 
 use craft::behavior::ColumnWidth;
 use craft::menu::Node;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::contract::{Bind, Props as _, Scroll, Show as _, ShowContainer as _, Sizing, clicked};
 use craft::ui::display::{Divider, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::{Grid, Row};
+use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::text::NumberField;
@@ -192,6 +194,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         empty_state(ui, "dc-anchor-smooth", tl!("No document"), tl!("Open a document to edit its anchor points."));
         return;
     }
+    Stack::new().label(tl!("Anchor Inspector")).fill().scroll(Scroll::vertical()).show(ui, |ui, _| show_inspector(app, ui));
+}
+
+fn show_inspector(app: &mut VectorcraftApp, ui: &mut Ui) {
     let readout = readout(app);
     let anchor = readout.anchor.as_ref();
     let selected = app.session.active().is_some_and(|st| !st.selection.is_empty());
@@ -313,6 +319,8 @@ fn options_params(tool: &str, lengths: LengthUnits) -> Vec<Param> {
             Param::new("color", tl!("Color"), ParamKind::choice(colors, Some("red".into()))),
             Param::new("snapTolerance", tl!("Snap Tolerance"), snap).unit(UnitKind::Pixels),
             Param::new("snapWithoutGuides", tl!("Snap When Smart Guides Are Off"), ParamKind::bool(true)),
+            Param::new("askRadius", tl!("Ask For Circle Radius"), ParamKind::bool(false)),
+            Param::new("autoUpdateDefault", tl!("Auto-Update Default"), ParamKind::bool(false)),
         ];
     }
     let (size, tolerance) = (anchor_eraser::SIZE_RANGE, anchor_eraser::TOLERANCE_RANGE);

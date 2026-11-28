@@ -28,7 +28,7 @@
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard, PoisonError};
 
 use vectorcraft_doc::placed_document::MAX_DEPTH;
 use vectorcraft_doc::{ImageBlob, Node, PlacedDocument};
@@ -69,6 +69,8 @@ struct Bitmaps {
 static BITMAPS: LazyLock<Mutex<Bitmaps>> = LazyLock::new(Default::default);
 /// Bitmaps being made.
 static PENDING: LazyLock<Mutex<HashSet<BitmapKey>>> = LazyLock::new(Default::default);
+/// Signaled, under [`PENDING`]'s lock, when the last bitmap being made stops being pending.
+static IDLE: Condvar = Condvar::new();
 /// Bitmaps that could not be made (neither the file nor a preview could be read): not asked for
 /// again.
 static FAILED: LazyLock<Mutex<HashSet<BitmapKey>>> = LazyLock::new(Default::default);
@@ -121,6 +123,24 @@ fn made(key: &str) {
 /// Are bitmaps being made in the background?
 pub fn busy() -> bool {
     !lock(&PENDING).is_empty()
+}
+
+/// Bitmap `key` stops being pending; when none is left, [`IDLE`] is signaled.
+fn finish(key: &BitmapKey) {
+    let mut pending = lock(&PENDING);
+    pending.remove(key);
+    if pending.is_empty() {
+        IDLE.notify_all();
+    }
+}
+
+/// Wait until no bitmap is being made ([`busy`] is false).
+#[cfg(test)]
+pub(crate) fn wait_idle() {
+    let mut pending = lock(&PENDING);
+    while !pending.is_empty() {
+        pending = IDLE.wait(pending).unwrap_or_else(PoisonError::into_inner);
+    }
 }
 
 /// Is a bitmap of file `key` being made?
@@ -237,12 +257,32 @@ thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The deepest this thread has drawn inside placed documents since [`reset_deepest`].
+    static DEEPEST: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Start counting how deep this thread draws inside placed documents ([`deepest`]).
+#[cfg(test)]
+pub(crate) fn reset_deepest() {
+    DEEPEST.with(|d| d.set(0));
+}
+
+/// The deepest this thread has drawn inside placed documents since [`reset_deepest`].
+#[cfg(test)]
+pub(crate) fn deepest() -> usize {
+    DEEPEST.with(Cell::get)
+}
+
 /// While alive: drawing inside a placed document, one level deeper.
 struct Inside;
 
 impl Inside {
     fn enter() -> Self {
         DEPTH.with(|d| d.set(d.get() + 1));
+        #[cfg(test)]
+        DEEPEST.with(|d| d.set(d.get().max(depth())));
         Inside
     }
 }
@@ -255,6 +295,74 @@ impl Drop for Inside {
 
 fn depth() -> usize {
     DEPTH.with(Cell::get)
+}
+
+/// How a frame draws art ([`Renderer::layer_mode`]): whether Layer Options apply (on screen;
+/// exports and thumbnails ignore them), whether the art draws in Outline mode, and whether Show
+/// Images in Outline Mode is on for it ([`Renderer::shows_outline_images`]). Layers are measured
+/// in the mode they draw in, and placed documents are their crossed box in Outline mode without
+/// Show Images in Outline Mode ([`vectorcraft_doc::placed_document::Crossed`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LayerMode {
+    pub(crate) options: bool,
+    pub(crate) outline: bool,
+    pub(crate) images: bool,
+}
+
+thread_local! {
+    /// The mode of the frame being drawn or measured on this thread ([`LayerMode::enter`]).
+    static MODE: Cell<Option<LayerMode>> = const { Cell::new(None) };
+}
+
+impl LayerMode {
+    /// The mode layer `n` draws its art in when its Layer Options change it: a template layer stays
+    /// in Preview in Outline mode (#1486), and a layer whose Preview is off draws in outline.
+    /// `None` for other objects and for a layer that draws in this mode.
+    pub(crate) fn inside(self, n: &Node) -> Option<Self> {
+        let vectorcraft_doc::NodeKind::Layer { preview, template, .. } = &n.kind else { return None };
+        if !self.options {
+            return None;
+        }
+        let outline = if *template && self.outline {
+            false
+        } else if !preview && !template && !self.outline {
+            true
+        } else {
+            return None;
+        };
+        Some(Self { outline, ..self })
+    }
+
+    /// The mode of the frame being drawn or measured on this thread, if any.
+    pub(crate) fn now() -> Option<Self> {
+        MODE.with(Cell::get)
+    }
+
+    /// Draw and measure in this mode on this thread until the guard returned is dropped.
+    pub(crate) fn enter(self) -> InMode {
+        let crossed = vectorcraft_doc::placed_document::Crossed::set(self.outline && !self.images);
+        InMode { was: MODE.with(|m| m.replace(Some(self))), _crossed: crossed }
+    }
+}
+
+/// While alive: art on this thread is drawn and measured in a [`LayerMode`]; once dropped, in the
+/// mode before it.
+#[must_use]
+pub(crate) struct InMode {
+    was: Option<LayerMode>,
+    _crossed: vectorcraft_doc::placed_document::Crossed,
+}
+
+impl Drop for InMode {
+    fn drop(&mut self) {
+        MODE.with(|m| m.set(self.was));
+    }
+}
+
+/// Measure layer `n` in the mode its Layer Options draw it in, inside the mode on this thread
+/// ([`LayerMode::inside`]), until the guard returned is dropped; `None` when that is the same mode.
+pub(crate) fn enter_layer(n: &Node) -> Option<InMode> {
+    LayerMode::now()?.inside(n).map(LayerMode::enter)
 }
 
 /// Render `art` of a placed document's file (`doc`, its resources) into `w`×`h` transparent
@@ -323,7 +431,7 @@ fn run(r: &mut Renderer, mut job: Job) {
                 lock(&FAILED).insert(job.key.clone());
             }
         }
-        lock(&PENDING).remove(&job.key);
+        finish(&job.key);
     };
     match scope {
         Some(scoped) => scoped(&mut body),
@@ -356,7 +464,7 @@ mod workers {
                     let key = job.key.clone();
                     if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| super::run(&mut r, *job))).is_err() {
                         super::lock(&super::FAILED).insert(key.clone());
-                        super::lock(&super::PENDING).remove(&key);
+                        super::finish(&key);
                     }
                 }
             });
@@ -388,7 +496,33 @@ fn schedule(job: Job) {
         Ok(()) => return,
         Err(job) => *job,
     };
-    run(&mut Renderer::new(), job);
+    run_here(job);
+}
+
+/// [`run`] `job` on this thread. When it panics, its bitmap failed (it is not asked for again)
+/// and stops being pending, and the panic goes on to the caller.
+fn run_here(job: Job) {
+    let key = job.key.clone();
+    if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(&mut Renderer::new(), job))) {
+        lock(&FAILED).insert(key.clone());
+        finish(&key);
+        std::panic::resume_unwind(panic);
+    }
+}
+
+/// Make the bitmap of `object`'s file (`blob`) at zoom `step` on this thread, as [`schedule`]
+/// does where no worker starts, inside `scope`.
+#[cfg(test)]
+pub(crate) fn make_here(object: &PlacedDocument, blob: ImageBlob, step: f64, scope: Scoped) {
+    let key = (object.key.clone(), step.to_bits(), false);
+    lock(&PENDING).insert(key.clone());
+    run_here(Job { key, object: object.clone(), blob, step, keep: 0, scope: Some(scope) });
+}
+
+/// Could a bitmap of file `key` not be made?
+#[cfg(test)]
+pub(crate) fn failed_for(key: &str) -> bool {
+    lock(&FAILED).iter().any(|k| k.0 == key)
 }
 
 /// The file `p` shows (its bytes `blob`) read as art, and kept for
@@ -449,8 +583,8 @@ impl Renderer {
     }
 
     /// Draw placed document `p` as its box crossed from corner to corner ([`Self::crosses_placed`]).
-    /// Its file is still read, as when its art is drawn: the art its effects and its group's effects
-    /// make comes from the read kept.
+    /// Its file is still read, as when its art is drawn: once the frame shows images again, the art
+    /// its effects and its group's effects make comes from the read kept.
     pub(crate) fn draw_crossed_placed(&mut self, ctx: &mut RenderContext, f: &Frame, p: &PlacedDocument) {
         if let Some(blob) = f.doc.images.get(&p.key) {
             let _ = read_placed(p, blob);

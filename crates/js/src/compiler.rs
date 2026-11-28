@@ -19,8 +19,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::ast::{
-    AssignOp, Ast, BinaryOp, Binding, Expr, ExprId, ForInTarget, ForInit, FunctionId, FunctionKind, LexKind, LogicalOp, Property, PropertyKey,
-    PropertyValue, Stmt, StmtId, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
+    AssignOp, Ast, BinaryOp, Binding, ClassDef, ClassKey, Expr, ExprId, ForInTarget, ForInit, FunctionId, FunctionKind, LexKind, LogicalOp,
+    MethodKind, Property, PropertyKey, PropertyValue, Stmt, StmtId, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 use crate::bytecode::{BlockScope, Code, CodeKind, Handler, NamePrefix, Op, Source, Template, fallthrough_effect, verify};
 use crate::error::{SyntaxError, TOO_DEEP};
@@ -100,6 +100,7 @@ struct FnCompiler<'a> {
     scopes: Vec<BlockScope>,
     templates: Vec<Template>,
     uses_this: bool,
+    uses_new_target: bool,
     /// The function declarations at the top of the body, which are var-scoped.
     top_funcs: HashSet<StmtId>,
     /// The function declarations a block scope instantiates.
@@ -109,6 +110,8 @@ struct FnCompiler<'a> {
     /// The optional chains being compiled, innermost last: where a step that finds `undefined`
     /// or `null` jumps, and the stack depth the chain started at.
     optional: Vec<(Label, u32)>,
+    /// The code is a generator function's.
+    generator: bool,
 }
 
 /// The `var` names and function declarations a body hoists.
@@ -153,10 +156,12 @@ impl<'a> FnCompiler<'a> {
             scopes: Vec::new(),
             templates: Vec::new(),
             uses_this: false,
+            uses_new_target: false,
             top_funcs: HashSet::new(),
             block_funcs: HashSet::new(),
             annex: HashSet::new(),
             optional: Vec::new(),
+            generator: false,
         }
     }
 
@@ -279,14 +284,15 @@ impl<'a> FnCompiler<'a> {
             };
             match stmt {
                 Stmt::Var(decls) => decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).for_each(|n| add_var(&mut out, key_of(&n.name))),
-                Stmt::Lexical(..) => {}
+                Stmt::Lexical(..) | Stmt::Class(_) => {}
                 Stmt::FunctionDecl(fid) => {
-                    let Some(name) = self.ast.function(*fid).and_then(|f| f.name.as_ref()) else {
+                    let Some((name, generator)) = self.ast.function(*fid).and_then(|f| Some((f.name.as_ref()?, f.generator))) else {
                         return internal("function declaration without a name");
                     };
                     let k = key_of(&name.name);
                     if self.es2015 && nested {
-                        if !self.strict {
+                        // Annex B.3.3 gives plain function declarations only a var binding too.
+                        if !self.strict && !generator {
                             annex.push((k, scope, id));
                         }
                     } else {
@@ -392,11 +398,14 @@ impl<'a> FnCompiler<'a> {
         Ok(out)
     }
 
-    /// The `let` and `const` names a statement list declares.
+    /// The `let`, `const` and class names a statement list declares.
     fn lexical_names(&self, list: &[StmtId]) -> HashSet<Key> {
         list.iter()
             .filter_map(|&s| match self.ast.stmt(s) {
-                Some(Stmt::Lexical(_, decls)) => Some(decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).map(|n| key_of(&n.name))),
+                Some(Stmt::Lexical(_, decls)) => {
+                    Some(decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).map(|n| key_of(&n.name)).collect::<Vec<_>>())
+                }
+                Some(Stmt::Class(class)) => Some(class.name.iter().map(|n| key_of(&n.name)).collect()),
                 _ => None,
             })
             .flatten()
@@ -424,18 +433,25 @@ impl<'a> FnCompiler<'a> {
             .collect()
     }
 
-    /// The scope a statement list declares with [`crate::Options::es2015`]: its `let` and
-    /// `const` names, and (`functions`) its function declarations, labelled ones included. `None`
-    /// when it declares none.
+    /// The scope a statement list declares with [`crate::Options::es2015`]: its `let`, `const`
+    /// and class names, and (`functions`) its function declarations, labeled ones included.
+    /// `None` when it declares none.
     fn list_scope(&mut self, list: &[StmtId], functions: bool) -> CResult<Option<u32>> {
         if !self.es2015 {
             return Ok(None);
         }
         let mut scope = BlockScope::default();
         for &s in list {
-            if let Some(Stmt::Lexical(kind, decls)) = self.ast.stmt(s) {
-                scope.lets.extend(decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).map(|n| (key_of(&n.name), *kind == LexKind::Const)));
-                continue;
+            match self.ast.stmt(s) {
+                Some(Stmt::Lexical(kind, decls)) => {
+                    scope.lets.extend(decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).map(|n| (key_of(&n.name), *kind == LexKind::Const)));
+                    continue;
+                }
+                Some(Stmt::Class(class)) => {
+                    scope.lets.extend(class.name.iter().map(|n| (key_of(&n.name), false)));
+                    continue;
+                }
+                _ => {}
             }
             let Some((decl, fid)) = self.declared_function(s).filter(|(decl, _)| functions && !self.top_funcs.contains(decl)) else { continue };
             let Some(name) = self.ast.function(fid).and_then(|f| f.name.as_ref()) else {
@@ -486,10 +502,11 @@ impl<'a> FnCompiler<'a> {
     /// Compiles a nested function and returns its index in the function table.
     fn function(&mut self, fid: FunctionId) -> CResult<u32> {
         let code = compile_function(self.ast, fid, self.source, self.recursion, true, self.es2015)?;
-        // An arrow function reads the `this` and `arguments` of the code around it.
+        // An arrow function reads the `this`, `arguments` and `new.target` of the code around it.
         if code.arrow {
             self.uses_this |= code.uses_this;
             self.uses_arguments |= code.uses_arguments;
+            self.uses_new_target |= code.uses_new_target;
         }
         self.functions.push(code);
         Ok(u32::try_from(self.functions.len() - 1).unwrap_or(u32::MAX))
@@ -520,6 +537,14 @@ impl<'a> FnCompiler<'a> {
             Stmt::Var(decls) => self.var_decls(decls),
             Stmt::Lexical(_, decls) => self.lexical_decls(decls),
             Stmt::FunctionDecl(fid) => self.function_decl(id, *fid),
+            Stmt::Class(class) => {
+                self.class(class)?;
+                let Some(name) = &class.name else { return internal("class declaration without a name") };
+                self.at(name.span.start);
+                let n = self.var_name(&name.name);
+                self.emit(Op::InitVar(n));
+                Ok(())
+            }
             Stmt::Empty | Stmt::Debugger => Ok(()),
             Stmt::Expr(e) => {
                 self.expr(*e)?;
@@ -916,6 +941,12 @@ impl<'a> FnCompiler<'a> {
                 self.emit(Op::Rot3);
                 self.emit(Op::SetIndex);
             }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(target)?;
+                self.emit(Op::Pick(3));
+                self.emit(Op::SuperSet);
+                self.emit(Op::Pop);
+            }
             _ => {
                 self.expr(target)?;
                 self.emit(Op::Pop);
@@ -954,6 +985,11 @@ impl<'a> FnCompiler<'a> {
                 self.xml_scope_ref(target, *name)?;
                 self.emit(Op::ForEachValue(2));
                 self.emit(Op::SetIndex);
+            }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(target)?;
+                self.emit(Op::ForEachValue(3));
+                self.emit(Op::SuperSet);
             }
             _ => {
                 self.expr(target)?;
@@ -1308,6 +1344,28 @@ impl<'a> FnCompiler<'a> {
             Expr::Template { quasis, exprs } => self.template(quasis, exprs)?,
             Expr::TaggedTemplate { .. } => self.chain(id)?,
             Expr::Spread(_) => return internal("spread outside an array literal or argument list"),
+            Expr::Class(class) => self.class(class)?,
+            Expr::SuperMember(_) | Expr::SuperIndex(_) => {
+                self.super_ref(id)?;
+                self.emit(Op::SuperGet);
+            }
+            Expr::SuperCall(args) => {
+                self.emit(Op::SuperCtor);
+                if self.has_spread(args) {
+                    self.spread_args(args)?;
+                    self.at(self.ast.expr_span(id).start);
+                    self.emit(Op::SuperCallSpread);
+                } else {
+                    self.args(args)?;
+                    self.at(self.ast.expr_span(id).start);
+                    self.emit(Op::SuperCall(len_u32(args.len())));
+                }
+                self.emit(Op::BindThis);
+            }
+            Expr::NewTarget => {
+                self.uses_new_target = true;
+                self.emit(Op::NewTarget);
+            }
             Expr::Update { op, prefix, target } => self.update(*op, *prefix, *target)?,
             Expr::Unary { .. } => self.unary(id)?,
             Expr::Binary { .. } | Expr::Logical { .. } => self.binary_chain(id)?,
@@ -1351,7 +1409,70 @@ impl<'a> FnCompiler<'a> {
                 self.at(self.ast.expr_span(id).end);
                 self.nullish_check()?;
             }
+            Expr::Yield { arg, delegate: false } => {
+                match arg {
+                    Some(e) => self.expr(*e)?,
+                    None => self.emit(Op::Undefined),
+                }
+                self.at(self.ast.expr_span(id).start);
+                self.emit(Op::Yield(false));
+                self.resume_after_yield()?;
+            }
+            Expr::Yield { arg: Some(e), delegate: true } => self.yield_delegate(id, *e)?,
+            Expr::Yield { arg: None, delegate: true } => return internal("yield* without an operand"),
         }
+        Ok(())
+    }
+
+    /// After a `Yield` that left `received mode`: goes on with the received value for `next`,
+    /// throws it for `throw`, and for `return` returns it through the `finally` blocks around.
+    fn resume_after_yield(&mut self) -> CResult<()> {
+        if !self.generator {
+            return internal("yield outside a generator function");
+        }
+        let ret = self.new_label();
+        let after = self.new_label();
+        self.jump(Op::Resume, ret);
+        self.jump(Op::Jump, after);
+        self.bind(ret);
+        self.emit_exit(Exit::Return)?;
+        self.bind(after);
+        Ok(())
+    }
+
+    /// `yield* operand` (ECMA-262 11th edition, section 14.4.14): each `next`, `throw` and `return`
+    /// the generator is resumed with goes to the operand's iterator, each result it gives that is
+    /// not done is yielded as it is, and a done one gives the expression its value, or for a
+    /// `return` returns that value.
+    fn yield_delegate(&mut self, id: ExprId, operand: ExprId) -> CResult<()> {
+        if !self.generator {
+            return internal("yield outside a generator function");
+        }
+        let d = self.depth;
+        self.expr(operand)?;
+        self.at(self.ast.expr_span(id).start);
+        self.emit(Op::DelegateIterator);
+        // The first step calls `next` with one argument, `undefined`: the spec starts with
+        // `received` as NormalCompletion(undefined) and calls `next` with « received.[[Value]] ».
+        self.emit(Op::Undefined);
+        self.push_number(0.0);
+        let (step, ret, done, end) = (self.new_label(), self.new_label(), self.new_label(), self.new_label());
+        self.bind(step);
+        self.jump(Op::DelegateCall, ret);
+        self.emit(Op::Call(1));
+        self.jump(Op::DelegateResult, done);
+        self.emit(Op::Yield(true));
+        self.jump(Op::Jump, step);
+        self.bind(done);
+        self.depth = d + 4;
+        self.jump(Op::DelegateDone, ret);
+        self.emit(Op::PopUnder(2));
+        self.jump(Op::Jump, end);
+        self.bind(ret);
+        self.depth = d + 3;
+        self.emit_exit(Exit::Return)?;
+        self.bind(end);
+        self.depth = d + 1;
         Ok(())
     }
 
@@ -1492,6 +1613,96 @@ impl<'a> FnCompiler<'a> {
         len_u32(self.templates.len() - 1)
     }
 
+    /// A class definition (ECMA-262 2015 section 14.5.14), leaving its constructor on the stack. A
+    /// named class binds its name, uninitialized and constant, in a scope of its own around the
+    /// heritage and the methods, and initializes it only after every method is defined (steps 21
+    /// and 23), so a computed key that reads the name throws a `ReferenceError`. The heritage and
+    /// the computed keys run as strict mode code (section 10.2.1).
+    fn class(&mut self, class: &ClassDef) -> CResult<()> {
+        self.at(class.span.start);
+        let scope = class.name.as_ref().map(|n| self.push_scope(BlockScope { lets: vec![(key_of(&n.name), true)], funcs: Vec::new() }));
+        if let Some(s) = scope {
+            self.emit(Op::PushBlock(s));
+            self.env_depth += 1;
+        }
+        // A class inside this one's heritage or keys is already in strict mode code.
+        let sloppy = !self.strict;
+        if sloppy {
+            self.emit(Op::StrictClass(true));
+            self.strict = true;
+        }
+        let r = self.class_body(class);
+        if sloppy {
+            self.strict = false;
+            self.emit(Op::StrictClass(false));
+        }
+        r?;
+        if let (Some(name), Some(_)) = (&class.name, scope) {
+            self.emit(Op::Dup);
+            let n = self.var_name(&name.name);
+            self.emit(Op::InitVar(n));
+            self.emit(Op::PopEnv);
+            self.env_depth -= 1;
+        }
+        Ok(())
+    }
+
+    /// A class's heritage, constructor and methods, leaving its constructor on the stack.
+    fn class_body(&mut self, class: &ClassDef) -> CResult<()> {
+        if let Some(h) = class.heritage {
+            self.expr(h)?;
+        }
+        let ctor = self.function(class.constructor)?;
+        self.at(class.span.start);
+        self.emit(Op::ClassStart { ctor, heritage: class.heritage.is_some() });
+        // A named class's constructor is named after it before its methods are defined, so a
+        // static method `name` replaces that name (ECMA-262 2015 section 14.5.15).
+        if let Some(name) = &class.name {
+            let n = self.name_key(key_of(&name.name));
+            self.emit(Op::Pick(1));
+            self.emit(Op::SetFunctionName(n));
+            self.emit(Op::Pop);
+        }
+        for element in &class.elements {
+            match &element.key {
+                ClassKey::Fixed(k) => {
+                    let i = self.string(&k.to_utf16());
+                    self.emit(Op::String(i));
+                }
+                ClassKey::Computed(e) => self.expr(*e)?,
+            }
+            let func = self.function(element.function)?;
+            let kind = match element.kind {
+                MethodKind::Method => 0,
+                MethodKind::Get => 1,
+                MethodKind::Set => 2,
+            };
+            self.at(self.ast.function(element.function).map_or(class.span.start, |f| f.span.start));
+            self.emit(Op::ClassMethod { func, kind, is_static: element.is_static });
+        }
+        self.emit(Op::Pop);
+        Ok(())
+    }
+
+    /// Pushes `this`, the prototype of the home object and the key of the `super` property `id`.
+    /// `this` is read before the key is evaluated (ECMA-262 2020 section 12.3.5.1).
+    fn super_ref(&mut self, id: ExprId) -> CResult<()> {
+        self.at(self.ast.expr_span(id).start);
+        self.uses_this = true;
+        self.emit(Op::This);
+        match self.ast.expr(id) {
+            Some(Expr::SuperMember(name)) => {
+                let i = self.string(&name.name.encode_utf16().collect::<Vec<u16>>());
+                self.emit(Op::String(i));
+            }
+            Some(Expr::SuperIndex(index)) => self.expr(*index)?,
+            _ => return internal("not a super property"),
+        }
+        self.at(self.ast.expr_span(id).start);
+        self.emit(Op::SuperRef);
+        Ok(())
+    }
+
     fn object_literal(&mut self, props: &[Property]) -> CResult<()> {
         self.emit(Op::NewObject);
         for p in props {
@@ -1516,6 +1727,16 @@ impl<'a> FnCompiler<'a> {
                     }
                     self.emit(Op::InitProp(n));
                 }
+                // A method, and with ES2015 an accessor, has the object as its home object.
+                PropertyValue::Method(f) => {
+                    let func = self.function(*f)?;
+                    self.emit(Op::InitMethod { func, kind: 0, name: n });
+                }
+                PropertyValue::Get(f) | PropertyValue::Set(f) if self.ast.function(*f).is_some_and(|f| f.home) => {
+                    let func = self.function(*f)?;
+                    let kind = if matches!(p.value, PropertyValue::Get(_)) { 1 } else { 2 };
+                    self.emit(Op::InitMethod { func, kind, name: n });
+                }
                 PropertyValue::Get(f) => {
                     let i = self.function(*f)?;
                     self.emit(Op::Closure(i));
@@ -1533,12 +1754,6 @@ impl<'a> FnCompiler<'a> {
                         self.emit(Op::SetFunctionName(named));
                     }
                     self.emit(Op::InitSetter(n));
-                }
-                PropertyValue::Method(f) => {
-                    let i = self.function(*f)?;
-                    self.emit(Op::Closure(i));
-                    self.emit(Op::SetFunctionName(n));
-                    self.emit(Op::InitProp(n));
                 }
             }
         }
@@ -1559,6 +1774,16 @@ impl<'a> FnCompiler<'a> {
                 }
                 self.emit(Op::InitIndex);
             }
+            // A method or an accessor with a home object is named as it is defined.
+            PropertyValue::Method(f) | PropertyValue::Get(f) | PropertyValue::Set(f) if self.ast.function(*f).is_some_and(|f| f.home) => {
+                let func = self.function(*f)?;
+                let kind = match value {
+                    PropertyValue::Get(_) => 1,
+                    PropertyValue::Set(_) => 2,
+                    _ => 0,
+                };
+                self.emit(Op::InitMethodKey { func, kind });
+            }
             PropertyValue::Get(f) | PropertyValue::Set(f) => {
                 let getter = matches!(value, PropertyValue::Get(_));
                 let i = self.function(*f)?;
@@ -1577,11 +1802,13 @@ impl<'a> FnCompiler<'a> {
     }
 
     /// The expression is an anonymous function definition (ECMA-262 2015 section 14.1.9): a
-    /// function expression without a name or an arrow function, parenthesized or not.
+    /// function expression without a name or an arrow function, parenthesized or not, or a class
+    /// expression without a name.
     fn is_anonymous_function(&self, e: ExprId) -> bool {
         match self.ast.expr(self.ast.unparenthesized(e)) {
             Some(Expr::Arrow(_)) => true,
             Some(Expr::Function(fid)) => self.ast.function(*fid).is_some_and(|f| f.name.is_none()),
+            Some(Expr::Class(class)) => class.name.is_none(),
             _ => false,
         }
     }
@@ -1648,6 +1875,11 @@ impl<'a> FnCompiler<'a> {
                 self.emit(Op::GetVarThis(n));
                 receiver = true;
                 eval_call = name == "eval";
+            }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) if first_is_call => {
+                self.super_ref(cur)?;
+                self.emit(Op::SuperGetThis);
+                receiver = true;
             }
             Some(Expr::OptionalChain(inner)) if first_is_call => {
                 self.optional_chain(*inner, true)?;
@@ -1844,6 +2076,17 @@ impl<'a> FnCompiler<'a> {
                 self.xml_scope_ref(arg, *name)?;
                 self.emit(Op::DeleteIndex);
             }
+            // Deleting a `super` property is a `ReferenceError` once the reference is made
+            // (ECMA-262 2015 section 12.5.4.2); `this` stands in for the result.
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(arg)?;
+                self.emit(Op::Pop);
+                self.emit(Op::Pop);
+                let s = self.string(&"a super property cannot be deleted".encode_utf16().collect::<Vec<u16>>());
+                let depth = self.depth;
+                self.emit(Op::ThrowReferenceError(s));
+                self.depth = depth;
+            }
             // `delete a?.b` is true without deleting anything when the chain stops at a `?.` step.
             Some(Expr::OptionalChain(inner))
                 if matches!(self.ast.expr(self.ast.unparenthesized(*inner)), Some(Expr::Member { .. } | Expr::Index { .. })) =>
@@ -1996,6 +2239,13 @@ impl<'a> FnCompiler<'a> {
                     self.emit(Op::GetIndex);
                 }
             }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(target)?;
+                if op.is_some() {
+                    self.emit(Op::SuperDup);
+                    self.emit(Op::SuperGet);
+                }
+            }
             _ => {
                 self.expr(target)?;
                 if op.is_none() {
@@ -2022,6 +2272,7 @@ impl<'a> FnCompiler<'a> {
                 self.emit(Op::SetMember(n));
             }
             Some(Expr::Index { .. } | Expr::XmlScopeName(_)) => self.emit(Op::SetIndex),
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => self.emit(Op::SuperSet),
             _ => self.throw_invalid_target(),
         }
         Ok(())
@@ -2049,6 +2300,10 @@ impl<'a> FnCompiler<'a> {
                 self.xml_scope_ref(target, *name)?;
                 self.emit(Op::IncIndex { prefix, dec });
             }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(target)?;
+                self.emit(Op::SuperInc { prefix, dec });
+            }
             _ => {
                 self.expr(target)?;
                 self.emit(Op::ToNumber);
@@ -2075,7 +2330,11 @@ impl<'a> FnCompiler<'a> {
                     | Op::JumpIfNullish { target: t, .. }
                     | Op::ForInNext(t)
                     | Op::IterStep(t)
-                    | Op::XmlFilterNext(t),
+                    | Op::XmlFilterNext(t)
+                    | Op::Resume(t)
+                    | Op::DelegateCall(t)
+                    | Op::DelegateResult(t)
+                    | Op::DelegateDone(t),
                 ) => *t = target,
                 _ => return internal("patching an instruction that is not a jump"),
             }
@@ -2119,10 +2378,14 @@ impl<'a> FnCompiler<'a> {
             arrow: meta.arrow,
             uses_this: self.uses_this,
             param_init: meta.param_init,
+            class_ctor: meta.class_ctor,
+            derived: meta.derived,
+            uses_new_target: self.uses_new_target,
             pattern_names: meta.pattern_names,
             es2015: self.es2015,
             own_name: meta.own_name,
             method: meta.method,
+            generator: self.generator,
         };
         code.max_stack = verify(&code).map_err(CompileFail::Internal)?;
         Ok(Rc::new(code))
@@ -2141,6 +2404,8 @@ struct Meta {
     length: u32,
     arrow: bool,
     param_init: bool,
+    class_ctor: bool,
+    derived: bool,
     pattern_names: Vec<Key>,
     own_name: Option<Key>,
     method: bool,
@@ -2156,6 +2421,7 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
     let Some(f) = ast.function(fid) else { return internal("function out of range") };
     let mut c = FnCompiler::new(ast, source, CodeKind::Function, f.strict, recursion);
     c.es2015 = es2015;
+    c.generator = f.generator;
     c.at(f.span.start);
     c.enter()?;
     // A destructured parameter has a binding of its own under a name no script can write, which
@@ -2170,7 +2436,10 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
     let all_params: Vec<Key> = f.params.iter().chain(&f.rest).flat_map(|p| c.bound_keys(p)).collect();
     let hoisted = c.hoist(&f.body, &all_params)?;
     let top_scope = c.list_scope(&f.body, false)?;
-    let param_init = !f.simple_params();
+    // Default values are expressions (ContainsExpression, ECMA-262 2015 section 14.1.5), and a
+    // destructured parameter is bound by code of its own: a rest parameter alone leaves the
+    // parameters and the body in one environment (section 9.2.12, step 27).
+    let param_init = f.defaults.iter().any(Option::is_some) || f.params.iter().chain(&f.rest).any(|p| matches!(p, Binding::Pattern(_)));
     if param_init {
         // Each parameter is initialized in order, from its argument or, when that is
         // `undefined`, its default value; then the body's environment is entered.
@@ -2207,6 +2476,12 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
         }
         c.emit(Op::BodyEnv);
     }
+    if f.generator {
+        // The call has bound the arguments and run the default values; the body waits for
+        // the first `next` (ECMA-262 2015 section 14.4.11).
+        c.at(f.span.start);
+        c.emit(Op::GeneratorStart);
+    }
     c.stmts(&f.body)?;
     c.at(f.span.end.saturating_sub(1));
     c.emit(Op::Undefined);
@@ -2223,9 +2498,12 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
         length: len_u32(length),
         arrow: f.kind == FunctionKind::Arrow,
         param_init,
+        class_ctor: f.is_class_constructor(),
+        derived: f.kind == FunctionKind::DerivedConstructor,
         pattern_names,
         own_name: es2015.then(|| key_of(f.name.as_ref().map_or("", |n| n.name.as_str()))),
-        method: es2015 && matches!(f.kind, FunctionKind::Method | FunctionKind::Getter | FunctionKind::Setter),
+        method: (f.home && !f.is_class_constructor())
+            || (es2015 && matches!(f.kind, FunctionKind::Method | FunctionKind::Getter | FunctionKind::Setter)),
     };
     c.finish(hoisted, meta)
 }

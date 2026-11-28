@@ -163,7 +163,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "charStyle.edit",
         "Edit Character Style",
         &[],
-        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt, tracking and kerning -1000..=10000, rotation -360..=360°, stroke miter limit 1..=500, Small Caps 1..=200%, finite stroke dashes and variable font axis settings",
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; [Normal Character Style] takes only `to` equal to `name`; users keep local overrides; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt, tracking and kerning -1000..=10000, rotation -360..=360°, stroke miter limit 1..=500, Small Caps 1..=200%, finite stroke dashes and variable font axis settings",
         |s, p| edit_style(s, p, Kind::Char),
         true,
     ));
@@ -178,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "paraStyle.edit",
         "Edit Paragraph Style",
         &[],
-        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; changed tabs: at most 256 stops, each changed stop's position 0..=100000 pt and leader at most 8 characters, sorted by position keeping the first of stops at one position",
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; [Normal Paragraph Style] takes only `to` equal to `name`; users keep local overrides; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; changed tabs: at most 256 stops, each changed stop's position 0..=100000 pt and leader at most 8 characters, sorted by position keeping the first of stops at one position",
         |s, p| edit_style(s, p, Kind::Para),
         true,
     ));
@@ -336,16 +336,17 @@ fn with_attrs<T: Serialize + DeserializeOwned>(base: &T, attrs: &Map<String, Val
 }
 
 /// `cur` after its style changed from `old` to `new`: attributes still equal to the old style's
-/// value (or not set by it) take the new value, and removed attributes return to `base`;
-/// overrides stay. `attrs` lists every attribute of `cur` ([`char_attrs`], [`para_attrs`]), so
-/// one at its default matches a style that sets the default. Unchanged if the style doesn't
-/// round-trip through JSON.
+/// value (for one the old style does not set, the value of `old_base`, what the text had under
+/// it) take the new value, and removed attributes return to `base`; overrides stay. `attrs`
+/// lists every attribute of `cur` ([`char_attrs`], [`para_attrs`]), so one at its default
+/// matches a style that sets the default. Unchanged if the style doesn't round-trip through JSON.
 fn restyle<T: Serialize + DeserializeOwned + Clone>(
     cur: &T,
     attrs: fn(&T) -> Map<String, Value>,
     old: &Map<String, Value>,
     new: &Map<String, Value>,
     base: &Map<String, Value>,
+    old_base: &Map<String, Value>,
 ) -> T {
     // Starts from every key `cur` writes, so values no style sets (a glyph choice) are kept.
     let Some(mut m) = to_map(cur) else { return cur.clone() };
@@ -353,7 +354,7 @@ fn restyle<T: Serialize + DeserializeOwned + Clone>(
     let pair = |m: &Map<String, Value>| KINSOKU.map(|k| m.get(k).cloned());
     let own = pair(&m);
     for (k, v) in new {
-        if old.get(k).is_none_or(|o| m.get(k) == Some(o)) {
+        if m.get(k) == old.get(k).or_else(|| old_base.get(k)) {
             m.insert(k.clone(), v.clone());
         }
     }
@@ -369,7 +370,7 @@ fn restyle<T: Serialize + DeserializeOwned + Clone>(
     // style's keeps its own.
     let has = |m: &Map<String, Value>| KINSOKU.iter().any(|k| m.contains_key(*k));
     if has(old) || has(new) {
-        let follows = !has(old) || pair(old) == own;
+        let follows = pair(if has(old) { old } else { old_base }) == own;
         let to = if !follows {
             own
         } else if has(new) {
@@ -494,32 +495,64 @@ fn uses_of(uses: &std::collections::HashMap<Option<String>, usize>, kind: Kind, 
 fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Value>, new: &Map<String, Value>) -> Result<()> {
     let target = (name != kind.normal()).then_some(name.to_string());
     let normal = kind.attrs(d, kind.normal()).unwrap_or_default();
-    let base = match kind {
-        Kind::Char => char_attrs(&with_attrs(&CharStyle::default(), &normal, &kind.cmd("edit"))?),
-        Kind::Para => para_attrs(&with_attrs(&ParaStyle::default(), &normal, &kind.cmd("edit"))?),
+    // What the text had under the old definition where it sets nothing: Normal's (its old
+    // definition when Normal is the style redefined) over the defaults.
+    let old_normal = if target.is_none() { old } else { &normal };
+    let over_defaults = |attrs: &Map<String, Value>| -> Result<Map<String, Value>> {
+        Ok(match kind {
+            Kind::Char => char_attrs(&with_attrs(&CharStyle::default(), attrs, &kind.cmd("edit"))?),
+            Kind::Para => para_attrs(&with_attrs(&ParaStyle::default(), attrs, &kind.cmd("edit"))?),
+        })
     };
+    let (base, old_base) = (over_defaults(&normal)?, over_defaults(old_normal)?);
     each_text_mut(d, &mut |t| {
         let mut changed = false;
+        // The first character whose leading the new definition changed.
+        let mut leading_at = None;
+        // Substitute the old definition only for leading generated by Block.
+        let block = t.dynamic_text && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. });
+        let block_metrics = super::typecmd::block_fit_metrics(t).map(|(points, gap, _)| (gap / points, super::typecmd::BLOCK_SIZES.0 / points));
+        // A leading the old definition does not set is the one the text had under it.
+        let old_leading = old
+            .get("leading")
+            .or_else(|| old_base.get("leading"))
+            .filter(|_| block && old.get("leading") != new.get("leading"))
+            .and_then(|v| serde_json::from_value::<Option<f64>>(v.clone()).ok());
         match kind {
             Kind::Char => {
+                let mut off = 0;
                 for r in &mut t.runs {
                     if r.style.style_name == target {
-                        r.style = font_change(&r.style, restyle(&r.style, char_attrs, old, new, &base), new);
+                        if let Some(l) = old_leading
+                            .filter(|_| block_metrics.is_some_and(|(gap, minimum)| r.style.leading == Some((r.style.size + gap).max(minimum))))
+                        {
+                            r.style.leading = l;
+                        }
+                        let was = r.style.leading;
+                        r.style = font_change(&r.style, restyle(&r.style, char_attrs, old, new, &base, &old_base), new);
                         changed = true;
+                        if r.style.leading != was && leading_at.is_none() {
+                            leading_at = Some(off);
+                        }
                     }
+                    off += r.text.len();
                 }
             }
             Kind::Para => {
                 for pa in t.para_styles_mut() {
                     if pa.style_name == target {
-                        *pa = restyle(pa, para_attrs, old, new, &base);
+                        *pa = restyle(pa, para_attrs, old, new, &base, &old_base);
                         changed = true;
                     }
                 }
             }
         }
         if changed {
-            refresh_bounds(t);
+            // With Block on, a leading the new definition gives goes to the frame's line gap.
+            match leading_at {
+                Some(at) => super::typecmd::refresh_with_given_leading(t, at),
+                None => refresh_bounds(t),
+            }
         }
         Ok(())
     })
@@ -857,6 +890,8 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let attrs = kind.attrs(d, &name).ok_or_else(|| bad(&c, format!("no style `{name}`")))?;
     let normal = kind.attrs(d, kind.normal()).unwrap_or_default();
     let clear = bool_or(p, "clearOverrides", false);
+    // The style sets a leading, or clearing overrides gives the text Normal's.
+    let sets_leading = kind == Kind::Char && (attrs.contains_key("leading") || (clear && normal.contains_key("leading")));
     let style_name = (name != kind.normal()).then(|| name.clone());
     // A Type tool range or whole text objects.
     let text_range = super::typecmd::TextRange::parse(p, &c)?;
@@ -883,6 +918,8 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     s.edit_named("Apply {name}", &name, name == kind.normal(), |d, _| {
         for id in &ids {
             let Some(t) = text_mut(d, *id) else { continue };
+            // The first character given the style's leading.
+            let mut leading_at = None;
             match kind {
                 Kind::Char => {
                     let len = vectorcraft_text::edit::runs_len(&t.runs);
@@ -903,6 +940,7 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
                     if let Some(e) = err {
                         return Err(e);
                     }
+                    leading_at = sets_leading.then(|| super::typecmd::styled_start(t, a.min(b), a.max(b))).flatten();
                 }
                 Kind::Para => {
                     let mut v = t.paragraph_styles();
@@ -916,7 +954,11 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
                     t.set_paragraph_styles(v);
                 }
             }
-            refresh_bounds(t);
+            // With Block on, a leading the style sets goes to the frame's line gap.
+            match leading_at {
+                Some(at) => super::typecmd::refresh_with_given_leading(t, at),
+                None => refresh_bounds(t),
+            }
         }
         Ok(())
     })?;
@@ -930,15 +972,29 @@ fn redefine_to(s: &mut Session, kind: Kind, name: &str, new_attrs: Map<String, V
         return ok();
     }
     let name = name.to_string();
-    s.edit_named("Redefine {name}", &name, name == kind.normal(), |d, _| {
-        match kind.defs_mut(d).iter_mut().find(|s| s.name == name) {
-            Some(def) => def.attrs = new_attrs.clone(),
-            None => kind.defs_mut(d).push(TextStyleDef { name: name.clone(), attrs: new_attrs.clone() }),
-        }
-        update_users(d, kind, &name, &old, &new_attrs)?;
-        Ok(())
-    })?;
+    s.edit_named("Redefine {name}", &name, name == kind.normal(), |d, _| set_definition(d, kind, &name, &old, &new_attrs))?;
     ok()
+}
+
+/// Give style `name` of `d` the attributes `new_attrs` (it had `old`), and the text in it that
+/// follows the old definition the new one (users keep their overrides).
+fn set_definition(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Value>, new_attrs: &Map<String, Value>) -> Result<()> {
+    match kind.defs_mut(d).iter_mut().find(|s| s.name == name) {
+        Some(def) => def.attrs = new_attrs.clone(),
+        None => kind.defs_mut(d).push(TextStyleDef { name: name.to_string(), attrs: new_attrs.clone() }),
+    }
+    update_users(d, kind, name, old, new_attrs)
+}
+
+/// Redefine `[Normal Character Style]` of `d` with `attrs` (attributes as `charStyle.new` stores
+/// them), as Redefine Character Style does: the type in it takes the new attributes and keeps its
+/// overrides. Nothing changes when `attrs` is the current definition.
+pub(crate) fn redefine_normal_char(d: &mut Document, attrs: &Map<String, Value>) -> Result<()> {
+    let old = Kind::Char.attrs(d, NORMAL_CHAR).unwrap_or_default();
+    if *attrs == old {
+        return Ok(());
+    }
+    set_definition(d, Kind::Char, NORMAL_CHAR, &old, attrs)
 }
 
 fn redefine(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
@@ -962,8 +1018,9 @@ fn edit_style(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let d = &s.doc()?.doc;
     let old = kind.attrs(d, &name).ok_or_else(|| bad(&c, format!("no style `{name}`")))?;
     let attrs = attrs_param(d, p, kind, "edit", Some(&old))?.ok_or_else(|| bad(&c, "missing `attrs`"))?;
-    if name == kind.normal() {
-        return Err(bad(&c, format!("`{name}` can't be edited this way")));
+    // The Normal style takes new attributes but keeps its name.
+    if name == kind.normal() && to != name {
+        return Err(bad(&c, format!("`{name}` can't be renamed")));
     }
     if to.is_empty() {
         return Err(bad(&c, "give the style a name"));
@@ -975,9 +1032,13 @@ fn edit_style(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         return ok();
     }
     s.edit(if kind == Kind::Char { "Character Style Options" } else { "Paragraph Style Options" }, |d, _| {
-        if let Some(def) = kind.defs_mut(d).iter_mut().find(|def| def.name == name) {
-            def.name = to.clone();
-            def.attrs = attrs.clone();
+        // A Normal style that was never redefined has no definition yet.
+        match kind.defs_mut(d).iter_mut().find(|def| def.name == name) {
+            Some(def) => {
+                def.name = to.clone();
+                def.attrs = attrs.clone();
+            }
+            None => kind.defs_mut(d).push(TextStyleDef { name: to.clone(), attrs: attrs.clone() }),
         }
         update_users(d, kind, &name, &old, &attrs)?;
         if to != name {
