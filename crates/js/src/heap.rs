@@ -818,7 +818,7 @@ impl Heap {
     /// entries of WeakMaps and WeakSets whose keys stay unmarked are removed before the sweep, so
     /// a value that refers back to its own key does not keep it alive. Values waiting for their
     /// key are kept by key, so the marking stays linear in the number of entries.
-    pub(crate) fn collect(&mut self, roots: &Roots<'_>) {
+    pub(crate) fn collect(&mut self, roots: &Roots<'_>) -> HashSet<usize> {
         let mut marks = vec![false; self.cells.len()];
         let mut work: Vec<u32> = Vec::new();
         let mut strings = StringSizes::default();
@@ -833,7 +833,13 @@ impl Heap {
         for code in &roots.codes {
             mark_code(code, &mut strings);
         }
-        while let Some(i) = work.pop() {
+        let mut reached_codes = 0;
+        loop {
+            while let Some(&code) = strings.codes.get(reached_codes) {
+                reached_codes += 1;
+                work.extend(roots.template_objects.get(&code).into_iter().flatten().map(|id| id.0));
+            }
+            let Some(i) = work.pop() else { break };
             let Some(mark) = marks.get_mut(i as usize) else { continue };
             if *mark {
                 continue;
@@ -888,6 +894,7 @@ impl Heap {
         live = live.saturating_sub(self.compact_collections());
         self.bytes = live + strings.bytes;
         self.collections += 1;
+        strings.codes.into_iter().collect()
     }
 
     /// Removes the holes of the Maps and Sets that have more holes than entries, and moves the
@@ -927,6 +934,7 @@ pub(crate) struct Roots<'a> {
     pub(crate) objects: Vec<ObjId>,
     pub(crate) envs: Vec<EnvId>,
     pub(crate) codes: Vec<&'a Code>,
+    pub(crate) template_objects: HashMap<usize, Vec<ObjId>>,
 }
 
 /// Sums the sizes of the strings and property names reached, counting each node and each
@@ -934,6 +942,7 @@ pub(crate) struct Roots<'a> {
 #[derive(Default)]
 struct StringSizes {
     seen: HashSet<usize>,
+    codes: Vec<usize>,
     bytes: usize,
 }
 
@@ -1009,6 +1018,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
         if !strings.seen.insert(code as *const Code as usize) {
             continue;
         }
+        strings.codes.push(code as *const Code as usize);
         if strings.seen.insert(Rc::as_ptr(&code.source) as usize) {
             strings.bytes += code.source.lines.heap_bytes();
             // The text can share its buffer with the string eval was given.
@@ -1241,7 +1251,7 @@ mod tests {
         object.props.insert(name.clone(), Prop::Data { value: Value::String(Str::from_rc(name.clone())), flags: 0 });
         object.props.insert(key("other"), Prop::Data { value: Value::Undefined, flags: 0 });
         let id = heap.alloc_object(object);
-        heap.collect(&Roots { objects: vec![id], ..Roots::default() });
+        let _ = heap.collect(&Roots { objects: vec![id], ..Roots::default() });
         assert_eq!(heap.bytes, OBJECT_BYTES + 2 * PROP_BYTES + string_bytes(1000) + string_bytes(5));
     }
 

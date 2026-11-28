@@ -8566,6 +8566,8 @@ breakText	Glyphs	Глифы
 	Tangent Circle	Касательная окружность
 	Tangent Circle Tool	Инструмент «Касательная окружность»
 	No tangent circle here	Здесь нет касательной окружности
+	Ask For Circle Radius	Запрашивать радиус окружности
+	Auto-Update Default	Автоматически обновлять значение по умолчанию
 	Circle:	Окружность:
 @msg	`ids` names an object twice	`ids` указывает объект дважды
 @msg	select two or three paths or compound paths	выделите два или три контура или составных контура

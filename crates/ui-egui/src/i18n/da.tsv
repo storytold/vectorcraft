@@ -10627,6 +10627,8 @@ breakText	Glyphs	Glyffer
 	Tangent Circle	Tangentcirkel
 	Tangent Circle Tool	Tangentcirkel-værktøj
 	No tangent circle here	Ingen tangentcirkel her
+	Ask For Circle Radius	Spørg om cirklens radius
+	Auto-Update Default	Opdater standard automatisk
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` nævner et objekt to gange
 @msg	select two or three paths or compound paths	vælg to eller tre stier eller sammensatte stier

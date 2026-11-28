@@ -8266,6 +8266,8 @@ breakText	Glyphs	字符
 	Tangent Circle	相切圓
 	Tangent Circle Tool	相切圓工具
 	No tangent circle here	此處沒有相切圓
+	Ask For Circle Radius	詢問圓半徑
+	Auto-Update Default	自動更新預設值
 	Circle:	圓：
 @msg	`ids` names an object twice	`ids` 將同一個物件指定了兩次
 @msg	select two or three paths or compound paths	請選取兩個或三個路徑或複合路徑

@@ -44,7 +44,8 @@ const WRAPPED: &[(&str, &str)] = &[
 /// every preference, Forget Import Matches forgets every saved match, Begin Undo Group and End
 /// Undo Group begin and end a group, the six Save … Preset commands save a new preset (Save
 /// Gradient Preset the selection's gradient), Delete Gradient Preset deletes the saved preset the
-/// selection's gradient matches, the three Asset Export commands open the Asset Export panel (#4864), New
+/// selection's gradient matches, the six Asset Export commands open the Asset Export panel (#4864),
+/// Rename Artboards opens the Rename dialog for the selected artboards, New
 /// Symbol makes a symbol of the selection, Gradient Vector gives the selection the default
 /// gradient, Define Perspective Grid makes the document's grid, Select Slice deselects the
 /// slices, and Find Next goes on from the last Find and Replace search or opens its dialog, as
@@ -65,8 +66,12 @@ const PICK_RUNS: &[&str] = &[
     "gradient.presets.save",
     "gradient.presets.delete",
     "assets.export",
+    "assets.remove",
+    "assets.rename",
     "assets.export3D",
+    "assets.set3DFormat",
     "assets.settings.set",
+    "artboard.rename",
     "symbol.new",
     "paint.setGradientGeom",
     "perspective.grid.set",
@@ -80,23 +85,11 @@ const PANEL_PATH: &str = "Window › Show Panel";
 /// The menu path ([`context`]) a result takes when another result has its name: (id, English
 /// path), for commands that no item of the menu bar runs and whose id names no parent command.
 const CONTEXTS: &[(&str, &str)] = &[
-    ("addon.pen.close", "Pen"),
-    ("addon.pen.reshape", "Pen"),
-    ("addon.pen.togglePoint", "Pen"),
-    ("charStyle.setAttrs", "Character Styles"),
     ("file.exportInBackground", "Export"),
     ("file.openInBackground", "Open"),
     ("imageTrace.hideRuns", "Image Trace"),
     ("links.reveal", "Links"),
-    ("livePaint.fill", "Live Paint"),
-    ("object.blend.spine.convertAnchor", "Blend"),
-    ("paraStyle.setAttrs", "Paragraph Styles"),
-    ("path.close", "Path"),
-    ("path.convertAnchor", "Path"),
-    ("path.knife", "Path"),
-    ("path.reshapeSegment", "Path"),
     ("plugin.hideRuns", "Plug-ins"),
-    ("text.editRange", "Text"),
     ("ui.layersPanelOptions", "Layers"),
     ("ui.navigatorPanelOptions", "Navigator"),
 ];
@@ -1563,15 +1556,8 @@ mod tests {
             ("ui.paraStyleOptions.resetPanel", "Paragraph Style Options › Reset Panel"),
             ("window.swatchLibrary.other", "Window › Swatch Libraries › Other Library…"),
             ("window.brushLibrary.other", "Window › Brush Libraries › Other Library…"),
-            ("tool:knife", "Tools › Knife"),
-            ("path.knife", "Path › Knife"),
-            ("addon.pen.close", "Pen › Close Path"),
-            ("path.close", "Path › Close Path"),
             ("type.fitHeadline", "Type › Fit Headline (type.fitHeadline)"),
             ("text.fitHeadline", "Type › Fit Headline (text.fitHeadline)"),
-            ("shape.ellipse", "Ellipse (shape.ellipse)"),
-            ("addon.shapes.ellipse", "Ellipse (addon.shapes.ellipse)"),
-            ("perspective.editText", "Object › Perspective › Edit Text"),
             ("ui.action.play", "Play Action (ui.action.play)"),
             ("ui.action.playAt", "Play Action (ui.action.playAt)"),
             ("ui.batchDialog", "Batch…"),
@@ -1690,7 +1676,8 @@ mod tests {
 
     /// Of the engine commands the palette listed before, it leaves out only the ones
     /// [`crate::shortcut_editor::needs_a_value`] marks: queries with no default key and no item of
-    /// the menu bar, and commands that need a value no menu item gives. A pick of each one it leaves
+    /// the menu bar, and commands that need a value no menu item gives, with a menu path of their own
+    /// or without one. A pick of each one it leaves
     /// out (with no document, one object selected or several) changes neither the document, its
     /// selection, history and layer state, nor the interface. Every [`PICK_RUNS`] query is still
     /// listed.
@@ -1706,7 +1693,8 @@ mod tests {
         let listed: std::collections::HashSet<String> = items().into_iter().map(|(_, id)| id).collect();
         let dropped: Vec<&vectorcraft_engine::CommandSpec> = before.iter().copied().filter(|c| !listed.contains(c.id)).collect();
         let ids: Vec<&str> = dropped.iter().map(|c| c.id).collect();
-        for id in ["document.json", "brush.unused", "symbol.unused", "transparency.set"] {
+        // Close Path, Set Handle and Knife have no menu path, and each needs an `id`.
+        for id in ["document.json", "brush.unused", "symbol.unused", "transparency.set", "path.close", "path.setHandle", "path.knife"] {
             assert!(ids.contains(&id), "{id} is left out: {ids:?}");
         }
         // What a pick can change: the document with its selection, history, revision and layer
@@ -1733,8 +1721,8 @@ mod tests {
                 look(&app) != before
             })
         };
-        // `layer.setProps {}` records an undo step that changes nothing.
-        let changed: Vec<&str> = ids.iter().copied().filter(|id| *id != "layer.setProps" && acts(id)).collect();
+        // `layer.setProps {}` and `path.moveAnchors {}` record an undo step that changes nothing.
+        let changed: Vec<&str> = ids.iter().copied().filter(|id| !["layer.setProps", "path.moveAnchors"].contains(id) && acts(id)).collect();
         assert!(changed.is_empty(), "a pick of these does something: {changed:?}");
         for c in &dropped {
             assert!(c.shortcut.is_none() && crate::shortcut_editor::menu_bar_path(c.id).is_none(), "{}", c.id);
@@ -1767,7 +1755,7 @@ mod tests {
         for id in PICK_RUNS.iter().filter(|id| !session_only.contains(id)) {
             assert!(acts(id), "a pick of {id} does something");
         }
-        for id in PICK_RUNS.iter().chain(&["object.group", "select.key", "view.preciseCursors", "path.close"]) {
+        for id in PICK_RUNS.iter().chain(&["object.group", "select.key", "view.preciseCursors"]) {
             assert!(listed.contains(*id), "{id} stays");
         }
     }

@@ -672,6 +672,9 @@ pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnO
 /// linear part. With `brush` true, the members of a group or layer are measured with the room
 /// their brushed strokes leave for brush art ([`member_cull_bounds`]).
 fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: bool) -> Option<Rect> {
+    // A layer is measured in the mode its Layer Options draw it in, as the renderer measures the
+    // members of a group or layer without effects ([`crate::Renderer::bounds_of`]).
+    let _mode = crate::placed_document::enter_layer(n);
     let inner = |c: &Node| cull_bounds_in(symbols, c, after_reshape, false);
     let member = |c: &Node| member_cull_bounds(symbols, c, after_reshape, brush);
     // The art that a group's or layer's crop marks or Vector Halftone draw holds its members. The

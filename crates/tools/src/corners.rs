@@ -203,6 +203,35 @@ impl CornerWidgets {
         out.insert(key.into(), value);
         Value::Object(out)
     }
+
+    /// The cut corner whose widget is within `tol` (document units) of `p`, as the path draws it in
+    /// the document, with the object it belongs to: what the canvas highlights while the pointer
+    /// is over that widget. `None` away from the widgets and for a corner with no cut.
+    pub fn hovered_cut(&self, doc: &Document, p: Point, tol: f64) -> Option<(NodeId, BezPath)> {
+        let (i, k) = self.hit(p, tol)?;
+        let (id, w) = (self.paths.get(i)?.id, self.widget(i, k)?);
+        let node = doc.node(id)?;
+        let NodeKind::Path { path, .. } = &node.kind else { return None };
+        let lc = LiveCorners::of(node)?;
+        let mut out = BezPath::new();
+        for (sp, from) in path.subpaths.iter().zip(lc.sources()) {
+            // A subpath whose anchors do not match its sources gives no cut rather than a wrong one.
+            if from.len() != sp.anchors.len() {
+                continue;
+            }
+            // A corner's cut is the segment between its two anchors (the last one, for a closed
+            // subpath's first corner); a square corner is one anchor and has none.
+            for s in 0..sp.segment_count() {
+                let (a, b) = (from.get(s), from.get(s + 1).or(from.first()));
+                if a == Some(&w.corner.index) && b == a {
+                    let c = sp.segment(s);
+                    out.move_to(c.p0);
+                    out.curve_to(c.p1, c.p2, c.p3);
+                }
+            }
+        }
+        (!out.elements().is_empty()).then_some((id, out))
+    }
 }
 
 /// The angle between corner `c`'s sides once `xf` maps them into the document, in degrees.

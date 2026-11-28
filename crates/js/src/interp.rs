@@ -945,16 +945,12 @@ impl Interp {
         roots.envs.push(self.global_env);
         roots.envs.push(self.global_lex);
         roots.envs.extend(self.temp_envs.iter().copied());
-        // A template object stays while its code can still run: while the code has an owner other
-        // than the entries of its own sites.
-        let mut sites: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
-        for &(code, _) in self.template_objects.keys() {
-            *sites.entry(code).or_default() += 1;
+        for (&(code, _), &(_, object)) in &self.template_objects {
+            roots.template_objects.entry(code).or_default().push(object);
         }
-        self.template_objects.retain(|(site, _), (code, _)| Rc::strong_count(code) > sites.get(site).copied().unwrap_or(0));
-        roots.objects.extend(self.template_objects.values().map(|&(_, id)| id));
         self.promises.add_roots(&mut roots);
-        self.heap.collect(&roots);
+        let live_codes = self.heap.collect(&roots);
+        self.template_objects.retain(|(code, _), _| live_codes.contains(code));
         crate::host_classes::forget_collected(&mut self.host_objects, &self.heap, &self.host_classes);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);

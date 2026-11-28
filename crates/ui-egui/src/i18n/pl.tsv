@@ -8432,6 +8432,8 @@ breakText	Glyphs	Glify
 	Tangent Circle	Okrąg styczny
 	Tangent Circle Tool	Narzędzie Okrąg styczny
 	No tangent circle here	Brak okręgu stycznego w tym miejscu
+	Ask For Circle Radius	Pytaj o promień okręgu
+	Auto-Update Default	Automatycznie aktualizuj wartość domyślną
 	Circle:	Okrąg:
 @msg	`ids` names an object twice	`ids` wskazuje ten sam obiekt dwa razy
 @msg	select two or three paths or compound paths	zaznacz dwie lub trzy ścieżki lub ścieżki złożone

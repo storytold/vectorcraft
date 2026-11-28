@@ -86,7 +86,8 @@
 //! Number hint. A Symbol converted to a string or a number without `String(symbol)` or `toString` throws a
 //! `TypeError`. A string converts to a number in the `0b` and `0o` forms as well. Every iterator
 //! step and every prototype a Symbol-keyed lookup passes takes fuel, and every Symbol and registry
-//! entry counts against the heap limit.
+//! entry counts against the heap limit. Registry lookups and insertions take fuel for the key's
+//! code units, and a registered description shares the key's existing buffer.
 //!
 //! With [`Options::es2015`], the realm also provides `Promise` (ECMA-262 11th edition, section
 //! 25.6, <https://262.ecma-international.org/11.0/#sec-promise-objects>): the constructor, `then`,
@@ -129,6 +130,7 @@ mod number;
 mod number_builtins;
 mod parser;
 mod realm;
+mod reflect;
 mod regexp;
 mod regexp_builtins;
 mod regexp_vm;
@@ -151,12 +153,13 @@ pub use ast::{
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
-pub use host_classes::{FILE_REF_KEY, HOST_REF_KEY, HostClass, HostMember, file_ref_path, host_ref, host_ref_parts};
+pub use host_classes::{ArgInfo, FILE_REF_KEY, HOST_REF_KEY, HostClass, HostMember, MemberInfo, file_ref_path, host_ref, host_ref_parts};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
 pub use realm::{
     Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, Rejection, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE,
 };
+pub use reflect::MAX_REFLECTED_MEMBERS;
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 pub use xmp::{MAX_BYTES as XMP_MAX_BYTES, PacketSpan, find_packet as find_xmp_packet};
 
@@ -310,6 +313,8 @@ mod host_tests;
 mod interp_tests;
 #[cfg(test)]
 mod promise_tests;
+#[cfg(test)]
+mod reflect_tests;
 #[cfg(test)]
 mod symbol_tests;
 #[cfg(test)]

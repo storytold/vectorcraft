@@ -8218,6 +8218,8 @@ breakText	Glyphs	Гліфи
 	Tangent Circle	Дотичне коло
 	Tangent Circle Tool	Інструмент «Дотичне коло»
 	No tangent circle here	Тут немає дотичного кола
+	Ask For Circle Radius	Запитувати радіус кола
+	Auto-Update Default	Автоматично оновлювати значення за замовчуванням
 	Circle:	Коло:
 @msg	`ids` names an object twice	`ids` указує об’єкт двічі
 @msg	select two or three paths or compound paths	виділіть два або три контури чи складені контури

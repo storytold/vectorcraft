@@ -10127,6 +10127,8 @@ breakText	Glyphs	字形
 	Tangent Circle	接円
 	Tangent Circle Tool	接円ツール
 	No tangent circle here	ここに接円はありません
+	Ask For Circle Radius	円の半径を確認
+	Auto-Update Default	デフォルトを自動更新
 	Circle:	円:
 @msg	`ids` names an object twice	`ids` に同じオブジェクトが 2 回指定されています
 @msg	select two or three paths or compound paths	パスまたは複合パスを 2 つか 3 つ選択してください

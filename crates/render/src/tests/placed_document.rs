@@ -336,6 +336,57 @@ fn outline_mode_draws_the_crossed_box_its_effects_move_into_view_after_a_preview
 }
 
 #[test]
+fn a_group_is_measured_again_when_show_images_in_outline_mode_changes_for_a_sublayer_in_it() {
+    // As above, in a sublayer whose Preview is off, held in a group. With Show Images in Outline
+    // Mode the file that can't be read draws nothing; turned off, the sublayer draws the moved box
+    // crossed, and the same renderer measures the group again.
+    let mut d = doc_with("outline-cull-2", b"bad");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut sub = Node::layer(NodeId(90), "Sublayer", vectorcraft_doc::LayerColor::Preset(1));
+    if let NodeKind::Layer { children, preview, .. } = &mut sub.kind {
+        children.push(placed);
+        *preview = false;
+    }
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, Node::group(NodeId(91), vec![Arc::new(sub)])).unwrap();
+    let view = Affine::translate((0.0, -55.0));
+    let preview = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    d.setup.outline_images = true;
+    r.render(&d, 100, 100, view, &preview);
+    d.setup.outline_images = false;
+    let crossed = r.render(&d, 100, 100, view, &preview);
+    assert!(crossed.pixel(30, 5)[0] < 200, "the moved box is drawn crossed");
+    assert!(crossed.pixels == Renderer::new().render(&d, 100, 100, view, &preview).pixels, "as a new renderer draws it");
+}
+
+#[test]
+fn a_group_with_a_drop_shadow_measures_a_sublayer_in_it_in_the_sublayers_own_mode() {
+    // As above, in a sublayer whose Preview is off, held in a group with a Drop Shadow effect: the
+    // sublayer draws the moved box crossed, and the group's cull bounds reach it.
+    let mut d = doc_with("outline-cull-3", b"bad");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut sub = Node::layer(NodeId(90), "Sublayer", vectorcraft_doc::LayerColor::Preset(1));
+    if let NodeKind::Layer { children, preview, .. } = &mut sub.kind {
+        children.push(placed);
+        *preview = false;
+    }
+    let shadow = serde_json::json!({"x": 0, "y": 0, "blur": 0, "opacity": 0});
+    let mut g = Node::group(NodeId(91), vec![Arc::new(sub)]);
+    g.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: shadow, visible: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    let view = Affine::translate((0.0, -55.0));
+    let preview = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, view, &preview);
+    assert!(r.pixel(30, 5)[0] < 200, "the moved box is drawn crossed in a group with a drop shadow");
+}
+
+#[test]
 fn an_edit_in_outline_mode_redraws_where_the_effects_move_the_crossed_box() {
     // A file that can't be read, in the box (10, 10)–(90, 50): a Transform effect added to it moves
     // the crossed box 40 points down, to (10, 50)–(90, 90).

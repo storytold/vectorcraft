@@ -40,11 +40,11 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use serde_json::json;
-use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, RunError, file_ref_path, host_ref};
+use vectorcraft_js::{Data, HostClass, HostError, HostItem, MemberInfo, Realm, RunError, file_ref_path, host_ref};
 
 use super::{
-    Answer, Doc, Host, Link, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, arg, class, command, doc_of, doc_ref, edit_item, find_doc, float, function, get,
-    handle_of, item_of, item_ref, method, named, num, on_doc, property, text, typename, whole, with_doc,
+    Answer, Described, Doc, Host, Link, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, arg, class, command, doc_of, doc_ref, edit_item, find_doc, float,
+    function, get, handle_of, item_of, item_ref, method, named, num, on_doc, property, returns, text, typed, typename, whole, with_doc,
 };
 use crate::doc::{DataSet, Node, Variable, VariableKind};
 use crate::file_access::Access;
@@ -723,26 +723,28 @@ fn item_set_content(h: &Host, a: &[Data]) -> Answer {
 // ---- Registration ----
 
 /// The members this module adds to `Document`.
-pub(super) fn document_members(l: &Link) -> Vec<(String, HostMember)> {
+pub(super) fn document_members(l: &Link) -> Vec<Described> {
     named(vec![
-        ("variables", get(l, doc_variables)),
-        ("dataSets", get(l, doc_datasets)),
-        ("activeDataset", property(l, doc_active_dataset, doc_set_active_dataset)),
-        ("variablesLocked", property(l, doc_locked, doc_set_locked)),
-        ("importVariables", method(l, doc_import)),
-        ("exportVariables", method(l, doc_export)),
+        ("variables", get(l, doc_variables), MemberInfo { collection: true, ..typed("Variables") }),
+        ("dataSets", get(l, doc_datasets), MemberInfo { collection: true, ..typed("Datasets") }),
+        ("activeDataset", property(l, doc_active_dataset, doc_set_active_dataset), typed("Dataset")),
+        ("variablesLocked", property(l, doc_locked, doc_set_locked), typed("boolean")),
+        ("importVariables", method(l, doc_import), returns("undefined", &[("fileSpec", "File")])),
+        ("exportVariables", method(l, doc_export), returns("undefined", &[("fileSpec", "File")])),
     ])
 }
 
 /// The members this module adds to `PageItem`.
-pub(super) fn page_item_members(l: &Link) -> Vec<(String, HostMember)> {
-    named(vec![("visibilityVariable", property(l, item_visibility, item_set_visibility))])
+pub(super) fn page_item_members(l: &Link) -> Vec<Described> {
+    named(vec![("visibilityVariable", property(l, item_visibility, item_set_visibility), typed("Variable"))])
 }
 
 /// The members this module adds to the page item class `class`.
-pub(super) fn item_members(l: &Link, class: &str) -> Vec<(String, HostMember)> {
+pub(super) fn item_members(l: &Link, class: &str) -> Vec<Described> {
     match class {
-        "TextFrame" | "PlacedItem" | "RasterItem" | "GraphItem" => named(vec![("contentVariable", property(l, item_content, item_set_content))]),
+        "TextFrame" | "PlacedItem" | "RasterItem" | "GraphItem" => {
+            named(vec![("contentVariable", property(l, item_content, item_set_content), typed("Variable"))])
+        }
         _ => Vec::new(),
     }
 }
@@ -754,13 +756,13 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "Variables",
             None,
             named(vec![
-                ("typename", get(l, vars_typename)),
-                ("length", get(l, vars_length)),
-                ("parent", get(l, vars_parent)),
-                ("index", method(l, vars_index)),
-                ("getByName", method(l, vars_by_name)),
-                ("add", method(l, vars_add)),
-                ("removeAll", method(l, vars_remove_all)),
+                ("typename", get(l, vars_typename), typed("string")),
+                ("length", get(l, vars_length), typed("number")),
+                ("parent", get(l, vars_parent), typed("Document")),
+                ("index", method(l, vars_index), returns("Variable", &[("itemKey", "*")])),
+                ("getByName", method(l, vars_by_name), returns("Variable", &[("name", "string")])),
+                ("add", method(l, vars_add), returns("Variable", &[])),
+                ("removeAll", method(l, vars_remove_all), returns("undefined", &[])),
             ]),
             Some(function(l, vars_at)),
         ),
@@ -768,12 +770,12 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "Variable",
             None,
             named(vec![
-                ("typename", get(l, var_typename)),
-                ("parent", get(l, var_parent)),
-                ("name", property(l, var_name, var_set_name)),
-                ("kind", property(l, var_kind, var_set_kind)),
-                ("pageItems", get(l, var_page_items)),
-                ("remove", method(l, var_remove)),
+                ("typename", get(l, var_typename), typed("string")),
+                ("parent", get(l, var_parent), typed("Document")),
+                ("name", property(l, var_name, var_set_name), typed("string")),
+                ("kind", property(l, var_kind, var_set_kind), typed("VariableKind")),
+                ("pageItems", get(l, var_page_items), typed("Array")),
+                ("remove", method(l, var_remove), returns("undefined", &[])),
             ]),
             None,
         ),
@@ -781,13 +783,13 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "Datasets",
             None,
             named(vec![
-                ("typename", get(l, sets_typename)),
-                ("length", get(l, sets_length)),
-                ("parent", get(l, sets_parent)),
-                ("index", method(l, sets_index)),
-                ("getByName", method(l, sets_by_name)),
-                ("add", method(l, sets_add)),
-                ("removeAll", method(l, sets_remove_all)),
+                ("typename", get(l, sets_typename), typed("string")),
+                ("length", get(l, sets_length), typed("number")),
+                ("parent", get(l, sets_parent), typed("Document")),
+                ("index", method(l, sets_index), returns("Dataset", &[("itemKey", "*")])),
+                ("getByName", method(l, sets_by_name), returns("Dataset", &[("name", "string")])),
+                ("add", method(l, sets_add), returns("Dataset", &[])),
+                ("removeAll", method(l, sets_remove_all), returns("undefined", &[])),
             ]),
             Some(function(l, sets_at)),
         ),
@@ -795,12 +797,12 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "Dataset",
             None,
             named(vec![
-                ("typename", get(l, set_typename)),
-                ("parent", get(l, set_parent)),
-                ("name", property(l, set_name, set_set_name)),
-                ("display", method(l, set_display)),
-                ("update", method(l, set_update)),
-                ("remove", method(l, set_remove)),
+                ("typename", get(l, set_typename), typed("string")),
+                ("parent", get(l, set_parent), typed("Document")),
+                ("name", property(l, set_name, set_set_name), typed("string")),
+                ("display", method(l, set_display), returns("undefined", &[])),
+                ("update", method(l, set_update), returns("undefined", &[])),
+                ("remove", method(l, set_remove), returns("undefined", &[])),
             ]),
             None,
         ),

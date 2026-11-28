@@ -380,6 +380,28 @@ pub type Loader = fn(&PlacedDocument, &[u8]) -> Option<(Document, Node, Rect)>;
 
 static LOADER: OnceLock<Loader> = OnceLock::new();
 
+std::thread_local! {
+    /// Open checks use previews rather than loading placed documents for drawing.
+    static PREVIEWS_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Restores whether only previews are used when an open check ends, including on unwind.
+struct PreviewsOnly(bool);
+
+impl Drop for PreviewsOnly {
+    fn drop(&mut self) {
+        PREVIEWS_ONLY.with(|p| p.set(self.0));
+    }
+}
+
+/// Run an open check using placed documents' previews instead of loading their art on this
+/// thread. Nested checks keep the scope active until the outer check ends. This prevents an
+/// open check and drawing from recursively loading each other's nested files.
+pub fn with_previews<T>(check: impl FnOnce() -> T) -> T {
+    let _scope = PreviewsOnly(PREVIEWS_ONLY.with(|p| p.replace(true)));
+    check()
+}
+
 /// Register how files are read (the first registration stays).
 pub fn set_loader(l: Loader) {
     // Already set: the same loader, registered by another session.
@@ -454,8 +476,12 @@ impl Cache {
 }
 
 /// `p`'s file (`bytes`) read, from the cache when it was read already: what the renderer draws a
-/// placed document from. `None` when it can't be read (or no loader is registered).
+/// placed document from. `None` when it can't be read, no loader is registered, or an open check
+/// uses [`with_previews`].
 pub fn read(p: &PlacedDocument, bytes: &Arc<Vec<u8>>) -> Option<Arc<ReadDocument>> {
+    if PREVIEWS_ONLY.with(std::cell::Cell::get) {
+        return None;
+    }
     if let Some(e) = cache().get(&p.key, false, Some(bytes)) {
         return Some(e);
     }
@@ -736,6 +762,22 @@ mod tests {
             children.push(Arc::new(Node::new(NodeId(52), NodeKind::PlacedDocument(Box::new(inner)))));
         }
         Some((d, Node::new(NodeId(0), NodeKind::Group { children, clip: false }), Rect::new(0.0, 0.0, 40.0, 20.0)))
+    }
+
+    /// Nested open checks skip both new and cached art, and restore ordinary reads afterward.
+    #[test]
+    fn open_checks_leave_placed_documents_for_drawing_afterward() {
+        set_loader(stub_loader);
+        let p = placed("open-check-1");
+        let bytes = Arc::new(b"leaf".to_vec());
+        with_previews(|| assert!(read(&p, &bytes).is_none()));
+        assert!(read(&p, &bytes).is_some());
+        with_previews(|| {
+            assert!(read(&p, &bytes).is_none());
+            with_previews(|| assert!(read(&p, &bytes).is_none()));
+            assert!(read(&p, &bytes).is_none());
+        });
+        assert!(read(&p, &bytes).is_some());
     }
 
     /// A color-masked image in a placed document's art keeps its masked pixels under the prefixed

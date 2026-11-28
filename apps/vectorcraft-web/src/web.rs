@@ -156,7 +156,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                     .jobs(Arc::new(InlineJobs))
                     .files(Arc::new(files))
                     .install(ctx);
-                let services = services(host.inbox.clone(), host.place_inbox.clone(), host.locks.clone());
+                let services = services(host.inbox.clone(), host.place_inbox.clone(), host.locks.clone(), ctx.clone());
                 let mut app = match taken.borrow_mut().take() {
                     Some(mut app) => {
                         // The old services asked the old context for frames.
@@ -461,8 +461,10 @@ impl eframe::App for WebShell {
     }
 }
 
-fn services(inbox: OpenInboxes, place_inbox: PlaceInbox, locks: Option<WebLocks>) -> Services {
+fn services(inbox: OpenInboxes, place_inbox: PlaceInbox, locks: Option<WebLocks>, ctx: egui::Context) -> Services {
     Services {
+        // Plug-ins are checked and filters run in workers of their own, off the page.
+        plugin_workers: vectorcraft_ui_egui::plugin_runs::workers(Box::new(crate::plugin_workers::PageWorkers { ctx })),
         // A download that couldn't be started fails the save or export it is for (#1693).
         download: Some(Box::new(|name: &str, bytes: &[u8]| download(name, bytes).inspect_err(|e| log::error!("download of {name} failed: {e}")))),
         inbox: Some(inbox.dropped),
