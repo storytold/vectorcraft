@@ -384,12 +384,27 @@ fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError
     }
 }
 
+fn node_handle(h: &Host, st: &DocState, id: NodeId) -> [f64; 5] {
+    let [high, low] = id_parts(id);
+    [float(h.run), float(st.uid), high, low, float(st.reverts)]
+}
+
+fn node_of(h: &Host, handle: &[f64]) -> Option<(Doc, NodeId)> {
+    let &[run, uid, high, low, reverts] = handle else { return None };
+    let doc = find_doc(h, run, uid)?;
+    if h.session.borrow().documents().get(doc.index)?.reverts != whole(reverts)? {
+        return None;
+    }
+    Some((doc, id_of(high, low)?))
+}
+
 /// The page item `d` names, which must still be in its document.
 fn item_of(h: &Host, d: &Data) -> std::result::Result<Item, HostError> {
     let Some(handle) = handle_of(d, "PageItem") else { return Err(HostError::Type("this is not a page item".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-    let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    if handle.len() != 5 {
+        return Err(HostError::Type("this is not a page item".into()));
+    }
+    let (doc, id) = node_of(h, &handle).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let s = h.session.borrow();
     let st = &s.documents()[doc.index];
     if st.doc.node(id).is_none_or(|n| typename(n).is_none()) {
@@ -426,8 +441,8 @@ fn doc_ref(h: &Host, uid: u64) -> Data {
 fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     match st.doc.node(id) {
         Some(n) => match typename(n) {
-            Some(t) => host_ref(t, &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
-            None => host_ref("Layer", &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
+            Some(t) => host_ref(t, &node_handle(h, st, id)),
+            None => host_ref("Layer", &node_handle(h, st, id)),
         },
         None => Data::Null,
     }
@@ -1974,17 +1989,16 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data) -> std::result::
     let how = placement_of(how)?;
     let beside = matches!(how, Placement::Above | Placement::Below);
     let handle = handle_of(target, "PageItem").or_else(|| handle_of(target, "Layer"));
-    let Some(&[run, uid, high, low]) = handle.as_deref() else {
+    let Some(handle) = handle.filter(|parts| parts.len() == 5) else {
         if handle_of(target, "Document").is_some() {
             return Err(HostError::Error("a document as the relative object is not available yet".into()));
         }
         return Err(HostError::Type("the relative object must be a page item or a layer".into()));
     };
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let (doc, target) = node_of(h, &handle).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     if doc.uid != item.doc.uid {
         return Err(HostError::Error(CROSS_DOCUMENT.into()));
     }
-    let target = id_of(high, low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     with_doc(h, doc, |_, st| {
         let d = &st.doc;
         let t = d.node(target).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
@@ -2150,9 +2164,9 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
 
 fn layer_name(h: &Host, a: &[Data]) -> Answer {
     let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-    let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
+    let [run, uid, _, _, _] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
+    find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
+    let (doc, id) = node_of(h, &handle).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
 }
 

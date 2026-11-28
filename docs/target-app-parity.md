@@ -57,6 +57,8 @@ History panel row context menus (2026-11-20, G12): Right-clicking any state offe
 
 Character-style edits keep manual leading overrides when Dynamic Text's Block cannot fit the frame. When Block can fit the frame, its generated leading follows the edited style. A regression in `crates/engine/src/cmd/typecmd/block_tests.rs` covers a frame whose inset leaves no room.
 
+Script page-item and layer objects become stale after `file.revert`, including when the file reuses node IDs. The document object and its collections remain available and return new objects for the reverted content. `crates/engine/src/tests/script_dom.rs` covers reads, assignments, and relative targets for moves and copies.
+
 Script appearance and geometry setters reject objects on locked artboards. Assigning the current opacity remains allowed when it changes no graph styling. Position, size and stacking-order setters also reject objects excluded by selection filtering, including locked guide paths. `crates/engine/src/tests/script_dom.rs` covers refused edits, unchanged documents and undo history, and editing a guide after unlocking it.
 
 Variables panel row context menus (2026-11-20, G12): Right-click highlights the clicked variable without changing the canvas selection and offers Select Bound Object, Variable Options…, Unbind Variable, the four Make Dynamic actions, and Delete Variable. Shift+F10 opens the same menu for the focused row; Escape dismisses it. Row actions target that variable; dynamic actions use the canvas selection. Lock and selection checks disable unavailable actions. Headless pointer/accessibility tests cover opening the menu, highlighting, bound-object selection, deletion in one undo step and restoration, and disabled actions. Scores and estimates unchanged.
