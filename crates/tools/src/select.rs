@@ -1323,7 +1323,7 @@ impl Tool for SelectionTool {
                 released(c, released_away, |c| c.drag(cx, p), CornerDrag::finish)
             }
             (PointerKind::Drag, State::Pie(mut d)) => {
-                let out = d.drag(cx, p);
+                let out = d.drag(cx, p, m.shift);
                 self.state = State::Pie(d);
                 out
             }
