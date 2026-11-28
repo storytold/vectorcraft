@@ -268,14 +268,24 @@ fn from_editing_data_alone(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions)
     if !every_page(opened.page_count(), opts) || !opts.layers || !opts.editing_data {
         return None;
     }
-    let private = opened.illustrator_data()?;
-    Some(editing_copy_alone(&private, opts))
+    Some(editing_copy_alone(&decoded_copy(opened)?, opts))
 }
 
-/// [`from_editing_data_alone`] of `private`, the editor's copy already read.
-fn editing_copy_alone(private: &[u8], opts: &LoadOptions) -> Result<(Document, Vec<String>)> {
-    vectorcraft_eps::ai_alone_with(private, opts.legacy_names)
+/// [`from_editing_data_alone`] of `decoded`, the editor's copy already read and decoded, or why it
+/// can't be decoded.
+fn editing_copy_alone(decoded: &std::result::Result<Vec<u8>, String>, opts: &LoadOptions) -> Result<(Document, Vec<String>)> {
+    decoded
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|data| vectorcraft_eps::ai_alone_decoded(data, opts.legacy_names))
         .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})")))
+}
+
+/// The editor's own copy of its art that `opened` carries, read from its streams one after the
+/// other and decoded as it is read ([`vectorcraft_eps::decode_ai_private`]): the decoded data or why
+/// it can't be decoded, `None` as for [`vectorcraft_pdf::Opened::illustrator_data`].
+fn decoded_copy(opened: &vectorcraft_pdf::Opened) -> Option<std::result::Result<Vec<u8>, String>> {
+    opened.read_illustrator_data(|private| vectorcraft_eps::decode_ai_private(private))
 }
 
 /// Does a file opened with `opts` read the editor's own copy of its art: no pages picked, and
@@ -292,10 +302,10 @@ fn reads_layers_alone(opts: &LoadOptions) -> bool {
     reads_editing_copy(opts) && opts.crop == vectorcraft_pdf::CropTo::Crop && opts.text_as != vectorcraft_pdf::TextAs::Outlines
 }
 
-/// The editor's own copy of its art that `opened` carries (as [`vectorcraft_pdf::illustrator_data`]
-/// reads it), when `opts` read it ([`reads_editing_copy`]).
-fn editing_copy(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions) -> Option<Vec<u8>> {
-    reads_editing_copy(opts).then(|| opened.illustrator_data()).flatten()
+/// The editor's own copy of its art that `opened` carries, decoded ([`decoded_copy`]), when `opts`
+/// read it ([`reads_editing_copy`]).
+fn editing_copy(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions) -> Option<std::result::Result<Vec<u8>, String>> {
+    reads_editing_copy(opts).then(|| decoded_copy(opened)).flatten()
 }
 
 /// A `.ai`, or a PDF saved with the editing data, whose PDF part can't be read (`e`, the import's
@@ -307,8 +317,12 @@ fn without_pdf_part(bytes: &[u8], opts: &LoadOptions, e: EngineError) -> Result<
     if opts.pages.is_some() || !opts.layers || !opts.editing_data {
         return Err(e);
     }
-    let read = vectorcraft_pdf::read_illustrator_data_without_pdf_part(bytes, opts.password.as_deref())
-        .and_then(|private| private.map(|p| vectorcraft_eps::ai_alone_on_page(&p.data, p.trim, p.user_unit, opts.legacy_names)).transpose());
+    let read = vectorcraft_pdf::read_illustrator_data_without_pdf_part_with(bytes, opts.password.as_deref(), |private| {
+        vectorcraft_eps::decode_ai_private(private)
+    })
+    .and_then(|private| {
+        private.map(|p| p.data.and_then(|data| vectorcraft_eps::ai_alone_on_page_decoded(&data, p.trim, p.user_unit, opts.legacy_names))).transpose()
+    });
     match read {
         Ok(Some((doc, warnings))) => {
             let notes =
@@ -466,7 +480,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 if let Some((o, private)) = opened.as_ref().ok().filter(|_| reads_layers_alone(opts)).and_then(|o| Some((o, editing_copy(o, opts)?)))
                 {
                     let pages = o.trim_pages();
-                    match vectorcraft_eps::ai_layers_alone(&private, &pages.sizes, pages.user_unit, opts.legacy_names) {
+                    match vectorcraft_eps::ai_layers_alone_decoded(private, &pages.sizes, pages.user_unit, opts.legacy_names) {
                         Ok((mut doc, warnings)) => {
                             doc.setup.bleed = pages.bleed;
                             editing_data = true;
@@ -502,7 +516,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                         let (doc, warnings, read) = match alone {
                             Some((doc, warnings)) => (doc, warnings, true),
                             None => {
-                                let layers = layers.or_else(|| private.as_deref().map(vectorcraft_eps::AiLayers::decode));
+                                let layers = layers.or_else(|| private.map(vectorcraft_eps::AiLayers::decoded));
                                 through_editing_data(layers, opts, r.document, r.warnings, r.user_unit)
                             }
                         };
@@ -530,9 +544,9 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             // A restored document opens on the artboard that the editing copy beside it names as
             // active, as a file read from that copy does (the restored document never holds one).
             if read.2
-                && let Some(private) = opened.as_ref().ok().and_then(|o| o.illustrator_data())
+                && let Some(Ok(data)) = opened.as_ref().ok().and_then(decoded_copy)
             {
-                read.0.opened_artboard = vectorcraft_eps::ai_opened_artboard(&private, &read.0);
+                read.0.opened_artboard = vectorcraft_eps::ai_opened_artboard_decoded(&data, &read.0);
             }
             read
         }
