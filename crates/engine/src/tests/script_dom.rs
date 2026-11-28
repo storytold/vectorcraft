@@ -316,14 +316,14 @@ fn document_preset_settings_are_held_to_a_total() {
     let (mut s, _, _) = doc();
     let e = failure(
         &mut s,
-        "var t = new Array(64001).join('x'), kept = []; for (var i = 0; i < 300; i++) { var p = new DocumentPreset(); p.title = t; kept.push(p); }",
+        "var t = new Array(4097).join('x'), kept = []; for (var i = 0; i < 5000; i++) { var p = new DocumentPreset(); p.title = t; kept.push(p); }",
     );
     assert!(e.contains("at most 16 MiB of settings"), "{e}");
     let out = log(
         &mut s,
-        "var t = new Array(64001).join('x'), p = new DocumentPreset(); for (var i = 0; i < 500; i++) p.title = t + i; vc.log(p.title.length);",
+        "var t = new Array(4001).join('x'), p = new DocumentPreset(); for (var i = 0; i < 5000; i++) p.title = t + i; vc.log(p.title.length);",
     );
-    assert_eq!(out, vec![json!(64003)]);
+    assert_eq!(out, vec![json!(4004)]);
 }
 
 #[test]
