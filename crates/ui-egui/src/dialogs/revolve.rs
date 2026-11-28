@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 use craft::behavior::{DisplayOrder, ItemSource, SelectionChange};
 use craft::theme::Srgba;
 use craft::ui::buttons::Button;
+use craft::ui::choice::Swatch;
 use craft::ui::contract::Entry;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
 use craft::ui::layout_components::Row;
@@ -684,15 +685,12 @@ pub(super) fn set_light_value(fields: &mut DialogFields, key: &str, value: Value
 /// The light's colour: a swatch that asks the host's picker; the answer arrives in `__lightPick`.
 fn light_color_row() -> Param {
     Param::custom("lightColor", tl!("Color"), |ui, fields, cx| {
-        let hex = fields.text("lightColor").unwrap_or("#ffffff").to_owned();
-        let color = Srgba::from_hex(&hex).unwrap_or(Srgba::rgb(1.0, 1.0, 1.0));
-        // The row's body may run more than once in a pass: the picker opens after it.
-        let mut ask = false;
-        let row = Row::new().show(ui, |ui, _| ask = pressed(ui, &hex.to_uppercase(), true, Some(tl!("Color"))));
-        if ask {
+        let color = fields.text("lightColor").and_then(Srgba::from_hex).unwrap_or(Srgba::rgb(1.0, 1.0, 1.0));
+        let swatch = Swatch::new(tl!("Color"), color).tooltip(tl!("Color")).show(ui);
+        if swatch.clicked {
             cx.pick_color("__lightPick", color);
         }
-        row.output
+        swatch.response
     })
     .opens_with("#ffffff")
 }
