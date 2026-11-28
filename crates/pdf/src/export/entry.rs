@@ -370,38 +370,51 @@ fn long_page_warning(set: &PdfSettings, artboard: usize, w: f64, h: f64, unit: f
     }
 }
 
-/// The RGB colours and non-CMYK images a CMYK document carries, which the export separates into
-/// CMYK. Their darkest values come out as rich blacks, so the export says how many there are.
+/// The RGB colours and RGB images a CMYK document carries. Its RGB colours are always separated
+/// into CMYK; its RGB images only with a CMYK destination (Output › Color conversion, or a
+/// PDF/X-1a preset), else they are written in RGB (#1242). The export says how many of each
+/// there are: converted ones' darkest values come out as rich blacks, and kept ones aren't CMYK.
+/// Grey images stay grey either way and aren't counted.
 #[derive(Default)]
 pub(crate) struct RgbInCmyk {
     /// Distinct RGB colours, by the bits of their channels.
     pub(super) colours: HashSet<[u32; 3]>,
-    /// Keys of the raster images that aren't CMYK.
-    pub(super) images: HashSet<String>,
+    /// Keys of the RGB images converted to CMYK.
+    pub(super) converted: HashSet<String>,
+    /// Keys of the RGB images written in RGB.
+    pub(super) kept: HashSet<String>,
+}
+
+/// `n` `thing`s, in the plural unless `n` is 1.
+fn count(n: usize, thing: &str) -> String {
+    format!("{n} {thing}{}", if n == 1 { "" } else { "s" })
 }
 
 impl RgbInCmyk {
     pub(super) fn merge(&mut self, other: RgbInCmyk) {
         self.colours.extend(other.colours);
-        self.images.extend(other.images);
+        self.converted.extend(other.converted);
+        self.kept.extend(other.kept);
     }
 
     /// The warning for the export report; `None` when the document has nothing of the sort.
     pub(super) fn warning(&self) -> Option<String> {
-        let (c, i) = (self.colours.len(), self.images.len());
-        if c == 0 && i == 0 {
-            return None;
+        let (c, i, k) = (self.colours.len(), self.converted.len(), self.kept.len());
+        let mut sentences = vec![];
+        let converted: Vec<_> = [(c, "RGB colour"), (i, "RGB image")].into_iter().filter(|(n, _)| *n > 0).map(|(n, t)| count(n, t)).collect();
+        if !converted.is_empty() {
+            sentences.push(format!(
+                "{}: they are converted to CMYK through the colour settings, so dark ones can come out as rich blacks on several plates; paint them with CMYK colours (Edit › Edit Colors › Convert to CMYK) for pure black ink",
+                converted.join(" and ")
+            ));
         }
-        let mut parts = vec![];
-        if c > 0 {
-            parts.push(format!("{c} RGB colour{}", if c == 1 { "" } else { "s" }));
+        if k > 0 {
+            let (it, is) = if k == 1 { ("it", "is") } else { ("them", "are") };
+            sentences.push(format!(
+                "{} that {is} written in RGB, not CMYK: to write {it} in CMYK, choose Output › Color conversion › Convert to destination with a CMYK destination, or the PDF/X-1a:2001 preset",
+                count(k, "RGB image")
+            ));
         }
-        if i > 0 {
-            parts.push(format!("{i} RGB or grey image{}", if i == 1 { "" } else { "s" }));
-        }
-        Some(format!(
-            "this CMYK document has {}: they are converted to CMYK through the colour settings, so dark ones can come out as rich blacks on several plates; paint them with CMYK colours (Edit › Edit Colors › Convert to CMYK) for pure black ink",
-            parts.join(" and ")
-        ))
+        (!sentences.is_empty()).then(|| format!("this CMYK document has {}", sentences.join("; and ")))
     }
 }

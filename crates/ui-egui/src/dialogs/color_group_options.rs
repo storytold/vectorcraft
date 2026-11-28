@@ -3,7 +3,7 @@
 //! as they are.
 //!
 //! Fields: `name`. The group being renamed (its name, its place in the list of color groups, the names of
-//! its swatches and the uid of its document when the dialog opened) is kept by the dialog's OK.
+//! its swatches and the document's identity and revert generation at opening) is kept by the dialog's OK.
 
 use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamKind, ParamResult};
 use serde_json::{Value, json};
@@ -16,8 +16,9 @@ pub const KIND: &str = "colorGroupOptions";
 
 /// A color group as the dialog found it: what tells it apart from the others, since color groups carry nothing else.
 struct Identity {
-    /// The uid of the document the dialog opened on.
+    /// The document and its saved-content generation when the dialog opened.
     doc: u64,
+    reverts: u64,
     /// The group's place in the document's list of color groups.
     at: usize,
     /// The group's name.
@@ -32,20 +33,23 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let key = "group";
     let group = match p.get(key) {
         Some(Value::String(g)) => g.clone(),
-        None | Some(Value::Null) => crate::panels::swatches::sole_selected_group(app).ok_or("missing `group`")?,
+        None | Some(Value::Null) => {
+            crate::panels::swatches::sole_selected_group(app).ok_or("select a color group in the Swatches panel, or pass group")?
+        }
         Some(_) => return Err(format!("`{key}` must be a string")),
     };
     let st = app.session.active().ok_or("no document open")?;
     let at = st.doc.swatch_groups.iter().position(|g| g.name == group).ok_or_else(|| format!("no colour group `{group}`"))?;
     let g = &st.doc.swatch_groups[at];
-    let identity = Identity { doc: st.uid, at, group: g.name.clone(), swatches: g.swatches.iter().map(|w| w.name.clone()).collect() };
+    let identity =
+        Identity { doc: st.uid, reverts: st.reverts, at, group: g.name.clone(), swatches: g.swatches.iter().map(|w| w.name.clone()).collect() };
     let mut fields = DialogFields::new();
     fields.set("name", g.name.as_str());
     let ctx = app.ui_ctx.clone().ok_or(NO_WINDOW)?;
     let rows = vec![Param::new("name", field_label(tl!("Name:")), ParamKind::text(""))];
     let dialog = hosted(&ctx, KIND, tl!("Color Group Options"), fields, rows, false);
     let ok = move |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
-        // Another document or group: it closes as Cancel does and renames nothing.
+        // A different document, a revert, or a different group closes the draft without renaming.
         if !same_group(app, &identity) {
             return Ok(());
         }
@@ -58,9 +62,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 }
 
 /// Whether the dialog's group is still in its document, at the place in the list, under the name
-/// and with the swatches it opened with, and that document is the active one.
+/// and with the swatches it opened with, and the document is still active and has not been reverted.
 fn same_group(app: &VectorcraftApp, identity: &Identity) -> bool {
-    let Some(st) = app.session.active().filter(|st| st.uid == identity.doc) else { return false };
+    let Some(st) = app.session.active().filter(|st| st.uid == identity.doc && st.reverts == identity.reverts) else { return false };
     st.doc
         .swatch_groups
         .get(identity.at)
@@ -97,6 +101,42 @@ mod tests {
 
     fn undo_len(app: &VectorcraftApp) -> usize {
         app.session.active().unwrap().history.undo.len()
+    }
+
+    #[test]
+    fn an_old_rename_draft_keeps_the_color_group_restored_by_revert() {
+        let (ctx, mut app) = app();
+        let dir = vectorcraft_testkit::TempDir::new("color-group-options-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("colors.vectorcraft")})).unwrap();
+        let color = |app: &VectorcraftApp| app.session.active().unwrap().doc.swatch("Bright Red").unwrap().paint.color();
+        let saved_color = color(&app);
+        let saved_groups = groups(&app);
+        let st = app.session.active().unwrap();
+        let (uid, reverts) = (st.uid, st.reverts);
+
+        app.run("swatch.edit", json!({"name": "Bright Red", "color": "#1784ca"})).unwrap();
+        assert_ne!(color(&app), saved_color);
+        app.run("ui.colorGroupOptions", json!({"group": "Brights"})).unwrap();
+        let id = dialog_id(KIND);
+        app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, "name", json!("Old palette draft"))).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let restored = app.session.active().unwrap();
+        assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+        assert_eq!(color(&app), saved_color);
+        assert_eq!(groups(&app), saved_groups);
+        let undo = undo_len(&app);
+
+        crate::tests::picks::answer_dialog(&mut app, id, &[], true);
+        assert_eq!(groups(&app), saved_groups, "old Color Group Options must leave the restored group named Brights");
+        assert_eq!(color(&app), saved_color);
+        assert_eq!(undo_len(&app), undo);
+
+        app.run("ui.colorGroupOptions", json!({"group": "Brights"})).unwrap();
+        ok(&mut app, &ctx, "Restored palette");
+        assert!(groups(&app).iter().any(|name| name == "Restored palette"));
+        assert_eq!(undo_len(&app), undo + 1);
     }
 
     /// Whether the dialog is still open.
