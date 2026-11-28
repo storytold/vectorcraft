@@ -89,11 +89,15 @@ pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Pat
     let xml = data.checked_add(length).and_then(|e| obj.get(data..e)).ok_or_else(bad)?;
     let mut edits: Vec<(usize, usize, Vec<u8>)> = vec![];
     if let Some((version, _)) = pdfx_ids(standard).filter(|_| standard == Standard::PdfX4) {
-        // Into the writer's description, whose namespaces declare the `pdf` and `xmpMM` prefixes.
+        // The writer wraps its properties in one outer description. Declare `pdfxid` there with
+        // the other namespaces, so validators can find the version property without attributes.
+        let description = b"<rdf:Description";
+        let open = find(xml, description, 0).ok_or_else(bad)? + description.len();
         let close = crate::lab_spot::rfind(xml, b"</rdf:Description>").ok_or_else(bad)?;
+        edits.push((open, open, br#" xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/""#.to_vec()));
         let trapped = if trapped { "True" } else { "False" };
         let props = format!(
-            "<pdfxid:GTS_PDFXVersion xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\">{version}</pdfxid:GTS_PDFXVersion><pdf:Trapped>{trapped}</pdf:Trapped><xmpMM:VersionID>1</xmpMM:VersionID>"
+            "<pdfxid:GTS_PDFXVersion>{version}</pdfxid:GTS_PDFXVersion><pdf:Trapped>{trapped}</pdf:Trapped><xmpMM:VersionID>1</xmpMM:VersionID>"
         );
         edits.push((close, close, props.into_bytes()));
         // When the packet has no `<xmp:MetadataDate>` element, this adds one after the writer's
