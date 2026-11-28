@@ -66,6 +66,11 @@ const WAVE_MAX: usize = 4_000;
 /// long story of unknown words costs one check's worth.
 const MAX_UNDERLINED: usize = 1_000;
 
+/// The radius of a missing link's badge and the size of its question mark, in screen points: the
+/// same at every zoom.
+const MISSING_BADGE_RADIUS: f32 = 7.0;
+const MISSING_BADGE_TEXT: f32 = 11.0;
+
 /// The marks Show Hidden Characters drew on each text object in the last pass
 /// ([`crate::CanvasCache::hidden_chars`]). Each is kept with the node it was laid out from: an edited
 /// object is a new `Arc` and is laid out again, and all type is laid out again when the fonts or the
@@ -158,6 +163,9 @@ pub(crate) struct Marks {
     fade: Vec<[Pos2; 4]>,
     bleed: Vec<BezPath>,
     artboard_marks: Vec<BezPath>,
+    /// View › Show Missing Links: each visible missing linked image or placed document in view, as
+    /// its box on the screen and where its badge sits (the box's top left corner in the document).
+    pub(crate) missing: Vec<([Pos2; 4], Pos2)>,
 }
 
 /// Drops the hidden-character and spelling memos and the text nodes they hold.
@@ -194,6 +202,8 @@ pub(crate) fn marks_of(app: &mut VectorcraftApp, view: &CanvasView) -> Marks {
         return m;
     };
     let key = (st.uid, st.revision);
+    // The link watcher's last scan: nothing here reads files.
+    m.missing = missing_links(st, view);
     if fades && let Some(shown) = app.view() {
         m.fade = artboards::fade_quads(view, &artboards::frames(app, st, shown, shown.outline));
     }
@@ -308,6 +318,18 @@ fn text_nodes(layers: &[Arc<Node>]) -> Vec<Arc<Node>> {
     let mut out = Vec::new();
     walk(layers, &mut out);
     out
+}
+
+/// The missing links [`DocState::marked_missing_links`] marks in view: each one's box on the screen
+/// (following a turned view) and its badge's place.
+fn missing_links(st: &DocState, view: &CanvasView) -> Vec<([Pos2; 4], Pos2)> {
+    st.marked_missing_links()
+        .into_iter()
+        .filter_map(|id| st.doc.node(id))
+        .filter(|n| in_view(n, view))
+        .filter_map(|n| n.geometric_bounds())
+        .map(|b| (view.quad(b), view.to_screen(Point::new(b.x0, b.y0))))
+        .collect()
 }
 
 /// Whether `n`'s box meets the part of the document the view shows (the box round the view's
@@ -549,6 +571,8 @@ pub(crate) struct ArtMarks<'a> {
     arm_color: [u8; 3],
     /// The print tiles.
     tiles: &'a [Tile],
+    /// The missing links' boxes and badges.
+    missing: &'a [([Pos2; 4], Pos2)],
 }
 
 impl<'a> ArtMarks<'a> {
@@ -565,6 +589,7 @@ impl<'a> ArtMarks<'a> {
             arms: &marks.arms,
             arm_color: marks.arm_color,
             tiles: &marks.tiles,
+            missing: &marks.missing,
         }
         .label(label)
     }
@@ -625,6 +650,9 @@ impl Component for ArtMarks<'_> {
         for tile in self.tiles {
             paint_tile(&draw, tile);
         }
+        for (quad, at) in self.missing {
+            paint_missing(&draw, quad, *at, style.bad);
+        }
     }
 
     fn finish(self, cx: Cx<'_, Self>) -> Response {
@@ -652,6 +680,16 @@ fn paint_tile(draw: &Draw<'_>, tile: &Tile) {
     draw.stroke(&PaintShape::Path(tile.edge.clone()), StrokeWidth::Hairline, color);
     let run = [DocRun::new(tile.label.as_str(), FontRef::proportional(), TILE_NUMBER_SIZE, color)];
     let room = egui::Rect::from_min_size(tile.at, Vec2::new(TILE_NUMBER_SIZE * 0.7 * tile.label.len().max(1) as f32, TILE_NUMBER_SIZE * 1.4));
+    draw.doc(room, &DocText::new(&run));
+}
+
+/// One missing link: a thick outline round its box and, at the box's corner, a filled badge with a
+/// question mark, so the mark doesn't rely on its colour alone.
+fn paint_missing(draw: &Draw<'_>, quad: &[Pos2; 4], at: Pos2, color: StyleColor) {
+    draw.stroke(&PaintShape::Path(ring(quad.to_vec(), true)), StrokeWidth::Thick, color);
+    draw.fill(&PaintShape::Circle(at, MISSING_BADGE_RADIUS), color);
+    let run = [DocRun::new("?", FontRef::proportional(), MISSING_BADGE_TEXT, DataColor::new(Color32::WHITE))];
+    let room = egui::Rect::from_min_size(at - Vec2::new(MISSING_BADGE_TEXT * 0.3, MISSING_BADGE_TEXT * 0.7), Vec2::splat(MISSING_BADGE_TEXT * 1.4));
     draw.doc(room, &DocText::new(&run));
 }
 

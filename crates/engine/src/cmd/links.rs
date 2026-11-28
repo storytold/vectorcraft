@@ -40,6 +40,12 @@ use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_do
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
+        cmd!(query "view.showMissingLinks", "Show Missing Links", ["View"], None,
+            "{on?: bool (default: toggle)} show non-printing red outlines and badges on missing linked images and placed documents in the active document; transient view state, no undo step; reads no files (the desktop app scans in the background, links.marked inspects now) → {on}",
+            has_doc, show_missing_links),
+        cmd!(query "links.marked", "Marked Missing Links", [], None,
+            "{} inspect missing links now; only visible image objects and placed documents are marked, and none when the toggle is off → {on, images: [{id, bounds: [x0, y0, x1, y1]}]}",
+            has_doc, marked),
         cmd!(
             query "links.check",
             "Check Links",
@@ -461,6 +467,8 @@ fn refused(link: &LinkInfo, doc_path: Option<&str>) -> Option<craft_docpath::Ref
 /// the content shown. Its bytes are read only when its size or modification time changed. An image
 /// placed from a DCS file is modified when one of its plate files of their own changed.
 fn probe(g: &Group, base: LinkBase) -> (Status, Option<Found>) {
+    #[cfg(test)]
+    probe_gate::hold(&g.link.path);
     let Some(mut f) = locate(&g.link, base) else { return (Status::Missing, None) };
     let l = &g.link;
     if !g.plate_files.is_empty() && super::place::dcs::plate_files_changed(&g.plate_files, &f.path) {
@@ -477,6 +485,24 @@ fn probe(g: &Group, base: LinkBase) -> (Status, Option<Found>) {
     };
     f.bytes = Some(bytes);
     (if same { Status::Ok } else { Status::Modified }, Some(f))
+}
+
+/// Whether [`probe`] would find group `g`'s file missing, without reading or hashing its content.
+/// A changed file is opened to check it can be read, and nothing more: the canvas markers ask only
+/// this, and with Update Links set to Manually a changed file keeps differing from its stored link,
+/// so a full probe would read the whole file again on every look while the markers are on.
+fn missing(g: &Group, base: LinkBase) -> bool {
+    #[cfg(test)]
+    probe_gate::hold(&g.link.path);
+    let Some(f) = locate(&g.link, base) else { return true };
+    let l = &g.link;
+    if !g.plate_files.is_empty() && super::place::dcs::plate_files_changed(&g.plate_files, &f.path) {
+        return false;
+    }
+    if l.size == Some(f.size) && l.modified.is_some() && l.modified == f.modified {
+        return false;
+    }
+    fileio::read_file_head(&f.path, 0).is_err()
 }
 
 /// Is image `key` of `d` showing its preview (its file not read)?
@@ -2102,6 +2128,7 @@ fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -
             editing_brush_art(d, |d| reads.into_iter().try_for_each(|(g, read)| install_read(d, &g.ids, read, None, Some(&g))))
         })?;
     }
+    clear_markers(s, &updated)?;
     let mut out = json!({ "updated": updated, "missing": missing });
     if !warnings.is_empty() {
         out["warnings"] = json!(warnings);
@@ -2384,6 +2411,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     }
     not_found.sort();
     not_found.dedup();
+    clear_markers(s, &relinked)?;
     let mut out = json!({ "relinked": relinked, "notFound": not_found });
     if !warnings.is_empty() {
         out["warnings"] = json!(warnings);
@@ -2561,6 +2589,56 @@ pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option
         out.extend(g.ids.iter().map(|id| (*id, (status, found.clone(), preview))));
     }
     out
+}
+
+/// Missing placed objects, using the same file resolution as the Links panel. Hidden ones are
+/// included: [`crate::DocState::marked_missing_links`] leaves out what is hidden when it is drawn, so
+/// artwork shown later is marked without another scan. Also used on the link watch worker, away
+/// from the UI thread.
+pub(crate) fn missing_markers(doc: &Document, base: LinkBase) -> Vec<NodeId> {
+    groups(doc, None).iter().filter(|g| !g.ids.is_empty() && missing(g, base)).flat_map(|g| g.ids.iter().copied()).collect()
+}
+
+fn show_missing_links(s: &mut Session, p: &Value) -> Result<Value> {
+    let st = s.doc_mut()?;
+    let on = super::switch_or(p, "on", !st.show_missing_links, "view.showMissingLinks")?;
+    // Never probes files here: a changed linked file is read in full to tell whether it still
+    // matches, which would hold up the caller (the desktop UI thread) on a large or slow file.
+    // Turning the overlay on leaves its markers unscanned; the link watch worker scans them
+    // at once ([`Session::missing_link_scan_due`]) and the canvas repaints from its result.
+    // `links.marked` stays the explicit, synchronous inspection. The web build has no worker
+    // and no files to read: its app marks them in place ([`Session::mark_missing_links_in_place`]).
+    if !on || !st.show_missing_links {
+        st.missing_link_markers = None;
+    }
+    st.show_missing_links = on;
+    Ok(json!({"on": on}))
+}
+
+fn marked(s: &mut Session, _: &Value) -> Result<Value> {
+    let st = s.doc_mut()?;
+    let ids = if st.show_missing_links { missing_markers(&st.doc, LinkBase::of(st)) } else { vec![] };
+    let images: Vec<Value> = ids
+        .iter()
+        .filter(|id| st.doc.is_visible(**id))
+        .filter_map(|id| {
+            let b = st.doc.node(*id)?.geometric_bounds()?;
+            Some(json!({"id": id.0, "bounds": [b.x0, b.y0, b.x1, b.y1]}))
+        })
+        .collect();
+    st.missing_link_markers = Some((st.doc.clone(), ids));
+    Ok(json!({"on": st.show_missing_links, "images": images}))
+}
+
+/// Successful repair clears its decoration even when the file's metadata is unchanged.
+fn clear_markers(s: &mut Session, repaired: &[u64]) -> Result<()> {
+    if !repaired.is_empty()
+        && let Some((_, ids)) = &mut s.doc_mut()?.missing_link_markers
+    {
+        let repaired: std::collections::HashSet<_> = repaired.iter().copied().collect();
+        ids.retain(|id| !repaired.contains(&id.0));
+    }
+    Ok(())
 }
 
 /// The format of the file image `im` of `d` shows: its link's extension, else its pixels' type.
@@ -3250,6 +3328,64 @@ fn placement_options(s: &mut Session, p: &Value) -> Result<Value> {
     let mut shown = first;
     set(&mut shown);
     Ok(json!({ "ids": ids_json(&ids), "placement": placement_json(shown) }))
+}
+
+/// Test seam: hold the probe of one linked path until the test releases it, so a test can
+/// tell whether a command returned before the probe finished, and on which thread it ran.
+#[cfg(test)]
+pub(crate) mod probe_gate {
+    use std::sync::{Arc, Condvar, Mutex, PoisonError};
+    use std::time::Duration;
+
+    /// A gated path: (open, entered on thread named, finished), and the condition signalling
+    /// each change.
+    #[derive(Default)]
+    pub struct Gate {
+        state: Mutex<(bool, Option<String>, bool)>,
+        changed: Condvar,
+    }
+
+    static GATES: Mutex<Vec<(String, Arc<Gate>)>> = Mutex::new(Vec::new());
+
+    impl Gate {
+        /// Gate probes of the link stored as `path` until [`Gate::open`].
+        pub fn close(path: &str) -> Arc<Gate> {
+            let g = Arc::new(Gate::default());
+            GATES.lock().unwrap_or_else(PoisonError::into_inner).push((path.to_string(), g.clone()));
+            g
+        }
+        pub fn open(&self) {
+            self.state.lock().unwrap_or_else(PoisonError::into_inner).0 = true;
+            self.changed.notify_all();
+        }
+        /// The name of the thread that entered the probe, waiting up to `limit` for one.
+        pub fn entered(&self, limit: Duration) -> Option<String> {
+            let s = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+            let (s, _) = self.changed.wait_timeout_while(s, limit, |s| s.1.is_none()).unwrap_or_else(PoisonError::into_inner);
+            s.1.clone()
+        }
+        pub fn finished(&self) -> bool {
+            self.state.lock().unwrap_or_else(PoisonError::into_inner).2
+        }
+    }
+
+    /// Called at the start of every probe: blocks while `path` is gated and closed (at most
+    /// ten seconds, so a regression fails the test instead of hanging it).
+    pub(super) fn hold(path: &str) {
+        let gate = GATES.lock().unwrap_or_else(PoisonError::into_inner).iter().find(|(p, _)| p == path).map(|(_, g)| g.clone());
+        let Some(g) = gate else { return };
+        let mut s = g.state.lock().unwrap_or_else(PoisonError::into_inner);
+        s.1 = Some(std::thread::current().name().unwrap_or("").to_string());
+        g.changed.notify_all();
+        let (mut s, _) = g.changed.wait_timeout_while(s, Duration::from_secs(10), |s| !s.0).unwrap_or_else(PoisonError::into_inner);
+        s.2 = true;
+        g.changed.notify_all();
+    }
+
+    /// Stop gating `path`.
+    pub fn remove(path: &str) {
+        GATES.lock().unwrap_or_else(PoisonError::into_inner).retain(|(p, _)| p != path);
+    }
 }
 
 #[cfg(test)]

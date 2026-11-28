@@ -118,6 +118,7 @@ mod livecorners;
 mod maskview;
 pub(super) mod menucmds;
 mod mesh_picks;
+mod missing_links;
 mod nativefile;
 mod newart;
 mod newdoc;

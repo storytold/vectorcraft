@@ -257,6 +257,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-26 | minor | Show Missing Links in View and the Links panel marks missing linked images and placed documents on the canvas; the link watcher scans them in the background, so turning it on never waits on a file; transient overlays stay out of artwork, export and undo history; command API controls and lists markers (#5547). Scores and estimates unchanged. |
 | 2026-11-20 | minor | Color conversion indexes global swatch bases and linked-paint lookups (#8804); scores, estimates and measured budgets unchanged. |
 | 2026-11-22 | minor | Upcoming: the G11 item names what is left, the unit preference reverting to points (#864; SVG export units are fixed) and a Transform effect in a fill's or stroke's own effects (#885), instead of Shape Builder regions and Asset Export borders, which are fixed (#937, #983 / #1037); its estimate follows docs/roadmap.md and docs/gaps.md, 8–15 → 6–13 h, #8314. The Essentials readiness row's Shape Builder item names what its 4–8 h still covers (checking #937's fix on the reporter's file, still unconfirmed). Headline numbers unchanged. |
 | 2026-11-15 | minor | Graphic Styles: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h). |

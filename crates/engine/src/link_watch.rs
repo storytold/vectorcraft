@@ -27,9 +27,24 @@ use crate::{Result, Session};
 /// A file's size and modification time (nanoseconds since 1970).
 pub type Stamp = (u64, u128);
 
-/// Stamps of a document's linked files taken on a worker thread: (document uid, [(file,
-/// object ids, stamp)]), the condition the worker signals when it ends, and whether it has.
-pub type LinkScan = Arc<(Mutex<Option<(u64, Vec<(String, Vec<u64>, Option<Stamp>)>)>>, Condvar, AtomicBool)>;
+/// A document's linked-file scan, the condition the worker signals when it ends, and whether
+/// it has. Includes missing-link marker ids when their view toggle is enabled.
+pub type LinkScan = Arc<(Mutex<Option<LinkScanResult>>, Condvar, AtomicBool)>;
+
+/// A worker's stamps and optional missing-link overlay scan of the same document snapshot.
+pub struct LinkScanResult {
+    uid: u64,
+    stamps: Vec<(String, Vec<u64>, Option<Stamp>)>,
+    markers: Option<(Arc<vectorcraft_doc::Document>, Vec<vectorcraft_doc::NodeId>)>,
+}
+
+#[cfg(test)]
+impl LinkScanResult {
+    /// A look's stamps of document `uid`'s linked files, with no missing-link scan.
+    pub(crate) fn stamps(uid: u64, stamps: Vec<(String, Vec<u64>, Option<Stamp>)>) -> Self {
+        Self { uid, stamps, markers: None }
+    }
+}
 
 /// Held by a look's worker: marks the look as ended and wakes [`Session::wait_link_scan`] when
 /// dropped, whether the worker returned or unwound.
@@ -83,6 +98,29 @@ pub(crate) fn update_changed(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 impl Session {
+    /// Whether the active document shows missing links but has no marker scan yet (the overlay
+    /// was just turned on, or its first scan saw art that has since changed): the desktop app
+    /// then starts a look at once instead of waiting for the next periodic one.
+    pub fn missing_link_scan_due(&self) -> bool {
+        self.link_scan.is_none() && self.active().is_some_and(|st| st.show_missing_links && st.missing_link_markers.is_none())
+    }
+
+    /// Find the active document's missing links again, here and now, when it shows them and its art
+    /// changed since they were last found (or they never were); returns whether it did. This reads
+    /// linked files on the calling thread, so only the web app calls it: it has no files to read,
+    /// so every linked file is missing there, and no link watch worker to scan in the background.
+    /// Artwork restored or placed while the overlay is on is then marked too. The desktop app
+    /// scans on the worker instead ([`Session::start_link_scan`]).
+    pub fn mark_missing_links_in_place(&mut self) -> bool {
+        let Some(st) = self.active_mut() else { return false };
+        if !st.show_missing_links || st.missing_link_markers.as_ref().is_some_and(|(seen, _)| Arc::ptr_eq(seen, &st.doc)) {
+            return false;
+        }
+        let ids = crate::cmd::links::missing_markers(&st.doc, crate::cmd::links::LinkBase::of(st));
+        st.missing_link_markers = Some((st.doc.clone(), ids));
+        true
+    }
+
     /// Start stamping the active document's linked files on a worker thread, unless a look is
     /// still running, a script is running (or the build has no files to look at: the web app).
     pub fn start_link_scan(&mut self) {
@@ -94,7 +132,14 @@ impl Session {
         // A confined caller's roots, else what the caller that opened the document may read (the
         // desktop frame is unconfined).
         let opened_by = st.opened_by.clone();
+        let marker_doc = st.show_missing_links.then(|| st.doc.clone());
+        let links_from = st.links_from.clone();
         if files.is_empty() {
+            // Nothing linked, so nothing missing: an empty scan, which also ends
+            // [`Session::missing_link_scan_due`] without starting a worker.
+            if let Some(st) = self.docs.iter_mut().find(|st| st.uid == uid) {
+                st.missing_link_markers = st.show_missing_links.then(|| (st.doc.clone(), vec![]));
+            }
             return;
         }
         let slot: LinkScan = Arc::default();
@@ -103,12 +148,18 @@ impl Session {
         let spawned = std::thread::Builder::new().name("link-watch".into()).spawn(move || {
             // Marks the look as ended when the worker returns or unwinds.
             let _ended = Ended(out.clone());
-            let stamps = scope.run(|| {
+            let (stamps, markers) = scope.run(|| {
                 crate::file_access::confine(crate::file_access::current().or(opened_by).as_ref(), || {
-                    files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p, doc_path.as_deref()))).collect()
+                    let stamps = files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p, doc_path.as_deref()))).collect();
+                    let markers = marker_doc.map(|doc| {
+                        let base = crate::cmd::links::LinkBase::of_files(doc_path.as_deref(), links_from.as_deref());
+                        let ids = crate::cmd::links::missing_markers(&doc, base);
+                        (doc, ids)
+                    });
+                    (stamps, markers)
                 })
             });
-            *out.0.lock().unwrap_or_else(PoisonError::into_inner) = Some((uid, stamps));
+            *out.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(LinkScanResult { uid, stamps, markers });
         });
         if spawned.is_ok() {
             self.link_scan = Some(slot);
@@ -123,8 +174,15 @@ impl Session {
             return None;
         }
         self.link_scan.take_if(|scan| ended_without_stamps(scan, |ended| ended.load(Ordering::SeqCst)));
-        let (uid, stamps) = self.link_scan.as_ref()?.0.lock().unwrap_or_else(PoisonError::into_inner).take()?;
+        let LinkScanResult { uid, stamps, markers } = self.link_scan.as_ref()?.0.lock().unwrap_or_else(PoisonError::into_inner).take()?;
         self.link_scan = None;
+        if let Some(st) = self.docs.iter_mut().find(|st| st.uid == uid)
+            && st.show_missing_links
+            && let Some((doc, ids)) = markers
+            && Arc::ptr_eq(&st.doc, &doc)
+        {
+            st.missing_link_markers = Some((doc, ids));
+        }
         Some(self.apply_link_stamps(uid, stamps, false))
     }
 

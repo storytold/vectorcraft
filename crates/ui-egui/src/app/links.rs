@@ -95,7 +95,9 @@ impl VectorcraftApp {
         let last: f64 = ctx.data(|d| d.get_temp(last_key)).unwrap_or(f64::NEG_INFINITY);
         // The active document as the last look saw it: its uid and revision.
         let (seen_key, doc) = (egui::Id::unique("linkWatch.seen"), self.session.active().map(|d| (d.uid, d.revision)));
-        if now - last >= 2.0 || (focused && !was_focused) {
+        // View › Show Missing Links just turned on: its first scan runs on the worker now, and
+        // the canvas repaints from the result (the toggle itself never reads files).
+        if now - last >= 2.0 || (focused && !was_focused) || self.session.missing_link_scan_due() {
             // Walking the document's links costs a pass over it: only when a look is due.
             // `start_link_scan` starts none for a document without links, which then doesn't
             // wake the app for looks of its own (any frame still looks once one is due).

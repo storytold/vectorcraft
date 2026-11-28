@@ -529,6 +529,12 @@ impl VectorcraftApp {
         }
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
+        // The web app has no link watch worker and no files to read: View › Show Missing Links
+        // marks again here whenever the art changed, so artwork shown or restored is marked too.
+        #[cfg(target_arch = "wasm32")]
+        if self.session.mark_missing_links_in_place() {
+            ctx.request_repaint();
+        }
         crate::addons::select::link_status::refresh(self, now);
         if !self.background.jobs.is_empty()
             || !self.opening.pending.is_empty()

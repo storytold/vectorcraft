@@ -30,6 +30,7 @@ pub const TOGGLES: &[&str] = &[
     "view.rulers",
     "view.boundingBox",
     "view.transparencyGrid",
+    "view.showMissingLinks",
     "view.guides",
     "view.grid",
     "view.slices.hide",

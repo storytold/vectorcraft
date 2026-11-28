@@ -152,7 +152,7 @@ fn a_look_that_stores_its_stamps_between_the_polls_reads_keeps_them() {
     // The worker takes its turn after the slot is read and before the flag is, if the slot is free.
     let ended = link_watch::ended_without_stamps(&scan, |flag| {
         if let Ok(mut slot) = scan.0.try_lock() {
-            *slot = Some((uid, stamps.clone()));
+            *slot = Some(link_watch::LinkScanResult::stamps(uid, stamps.clone()));
             flag.store(true, Ordering::SeqCst);
         }
         flag.load(Ordering::SeqCst)
@@ -163,7 +163,7 @@ fn a_look_that_stores_its_stamps_between_the_polls_reads_keeps_them() {
         let scan = scan.clone();
         move || {
             let _ended = link_watch::Ended(scan.clone());
-            *scan.0.lock().unwrap() = Some((uid, stamps));
+            *scan.0.lock().unwrap() = Some(link_watch::LinkScanResult::stamps(uid, stamps));
         }
     });
     worker.join().unwrap();

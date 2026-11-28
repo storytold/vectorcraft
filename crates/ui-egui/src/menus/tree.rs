@@ -663,6 +663,7 @@ fn built_in_tree(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec
                 ),
                 c("Hide Bounding Box", "view.boundingBox"),
                 c("Show Transparency Grid", "view.transparencyGrid"),
+                c("Show Missing Links", "view.showMissingLinks"),
                 c("Hide Text Threads", "view.textThreads"),
                 c("Hide Gradient Annotator", "view.gradientAnnotator"),
                 c("Hide Corner Widget", "view.cornerWidget"),

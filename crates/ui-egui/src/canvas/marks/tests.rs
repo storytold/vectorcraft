@@ -452,3 +452,47 @@ fn auto_spell_check_is_a_toggle_of_the_canvas_lines() {
     assert_eq!(segments(&mut app), 0, "off");
     assert!(app.canvas.spelling.lines.is_empty(), "no node is kept");
 }
+
+/// A document with a placed document whose file is gone, View › Show Missing Links on and its markers
+/// inspected → (app, the placed object).
+fn missing_placed(name: &str) -> (VectorcraftApp, NodeId) {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-marks-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("placed.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::save_file(&vectorcraft_doc::Document::new(80.0, 40.0))).unwrap();
+    let mut app = app();
+    let r = app.session.execute("file.place", &json!({"path": path.to_string_lossy(), "at": [200, 150]})).unwrap();
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    std::fs::remove_dir_all(&dir).unwrap();
+    app.run("view.showMissingLinks", json!({"on": true})).unwrap();
+    // The synchronous inspection stands in for the link watcher's scan.
+    app.run("links.marked", json!({})).unwrap();
+    (app, id)
+}
+
+/// A missing link is outlined round its box and badged at its corner in any view, turned or zoomed,
+/// and nothing is marked once the toggle is off.
+#[test]
+fn missing_links_are_marked_round_their_box_in_any_view_until_turned_off() {
+    let (mut app, id) = missing_placed("follow");
+    let bounds = app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+    for (zoom, rotation) in [(0.25, 0.0), (1.0, 37.0), (8.0, 90.0)] {
+        let view = CanvasView::new(view().rect, bounds.center(), zoom).rotation(rotation);
+        let m = marks_of(&mut app, &view);
+        assert_eq!(m.missing, vec![(view.quad(bounds), view.to_screen(Point::new(bounds.x0, bounds.y0)))], "zoom {zoom}, {rotation}°");
+    }
+    app.run("view.showMissingLinks", json!({"on": false})).unwrap();
+    assert!(marks_of(&mut app, &view()).missing.is_empty());
+}
+
+/// The menu item runs the engine's toggle, and its label follows it.
+#[test]
+fn the_missing_links_menu_item_uses_the_engine_toggle() {
+    let mut app = app();
+    assert_eq!(crate::menus::dynamic_label(&app, "view.showMissingLinks", ""), "Show Missing Links");
+    app.run("view.showMissingLinks", json!({"on": true})).unwrap();
+    assert!(app.session.active().unwrap().show_missing_links);
+    assert_eq!(crate::menus::dynamic_label(&app, "view.showMissingLinks", ""), "Hide Missing Links");
+    app.run("view.showMissingLinks", json!({"on": false})).unwrap();
+    assert!(!app.session.active().unwrap().show_missing_links);
+}

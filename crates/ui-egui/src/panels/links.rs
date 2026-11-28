@@ -1058,6 +1058,12 @@ fn groups(app: &VectorcraftApp) -> [Vec<(CommandRef, CommandState)>; 6] {
     let f = Facts::of(&cache.list, &selected);
     let o = &app.ui.links.options;
     let e = |id: &str, params: Value, a: Act| entry(app, &f, id, params, a);
+    // View › Show Missing Links, also here: checked while the canvas marks them.
+    let marking = app.session.active().map(|st| st.show_missing_links);
+    let show_missing = (
+        CommandRef::with_params("view.showMissingLinks", json!({ "on": marking != Some(true) })),
+        CommandState::new().enabled(marking.is_some()).checked(marking == Some(true)),
+    );
     [
         vec![
             e("ui.relinkDialog", json!({ "ids": f.all() }), Act::Relink),
@@ -1079,7 +1085,7 @@ fn groups(app: &VectorcraftApp) -> [Vec<(CommandRef, CommandState)>; 6] {
         THUMBS
             .iter()
             .map(|(k, size, _)| option_entry("ui.links.thumbnails", json!({ "size": k }), o.thumb == *size))
-            .chain([option_entry("ui.links.linkInfo", Value::Null, o.info), option_entry("ui.links.dcs", Value::Null, o.dcs)])
+            .chain([option_entry("ui.links.linkInfo", Value::Null, o.info), option_entry("ui.links.dcs", Value::Null, o.dcs), show_missing])
             .collect(),
     ]
 }
