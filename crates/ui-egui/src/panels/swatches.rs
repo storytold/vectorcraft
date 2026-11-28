@@ -408,6 +408,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let dragged_doc = Arc::clone(&thumbs.doc);
     let document = st.uid;
+    let reverts = st.reverts;
     let shown_app: &VectorcraftApp = app;
     let browser = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
         .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, document, &drag.grabbed, dragged_rows(drag))))
@@ -417,8 +418,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
             _ => vec![],
         })
         .row_items(|key| row_items(shown_app, key))
-        .takes_drop::<PanelDrag>(DropPlace::Between, |drag, _| dnd::accepts(drag, document))
-        .takes_drop::<PanelDrag>(DropPlace::Onto, |drag, _| dnd::accepts(drag, document))
+        .takes_drop::<PanelDrag>(DropPlace::Between, |drag, _| dnd::accepts(drag, document, reverts))
+        .takes_drop::<PanelDrag>(DropPlace::Onto, |drag, _| dnd::accepts(drag, document, reverts))
         .select(SelectMode::Multi)
         .search(model.show_find)
         .reveal(focus.map(SwatchKey::Swatch))

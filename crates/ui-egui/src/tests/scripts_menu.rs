@@ -32,9 +32,10 @@ fn folder(name: &str) -> vectorcraft_testkit::TempDir {
     dir
 }
 
-/// An app with a document whose Scripts folder is `dir`'s.
+/// An app with a document whose Scripts folder is `dir`'s, and whose folder listings take no time.
 fn app(dir: &std::path::Path) -> VectorcraftApp {
     let mut session = Session::new();
+    session.set_script_listing_clock(vectorcraft_engine::script::folder::Clock::Fixed(Duration::ZERO));
     session.attach_scripts_dir(dir.join("Scripts"));
     let mut app = VectorcraftApp::new(session, crate::Services::default());
     app.ui_ctx = Some(ctx());
@@ -302,6 +303,20 @@ fn the_menu_notes_a_listing_that_stopped_and_a_folder_it_cannot_read() {
     craft::menu::tidy(&mut laid);
     assert_eq!(shape(&laid), format!("({}), -, {FIXED}", scripts_menu::UNREADABLE));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_menu_listing_stops_when_the_sessions_clock_is_past_the_time_limit() {
+    let dir = folder("clock");
+    let mut app = app(&dir);
+    write(&dir, "a.js", "");
+    let late = vectorcraft_engine::script::folder::MAX_SCAN + Duration::from_millis(1);
+    app.session.set_script_listing_clock(vectorcraft_engine::script::folder::Clock::Fixed(late));
+    read(&app);
+    assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::TRUNCATED));
+    app.session.set_script_listing_clock(vectorcraft_engine::script::folder::Clock::Fixed(Duration::ZERO));
+    read(&app);
+    assert_eq!(shape(&scripts()), format!("a, -, {FIXED}"));
 }
 
 #[test]

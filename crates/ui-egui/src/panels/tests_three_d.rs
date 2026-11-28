@@ -696,7 +696,7 @@ fn three_d_graphics_accepts_artwork_only_from_its_document() {
 
     fn with_artwork(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         let st = app.session.active().unwrap();
-        let payload = PanelDrag::Art { document: st.uid, ids: st.selection.objects.clone() };
+        let payload = PanelDrag::Art { document: st.uid, reverts: st.reverts, ids: st.selection.objects.clone() };
         ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
             let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
             List::<usize>::new("Artwork")

@@ -106,7 +106,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 `XMPFile` updates restart open `File` readers with a UTF-8 byte order mark or UTF-16 encoding at the beginning of the new UTF-8 packet. Unmarked UTF-8 readers keep their position, limited to the new packet's length. Written packets omit a leading XML declaration and retain the following packet bytes. Nonempty language inherited by an `rdf:Description` is rejected as unavailable; explicit property-level language qualifiers are retained. Native file state is separate from script properties, and a successful close or the next script file run releases its packet buffers. Registered namespaces and expanded XML values count toward the script's heap limit. String-packet validation does not retain expanded XML values. On Unix, a folder flush failure after writing reports the written replacement and refreshes open readers while keeping the pending packet for retry. A failed `Realm::define_external_object` call can be retried; a call after a successful installation returns an internal error and preserves registered namespaces.
 
-`XMPMeta.getLocalizedText` returns the selected `XMPProperty`, including its locale and option flags. VectorCraft returns `undefined` for an absent property or empty language alternative. `appendArrayItem` preserves explicit optional argument positions.
+`XMPMeta.getLocalizedText` returns the selected `XMPProperty`, including its locale and option flags. VectorCraft returns `undefined` for an absent property or empty language alternative. `appendArrayItem` preserves explicit optional argument positions. Property getters charge fuel before copying the selected text and locale or scanning whole-array language options.
 
 ### Feature revisions
 

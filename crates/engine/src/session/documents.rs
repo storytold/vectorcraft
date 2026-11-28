@@ -112,6 +112,7 @@ impl Session {
             plugin_loads_in_background: false,
             scripts_dir: None,
             startup_scripts_dir: None,
+            script_listing_clock: Default::default(),
             metadata_templates_dir: None,
             new_doc_profile_dir: None,
             proof_setup_dir: None,

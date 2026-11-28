@@ -71,7 +71,8 @@ fn art(app: &mut VectorcraftApp, x: f64, name: Option<&str>) -> Vec<vectorcraft_
 /// New art at `x`, as the canvas drags it.
 fn art_drag(app: &mut VectorcraftApp, x: f64) -> PanelDrag {
     let ids = art(app, x, None);
-    PanelDrag::Art { document: app.session.active().unwrap().uid, ids }
+    let state = app.session.active().unwrap();
+    PanelDrag::Art { document: state.uid, reverts: state.reverts, ids }
 }
 
 fn graphics(app: &mut VectorcraftApp) -> Vec<String> {
