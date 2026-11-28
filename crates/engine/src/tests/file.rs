@@ -134,9 +134,58 @@ fn draw_behind_and_inside() {
     assert_eq!(d.parent_of(NodeId(a)), Some(g));
     // A second shape goes into the same clip group.
     s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-    assert_eq!(s.doc().unwrap().doc.node(g).unwrap().children().unwrap().len(), 4);
+    assert_eq!(s.doc().unwrap().doc.node(g).unwrap().children().unwrap().len(), 3);
     s.execute("view.drawMode", &json!({"mode": "normal"})).unwrap();
     assert!(s.draw_inside.is_none());
+}
+
+/// #8753: Draw Inside makes the object drawn into the clipping path, keeping its fill and stroke,
+/// so its centred stroke stays whole and paints over the art drawn inside it. It used to clip by an
+/// unpainted copy of the object, the object itself becoming clipped art under the new art: the
+/// outer half of the stroke was cut off and the new art covered the inner half.
+#[test]
+fn draw_inside_keeps_the_objects_stroke_whole_and_over_the_new_art() {
+    use vectorcraft_geom::Affine;
+    use vectorcraft_render::{RenderOptions, Renderer};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 240, "height": 240})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ebb471"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#a8622a"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 12})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 140, "height": 140})).unwrap()["id"].as_u64().unwrap();
+    let look = s.doc().unwrap().doc.node(NodeId(a)).unwrap().appearance.clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("view.drawMode", &json!({"mode": "inside"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#c89a60"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 20, "y": 110, "width": 220, "height": 110})).unwrap()["id"].as_u64().unwrap();
+    let d = &s.doc().unwrap().doc;
+    // The clip group holds the object, its clipping path with its appearance, then the new art.
+    let g = d.parent_of(NodeId(a)).unwrap();
+    let children: Vec<u64> = d.node(g).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
+    assert_eq!(children, [a, b], "no unpainted copy of the object");
+    let target = d.node(NodeId(a)).unwrap();
+    assert!(matches!(target.kind, NodeKind::Path { clipping: true, .. }));
+    assert_eq!(target.appearance, look, "the object keeps its fill and stroke");
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let img = Renderer::new().render(d, 240, 240, Affine::IDENTITY, &opts);
+    let rgb = |x: u32, y: u32| {
+        let p = img.pixel(x, y);
+        [p[0], p[1], p[2]]
+    };
+    let (stroke, fill, new) = ([0xa8, 0x62, 0x2a], [0xeb, 0xb4, 0x71], [0xc8, 0x9a, 0x60]);
+    // The stroke runs 6 pt either side of the edge: its outer half is not clipped away.
+    assert_eq!(rgb(120, 46), stroke, "outer half of the top stroke");
+    assert_eq!(rgb(120, 53), stroke, "inner half of the top stroke");
+    assert_eq!(rgb(120, 80), fill);
+    // Where the new art crosses the edge, the stroke paints over it, both halves.
+    for (x, y) in [(46, 150), (53, 150), (120, 186), (120, 193), (186, 150), (193, 150)] {
+        assert_eq!(rgb(x, y), stroke, "stroke at ({x}, {y})");
+    }
+    // The new art shows inside the object only.
+    assert_eq!(rgb(120, 150), new);
+    assert_eq!(rgb(30, 150), [255, 255, 255]);
 }
 
 /// In Draw Inside, a double-click with a selection tool outside the object being drawn into sets
@@ -181,11 +230,11 @@ fn double_clicking_outside_the_draw_inside_object_returns_to_draw_normal() {
 /// the object drawn into, as drawn art goes, each paste one undo step; the first one makes the
 /// clip group and the next ones add to it, with Paste Remembers Layers on and with the object
 /// isolated by a double-click too. Paste in Front and Paste in Back keep their places.
-/// Draw Inside a compound path: the clip group's mask is a copy whose subpaths have ids of their
-/// own, so no two objects share an id. An artboard copied without art, pasted on all artboards in
+/// Draw Inside a compound path: it becomes the clip group's clipping path, its first child, and no
+/// two objects share an id. An artboard copied without art, pasted on all artboards in
 /// Draw Inside, makes no clip group.
 #[test]
-fn draw_inside_a_compound_path_gives_its_mask_ids_of_its_own() {
+fn draw_inside_a_compound_path_makes_it_the_clipping_path() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300, "artboards": 2})).unwrap();
     let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
@@ -202,7 +251,22 @@ fn draw_inside_a_compound_path_gives_its_mask_ids_of_its_own() {
     ids.sort_unstable();
     ids.dedup();
     assert_eq!(ids.len(), all, "an id is used twice");
-    assert_eq!(d.node(d.parent_of(NodeId(c)).unwrap()).unwrap().kind_label(), "Clip Group");
+    let g = d.node(d.parent_of(NodeId(c)).unwrap()).unwrap();
+    assert_eq!(g.kind_label(), "Clip Group");
+    assert_eq!(g.children().unwrap().first().map(|n| n.id.0), Some(c), "the compound path is the clipping path");
+    // Type too: it is the clipping path, keeping its paint, and drawing inside it again adds to
+    // the same clip group.
+    s.execute("view.drawMode", &json!({"mode": "normal"})).unwrap();
+    let t = s.execute("text.create", &json!({"x": 100, "y": 250, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap();
+    let look = s.doc().unwrap().doc.node(NodeId(t)).unwrap().clone();
+    s.execute("select.set", &json!({"ids": [t]})).unwrap();
+    s.execute("view.drawMode", &json!({"mode": "inside"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 100, "y": 220, "width": 30, "height": 30})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 110, "y": 220, "width": 30, "height": 30})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let g = d.node(d.parent_of(NodeId(t)).unwrap()).unwrap();
+    assert_eq!((g.kind_label(), g.children().unwrap().len()), ("Clip Group", 3));
+    assert_eq!(**g.children().unwrap().first().unwrap(), look, "the type is the clipping path, as it was");
     // An artboard alone on the clipboard: Paste on All Artboards adds nothing inside the object.
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300, "artboards": 2})).unwrap();
@@ -242,8 +306,7 @@ fn pasting_in_draw_inside_puts_the_copies_inside_the_object() {
     let all = pasted(s.execute("edit.pasteOnAllArtboards", &json!({})).unwrap());
     assert_eq!(all.len(), 2);
     let children: Vec<u64> = s.doc().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
-    assert_eq!(children.len(), 6, "{children:?}");
-    assert_eq!(children[1..], [a, ids[0], in_place[0], all[0], all[1]]);
+    assert_eq!(children, [a, ids[0], in_place[0], all[0], all[1]]);
     // Paste Remembers Layers doesn't take the copy out of the object.
     s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
     let remembered = pasted(s.execute("edit.paste", &json!({})).unwrap());
