@@ -32,6 +32,10 @@
 //! the set of [`permissions`] its manifest lists, which the user approves when it is installed. A
 //! filter or a live effect may also add menu commands of its own ([`Command`]), which the host
 //! runs through `vc_run` with the command's id in `_context`.
+//!
+//! An object filter may also be written in JavaScript ([`js`]): its manifest gives
+//! `"runtime": "js"` and names a `.js` file, which runs in a fresh `vectorcraft-js` realm for each
+//! run, with the same input, output, permissions and budgets.
 #![forbid(unsafe_code)]
 
 pub mod deferred;
@@ -40,6 +44,7 @@ pub mod effect;
 pub mod export;
 pub mod host;
 pub mod import;
+pub mod js;
 pub mod loader;
 pub mod manifest;
 pub mod objects;
@@ -53,7 +58,7 @@ pub mod wat;
 
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
-pub use manifest::{Budget, Command, ContextSection, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec};
+pub use manifest::{Budget, Command, ContextSection, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec, Runtime};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, heavy_terms};
 #[doc(hidden)]
 pub use runtime::{BYTES_COPIED_PER_FUEL, FUEL_SLICE};

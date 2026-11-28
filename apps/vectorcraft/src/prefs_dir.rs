@@ -50,9 +50,10 @@ pub fn attach_color_settings(session: &mut vectorcraft_engine::Session) {
 }
 
 /// Install the plug-ins Install Plug-in kept in the `Plug-ins` folder (#2541), and keep the ones
-/// installed from now on there.
+/// installed from now on there. The key of the grants kept there is in the system's key store.
 pub fn attach_plugin_store(session: &mut vectorcraft_engine::Session) {
     if let Some(dir) = store_dir("Plug-ins") {
+        vectorcraft_engine::store::grant_keys::use_os_grant_keys();
         session.attach_plugin_store(dir);
     }
 }
@@ -62,6 +63,14 @@ pub fn attach_plugin_store(session: &mut vectorcraft_engine::Session) {
 pub fn attach_scripts_dir(session: &mut vectorcraft_engine::Session) {
     if let Some(dir) = store_dir("Scripts") {
         session.attach_scripts_dir(dir);
+    }
+}
+
+/// Have `script.startup.run` run the scripts of the `Startup Scripts` folder. The folder is only
+/// read: the user makes it.
+pub fn attach_startup_scripts_dir(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Startup Scripts") {
+        session.attach_startup_scripts_dir(dir);
     }
 }
 

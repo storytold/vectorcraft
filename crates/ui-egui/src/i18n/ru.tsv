@@ -4956,6 +4956,14 @@ axis	Both	Оба
 	The script asks to read and write a folder you choose, with everything in it.	Скрипт запрашивает чтение и запись выбранной вами папки со всем её содержимым.
 	Allow Once	Разрешить один раз
 	Always Allow This Script	Всегда разрешать этот скрипт
+	No script has kept file access.	Ни у одного скрипта нет сохранённого доступа к файлам.
+	Read file	Чтение файла
+	Read and write file	Чтение и запись файла
+	Read and write folder	Чтение и запись папки
+	Revoke	Отозвать
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	«Отозвать» удаляет доступ, сохранённый для каждой версии скрипта. Доступ к папке распространяется на всё её содержимое.
+@msg	Script file access revoked	Доступ скрипта к файлам отозван
+@msg	The script file access was already revoked	Доступ скрипта к файлам уже был отозван
 	Deny	Запретить
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт может изменять открытые документы и записывать файлы с помощью выполняемых команд. Запускайте только те скрипты, которым доверяете.
 	Do not show this warning again	Больше не показывать это предупреждение
@@ -5140,6 +5148,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` для файлового диалога скрипта должен быть одним из: once, always, deny, stop
 @msg	choose a file or folder first, or deny	сначала выберите файл или папку либо откажите
 @msg	the script file permissions could not be saved: {e}	не удалось сохранить разрешения скриптов на файлы: {e}
+@msg	the script file permissions could not be read: {e}	не удалось прочитать разрешения скриптов на файлы: {e}
 @msg	this script's file access can be allowed only once	доступ этого скрипта к файлам можно разрешить только один раз
 @msg	Only the person at the keyboard can allow a script's file access	Разрешить скрипту доступ к файлам может только человек за клавиатурой
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Скрипт получает не больше 2 048 файлов: файлы, выбранные после них, пропущены
@@ -7164,6 +7173,35 @@ axis	Y Axis	Ось Y
 @msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано дважды
 @msg	`inputs` needs `api` 2 or later	для `inputs` нужен `api` 2 или выше
 @msg	`inputs` needs the permission `doc.read`	для `inputs` нужно разрешение `doc.read`
+@msg	only a filter declares `writes`	`writes` может объявлять только фильтр
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	в `writes` указан неизвестный вид объекта `{shown}`: используйте type, image или symbolInstance
+@msg	`writes` lists `{shown}` twice	в `writes` `{shown}` указано дважды
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	в `writes` указано `{shown}`, которого нет в `inputs`
+@msg	`writes` needs `api` {WRITES_API} or later	для `writes` нужен `api` {WRITES_API} или выше
+@msg	`writes` needs the permission `doc.write`	для `writes` нужно разрешение `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} не является ни текстом, ни изображением, ни экземпляром символа
+@msg	the text of type given as `truncated` can't be changed	текст текстового объекта, переданного как `truncated`, изменить нельзя
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	должно быть списком не более чем из {MAX_INPUT_RUNS} элементов
+@msg	type needs at least one run	у текста должен быть хотя бы один фрагмент
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} байт текста (предел {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} абзацев (предел {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	более {MAX_INPUT_TEXT_TOTAL} байт текста во всём выводе
+@msg	unknown key '{k}'	неизвестный ключ '{k}'
+@msg	must be a list of 6 numbers	должно быть списком из 6 чисел
+@msg	a number is out of range (limit ±{MAX_COORD})	число вне диапазона (предел ±{MAX_COORD})
+@msg	flattens the object to a line or a point	сплющивает объект в линию или точку
+@msg	an object flattened to a line or a point can't be placed again	объект, сплющенный в линию или точку, нельзя разместить заново
+@msg	must be a number from 0 to 1	должно быть числом от 0 до 1
+@msg	must be the name of a symbol	должно быть именем символа
+@msg	'{shown}' is not a symbol in this document	'{shown}' не является символом этого документа
+@msg	a run must be {{"text", "style", "inline"?}}	фрагмент должен иметь вид {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` содержит символ встроенной в строку графики
+@msg	inline graphics can't be added, removed, reordered or changed	встроенную в строку графику нельзя добавлять, удалять, переупорядочивать или изменять
+@msg	the characters of threaded type can't be changed	знаки связанного текста изменить нельзя
+@msg	the characters of type with ruby can't be changed	знаки текста с руби изменить нельзя
+@msg	expected {count} paragraph styles, one per paragraph	ожидалось стилей абзацев: {count}, по одному на абзац
+@msg	the document has no Kinsoku set named '{shown}'	в документе нет набора kinsoku с именем '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	должно содержать 1-{MAX_FAMILY} печатаемых символов
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Читать переданные ему объекты, а также параметры, монтажные области, слои и образцы документа
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` должен перечислять разные разделы: settings, artboards, layers или swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` допустим только для фильтра или динамического эффекта с `commands`, с `api` 3 или выше и с разрешением `doc.read`
@@ -7174,6 +7212,21 @@ axis	Y Axis	Ось Y
 @msg	time budget	бюджет времени
 @msg	memory budget (the selection is too large to hand over)	бюджет памяти (выделение слишком велико для передачи)
 @msg	output size ({what} is {len} bytes, limit {max})	размер вывода ({what}: {len} байт, предел {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script}, строка {line}, столбец {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	бюджет памяти
+@msg	call depth	глубина вызовов
+@msg	run(input, params) returned no output object	run(input, params) не вернула объект вывода
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	для `runtime` "js" нужен `script`: имя файла .js модуля рядом с манифестом
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` должен быть именем файла .js в папке манифеста: 1-128 байт, без папки, без `:`, не начинаясь с `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` содержит текст скрипта и задаётся только в JSON, который принимает dataBase64 команды plugin.install: файл .vcplugin называет свой скрипт в `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	манифест модуля JavaScript задаёт `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" предназначен для фильтра объектов (`kind` "filter"), а не для `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	модуль JavaScript не может перечислять разрешение `{name}`: из разрешений хоста он может перечислить `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	манифест модуля WebAssembly не указывает `runtime`: "js" предназначен для модуля JavaScript
+@msg	a JavaScript plug-in makes no command calls	модуль JavaScript не вызывает команды
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) принимает два числа
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) принимает уровень, 0 (ошибка), 1 (предупреждение), 2 (информация) или 3 (отладка), и строку
 @msg	the plug-in's grant can't be removed from the plug-in store	разрешение модуля нельзя удалить из хранилища модулей
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешение `{shown}` зарезервировано для будущего API модулей; этот хост его не выдаёт
 @msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
@@ -7976,6 +8029,8 @@ arrowhead	Target	Мишень
 	VectorCraft Default	VectorCraft по умолчанию
 	VectorCraft Defaults	Стандартные VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	Общий CMYK VectorCraft (как SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK VectorCraft для мелованной бумаги (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK VectorCraft для немелованной бумаги (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Образцы VectorCraft (.vcswatches)
 	Vertical Align	Вертикальное выравнивание
 	Vertical Area Type	Вертикальный текст в области
@@ -10889,6 +10944,11 @@ shape	Open	Открытый
 	No objects are selected.	Объекты не выделены.
 	Open a document to mark its fold lines.	Откройте документ, чтобы отметить его линии сгиба.
 	Remove Fold Line Role	Убрать тип линии
+	Fold Angle	Угол сгиба
+	Set Fold Angle…	Задать угол сгиба…
+	Set Fold Angle	Задать угол сгиба
+	Reset Fold Angle	Сбросить угол сгиба
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	выделите линию биговки, надреза или перфорации, которая не закреплена и не скрыта
 	Check	Проверить
 	Check Fold Lines	Проверить линии сгиба
 @msg	No cut lines are in the selection.	В выделении нет линий реза.

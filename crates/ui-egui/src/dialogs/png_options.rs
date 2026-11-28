@@ -1,7 +1,7 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
 //! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
 //! map), WebP Options (lossless, or lossy at a quality 0–100), and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
-//! transparency and matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
+//! transparency and its dither, matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
 //! ([`super::psd_options`]). Fields
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
 //! dialog's.
@@ -43,6 +43,8 @@ const IMAGE_MAP_LABELS: [&str; 3] = ["None", "Client-side (.html)", "Server-side
 /// Matte param values and their labels (`Other`: a colour).
 const MATTES: [&str; 3] = ["none", "white", "black"];
 const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
+/// The Transparency Dither labels, in [`Dither::ALL`] order.
+const TRANSPARENCY_DITHER_LABELS: [&str; 4] = ["No Transparency Dither", "Diffusion", "Pattern", "Noise"];
 /// JPEG quality on the dialog's 0–10 scale: the band each step falls in.
 const QUALITY_BANDS: [&str; 11] = ["Low", "Low", "Low", "Medium", "Medium", "Medium", "High", "High", "Maximum", "Maximum", "Maximum"];
 /// WebP compression labels: `lossless` true, then false.
@@ -135,6 +137,8 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
                 ("dither".into(), json!(p.dither.id())),
                 ("ditherAmount".into(), json!(p.dither_amount)),
                 ("transparency".into(), json!(p.transparency)),
+                ("transparencyDither".into(), json!(p.transparency_dither.id())),
+                ("transparencyDitherAmount".into(), json!(p.transparency_dither_amount)),
                 ("matte".into(), json!(MATTES[1])),
                 ("interlaced".into(), json!(false)),
             ]);
@@ -345,7 +349,8 @@ fn webp_rows() -> Vec<Param> {
 }
 
 /// The PNG-8 and GIF Options rows: the palette (reduction, colours, dither and amount),
-/// transparency and matte, interlacing.
+/// transparency and matte, interlacing, and Transparency Dither with the amount Diffusion uses
+/// (both disabled while Transparency is off, keeping their values).
 fn palette_rows() -> Vec<Param> {
     let dithering = Dither::ALL.iter().copied().filter(|d| *d != Dither::None).map(Dither::id);
     vec![
@@ -355,6 +360,11 @@ fn palette_rows() -> Vec<Param> {
         Param::new("ditherAmount", tl!("Dither Amount:"), ParamKind::int(Some(0), Some(100), 100)).enabled_when_in("dither", dithering),
         color_choice("matte", tl!("Matte:"), &MATTES, &MATTE_LABELS, |_| 0),
         check("transparency", tl!("Transparency"), true),
+        choice("transparencyDither", tl!("Transparency Dither:"), &Dither::ALL.map(Dither::id), &TRANSPARENCY_DITHER_LABELS)
+            .enabled_when("transparency", true),
+        Param::new("transparencyDitherAmount", tl!("Transparency Dither Amount:"), ParamKind::int(Some(0), Some(100), 100))
+            .visible_when("transparencyDither", Dither::Diffusion.id())
+            .enabled_when("transparency", true),
         check("interlaced", tl!("Interlaced"), false),
     ]
 }

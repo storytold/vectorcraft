@@ -35,6 +35,9 @@ pub(crate) const OPTION_TOOLS: [&str; 4] = ["rectangularGrid", "polarGrid", "arc
 /// link as the Transform panel's, and the next of these dialogs opens with it as this one left it.
 const SIZE_KINDS: [&str; 3] = ["rectangle", "roundedRectangle", "ellipse"];
 
+const CLICK_DOCUMENT: &str = "__clickDocument";
+const CLICK_ALT: &str = "__clickAlt";
+
 /// Where a shape tool was clicked: the dialog's shape is drawn there, and with `alt` held a box shape
 /// is centred on it.
 #[derive(Clone, Copy, Debug)]
@@ -87,10 +90,16 @@ pub(crate) fn open(app: &mut VectorcraftApp, kind: &str, click: Option<Click>) {
     if SIZE_KINDS.contains(&kind) {
         values.insert("constrain".into(), json!(app.object_dialogs.shape_link));
     }
-    // The click is among the fields (no row shows it), where OK reads it.
+    // Keep the placement with the draft whose fields OK receives.
     if let Some(click) = click {
+        let Some(document) = app.session.active().map(|doc| doc.uid) else {
+            app.status(tl!("Open a document before drawing a shape").to_string());
+            return;
+        };
         values.insert("x".into(), json!(click.at.x));
         values.insert("y".into(), json!(click.at.y));
+        values.insert(CLICK_DOCUMENT.into(), json!(document.to_string()));
+        values.insert(CLICK_ALT.into(), json!(click.alt));
     }
     let ink = (kind == "arc" && click.is_none()).then(|| ArcInk::of(&app.session));
     let params = shape_params(kind, &values, lengths, ink);
@@ -100,7 +109,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, kind: &str, click: Option<Click>) {
         ParamDialog::new(key.clone(), title, params.clone()).values(Bind::bound(fields))
     });
     let kind_owned = kind.to_owned();
-    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| confirm(app, &kind_owned, click, &result.fields);
+    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| confirm(app, &kind_owned, &result.fields);
     if open_held(app, dialog, ok).is_none() {
         app.status(format!("no window to show the {kind} dialog"));
     }
@@ -470,18 +479,28 @@ fn option_values(kind: &str, fields: &DialogFields) -> Option<Map<String, Value>
 /// OK of the `kind` dialog: Tool Options set the tool's options and draw nothing; a click dialog draws at the
 /// click, then keeps the options and General › Corner Radius. Every refusal comes before the draw, so a refused OK
 /// draws nothing and the dialog stays open for a second OK.
-fn confirm(app: &mut VectorcraftApp, kind: &str, click: Option<Click>, fields: &DialogFields) -> Result<(), String> {
+fn confirm(app: &mut VectorcraftApp, kind: &str, fields: &DialogFields) -> Result<(), String> {
     let options = option_values(kind, fields);
-    let Some(click) = click else {
+    let Some(document) = fields.text(CLICK_DOCUMENT) else {
         return match options {
             Some(options) if OPTION_TOOLS.contains(&kind) => set_options(app, kind, options),
             _ => Err(format!("the {kind} tool has no options")),
         };
     };
+    let document = document.parse::<u64>().map_err(|_| tl!("The shape click document is missing").to_string())?;
+    if app.session.active().is_none_or(|doc| doc.uid != document) {
+        let reason = if app.session.documents().iter().any(|doc| doc.uid == document) {
+            tl!("Switch back to the document where you clicked to draw the shape")
+        } else {
+            tl!("The document where you clicked to draw the shape has closed")
+        };
+        return Err(reason.into());
+    }
+    let (Some(x), Some(y)) = (fields.number("x"), fields.number("y")) else {
+        return Err(tl!("The shape click position is missing").into());
+    };
+    let click = Click { at: Point::new(x, y), alt: fields.bool(CLICK_ALT).unwrap_or(false) };
     let corner_radius = if kind == "roundedRectangle" { Some(rounded_radius(app, fields)?) } else { None };
-    let at = |key, clicked| fields.number(key).unwrap_or(clicked);
-    let click = Click { at: Point::new(at("x", click.at.x), at("y", click.at.y)), ..click };
-    let (x, y) = (click.at.x, click.at.y);
     let (width, height) = (length_of(fields, "width", 100.0), length_of(fields, "height", 100.0));
     let (bx, by) = box_origin(click, width, height);
     let (id, params) = match kind {
@@ -656,6 +675,60 @@ mod tests {
 
     fn drawn(app: &VectorcraftApp) -> usize {
         app.session.doc().unwrap().doc.layers[0].children().unwrap().len()
+    }
+
+    #[test]
+    fn rectangle_click_waits_for_its_opening_document() {
+        let (mut app, mut fx) = shown();
+        let opening = app.session.doc().unwrap().uid;
+        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 40.0, "y": 60.0}));
+        set(&app, &fx, "rectangle", "width", json!(32.0)).unwrap();
+        app.run("file.new", json!({"width": 350, "height": 200})).unwrap();
+        assert_ne!(app.session.doc().unwrap().uid, opening);
+
+        press_ok(&mut app, &mut fx, "rectangle");
+        assert_eq!(drawn(&app), 0, "OK must leave the other document unchanged");
+        assert!(is_open(&app, "rectangle"));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        press_ok(&mut app, &mut fx, "rectangle");
+        assert!(!is_open(&app, "rectangle"));
+        let doc = &app.session.doc().unwrap().doc;
+        let bounds = doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+        assert!((bounds.x0 - 40.0).abs() < 1e-6 && (bounds.y0 - 60.0).abs() < 1e-6);
+        assert!((bounds.width() - 32.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_reopened_rectangle_uses_the_replacement_click_and_modifier() {
+        let (mut app, mut fx) = shown();
+        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 40.0, "y": 60.0}));
+        app.run("file.new", json!({"width": 350, "height": 200})).unwrap();
+        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 120.0, "y": 130.0, "alt": true}));
+        set(&app, &fx, "rectangle", "width", json!(20.0)).unwrap();
+        set(&app, &fx, "rectangle", "height", json!(30.0)).unwrap();
+
+        press_ok(&mut app, &mut fx, "rectangle");
+
+        assert!(!is_open(&app, "rectangle"));
+        assert_eq!(drawn(&app), 1);
+        let doc = &app.session.doc().unwrap().doc;
+        let bounds = doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+        assert!((bounds.center().x - 120.0).abs() < 1e-6 && (bounds.center().y - 130.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn tool_options_can_be_confirmed_after_switching_documents() {
+        let (mut app, mut fx) = shown();
+        open_options(&mut app, "lineSegment").unwrap();
+        set(&app, &fx, "lineSegment", "length", json!(72.0)).unwrap();
+        app.run("file.new", json!({"width": 350, "height": 200})).unwrap();
+
+        press_ok(&mut app, &mut fx, "lineSegment");
+
+        assert!(!is_open(&app, "lineSegment"));
+        assert_eq!(drawn(&app), 0);
+        assert_eq!(app.session.tool_options_of("lineSegment")["length"], json!(72.0));
     }
 
     #[test]

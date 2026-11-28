@@ -27,6 +27,8 @@ pub(crate) struct HoverKey {
     use_preview_bounds: bool,
     type_glyph_bounds: bool,
     show_handles_multiple_anchors: bool,
+    /// [`Session::behind_armed`].
+    behind_armed: bool,
 }
 
 /// The tool whose radius is General › Corner Radius.
@@ -203,8 +205,10 @@ impl Session {
             return Ok(());
         }
         // A double-click or triple-click after the switch is the new tool's, also when the switch
-        // comes back to the tool a Cmd press was lent from.
+        // comes back to the tool a Cmd press was lent from. Select Behind is armed again by the
+        // next Cmd press.
         self.press_lent = None;
+        self.behind_armed = None;
         // Sampling type keeps its highlighted characters as the target, and a whole story that
         // Select All selected. Capture before the Type tool deactivates (which commits typing and
         // clears its editing state).
@@ -366,6 +370,22 @@ impl Session {
             use_preview_bounds: p.use_preview_bounds,
             type_glyph_bounds: p.type_glyph_bounds,
             show_handles_multiple_anchors: p.show_handles_multiple_anchors,
+            behind_armed: self.behind_armed(),
+        }
+    }
+
+    /// Has a Cmd press with the Selection tool in the active document armed Select Behind, with
+    /// Cmd held since? Then a Cmd-click over the selection selects the object behind it (Selection
+    /// & Anchor Display › Command Click to Select Objects Behind); the first Cmd press is lent to
+    /// Direct Selection or Group Selection.
+    pub fn behind_armed(&self) -> bool {
+        self.behind_armed.is_some_and(|doc| doc == self.active().map(|d| d.uid))
+    }
+
+    /// Cmd let go ends Select Behind's arming ([`Self::behind_armed`]).
+    fn note_cmd_held(&mut self, mods: &Mods) {
+        if !mods.cmd {
+            self.behind_armed = None;
         }
     }
 
@@ -374,6 +394,7 @@ impl Session {
     /// ([`Self::lent_tool_at`]; off the canvas, the one [`Self::lent_tool_id`] names), else the
     /// active tool. [`Self::hover_tool_id`] then answers the same until the pointer or the keys move.
     pub fn hover_tool_at(&mut self, p: Option<Point>, mods: &Mods, view: ViewInfo) -> &'static str {
+        self.note_cmd_held(mods);
         let lends = mods.cmd && !mods.space && self.lender.is_none() && !self.tool_editing() && !self.pointer_held;
         let lent = match p {
             _ if !lends => None,
@@ -387,7 +408,8 @@ impl Session {
 
     /// The selection tool a press at `p` with `mods` borrows ([`Self::lent_tool`]): none when
     /// the Selection tool keeps a Cmd press on a selected object to select the object behind it
-    /// (Selection & Anchor Display › Command Click to Select Objects Behind).
+    /// (Selection & Anchor Display › Command Click to Select Objects Behind), which an earlier Cmd
+    /// press armed ([`Self::behind_armed`]).
     fn lent_tool_at(&mut self, p: Point, mods: &Mods, view: ViewInfo) -> Option<&'static str> {
         let id = self.lent_tool(self.tool.id(), mods)?;
         let behind = self.tool.id() == "selection" && self.with_tool_cx(view, |_, cx| vectorcraft_tools::select::selects_behind_at(cx, p));
@@ -629,6 +651,7 @@ impl Session {
             double_click_isolate: self.prefs.double_click_to_isolate,
             double_click_adds_anchor: self.prefs.double_click_adds_anchor_points,
             select_behind: self.prefs.ctrl_click_selects_behind,
+            behind_armed: self.behind_armed(),
             highlight_anchors: self.prefs.highlight_anchors_on_hover,
             snap_tolerance: self.prefs.snap_to_point_tolerance,
             handles_multiple: self.prefs.show_handles_multiple_anchors,
@@ -921,7 +944,13 @@ impl Session {
         }
         self.leave_draw_inside(ev, view)?;
         self.tell_tool_history_moved();
+        self.note_cmd_held(&ev.mods);
+        // A Cmd press with the Selection tool, lent or not, arms Select Behind for the next one.
+        let arms = ev.kind == PointerKind::Down && ev.mods.cmd && self.lender.is_none() && self.tool.id() == "selection";
         let (ev, settled) = self.lend_selection_tool(ev, view)?;
+        if arms {
+            self.behind_armed = Some(self.active().map(|d| d.uid));
+        }
         let ev = &ev;
         let lent = self.lender.is_some();
         let mut acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
@@ -1069,6 +1098,12 @@ impl Session {
         self.tool.wants_samples()
     }
 
+    /// Does a stroke the active tool draws now vary with an airbrush pen's finger wheel
+    /// ([`vectorcraft_tools::Tool::reads_wheel`])? False with no document open.
+    pub fn tool_reads_wheel(&mut self, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.reads_wheel(cx))
+    }
+
     /// Is the active tool waiting for work it runs on another thread ([`Tool::waiting`]), is input
     /// held until an edit it computes is applied, or are requests for the UI left from making it?
     pub fn tool_waiting(&self) -> bool {
@@ -1214,6 +1249,7 @@ impl Session {
     }
 
     fn tool_key_now(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        self.note_cmd_held(&mods);
         // 1–4 pick the active perspective plane while the grid is shown.
         if let Some(plane) = self.plane_key(key) {
             self.execute("perspective.plane.set", &serde_json::json!({ "plane": plane.id() }))?;
@@ -1454,6 +1490,7 @@ impl Session {
     /// The pointer the active tool shows at `p`. With Cmd held, the pointer of the selection tool a
     /// press would borrow ([`Self::lend_selection_tool`]).
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
+        self.note_cmd_held(&mods);
         // While an edit is computed, a Cmd press is held for the active tool, which shows it is busy.
         // Cmd pressed once a drag is under way lends nothing, so the tool keeps its pointer.
         let lends = mods.cmd && self.lender.is_none() && !self.tool_editing() && !self.pointer_held;
@@ -1582,7 +1619,15 @@ impl Session {
             let set = other.id();
             Self::restore_stores(&self.prefs, self.tool.as_mut(), |store| settings::stores(set).any(|(s, _)| s == store));
         }
-        self.keep_press_set(before_press, |k| sets_pressed && values.contains_key(k), sets_pressed);
+        // Another tool's set also names the keys of the stores it shares with the pressed tool.
+        let shared: Vec<&str> = match (self.pressed_tool().map(|t| t.id()), id) {
+            (Some(pressed), Some(set)) if pressed != set => settings::stores(pressed)
+                .filter(|(store, _)| settings::stores(set).any(|(s, _)| s == *store))
+                .flat_map(|(_, keys)| keys.iter().copied())
+                .collect(),
+            _ => Vec::new(),
+        };
+        self.keep_press_set(before_press, |k| values.contains_key(k) && (sets_pressed || shared.contains(&k)), sets_pressed);
         // The Eyedropper waiting for a Cmd-drag it lent a selection tool to is armed as the active one.
         if (active || lender) && values.contains_key("stop") {
             let eyedropper = id.unwrap_or(self.tool.id()) == "eyedropper";
@@ -1873,7 +1918,12 @@ impl Session {
                 // The place cursor's file, placed by the frontend that asked for it.
                 Action::Exec(cmd, p) if cmd == "file.place" && self.place_cursor_requests => ui.push(UiRequest::Place(p)),
                 // The place cursor's file, read within the roots of whoever loaded the cursor.
-                Action::Exec(cmd, p) if cmd == "file.place" => {
+                Action::Exec(cmd, mut p) if cmd == "file.place" => {
+                    if let Some(params) = p.as_object_mut() {
+                        for key in [vectorcraft_tools::place::SOURCE_INDEX, vectorcraft_tools::place::CLICK] {
+                            params.remove(key);
+                        }
+                    }
                     let roots = self.place_queue_roots.clone();
                     if let Some(w) = crate::file_access::confine(roots.as_ref(), || self.execute(&cmd, &p))?.get("warning").and_then(Value::as_str) {
                         ui.push(UiRequest::Status(w.to_string()));
@@ -1933,14 +1983,14 @@ impl Session {
     }
 
     fn measure_deferred_preview(&mut self, cmd: &str, p: &Value) -> Option<DeferredFeedback> {
-        let (snapshot, selection, revision, paint, interaction_fields) = {
+        let (snapshot, selection, isolation, revision, paint, interaction_fields) = {
             let st = self.active()?;
             let it = st.interaction.as_ref()?;
             if !std::sync::Arc::ptr_eq(&it.doc, &st.doc) {
                 return None;
             }
             let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone(), it.plane_placed);
-            (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
+            (st.doc.clone(), st.selection.clone(), st.isolation, st.revision, self.pending_paint.clone(), interaction_fields)
         };
         let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
             let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection, cmd, p)).unwrap_or_default();
@@ -1956,6 +2006,8 @@ impl Session {
         if let Ok(st) = self.doc_mut() {
             st.doc = snapshot;
             st.selection = selection;
+            // A measured preview that removed the isolated object leaves isolation mode as it was.
+            st.isolation = isolation;
             st.revision = revision;
             if let Some(it) = &mut st.interaction {
                 it.preview = interaction_fields.0;
