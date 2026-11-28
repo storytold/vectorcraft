@@ -120,48 +120,21 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
     }
 }
 
-/// The selected paths' eligible corners, as document lengths, beside the anchor controls.
-/// Explicit partial selections with no corners contribute no target (unlike `picked`'s fallback).
+/// The Corners link and the radius of the selected paths' picked corners
+/// ([`crate::panels::picked_corners`]), beside the anchor controls. The link opens the Corners
+/// pop-up for those corners; a narrow bar leaves out the link and the field together.
 fn corner_radius(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some(st) = app.session.active() else { return };
-    let mut items = Vec::new();
-    let mut radius: Option<f64> = None;
-    let mut mixed = false;
-    for &id in &st.selection.objects {
-        let Some(lc) = st.doc.node(id).and_then(vectorcraft_doc::LiveCorners::of) else { continue };
-        let corners = st.selection.partial(id).map_or_else(|| lc.all(), |anchors| lc.corners_of(anchors));
-        if corners.is_empty() {
-            continue;
-        }
-        for &k in &corners {
-            // Keep absolute requested radii, even when their drawing is fitted smaller. Relative
-            // storage is a fraction, but the field and setLiveShape both consume document lengths.
-            let value = if lc.radii_relative() { lc.radius(k) * lc.corner(k).map_or(0.0, |c| c.max_radius()) } else { lc.radius(k) };
-            if let Some(first) = radius {
-                mixed |= (first - value).abs() >= 1e-9;
-            } else {
-                radius = Some(value);
-            }
-        }
-        items.push(json!({"id": id, "corners": corners}));
-    }
-    if items.is_empty() {
-        return;
-    }
+    let Some(picked) = crate::panels::picked_corners(app) else { return };
     let label = tl!("Corner Radius:");
-    let shown = if mixed { None } else { radius };
-    // PLAN: assumed `crate::canvas::general_lengths(app) -> LengthUnits` (cv.B5b, canvas-w15).
     let lengths = crate::canvas::general_lengths(app);
     let mut typed = None;
     group(ui, rank::GROUP, |ui| {
-        Field::new(label).show(ui, |ui, _| {
-            let number = NumberField::length(label, Bind::given(shown), lengths).show(ui);
-            typed = number.edit.events.committed().copied().flatten().or(typed);
-        });
+        crate::panels::corners_link(app, ui);
+        let number = NumberField::length(label, Bind::given(picked.radius), lengths).show(ui);
+        typed = number.edit.events.committed().copied().flatten().or(typed);
     });
     if let Some(radius) = typed {
-        // App::run reports any command failure in the status bar, as the other inline fields do.
-        app.run("object.setLiveShape", json!({"items": items, "radius": radius.max(0.0)})).ok();
+        crate::panels::set_picked_corners(app, &picked, json!({"radius": radius.max(0.0)}));
     }
 }
 
@@ -192,6 +165,21 @@ fn command_rows(ui: &mut Ui, rows: &[CommandRow]) -> Option<(&'static str, Value
 /// The Control bar's snapping quick access; every change uses its existing command, and Pixel
 /// Snapping Options… opens the dialog of `view.snapToPixel.options`.
 fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let label = tl!("Snapping");
+    let mut ran = None;
+    ranked(ui, rank::FIELDS, |ui| {
+        let button = Button::new(label).trailing_icon(IconId::new("chevron-down")).show(ui);
+        Menu::new(label).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
+            ran = snapping_menu_contents(app, ui);
+        });
+    });
+    if let Some((id, params)) = ran {
+        crate::menus::invoke(app, id, params);
+    }
+}
+
+/// The same live command menu in the Control and Status bars.
+pub(super) fn snapping_menu_contents(app: &VectorcraftApp, ui: &mut Ui) -> Option<(&'static str, Value)> {
     let toggle = |label, id, on| CommandRow { label, check: Some(on), id, params: json!({}) };
     let preference =
         |label, key: &'static str, on: bool| CommandRow { label, check: Some(on), id: "prefs.set", params: json!({"key": key, "value": !on}) };
@@ -212,22 +200,14 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             preference(tl!("Snap to Perpendicular"), "snapPerpendicular", prefs.snap_perpendicular),
         ],
     ];
-    let label = tl!("Snapping");
     let mut ran = None;
-    ranked(ui, rank::FIELDS, |ui| {
-        let button = Button::new(label).trailing_icon(IconId::new("chevron-down")).show(ui);
-        Menu::new(label).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
-            for (i, rows) in sections.iter().enumerate() {
-                if i > 0 {
-                    Divider::horizontal().show(ui);
-                }
-                ran = command_rows(ui, rows).or(ran.take());
-            }
-        });
-    });
-    if let Some((id, params)) = ran {
-        crate::menus::invoke(app, id, params);
+    for (i, rows) in sections.iter().enumerate() {
+        if i > 0 {
+            Divider::horizontal().show(ui);
+        }
+        ran = command_rows(ui, rows).or(ran.take());
     }
+    ran
 }
 
 /// The Control bar's isolation action: icon, name and command. In isolation mode it is Exit Isolation Mode,
@@ -609,9 +589,8 @@ fn members(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     }
     if typed && paragraph {
-        ranked(ui, rank::TYPE, |ui| {
-            crate::panels::paragraph::control_bar(app, ui);
-        });
+        // The Paragraph group ranks its link and its Align buttons as two members, so the buttons leave first.
+        crate::panels::paragraph::control_bar(app, ui);
     }
     let vertical = group_on(app, "verticalAlignment") && crate::panels::properties::vertical_align::shown(app).is_some();
     if vertical {

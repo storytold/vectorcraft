@@ -92,7 +92,7 @@ impl Session {
     fn execute_unwatched(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
         // A clipboard import is a query that replaces the clipboard, which the end of a run sets too.
-        if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
+        if self.depth == 0 && self.script_running() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
             return Err(EngineError::Busy);
         }
         // A step of a batch a script runs is held to the same rule as the script's own commands.
@@ -454,6 +454,7 @@ impl Session {
                     st.doc = doc;
                     st.selection = selection;
                     st.interaction = interaction;
+                    st.effect_step = None;
                     if let Some(history) = history {
                         st.history = history;
                     }

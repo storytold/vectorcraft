@@ -61,7 +61,7 @@ fn scripts_and_subfolders_are_listed_by_name_without_the_extension() {
         touch(&root, name);
     }
     std::fs::create_dir_all(root.join("Empty/Also Empty")).unwrap();
-    let listing = folder::list(&root);
+    let listing = list(&root, Limits::default());
     assert_eq!(rows(&listing.entries), "A, b, Dessin (été) #1, v1.2 draft, Zeta/[Deep/[x], inner]");
     assert!(!listing.truncated && !listing.unreadable);
     // Each script keeps the path the folder gave, whatever its label.
@@ -81,7 +81,7 @@ fn a_script_whose_label_another_row_has_shows_its_whole_file_name() {
         touch(&root, name);
     }
     // `tidy.js.js` is labeled `tidy.js` until `tidy.js` takes that label, then shows its whole name.
-    assert_eq!(rows(&folder::list(&root).entries), "alone, tidy/[x], tidy.js, tidy.js.js, tidy.jsx");
+    assert_eq!(rows(&list(&root, Limits::default()).entries), "alone, tidy/[x], tidy.js, tidy.js.js, tidy.jsx");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -93,7 +93,7 @@ fn control_characters_in_a_name_are_written_as_escapes_and_a_long_label_is_cut()
     touch(&root, "a\u{202E}sj.js");
     let long = "n".repeat(200);
     touch(&root, &format!("{long}.jsx"));
-    let listing = folder::list(&root);
+    let listing = list(&root, Limits::default());
     let labels: Vec<&str> = listing.scripts().into_iter().map(|(_, label, _)| label).collect();
     assert_eq!(labels[0], "a\\u{202E}sj");
     assert_eq!(labels[1], format!("{}…", "n".repeat(folder::MAX_LABEL_CHARS - 1)));
@@ -119,7 +119,7 @@ fn hidden_names_and_links_are_left_out() {
         let marked = touch(&root, "marked.js");
         assert!(std::process::Command::new("attrib").arg("+h").arg(&marked).status().unwrap().success());
     }
-    let listing = folder::list(&root);
+    let listing = list(&root, Limits::default());
     assert_eq!(rows(&listing.entries), "shown");
     assert!(!listing.truncated && !listing.unreadable);
     // Nor is a file behind a link read as a listed script.
@@ -146,12 +146,12 @@ fn a_folder_that_is_missing_is_empty_and_one_that_is_a_file_or_a_link_is_unreada
     let dir = folder("root");
     let root = dir.join("Scripts");
     touch(&root, "a.js");
-    assert_eq!(folder::list(&dir.join("None")), Listing::default());
+    assert_eq!(list(&dir.join("None"), Limits::default()), Listing::default());
     let file = touch(&dir, "file");
-    assert_eq!(folder::list(&file), Listing { unreadable: true, ..Listing::default() });
+    assert_eq!(list(&file, Limits::default()), Listing { unreadable: true, ..Listing::default() });
     let link = dir.join("Link");
     link_folder(&root, &link);
-    assert_eq!(folder::list(&link), Listing { unreadable: true, ..Listing::default() });
+    assert_eq!(list(&link, Limits::default()), Listing { unreadable: true, ..Listing::default() });
     assert!(folder::read(&link, &link.join("a.js"), 10).is_none());
     let _ = std::fs::remove_dir_all(&link);
     let _ = std::fs::remove_dir_all(dir);
@@ -187,7 +187,7 @@ fn subfolders_past_the_fourth_level_or_the_folder_limit_are_left_out() {
     let root = dir.join("Scripts");
     touch(&root, "1/2/3/4/kept.js");
     touch(&root, "1/2/3/4/5/deeper.js");
-    let listing = folder::list(&root);
+    let listing = list(&root, Limits::default());
     assert_eq!(rows(&listing.entries), "1/[2/[3/[4/[kept]]]]");
     assert!(listing.truncated);
     assert!(folder::holds(&root, &root.join("1/2/3/4/kept.js")));
@@ -199,7 +199,7 @@ fn subfolders_past_the_fourth_level_or_the_folder_limit_are_left_out() {
     let listing = list(&root, Limits { folders: 1, ..Limits::default() });
     assert_eq!(rows(&listing.entries), "a/[x]");
     assert!(listing.truncated);
-    assert!(!folder::list(&root).truncated);
+    assert!(!list(&root, Limits::default()).truncated);
     let _ = std::fs::remove_dir_all(dir);
     let _ = std::fs::remove_dir_all(two);
 }
@@ -249,6 +249,7 @@ fn list_installed_gives_the_folder_and_its_scripts_in_menu_order() {
     touch(&root, "Tidy Layers.jsx");
     touch(&root, "Export/All Artboards.js");
     let mut s = Session::new();
+    s.set_script_listing_clock(folder::Clock::Fixed(Duration::ZERO));
     assert_eq!(
         s.execute("script.listInstalled", &json!({})).unwrap(),
         json!({"folder": null, "scripts": [], "truncated": false, "unreadable": false})
@@ -273,6 +274,22 @@ fn list_installed_gives_the_folder_and_its_scripts_in_menu_order() {
     std::fs::remove_dir_all(&root).unwrap();
     assert_eq!(s.execute("script.listInstalled", &json!({})).unwrap()["scripts"], json!([]));
     assert!(!root.exists());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn list_installed_stops_when_the_sessions_clock_is_past_the_time_limit() {
+    let dir = folder("command-clock");
+    let root = dir.join("Scripts");
+    touch(&root, "a.jsx");
+    let mut s = Session::new();
+    s.attach_scripts_dir(root);
+    s.set_script_listing_clock(folder::Clock::Fixed(folder::MAX_SCAN + Duration::from_millis(1)));
+    let late = s.execute("script.listInstalled", &json!({})).unwrap();
+    assert_eq!((&late["scripts"], &late["truncated"]), (&json!([]), &json!(true)));
+    s.set_script_listing_clock(folder::Clock::Fixed(folder::MAX_SCAN));
+    let on_time = s.execute("script.listInstalled", &json!({})).unwrap();
+    assert_eq!((on_time["scripts"].as_array().map(Vec::len), &on_time["truncated"]), (Some(1), &json!(false)));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -374,6 +391,7 @@ fn the_automation_read_root_keeps_an_agent_out_of_the_scripts_folder() {
     std::fs::create_dir_all(&work).unwrap();
     let mut s = Session::new();
     s.attach_scripts_dir(root.clone());
+    s.set_script_listing_clock(folder::Clock::Fixed(Duration::ZERO));
     let roots = crate::file_access::AutomationRoots::new(&[&work], &[]).unwrap().unwrap();
     let e = crate::file_access::confine(Some(&roots), || s.execute("script.listInstalled", &json!({}))).unwrap_err();
     // The Scripts folder is the app's: the error keeps the root and names the folder by its name.
@@ -388,4 +406,17 @@ fn the_automation_read_root_keeps_an_agent_out_of_the_scripts_folder() {
         assert_eq!(s.installed_script(&script.to_string_lossy()).unwrap(), "");
     });
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_startup_listing_over_the_script_limit_keeps_the_first_names_in_order() {
+    let dir = vectorcraft_testkit::TempDir::new("startup-limit");
+    for name in ["d.jsx", "b.jsx", "e.jsx", "a.jsx", "c.jsx"] {
+        touch(&dir, name);
+    }
+    let limits = Limits { scripts: 3, ..Limits::default() };
+    let listing = crate::script::startup::list_with(&dir, &limits, &mut || Duration::ZERO);
+    let names: Vec<_> = listing.scripts.iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+    assert_eq!(names, ["a.jsx", "b.jsx", "c.jsx"]);
+    assert!(listing.truncated);
 }

@@ -189,6 +189,10 @@ pub(crate) fn services(window: Parent) -> Services {
         open_in_application: Some(Box::new(open_in_application)),
         // File → Print: the system's printers and print queue.
         print: Some(Box::new(printing::SystemPrint)),
+        // The tablet driver's Wintab context, which reads an airbrush pen's finger wheel, opens
+        // only while the active tool uses the wheel.
+        #[cfg(all(windows, not(target_vendor = "win7")))]
+        stylus_wheel: Some(Box::new(super::windows_wintab::set_wheel_used)),
         ..Default::default()
     }
 }
