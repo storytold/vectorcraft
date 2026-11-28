@@ -5,9 +5,11 @@
 use craft::behavior::{CanvasView, PressPhase};
 use craft::keymap::Mods;
 use craft::ui::canvas::{
-    Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass,
+    Canvas, CanvasScrollbars, CanvasSpace, ContextSource, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget,
+    canvas_space, tool_pass,
 };
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::primitives::PaintSlot;
 use craft::ui::runtime::env::Env;
 use craft::ui::runtime::focus::NudgeMods;
 use craft::ui::style::StyleCx;
@@ -73,7 +75,7 @@ pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
 
 /// Whether a 3D effect is edited in its dialog: the selection's marks and widgets give way to the dialog's gizmo.
 pub(crate) fn revolve_editing(app: &VectorcraftApp) -> bool {
-    app.three_d_dialog.is_some()
+    crate::dialogs::three_d::editing_current_drawing(app)
 }
 
 /// The arrows the canvas takes with nothing in the window focused, as it takes every arrow while it has the focus:
@@ -109,6 +111,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
         app.ui.home = None;
     }
+    // The Home screen and the empty window show no marks: a closed document's text nodes are not kept.
+    if app.session.active().is_none() {
+        marks::release_text_marks(app);
+    }
     let full = ui.available_rect_before_wrap();
     if crate::menus::home_showing(app) {
         // No type editor shows to lose the keys: the marked text stays as typed.
@@ -134,6 +140,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 struct Body {
     reply: Option<ToolHostResponse>,
     context_at: Option<egui::Pos2>,
+    /// The pasteboard's `context_at` answers the Menu key or Shift+F10, not a secondary click.
+    context_key: bool,
     /// A view a compass or scroll bar edit made this pass.
     edited: Option<CanvasView>,
     /// The Quick Pen tool took this pass's wheel for its arc size ([`quick_pen_wheel::arc_size`]).
@@ -197,6 +205,11 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     };
     let pasteboard = app.session.documents().get(win.0).map(|st| artboards::pasteboard_color(app, st, app.outline_view()));
     let layers = move || bounds;
+    let host_caps_lock = craft::ui::runtime::lock_keys::caps_lock(ui.ctx());
+    app.follow_caps_lock(host_caps_lock);
+    // The canvas reverses the state it is given while the host's Caps Lock is on: given this, it shows the precise
+    // cursors the tools are told about.
+    let precise = app.precise_cursors() != host_caps_lock;
     let prefs = &app.session.prefs;
     let mut canvas = Canvas::new("Document")
         .id(canvas_id(win))
@@ -208,7 +221,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         .body_nudges(ARROWS)
         .rulers(x, y)
         .with_rulers(strips)
-        .precise_cursors(prefs.use_precise_cursors);
+        .precise_cursors(precise);
     if let Some(pasteboard) = pasteboard {
         canvas = canvas.pasteboard(pasteboard);
     }
@@ -233,8 +246,12 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         rulers::apply(app, ui, out);
     }
     let pressed = matches!(output.press.phase, PressPhase::Down { .. });
-    let Body { reply, context_at, edited, arc_turn } = body;
-    let request = reply.as_ref().and_then(|r| r.context.as_ref()).map(|c| c.at).or(context_at);
+    let Body { reply, context_at, context_key, edited, arc_turn } = body;
+    let request = reply
+        .as_ref()
+        .and_then(|r| r.context.as_ref())
+        .map(|c| context_menu::Request { at: c.at, key: c.source == ContextSource::Key })
+        .or(context_at.map(|at| context_menu::Request { at, key: context_key }));
     let jumped = edited.is_some();
     // Presentation Mode keeps its view through a drag of the middle button, which the canvas pans on its own, and a
     // wheel turn the Quick Pen tool takes for its arc size keeps the view the pass began with.
@@ -270,11 +287,17 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     pressed
 }
 
-/// The body of the canvas in order: controls that take presses first, the tool host, the picture last.
+/// The body of the canvas in order: controls that take presses first, the tool host, the selection's marks, the
+/// picture last.
 fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: Option<&ToolPass>, win: Win, kind: BodyKind) -> Body {
     let live = kind == BodyKind::Live;
     let presenting = app.ui.screen_mode == 3;
-    let mut out = Body { context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)), ..Body::default() };
+    let background = space.background();
+    let mut out = Body {
+        context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)),
+        context_key: background.context.is_none() && background.context_key,
+        ..Body::default()
+    };
     grids(app, ui, space, win);
     if live {
         find_shown_tool(app, ui.ctx(), space);
@@ -285,7 +308,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
         crate::dialogs::simplify_slider::show(app, ui, &space.view);
     }
     guides::show(app, ui, space, win, kind);
-    selection::show(app, ui, space, win, kind);
+    // The selection's marks paint here, under the widgets and bars, and are drawn after the tool host has taken this
+    // frame's pointer event, from the document as the event leaves it.
+    let marks = PaintSlot::reserve(ui.painter());
     widgets::show(app, ui, space, win, kind);
     if !presenting && !revolve_editing(app) {
         crate::panels::three_d::handles::show(app, ui, space);
@@ -324,6 +349,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
             crate::type_editing::show(app, ui);
         }
     }
+    let after = PaintSlot::reserve(ui.painter());
+    selection::show(app, ui, space, win, kind);
+    marks.extend(ui.ctx(), after.take_after(ui.ctx()));
     drops::show(app, ui, win, kind);
     raster::picture(app, ui, space, win, kind);
     out

@@ -267,6 +267,25 @@ fn an_option_set_on_a_lending_tool_during_a_dropped_press_is_kept() {
     assert_eq!(s.prefs.corner_radius, 30.0, "the preference keeps it");
 }
 
+/// A shared Liquify brush size set through another Liquify tool during a held press survives the
+/// dropped press, also when the set value equals the size the press's drag has made current.
+#[test]
+fn a_shared_option_set_through_another_tool_during_a_dropped_press_is_kept() {
+    let mut s = session();
+    select(&mut s, "warp");
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 180.0), v).unwrap();
+    let before = s.tool_options()["width"].as_f64().unwrap();
+    // The press's own change to the shared size, not stored.
+    s.tool.set_option("width", &json!(before + 40.0));
+    let current = s.tool_options()["width"].clone();
+    s.set_tool_option_cmd(&json!({"tool": "pucker", "key": "width", "value": before + 40.0})).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.tool_options()["width"], current, "the tool keeps the size set through the other tool");
+    assert_eq!(s.prefs.tool_settings["liquify"]["width"], current, "and stores it");
+}
+
 /// A dropped Pen press drops only the anchor it was placing: the path being drawn goes on with
 /// the next click.
 #[test]

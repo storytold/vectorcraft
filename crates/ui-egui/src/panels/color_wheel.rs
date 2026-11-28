@@ -927,7 +927,7 @@ fn ratio_answer(app: &mut VectorcraftApp, panel: &mut WheelUi, pinned: Option<Co
         black_on_screen: app.session.prefs.black_on_screen.clone(),
         under: under(),
         mesh_points: app.session.fill_mesh_points(),
-        bucket: app.session.bucket_paints(),
+        bucket: app.session.tool_paints(!app.session.fill_active),
     };
     match &panel.ratio {
         Some((k, r)) if *k == key => r.clone(),
@@ -985,11 +985,15 @@ fn contrast_row(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cms:
 }
 
 /// What the HSB picked last belongs to: the document, the selected objects or text characters,
-/// the appearance item, the proxy, the gradient stop or freeform point, its paint, and the color
-/// the pick stored. The wheel shows that HSB only while all of them are unchanged.
+/// the appearance item, the proxy, the gradient stop or freeform point, its paint, the color the
+/// pick stored, and the document's undo step. The wheel shows that HSB only while all of them are
+/// unchanged.
 #[derive(Clone, Debug, PartialEq)]
 struct Owner {
     doc: Option<u64>,
+    /// The document's [`History::step`](vectorcraft_engine::History::step): another edit, an Undo
+    /// or a Redo changes it, also when the same color comes back.
+    step: Option<(u64, u64)>,
     selection: Vec<NodeId>,
     /// The Type tool's selected characters, when it edits the paint.
     text_selection: Option<(NodeId, usize, usize)>,
@@ -1013,6 +1017,7 @@ impl Owner {
         };
         Self {
             doc: st.map(|d| d.uid),
+            step: st.map(|d| d.history.step()),
             selection: st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
             text_selection: super::character::text_editing(app),
             appearance_item: app.session.appearance_item(),
@@ -1043,6 +1048,15 @@ fn recall<T: Clone>(
         *slot = None;
     }
     kept
+}
+
+/// Move the record in `slot` from owner `was` to owner `now`, when `was` holds it.
+fn rekey<T>(slot: &mut Option<(Owner, [f32; 3], T)>, was: &Owner, now: &Owner) {
+    if let Some((owner, ..)) = slot
+        && owner == was
+    {
+        *owner = now.clone();
+    }
 }
 
 /// The HSB a color shows on the wheel: that of its display sRGB through `cms`.
@@ -1505,13 +1519,13 @@ fn show_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &Pi
         let shown = color.unwrap_or(app.session.last_solid);
         let owner = color.map(|c| Owner::of(app, tgt, c));
         opacity_row(app, panel, ui, tgt, &shown, cx.cms);
-        // An opacity edit of a gradient stop or point changes the gradient its owner holds, and the
-        // HSB picked last stays with the new gradient.
-        if let (Some(c), Some(was)) = (color, owner)
-            && let Some((remembered, ..)) = &mut panel.hsb
-            && *remembered == was
-        {
-            *remembered = Owner::of(app, tgt, c);
+        // An opacity edit adds an undo step, and on a gradient stop or point it also changes the
+        // gradient its owner holds. The HSB, HSL and OKLCH picked last stay with the edited paint.
+        if let (Some(c), Some(was)) = (color, owner) {
+            let now = Owner::of(app, tgt, c);
+            rekey(&mut panel.hsb, &was, &now);
+            rekey(&mut panel.hsl, &was, &now);
+            rekey(&mut panel.oklch, &was, &now);
         }
     } else {
         end_opacity_drag(app, panel);

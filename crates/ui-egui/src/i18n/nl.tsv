@@ -102,6 +102,7 @@
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` voor het bestandsdialoogvenster van een script moet een van deze waarden zijn: once, always, deny, stop
 @msg	choose a file or folder first, or deny	kies eerst een bestand of map, of weiger
 @msg	the script file permissions could not be saved: {e}	de toestemmingen voor scriptbestanden konden niet worden opgeslagen: {e}
+@msg	the script file permissions could not be read: {e}	de toestemmingen voor scriptbestanden konden niet worden gelezen: {e}
 @msg	this script's file access can be allowed only once	de bestandstoegang van dit script kan maar één keer worden toegestaan
 @msg	Only the person at the keyboard can allow a script's file access	Alleen de persoon aan het toetsenbord kan de bestandstoegang van een script toestaan
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Een script krijgt maximaal 2.048 bestanden: de bestanden die daarna zijn gekozen, zijn weggelaten
@@ -474,6 +475,15 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	een alleen-lezen object is weggelaten: geef het terug, als alleen {{"id": …}} of zoals het is gegeven
 @msg	a string	een string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	een contour heeft alleen `paint`, `width`, `join`, `cap` en `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	een stuk van een geschilderd live-effect heeft alleen `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` en `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	een contour heeft alleen `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` en `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` mag alleen true zijn
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` is alleen voor een live-effect dat `paintOutput` opgeeft, bij `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` moet een getal van 0 tot 1 zijn
+@msg	unknown blending mode; `blend` is one of {_1}	onbekende overvloeimodus; `blend` is een van {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` moet een lijst van hoogstens {MAX_LOOK_EFFECTS} records zijn
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	een resultaat draagt hoogstens {MAX_RESULT_EFFECTS} effectrecords
+@msg	this host takes no effects here	deze host neemt hier geen effecten aan
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	een contour moet {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} zijn
 @msg	an effect must be {{"id", "params"?, "visible"?}}	een effect moet {{"id", "params"?, "visible"?}} zijn
 @msg	an effect on a fill returns only `fills`	een effect op een vulling geeft alleen `fills` terug
@@ -567,6 +577,35 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`inputs` lists `{shown}` twice	`inputs` noemt `{shown}` twee keer
 @msg	`inputs` needs `api` 2 or later	`inputs` vereist `api` 2 of hoger
 @msg	`inputs` needs the permission `doc.read`	`inputs` vereist de machtiging `doc.read`
+@msg	only a filter declares `writes`	alleen een filter declareert `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` noemt een onbekende objectsoort `{shown}`: gebruik type, image of symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` noemt `{shown}` twee keer
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` noemt `{shown}`, dat `inputs` niet noemt
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` vereist `api` {WRITES_API} of hoger
+@msg	`writes` needs the permission `doc.write`	`writes` vereist de machtiging `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} is geen tekst, afbeelding of symboolinstantie
+@msg	the text of type given as `truncated` can't be changed	de tekst van een tekstobject dat als `truncated` is doorgegeven, kan niet worden gewijzigd
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	moet een lijst van ten hoogste {MAX_INPUT_RUNS} items zijn
+@msg	type needs at least one run	tekst heeft ten minste één tekstreeks nodig
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes tekst (limiet {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} alinea's (limiet {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	meer dan {MAX_INPUT_TEXT_TOTAL} bytes tekst in de hele uitvoer
+@msg	unknown key '{k}'	onbekende sleutel '{k}'
+@msg	must be a list of 6 numbers	moet een lijst van 6 getallen zijn
+@msg	a number is out of range (limit ±{MAX_COORD})	een getal valt buiten het bereik (limiet ±{MAX_COORD})
+@msg	flattens the object to a line or a point	drukt het object plat tot een lijn of een punt
+@msg	an object flattened to a line or a point can't be placed again	een object dat tot een lijn of een punt is platgedrukt, kan niet opnieuw worden geplaatst
+@msg	must be a number from 0 to 1	moet een getal van 0 tot 1 zijn
+@msg	must be the name of a symbol	moet de naam van een symbool zijn
+@msg	'{shown}' is not a symbol in this document	'{shown}' is geen symbool in dit document
+@msg	a run must be {{"text", "style", "inline"?}}	een tekstreeks moet {{"text", "style", "inline"?}} zijn
+@msg	`text` holds the character of an inline graphic	`text` bevat het teken van een inline afbeelding
+@msg	inline graphics can't be added, removed, reordered or changed	inline afbeeldingen kunnen niet worden toegevoegd, verwijderd, anders geordend of gewijzigd
+@msg	the characters of threaded type can't be changed	de tekens van gekoppelde tekst kunnen niet worden gewijzigd
+@msg	the characters of type with ruby can't be changed	de tekens van tekst met ruby kunnen niet worden gewijzigd
+@msg	expected {count} paragraph styles, one per paragraph	{count} alineastijlen verwacht, één per alinea
+@msg	the document has no Kinsoku set named '{shown}'	het document heeft geen Kinsoku-set met de naam '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	moet uit 1-{MAX_FAMILY} afdrukbare tekens bestaan
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	De objecten lezen die het krijgt, en de instellingen, tekengebieden, lagen en stalen van het document
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` moet verschillende secties noemen: settings, artboards, layers of swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` is voor een filter, of een live-effect met `commands`, bij `api` 3 of later en met de machtiging `doc.read`
@@ -577,6 +616,21 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	time budget	tijdbudget
 @msg	memory budget (the selection is too large to hand over)	geheugenbudget (de selectie is te groot om door te geven)
 @msg	output size ({what} is {len} bytes, limit {max})	uitvoergrootte ({what} is {len} bytes, limiet {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} regel {line}, kolom {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	geheugenbudget
+@msg	call depth	aanroepdiepte
+@msg	run(input, params) returned no output object	run(input, params) heeft geen uitvoerobject teruggegeven
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" heeft `script` nodig: de naam van het .js-bestand van de plug-in, naast het manifest
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` moet de naam zijn van een .js-bestand in de map van het manifest: 1-128 bytes, geen map, geen `:`, niet beginnend met `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` is de tekst van het script en staat alleen in de JSON die dataBase64 van plugin.install aanneemt: een .vcplugin-bestand noemt zijn script in `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	het manifest van een JavaScript-plug-in geeft `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" is voor een objectfilter (`kind` "filter"), niet voor `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	een JavaScript-plug-in kan de toestemming `{name}` niet vermelden: van de toestemmingen van de host mag hij `progress` vermelden
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	het manifest van een WebAssembly-module laat `runtime` weg: "js" is voor een JavaScript-plug-in
+@msg	a JavaScript plug-in makes no command calls	een JavaScript-plug-in roept geen opdrachten aan
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) neemt twee getallen
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) neemt een niveau, 0 (fout), 1 (waarschuwing), 2 (informatie) of 3 (foutopsporing), en een tekenreeks
 @msg	the plug-in's grant can't be removed from the plug-in store	de toekenning van de plug-in kan niet uit de plug-inopslag worden verwijderd
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	machtiging `{shown}` is gereserveerd voor een latere plug-in-API; deze host kent haar niet toe
 @msg	unknown permission `{shown}`	onbekende machtiging `{shown}`
@@ -1273,6 +1327,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	Generieke VectorCraft-CMYK (SWOP-achtig)
+	VectorCraft Coated CMYK (FOGRA51)	Gestreken VectorCraft-CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	Ongestreken VectorCraft-CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Verouderde Macintosh-RGB (Gamma 1.8)
 	Internet Standard RGB (sRGB)	Internetstandaard-RGB (sRGB)
 	Monitor RGB	Monitor-RGB
@@ -5579,6 +5635,14 @@ imageTrace	Outline	Contour
 	The script asks to read and write a folder you choose, with everything in it.	Het script vraagt een map die u kiest te lezen en te schrijven, met alles wat erin staat.
 	Allow Once	Eenmaal toestaan
 	Always Allow This Script	Dit script altijd toestaan
+	No script has kept file access.	Geen enkel script heeft bewaarde bestandstoegang.
+	Read file	Bestand lezen
+	Read and write file	Bestand lezen en schrijven
+	Read and write folder	Map lezen en schrijven
+	Revoke	Intrekken
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Intrekken verwijdert de toegang die voor elke versie van het script is bewaard. Toegang tot een map omvat alles erin.
+@msg	Script file access revoked	Bestandstoegang van script ingetrokken
+@msg	The script file access was already revoked	De bestandstoegang van het script was al ingetrokken
 	Deny	Weigeren
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen
@@ -10339,6 +10403,7 @@ breakText	Glyphs	Glyphs
 	Place Brush Art	Penseelillustratie plaatsen
 	Replace Brush Art	Penseelillustratie vervangen
 	Replace Pattern Art	Patroonillustratie vervangen
+	Place Pattern Art	Patroonillustratie plaatsen
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Contouren gebruiken dit penseel. De nieuwe illustratie op deze contouren toepassen, of ze laten zoals ze zijn en een kopie van het penseel met de nieuwe illustratie toevoegen?
 	Apply to Strokes	Op contouren toepassen
 	Leave Strokes	Contouren behouden
@@ -10408,6 +10473,8 @@ breakText	Glyphs	Glyphs
 	Tangent Circle	Raakcirkel
 	Tangent Circle Tool	Raakcirkel-gereedschap
 	No tangent circle here	Hier geen raakcirkel
+	Ask For Circle Radius	Vragen naar cirkelradius
+	Auto-Update Default	Standaard automatisch bijwerken
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` noemt een object twee keer
 @msg	select two or three paths or compound paths	selecteer twee of drie paden of samengestelde paden
@@ -10843,6 +10910,11 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Fold Angle	Vouwhoek
+	Set Fold Angle…	Vouwhoek instellen…
+	Set Fold Angle	Vouwhoek instellen
+	Reset Fold Angle	Vouwhoek herstellen
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	selecteer een rillijn, halve snijlijn of perforatielijn die niet vergrendeld of verborgen is
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Toont in plaats van de tooltip een kaart met wat een gereedschap in de werkbalk en zijn toetsen doen; vereist Tooltips tonen.
 	Selects whole objects and groups to move, resize or rotate them.	Selecteert hele objecten en groepen om ze te verplaatsen, te schalen of te draaien.

@@ -8,6 +8,56 @@ fn app() -> VectorcraftApp {
     app
 }
 
+#[test]
+fn changing_one_tip_component_preserves_the_other_fractional_tool_setting() {
+    use crate::tests::panel_harness::Panel;
+    use egui::{Key, Modifiers};
+
+    for tool in ["eraser", "blobBrush"] {
+        for component in ["none", "angle", "roundness"] {
+            for save in [false, true] {
+                let mut app = app();
+                app.run("tool.setOption", json!({"tool": tool, "values": {"angle": 17.25, "roundness": 25.5}})).unwrap();
+                let original = app.session.tool_options_of(tool);
+                assert_eq!(original["angle"], 17.25);
+                assert_eq!(original["roundness"], 25.5);
+                let document = app.session.active().unwrap().doc.clone();
+                let revision = app.session.active().unwrap().revision;
+                let undo = app.session.active().unwrap().history.undo.len();
+                let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+                panel.room(egui::vec2(1000.0, 1200.0));
+                crate::toolbar::open_options(&mut panel.app(), tool).unwrap();
+                panel.frame();
+                let mut expected = original.clone();
+                if component != "none" {
+                    // Focus is an actual accessibility action. A disc click would itself edit the tip.
+                    panel.focus("Tip");
+                    assert!(panel.focused("Tip"));
+                    if component == "angle" {
+                        panel.key(Key::ArrowRight, Modifiers::NONE);
+                        expected["angle"] = json!(18.0);
+                    } else {
+                        panel.key(Key::ArrowUp, Modifiers::ALT);
+                        expected["roundness"] = json!(27.0);
+                    }
+                }
+                let draft = panel.app().dialogs().unwrap().with(|host| host.get::<HostedParamDialog>().unwrap().fields().clone());
+                assert_eq!(draft.number("angle"), expected["angle"].as_f64());
+                assert_eq!(draft.number("roundness"), expected["roundness"].as_f64(), "editing one component must not round its untouched partner");
+                assert_eq!(panel.app().session.tool_options_of(tool), original, "the tool changes only on OK");
+                panel.click(if save { "OK" } else { "Cancel" });
+                panel.frame();
+                panel.frame();
+                assert!(!panel.app().dialogs().unwrap().with(|host| host.is_open::<HostedParamDialog>()));
+                assert_eq!(panel.app().session.tool_options_of(tool), if save { expected } else { original });
+                assert_eq!(panel.app().session.active().unwrap().doc, document);
+                assert_eq!(panel.app().session.active().unwrap().revision, revision);
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            }
+        }
+    }
+}
+
 /// The id of the open dialog `key`.
 fn open_id(app: &VectorcraftApp, key: &str) -> DialogId {
     app.dialogs()
@@ -77,6 +127,7 @@ fn ok_sets_each_tools_options() {
     let layers = app.session.doc().unwrap().doc.layers.clone();
     let circle = vectorcraft_tools::circle::ID;
     let arc = vectorcraft_tools::three_point_arc::ID;
+    let curvature = vectorcraft_tools::curvature_circle::ID;
     // The tool opened, the fields set, the tool whose options are read, and the options expected there.
     let rows: Vec<(&str, Value, &str, Value)> = vec![
         (
@@ -106,6 +157,12 @@ fn ok_sets_each_tools_options() {
             json!({"radii": false, "standardAnchors": false, "dragThird": false, "color": "magenta"}),
             circle,
             json!({"radii": false, "standardAnchors": false, "dragThird": false, "color": "magenta"}),
+        ),
+        (
+            curvature,
+            json!({"snapTolerance": 8, "annotateRadius": false, "standardAnchors": false}),
+            curvature,
+            json!({"snapTolerance": 8.0, "snapWithoutGuides": true, "annotateRadius": false, "standardAnchors": false, "constantRadius": true}),
         ),
         (arc, json!({"direction": true}), arc, json!({"direction": true})),
         ("objectsOnPath", json!({"pivot": 7, "rotate": 30}), "objectsOnPath", json!({"pivot": 7, "rotate": 30.0})),

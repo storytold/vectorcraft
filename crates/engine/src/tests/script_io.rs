@@ -652,6 +652,63 @@ fn a_grants_change_without_its_lock_changes_nothing() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `script.grants.revoke` removes a grant by the path `script.grants` lists for it, also when a
+/// link has since taken that path's place and leads elsewhere.
+#[cfg(unix)]
+#[test]
+fn a_grant_whose_path_is_now_a_link_is_revoked_by_its_listed_path() {
+    let base = folder("grants-relinked");
+    let real = std::fs::canonicalize(&base).unwrap();
+    let (kept, other) = (real.join("kept.txt"), real.join("other.txt"));
+    write(&other, b"other");
+    let kept_path = kept.to_string_lossy().into_owned();
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": kept_path, "write": false, "folder": false});
+    write(&base.join("settings/Script Grants.json"), json!({"version": 1, "grants": [grant]}).to_string().as_bytes());
+    std::os::unix::fs::symlink(&other, &kept).unwrap();
+    let mut s = with_data(&base);
+    let listed = s.execute("script.grants", &json!({})).unwrap();
+    assert_eq!(listed["grants"][0]["path"], json!(kept_path));
+    let r = s.execute("script.grants.revoke", &json!({"script": "/s.jsx", "path": kept_path})).unwrap();
+    assert_eq!(r["removed"], 1, "{r}");
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"], json!([]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A grant kept for a path that is now a link to another granted path is revoked alone: the grant of
+/// the link's target stays.
+#[cfg(unix)]
+#[test]
+fn revoking_a_grant_whose_path_now_links_to_another_grant_keeps_the_other() {
+    let base = folder("grants-relinked-both");
+    let real = std::fs::canonicalize(&base).unwrap();
+    let (kept, other) = (real.join("kept.txt"), real.join("other.txt"));
+    write(&other, b"other");
+    let (kept_path, other_path) = (kept.to_string_lossy().into_owned(), other.to_string_lossy().into_owned());
+    let grant = |path: &str| json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": path, "write": false, "folder": false});
+    let stored = json!({"version": 1, "grants": [grant(&kept_path), grant(&other_path)]});
+    write(&base.join("settings/Script Grants.json"), stored.to_string().as_bytes());
+    std::os::unix::fs::symlink(&other, &kept).unwrap();
+    let mut s = with_data(&base);
+    let r = s.execute("script.grants.revoke", &json!({"script": "/s.jsx", "path": kept_path})).unwrap();
+    assert_eq!(r["removed"], 1, "{r}");
+    let left = s.execute("script.grants", &json!({})).unwrap();
+    let paths: Vec<Value> = left["grants"].as_array().into_iter().flatten().map(|g| g["path"].clone()).collect();
+    assert_eq!(paths, [json!(other_path)], "{left}");
+    // Another script's grant of the path as given does not keep this script's grant of the link's
+    // target from being removed.
+    let stored = json!({"version": 1, "grants": [
+        {"script": "/t.jsx", "sha256": "0", "code": [], "path": kept_path, "write": false, "folder": false},
+        grant(&other_path)
+    ]});
+    write(&base.join("settings/Script Grants.json"), stored.to_string().as_bytes());
+    let r = s.execute("script.grants.revoke", &json!({"script": "/s.jsx", "path": kept_path})).unwrap();
+    assert_eq!(r["removed"], 1, "{r}");
+    let left = s.execute("script.grants", &json!({})).unwrap();
+    let scripts: Vec<Value> = left["grants"].as_array().into_iter().flatten().map(|g| g["script"].clone()).collect();
+    assert_eq!(scripts, [json!("/t.jsx")], "{left}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Reading and changing the grants file wait for a lock another handle holds only for a bounded
 /// number of tries: then a listing and a change fail, with the file unchanged. A lock
 /// released while it waits is taken.
@@ -686,6 +743,29 @@ fn a_grants_change_waits_for_a_held_lock_a_bounded_number_of_tries() {
     assert_eq!(revoke_grants(&data, None, None).unwrap(), 1, "a lock released while it waits is taken");
     assert_eq!(waits.get(), 1);
     WHILE_GRANTS_LOCKED.set(None);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A grants lock that is dropped frees the grants file while a copy of its handle is open, as a
+/// child process that is starting holds one: the next change takes the lock without waiting.
+#[test]
+fn a_dropped_grants_lock_frees_the_file_while_a_copy_of_its_handle_is_open() {
+    use crate::script::files::{GRANTS_FILE, WHILE_GRANTS_LOCKED, lock_store, revoke_grants};
+    let base = folder("grants-lock-copied");
+    let data = base.join("settings/Script Data");
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": "/p", "write": false, "folder": false});
+    write(&base.join("settings").join(GRANTS_FILE), json!({"version": 1, "grants": [grant]}).to_string().as_bytes());
+    let lock = lock_store(&base.join("settings").join(GRANTS_FILE)).unwrap();
+    let copy = lock.file().try_clone().unwrap();
+    drop(lock);
+    let waits = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counted = waits.clone();
+    WHILE_GRANTS_LOCKED.set(Some(Box::new(move || counted.set(counted.get() + 1))));
+    let revoked = revoke_grants(&data, None, None);
+    WHILE_GRANTS_LOCKED.set(None);
+    assert_eq!(revoked.map_err(|e| e.kind()), Ok(1), "a dropped lock is free");
+    assert_eq!(waits.get(), 0, "it is taken without waiting");
+    drop(copy);
     let _ = std::fs::remove_dir_all(base);
 }
 

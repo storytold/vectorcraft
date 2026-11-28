@@ -4922,6 +4922,14 @@ axis	Both	И двете
 	The script asks to read and write a folder you choose, with everything in it.	Скриптът иска да чете и записва папка, която изберете, с цялото ѝ съдържание.
 	Allow Once	Разреши веднъж
 	Always Allow This Script	Винаги разрешавай този скрипт
+	No script has kept file access.	Няма скрипт със запазен достъп до файлове.
+	Read file	Четене на файл
+	Read and write file	Четене и запис на файл
+	Read and write folder	Четене и запис на папка
+	Revoke	Отнемане
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Отнемането премахва достъпа, запазен за всяка версия на скрипта. Достъпът до папка обхваща всичко в нея.
+@msg	Script file access revoked	Достъпът на скрипта до файлове е отнет
+@msg	The script file access was already revoked	Достъпът на скрипта до файлове вече е отнет
 	Deny	Откажи
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скриптът може да променя отворените документи и да записва файлове чрез командите, които изпълнява. Изпълнявайте само скриптове, на които имате доверие.
 	Do not show this warning again	Не показвай повече това предупреждение
@@ -6626,6 +6634,8 @@ arrowhead	Feather	Перо
 	VectorCraft Default	По подразбиране за VectorCraft
 	VectorCraft Defaults	Стандартни настройки на VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	Общ CMYK за VectorCraft (подобен на SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	Мелиран CMYK за VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	Немелиран CMYK за VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Образци на VectorCraft (.vcswatches)
 	Vertical Align	Вертикално подравняване
 	Vertical Area Type	Вертикално въвеждане в област
@@ -8219,6 +8229,7 @@ breakText	Glyphs	Глифи
 	Place Brush Art	Поставяне на графика на четка
 	Replace Brush Art	Замяна на графика на четка
 	Replace Pattern Art	Замяна на графика на мостра
+	Place Pattern Art	Поставяне на графика на мостра
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Щрихи използват тази четка. Да се приложи ли новата графика към тези щрихи, или те да останат както са и да се добави копие на четката с новата графика?
 	Apply to Strokes	Прилагане към щрихите
 	Leave Strokes	Оставяне на щрихите
@@ -8288,6 +8299,8 @@ breakText	Glyphs	Глифи
 	Tangent Circle	Допирателна окръжност
 	Tangent Circle Tool	Инструмент „Допирателна окръжност“
 	No tangent circle here	Тук няма допирателна окръжност
+	Ask For Circle Radius	Питане за радиуса на окръжността
+	Auto-Update Default	Автоматично обновяване на стойността по подразбиране
 	Circle:	Окръжност:
 @msg	`ids` names an object twice	`ids` посочва обект два пъти
 @msg	select two or three paths or compound paths	изберете два или три пътя или съставни пътя
@@ -8603,6 +8616,11 @@ breakText	Glyphs	Глифи
 	No objects are selected.	Няма избрани обекти.
 	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
 	Remove Fold Line Role	Премахни вида на линията
+	Fold Angle	Ъгъл на сгъване
+	Set Fold Angle…	Задай ъгъл на сгъване…
+	Set Fold Angle	Задай ъгъл на сгъване
+	Reset Fold Angle	Нулирай ъгъла на сгъване
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	изберете линия за биговане, частично рязане или перфорация, която не е заключена или скрита
 	Check	Провери
 	Check Fold Lines	Провери линиите на сгъване
 @msg	No cut lines are in the selection.	В селекцията няма линии за рязане.

@@ -957,6 +957,29 @@ fn function_based_shadings_share_one_budget_per_import() {
     assert!(r.warnings.iter().any(|w| w.contains("too many to read")), "{:?}", r.warnings);
 }
 
+/// An import that stops on a later page still counts the evaluations the shadings of the pages
+/// before it took, once each.
+#[test]
+fn an_import_that_stops_on_a_later_page_counts_its_function_evaluations() {
+    use std::sync::atomic::Ordering::Relaxed;
+    let _held = shadings();
+    let resources = format!(
+        "/Pattern << /P0 << /PatternType 2 /Shading << /ShadingType 1 /ColorSpace /DeviceRGB /Domain [0 4 0 1] /Matrix [25 0 0 100 0 0] /Function {} 0 R >> >> >>",
+        first_extra(2)
+    );
+    let function = stream("/FunctionType 4 /Domain [0 4 0 1] /Range [0 1 0 1 0 1]", STRIPES);
+    let shaded = PdfPage { resources, ..PdfPage::new(100.0, 100.0, "/Pattern cs /P0 scn 0 0 100 100 re f") };
+    // The second page's content ends inside a string, so the import stops there.
+    let cut = PdfPage::new(100.0, 100.0, "0 0 5 5 re f (unterminated");
+    let bytes = pdf_with(&[shaded, cut], &[&function], None);
+    crate::import_shading::EVALUATIONS.store(0, Relaxed);
+    let before = function_evaluations_of(&bytes);
+    assert!(import(&bytes).is_err());
+    let used = crate::import_shading::EVALUATIONS.load(Relaxed);
+    assert!(used > 0, "the first page's shading is read");
+    assert_eq!(function_evaluations_of(&bytes) - before, used);
+}
+
 /// A page drawing one small form over and over makes objects only up to the import's limit, then
 /// leaves the rest out with a warning, instead of taking memory for every drawing (#3569).
 #[test]

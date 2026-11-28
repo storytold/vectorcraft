@@ -821,9 +821,17 @@ fn a_library_of_many_repeated_swatches_is_read_once_per_color() {
         })
         .collect();
     let params = TraceParams { mode: Mode::Color, palette: Palette::DocumentLibrary, swatches, colors: 2, ..TraceParams::default() };
-    let start = std::time::Instant::now();
+    let distinct = 50_000;
+    let count = params.swatches.len();
+    quantize::LIBRARY_COMPARISONS.with(|n| n.set(0));
+    quantize::SWATCH_LOOKUPS.with(|n| n.set(0));
     let q = quantize(&img, &params);
-    assert!(start.elapsed() < std::time::Duration::from_secs(30), "{:?}", start.elapsed());
+    // Each swatch is looked up once to drop the repeats. The two colors of the picture are each
+    // compared with every distinct swatch once, and the image's few bins with the two swatches kept.
+    let lookups = quantize::SWATCH_LOOKUPS.with(|n| n.get());
+    assert!(lookups > 0 && lookups <= count, "{lookups} lookups for {count} swatches");
+    let comparisons = quantize::LIBRARY_COMPARISONS.with(|n| n.get());
+    assert!(comparisons > 0 && comparisons <= 2 * distinct + 1_000, "{comparisons} comparisons for {distinct} distinct swatches");
     assert_eq!(q.labels.len(), 2);
 }
 

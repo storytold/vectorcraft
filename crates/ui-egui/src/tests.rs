@@ -36,6 +36,7 @@ mod quickpenwheel;
 mod recolor;
 mod recovery;
 pub(super) mod removeanchors;
+mod retype_runs;
 mod rotateview;
 mod ruler_origin;
 mod save;

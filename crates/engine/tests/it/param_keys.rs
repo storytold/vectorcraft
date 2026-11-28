@@ -263,6 +263,56 @@ fn a_tone_curve_channel_it_does_not_have_is_refused() {
     assert_eq!(back.layers[0].children().unwrap()[0].appearance.effects[0].params["channel"], json!("alpha"));
 }
 
+/// A Drop Shadow's or glow's `mode` that names no blend mode (which it drew as Normal) is refused
+/// in new calls to `effect.apply`, `appearance.addEffect` and `effect.setParams`, with the modes it
+/// takes, and the document and its undo history stay as they were. Blend-mode names in any
+/// spelling pass, an omitted `mode` keeps the default, and an older saved step still plays.
+#[test]
+fn a_shadow_or_glow_mode_that_is_no_blend_mode_is_refused() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].clone();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "params": {"opacity": 50}})).unwrap();
+    let state = |s: &Session| {
+        let st = s.active().unwrap();
+        (st.doc.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    let why = "`mode` must be one of normal, darken, multiply, colorBurn";
+    for bad in [json!("multipy"), json!(""), json!("passThrough"), json!(null), json!(["multiply"]), json!(1), json!(false)] {
+        for (cmd, params) in [
+            ("effect.setParams", json!({"index": 0, "params": {"mode": bad}})),
+            ("effect.apply", json!({"effect": "stylize.innerGlow", "params": {"mode": bad}})),
+            ("effect.apply", json!({"effect": null, "id": "stylize.dropShadow", "ids": [id], "params": {"mode": bad}})),
+            ("appearance.addEffect", json!({"effect": "stylize.outerGlow", "params": {"mode": bad}})),
+        ] {
+            let e = s.execute(cmd, &params).unwrap_err().to_string();
+            assert!(e.contains(why), "{cmd} {params}: {e}");
+            let checked = s.check_params(cmd, &params).unwrap_err().to_string();
+            assert!(checked.contains(why), "{cmd} {params}: {checked}");
+            assert!(state(&s) == before, "{cmd} {params} changed the document or its undo history");
+        }
+    }
+    let effect = |s: &Session| s.active().unwrap().doc.layers[0].children().unwrap()[0].appearance.effects[0].clone();
+    let shadow = effect(&s);
+    let drawn = vectorcraft_render::effects::merged_params(&shadow.id, &shadow.params);
+    assert_eq!(drawn["mode"], json!("multiply"), "an omitted mode keeps the default");
+    for good in ["screen", "Color Burn", "color-burn", "COlor!!Burn#", "softLight", "LUMINOSITY"] {
+        let params = json!({"index": 0, "params": {"mode": good}});
+        s.check_params("effect.setParams", &params).unwrap_or_else(|e| panic!("{good}: {e}"));
+        s.execute("effect.setParams", &params).unwrap_or_else(|e| panic!("{good}: {e}"));
+        assert_eq!(effect(&s).params["mode"], json!(good));
+    }
+    s.replay("effect.setParams", &json!({"index": 0, "params": {"mode": "multipy"}})).unwrap();
+    assert_eq!(effect(&s).params["mode"], json!("multipy"));
+    assert_eq!(vectorcraft_render::effects::blend_mode("multipy"), vectorcraft_color::BlendMode::Normal);
+    for mode in vectorcraft_color::BlendMode::ALL {
+        let id = vectorcraft_render::effects::blend_mode_id(mode);
+        assert_eq!(vectorcraft_render::effects::parse_blend_mode(&id), Some(mode));
+        assert_eq!(vectorcraft_render::effects::blend_mode(&id), mode);
+    }
+}
+
 /// What a command adds to its own journal entry passes the check, so a recorded journal can be
 /// sent back through the control channel or MCP.
 #[test]

@@ -6,9 +6,10 @@
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/> describe them.
 //!
 //! The objects are host classes ([`vectorcraft_js::HostClass`]): each holds the run's number, the
-//! document's [`crate::DocState::uid`] and, for art, the object's id, and every read looks the
-//! document and the object up again. An object that was deleted, a document that was closed and an
-//! object from an earlier run of a named engine throw an error on every member. Every change runs
+//! document's [`crate::DocState::uid`] and, for art and layers, the object's id and the document's
+//! [`crate::DocState::reverts`], and every read looks the document and the
+//! object up again. An object that was deleted, a document that was closed, an object from before
+//! File › Revert and an object from an earlier run of a named engine throw an error on every member. Every change runs
 //! a command, as `vc.run` does, so it joins the run's transaction and its one undo step for each
 //! changed document; a change that changes nothing runs no command. A change to a document that is
 //! not the active one makes it active for the command and makes the other one active again after.
@@ -18,7 +19,8 @@
 //! `pathItems[0]`. A collection read with a name, `pageItems["name"]`, gives the object `getByName`
 //! gives, and a script may name the application's members without `app.`, as
 //! <https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/> describes; here
-//! that holds for `activeDocument`, `documents` and `selection`.
+//! that holds for `activeDocument`, `documents` and `selection`. `documents[0]` is the active
+//! document, as the same page says.
 //!
 //! VectorCraft's own rules:
 //! - A document's selection lists the selected objects topmost first, as `pageItems` does, whatever
@@ -28,9 +30,10 @@
 //!   false then. Assigning to such a name throws the same error.
 //! - Assigning `activeDocument` or `selection` without `app.` assigns `app.activeDocument` or the
 //!   active document's selection. A top-level `var selection = ...` does the same and does
-//!   not make a variable of the script. Assigning `documents` keeps its value.
-//! - Collections list documents in tab order. The objectReferences page says `documents[0]` is
-//!   always the active document; VectorCraft does not follow that yet.
+//!   not make a variable of the script. An assignment to `documents` is ignored outside strict
+//!   mode and throws a `TypeError` in strict mode code or with `#strict on`.
+//! - After `documents[0]`, documents are listed from the one active most recently to the one
+//!   active longest ago. A change a script makes to a document in the back does not move it.
 //! - `pageItems` lists every object, with the objects inside groups and compound paths after the
 //!   group or compound path, and leaves out layers and ruler guides. An index out of range gives
 //!   `undefined`; `index` and `getByName` throw `Not found` when nothing matches.
@@ -40,8 +43,11 @@
 //! - Enumerated values are strings such as `"ZOrderMethod.BRINGTOFRONT"`.
 //! - `app.activeDocument` with no document open throws `No active document`.
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
-//!   must be one of that document's that can be selected, or nothing changes.
-//! - Members the help pages list that are not here yet throw an error that says so.
+//!   must be one of that document's that can be selected, or nothing changes. `undefined` throws.
+//! - `controlBounds` is the visible bounds, widened to take in the direction points of every path
+//!   in the object.
+//! - Members the help pages list that are not here yet throw an error that says so, and `reflect`
+//!   leaves them out.
 //! - Assigning `hidden`, `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an
 //!   object in a hidden or locked layer, and `zOrder()` on one, throw `Cannot edit` and change
 //!   nothing, even for the value the object has. The exception is `opacity` given the value the
@@ -53,6 +59,10 @@
 //! - A compound path whose last path `move` or `remove()` takes out stays, empty.
 //! - An object with nothing in it, such as an empty group or a compound path whose paths moved out,
 //!   reads its bounds, `position`, `width` and `height` as zeros, and assigning them does nothing.
+//! - `reflect` on an object or a class gives each member's type from the declaration that installs
+//!   the member ([`classes`]): a class name, `boolean`, `number`, `string`, `Array` for a list of
+//!   numbers, the enumeration's name for an enumerated value, and `*` where the value can be of
+//!   more than one type.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -61,10 +71,28 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Rect};
-use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, Realm, RunError, host_ref, host_ref_parts};
+use vectorcraft_js::{
+    ArgInfo, Data, HostClass, HostError, HostFunction, HostItem, HostMember, MemberInfo, Realm, RunError, host_ref, host_ref_parts,
+};
 
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
+
+mod tags;
+mod variables;
+
+pub use variables::{MAX_HANDLES, STALE_DATASET, STALE_VARIABLE};
+
+/// What [`after_command`] compares with, taken before each command a script runs
+/// ([`variables::before_command`]).
+pub(super) fn before_command(h: &Host, id: &str) -> Option<(u64, Vec<crate::doc::DataSet>)> {
+    variables::before_command(h, id)
+}
+
+/// After each command a script runs ([`variables::after_command`]).
+pub(super) fn after_command(h: &Host, before: Option<(u64, Vec<crate::doc::DataSet>)>) {
+    variables::after_command(h, before);
+}
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -115,7 +143,9 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 /// What the object model keeps for one run: its coordinate system, the lists of page items and the
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
 /// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
-/// open, and the settings of each `DocumentPreset` the run made.
+/// open, the settings of each `DocumentPreset` the run made, with the size of the values they hold
+/// now and the most they may hold (the run's heap), and the `Variable` and `Dataset` objects it
+/// gave out.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
@@ -123,9 +153,17 @@ pub(super) struct State {
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    preset_bytes: Cell<u64>,
+    preset_limit: u64,
+    vars: variables::Handles,
 }
 
 impl State {
+    /// The state of a run whose heap is `heap_bytes`.
+    pub(super) fn new(heap_bytes: usize) -> Self {
+        Self { preset_limit: heap_bytes as u64, ..Self::default() }
+    }
+
     /// Whether a call's own savepoint is open: its commands take none of their own.
     pub(super) fn saving(&self) -> bool {
         self.saving.get()
@@ -134,20 +172,25 @@ impl State {
 
 /// Runs `f`, whose commands are kept together or put back together: when `f` fails, every
 /// document, the selection and the undo histories are as they were before it, with no undo step
-/// and no change to the document's saved state.
+/// and no change to the document's saved state, and the growth its commands were charged is not
+/// counted.
 fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostError>) -> std::result::Result<T, HostError> {
     if h.dom.saving.get() {
         return f(h);
     }
     let save = Savepoint::take(&mut h.session.borrow_mut(), "edit.duplicate");
+    let mark = h.growth_mark();
     h.dom.saving.set(true);
     let r = f(h);
     h.dom.saving.set(false);
     let mut s = h.session.borrow_mut();
     if r.is_ok() {
         save.keep(&mut s);
-    } else if !save.restore(&mut s) {
-        return Err(HostError::Abort(HISTORY_LOST.to_string()));
+    } else {
+        h.put_growth_back(mark);
+        if !save.restore(&mut s) {
+            return Err(HostError::Abort(HISTORY_LOST.to_string()));
+        }
     }
     r
 }
@@ -232,10 +275,24 @@ fn method(link: &Link, f: Member) -> HostMember {
     HostMember::Method(function(link, f))
 }
 
+/// A member of a class with what `reflect` tells of it.
+type Described = (String, HostMember, MemberInfo);
+
+/// A property's or a method's result's type for `reflect`.
+fn typed(data_type: &str) -> MemberInfo {
+    MemberInfo { data_type: data_type.into(), ..MemberInfo::default() }
+}
+
+/// A method's result's type and its arguments' names and types, for `reflect`.
+fn returns(data_type: &str, arguments: &[(&str, &str)]) -> MemberInfo {
+    let arguments = arguments.iter().map(|(n, t)| ArgInfo { name: (*n).into(), data_type: (*t).into(), ..ArgInfo::default() }).collect();
+    MemberInfo { arguments, ..typed(data_type) }
+}
+
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
 /// the check that a document or page item `this` is still there. `hasOwnProperty` is false for it,
-/// so a script that checks for the member first skips it.
-fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostMember) {
+/// so a script that checks for the member first skips it, and `reflect` leaves it out.
+fn later(link: &Link, class: &'static str, name: &'static str) -> Described {
     let message = format!("{class}.{name} is not available yet");
     let l = link.clone();
     let f: HostFunction = Rc::new(move |a: Vec<Data>| {
@@ -252,7 +309,7 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostM
         }
         Err(HostError::Error(message.clone()))
     });
-    (name.to_string(), HostMember::Unavailable(f))
+    (name.to_string(), HostMember::Unavailable(f), MemberInfo { unavailable: true, ..MemberInfo::default() })
 }
 
 fn text(s: impl Into<String>) -> Data {
@@ -365,12 +422,27 @@ fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError
     }
 }
 
+fn node_handle(h: &Host, st: &DocState, id: NodeId) -> [f64; 5] {
+    let [high, low] = id_parts(id);
+    [float(h.run), float(st.uid), high, low, float(st.reverts)]
+}
+
+fn node_of(h: &Host, handle: &[f64]) -> Option<(Doc, NodeId)> {
+    let &[run, uid, high, low, reverts] = handle else { return None };
+    let doc = find_doc(h, run, uid)?;
+    if h.session.borrow().documents().get(doc.index)?.reverts != whole(reverts)? {
+        return None;
+    }
+    Some((doc, id_of(high, low)?))
+}
+
 /// The page item `d` names, which must still be in its document.
 fn item_of(h: &Host, d: &Data) -> std::result::Result<Item, HostError> {
     let Some(handle) = handle_of(d, "PageItem") else { return Err(HostError::Type("this is not a page item".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-    let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    if handle.len() != 5 {
+        return Err(HostError::Type("this is not a page item".into()));
+    }
+    let (doc, id) = node_of(h, &handle).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let s = h.session.borrow();
     let st = &s.documents()[doc.index];
     if st.doc.node(id).is_none_or(|n| typename(n).is_none()) {
@@ -407,8 +479,8 @@ fn doc_ref(h: &Host, uid: u64) -> Data {
 fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     match st.doc.node(id) {
         Some(n) => match typename(n) {
-            Some(t) => host_ref(t, &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
-            None => host_ref("Layer", &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
+            Some(t) => host_ref(t, &node_handle(h, st, id)),
+            None => host_ref("Layer", &node_handle(h, st, id)),
         },
         None => Data::Null,
     }
@@ -569,6 +641,8 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
             .map(|i| {
                 let anchors: Vec<[usize; 2]> = match before.anchors.get(i) {
                     Some(a) => a.iter().map(|(p, k)| [*p, *k]).collect(),
+                    // A path with only segments selected gets them back below, with no anchors.
+                    None if before.segments.contains_key(i) => Vec::new(),
                     None => doc.node(*i).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, k, _)| [s, k]).collect()).unwrap_or_default(),
                 };
                 json!({"id": i.0, "anchors": anchors})
@@ -649,11 +723,11 @@ fn on_doc<T>(
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
-    let (index, active, before, layer) = {
+    let (index, active, before, layer, activated) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
         let st = &s.documents()[index];
-        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()))
+        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()), st.activated)
     };
     let switch = active != Some(index);
     if switch {
@@ -679,6 +753,13 @@ fn on_doc<T>(
         Some(a) if switch => command(h, "document.activate", &json!({"index": a})).map(drop),
         _ => Ok(()),
     };
+    // The switch for the change does not move the document up in `documents`.
+    if switch
+        && back.is_ok()
+        && let Some(st) = h.session.borrow_mut().document_mut(uid)
+    {
+        st.activated = activated;
+    }
     let v = r?;
     restored?;
     back?;
@@ -772,6 +853,62 @@ fn app_is_open(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Bool(open))
 }
 
+/// The menu command strings `app.executeMenuCommand` takes, each with the command it runs. The
+/// strings are the ones
+/// <https://community.adobe.com/questions-652/a-list-of-illustrator-menu-commands-we-can-call-from-javascript-769510>
+/// lists, and `Fit Artboard to artwork bounds` is the one
+/// <https://gist.github.com/shalakolee/df3246659d4289eb99149b9ed00a00ee> gives for Object ›
+/// Artboards › Fit to Artwork Bounds.
+const MENU_COMMANDS: &[(&str, &str)] = &[
+    ("selectall", "select.all"),
+    ("deselectall", "select.none"),
+    ("group", "object.group"),
+    ("ungroup", "object.ungroup"),
+    ("makeMask", "object.clippingMask.make"),
+    ("releaseMask", "object.clippingMask.release"),
+    ("compoundPath", "object.compoundPath.make"),
+    ("noCompoundPath", "object.compoundPath.release"),
+    ("Fit Artboard to artwork bounds", "artboard.fitToArt"),
+];
+
+/// `app.executeMenuCommand(name)`: runs the command of the menu item `name` names
+/// ([`MENU_COMMANDS`]) on the active document, as
+/// <https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts> describes the method. A
+/// name it does not list throws an error that names it. A menu item that is not available, with
+/// no document open or nothing selected that it acts on, does nothing, as a dimmed menu item does
+/// (VectorCraft's own rule). A menu item the menus show as available runs its command, and an error
+/// that command returns throws. `Fit Artboard to artwork bounds` fits the active artboard, and does
+/// nothing when that artboard is locked or has no art, as the canvas's right-click menu dims
+/// the item then ([`DocState::any_art_to_fit`]).
+fn app_menu_command(h: &Host, a: &[Data]) -> Answer {
+    let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("executeMenuCommand needs a menu command, as a string".into())) };
+    if name.len() > MAX_TEXT_BYTES {
+        return Err(HostError::Range("the menu command is too long".into()));
+    }
+    let Some(&(_, id)) = MENU_COMMANDS.iter().find(|(n, _)| n == name) else {
+        return Err(HostError::Error(format!("executeMenuCommand: unknown menu command \"{name}\"")));
+    };
+    let params = {
+        let s = h.session.borrow();
+        let Some(spec) = crate::find_command(id) else { return Err(HostError::Abort(format!("executeMenuCommand: no command {id}"))) };
+        if (spec.enabled)(&s).is_err() {
+            return Ok(Data::Undefined);
+        }
+        match (id, s.active()) {
+            ("artboard.fitToArt", Some(st)) => {
+                let index = active_artboard(st);
+                if !st.any_art_to_fit(&[index]) {
+                    return Ok(Data::Undefined);
+                }
+                json!({"index": index})
+            }
+            _ => json!({}),
+        }
+    };
+    command(h, id, &params)?;
+    Ok(Data::Undefined)
+}
+
 // ---- Documents ----
 
 fn docs_length(h: &Host, _: &[Data]) -> Answer {
@@ -782,12 +919,17 @@ fn app_ref(_: &Host, _: &[Data]) -> Answer {
     Ok(host_ref("Application", &[]))
 }
 
+/// The open documents in the order `documents` lists them ([`Session::front_order`]).
+fn front_docs(s: &Session) -> impl Iterator<Item = &DocState> {
+    s.front_order().into_iter().map(|i| &s.documents()[i])
+}
+
 /// `documents[i]`, and `documents["name"]` as `getByName` reads it.
 fn docs_at(h: &Host, a: &[Data]) -> Answer {
     let s = h.session.borrow();
     let at = match arg(a, 1) {
-        Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| s.documents().get(i)),
-        Data::String(name) => match s.documents().iter().find(|d| d.title() == *name) {
+        Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| front_docs(&s).nth(i)),
+        Data::String(name) => match front_docs(&s).find(|d| d.title() == *name) {
             None if !probing(a) => return Err(HostError::Error(NOT_FOUND.into())),
             found => found,
         },
@@ -799,7 +941,7 @@ fn docs_at(h: &Host, a: &[Data]) -> Answer {
 fn docs_by_name(h: &Host, a: &[Data]) -> Answer {
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     let s = h.session.borrow();
-    let st = s.documents().iter().find(|d| d.title() == *name).ok_or_else(|| HostError::Error(NOT_FOUND.into()))?;
+    let st = front_docs(&s).find(|d| d.title() == *name).ok_or_else(|| HostError::Error(NOT_FOUND.into()))?;
     Ok(doc_ref(h, st.uid))
 }
 
@@ -1079,15 +1221,40 @@ fn new_preset(h: &Host) -> Answer {
         return Err(HostError::Range(format!("a script can make at most {MAX_PRESETS} DocumentPresets")));
     }
     let item = |k: &str, v: Data| (k.to_string(), v);
-    presets.push(vec![
+    let fields = vec![
         item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
         item("artboardRowsOrCols", num(1.0)),
         item("artboardSpacing", num(20.0)),
         item("height", num(792.0)),
         item("numArtboards", num(1.0)),
         item("width", num(612.0)),
-    ]);
+    ];
+    hold_preset_bytes(h, 0, fields.iter().map(|(_, v)| held_bytes(v)).sum())?;
+    presets.push(fields);
     Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
+}
+
+/// Counts that the run's presets now hold `added` bytes of values in place of `replaced`, and
+/// refuses when they would hold more than the run's heap.
+fn hold_preset_bytes(h: &Host, replaced: u64, added: u64) -> std::result::Result<(), HostError> {
+    let total = h.dom.preset_bytes.get().saturating_sub(replaced).saturating_add(added);
+    if total > h.dom.preset_limit {
+        return Err(HostError::Range(format!("the DocumentPreset settings would hold more than {} bytes", h.dom.preset_limit)));
+    }
+    h.dom.preset_bytes.set(total);
+    Ok(())
+}
+
+/// The bytes the host's copy of `d` takes: a `Data` for the value and each element or property
+/// in it, plus the text of its strings and property names.
+fn held_bytes(d: &Data) -> u64 {
+    let owned = match d {
+        Data::String(s) => s.len() as u64,
+        Data::Array(a) => a.iter().map(held_bytes).sum(),
+        Data::Object(o) => o.iter().map(|(k, v)| (size_of::<String>() + k.len()) as u64 + held_bytes(v)).sum(),
+        Data::Undefined | Data::Null | Data::Bool(_) | Data::Number(_) => 0,
+    };
+    size_of::<Data>() as u64 + owned
 }
 
 /// The most `DocumentPreset` objects one run can make.
@@ -1122,8 +1289,58 @@ fn preset_of(h: &Host, d: &Data) -> Option<usize> {
     (i < h.dom.presets.borrow().len()).then_some(i)
 }
 
-/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`, and
-/// a value is checked when `addDocument` uses it.
+/// The enumeration whose values the `DocumentPreset` setting `key` takes, when it takes one.
+fn preset_enum(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "artboardLayout" => "DocumentArtboardLayout",
+        "colorMode" => "DocumentColorSpace",
+        "previewMode" => "DocumentPreviewMode",
+        "rasterResolution" => "DocumentRasterResolution",
+        "transparencyGrid" => "DocumentTransparencyGrid",
+        "units" => "RulerUnits",
+        _ => return None,
+    })
+}
+
+/// Checks that `value` is of the kind the `DocumentPreset` setting `key` holds: a value of its
+/// enumeration, a finite number, a title of at most [`MAX_TEXT_BYTES`] bytes, `true` or `false` for
+/// `documentBleedLink`, or four finite numbers for `documentBleedOffsetRect`. `undefined` unsets any
+/// setting, and the three settings `addDocument` does not apply yet also take `null`.
+fn check_preset_value(key: &str, value: &Data) -> std::result::Result<(), HostError> {
+    let wrong = |kind: &str| Err(HostError::Type(format!("DocumentPreset.{key} must be {kind}")));
+    match value {
+        Data::Undefined => return Ok(()),
+        Data::Null if matches!(key, "documentBleedLink" | "documentBleedOffsetRect" | "transparencyGrid") => return Ok(()),
+        _ => {}
+    }
+    if let Some(name) = preset_enum(key) {
+        let member = ENUMS.iter().find(|(n, _)| *n == name).map_or(&[][..], |(_, m)| *m);
+        return match value {
+            Data::String(s) if s.strip_prefix(name).and_then(|r| r.strip_prefix('.')).is_some_and(|m| member.contains(&m)) => Ok(()),
+            _ => wrong(&format!("a {name} value")),
+        };
+    }
+    match key {
+        "title" => match value {
+            Data::String(t) if t.len() > MAX_TEXT_BYTES => Err(HostError::Range("the title is too long".into())),
+            Data::String(_) => Ok(()),
+            _ => wrong("a string"),
+        },
+        "documentBleedLink" => match value {
+            Data::Bool(_) => Ok(()),
+            _ => wrong("true or false"),
+        },
+        "documentBleedOffsetRect" => match value {
+            Data::Array(r) if r.len() == 4 && r.iter().all(|n| matches!(n, Data::Number(n) if n.is_finite())) => Ok(()),
+            _ => wrong("an array of four finite numbers"),
+        },
+        _ => number(value, &format!("DocumentPreset.{key}")).map(|_| ()),
+    }
+}
+
+/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`. The
+/// setter checks the kind and size of a value ([`check_preset_value`]) and keeps the old value when
+/// it throws; `addDocument` checks the ranges.
 fn preset_field(link: &Link, key: &'static str) -> HostMember {
     let not_preset = || HostError::Type("this is not a DocumentPreset".into());
     let l = link.clone();
@@ -1143,10 +1360,15 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
         let value = arg(&a, 1).clone();
         h.charge_call(16 + data_size(&value))?;
         let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
+        check_preset_value(key, &value)?;
         let mut presets = h.dom.presets.borrow_mut();
         let fields = &mut presets[i];
-        match fields.iter_mut().find(|(k, _)| k == key) {
-            Some((_, v)) => *v = value,
+        // The values the presets hold now count against the run's heap: a value assigned again
+        // replaces the one before it.
+        let at = fields.iter().position(|(k, _)| k == key);
+        hold_preset_bytes(&h, at.map_or(0, |n| held_bytes(&fields[n].1)), held_bytes(&value))?;
+        match at {
+            Some(n) => fields[n].1 = value,
             None => fields.push((key.to_string(), value)),
         }
         Ok(Data::Undefined)
@@ -1294,15 +1516,18 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
 }
 
 /// The ids an assignment to a document's selection gives: one page item, a list of them, `null` or
-/// `[]`. Every one must be an object of that document that can be selected.
+/// `[]`. Every one must be an object of that document that can be selected. `undefined`, such as
+/// an index past the end of `pageItems`, is refused and clears nothing.
 fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId>, HostError> {
     let list: Vec<&Data> = match v {
-        Data::Null | Data::Undefined => Vec::new(),
+        Data::Null => Vec::new(),
+        Data::Undefined => return Err(HostError::Type("a selection is a page item, a list of them, null or []".into())),
         Data::Array(a) if a.len() > MAX_LISTED => return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects"))),
         Data::Array(a) => a.iter().collect(),
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+    let mut seen: HashSet<NodeId> = HashSet::with_capacity(list.len());
     // The document is read once for every object: nothing changes it while the list is checked.
     let (d, isolation, guides_locked) = with_doc(h, doc, |s, st| (st.doc.clone(), st.isolation, s.guides_locked()));
     let locks = d.locked_artboards();
@@ -1317,7 +1542,8 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
         }
-        if !ids.contains(&item.id) {
+        // Repeated objects are kept once.
+        if seen.insert(item.id) {
             ids.push(item.id);
         }
     }
@@ -1376,6 +1602,11 @@ fn items_length(h: &Host, a: &[Data]) -> Answer {
 fn items_typename(h: &Host, a: &[Data]) -> Answer {
     items_doc(h, a)?;
     Ok(text("PageItems"))
+}
+
+fn items_to_string(h: &Host, a: &[Data]) -> Answer {
+    items_doc(h, a)?;
+    Ok(text("[PageItems]"))
 }
 
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
@@ -1537,16 +1768,23 @@ fn item_set_note(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// Refuses a change to the item's appearance, place, stacking order or size while a layer it is in
-/// is hidden or locked. Its name and note may still change.
-fn refuse_in_closed_layer(h: &Host, item: Item) -> std::result::Result<(), HostError> {
+/// Refuses appearance, place, stacking order and size changes in hidden or locked layers and on
+/// locked artboards. Names and notes may still change.
+fn refuse_protected_edit(h: &Host, item: Item) -> std::result::Result<(), HostError> {
     let refused = with_doc(h, item.doc, |_, st| {
         let d = &st.doc;
         let closed = |i: &NodeId| d.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. }) && (!n.visible || n.locked));
-        d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)).then(|| d.node(item.id).and_then(typename).unwrap_or("page item"))
+        let why = if d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)) {
+            Some("a layer it is in is hidden or locked")
+        } else if on_locked_artboard(h, st, item.id) {
+            Some("it is on a locked artboard")
+        } else {
+            None
+        };
+        why.map(|why| (d.node(item.id).and_then(typename).unwrap_or("page item"), why))
     });
     match refused {
-        Some(name) => Err(HostError::Error(format!("Cannot edit {name} {}: a layer it is in is hidden or locked", item.id.0))),
+        Some((name, why)) => Err(HostError::Error(format!("Cannot edit {name} {}: {why}", item.id.0))),
         None => Ok(()),
     }
 }
@@ -1557,7 +1795,7 @@ fn item_hidden(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_hidden(h: &Host, a: &[Data]) -> Answer {
     let hidden = boolean(arg(a, 1), "hidden")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.visible != hidden, json!({"visible": !hidden}))
 }
 
@@ -1567,7 +1805,7 @@ fn item_locked(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_locked(h: &Host, a: &[Data]) -> Answer {
     let locked = boolean(arg(a, 1), "locked")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.locked == locked, json!({"locked": locked}))
 }
 
@@ -1595,7 +1833,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
         (now, keeps_other)
     });
     if now.is_none() || keeps_other {
-        refuse_in_closed_layer(h, item)?;
+        refuse_protected_edit(h, item)?;
     }
     set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
 }
@@ -1643,6 +1881,26 @@ fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
 }
 
+/// `controlBounds`: the visible bounds, widened to take in the direction points of every path in
+/// the object.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    // An object with nothing in it reads zeros, as its other bounds do.
+    let (Some(r), f) = item_rect(h, item, true)? else { return Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])) };
+    let r = with_doc(h, item.doc, |_, st| {
+        let mut r = r;
+        if let Some(n) = st.doc.node(item.id) {
+            n.walk(&mut |c| {
+                if let Some(handles) = c.path_data().and_then(vectorcraft_geom::PathData::control_bounds) {
+                    r = r.union(handles);
+                }
+            });
+        }
+        r
+    });
+    Ok(f.bounds(h.dom.coords.get(), r))
+}
+
 fn item_position(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     match item_rect(h, item, false)? {
@@ -1679,7 +1937,8 @@ fn item_height(h: &Host, a: &[Data]) -> Answer {
 /// stays).
 fn move_to(h: &Host, a: &[Data], x: Option<f64>, y: Option<f64>) -> Answer {
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), f) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let c = h.dom.coords.get();
     let now = f.to_script(c, Point::new(r.x0, r.y0));
@@ -1716,7 +1975,8 @@ fn resize(h: &Host, a: &[Data], width: bool) -> Answer {
         return Err(HostError::Range(format!("{what} must be more than 0 and at most 3999856 points")));
     }
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), _) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let now = if width { r.width() } else { r.height() };
     if now <= 0.0 {
@@ -1821,17 +2081,16 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data) -> std::result::
     let how = placement_of(how)?;
     let beside = matches!(how, Placement::Above | Placement::Below);
     let handle = handle_of(target, "PageItem").or_else(|| handle_of(target, "Layer"));
-    let Some(&[run, uid, high, low]) = handle.as_deref() else {
+    let Some(handle) = handle.filter(|parts| parts.len() == 5) else {
         if handle_of(target, "Document").is_some() {
             return Err(HostError::Error("a document as the relative object is not available yet".into()));
         }
         return Err(HostError::Type("the relative object must be a page item or a layer".into()));
     };
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let (doc, target) = node_of(h, &handle).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     if doc.uid != item.doc.uid {
         return Err(HostError::Error(CROSS_DOCUMENT.into()));
     }
-    let target = id_of(high, low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     with_doc(h, doc, |_, st| {
         let d = &st.doc;
         let t = d.node(target).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
@@ -1962,7 +2221,8 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `zOrder(method)`: one of the four Object › Arrange commands for the item. A path inside a
-/// compound path is refused, and so is an object in a hidden or locked layer.
+/// compound path is refused. The item must be selectable and outside hidden or locked layers and
+/// locked artboards.
 fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     let id = match arg(a, 1) {
         Data::String(s) if s == "ZOrderMethod.BRINGTOFRONT" => "object.arrange.bringToFront",
@@ -1975,7 +2235,8 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER_ORDER.into()));
     }
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (before, after) = with_doc(h, item.doc, |_, st| {
         let at = st.doc.position(item.id);
         let count = at.and_then(|(p, ..)| st.doc.children(p).map(Vec::len)).unwrap_or(0);
@@ -1995,9 +2256,9 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
 
 fn layer_name(h: &Host, a: &[Data]) -> Answer {
     let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-    let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
+    let [run, uid, _, _, _] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
+    find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
+    let (doc, id) = node_of(h, &handle).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
 }
 
@@ -2035,12 +2296,30 @@ fn typename_of(name: &'static str) -> HostMember {
     HostMember::Get(Rc::new(move |_| Ok(text(name))))
 }
 
-fn class(name: &str, parent: Option<&str>, members: Vec<(String, HostMember)>, index: Option<HostFunction>) -> HostClass {
-    HostClass { name: name.into(), parent: parent.map(Into::into), members, index, construct: None }
+fn class(name: &str, parent: Option<&str>, members: Vec<Described>, index: Option<HostFunction>) -> HostClass {
+    let info = members.iter().map(|(n, _, i)| (n.clone(), i.clone())).collect();
+    let members = members.into_iter().map(|(n, m, _)| (n, m)).collect();
+    HostClass { name: name.into(), parent: parent.map(Into::into), members, info, index, construct: None }
 }
 
-fn named(items: Vec<(&str, HostMember)>) -> Vec<(String, HostMember)> {
-    items.into_iter().map(|(n, m)| (n.to_string(), m)).collect()
+fn named(items: Vec<(&str, HostMember, MemberInfo)>) -> Vec<Described> {
+    items.into_iter().map(|(n, m, i)| (n.to_string(), m, i)).collect()
+}
+
+/// The type of a `DocumentPreset` field's value.
+fn preset_type(field: &str) -> &'static str {
+    match field {
+        "artboardLayout" => "DocumentArtboardLayout",
+        "colorMode" => "DocumentColorSpace",
+        "documentBleedLink" => "boolean",
+        "documentBleedOffsetRect" => "Array",
+        "previewMode" => "DocumentPreviewMode",
+        "rasterResolution" => "DocumentRasterResolution",
+        "title" => "string",
+        "transparencyGrid" => "DocumentTransparencyGrid",
+        "units" => "RulerUnits",
+        _ => "number",
+    }
 }
 
 /// The enumerations, as frozen objects whose members are `"Name.MEMBER"` strings.
@@ -2077,15 +2356,30 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
+    variables::define_enums(realm)?;
+    realm.define_host_classes(classes(link), vec![("app".into(), host_ref("Application", &[]))])?;
     let l = link;
+    // The application's members a script may name without `app.`, assigned as `app.<member>` is.
+    realm.define_host_globals(vec![
+        ("activeDocument".into(), function(l, app_active), Some(function(l, app_set_active))),
+        ("documents".into(), function(l, app_documents), None),
+        ("selection".into(), function(l, app_selection), Some(function(l, app_set_selection))),
+    ])
+}
+
+/// The classes of the object model, each member with the type `reflect` gives for it.
+fn classes(link: &Link) -> Vec<HostClass> {
+    let l = link;
+    let placement = [("relativeObject", "*"), ("insertionLocation", "ElementPlacement")];
     let mut application = named(vec![
-        ("typename", typename_of("Application")),
-        ("documents", get(l, app_documents)),
-        ("activeDocument", property(l, app_active, app_set_active)),
-        ("selection", property(l, app_selection, app_set_selection)),
-        ("coordinateSystem", property(l, app_coords, app_set_coords)),
-        ("getIsFileOpen", method(l, app_is_open)),
-        ("toString", class_text("Application")),
+        ("typename", typename_of("Application"), typed("string")),
+        ("documents", get(l, app_documents), MemberInfo { collection: true, ..typed("Documents") }),
+        ("activeDocument", property(l, app_active, app_set_active), typed("Document")),
+        ("selection", property(l, app_selection, app_set_selection), typed("*")),
+        ("coordinateSystem", property(l, app_coords, app_set_coords), typed("CoordinateSystem")),
+        ("getIsFileOpen", method(l, app_is_open), returns("boolean", &[("filePath", "string")])),
+        ("executeMenuCommand", method(l, app_menu_command), returns("undefined", &[("menuCommandString", "string")])),
+        ("toString", class_text("Application"), returns("string", &[])),
     ]);
     application.push(later(l, "Application", "beep"));
     let preset = {
@@ -2095,9 +2389,12 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             h.charge_call(64)?;
             new_preset(&h)
         });
-        let mut members = vec![("typename".to_string(), typename_of("DocumentPreset")), ("toString".to_string(), class_text("DocumentPreset"))];
-        members.extend(PRESET_FIELDS.iter().map(|k| (k.to_string(), preset_field(link, k))));
-        HostClass { name: "DocumentPreset".into(), parent: None, members, index: None, construct: Some(f) }
+        let mut members = vec![
+            ("typename".to_string(), typename_of("DocumentPreset"), typed("string")),
+            ("toString".to_string(), class_text("DocumentPreset"), returns("string", &[])),
+        ];
+        members.extend(PRESET_FIELDS.iter().map(|k| (k.to_string(), preset_field(link, k), typed(preset_type(k)))));
+        HostClass { construct: Some(f), ..class("DocumentPreset", None, members, None) }
     };
     let mut classes = vec![
         class("Application", None, application, None),
@@ -2106,76 +2403,108 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "Documents",
             None,
             named(vec![
-                ("typename", typename_of("Documents")),
-                ("length", get(l, docs_length)),
-                ("parent", get(l, app_ref)),
-                ("index", method(l, docs_index)),
-                ("getByName", method(l, docs_by_name)),
-                ("add", method(l, docs_add)),
-                ("addDocument", method(l, docs_add_document)),
-                ("toString", class_text("Documents")),
+                ("typename", typename_of("Documents"), typed("string")),
+                ("length", get(l, docs_length), typed("number")),
+                ("parent", get(l, app_ref), typed("Application")),
+                ("index", method(l, docs_index), returns("Document", &[("itemKey", "*")])),
+                ("getByName", method(l, docs_by_name), returns("Document", &[("name", "string")])),
+                (
+                    "add",
+                    method(l, docs_add),
+                    returns(
+                        "Document",
+                        &[
+                            ("colorSpace", "DocumentColorSpace"),
+                            ("width", "number"),
+                            ("height", "number"),
+                            ("numArtBoards", "number"),
+                            ("artboardLayout", "DocumentArtboardLayout"),
+                            ("artboardSpacing", "number"),
+                            ("artboardRowsOrCols", "number"),
+                        ],
+                    ),
+                ),
+                (
+                    "addDocument",
+                    method(l, docs_add_document),
+                    returns("Document", &[("startupPreset", "string"), ("presetSettings", "DocumentPreset"), ("showOptionsDialog", "boolean")]),
+                ),
+                ("toString", class_text("Documents"), returns("string", &[])),
             ]),
             Some(function(l, docs_at)),
         ),
     ];
     let mut document = named(vec![
-        ("typename", get(l, doc_typename)),
-        ("parent", get(l, doc_parent)),
-        ("name", get(l, doc_name)),
-        ("width", get(l, doc_width)),
-        ("height", get(l, doc_height)),
-        ("rulerUnits", get(l, doc_units)),
-        ("documentColorSpace", get(l, doc_color_space)),
-        ("rulerOrigin", property(l, doc_ruler_origin, doc_set_ruler_origin)),
-        ("convertCoordinate", method(l, doc_convert)),
-        ("pageItems", get(l, doc_page_items)),
-        ("selection", property(l, doc_selection, doc_set_selection)),
-        ("toString", method(l, doc_to_string)),
+        ("typename", get(l, doc_typename), typed("string")),
+        ("parent", get(l, doc_parent), typed("Application")),
+        ("name", get(l, doc_name), typed("string")),
+        ("width", get(l, doc_width), typed("number")),
+        ("height", get(l, doc_height), typed("number")),
+        ("rulerUnits", get(l, doc_units), typed("RulerUnits")),
+        ("documentColorSpace", get(l, doc_color_space), typed("DocumentColorSpace")),
+        ("rulerOrigin", property(l, doc_ruler_origin, doc_set_ruler_origin), typed("Array")),
+        (
+            "convertCoordinate",
+            method(l, doc_convert),
+            returns("Array", &[("point", "Array"), ("source", "CoordinateSystem"), ("destination", "CoordinateSystem")]),
+        ),
+        ("pageItems", get(l, doc_page_items), MemberInfo { collection: true, ..typed("PageItems") }),
+        ("selection", property(l, doc_selection, doc_set_selection), typed("*")),
+        ("toString", method(l, doc_to_string), returns("string", &[])),
     ]);
     document.extend(
         ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
+    document.extend(variables::document_members(l));
+    document.push(("tags".into(), get(l, tags::doc_tags), MemberInfo { collection: true, ..typed("Tags") }));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
         None,
         named(vec![
-            ("typename", get(l, items_typename)),
-            ("length", get(l, items_length)),
-            ("parent", get(l, items_parent)),
-            ("index", method(l, items_index)),
-            ("getByName", method(l, items_by_name)),
-            ("removeAll", method(l, items_remove_all)),
-            ("toString", class_text("PageItems")),
+            ("typename", get(l, items_typename), typed("string")),
+            ("length", get(l, items_length), typed("number")),
+            ("parent", get(l, items_parent), typed("Document")),
+            ("index", method(l, items_index), returns("PageItem", &[("itemKey", "*")])),
+            ("getByName", method(l, items_by_name), returns("PageItem", &[("name", "string")])),
+            ("removeAll", method(l, items_remove_all), returns("undefined", &[])),
+            ("toString", method(l, items_to_string), returns("string", &[])),
         ]),
         Some(function(l, items_at)),
     ));
     let mut page_item = named(vec![
-        ("typename", get(l, item_typename)),
-        ("parent", get(l, item_parent)),
-        ("name", property(l, item_name, item_set_name)),
-        ("note", property(l, item_note, item_set_note)),
-        ("hidden", property(l, item_hidden, item_set_hidden)),
-        ("locked", property(l, item_locked, item_set_locked)),
-        ("selected", property(l, item_selected, item_set_selected)),
-        ("opacity", property(l, item_opacity, item_set_opacity)),
-        ("position", property(l, item_position, item_set_position)),
-        ("left", property(l, item_left, item_set_left)),
-        ("top", property(l, item_top, item_set_top)),
-        ("width", property(l, item_width, item_set_width)),
-        ("height", property(l, item_height, item_set_height)),
-        ("geometricBounds", get(l, item_geometric)),
-        ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
-        ("editable", get(l, item_editable)),
-        ("zOrderPosition", get(l, item_z_order_position)),
-        ("duplicate", method(l, item_duplicate)),
-        ("move", method(l, item_move)),
-        ("remove", method(l, item_remove)),
-        ("zOrder", method(l, item_z_order)),
-        ("toString", method(l, item_to_string)),
+        ("typename", get(l, item_typename), typed("string")),
+        ("parent", get(l, item_parent), typed("*")),
+        ("name", property(l, item_name, item_set_name), typed("string")),
+        ("note", property(l, item_note, item_set_note), typed("string")),
+        ("tags", get(l, tags::item_tags), MemberInfo { collection: true, ..typed("Tags") }),
+        ("hidden", property(l, item_hidden, item_set_hidden), typed("boolean")),
+        ("locked", property(l, item_locked, item_set_locked), typed("boolean")),
+        ("selected", property(l, item_selected, item_set_selected), typed("boolean")),
+        ("opacity", property(l, item_opacity, item_set_opacity), MemberInfo { min: Some(0.0), max: Some(100.0), ..typed("number") }),
+        ("position", property(l, item_position, item_set_position), typed("Array")),
+        ("left", property(l, item_left, item_set_left), typed("number")),
+        ("top", property(l, item_top, item_set_top), typed("number")),
+        ("width", property(l, item_width, item_set_width), typed("number")),
+        ("height", property(l, item_height, item_set_height), typed("number")),
+        ("geometricBounds", get(l, item_geometric), typed("Array")),
+        ("visibleBounds", get(l, item_visible), typed("Array")),
+        ("controlBounds", get(l, item_control), typed("Array")),
+        ("editable", get(l, item_editable), typed("boolean")),
+        ("zOrderPosition", get(l, item_z_order_position), typed("number")),
+        ("duplicate", method(l, item_duplicate), returns("PageItem", &placement)),
+        ("move", method(l, item_move), {
+            let mut info = returns("PageItem", &placement);
+            if let Some(at) = info.arguments.get_mut(1) {
+                at.default = Some(text("ElementPlacement.PLACEATBEGINNING"));
+            }
+            info
+        }),
+        ("remove", method(l, item_remove), returns("undefined", &[])),
+        ("zOrder", method(l, item_z_order), returns("undefined", &[("zOrderCmd", "ZOrderMethod")])),
+        ("toString", method(l, item_to_string), returns("string", &[])),
     ]);
     page_item.extend(
         [
@@ -2185,10 +2514,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "layer",
             "pixelAligned",
             "sliced",
-            "tags",
             "uRL",
             "uuid",
-            "visibilityVariable",
             "wrapInside",
             "wrapOffset",
             "wrapped",
@@ -2201,21 +2528,22 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .into_iter()
         .map(|m| later(l, "PageItem", m)),
     );
+    page_item.extend(variables::page_item_members(l));
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), variables::item_members(l, c), None)));
+    classes.extend(variables::classes(l));
     classes.push(class(
         "Layer",
         None,
-        named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name)), ("toString", method(l, layer_to_string))]),
+        named(vec![
+            ("typename", get(l, layer_typename), typed("string")),
+            ("name", get(l, layer_name), typed("string")),
+            ("toString", method(l, layer_to_string), returns("string", &[])),
+        ]),
         None,
     ));
-    realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])?;
-    // The application's members a script may name without `app.`, assigned as `app.<member>` is.
-    realm.define_host_globals(vec![
-        ("activeDocument".into(), function(l, app_active), Some(function(l, app_set_active))),
-        ("documents".into(), function(l, app_documents), None),
-        ("selection".into(), function(l, app_selection), Some(function(l, app_set_selection))),
-    ])
+    classes.extend(tags::classes(l));
+    classes
 }
 
 #[cfg(test)]
@@ -2254,5 +2582,108 @@ mod tests {
         assert_eq!(lists.len(), ITEM_LISTS);
         assert_eq!(kept_items(&lists, 2, &docs[1]), None);
         assert_eq!(kept_items(&lists, 1, &changed), Some(ids(3)));
+    }
+
+    /// A script function that writes a reflection as one line, in the form [`expected_line`] gives.
+    const LINE: &str = "function line(r) {\
+           function args(a) { var s = []; for (var i = 0; i < a.length; i++) s.push([a[i].name, a[i].type, a[i].dataType, a[i].defaultValue].join('=')); return s.join(','); }\
+           function list(a) { var s = []; for (var i = 0; i < a.length; i++) { var e = a[i];\
+             s.push([e.name, e.type, e.dataType, e.isCollection, e.min, e.max, e.defaultValue, args(e.arguments)].join(':')); } return s.join(' '); }\
+           return r.name + '|' + list(r.properties) + '|' + list(r.methods); }";
+
+    fn shown(d: Option<&Data>) -> String {
+        match d {
+            None | Some(Data::Undefined) => String::new(),
+            Some(Data::String(s)) => s.clone(),
+            Some(Data::Number(n)) => n.to_string(),
+            Some(other) => panic!("no form for {other:?}"),
+        }
+    }
+
+    /// The line [`LINE`] should write for `class`: its parents' members, then its own, a member it
+    /// declares again in its parent's place, without the members that are not available.
+    fn expected_line(classes: &[HostClass], class: &HostClass) -> String {
+        let mut chain = vec![class];
+        while let Some(p) = chain.last().and_then(|c| c.parent.as_ref()) {
+            chain.push(classes.iter().find(|c| &c.name == p).unwrap_or_else(|| panic!("no class {p}")));
+        }
+        let mut members: Vec<(String, &'static str, MemberInfo)> = Vec::new();
+        for c in chain.iter().rev() {
+            for (name, member) in &c.members {
+                let info = c.info.iter().find(|(n, _)| n == name).map(|(_, i)| i.clone()).unwrap_or_default();
+                let kind = match member {
+                    HostMember::Get(_) => "readonly",
+                    HostMember::Property { .. } | HostMember::Unavailable(_) => "readwrite",
+                    HostMember::Method(_) => "method",
+                };
+                match members.iter_mut().find(|(n, ..)| n == name) {
+                    Some(slot) => *slot = (name.clone(), kind, info),
+                    None => members.push((name.clone(), kind, info)),
+                }
+            }
+        }
+        members.retain(|(.., i)| !i.unavailable);
+        let one = |(name, kind, i): &(String, &str, MemberInfo)| {
+            let args: Vec<String> =
+                i.arguments.iter().map(|a| format!("{}=parameter={}={}", a.name, a.data_type, shown(a.default.as_ref()))).collect();
+            let number = |n: Option<f64>| n.map(|n| n.to_string()).unwrap_or_default();
+            format!(
+                "{name}:{kind}:{}:{}:{}:{}:{}:{}",
+                i.data_type,
+                i.collection,
+                number(i.min),
+                number(i.max),
+                shown(i.default.as_ref()),
+                args.join(",")
+            )
+        };
+        let properties: Vec<String> = members.iter().filter(|m| m.1 != "method").map(one).collect();
+        let methods: Vec<String> = members.iter().filter(|m| m.1 == "method").map(one).collect();
+        format!("{}|{}|{}", class.name, properties.join(" "), methods.join(" "))
+    }
+
+    fn logged(s: &mut Session, source: &str) -> Vec<String> {
+        let r = s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap_or_else(|e| panic!("{source}: {e}"));
+        r["log"].as_array().unwrap_or_else(|| panic!("{r}")).iter().map(|v| v.as_str().unwrap_or_default().to_string()).collect()
+    }
+
+    #[test]
+    fn reflect_of_every_class_equals_its_declaration() {
+        let link = Link::default();
+        let classes = classes(&link);
+        // Every member that is available declares its type, so `reflect` never answers `unknown`.
+        for c in &classes {
+            for (name, _) in &c.members {
+                let info = c.info.iter().find(|(n, _)| n == name).map(|(_, i)| i);
+                assert!(info.is_some_and(|i| i.unavailable || !i.data_type.is_empty()), "{}.{name} declares no type", c.name);
+            }
+        }
+        let mut s = Session::new();
+        let logs: Vec<String> = classes.iter().map(|c| format!("vc.log(line({}.reflect));", c.name)).collect();
+        let script = format!("{LINE} {}", logs.join(" "));
+        let got = logged(&mut s, &script);
+        let want: Vec<String> = classes.iter().map(|c| expected_line(&classes, c)).collect();
+        assert_eq!(got, want);
+        assert!(want.iter().any(|w| w.contains("insertionLocation=parameter=ElementPlacement=ElementPlacement.PLACEATBEGINNING")));
+    }
+
+    #[test]
+    fn reflect_of_an_object_equals_its_class_and_calls_no_member() {
+        let link = Link::default();
+        let classes = classes(&link);
+        let want = |name: &str| expected_line(&classes, classes.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("no class {name}")));
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap_or_else(|e| panic!("{e}"));
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap_or_else(|e| panic!("{e}"));
+        let script = format!(
+            "{LINE} var d = app.activeDocument, p = d.pageItems[0]; vc.log(line(app.reflect)); vc.log(line(app.documents.reflect));\
+             vc.log(line(d.reflect)); vc.log(line(d.pageItems.reflect)); vc.log(line(p.reflect)); vc.log(line(new DocumentPreset().reflect));\
+             p.remove(); vc.log(line(p.reflect)); vc.log(String(p.reflect.find('opacity').max));"
+        );
+        let got = logged(&mut s, &script);
+        let path = want("PathItem");
+        let expected =
+            [want("Application"), want("Documents"), want("Document"), want("PageItems"), path.clone(), want("DocumentPreset"), path, "100".into()];
+        assert_eq!(got, expected);
     }
 }

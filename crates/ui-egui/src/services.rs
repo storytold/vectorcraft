@@ -62,6 +62,9 @@ pub struct Services {
     /// The pen the host reads itself (tablet APIs the window system doesn't route): the same
     /// handle the host installs for the framework's pointer feed.
     pub pen: Option<PenSource>,
+    /// Told whether the active tool reads an airbrush pen's finger wheel (Windows: the host opens
+    /// the tablet driver's Wintab context only while it does). Without it nothing is told.
+    pub stylus_wheel: Option<Box<dyn FnMut(bool)>>,
     pub read: Option<ReadFn>,
     /// Read at most a number of bytes from a file (desktop). A file with a size limit is read one
     /// byte past the limit, so a larger file is refused without reading all of it. Without it, the
@@ -106,6 +109,10 @@ pub struct Services {
     pub check_application: Option<CheckApplicationFn>,
     /// Launch a native-picked application with one file argument; false only when absent.
     pub open_in_application: Option<OpenApplicationFn>,
+    /// Web: start the workers that check plug-ins being installed and run filters
+    /// ([`crate::plugin_runs`]). Without it a filter that would run on a thread of its own runs at
+    /// once where there are no threads, and a module is checked on the page.
+    pub plugin_workers: Option<Box<dyn crate::plugin_runs::Workers>>,
     /// Where Data Recovery keeps its copies when not in a folder (the web's browser storage;
     /// tests): installed into the session ([`vectorcraft_engine::cmd::recovery`]).
     pub recovery_store: Option<std::sync::Arc<dyn vectorcraft_engine::cmd::recovery::RecoveryStore>>,

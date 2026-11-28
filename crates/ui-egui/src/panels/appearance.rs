@@ -352,11 +352,17 @@ pub fn effect_label(id: &str) -> String {
         .unwrap_or_else(|| id.rsplit('.').next().unwrap_or(id).to_string())
 }
 
-/// [`effect_label`] as shown: a built-in effect's in the UI language (an `@id` row for the
-/// effect's id wins over the plain row of its English label), a plug-in's as it is.
+/// Is `id` one of our own effects? A plug-in's effect name comes from the plug-in and is shown as
+/// it is.
+fn built_in_effect(id: &str) -> bool {
+    catalog().iter().any(|c| c.0 == id)
+}
+
+/// [`effect_label`] as shown: a built-in effect's name in the UI language as the Effect menu
+/// shows it ([`crate::i18n::effect_name`]), a plug-in's as it is.
 pub(crate) fn shown_effect_label(id: &str) -> String {
-    match catalog().iter().find(|c| c.0 == id) {
-        Some(c) => crate::i18n::t_id(id, &c.1).to_string(),
+    match built_in_effect(id).then(|| crate::i18n::effect_name(crate::i18n::current(), id)).flatten() {
+        Some(name) => name,
         None => effect_label(id),
     }
 }
@@ -429,7 +435,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let order = rows.keys();
     let sel = current_sel(app, node.as_deref());
     let mut selection = node.as_deref().map_or_else(Selection::default, |n| list_selection(app, n, sel));
-    let list_id = ui.scope_id().with("appearance-rows");
+    let document = app.session.active().map(|st| st.uid);
+    let list_id = ui.scope_id().with(("appearance-rows", document));
     let has = node.is_some();
     // A dragged fill/stroke or effect row lights Duplicate and Delete up, also with nothing picked.
     let dragged = craft::ui::runtime::drag::active::<ListDrag<RowKey>>(ui.ctx())
@@ -490,6 +497,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         if let (Some(dropped), Some(n)) = (&out.dropped, node.as_deref())
             && let Some(drag) = dropped.payload::<ListDrag<RowKey>>()
+            && drag.list == list_id
         {
             drop_on_footer(app, n, sel, &drag.keys, dropped.index == DUPLICATE);
         }
@@ -797,8 +805,8 @@ fn object_row<'r>(cx: &'r RowCx<'_>) -> ListRow<'r> {
         None => cx.app.session.paint.fill.clone(),
     };
     let row = row.thumb(ThumbSize::Small, move |painter, rect| paint_preview::paint_rect(painter, rect, &fill));
-    match cx.node.filter(|_| cx.mix.is_none()) {
-        Some(n) => row.part_drag(RowDragSpot::Thumb(ThumbTarget::First), PanelDrag::Appearance(n.id)),
+    match cx.node.filter(|_| cx.mix.is_none()).zip(cx.app.session.active()) {
+        Some((n, st)) => row.part_drag(RowDragSpot::Thumb(ThumbTarget::First), PanelDrag::Appearance { document: st.uid, source: n.id }),
         None => row,
     }
 }
@@ -1778,9 +1786,10 @@ fn effects_move(
 pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut groups: Vec<(String, Vec<(String, String)>)> = vec![];
     let plugins: Vec<_> = vectorcraft_effects::plugin_effects().into_iter().map(catalog_entry).collect();
-    // Built-in effects in the UI language; a plug-in's by the name it gives.
-    let built_in = catalog().iter().map(|(id, label, menu)| (id, tl!(label), menu));
-    for (id, label, menu) in built_in.chain(plugins.iter().map(|(id, label, menu)| (id, label.as_str(), menu))) {
+    // Built-in effects named as the Effect menu names them; a plug-in's by the name it gives.
+    let lang = crate::i18n::current();
+    let built_in = catalog().iter().map(|(id, label, menu)| (id, crate::i18n::effect_name(lang, id).unwrap_or_else(|| label.clone()), menu));
+    for (id, label, menu) in built_in.chain(plugins.iter().map(|(id, label, menu)| (id, label.clone(), menu))) {
         let g = menu.get(1).cloned().unwrap_or_else(|| "Other".into());
         match groups.iter_mut().find(|(n, _)| *n == g) {
             Some((_, v)) => v.push((id.clone(), label.to_string())),
