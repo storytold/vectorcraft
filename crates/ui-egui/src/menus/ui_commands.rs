@@ -2059,7 +2059,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.runScript",
         "Other Script…",
         "Cmd+F12",
-        "{path? | source?, name?} run a .js or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `name`, `script`, `dontShow`); without a file pick one (the web opens the browser's file picker); with Preferences › General › Run Startup Scripts on, the startup scripts run first (script.startup.run) and script.run's reply also holds `startup`, script.startup.run's reply; while a startup script runs before it the reply is {running: true, queued: true}, and a later failure to start shows in the status bar",
+        "{path? | source?, name?} run a .js or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `choice`, `skip`, and `reaches`, which ui.dialog.set cannot set: the `kind`, `needs`, `outside`, `includes` and `truncated` of script.check's report on the script, which the warning lists, or null when the check failed); without a file pick one (the web opens the browser's file picker); with Preferences › General › Run Startup Scripts on, the startup scripts run first (script.startup.run) and script.run's reply also holds `startup`, script.startup.run's reply; while a startup script runs before it the reply is {running: true, queued: true}, and a later failure to start shows in the status bar",
     ),
     (
         crate::scripts_menu::COMMAND,

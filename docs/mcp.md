@@ -2706,7 +2706,16 @@ In an ES2015 realm, `Symbol.for` lookups and insertions take fuel for the key's 
 shares the key's existing string buffer.
 File › Scripts › Other Script… (Cmd+F12) picks a `.js` or `.jsx` file and runs it the same way; the help page
 https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html
-describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
+describes that menu item. Its warning before the run lists what `script.check` finds the script reaches outside
+the document, read without running it: each `outside` category of the report (files it writes, moves or deletes,
+files it opens in other apps, messages to other apps, the network, native code, environment variables, the reference
+app's preferences and code the checker can't read), the files and dialogs it needs, features only the reference app
+has, and the files its `#include` lines name (the first 20, then the count of the rest; VectorCraft's own limit). It
+says when the script is too large to check, compiled or not a script, when the check failed, and when a list was cut
+short at its limit. The listing does not stop the run. Run checks the script again, and when the report has changed
+since the warning opened, nothing runs and the warning opens again with the new report. A script from the Scripts
+folder runs without the warning.
+Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
 case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
 not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and
 `ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. A `path` that ends in

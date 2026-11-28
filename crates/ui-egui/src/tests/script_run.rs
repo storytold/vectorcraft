@@ -9,7 +9,8 @@ use vectorcraft_engine::cmd::scripts::TOO_LARGE;
 use vectorcraft_engine::script::MAX_SOURCE_BYTES;
 use vectorcraft_engine::script::folder::Clock;
 
-use super::script_dialogs::{cancel, confirm, frame, is_open, key, open_id, pump, set};
+use super::script_dialogs::{cancel, confirm, fields, frame, is_open, key, open_id, pump, set};
+use crate::dialogs::script_check;
 use crate::dialogs::script_run::{
     self, BY_PERSON, CLOSE_KIND, FilesAnswer, GROWTH_KIND, GrowthQuestion, KIND, PICKER_KIND, RunQuestion, ScriptFiles,
 };
@@ -610,6 +611,187 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
     assert_eq!(files_fields(&app).unwrap()["leftOut"], true);
     cancel(&mut app, PICKER_KIND);
     finish(&mut app);
+}
+
+/// The texts the open warning draws, after a few frames of the whole app.
+fn dialog_texts(app: &mut VectorcraftApp) -> Vec<String> {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let ctx = app.ui_ctx.clone().unwrap();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 4000.0));
+    let mut out = None;
+    for i in 0..4 {
+        let raw = egui::RawInput { time: Some(0.1 * f64::from(i)), screen_rect: Some(screen), ..Default::default() };
+        out = Some(crate::testing::app_frame(app, &ctx, raw));
+    }
+    let mut v = vec![];
+    out.unwrap().shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+    v
+}
+
+/// The warning before a run lists the files the script writes, read without running it.
+#[test]
+fn the_warning_lists_the_files_a_script_writes() {
+    let mut app = app();
+    let source = "var f = new File(Folder.temp + '/out.txt');\nf.open('w');\nf.write('x');\nf.close();\n";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "write.js"})).unwrap().unwrap();
+    assert!(!app.session.script_running());
+    let texts = dialog_texts(&mut app);
+    let writes = script_check::outside_label("filesWritten").unwrap();
+    assert!(texts.iter().any(|t| t.starts_with(writes) && t.contains("(w)")), "{texts:?}");
+    assert!(texts.iter().any(|t| t == script_check::need_label("files").unwrap()), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Outside the document:"), "{texts:?}");
+    // The warning lists the report as `reaches`, which `ui.dialog.set` cannot change.
+    assert_eq!(fields(&app, KIND)["reaches"]["outside"][0]["id"], "filesWritten");
+    assert!(set(&app, KIND, "reaches", json!(null)).is_err());
+    assert_eq!(fields(&app, KIND)["reaches"]["outside"][0]["id"], "filesWritten");
+    cancel(&mut app, KIND);
+    finish(&mut app);
+}
+
+/// A script that reaches nothing outside the document gets the warning with nothing more.
+#[test]
+fn the_warning_for_a_script_that_reaches_nothing_lists_nothing_more() {
+    let mut app = app();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": DRAW, "name": "draw.js"})).unwrap().unwrap();
+    let texts = dialog_texts(&mut app);
+    assert!(texts.iter().any(|t| t.starts_with("A script can change the open documents")), "{texts:?}");
+    for heading in ["Outside the document:", "Includes:", "VectorCraft read this script without running it."] {
+        assert!(!texts.iter().any(|t| t == heading), "{heading}: {texts:?}");
+    }
+    assert!(confirm(&mut app, KIND));
+    finish(&mut app);
+    assert_eq!(objects(&app), 2);
+}
+
+/// A script file's warning also lists what the files its `#include` lines name reach.
+#[test]
+fn the_warning_lists_what_a_scripts_included_files_reach() {
+    let mut app = app();
+    let dir = folder("includes");
+    std::fs::create_dir_all(dir.join("lib")).unwrap();
+    std::fs::write(dir.join("main.jsx"), "#include 'lib/net.jsxinc'\n").unwrap();
+    std::fs::write(dir.join("lib/net.jsxinc"), "var s = new Socket();\n").unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"path": dir.join("main.jsx").to_string_lossy()})).unwrap().unwrap();
+    let texts = dialog_texts(&mut app);
+    assert!(texts.iter().any(|t| t.starts_with("lib/net.jsxinc · ")), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Includes:"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == script_check::need_label("hostOnly").unwrap()), "{texts:?}");
+    cancel(&mut app, KIND);
+    finish(&mut app);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A script that opens a dialog and reaches nothing outside the document lists the need without the
+/// outside-the-document heading.
+#[test]
+fn the_warning_lists_a_need_without_the_outside_heading() {
+    let mut app = app();
+    let source = "var w = new Window('dialog', 'Title');";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "dialog.js"})).unwrap().unwrap();
+    assert_eq!(fields(&app, KIND)["reaches"]["outside"], json!([]));
+    let texts = dialog_texts(&mut app);
+    assert!(texts.iter().any(|t| t == script_check::need_label("dialogs").unwrap()), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Outside the document:"), "{texts:?}");
+    cancel(&mut app, KIND);
+    finish(&mut app);
+}
+
+/// A script file that changes what it reaches while its warning is open does not run on Run: the
+/// warning opens again with the new report, and the next Run runs it.
+#[test]
+fn run_lists_a_script_again_when_it_changed_after_its_warning_opened() {
+    let mut app = app();
+    let dir = folder("changed");
+    let path = dir.join("changed.jsx");
+    std::fs::write(&path, DRAW).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"path": path.to_string_lossy()})).unwrap().unwrap();
+    assert_eq!(fields(&app, KIND)["reaches"]["outside"], json!([]));
+    std::fs::write(&path, format!("{DRAW}\nvar s = new Socket();\n")).unwrap();
+    assert!(confirm(&mut app, KIND));
+    assert!(!app.session.script_running());
+    assert!(is_open::<RunQuestion>(&app));
+    assert_eq!(app.ui.status, script_run::CHANGED_SINCE_WARNING);
+    assert_eq!(fields(&app, KIND)["reaches"]["outside"][0]["id"], "network");
+    assert!(confirm(&mut app, KIND));
+    assert!(app.session.script_running());
+    finish(&mut app);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A script with more includes than the warning lists gives the count of the rest.
+#[test]
+fn the_warning_counts_the_includes_it_does_not_list() {
+    let mut app = app();
+    let dir = folder("many-includes");
+    let names: Vec<String> = (0..script_run::SHOWN_INCLUDES + 3).map(|n| format!("i{n}.jsxinc")).collect();
+    for name in &names {
+        std::fs::write(dir.join(name), "var x = 1;\n").unwrap();
+    }
+    let main: String = names.iter().map(|n| format!("#include '{n}'\n")).collect();
+    std::fs::write(dir.join("main.jsx"), main).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"path": dir.join("main.jsx").to_string_lossy()})).unwrap().unwrap();
+    let texts = dialog_texts(&mut app);
+    let listed = |name: &str| texts.iter().any(|t| t.starts_with(&format!("{name} · ")));
+    assert!(listed(&names[script_run::SHOWN_INCLUDES - 1]), "{texts:?}");
+    assert!(!listed(&names[script_run::SHOWN_INCLUDES]), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Included files not listed: 3"), "{texts:?}");
+    assert_eq!(fields(&app, KIND)["reaches"]["includes"].as_array().map(Vec::len), Some(names.len()));
+    cancel(&mut app, KIND);
+    finish(&mut app);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A script the checker could not read as a script gets a warning that says so, not the warning of
+/// a script that was checked and reaches nothing.
+#[test]
+fn the_warning_says_when_a_script_was_not_checked() {
+    let missing = std::env::temp_dir().join(format!("vc-script-run-ui-missing-{}.js", std::process::id()));
+    for (params, text) in [
+        (json!({"source": "export const b = 2;", "name": "module.js"}), "Not a script for the reference app"),
+        (json!({"source": "var a = 1;\u{0}", "name": "binary.js"}), "Not a script for the reference app"),
+        (json!({"source": "@JSXBIN@ES@2.0@MyBbyBn0ABJAnA", "name": "compiled.js"}), "Compiled script: ask its author for the .jsx file"),
+        (json!({"path": missing.to_string_lossy()}), "Not read"),
+    ] {
+        let mut app = app();
+        menus::run_ui_command(&mut app, "ui.runScript", &params).unwrap().unwrap();
+        let texts = dialog_texts(&mut app);
+        assert!(texts.iter().any(|t| t == text), "{params}: {texts:?}");
+        cancel(&mut app, KIND);
+        finish(&mut app);
+    }
+}
+
+/// A script whose report was cut short at a list's limit says so, also when nothing else is listed.
+#[test]
+fn the_warning_says_when_a_list_was_cut_short() {
+    let mut app = app();
+    let source: String = (0..=1000).map(|n| format!("x = app.m{n};\n")).collect();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "many.js"})).unwrap().unwrap();
+    let texts = dialog_texts(&mut app);
+    assert!(texts.iter().any(|t| t == "Some lists were cut short at their limit."), "{texts:?}");
+    cancel(&mut app, KIND);
+    finish(&mut app);
+}
+
+/// A script over the checker's size limit gets a warning that says it was too large to check.
+#[test]
+fn the_warning_says_when_a_script_is_too_large_to_check() {
+    let mut app = app();
+    let dir = folder("large");
+    let path = dir.join("large.js");
+    std::fs::write(&path, vec![b' '; MAX_SOURCE_BYTES + 1]).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"path": path.to_string_lossy()})).unwrap().unwrap();
+    let texts = dialog_texts(&mut app);
+    assert!(texts.iter().any(|t| t == "Too large to check"), "{texts:?}");
+    cancel(&mut app, KIND);
+    finish(&mut app);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// With two files picked, the file dialog lists them in a scrolled group named Picked files.

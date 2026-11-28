@@ -6,9 +6,20 @@
 //! asks for a `.js` or `.jsx` file through the app's file asks. With Preferences › General › Show
 //! External Script Warning off, the chosen script runs at once. With General › Run Startup Scripts
 //! on, the startup scripts run first (`script.startup.run`). The warning (kind `scriptRun`) is a
-//! prompt: its `choice` field (`proceed` runs, `cancel` does not) and `skip` (true: turn the
-//! warning off). The growth question (`scriptGrowth`) and the question quitting asks
-//! (`scriptClose`) have the `choice` field alone.
+//! prompt: its `choice` field (`proceed` runs, `cancel` does not), `skip` (true: turn the warning
+//! off) and `reaches`, which `ui.dialog.set` cannot set: the `kind`, `needs`, `outside`, `includes`
+//! and `truncated` of `script.check`'s report on the script, read without running it (a path also
+//! checks the files its `#include` lines name), or null when the check fails. The warning lists
+//! what the report finds the script reaches outside the document (each of `script.check`'s
+//! `outside` categories, such as files it writes, moves or deletes, files it opens in other apps,
+//! the network, native code, environment variables and code the checker can't read), the files
+//! and dialogs it needs, features only the reference app has, and its includes (at most
+//! [`SHOWN_INCLUDES`], then the count of the rest). It says when the script is too large to check,
+//! compiled or not a script, when the check failed, and when a list was cut short at its limit.
+//! The listing is information: Run runs the script as before, after checking it again. When the
+//! report has changed since the warning opened, nothing runs and the warning opens again with the
+//! new report. The growth question
+//! (`scriptGrowth`) and the question quitting asks (`scriptClose`) have the `choice` field alone.
 //!
 //! A script's dialog (kind `scriptDialog`) has the fields `kind` (alert, confirm or prompt),
 //! `message`, `title` (null: Script Alert), `errorIcon`, `noAsDefault`, `value` (the prompt's
@@ -36,7 +47,7 @@ use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Outcome as _, Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::dialog::{
-    DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id,
+    DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, HeldOk, Prompt, PromptAnswer, PromptChoice, StackDialog, StandardPrompt, dialog_id,
 };
 use craft::ui::display::Text;
 use craft::ui::layout_components::Stack;
@@ -75,7 +86,53 @@ const PICKED_LIST_HEIGHT: f32 = 120.0;
 /// The warning before a script runs. One type per question, so the host's per-type results never
 /// mix the three questions of this area.
 pub(crate) struct RunQuestion(pub(crate) StandardPrompt);
-crate::dialogs::confirm::wrapped_dialog!(RunQuestion, StandardPrompt, KIND);
+
+/// The prompt's own dialog, with `reaches` added to its fields: what the warning lists.
+impl StackDialog for RunQuestion {
+    type Result = PromptAnswer;
+
+    fn id(&self) -> DialogId {
+        dialog_id(KIND)
+    }
+
+    fn instance(&self) -> Option<DialogId> {
+        StackDialog::instance(&self.0)
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(KIND)
+    }
+
+    fn show(&mut self, ui: &mut Ui, stack: &DialogStack) -> Option<DialogResult<PromptAnswer>> {
+        StackDialog::show(&mut self.0, ui, stack)
+    }
+
+    fn confirm(&mut self, ctx: &egui::Context) -> Option<PromptAnswer> {
+        self.0.confirm(ctx)
+    }
+
+    fn held_state(&self) -> Option<HeldOk> {
+        self.0.held_state()
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        let mut fields = self.0.json_fields()?;
+        fields["reaches"] = self.0.tag_as::<RunWarning>().map_or(Value::Null, |w| w.reaches.clone());
+        Some(fields)
+    }
+
+    fn set_json_field(&mut self, ctx: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        self.0.set_json_field(ctx, field, value)
+    }
+
+    fn cancelled(&mut self, ctx: &egui::Context) {
+        self.0.cancelled(ctx);
+    }
+
+    fn preview_color(&mut self, key: &str, color: Option<craft::theme::Srgba>) {
+        self.0.preview_color(key, color);
+    }
+}
 
 /// The question a run asks when it has added a great deal.
 pub(crate) struct GrowthQuestion(pub(crate) StandardPrompt);
@@ -85,9 +142,11 @@ crate::dialogs::confirm::wrapped_dialog!(GrowthQuestion, StandardPrompt, GROWTH_
 pub(crate) struct CloseQuestion(pub(crate) StandardPrompt);
 crate::dialogs::confirm::wrapped_dialog!(CloseQuestion, StandardPrompt, CLOSE_KIND);
 
-/// The tag of the warning: the params `script.run` takes once the warning is answered.
+/// The tag of the warning: the params `script.run` takes once the warning is answered, and the
+/// parts of `script.check`'s report the warning lists ([`reaches`]).
 struct RunWarning {
     params: Value,
+    reaches: Value,
     /// The automation roots in force when asked: the script runs under them, and under any in force
     /// when the warning is answered.
     scope: ScopeHandle,
@@ -488,17 +547,109 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
     if !app.session.prefs.show_external_script_warning {
         return crate::script_runs::run_chosen(app, params);
     }
+    let reaches = reaches(app, &params);
+    let automated = app.automation_asked();
+    warn(app, params, reaches, ScopeHandle::capture(), automated)
+}
+
+/// Opens the warning for the script `params` name, listing `reaches`; the script runs under
+/// `scope`, and as automation when `automated` ([`RunWarning`]).
+fn warn(app: &mut VectorcraftApp, params: Value, reaches: Value, scope: ScopeHandle, automated: bool) -> Result<Value, String> {
+    let path = params.get("path").and_then(Value::as_str);
     let name = params.get("name").and_then(Value::as_str).or(path).map_or_else(|| "script".to_string(), vectorcraft_engine::cmd::fileio::file_name);
     // The script's name is the message: it is what the person reads first.
     let prompt = StandardPrompt::custom(name)
         .title(tl!("Run Script"))
-        .paragraph(tl!("A script can change the open documents and can write files through the commands it runs. Run only scripts you trust."))
+        .paragraph(tl!("A script can change the open documents and can write files through the commands it runs. Run only scripts you trust."));
+    let prompt = listed(prompt, &reaches)
         .dont_show_again()
         .button(PromptChoice::Proceed, tl!("Run"))
         .button(PromptChoice::Cancel, tl!("Cancel"))
-        .tag(RunWarning { params, scope: ScopeHandle::capture(), automated: app.automation_asked() });
+        .tag(RunWarning { params, reaches, scope, automated });
     with_host(app, |host, _| host.open(RunQuestion(prompt))).ok_or_else(|| "there is no window to ask in".to_string())?;
     Ok(Value::Null)
+}
+
+/// The status when Run finds that the script's report changed since the warning opened: the
+/// warning opens again with the new report, and nothing runs.
+pub(crate) const CHANGED_SINCE_WARNING: &str = "The script changed after its warning opened: check the warning again";
+
+/// The most includes the warning lists; a line after them gives the count of the rest.
+pub(crate) const SHOWN_INCLUDES: usize = 20;
+
+/// The parts of `script.check`'s report on the script `script.run`'s `params` name that the
+/// warning lists, read without running the script; a path also checks the files its `#include`
+/// lines name. Null when the check fails: the run reports why the script can't be read.
+fn reaches(app: &mut VectorcraftApp, params: &Value) -> Value {
+    checked(app, params).unwrap_or(Value::Null)
+}
+
+/// [`reaches`], with the check's error when it fails, for example when the request asking can't
+/// read the script.
+fn checked(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
+    let check = match (params.get("path"), params.get("source")) {
+        (Some(path), _) => json!({"path": path, "includes": true}),
+        (None, Some(source)) => json!({"data": source}),
+        (None, None) => return Ok(Value::Null),
+    };
+    let r = app.session.execute("script.check", &check).map_err(|e| e.to_string())?;
+    Ok(json!({"kind": r["kind"], "needs": r["needs"], "outside": r["outside"], "includes": r["includes"], "truncated": r["truncated"]}))
+}
+
+/// `prompt` with what the report `r` finds the script reaches outside the document, one line each;
+/// nothing more for a script that was checked and reaches nothing. A failed check (null) says the
+/// script was not read.
+fn listed(prompt: StandardPrompt, r: &Value) -> StandardPrompt {
+    use super::script_check::{list, need_label, outside_label, place, status_label, tally};
+    let unchecked = match r["kind"].as_str() {
+        Some("script") => None,
+        Some("compiled") => Some(tl!("Compiled script: ask its author for the .jsx file")),
+        Some("tooLarge") => Some(tl!("Too large to check")),
+        _ if r.is_null() => Some(tl!("Not read")),
+        _ => Some(tl!("Not a script for the reference app")),
+    };
+    if let Some(text) = unchecked {
+        return prompt.note(text);
+    }
+    // A row: its text, then its count, lines or status when it has them.
+    let row = |text: &str, note: &str| if note.is_empty() { text.to_string() } else { format!("{text} · {note}") };
+    let outside: Vec<String> = list(r, "outside")
+        .iter()
+        .filter_map(|o| {
+            let label = o["id"].as_str().and_then(outside_label)?;
+            let modes: Vec<&str> = list(o, "modes").iter().filter_map(Value::as_str).collect();
+            let label = if modes.is_empty() { label.to_string() } else { format!("{label} ({})", modes.join(", ")) };
+            Some(row(&label, &tally(o)))
+        })
+        .collect();
+    let needs = list(r, "needs").iter().filter_map(Value::as_str).filter(|n| matches!(*n, "files" | "dialogs" | "hostOnly")).filter_map(need_label);
+    // The needs come first, each a sentence of its own; the heading names only what the script does
+    // outside the document.
+    let mut lines: Vec<String> = needs.map(str::to_string).collect();
+    if !outside.is_empty() {
+        lines.push(crate::i18n::colon(tl!("Outside the document")));
+        lines.extend(outside);
+    }
+    let includes = list(r, "includes");
+    if !includes.is_empty() {
+        lines.push(crate::i18n::colon(tl!("Includes")));
+        for i in includes.iter().take(SHOWN_INCLUDES) {
+            let status = i["status"].as_str().and_then(status_label).unwrap_or_default();
+            let note = [status.to_string(), place(i)].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
+            lines.push(row(i["value"].as_str().unwrap_or_default(), &note));
+        }
+        if includes.len() > SHOWN_INCLUDES {
+            let count = (includes.len() - SHOWN_INCLUDES).to_string();
+            lines.push(crate::i18n::fmt(tl!("Included files not listed: {count}"), &[("count", &count)]));
+        }
+    }
+    if r["truncated"].as_bool() == Some(true) {
+        lines.push(tl!("Some lists were cut short at their limit.").to_string());
+    }
+    if lines.is_empty() {
+        return prompt;
+    }
+    prompt.paragraph(tl!("VectorCraft read this script without running it.")).lines(lines.into_iter().map(Into::into))
 }
 
 fn growth_question() -> GrowthQuestion {
@@ -583,12 +734,29 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     }
     if let Some(DialogResult::Ok(mut answer)) = run
         && answer.choice == PromptChoice::Proceed
-        && let Some(RunWarning { params, scope, automated }) = answer.take_tag::<RunWarning>()
+        && let Some(RunWarning { params, reaches: listed, scope, automated }) = answer.take_tag::<RunWarning>()
     {
-        let stored = if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
-        let run = |app: &mut VectorcraftApp| crate::script_runs::run_chosen(app, params).map(drop);
-        let automated = automated || app.automation_asked();
-        if let Err(e) = stored.and_then(|()| scope.within_current().run(|| file_asks::as_automated(app, automated, run))) {
+        // A script whose report changed while the warning was open is listed again before it runs.
+        // A script read when the warning opened that the answering request can't read is
+        // refused with the check's error, not listed again as changed.
+        // The check reads the script under the access the run would have.
+        let ran = match scope.clone().within_current().run(|| checked(app, &params)) {
+            Err(e) if !listed.is_null() => Err(e),
+            now => Ok(now.unwrap_or(Value::Null)),
+        }
+        .and_then(|now| {
+            if now == listed {
+                let stored =
+                    if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
+                let run = |app: &mut VectorcraftApp| crate::script_runs::run_chosen(app, params).map(drop);
+                let automated = automated || app.automation_asked();
+                stored.and_then(|()| scope.within_current().run(|| file_asks::as_automated(app, automated, run)))
+            } else {
+                app.status(CHANGED_SINCE_WARNING);
+                warn(app, params, now, scope, automated).map(drop)
+            }
+        });
+        if let Err(e) = ran {
             app.status(e);
         }
     }
