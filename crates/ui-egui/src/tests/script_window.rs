@@ -856,6 +856,44 @@ fn a_click_on_a_list_box_row_gives_the_list_the_keyboard_focus() {
 }
 
 #[test]
+fn controls_are_drawn_at_the_size_the_script_gave_them() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); w.add('button', undefined, 'Wide').preferredSize = [240, 60]; var e = w.add('edittext', undefined, 'a'); \
+         e.preferredSize = [200, -1]; w.add('checkbox', undefined, 'Remember the size'); w.add('button', undefined, 'OK'); vc.log(w.show());",
+    );
+    assert!(until_window(&mut app));
+    step(&mut app, Vec::new());
+    access_nodes(&mut app);
+    let nodes = access_nodes(&mut app);
+    let bounds = |role: egui::accesskit::Role, label: Option<&str>| {
+        nodes
+            .iter()
+            .map(|(_, n)| n)
+            .find(|n| n.role() == role && (label.is_none() || n.label() == label))
+            .and_then(egui::accesskit::Node::bounds)
+            .unwrap_or_else(|| panic!("no {role:?} {label:?}"))
+    };
+    let w = app.session.script_window().unwrap();
+    let (wide, ok, field) = (
+        bounds(egui::accesskit::Role::Button, Some("Wide")),
+        bounds(egui::accesskit::Role::Button, Some("OK")),
+        bounds(egui::accesskit::Role::TextInput, None),
+    );
+    assert!(wide.width() > ok.width() && wide.height() > ok.height(), "the wide button is larger than OK: {wide:?} {ok:?}");
+    assert!((wide.width() - f64::from(w.nodes[1].rect.w)).abs() < 1.0, "the wide button is as wide as its preferred size: {wide:?}");
+    assert!((field.width() - f64::from(w.nodes[2].rect.w)).abs() < 1.0, "the field is as wide as its preferred size: {field:?}");
+    let (check, caption) = (bounds(egui::accesskit::Role::CheckBox, None), bounds(egui::accesskit::Role::Label, Some("Remember the size")));
+    assert!(
+        caption.x0 >= check.x1 && caption.y0 < check.y1 && caption.y1 > check.y0,
+        "the check box shows its text after the box: {check:?} {caption:?}"
+    );
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
+}
+
+#[test]
 fn the_run_asks_its_question_over_the_dialog_only_while_no_popup_is_open_over_it() {
     let mut app = app();
     start(

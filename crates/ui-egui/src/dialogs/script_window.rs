@@ -476,18 +476,19 @@ fn control(ui: &mut Ui, drafts: &BTreeMap<u64, String>, place: &Place, (i, n, pr
         UiKind::Group => shown.container = Some(group(ui, rect, n, enabled)),
         UiKind::Panel => shown.container = Some(panel(ui, rect, n, enabled)),
         UiKind::StaticText => {
-            Text::new(n.text.clone()).show(ui);
+            Text::new(n.text.clone()).show_at(ui, rect);
         }
         UiKind::Button => {
             let mut button = Button::new(n.text.clone()).id_salt(salt).enabled(enabled);
             if place.default {
                 button = button.variant(Variant::PRIMARY).default_stop();
             }
-            if clicked(&button.show(ui)) {
+            if clicked(&button.show_at(ui, rect)) {
                 shown.event = Some(UiEvent::Click(i));
             }
         }
         UiKind::CheckBox => {
+            // A check box is shown in the flow of its place, which draws its text after the box.
             let out = Checkbox::new(Bind::given(n.checked)).label(n.text.clone()).id_salt(salt).enabled(enabled).show(ui);
             if out.events.committed().is_some() {
                 shown.event = Some(UiEvent::Click(i));
@@ -495,17 +496,17 @@ fn control(ui: &mut Ui, drafts: &BTreeMap<u64, String>, place: &Place, (i, n, pr
         }
         UiKind::RadioButton => {
             let mut picked = false;
-            let out = RadioGroup::new(n.text.clone(), Bind::given(n.checked)).id_salt(salt).enabled(enabled).show(ui, |ui, _| {
+            let out = RadioGroup::new(n.text.clone(), Bind::given(n.checked)).id_salt(salt).enabled(enabled).show_at(ui, rect, |ui, _| {
                 picked = clicked(&Radio::new(true).label(n.text.clone()).enabled(enabled).show(ui));
             });
             if picked || out.events.committed().is_some() {
                 shown.event = Some(UiEvent::Click(i));
             }
         }
-        UiKind::EditText => shown = edit(ui, drafts, enabled, (i, n, prompt)),
+        UiKind::EditText => shown = edit(ui, rect, drafts, enabled, (i, n, prompt)),
         UiKind::DropDownList => {
             let entries: Vec<Entry<Option<usize>>> = n.items.iter().enumerate().map(|(k, item)| Entry::new(Some(k), item.clone())).collect();
-            let out = Select::new(list_name(n, prompt), Bind::given(n.selection), &entries).id_salt(salt).enabled(enabled).show(ui);
+            let out = Select::new(list_name(n, prompt), Bind::given(n.selection), &entries).id_salt(salt).enabled(enabled).show_at(ui, rect);
             if let Some(k) = out.events.committed().copied().filter(|k| *k != n.selection) {
                 shown.event = Some(UiEvent::Change(i, UiValue::Index(k)));
             }
@@ -539,13 +540,17 @@ fn control(ui: &mut Ui, drafts: &BTreeMap<u64, String>, place: &Place, (i, n, pr
             }
         }
         UiKind::Slider => {
-            let out = Slider::new(Bind::given(n.value), n.min..=n.max).label(screen_reader_name(n, prompt)).id_salt(salt).enabled(enabled).show(ui);
+            let out = Slider::new(Bind::given(n.value), n.min..=n.max)
+                .label(screen_reader_name(n, prompt))
+                .id_salt(salt)
+                .enabled(enabled)
+                .show_at(ui, rect);
             if let Some(v) = out.events.committed().copied().filter(|v| *v != n.value) {
                 shown.event = Some(UiEvent::Change(i, UiValue::Number(v)));
             }
         }
         UiKind::ProgressBar => {
-            Progress::new(n.fraction()).label(screen_reader_name(n, prompt)).id_salt(salt).show(ui);
+            Progress::new(n.fraction()).label(screen_reader_name(n, prompt)).id_salt(salt).show_at(ui, rect);
         }
     });
     shown
@@ -603,7 +608,7 @@ pub(crate) const DRAFT_CHARS: usize = 2 * MAX_TEXT_BYTES;
 
 /// An edit field: its text is kept in the dialog while it is typed and given to the script when
 /// the field loses the focus, or at Enter in a one-line field.
-fn edit(ui: &mut Ui, drafts: &BTreeMap<u64, String>, enabled: bool, (i, n, prompt): (usize, &UiNode, &str)) -> Shown {
+fn edit(ui: &mut Ui, rect: egui::Rect, drafts: &BTreeMap<u64, String>, enabled: bool, (i, n, prompt): (usize, &UiNode, &str)) -> Shown {
     let mut text = drafts.get(&n.id).cloned().unwrap_or_else(|| n.text.clone());
     let mut field = TextField::new(screen_reader_name(n, prompt), Bind::bound(&mut text))
         .limit(DRAFT_CHARS)
@@ -613,7 +618,7 @@ fn edit(ui: &mut Ui, drafts: &BTreeMap<u64, String>, enabled: bool, (i, n, promp
     if n.multiline {
         field = field.lines(3);
     }
-    let out = field.show(ui);
+    let out = field.show_at(ui, rect);
     let focused = out.response.has_focus();
     let mut draft = (out.events.value().is_some() || text != n.text).then(|| Some(text.clone()));
     let committed = out.submitted || out.events.committed().is_some() || out.response.lost_focus();
