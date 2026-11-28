@@ -1917,7 +1917,7 @@ fn oversized_screenshot_and_png_export_are_errors() {
 }
 
 /// Preferences reach agents' gestures (#394): `prefs.set` Object Selection by Path Only, then a
-/// click inside a filled square selects nothing; Command Click to Select Objects Behind, a
+/// click inside a filled square selects nothing; Command Click to Select Objects Behind, a second
 /// Cmd-click selects the square underneath.
 #[test]
 fn selection_preferences_apply_to_pointer_gestures() {
@@ -1927,14 +1927,15 @@ fn selection_preferences_apply_to_pointer_gestures() {
         serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].as_u64().unwrap()
     };
     let (back, front) = (square(&mut s, 1, 100), square(&mut s, 2, 150));
-    let click = |s: &mut Server, id: u64, x: f64, mods: Value| {
-        let events = json!([{"kind": "down", "x": x, "y": 125}, {"kind": "up", "x": x, "y": 125}]);
+    let clicks = |s: &mut Server, id: u64, x: f64, mods: Value, n: usize| {
+        let events: Vec<Value> = (0..n).flat_map(|_| [json!({"kind": "down", "x": x, "y": 125}), json!({"kind": "up", "x": x, "y": 125})]).collect();
         let r = call(s, id, "pointer_gesture", json!({"tool": "selection", "events": events, "mods": mods}));
         assert_eq!(r["isError"], false, "{r}");
         serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"].clone()
     };
+    let click = |s: &mut Server, id: u64, x: f64, mods: Value| clicks(s, id, x, mods, 1);
     assert_eq!(click(&mut s, 3, 175.0, json!({})), json!([front]));
-    assert_eq!(click(&mut s, 4, 175.0, json!({"cmd": true})), json!([back]), "Cmd-click selects behind");
+    assert_eq!(clicks(&mut s, 4, 175.0, json!({"cmd": true}), 2), json!([back]), "the second Cmd-click selects behind");
     let r = call(&mut s, 5, "run_command", json!({"command": "prefs.set", "params": {"key": "objectSelectionByPathOnly", "value": true}}));
     assert_eq!(r["isError"], false, "{r}");
     assert_eq!(click(&mut s, 6, 225.0, json!({})), json!([]), "path only: the fill doesn't select");

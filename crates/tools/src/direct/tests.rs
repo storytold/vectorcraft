@@ -2990,7 +2990,7 @@ fn select_behind_is_measured_once_for_a_point() {
     let mut picked = Selection::default();
     picked.add(id);
     let memo = crate::select::PreviewMemo::default();
-    let c = ToolContext { preview_memo: Some(&memo), select_behind: true, ..cx(&d, &picked, &p) };
+    let c = ToolContext { preview_memo: Some(&memo), select_behind: true, behind_armed: true, ..cx(&d, &picked, &p) };
     let at = Point::new(150.0, 150.0);
     let before = MEASURED_PARTS.get();
     assert!(crate::select::selects_behind_at(&c, at), "inside the selected square, away from its anchors");

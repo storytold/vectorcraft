@@ -72,6 +72,7 @@ impl Session {
             last_selection_tool: None,
             last_part_selection_tool: None,
             press_lent: None,
+            behind_armed: None,
             hover_lent: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
@@ -228,6 +229,7 @@ impl Session {
         }
         self.press_type_selection = None;
         self.press_lent = None;
+        self.behind_armed = None;
         let view = self.last_view;
         // The edit the tool computes on another thread and the input held for it belong to the
         // document being left. The switch goes on whatever they did, as for the deactivation.

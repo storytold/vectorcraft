@@ -7746,10 +7746,11 @@ macOS, Ctrl elsewhere), drags with the selection tool chosen last (`select_tool`
 Curvature and anchor tools until one is chosen; the release gives the tool back as it was, so the Pen goes on drawing
 the path it had begun while that stays selected. With Direct Selection or Group Selection, `mods.cmd` drags with the
 Selection tool (with Direct Selection and `mods.alt` held too, with Group Selection). With the Selection tool, it drags
-with Direct Selection or Group Selection, whichever was chosen last (Direct Selection until one is), except where the
-press lands on a selected object, or on a group holding a selected member, with another object under the pointer, away
-from its anchors, direction handles, mesh points, blend spine and the bounding box's handles and rotate zones, while
-`ctrlClickSelectsBehind` is on: there the Selection tool keeps the press and selects the object behind. A double-click
+with Direct Selection or Group Selection, whichever was chosen last (Direct Selection until one is). That first press
+arms Select Behind while `ctrlClickSelectsBehind` is on: until an event comes without `mods.cmd`, a press that lands on
+a selected object, or on an object inside one, with another object under the pointer, away from its anchors, direction
+handles, mesh points, blend spine and the bounding box's handles and rotate zones, stays with the Selection tool and
+selects the next object under the pointer (members of groups one by one, back to the topmost after the last). A double-click
 or triple-click made with Cmd still held after Cmd-clicks goes to the tool the clicks went to, and one that follows a
 Cmd-click selecting behind keeps what that click selected, without isolating or editing. Its reply's `tool` is the tool
 given back.
@@ -9037,9 +9038,10 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   handle or segment for Direct Selection, the Anchor Point, Add and Delete Anchor Point and Scissors tools, and the
   Pen with Alt. A handle shorter than that leaves its anchor to be picked when pressed nearer the anchor.
 - `objectSelectionByPathOnly`: a click inside a filled path or compound path doesn't select it, one on its path does.
-- `ctrlClickSelectsBehind` (on by default): a Selection tool click with `mods: {cmd: true}` (Command on macOS, Ctrl
-  elsewhere) selects the object under the selected one there, the next such click the one under that, then the
-  topmost again. Cmd held to borrow the selection tool from another tool clicks as usual.
+- `ctrlClickSelectsBehind` (on by default): after a first Selection tool click with `mods: {cmd: true}` (Command on
+  macOS, Ctrl elsewhere), which Direct Selection or Group Selection takes, each further such click with Cmd held
+  selects the object under the selected one there, members of groups one by one, the next such click the one under
+  that, then the topmost again. Cmd held to borrow the selection tool from another tool clicks as usual.
 - `doubleClickToIsolate` (on by default): a `doubleclick` with the Selection tool isolates a group, a compound path or a
   single path, image, mesh or placed file (not type, blends, envelopes, repeats or symbol instances); off, it no longer does.
 - `usePreciseCursors`: the Pen, Eyedropper, Slice and Blend tools' pointers are a crosshair.

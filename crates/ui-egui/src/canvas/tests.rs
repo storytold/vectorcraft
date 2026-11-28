@@ -230,9 +230,9 @@ fn a_release_ends_the_image_trace_hold_without_the_panel() {
     frame(&mut app, &ctx, vec![press(false)]);
 }
 
-/// The canvas decides which tool's marks and widgets to show for the pointer where it is in the same frame: over the
-/// selected blend a Cmd press selects behind, so the Selection tool's stay; moved away in the next frame, where Cmd
-/// lends Direct Selection, they are Direct Selection's in that frame.
+/// The canvas decides which tool's marks and widgets to show for the pointer where it is in the same frame: once a
+/// Cmd-click has armed Select Behind, over the selected blend a Cmd press selects behind, so the Selection tool's
+/// stay; moved away in the next frame, where Cmd lends Direct Selection, they are Direct Selection's in that frame.
 #[test]
 fn the_shown_tool_follows_the_pointer_in_the_frame_it_moves() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -245,14 +245,22 @@ fn the_shown_tool_follows_the_pointer_in_the_frame_it_moves() {
     app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
     let blend = id(app.session.execute("object.blend.make", &json!({})).unwrap());
     app.select_tool("selection");
-    app.session.execute("select.set", &json!({"ids": [blend]})).unwrap();
     let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let xf = app.canvas_view().unwrap();
+    let held = |events: Vec<egui::Event>| std::iter::once(egui::Event::ModifiersChanged(egui::Modifiers::COMMAND)).chain(events).collect();
     let cmd_frame = |app: &mut VectorcraftApp, at: Point| {
-        frame(app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::COMMAND), egui::Event::PointerMoved(xf.to_screen(at))]);
+        frame(app, &ctx, held(vec![egui::Event::PointerMoved(xf.to_screen(at))]));
         app.session.hover_tool_id(&Mods { cmd: true, ..Default::default() })
     };
+    // A Cmd-click on empty canvas arms Select Behind; Cmd stays held.
+    let empty = xf.to_screen(Point::new(200.0, 380.0));
+    let button =
+        |pressed| egui::Event::PointerButton { pos: empty, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::COMMAND };
+    frame(&mut app, &ctx, held(vec![egui::Event::PointerMoved(empty), button(true)]));
+    frame(&mut app, &ctx, held(vec![button(false)]));
+    assert!(app.session.behind_armed());
+    app.session.execute("select.set", &json!({"ids": [blend]})).unwrap();
     // Inside the first key object, away from its anchors and the spine.
     assert_eq!(cmd_frame(&mut app, Point::new(80.0, 175.0)), "selection", "over the selected blend, the press selects behind");
     assert_eq!(cmd_frame(&mut app, Point::new(200.0, 380.0)), "directSelection", "away from it, in the same frame");
