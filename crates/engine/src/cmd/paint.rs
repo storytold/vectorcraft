@@ -945,6 +945,9 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
     let for_tool = tool_color_params(s, p, cmd, !fill)?;
     let p = for_tool.as_ref().unwrap_or(p);
+    // Character edits can return before appearance-target resolution; validate first.
+    super::appearance::aligned(p, cmd)?;
+    super::appearance::targets_contents(p)?;
     let focus = switch_or(p, "focus", true, cmd)?;
     // An opacity alone places no gradient, so `span` may only be "object" with it.
     let span = spans_targets(p, paint.as_ref().unwrap_or(&Paint::None)).map_err(|e| bad(cmd, e))?;
