@@ -87,8 +87,11 @@ fn dialog<'a>(relative: bool, lengths: LengthUnits) -> ParamDialog<'a> {
         Param::number("radius", tl!("Radius:"), 0.0, 1.0, 3).length(lengths).bounds(Some(0.0), None)
     };
     let radii = vec![("relative".to_owned(), tl!("Relative").into()), ("absolute".to_owned(), tl!("Absolute").into())];
-    let params =
-        vec![Param::new("kind", tl!("Corner:"), ParamKind::radio(kinds, None)), Param::new("radii", "", ParamKind::radio(radii, None)), radius];
+    let params = vec![
+        Param::new("kind", tl!("Corner:"), ParamKind::radio(kinds, None)),
+        Param::new("radii", "", ParamKind::radio(radii, None)).options_in_row(),
+        radius,
+    ];
     ParamDialog::new(KIND, tl!("Corners"), params)
 }
 
