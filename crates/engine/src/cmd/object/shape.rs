@@ -466,8 +466,10 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             };
             recut(path, live, partial, &picked, radius, kind);
         }
+        // The snap to the pixel grid moves the patterns of a carried shape when the carry did.
         for id in &ids {
-            super::pixelgrid::resnap(d, *id);
+            let snap = Scaling { patterns: sc.patterns && carried.contains(id), ..Scaling::default() };
+            super::pixelgrid::resnap_with(d, *id, snap);
         }
         // A shape named in `ids` and not selected is not checked after the edit: one that a turn or
         // a new radius would take past the coordinate limit is an error here, and nothing changes.

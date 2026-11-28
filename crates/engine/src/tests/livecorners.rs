@@ -1009,6 +1009,42 @@ fn shape_edits_take_a_linked_mask_and_placed_gradient_along() {
     assert!((radii[0] * xf.as_coeffs()[0] - 5.0).abs() < 1e-9, "the corner keeps its radius: {radii:?}, {xf:?}");
 }
 
+/// A pixel-aligned line that a new angle carries off the pixel grid snaps back to it, and with
+/// `patterns` on its pattern moves with the snap as well as with the turn; with `patterns` off the
+/// pattern stays where it was.
+#[test]
+fn a_pixel_aligned_line_takes_its_pattern_through_the_snap() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let line = |s: &mut Session, aligned: bool| {
+        let id = NodeId(s.execute("shape.line", &json!({"x1": 0, "y1": 0.5, "x2": 100, "y2": 0.5})).unwrap()["id"].as_u64().unwrap());
+        let n = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap();
+        n.appearance.set_stroke(vectorcraft_color::Paint::Pattern { pattern: "P".into(), xf: Affine::default() });
+        n.extras_mut().pixel_aligned = aligned;
+        id
+    };
+    let node = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().clone();
+    let pattern = |s: &Session, id: NodeId| match node(s, id).appearance.stroke_paint() {
+        vectorcraft_color::Paint::Pattern { xf, .. } => xf,
+        p => panic!("a pattern stroke: {p:?}"),
+    };
+    let origin = |s: &Session, id: NodeId| node(s, id).geometric_bounds().unwrap().origin();
+    for patterns in [true, false] {
+        let (aligned, free) = (line(&mut s, true), line(&mut s, false));
+        run(&mut s, json!({"ids": [aligned.0, free.0], "lineAngle": 90, "patterns": patterns}));
+        let snapped = origin(&s, aligned) - origin(&s, free);
+        assert!(snapped.hypot() > 1e-6, "the aligned line snapped to the grid: {snapped:?}");
+        if patterns {
+            let want = Affine::translate(snapped) * pattern(&s, free);
+            let got = pattern(&s, aligned);
+            let off = got.as_coeffs().iter().zip(want.as_coeffs()).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+            assert!(off < 1e-9, "the pattern moved with the snap: {got:?}, want {want:?}");
+        } else {
+            assert_eq!(pattern(&s, aligned), Affine::default(), "the pattern stays where it was");
+        }
+    }
+}
+
 #[test]
 fn relative_corner_rounding_keeps_fraction_on_resize() {
     let (mut s, id) = session();
