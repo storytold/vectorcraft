@@ -1117,10 +1117,10 @@ fn transform_copies_before_offset_path_evaluates_without_ram_spike() {
         fx("path.offsetPath", json!({"offset": 10.0, "joins": "round"})),
     ];
     let path = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
-    let start = std::time::Instant::now();
+    crate::geometry::OFFSET_SUBPATHS.with(|n| n.set(0));
     let out = apply_geometry(&effects, &path, path.bounds().unwrap());
-    let elapsed = start.elapsed();
-    assert!(elapsed < std::time::Duration::from_secs(2), "elapsed: {:?}", elapsed);
+    // Offset Path offsets the one rectangle, not the 31 overlapping copies.
+    assert_eq!(crate::geometry::OFFSET_SUBPATHS.with(|n| n.get()), path.subpaths.len());
     assert_eq!(out.subpaths.len(), 31);
 }
 
@@ -1135,10 +1135,10 @@ fn reshape_leaves_within_optimizes_transform_before_terminal_offset_path() {
     let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 10}));
     let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
 
-    let start = std::time::Instant::now();
+    crate::geometry::OFFSET_SUBPATHS.with(|n| n.set(0));
     crate::reshape::reshape_leaves_within(&mut art, &[&transform, &offset], Budget::EFFECTS, None);
-    let elapsed = start.elapsed();
-    assert!(elapsed < std::time::Duration::from_secs(2));
+    // Offset Path offsets each leaf's one rectangle, not its 11 copies.
+    assert_eq!(crate::geometry::OFFSET_SUBPATHS.with(|n| n.get()), 5);
 
     let children = art.children().unwrap();
     assert_eq!(children.len(), 5);

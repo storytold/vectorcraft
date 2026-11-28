@@ -562,16 +562,30 @@ fn mode_converter(mode: ColorMode, intent: Option<Intent>, grays: Grays) -> impl
 }
 
 /// The name and color of each global swatch of `d`, for [`mode_color`].
-fn global_bases(d: &vectorcraft_doc::Document) -> Vec<(String, Color)> {
-    d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect()
+fn global_bases(d: &vectorcraft_doc::Document) -> BTreeMap<String, Color> {
+    let mut first = BTreeMap::new();
+    for w in d.swatches_iter() {
+        // An ineligible first record still shadows a later global solid of the same name.
+        first.entry(w.name.as_str()).or_insert(w);
+    }
+    first
+        .into_values()
+        .filter_map(|w| {
+            if !w.global {
+                return None;
+            }
+            let Paint::Solid { color, swatch: None, .. } = &w.paint else { return None };
+            Some((w.name.clone(), d.linked_color(*color, w.spot)))
+        })
+        .collect()
 }
 
 /// The color Document Color Mode gives `col` (swatch link `link`): a tint of a global swatch in
 /// `bases` (already converted) is that swatch's color at its tint; any other color goes through
 /// `conv` ([`mode_converter`]).
-fn mode_color(col: &Color, link: proof::Link, bases: &[(String, Color)], conv: &dyn Fn(&Color) -> Color) -> Color {
-    match link.and_then(|(name, tint)| Some((bases.iter().find(|(n, _)| n == name)?, tint))) {
-        Some(((_, base), tint)) if tint < 1.0 => base.tinted(tint),
+fn mode_color(col: &Color, link: proof::Link, bases: &BTreeMap<String, Color>, conv: &dyn Fn(&Color) -> Color) -> Color {
+    match link.and_then(|(name, tint)| Some((bases.get(name)?, tint))) {
+        Some((base, tint)) if tint < 1.0 => base.tinted(tint),
         _ => conv(col),
     }
 }
@@ -579,10 +593,11 @@ fn mode_color(col: &Color, link: proof::Link, bases: &[(String, Color)], conv: &
 /// Put `d` in color `mode` and, with `convert`, convert every color of its art (opacity masks,
 /// effect colors and the series paints and label styles that graphs keep included), symbols,
 /// graph designs, pattern tiles (the tile that pattern editing's Cancel puts back included),
-/// graphic styles (their effects included), brushes (their art and a Hue Shift key color) and
-/// swatches through the color settings (`intent`, default: theirs) → how many colors of the art
-/// (opacity masks, effect colors and graphs' paints included), symbols, graph designs and pattern
-/// tiles changed; the colors of graphic styles and brushes convert without being counted. Gray
+/// graphic styles (their effects included), brushes (their art and a Hue Shift key color),
+/// character and paragraph styles (their fill and stroke) and swatches through the color settings
+/// (`intent`, default: theirs) → how many colors of the art (opacity masks, effect colors and
+/// graphs' paints included), symbols, graph designs and pattern tiles changed; the colors of
+/// graphic styles, brushes and text styles convert without being counted. Gray
 /// colors stay Gray (they print on the black plate in either mode); RGB grays are colors like any
 /// other and separate through the CMYK profile, unless `grays` puts them on the black plate
 /// ([`mode_converter`]). Lab colors
@@ -594,7 +609,10 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
     if !convert {
         return 0;
     }
-    convert_colors(d, &mode_converter(mode, intent, grays))
+    let conv = mode_converter(mode, intent, grays);
+    let changed = convert_colors(d, &conv);
+    convert_style_colors(d, &conv);
+    changed
 }
 
 /// Every color of `d` that [`set_color_mode`] converts, converted with `conv` → how many colors of
@@ -685,8 +703,8 @@ fn convert_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Co
         vectorcraft_brush::store(d, &brushes);
     }
     // This pass gives tint swatches their converted swatch's color at their tint; the passes above already did the same for the art's tints.
-    d.map_solid_paints(&mut |c, link, tint| match bases.iter().find(|(n, _)| Some(n) == link.as_ref()) {
-        Some((_, base)) if *tint < 1.0 => {
+    d.map_solid_paints(&mut |c, link, tint| match link.as_ref().and_then(|name| bases.get(name)) {
+        Some(base) if *tint < 1.0 => {
             *c = base.tinted(*tint);
             true
         }

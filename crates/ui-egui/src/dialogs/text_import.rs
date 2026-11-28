@@ -97,8 +97,12 @@ fn starting_fields(app: &VectorcraftApp) -> DialogFields {
 pub fn open(app: &mut VectorcraftApp, params: &Value) -> Value {
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     let dialog = HostedParamDialog::new(&ctx, KIND, starting_fields(app), build).held_ok();
+    let drawing = crate::place::import_options_drawing(app, params);
     let params = params.clone();
-    open_held(app, dialog, move |app, result| confirm(app, &params, result));
+    open_held(app, dialog, move |app, result| {
+        crate::place::check_import_options_drawing(app, drawing)?;
+        confirm(app, &params, result)
+    });
     json!({ "dialog": KIND })
 }
 
@@ -127,8 +131,9 @@ fn options(fields: &DialogFields) -> Value {
 fn confirm(app: &mut VectorcraftApp, params: &Value, result: &ParamResult) -> Result<(), String> {
     let mut params = params.clone();
     params["text"] = options(&result.fields);
+    crate::place::run_for_user(app, &params)?;
     app.ui.text_import = params["text"].clone();
-    crate::place::run_for_user(app, &params).map(|_| ())
+    Ok(())
 }
 
 /// What the three import dialogs' tests share: a window for the host, and the open dialog's fields,
@@ -226,6 +231,110 @@ mod tests {
     }
 
     #[test]
+    fn refused_text_import_does_not_change_the_next_files_options() {
+        use craft::ui::dialog::HeldOk;
+        use egui::accesskit::{Role, TreeUpdate};
+        use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+        fn control(tree: &TreeUpdate, source: &str, role: Role, scope: Option<Rect>) -> Rect {
+            fn plain(label: &str) -> &str {
+                label.trim_end().trim_end_matches([':', '：']).trim_end()
+            }
+            let caption = crate::i18n::t(source);
+            tree.nodes
+                .iter()
+                .map(|(_, node)| node)
+                .filter(|node| node.role() == role && node.label().is_some_and(|label| plain(label) == plain(caption)))
+                .filter_map(|node| {
+                    let b = node.bounds()?;
+                    Some(Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)))
+                })
+                .find(|rect| scope.is_none_or(|modal| modal.contains(rect.center())))
+                .unwrap_or_else(|| panic!("missing {role:?} {caption:?} in {scope:?}"))
+        }
+
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 500.0));
+        let mut app = host::app();
+        app.session.prefs.interface_language = "en".into();
+        app.placing.off_the_ui_thread = true;
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [rect]})).unwrap();
+        let prior = json!({"platform": "windows", "characterSet": "unicode", "removeLineReturns": false, "removeParagraphReturns": false});
+        app.ui.text_import = prior.clone();
+
+        let ctx = app.ui_ctx.clone().unwrap();
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+            time += 0.1;
+            let raw = RawInput { events, time: Some(time), screen_rect: Some(screen), focused: true, ..Default::default() };
+            crate::testing::app_frame(app, &ctx, raw).platform_output.accesskit_update.unwrap()
+        };
+        let settle = |app: &mut VectorcraftApp, frame: &mut dyn FnMut(&mut VectorcraftApp, Vec<Event>) -> TreeUpdate| {
+            for _ in 0..5 {
+                frame(app, vec![]);
+            }
+            frame(app, vec![])
+        };
+        let click = |app: &mut VectorcraftApp, frame: &mut dyn FnMut(&mut VectorcraftApp, Vec<Event>) -> TreeUpdate, pos| {
+            frame(app, vec![Event::PointerMoved(pos)]);
+            for pressed in [true, false] {
+                frame(app, vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+            }
+            frame(app, vec![]);
+        };
+        let press = |app: &mut VectorcraftApp, frame: &mut dyn FnMut(&mut VectorcraftApp, Vec<Event>) -> TreeUpdate, key, modifiers| {
+            for pressed in [true, false] {
+                frame(app, vec![Event::ModifiersChanged(modifiers), Event::Key { key, physical_key: None, pressed, repeat: false, modifiers }]);
+            }
+        };
+
+        let file = json!({"name": "notes.txt", "dataBase64": vectorcraft_format::base64_encode(b"one    two")});
+        let mut replace = file.clone();
+        replace["replace"] = json!(true);
+        settle(&mut app, &mut frame);
+        assert_eq!(app.run("file.place", replace).unwrap()["dialog"], KIND);
+        let tree = settle(&mut app, &mut frame);
+        let modal = control(&tree, "Text Import Options", Role::Dialog, None);
+        assert!(screen.expand(0.5).contains_rect(modal));
+        let checkbox = control(&tree, "Replace", Role::CheckBox, Some(modal));
+        click(&mut app, &mut frame, checkbox.center());
+        let tree = settle(&mut app, &mut frame);
+        let number = control(&tree, "or more spaces with a tab", Role::SpinButton, Some(modal));
+        let ok = control(&tree, "OK", Role::Button, Some(modal));
+        click(&mut app, &mut frame, number.center());
+        press(&mut app, &mut frame, Key::A, Modifiers::COMMAND);
+        frame(&mut app, vec![Event::ModifiersChanged(Modifiers::NONE), Event::Text("4".into())]);
+        press(&mut app, &mut frame, Key::Tab, Modifiers::NONE);
+        settle(&mut app, &mut frame);
+        let fields = host::fields(&app, KIND);
+        assert_eq!(fields["replaceSpaces"], true, "actual toggle");
+        assert_eq!(fields["spaces"].as_f64(), Some(4.0), "actual focused text");
+
+        // The original drawing is still open, but an automation command removed the Replace target.
+        app.run("select.set", json!({"ids": []})).unwrap();
+        let history = app.session.doc().unwrap().history.undo.len();
+        click(&mut app, &mut frame, ok.center());
+        let tree = settle(&mut app, &mut frame);
+        let opened = host::open_dialog(&app, KIND).expect("the refusal kept the dialog open");
+        let refusal = app.dialogs().unwrap().with(|h| h.held_state(opened.id));
+        assert!(
+            matches!(refusal, Some(HeldOk::Refused(reason)) if reason.as_str().contains("select the one object")),
+            "expected Replace target refusal"
+        );
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), history, "refused import did not edit the document");
+        let modal = control(&tree, "Text Import Options", Role::Dialog, None);
+        let cancel = control(&tree, "Cancel", Role::Button, Some(modal));
+        click(&mut app, &mut frame, cancel.center());
+        settle(&mut app, &mut frame);
+        assert!(!host::is_open(&app, KIND), "Cancel closed the refusal");
+        assert_eq!(app.run("file.place", file).unwrap()["dialog"], KIND);
+        let fields = host::fields(&app, KIND);
+        assert_eq!((fields["replaceSpaces"].as_bool(), fields["spaces"].as_f64()), (Some(false), Some(3.0)));
+        assert_eq!(app.ui.text_import, prior, "only accepted settings are remembered");
+    }
+
+    #[test]
     fn placing_a_text_file_asks_for_the_import_options_then_places_area_type() {
         let mut app = host::app();
         app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
@@ -242,6 +351,23 @@ mod tests {
         assert_eq!(placed_text(&app).as_deref(), Some("one two\nthree"), "one paragraph per block");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), 1);
         assert_eq!(app.ui.text_import["removeLineReturns"], true, "remembered for the next file");
+    }
+
+    #[test]
+    fn normal_text_place_options_wait_for_the_original_drawing() {
+        let mut app = host::app();
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let file = json!({"name": "notes.txt", "dataBase64": vectorcraft_format::base64_encode(b"one\r\ntwo")});
+        assert_eq!(app.run("file.place", file).unwrap()["dialog"], KIND);
+        host::set(&app, KIND, "removeLineReturns", json!(true));
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let error = host::confirm(&mut app, KIND).expect_err("the other drawing must not receive the file");
+        assert!(error.contains("original drawing"), "{error}");
+        assert!(placed_text(&app).is_none());
+        assert_eq!(host::fields(&app, KIND)["removeLineReturns"], true);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        host::confirm(&mut app, KIND).unwrap();
+        assert_eq!(placed_text(&app).as_deref(), Some("one two"));
     }
 
     /// Every character set is a choice: one confirmed last comes back on the next text file and

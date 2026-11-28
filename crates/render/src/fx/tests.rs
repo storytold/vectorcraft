@@ -99,6 +99,88 @@ fn doc_with(r: Rect, fill: Color, effects: Vec<(&str, serde_json::Value)>) -> Do
     d
 }
 
+/// A stroked line from (10, 50) to (60, 50) beside a lone anchor at (90, 90), closed or open
+/// (`line` false: the lone anchor alone), its stroke 4 pt wide with `cap`, round joins and the
+/// object-level `object` and stroke-level `stroke` effects.
+fn lone_anchor_doc(line: bool, closed: bool, cap: vectorcraft_doc::LineCap, object: &[Effect], stroke: &[Effect]) -> Document {
+    use vectorcraft_geom::{PathData, SubPath};
+    let mut d = Document::new(100.0, 100.0);
+    let lone = SubPath::polyline(&[Point::new(90.0, 90.0)], closed);
+    let subpaths = if line { vec![SubPath::polyline(&[Point::new(10.0, 50.0), Point::new(60.0, 50.0)], false), lone] } else { vec![lone] };
+    let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+    let s = ap.stroke_mut().unwrap();
+    (s.cap, s.join) = (cap, vectorcraft_doc::LineJoin::Round);
+    s.effects = stroke.to_vec();
+    ap.effects = object.to_vec();
+    let n = Node::path(d.alloc_id(), PathData::new(subpaths), ap);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    d
+}
+
+/// The bounds the effects are measured by hold the dot a round or projecting cap draws for a
+/// lone anchor of a closed subpath, wherever the effected path is measured: the visual and cull
+/// bounds (with the object's or the stroke's own geometry effect) and what Rasterize makes its image
+/// over (the path as drawn, and a stroke with a raster effect, with and without a geometry effect
+/// of its own). A lone anchor that draws no dot (open, or under a butt cap) leaves them as the line
+/// alone has them.
+#[test]
+fn effect_bounds_hold_a_lone_anchors_dot_only_where_its_cap_draws_one() {
+    use vectorcraft_doc::LineCap;
+    let fx = |id: &str, p: serde_json::Value| Effect { id: id.into(), params: p, visible: true };
+    // The object's effect moves the dot to (91, 90), the stroke's own effect to (130, 90), and the
+    // stroke's shadow paints a copy 30 pt below.
+    let moved = fx("distort.transform", json!({"moveH": 1}));
+    let far = fx("distort.transform", json!({"moveH": 40}));
+    let shadow = fx("stylize.dropShadow", json!({"x": 0, "y": 30, "blur": 0}));
+    // (what, object effects, stroke effects, measure, the center of the lowest dot painted)
+    type Measure = fn(&Document, &Node) -> Option<Rect>;
+    let visual: Measure = |d, n| super::visual_bounds(&d.symbol_boxes(), n);
+    let cull: Measure = |d, n| super::cull_bounds(&d.symbol_boxes(), n);
+    let drawn: Measure = |d, n| crate::drawn_bounds(d, n);
+    type Case = (&'static str, Vec<Effect>, Vec<Effect>, Measure, Point);
+    let cases: [Case; 7] = [
+        ("visual, object effect", vec![moved.clone()], vec![], visual, Point::new(91.0, 90.0)),
+        ("visual, stroke effect", vec![], vec![far.clone()], visual, Point::new(130.0, 90.0)),
+        ("cull, object effect", vec![moved.clone()], vec![], cull, Point::new(91.0, 90.0)),
+        ("drawn, object effect", vec![moved.clone()], vec![], drawn, Point::new(91.0, 90.0)),
+        ("drawn, stroke effect", vec![], vec![far.clone()], drawn, Point::new(130.0, 90.0)),
+        ("drawn, stroke raster effect", vec![moved.clone()], vec![shadow.clone()], drawn, Point::new(91.0, 120.0)),
+        ("drawn, stroke geometry and raster effects", vec![], vec![far.clone(), shadow.clone()], drawn, Point::new(130.0, 120.0)),
+    ];
+    for (what, object, stroke, measure, dot) in cases {
+        for (closed, cap) in [(true, LineCap::Round), (true, LineCap::Square), (true, LineCap::Butt), (false, LineCap::Round)] {
+            let d = lone_anchor_doc(true, closed, cap, &object, &stroke);
+            let b = measure(&d, &d.layers[0].children().unwrap()[0]).unwrap();
+            if closed && cap != LineCap::Butt {
+                // The dot is 4 pt across.
+                assert!(b.x1 >= dot.x + 2.0 - 1e-6 && b.y1 >= dot.y + 2.0 - 1e-6, "{what}, {cap:?}: {b:?} leaves out the dot at {dot:?}");
+            } else {
+                assert!(b.y1 < dot.y - 2.0, "{what}, closed {closed}, {cap:?}: {b:?} reaches toward a lone anchor that draws nothing");
+            }
+        }
+    }
+}
+
+/// A path of only a lone anchor is measured at that anchor, not at the origin, and an effect that
+/// paints around what the path draws (a drop shadow) is drawn over the dot a round cap draws there.
+#[test]
+fn a_path_of_a_lone_anchor_is_measured_at_its_dot() {
+    use vectorcraft_doc::LineCap;
+    let moved = Effect { id: "distort.transform".into(), params: json!({"moveH": 1}), visible: true };
+    let d = lone_anchor_doc(false, true, LineCap::Round, std::slice::from_ref(&moved), &[]);
+    let n = &d.layers[0].children().unwrap()[0];
+    for (what, b) in [("visual", super::visual_bounds(&d.symbol_boxes(), n)), ("drawn", crate::drawn_bounds(&d, n))] {
+        let b = b.unwrap();
+        assert!(b.contains(Point::new(91.0, 90.0)) && !b.contains(Point::ZERO), "{what}: {b:?}");
+    }
+    let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({"x": 0, "y": 6, "blur": 0}), visible: true };
+    let d = lone_anchor_doc(true, true, LineCap::Round, &[moved, shadow], &[]);
+    let img = render(&d);
+    assert!(lum(img.pixel(91, 90)) < 200, "the dot is drawn");
+    assert!(lum(img.pixel(91, 96)) < 600, "the dot's shadow is drawn: {:?}", img.pixel(91, 96));
+}
+
 fn render(d: &Document) -> Rendered {
     Renderer::new().render(d, 100, 100, Affine::IDENTITY, &RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() })
 }
@@ -1531,6 +1613,78 @@ fn moved_objects_draw_their_effect_rasters_while_interacting() {
 /// frame after the drag, of the same document, is what a fresh renderer draws, as is a frame
 /// rendered while interacting without a drag (a dialog's preview).
 #[test]
+fn a_plain_patch_stops_at_a_raster_effect() {
+    let mut doc = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::BLACK, vec![("texture.texturizer", json!({}))]);
+    let plain = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(94.0, 3.0, 96.0, 6.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(doc.layers[0].id), usize::MAX, plain).unwrap();
+    let (width, height) = (2000, 1600);
+    let view = Affine::scale(20.0);
+    let still = RenderOptions::default();
+    let mut renderer = Renderer::new();
+    renderer.threads = 0;
+    renderer.render(&doc, width, height, view, &still);
+    let total_drawn = renderer.stats.drawn;
+    let mut scratch = Renderer::new();
+    scratch.threads = 0;
+    let patch_view = Affine::translate((-1850.0, -50.0)) * view;
+    assert!(scratch.render_plain_patch(&doc, 100, 100, patch_view, &still).is_some(), "the distant patch does not draw the effect");
+    assert!(scratch.render_plain_patch(&doc, width, height, view, &still).is_none(), "a patch that draws the effect needs the full render");
+    assert!(scratch.stats.drawn < total_drawn, "the rejected patch does not draw the artwork after the effect");
+}
+
+#[test]
+fn a_plain_patch_does_not_build_unrelated_3d_art_to_cull_it() {
+    let mut doc = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::BLACK, vec![("threeD.extrude", json!({"depth": 10}))]);
+    let plain = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(290.0, 10.0, 300.0, 20.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(doc.layers[0].id), usize::MAX, plain).unwrap();
+    let opts = RenderOptions::default();
+    let mut whole = Renderer::new();
+    whole.threads = 0;
+    whole.render(&doc, 350, 150, Affine::IDENTITY, &opts);
+    assert!(whole.stats.three_d_built > 0, "the fixture generates 3D art");
+    let mut scratch = Renderer::new();
+    scratch.threads = 0;
+    let patch = Affine::translate((-280.0, 0.0));
+    let result = scratch.render_plain_patch(&doc, 40, 30, patch, &opts);
+    assert_eq!(scratch.stats.three_d_built, 0, "fall back before rebuilding 3D art");
+    assert!(result.is_none());
+
+    let layer = doc.layers[0].id;
+    let art = doc.layers[0].children().unwrap()[0].clone();
+    doc.remove(art.id).unwrap();
+    let mut group = Node::group(doc.alloc_id(), vec![art.clone()]);
+    group.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.innerGlow".into(), params: json!({"blur": 4}), visible: true });
+    assert!(super::has_object_fx(&group), "this group uses the alternate bounds path");
+    let group = doc.insert(Some(layer), 0, group).unwrap();
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &opts).is_none(), "alternate group bounds also need the 3D child");
+    doc.remove(group).unwrap();
+
+    let mut template = Node::layer(doc.alloc_id(), "Template", vectorcraft_doc::LayerColor::Preset(0));
+    if let vectorcraft_doc::NodeKind::Layer { template: flag, children, .. } = &mut template.kind {
+        *flag = true;
+        children.push(art.clone());
+    }
+    let template = doc.insert(Some(layer), 0, template).unwrap();
+    let hidden = RenderOptions { hide_templates: true, ..opts.clone() };
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &hidden).is_none(), "layer bounds conservatively include hidden templates");
+    assert_eq!(scratch.stats.three_d_built, 0);
+
+    doc.remove(template).unwrap();
+    doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Solid".into(), art });
+    let instance = Node::new(doc.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Solid".into(), xf: Affine::IDENTITY });
+    doc.insert(Some(layer), 0, instance).unwrap();
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &opts).is_none(), "a symbol's definition also needs 3D bounds");
+}
+
+#[test]
 fn a_drag_renders_raster_effects_within_the_drag_budget() {
     let effects = vec![("stylize.dropShadow", json!({"x": 4, "y": 3, "blur": 7, "opacity": 80})), ("texture.texturizer", json!({}))];
     let base = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::rgb(0.9, 0.4, 0.1), effects);
@@ -1579,6 +1733,31 @@ fn a_drag_renders_raster_effects_within_the_drag_budget() {
     assert_eq!((r.shadows.len(), r.stats.previewed), (kept, 1), "the scaled shadow");
     let after = r.render(&scaled, 1600, 1000, view, &still).pixels;
     assert!(after == threaded().render(&scaled, 1600, 1000, view, &still).pixels, "the frame after the drag");
+}
+
+#[test]
+fn a_drag_glow_fallback_cannot_be_spliced_into_a_still_frame() {
+    let doc = doc_with(
+        Rect::new(20.0, 20.0, 40.0, 40.0),
+        Color::BLACK,
+        vec![
+            ("stylize.outerGlow", json!({"blur": 1.3, "color": "#ff0000", "opacity": 100, "mode": "normal"})),
+            ("stylize.outerGlow", json!({"blur": 1.0, "color": "#0000ff", "opacity": 100, "mode": "normal"})),
+        ],
+    );
+    let view = Affine::translate((600.0, 600.0)) * Affine::scale(40.0) * Affine::translate((-30.0, -30.0));
+    let mut still = Renderer::new();
+    still.threads = 2;
+    let still_pixels = still.render(&doc, 1200, 1200, view, &RenderOptions::default()).pixels;
+    assert_eq!(still.stats.view_sized, 0, "the still frame draws both whole rasters");
+
+    let mut drag = Renderer::new();
+    drag.threads = 2;
+    let opts = RenderOptions { interacting: true, dragging: true, ..Default::default() };
+    let drag_pixels = drag.render(&doc, 1200, 1200, view, &opts).pixels;
+    assert_eq!(drag.stats.previewed, 0, "the fallback filter fits the drag budget without downsampling");
+    assert!(drag_pixels != still_pixels, "a glow over the first glow differs from the fallback filter");
+    assert!(drag.stats.view_sized > 0, "the fallback must replace the whole frame");
 }
 
 /// While interacting, a group holding a symbol instance whose art lies outside the 20 × 20

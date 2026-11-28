@@ -60,8 +60,8 @@ pub use read::read;
 #[cfg(test)]
 pub(crate) use read::with_image_limits;
 pub(crate) use read::{
-    BLEND_BUDGET, MAX_NODES as MAX_EDITING_OBJECTS, MAX_SYMBOLS, ParsedStyle, join_and, parse_art_style, parsed_moves_with, read_over_page,
-    read_parsed_style, read_program, read_style_list, slot_frame, slot_of, symbol_art_member,
+    BLEND_BUDGET, MAX_NODES as MAX_EDITING_OBJECTS, MAX_SYMBOLS, ParsedStyle, join_and, parse_art_style, parsed_moves_with, parsed_type_color,
+    read_over_page, read_parsed_style, read_program, read_style_list, slot_frame, slot_of, symbol_art_member,
 };
 pub use read::{
     BindingRef, Brushes, PaletteSwatches, PlacedPage, Structure, Symbols, active_artboard, artboards, bindings_note, brushes, graphic_styles,

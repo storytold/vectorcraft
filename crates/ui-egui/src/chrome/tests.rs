@@ -184,6 +184,182 @@ impl Shown {
     }
 }
 
+/// #8687: the framework buttons and the shared menu run the existing commands, retain their live accessible
+/// state, and leave the document, selection, history, tool, view and unconfirmed pixel options untouched.
+#[test]
+fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
+    let mut bar = status_readout_app();
+    bar.room(egui::vec2(2200.0, 300.0));
+    let (document, selection, history, tool, camera) = {
+        let mut app = bar.app();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 30})).unwrap();
+        app.ui.view.smart_guides = false;
+        app.ui.view.snap_to_point = false;
+        app.ui.view.snap_to_grid = false;
+        app.ui.view.snap_to_pixel = false;
+        app.ui.view.snap_to_glyph = false;
+        app.run("prefs.set", json!({"key": "alignmentGuides", "value": true})).unwrap();
+        let st = app.session.active().unwrap();
+        (
+            json!(st.doc.as_ref()),
+            st.selection.clone(),
+            (st.history.undo.len(), st.history.redo.len()),
+            app.session.tool_id().to_owned(),
+            app.view().map(|v| (v.zoom, v.rotation)),
+        )
+    };
+    for (name, command) in [("Smart Guides", "view.smartGuides"), ("Snap to Point", "view.snapToPoint"), ("Snap to Grid", "view.snapToGrid")] {
+        let button = bar.settle().named(name);
+        assert_eq!(bar.tree().role_of(button.node), Some(Role::BUTTON));
+        // Native IconButton exposes its active state as pressed/toggled through its BUTTON role.
+        assert_eq!(bar.tree().toggled_of(button.node), Some(Mixed::Same(false)));
+        let before = bar.app().run_count;
+        bar.click_on(&button).settle();
+        assert_eq!(bar.app().run_count, before + 1, "direct {name} uses the existing command entry");
+        assert_eq!(crate::menus::checked(&bar.app(), command, &json!({})), Some(true));
+        let button = bar.named(name);
+        assert_eq!(bar.tree().toggled_of(button.node), Some(Mixed::Same(true)));
+        crate::menus::invoke(&mut bar.app(), command, json!({}));
+        let button = bar.settle().named(name);
+        assert_eq!(bar.tree().toggled_of(button.node), Some(Mixed::Same(false)), "reverse commands refresh the live button");
+    }
+    for (name, command) in [
+        ("Smart Guides", "view.smartGuides"),
+        ("Snap to Point", "view.snapToPoint"),
+        ("Snap to Grid", "view.snapToGrid"),
+        ("Snap to Pixel", "view.snapToPixel"),
+        ("Snap to Glyph", "view.snapToGlyph"),
+    ] {
+        bar.click("Snapping").settle();
+        // The menu follows the direct buttons in the tree; select the checked menu row by role.
+        let row = review_8687_menu_row(&bar, name);
+        assert!(!bar.checked(&row));
+        let before = bar.app().run_count;
+        bar.click_on(&row).settle();
+        assert_eq!(bar.app().run_count, before + 1, "menu {name} uses the existing command entry");
+        assert_eq!(crate::menus::checked(&bar.app(), command, &json!({})), Some(true));
+        bar.key(egui::Key::Escape);
+        crate::menus::invoke(&mut bar.app(), command, json!({}));
+        bar.settle().click("Snapping").settle();
+        assert!(!bar.checked(&review_8687_menu_row(&bar, name)), "menu rereads external command state");
+        bar.key(egui::Key::Escape);
+    }
+    bar.click("Snapping").settle();
+    let preferences = {
+        let app = bar.app();
+        [
+            ("Alignment Guides", app.session.prefs.alignment_guides),
+            ("Snap to Tangent", app.session.prefs.snap_tangent),
+            ("Snap to Perpendicular", app.session.prefs.snap_perpendicular),
+        ]
+    };
+    for (name, on) in preferences {
+        assert_eq!(bar.checked(&review_8687_menu_row(&bar, name)), on);
+    }
+    let row = review_8687_menu_row(&bar, "Alignment Guides");
+    let before = bar.app().run_count;
+    bar.click_on(&row).settle();
+    assert_eq!(bar.app().run_count, before + 1);
+    assert!(!bar.app().session.prefs.alignment_guides);
+    bar.key(egui::Key::Escape).click("Snapping").settle();
+    let pixel = bar.app().session.prefs.pixel_snap;
+    bar.click(tl!("Pixel Snapping Options…")).settle();
+    {
+        let app = bar.app();
+        let dialogs = app.dialogs().expect("the native dialog host");
+        let id = craft::ui::dialog::dialog_id(crate::dialogs::pixel_snap_options::KIND);
+        dialogs.with(|host| {
+            let dialog = host.open_dialogs().into_iter().find(|dialog| dialog.id == id).expect("the existing Pixel Snapping Options dialog");
+            assert_eq!(dialog.key.as_deref(), Some(crate::dialogs::pixel_snap_options::KIND));
+            assert_eq!(dialog.fields, Some(json!({"drawing": pixel.drawing, "moving": pixel.moving, "scaling": pixel.scaling})));
+            assert!(host.cancel_by_id(bar.fixture.ctx(), id));
+            assert!(!host.open_dialogs().iter().any(|dialog| dialog.id == id));
+        });
+        assert_eq!(app.session.prefs.pixel_snap, pixel, "closing without OK changes no option");
+        let st = app.session.active().unwrap();
+        assert_eq!(json!(st.doc.as_ref()), document);
+        assert_eq!(st.selection, selection);
+        assert_eq!((st.history.undo.len(), st.history.redo.len()), history);
+        assert_eq!(app.session.tool_id(), tool);
+        assert_eq!(app.view().map(|v| (v.zoom, v.rotation)), camera);
+    }
+}
+
+fn review_8687_menu_row(bar: &Shown, name: &str) -> Target {
+    let tree = bar.tree();
+    let rows: Vec<_> = tree
+        .keys()
+        .into_iter()
+        .filter(|key| tree.role_of(*key) == Some(Role::MENU_ITEM_CHECK_BOX))
+        .filter(|key| tree.name_of(*key) == Some(name) && tree.toggled_of(*key).is_some())
+        .collect();
+    assert_eq!(rows.len(), 1, "one live checked menu row named {name}");
+    bar.fixture.target(rows[0]).unwrap()
+}
+
+/// #8687: fit ranks replace raw pixel reservations. The direct group leaves whole, then the menu, while current
+/// main's navigation, info, message and higher-priority readouts keep their places and controls stay in the bar.
+#[test]
+fn review_8687_status_snapping_fits_full_menu_and_omitted_real_frames() {
+    let mut bar = status_readout_app();
+    bar.app().hover_doc = Some(vectorcraft_geom::Point::new(7.0, 5.0));
+    let mut stages = Vec::new();
+    let (mut message_origin, mut info_origin) = (None, None);
+    for width in (400..=2200).rev().step_by(10).map(|w| w as f32) {
+        bar.room(egui::vec2(width, 300.0)).settle();
+        let direct: Vec<_> = ["Smart Guides", "Snap to Point", "Snap to Grid"].into_iter().filter_map(|name| bar.find(name)).collect();
+        let menu = bar.find("Snapping");
+        assert!(direct.is_empty() || direct.len() == 3, "the direct group remains whole at {width}");
+        let stage = if !direct.is_empty() {
+            2
+        } else if menu.is_some() {
+            1
+        } else {
+            0
+        };
+        assert!(stage != 2 || menu.is_some(), "full includes Snapping");
+        if let Some(previous) = stages.last() {
+            assert!(stage <= *previous, "controls cannot return as the bar narrows");
+        }
+        if stages.last() != Some(&stage) {
+            stages.push(stage);
+        }
+        let texts = bar.texts();
+        let message = status_text(&texts, "Saved recovery data");
+        let info = status_text(&texts, "Selection");
+        let controls_band = bar.find("Zoom").unwrap().rect.union(bar.find("Rotation").unwrap().rect);
+        assert!(message.bounds.left() >= info.bounds.right());
+        for (origin, at) in [(&mut message_origin, message.at), (&mut info_origin, info.at)] {
+            if let Some(first) = *origin {
+                assert_eq!(at, first, "snapping cannot displace core status content");
+            } else {
+                *origin = Some(at);
+            }
+        }
+        for name in ["Zoom", "Rotation", "First Artboard", "Previous Artboard", "Next Artboard", "Last Artboard"] {
+            assert!(bar.find(name).is_some(), "{name} remains at {width}");
+        }
+        let mut rects = Vec::new();
+        for target in direct.into_iter().chain(menu) {
+            let rect = target.rect;
+            assert!(rect.left() >= info.bounds.right() && rect.right() <= width);
+            assert!(rect.top() >= controls_band.top() && rect.bottom() <= controls_band.bottom(), "closed controls stay in the status bar's row");
+            assert!(!rect.intersects(message.bounds), "controls leave the message its own rectangle");
+            assert!(rects.iter().all(|old: &egui::Rect| !old.intersects(rect)), "controls do not overlap");
+            rects.push(rect);
+        }
+        for field in texts.iter().filter(|t| t.text.starts_with("X:") || t.text.starts_with("Y:") || t.text.starts_with("render")) {
+            assert!(field.bounds.left() >= info.bounds.right());
+            assert!(!field.bounds.intersects(message.bounds));
+            assert!(rects.iter().all(|r| !r.intersects(field.bounds)));
+        }
+        if stage == 0 {
+            break;
+        }
+    }
+    assert_eq!(stages, [2, 1, 0], "real frames reach full, dropdown-only, then omitted");
+}
+
 /// A tab dropped on the strip lands at an index among all the open documents: the documents without a tab (the
 /// floating ones) keep their places in the documents' order, and a document with two views moves as one (#5663).
 #[test]

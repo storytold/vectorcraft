@@ -1153,6 +1153,28 @@ fn transform_each_random_is_deterministic_with_seed() {
     assert!(x.x0.abs() <= 50.0 && x.width() == 100.0);
 }
 
+/// Random with the same horizontal and vertical scale scales each object evenly, Relative and
+/// Absolute alike: one random share takes both sides toward the value, so squares stay square, each
+/// by its own share (#9320).
+#[test]
+fn transform_each_random_with_equal_scales_keeps_proportions() {
+    for p in [
+        json!({"scaleH": 40, "scaleV": 40, "random": true, "seed": 7}),
+        json!({"scaleH": 40, "scaleV": 40, "relative": false, "random": true, "seed": 7}),
+    ] {
+        let mut s = session();
+        let ids: Vec<NodeId> = (0..8).map(|i| rect(&mut s, f64::from(i) * 150.0, 0.0, 100.0, 100.0)).collect();
+        sel(&mut s, &ids);
+        s.execute("object.transformEach", &p).unwrap();
+        let sizes: Vec<(f64, f64)> = ids.iter().map(|id| bounds(&s, *id)).map(|b| (b.width(), b.height())).collect();
+        for (w, h) in &sizes {
+            assert!(close(*w, *h), "{p}: a square came out {w} × {h}");
+            assert!(*w < 100.0, "{p}: a square didn't shrink: {w}");
+        }
+        assert!(sizes.iter().any(|(w, _)| !close(*w, sizes[0].0)), "{p}: every square took the same share: {sizes:?}");
+    }
+}
+
 /// A `reference` or `seed` that is not a whole number (a fraction, a negative number or a string) is an error naming
 /// the key, and the object stays as it was; a `reference` of 0.0 is the top-left point.
 #[test]

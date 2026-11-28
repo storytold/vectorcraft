@@ -452,6 +452,34 @@ fn a_group_shows_its_contents_in_the_proxies() {
     assert_eq!(s.proxy_paints().0, s.paint.fill);
 }
 
+/// A targeted layer without an active Appearance row: the proxies show the paint of the layer's
+/// editable art, which `paint.setFill` and `paint.editGradient` change, not that of a locked object
+/// before it.
+#[test]
+fn a_targeted_layer_shows_its_editable_art_in_the_proxies() {
+    let mut s = session();
+    let locked = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let open = rect(&mut s);
+    let stops = json!([{"offset": 0, "color": "#0000ff"}, {"offset": 1, "color": "#00ff00"}]);
+    s.execute("paint.setFill", &json!({"gradient": {"stops": stops}})).unwrap();
+    s.execute("object.lock", &json!({"ids": [locked.0]})).unwrap();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.target", &json!({"id": layer.0})).unwrap();
+    assert_eq!(s.proxy_paints().0, node(&s, open).appearance.fill().unwrap().paint);
+    assert_eq!(s.execute("paint.proxies", &json!({})).unwrap()["fill"], json!(s.proxy_paints().0));
+    // A stop edit of the gradient shown changes the editable art's gradient and leaves the locked
+    // object's red fill alone.
+    let Paint::Gradient(g) = s.proxy_paints().0 else { panic!("the proxy shows the gradient") };
+    let mut stops = vectorcraft_tools::params::stops_json(&g.gradient.stops);
+    stops[0]["opacity"] = json!(0.3);
+    s.execute("paint.editGradient", &json!({"stops": stops})).unwrap();
+    let Paint::Gradient(edited) = node(&s, open).appearance.fill().unwrap().paint.clone() else { panic!("still a gradient") };
+    assert!((edited.gradient.stops[0].opacity - 0.3).abs() < 1e-6, "{:?}", edited.gradient.stops);
+    assert_eq!(edited.gradient.stops[1].color.to_hex(), "#00ff00");
+    assert_eq!(node(&s, locked).appearance.fill().unwrap().paint.color().unwrap().to_hex(), "#ff0000");
+}
+
 /// The top fill and top stroke of object `id`.
 fn paints(s: &Session, id: NodeId) -> (Paint, Paint, f64) {
     let n = node(s, id);
