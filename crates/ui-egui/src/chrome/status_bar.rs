@@ -9,6 +9,7 @@ use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::Menu;
 use craft::ui::pickers::{Select, SelectLook};
+use craft::ui::runtime::env::Env;
 use craft::ui::style::TypeRole;
 use craft::ui::text::ZoomField;
 
@@ -47,24 +48,44 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let busy = busy_labels(app);
 
     let (mut zoom_to, mut rotate_to, mut go, mut show_pick, mut stop) = (None, None, None, None, false);
-    // The readouts end the bar, the pointer's position and then the timings; a narrow bar leaves out the timings
-    // first, then the position, before the message.
+    let mut invalid_zoom = None;
+    let mut snapping = None;
+    // Convenience controls leave first: direct toggles, then the menu. The existing timings and pointer position
+    // retain their priority, and all trailing groups leave before the navigation, info field or message narrows.
     let readouts = |ui: &mut Ui, _: &mut BodyCx<'_>| {
         // With no hover point the axes stay empty and keep their width.
         let origin = app.ruler_origin();
-        Row::new().gap(Gap::Item).fit_rank(2).show(ui, |ui, _| {
+        Row::new().gap(Gap::Item).fit_rank(4).show(ui, |ui, _| {
             for (axis, value) in [("X", app.hover_doc.map(|p| p.x - origin.x)), ("Y", app.hover_doc.map(|p| p.y - origin.y))] {
                 let text = value.map(|v| format!("{axis}: {}", unit.readout(v))).unwrap_or_default();
                 Text::new(text).role(TypeRole::Mono).shade(Shade::Muted).sample(format!("{axis}: -8888.88 {}", unit.suffix())).show(ui);
             }
         });
         let readout = |text: String, sample: String| Text::new(text).shade(Shade::Faint).sample(sample);
-        Row::new().gap(Gap::Item).fit_rank(1).show(ui, |ui, _| {
+        Row::new().gap(Gap::Item).fit_rank(3).show(ui, |ui, _| {
             readout(format!("{render} {:.1} ms", app.perf.render_ms), format!("{render} 8888.8 ms")).show(ui);
             readout(format!("{ui_name} {:.1} ms", app.perf.frame_ms), format!("{ui_name} 8888.8 ms")).show(ui);
             // No rate until the window has drawn continuously for a moment (`frame_rate`).
             let fps = if app.perf.fps > 0.0 { format!("{:.0} fps", app.perf.fps) } else { "\u{2013} fps".into() };
             readout(fps, "8888 fps".into()).show(ui);
+        });
+        Row::new().gap(Gap::Item).fit_rank(1).show(ui, |ui, _| {
+            for (icon, label, command, on) in [
+                ("sparkles", tl!("Smart Guides"), "view.smartGuides", app.ui.view.smart_guides),
+                ("dc-reference-point", tl!("Snap to Point"), "view.snapToPoint", app.ui.view.snap_to_point),
+                ("grid-3x3", tl!("Snap to Grid"), "view.snapToGrid", app.ui.view.snap_to_grid),
+            ] {
+                if IconButton::new(IconId::new(icon)).label(label).selected(on).show(ui).clicked() {
+                    snapping = Some((command, json!({})));
+                }
+            }
+        });
+        Row::new().fit_rank(2).show(ui, |ui, _| {
+            let label = tl!("Snapping");
+            let button = Button::new(label).trailing_icon(IconId::new("chevron-down")).show(ui);
+            Menu::new(label).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
+                snapping = super::control_bar::snapping_menu_contents(app, ui).or(snapping.take());
+            });
         });
     };
     // PLAN: assumed VectorcraftApp::canvas_view() -> Option<CanvasView> (cv.S4) and the label msgid "Status Bar".
@@ -73,8 +94,11 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             .side(SideLabel::new().kind(LabelKind::Hidden))
             .show(ui, |ui, _| ZoomField::new(tl!("Zoom"), app.canvas_view(), document).scrub(true).show(ui));
         // The field edits the canvas view, whose zoom is divided by UI Scaling; `view.setZoom` takes the view's zoom.
-        if let Some(view) = zoom.inner.and_then(|z| z.view.committed().copied()) {
-            zoom_to = Some(crate::state::zoom_display_percent(crate::state::View::zoom_of_canvas(&view, app.ui_scaling()), print));
+        if let Some(zoom) = zoom.inner {
+            if let Some(view) = zoom.view.committed() {
+                zoom_to = Some(crate::state::zoom_display_percent(crate::state::View::zoom_of_canvas(view, app.ui_scaling()), print));
+            }
+            invalid_zoom = zoom.invalid_zoom.map(|invalid| invalid.message(&Env::of(ui)));
         }
         Field::new(tl!("Rotation")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             // Entries are keyed by index: an angle is not a hashable value.
@@ -83,7 +107,8 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 .look(SelectLook::Filled)
                 .enabled(view.is_some())
                 .show(ui)
-                .value()
+                .events
+                .committed()
                 .copied();
         });
         Divider::vertical().show(ui);
@@ -96,7 +121,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         Field::new(tl!("Artboard")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             if let Some(i) =
-                Select::new(tl!("Artboard"), Bind::given(cur), &boards).look(SelectLook::Filled).enabled(nab > 0).show(ui).value().copied()
+                Select::new(tl!("Artboard"), Bind::given(cur), &boards).look(SelectLook::Filled).enabled(nab > 0).show(ui).events.committed().copied()
             {
                 go = Some(json!(i));
             }
@@ -139,6 +164,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     if stop {
         app.session.script_interrupt().set();
     }
+    if let Some((id, params)) = snapping {
+        crate::menus::invoke(app, id, params);
+    }
     // It fails only without a document, when there is no view to turn or zoom.
     if let Some(zoom) = zoom_to {
         app.run("view.setZoom", json!({"zoom": zoom})).ok();
@@ -155,6 +183,86 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Err(e) = app.run("view.statusBarShow", json!({ "show": show.param() }))
     {
         app.status(e);
+    }
+    if let Some(message) = invalid_zoom {
+        app.status(message);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+
+    #[test]
+    fn canceling_artboard_choices_keeps_the_active_artboard_and_view() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("artboard.new", json!({"x": 400, "y": 50, "width": 100, "height": 80, "name": "Back"})).unwrap();
+        app.run("view.goToArtboard", json!({"index": 0})).unwrap();
+        app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 400.0));
+        let original = {
+            let view = app.view().unwrap();
+            (view.artboard, view.center, view.zoom, view.rotation)
+        };
+        let document = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, status_bar);
+        panel.room(egui::vec2(1200.0, 300.0));
+        panel.click_role("Artboard", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.app().view().unwrap().artboard, 0, "highlighting another board does not navigate");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        {
+            let app = panel.app();
+            let view = app.view().unwrap();
+            assert_eq!((view.artboard, view.center, view.zoom, view.rotation), original);
+            assert_eq!(app.session.active().unwrap().doc, document);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        }
+        panel.click_role("Artboard", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert_eq!(panel.app().view().unwrap().artboard, 1, "an accepted choice navigates to the board");
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+    }
+
+    #[test]
+    fn canceling_rotation_choices_keeps_an_unlisted_view_angle() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 400.0));
+        app.run("view.rotate", json!({"angle": 17})).unwrap();
+        let original = {
+            let view = app.view().unwrap();
+            (view.rotation, view.center, view.zoom)
+        };
+        let document = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, status_bar);
+        panel.room(egui::vec2(1200.0, 300.0));
+        panel.click_role("Rotation", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.app().view().unwrap().rotation, 17.0, "highlighting a preset does not rotate the canvas");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        {
+            let app = panel.app();
+            let view = app.view().unwrap();
+            assert_eq!((view.rotation, view.center, view.zoom), original, "Escape keeps the arbitrary opening view");
+            assert_eq!(app.session.active().unwrap().doc, document);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        }
+        panel.click_role("Rotation", Role::COMBO_BOX);
+        panel.click("30°");
+        {
+            let app = panel.app();
+            let view = app.view().unwrap();
+            assert_eq!(view.rotation, 30.0, "a deliberate choice rotates the view");
+            assert_eq!((view.center, view.zoom), (original.1, original.2));
+            assert_eq!(app.session.active().unwrap().doc, document);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        }
     }
 }
 

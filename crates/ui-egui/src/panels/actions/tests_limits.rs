@@ -501,12 +501,9 @@ fn place_cursor_exec_checks_recording_step_limit_on_completion() {
             assert_ne!(app.ui.status, steps, "nothing is checked before the file is placed");
             // The read runs on the place lane; a frame after it ends places the file.
             let ctx = crate::testing::ui_context();
-            let t0 = std::time::Instant::now();
-            while !app.placing.pending.is_empty() && t0.elapsed().as_secs() < 60 {
-                craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
-                ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx())).textures_delta.clear();
-                std::thread::yield_now();
-            }
+            crate::placing::wait(&mut app);
+            craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
+            ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx())).textures_delta.clear();
             assert!(app.placing.pending.is_empty(), "a frame after the read places the file");
         }
         assert_eq!(app.session.journal.len(), journal + 1, "background {background}: the place journals one step");
