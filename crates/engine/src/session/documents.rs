@@ -72,12 +72,14 @@ impl Session {
             last_selection_tool: None,
             last_part_selection_tool: None,
             press_lent: None,
+            behind_armed: None,
             hover_lent: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
             replaying: false,
             shape_drawn: false,
+            prefs_resets: Vec::new(),
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -110,6 +112,8 @@ impl Session {
             plugin_loads: Default::default(),
             plugin_loads_in_background: false,
             scripts_dir: None,
+            startup_scripts_dir: None,
+            script_listing_clock: Default::default(),
             metadata_templates_dir: None,
             new_doc_profile_dir: None,
             proof_setup_dir: None,
@@ -138,6 +142,7 @@ impl Session {
             place_queue_loads: 0,
             image_hand_off: None,
             trace_hand_off: None,
+            retype_hand_off: None,
             place_cursor_requests: false,
             package_hand_off: None,
             screens_hand_off: None,
@@ -176,6 +181,11 @@ impl Session {
             script_console: Default::default(),
             script_runs: 0,
             script_frames: false,
+            script_queue: Default::default(),
+            script_queue_scope: None,
+            script_queue_then: None,
+            startup_loading: None,
+            startup_failures: vec![],
             script_high_water: Default::default(),
             script_in_run: false,
             script_copy_first: cfg!(target_arch = "wasm32"),
@@ -219,6 +229,7 @@ impl Session {
         }
         self.press_type_selection = None;
         self.press_lent = None;
+        self.behind_armed = None;
         let view = self.last_view;
         // The edit the tool computes on another thread and the input held for it belong to the
         // document being left. The switch goes on whatever they did, as for the deactivation.
@@ -248,11 +259,29 @@ impl Session {
         self.reset_tool_for_doc_switch();
     }
 
+    /// The tab indices of the open documents from the front: the current document first, then
+    /// the others from the one that was current most recently to the one current longest ago
+    /// (tab order among documents that have not been current).
+    pub fn front_order(&self) -> Vec<usize> {
+        let mut order: Vec<usize> = (0..self.docs.len()).collect();
+        order.sort_by_key(|&i| (Some(i) != self.active, std::cmp::Reverse(self.docs[i].activated)));
+        order
+    }
+
+    /// Marks the document in tab `index` as the one current most recently ([`Session::front_order`]).
+    fn stamp_activated(&mut self, index: usize) {
+        let next = self.docs.iter().map(|d| d.activated).max().unwrap_or(0) + 1;
+        if let Some(st) = self.docs.get_mut(index) {
+            st.activated = next;
+        }
+    }
+
     pub fn set_active(&mut self, index: usize) -> bool {
         if index < self.docs.len() {
             let switched = self.active != Some(index);
             if switched {
                 self.reset_tool_for_doc_switch();
+                self.stamp_activated(index);
             }
             self.active = Some(index);
             if switched {
@@ -377,6 +406,7 @@ impl Session {
         self.docs.push(st);
         let i = self.docs.len() - 1;
         self.active = Some(i);
+        self.stamp_activated(i);
         self.sync_opened_composite_fonts(i);
         self.sync_front_profiles();
         if self.depth == 0
@@ -420,6 +450,7 @@ impl Session {
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        st.activated = old.activated;
         // Work started for the content being thrown away is dropped when it finishes.
         st.reverts = old.reverts + 1;
         st.opened_as_tab = old.opened_as_tab;
@@ -504,6 +535,9 @@ impl Session {
             return true;
         }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
+        if let Some(i) = self.active {
+            self.stamp_activated(i);
+        }
         self.sync_front_composite_fonts();
         self.sync_front_profiles();
         true

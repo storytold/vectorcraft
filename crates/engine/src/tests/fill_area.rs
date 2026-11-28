@@ -232,6 +232,29 @@ fn fill_area_takes_clipped_art_only_where_its_mask_shows_it() {
     assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
 }
 
+/// Parts of an outline that lie on the mask's edge show: a square without a fill, clipped by a mask
+/// of the same square, keeps all four sides and bounds its whole area. A square just outside the
+/// mask is hidden and bounds nothing.
+#[test]
+fn fill_area_keeps_outline_parts_on_the_mask_edge() {
+    let mut s = session();
+    let square = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    clip_by(&mut s, &[square], 0.0, 0.0, 100.0, 100.0);
+    deselect(&mut s);
+    let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 50]})).unwrap();
+    assert!((area(&s, id_of(&r)) - 10000.0).abs() < 1.0, "{}", area(&s, id_of(&r)));
+
+    let mut s = session();
+    let square = rect(&mut s, -0.005, -0.005, 100.01, 100.01);
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    clip_by(&mut s, &[square], 0.0, 0.0, 100.0, 100.0);
+    deselect(&mut s);
+    let (undo, kids) = (undo_len(&s), stack(&s));
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 50]})).is_err());
+    assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
+}
+
 /// In a clipping group inside another, clipped art shows only where both masks show it.
 #[test]
 fn fill_area_takes_art_in_nested_clipping_groups_only_where_every_mask_shows_it() {
@@ -248,6 +271,35 @@ fn fill_area_takes_art_in_nested_clipping_groups_only_where_every_mask_shows_it(
     let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [65, 50]})).unwrap();
     assert!((area(&s, id_of(&r)) - 3000.0).abs() < 1.0, "{}", area(&s, id_of(&r)));
     assert_eq!(stack(&s), vec![outer, id_of(&r)]);
+}
+
+/// A clipped open path with more segments than the mask can be cut against is not known to show or
+/// hide anywhere inside its mask: a square it crosses inside the mask is not filled across it. A
+/// square it stays clear of, and a square it crosses where its mask hides it, are still filled.
+#[test]
+fn fill_area_does_not_fill_across_a_clipped_path_its_mask_cannot_cut() {
+    // The path's y, its mask's left edge and width, the click and whether the square is filled.
+    for (y, (mx, mw), click, fills) in
+        [(50.0, (-50.0, 200.0), [50, 25], false), (150.0, (-50.0, 200.0), [50, 50], true), (50.0, (200.0, 100.0), [50, 25], true)]
+    {
+        let mut s = session();
+        rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        let n = vectorcraft_pathops::addons::pathtools::MAX_CROSSING_SEGMENTS + 1;
+        let pts: Vec<Point> = (0..=n).map(|k| Point::new(-20.0 + 340.0 * k as f64 / n as f64, y)).collect();
+        let look = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+        let huge = insert_path(&mut s, PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false)), look);
+        clip_by(&mut s, &[huge], mx, -50.0, mw, 250.0);
+        deselect(&mut s);
+        let (undo, kids) = (undo_len(&s), stack(&s));
+        let r = s.execute("shapeBuilder.copyRegion", &json!({"point": click}));
+        if fills {
+            let r = r.unwrap_or_else(|e| panic!("y {y}, mask at {mx}: {e:?}"));
+            assert!((area(&s, id_of(&r)) - 10_000.0).abs() < 1.0, "{}", area(&s, id_of(&r)));
+        } else {
+            assert!(r.is_err(), "the path crosses the square where its mask shows it");
+            assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
+        }
+    }
 }
 
 /// In isolation mode only the isolated group's paths bound areas, for the command and the tool: a
@@ -303,6 +355,39 @@ fn fill_area_stays_inside_the_isolated_group() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 70.0), v).unwrap();
     let new = s.doc().unwrap().selection.objects[0];
     assert_eq!(s.doc().unwrap().doc.parent_of(new), s.doc().unwrap().doc.default_layer());
+}
+
+/// In isolation mode, `ids` naming the isolated group, or the layer or a group that holds it, takes
+/// every path of the isolated group. The other paths of that layer or group, and other listed
+/// objects outside the isolated group, do not bound areas.
+#[test]
+fn fill_area_ids_naming_what_holds_the_isolated_group_take_its_paths() {
+    let mut s = session();
+    let outside =
+        [line(&mut s, (200.0, 0.0), (300.0, 100.0)), line(&mut s, (300.0, 0.0), (200.0, 100.0)), line(&mut s, (190.0, 80.0), (310.0, 80.0))];
+    let lines = triangle(&mut s);
+    let ids: Vec<u64> = lines.iter().map(|l| l.0).collect();
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let outer = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    deselect(&mut s);
+    let layer = s.doc().unwrap().doc.default_layer().unwrap();
+    let (undo, kids) = (undo_len(&s), stack(&s));
+    for named in [vec![layer.0], vec![outer.0], vec![g.0], vec![layer.0, outside[0].0]] {
+        let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [250, 70], "ids": named}));
+        assert!(r.is_err(), "the area outside the isolated group, ids {named:?}");
+        assert_eq!((undo_len(&s), stack(&s)), (undo, kids.clone()));
+        let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 70], "ids": named})).unwrap();
+        let new = id_of(&r);
+        assert_eq!(s.doc().unwrap().doc.parent_of(new), Some(g), "ids {named:?}");
+        assert!((area(&s, new) - 900.0).abs() < 1.0, "{}", area(&s, new));
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    let named: Vec<u64> = outside.iter().map(|l| l.0).collect();
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 70], "ids": named})).is_err(), "only art outside it listed");
+    assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
 }
 
 /// While a compound path is isolated, Fill Area finds no area, for the command and the tool, and
@@ -854,6 +939,26 @@ fn fill_area_tool_hovers_a_large_document_on_another_thread() {
     assert!(!s.tool_waiting(), "the press waited for the search");
     s.pointer(&PointerEvent::new(PointerKind::Up, 310.0, 300.0), v).unwrap();
     assert_eq!(undo_len(&s), undo + 1);
+}
+
+/// A clipped path with more segments than its mask can be cut against is in no map, but a search
+/// still checks it against the area, so the hover over a square beside it runs on another thread.
+#[test]
+fn fill_area_tool_hovers_beside_a_clipped_path_its_mask_cannot_cut_on_another_thread() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let n = vectorcraft_pathops::addons::pathtools::MAX_CROSSING_SEGMENTS + 1;
+    let pts: Vec<Point> = (0..=n).map(|k| Point::new(-20.0 + 140.0 * k as f64 / n as f64, 150.0)).collect();
+    let look = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    let huge = insert_path(&mut s, PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false)), look);
+    clip_by(&mut s, &[huge], -50.0, -50.0, 200.0, 250.0);
+    deselect(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("fillArea", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 50.0, 50.0), v).unwrap();
+    assert!(s.tool_waiting(), "the search runs on another thread");
+    s.tool_poll(v, true).unwrap();
+    assert_eq!(s.overlays(v).len(), 1, "the square is outlined");
 }
 
 /// A press that is dropped before the release (a long or canceled touch) takes the new path back

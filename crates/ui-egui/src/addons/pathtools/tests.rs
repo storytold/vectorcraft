@@ -44,6 +44,32 @@ fn the_inspector_shows_the_selected_anchor_and_its_buttons_edit() {
     assert!(a.lengths.iter().all(|l| *l > 0.0) && a.angles.iter().all(|d| d.is_some()), "{:?} {:?}", a.lengths, a.angles);
 }
 
+#[test]
+fn a_short_anchor_inspector_scrolls_to_the_selected_anchors_actions() {
+    let mut app = app();
+    let path = app.run("path.create", json!({ "anchors": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 110}] })).unwrap();
+    let id = vectorcraft_doc::NodeId(path["id"].as_u64().unwrap());
+    app.session
+        .select(|_, sel| {
+            sel.set([id]);
+            sel.anchors.insert(id, [(0, 1)].into_iter().collect());
+        })
+        .unwrap();
+    let mut panel = Panel::new(app, super::show);
+    let room = egui::vec2(220.0, 215.0);
+    panel.room(room).frame();
+    panel.frame();
+    let action = "Remove Points, Keep Shape";
+    assert!(panel.rect(action).bottom() > room.y, "the action starts clipped");
+    panel.focus(action);
+    let rect = panel.rect(action);
+    assert!(panel.focused(action) && rect.top() >= 0.0 && rect.bottom() <= room.y, "focus reveals the action: {rect:?}");
+    panel.focus("Make Smooth");
+    panel.click("Make Smooth");
+    let anchor = readout(&panel.app()).anchor.unwrap();
+    assert!(anchor.lengths.iter().all(|length| *length > 0.0));
+}
+
 /// Runs `f` on the held options dialog, `None` when none is open.
 fn held<R>(app: &VectorcraftApp, f: impl FnOnce(Option<&mut HostedParamDialog>) -> R) -> R {
     app.dialogs().expect("the window's dialogs").with(|h| f(h.get_mut::<HostedParamDialog>()))
@@ -84,11 +110,18 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("straight"));
     ok(&mut app, &[("mode", FieldValue::Text("arc".into()))]);
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
-    // The Tangent Circle tool's radius for Shift.
+    // The Tangent Circle tool's radius for Shift, and Add Points to Existing Paths (off to start).
     app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
-    assert_eq!(held(&app, |d| d.expect("the held dialog").fields().number("radius")), Some(36.0));
-    ok(&mut app, &[("radius", FieldValue::Number(12.5))]);
+    let shown = held(&app, |d| {
+        let f = d.expect("the held dialog").fields();
+        (f.number("radius"), f.bool("addPoints"))
+    });
+    assert_eq!(shown, (Some(36.0), Some(false)));
+    let rows = super::options_params("tangentCircle", crate::canvas::rulers::general_lengths(&app));
+    assert!(rows.iter().any(|p| p.key == "addPoints" && p.label.as_str() == "Add Points to Existing Paths"), "the option has a row");
+    ok(&mut app, &[("radius", FieldValue::Number(12.5)), ("addPoints", FieldValue::Bool(true))]);
     assert_eq!(app.session.tool_options_of("tangentCircle")["radius"], json!(12.5));
+    assert_eq!(app.session.tool_options_of("tangentCircle")["addPoints"], json!(true));
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
     assert_eq!(KIND, "pathToolOptions");
 }
@@ -150,6 +183,7 @@ fn the_tangent_circle_options_have_their_rows_and_a_fractional_tolerance() {
         rows,
         [
             ("radius", "Radius"),
+            ("addPoints", "Add Points to Existing Paths"),
             ("center", "Circle Center"),
             ("radii", "Circle Radii Lines"),
             ("color", "Color"),

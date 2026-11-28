@@ -44,6 +44,8 @@ struct Open {
     preview: LivePreview,
     /// Set Role Swatch: the role the Swatch row was last filled for.
     filled_for: Option<String>,
+    /// The uid of the document whose objects the dialog opened on (`__doc`), for Set Fold Angle.
+    doc: Option<u64>,
     /// Names this dialog's own open among reopenings of the same command, for its OK and Cancel.
     token: Arc<()>,
 }
@@ -66,7 +68,8 @@ impl Setting {
 }
 
 /// Opens the parameter dialog of `command`, headed `label`, on `params` (a menu item's own values, `__params` for the
-/// fixed ones and `__rowGutterLinked` for Area Type Options' linked Row Gutter).
+/// fixed ones, `__rowGutterLinked` for Area Type Options' linked Row Gutter and `__doc` for the uid of the document
+/// whose objects the dialog edits).
 pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut params: Map<String, Value>) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     if let Some(old) = app.command_dialog.open.take() {
@@ -77,6 +80,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut par
         _ => Map::new(),
     };
     let linked = params.remove("__rowGutterLinked").and_then(|v| v.as_f64());
+    let doc = params.remove("__doc").and_then(|v| v.as_u64());
     params.retain(|k, _| !k.starts_with("__"));
     let previews = previews(command, &params);
     let setting = Setting::of(app);
@@ -84,8 +88,10 @@ pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut par
     let token = Arc::new(());
     let dialog = {
         let (key, heading, opening) = (command.to_string(), heading_label(label), params.clone());
-        HostedParamDialog::command(&ctx, command, fields, move |_: &mut DialogFields| {
-            ParamDialog::command(key.clone(), heading.clone(), command_params(&key, &opening, setting)).previews(previews)
+        HostedParamDialog::command(&ctx, command, fields, move |fields| {
+            ParamDialog::command(key.clone(), heading.clone(), command_params(&key, &opening, setting))
+                .previews(previews)
+                .values(craft::ui::contract::Bind::bound(fields))
         })
         // The Preview box starts off, as production's dialogs did (#5360).
         .preview_off()
@@ -104,6 +110,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut par
         previews,
         preview: LivePreview::default(),
         filled_for: None,
+        doc,
         token,
     });
     Ok(Value::Null)
@@ -162,9 +169,14 @@ fn step(app: &mut VectorcraftApp, open: &mut Open) {
 }
 
 /// OK: runs the command on the dialog's values (keeping a preview as the one undo step) and closes the dialog; an
-/// error keeps it open with the reason under its rows.
+/// error keeps it open with the reason under its rows. A dialog opened on one document's objects (`__doc`, its uid)
+/// closes as Cancel does and runs nothing once another document is the active one.
 fn confirm(app: &mut VectorcraftApp, token: &Arc<()>, fields: &DialogFields) -> Result<Value, String> {
     let open = app.command_dialog.open.take_if(|o| Arc::ptr_eq(&o.token, token)).ok_or("the dialog is gone")?;
+    if open.doc.is_some() && open.doc != app.session.active().map(|st| st.uid) {
+        open.preview.cancel(app);
+        return Ok(Value::Null);
+    }
     let params = command_params(&open.command, &open.opening, Setting::of(app));
     let value = call(&open.command, &open.fixed, open.linked, form::json_of(&params, fields));
     let result = if open.previews {
@@ -222,7 +234,17 @@ fn row(command: &str, key: &str, value: &Value, setting: Setting) -> Option<Para
         Value::Bool(on) => Param::new(key, label, ParamKind::bool(*on)),
         Value::Number(n) => {
             let whole = n.is_i64() || n.is_u64();
-            let mut param = Param::number(key, label, n.as_f64().unwrap_or(0.0), 1.0, if whole { 0 } else { 3 });
+            let range = number_range(command, key);
+            // A ranged number (a fold angle) is shown to every place it keeps.
+            let decimals = match range {
+                Some(_) => u32::try_from(crate::addons::packaging::angle_places(n.as_f64())).unwrap_or(u32::MAX),
+                None if whole => 0,
+                None => 3,
+            };
+            let mut param = Param::number(key, label, n.as_f64().unwrap_or(0.0), 1.0, decimals);
+            if let Some(range) = range {
+                param = param.bounds(Some(*range.start()), Some(*range.end()));
+            }
             if lengths(command).contains(&key) {
                 param = param.length(setting.units);
                 if let Some(range) = length_range(command, key) {
@@ -354,6 +376,15 @@ pub(crate) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeIn
         (crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE, "offset") => {
             Some(0.0..=vectorcraft_engine::MAX_COORD)
         }
+        _ => None,
+    }
+}
+
+/// The range of a number parameter (not a distance) of the commands this dialog edits, where the
+/// command has one: the field keeps what is typed within it.
+fn number_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    match (command, key) {
+        (crate::addons::packaging::SET_FOLD_ANGLE, "angle") => Some(crate::addons::packaging::FOLD_ANGLES),
         _ => None,
     }
 }
@@ -559,6 +590,75 @@ mod tests {
 
     fn cols(app: &VectorcraftApp) -> u64 {
         crate::panels::pattern_options::repeat_fields(app).unwrap()["cols"].as_u64().unwrap()
+    }
+
+    #[test]
+    fn hosted_commands_keep_actual_keyboard_edits_until_ok() {
+        use egui::accesskit::Role;
+        use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+        let viewport = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 500.0));
+        let type_and_accept = |app: &mut VectorcraftApp, command: &str, name: &str, role: Role, value: &str, preview: bool| {
+            let ctx = app.ui_ctx.clone().unwrap();
+            let time = std::cell::Cell::new(0.0);
+            let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+                ctx.enable_accesskit();
+                time.set(time.get() + 0.1);
+                crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time.get()), screen_rect: Some(viewport), ..Default::default() })
+            };
+            let locate = |app: &mut VectorcraftApp, label: &str, role: Role| {
+                frame(app, vec![]);
+                let nodes = frame(app, vec![]).platform_output.accesskit_update.unwrap().nodes;
+                let node = nodes
+                    .iter()
+                    .map(|(_, node)| node)
+                    .find(|node| {
+                        node.role() == role
+                            && (node.label() == Some(label)
+                                || node.labelled_by().iter().any(|id| nodes.iter().any(|(key, name)| key == id && name.label() == Some(label))))
+                    })
+                    .unwrap_or_else(|| panic!("{command}: missing {role:?} {label}"));
+                let b = node.bounds().unwrap();
+                let at = pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+                assert!(viewport.contains(at), "{command}: {label} is reachable");
+                at
+            };
+            let click = |app: &mut VectorcraftApp, at: Pos2| {
+                frame(app, vec![Event::PointerMoved(at)]);
+                for pressed in [true, false] {
+                    frame(app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+                }
+                frame(app, vec![]);
+            };
+            frame(app, vec![]);
+            assert_eq!(ctx.content_rect(), viewport);
+            crate::menus::invoke(app, command, json!({}));
+            let id = id_of(app);
+            if preview {
+                let toggle = locate(app, "Preview", Role::CheckBox);
+                click(app, toggle);
+                assert!(app.session.in_interaction(), "{command}: pointer turns Preview on");
+            }
+            let at = locate(app, name, role);
+            click(app, at);
+            frame(app, vec![Event::Key { key: Key::A, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND }]);
+            frame(app, vec![Event::Text(value.to_owned())]);
+            frame(app, vec![Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }]);
+            frame(app, vec![]);
+            let live_columns = preview.then(|| cols(app));
+            let ok = locate(app, "OK", Role::Button);
+            click(app, ok);
+            frame(app, vec![]);
+            assert!(app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).is_none()), "{command}: OK closes the dialog");
+            live_columns
+        };
+
+        let (mut repeat, _) = prepared("object.repeat.options");
+        let preview = type_and_accept(&mut repeat, "object.repeat.options", "Columns", Role::SpinButton, "5", true);
+        let (mut selection, _) = prepared("select.save");
+        type_and_accept(&mut selection, "select.save", "Name", Role::TextInput, "Typed selection", false);
+        let saved = &selection.session.active().unwrap().doc.saved_selections;
+        assert_eq!((preview, cols(&repeat), saved.last().map(|s| s.name.as_str())), (Some(5), 5, Some("Typed selection")));
     }
 
     #[test]
@@ -780,5 +880,135 @@ mod tests {
                 }
             }
         }
+    }
+
+    use crate::addons::packaging::{SET_FOLD_ANGLE, SET_ROLE};
+
+    /// A window app with two rectangles, `a` a crease and `b` a cut line, nothing selected → (app, a, b).
+    fn fold_lines() -> (VectorcraftApp, u64, u64) {
+        let mut app = windowed();
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let rect = |app: &mut VectorcraftApp, x: f64| {
+            app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap()
+        };
+        let (a, b) = (rect(&mut app, 20.0), rect(&mut app, 100.0));
+        app.run(SET_ROLE, json!({"role": "crease", "ids": [a]})).unwrap();
+        app.run(SET_ROLE, json!({"role": "cut", "ids": [b]})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        (app, a, b)
+    }
+
+    /// The angle the open Set Fold Angle… dialog shows.
+    fn shown_angle(app: &VectorcraftApp) -> Option<f64> {
+        let id = id_of(app);
+        app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().number("angle")))
+    }
+
+    /// Set Fold Angle… from its menu item → the angle its dialog opens on, the dialog then canceled; `None` when no
+    /// dialog opens.
+    fn opened_angle(app: &mut VectorcraftApp) -> Option<f64> {
+        crate::menus::invoke(app, SET_FOLD_ANGLE, json!({}));
+        app.command_dialog.open.as_ref()?;
+        pump(app);
+        let angle = shown_angle(app);
+        answer_cancel(app);
+        angle
+    }
+
+    /// The angle the selection's fold lines fold at, after selecting `id`.
+    fn fold_angle(app: &mut VectorcraftApp, id: u64) -> Option<f64> {
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        vectorcraft_engine::cmd::selection_fold_angles(&app.session).angle
+    }
+
+    #[test]
+    fn set_fold_angle_opens_its_dialog_on_the_selected_lines_angle() {
+        let (mut app, a, b) = fold_lines();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        assert_eq!(opened_angle(&mut app), Some(90.0), "a crease folds at 90° until it has an angle of its own");
+        app.run(SET_FOLD_ANGLE, json!({"angle": 45})).unwrap();
+        assert_eq!(opened_angle(&mut app), Some(45.0));
+        // The cut line does not fold, so the crease's angle is still the one shown.
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        assert_eq!(opened_angle(&mut app), Some(45.0));
+        // Lines that differ open on 90°.
+        let c = app.run("shape.rectangle", json!({"x": 180, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.run(SET_ROLE, json!({"role": "partialCut", "ids": [c]})).unwrap();
+        app.run("select.set", json!({"ids": [a, c]})).unwrap();
+        assert_eq!(opened_angle(&mut app), Some(90.0));
+        // With only a cut line selected there is nothing to set: no dialog opens, and ui.menuDialog gives the reason.
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        assert_eq!(opened_angle(&mut app), None);
+        assert!(app.command_dialog.open.is_none());
+        let e = app.run("ui.menuDialog", json!({"command": SET_FOLD_ANGLE})).unwrap_err();
+        assert!(e.contains("select a crease, partial cut or perforation line"), "{e}");
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.run("ui.menuDialog", json!({"command": SET_FOLD_ANGLE})).unwrap();
+        pump(&mut app);
+        assert_eq!(shown_angle(&app), Some(45.0));
+        answer_cancel(&mut app);
+        // The options dialog opened with an angle keeps it.
+        crate::menus::invoke(&mut app, "ui.paramDialog", json!({"command": SET_FOLD_ANGLE, "label": "Set Fold Angle", "params": {"angle": 30}}));
+        pump(&mut app);
+        assert_eq!(shown_angle(&app), Some(30.0));
+    }
+
+    /// Set Fold Angle…'s OK changes the lines the dialog opened on, even when the selection changes while it is open
+    /// (a remote command can change it): the other crease keeps its angle.
+    #[test]
+    fn set_fold_angle_s_ok_changes_the_lines_the_dialog_opened_on() {
+        let (mut app, a, b) = fold_lines();
+        app.run(SET_ROLE, json!({"role": "crease", "ids": [b]})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        crate::menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+        pump(&mut app);
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        set(&mut app, "angle", json!(30.0));
+        answer_ok(&mut app);
+        assert!(app.command_dialog.open.is_none(), "OK closes the dialog");
+        assert_eq!(fold_angle(&mut app, a), Some(30.0), "the line the dialog opened on");
+        assert_eq!(fold_angle(&mut app, b), Some(90.0), "the line selected later keeps its role's angle");
+    }
+
+    /// Set Fold Angle…'s OK changes nothing once another document is the active one, even a line there with the same
+    /// id as the line the dialog opened on.
+    #[test]
+    fn set_fold_angle_s_ok_changes_nothing_in_another_document() {
+        let (mut app, a, _) = fold_lines();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        crate::menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+        pump(&mut app);
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let other = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(other, a, "the same id in the other document");
+        app.run(SET_ROLE, json!({"role": "crease", "ids": [other]})).unwrap();
+        set(&mut app, "angle", json!(30.0));
+        answer_ok(&mut app);
+        assert!(app.command_dialog.open.is_none(), "OK closes the dialog");
+        assert_eq!(fold_angle(&mut app, other), Some(90.0), "the other document's line keeps its role's angle");
+        assert!(app.session.set_active(0));
+        assert_eq!(fold_angle(&mut app, a), Some(90.0), "the first document's line is left as it was");
+    }
+
+    /// Set Fold Angle…'s Angle row takes -180° to 180°, the range the command takes, and shows every place the angle
+    /// it opens on has.
+    #[test]
+    fn set_fold_angle_s_angle_row_keeps_the_commands_range() {
+        let (mut app, a, _) = fold_lines();
+        app.run(SET_FOLD_ANGLE, json!({"angle": 179.999999, "ids": [a]})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        let param = row(SET_FOLD_ANGLE, "angle", &json!(179.999999), Setting::of(&app)).expect("a row");
+        match param.kind {
+            ParamKind::Number { min, max, decimals, .. } => assert_eq!((min, max, decimals), (Some(-180.0), Some(180.0), 6)),
+            _ => panic!("a number row"),
+        }
+        crate::menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+        pump(&mut app);
+        assert_eq!(shown_angle(&app), Some(179.999999));
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), id_of(&app));
+        assert!(app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, "angle", json!(181))).is_err(), "past the range");
+        set(&mut app, "angle", json!(-180));
+        answer_ok(&mut app);
+        assert_eq!(fold_angle(&mut app, a), Some(-180.0));
     }
 }
