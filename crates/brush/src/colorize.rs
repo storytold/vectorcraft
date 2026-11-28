@@ -121,14 +121,67 @@ pub fn colorize(n: &mut Node, mode: Colorization, stroke: &Paint) {
 /// and a copy's size, spacing, scatter and rotation stay as they were without hue jitter.
 const HUE_JITTER_SALT: u64 = 0x6875_655f_6a69_7474;
 
-/// Turn the hue of each of `copies` (a scatter brush's copies, in order along the path) by its
-/// own amount between −`amount` and `amount` degrees, drawn from `seed` (the stroke's
-/// [`crate::track::seed_of`]).
-pub(crate) fn jitter_hues(copies: &mut [Node], amount: f64, seed: u64) {
-    let mut rng = crate::track::Rng::new(seed ^ HUE_JITTER_SALT);
+/// Mixed into a stroke's seed for its saturation jitter, so its amounts do not follow the hue
+/// jitter's and the hue jitter's amounts stay as they were without it.
+const SATURATION_JITTER_SALT: u64 = 0x7361_745f_6a69_7474;
+
+/// Recolor each of `copies` (a scatter brush's copies, in order along the path) with `adjust`,
+/// given that copy's own amount between −`amount` and `amount`, drawn from `seed` (the stroke's
+/// [`crate::track::seed_of`]) mixed with `salt`. `adjust` gives `None` for a color it leaves as it
+/// is.
+fn jitter_copies(copies: &mut [Node], amount: f64, seed: u64, salt: u64, adjust: fn(&Color, f32) -> Option<Color>) {
+    let mut rng = crate::track::Rng::new(seed ^ salt);
     for n in copies {
-        let turn = rng.range(-amount, amount) as f32;
-        turn_hues(n, turn);
+        let by = rng.range(-amount, amount) as f32;
+        recolor_solids(n, &|c| adjust(c, by));
+    }
+}
+
+/// Turn the hue of each of `copies` by its own amount between −`amount` and `amount` degrees (see
+/// [`jitter_copies`]).
+pub(crate) fn jitter_hues(copies: &mut [Node], amount: f64, seed: u64) {
+    jitter_copies(copies, amount, seed, HUE_JITTER_SALT, turned);
+}
+
+/// Move the saturation of each of `copies` by its own amount between −`amount` and `amount`
+/// percentage points (see [`jitter_copies`]).
+pub(crate) fn jitter_saturations(copies: &mut [Node], amount: f64, seed: u64) {
+    jitter_copies(copies, amount, seed, SATURATION_JITTER_SALT, saturated);
+}
+
+/// The largest a or b a Lab color takes.
+const LAB_AB_MAX: f64 = 127.0;
+
+/// `c` with its saturation moved by `points` percentage points, worked out on its own components
+/// so its hue and brightness stay: RGB in HSB of its values, CMYK over C, M and Y with K kept, Lab
+/// by moving its chroma (the length of a and b) by `points` with its lightness and hue angle kept.
+/// The result stays between no saturation and full. `None` for a color without a hue (white,
+/// black and grays, which have no saturation to move).
+fn saturated(c: &Color, points: f32) -> Option<Color> {
+    if !points.is_finite() || vectorcraft_color::recolor::Neutral::of(c).is_some() {
+        return None;
+    }
+    let by = points / 100.0;
+    let move_by = |v: [f32; 3]| {
+        let [h, s, b] = vectorcraft_color::rgb_to_hsb(v);
+        (s > 0.0).then(|| vectorcraft_color::hsb_to_rgb([h, (s + by).clamp(0.0, 1.0), b]))
+    };
+    match *c {
+        Color::Rgb { r, g, b } => move_by([r, g, b]).map(|[r, g, b]| Color::rgb(r, g, b)),
+        Color::Cmyk { c, m, y, k } => move_by([1.0 - c, 1.0 - m, 1.0 - y]).map(|[r, g, b]| Color::cmyk(1.0 - r, 1.0 - g, 1.0 - b, k)),
+        Color::Gray { .. } => None,
+        Color::Lab { l, a, b } => {
+            let (a, b) = (f64::from(a), f64::from(b));
+            let chroma = a.hypot(b);
+            if chroma <= 0.0 {
+                return None;
+            }
+            // A longer chroma is cut back along the same hue angle until a and b fit; one that
+            // already reaches past that does not grow.
+            let fit = (LAB_AB_MAX / a.abs().max(b.abs())).max(1.0);
+            let scale = ((chroma + f64::from(points)).max(0.0) / chroma).min(fit);
+            Some(Color::lab(l, (a * scale) as f32, (b * scale) as f32))
+        }
     }
 }
 
@@ -156,32 +209,33 @@ fn turned(c: &Color, degrees: f32) -> Option<Color> {
     }
 }
 
-fn turn_paint(p: &mut Paint, degrees: f32) {
+/// Replace a solid paint's color with what `adjust` gives for it, dropping its swatch link.
+fn recolor_paint(p: &mut Paint, adjust: &dyn Fn(&Color) -> Option<Color>) {
     if let Paint::Solid { color, .. } = p
-        && let Some(c) = turned(color, degrees)
+        && let Some(c) = adjust(color)
     {
         *p = Paint::solid(c);
     }
 }
 
-/// Turn the hue of the solid fills and strokes under `n`, its type's characters included. A
+/// Recolor the solid fills and strokes under `n` with `adjust`, its type's characters included. A
 /// mask's colors are its values, so they stay.
-fn turn_hues(n: &mut Node, degrees: f32) {
+fn recolor_solids(n: &mut Node, adjust: &dyn Fn(&Color) -> Option<Color>) {
     for it in &mut n.appearance.items {
         match it {
-            AppearanceItem::Fill(f) => turn_paint(&mut f.paint, degrees),
-            AppearanceItem::Stroke(s) => turn_paint(&mut s.paint, degrees),
+            AppearanceItem::Fill(f) => recolor_paint(&mut f.paint, adjust),
+            AppearanceItem::Stroke(s) => recolor_paint(&mut s.paint, adjust),
         }
     }
     if let NodeKind::Text(t) = &mut n.kind {
         for r in &mut t.runs {
-            turn_paint(&mut r.style.fill, degrees);
-            turn_paint(&mut r.style.stroke, degrees);
+            recolor_paint(&mut r.style.fill, adjust);
+            recolor_paint(&mut r.style.stroke, adjust);
         }
     }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {
-            turn_hues(Arc::make_mut(c), degrees);
+            recolor_solids(Arc::make_mut(c), adjust);
         }
     }
 }

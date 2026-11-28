@@ -4715,7 +4715,19 @@ already walks Image Trace. Short agent entry points:
   and the brush's name, so a stroke draws the same colors on every redraw, after Save and Open, and in export. Hue
   jitter does not change where the copies go or their size and rotation. A value outside the range is clamped, as
   the brush's other values are. A brush saves `hue_jitter` only when it is above 0, and a brush without the key
-  reads as 0; `brush.get` shows it for every scatter brush. `brush.new` and `brush.options` take a bristle brush name of at most 31 characters:
+  reads as 0; `brush.get` shows it for every scatter brush. A scatter brush's `saturation_jitter` (0 to 100
+  percent, VectorCraft's own range; 0, the default, leaves every copy's colors as they are) moves the saturation of
+  each copy's solid fills and strokes, its type's characters included, by that copy's own amount between minus and
+  plus that many percentage points, after the colorization and the hue jitter. A color keeps its hue and brightness
+  and moves in its own model: RGB in the HSB of its values, CMYK over its C, M and Y with its K kept, and Lab by
+  moving its chroma (the length of a and b) by that many units with its lightness and hue angle kept, with a and b
+  kept within 127. The saturation stops at none, which gives a gray, and at full. Colors without a hue (as for
+  `hue_jitter`) stay as they are, gradients and patterns stay, and a moved color loses its swatch link. The amounts
+  depend only on the stroke's path and the brush's name, and they are drawn apart from the hue jitter's, so turning
+  saturation jitter on does not change the hue jitter's amounts. A stroke draws the same colors on every redraw,
+  after Save and Open, and in export, and the copies keep their places, sizes and rotations. A value outside the
+  range is clamped. A brush saves `saturation_jitter` only when it is above 0, a brush without the key reads as 0,
+  and `brush.get` shows it for every scatter brush. `brush.new` and `brush.options` take a bristle brush name of at most 31 characters:
   `brush.new` refuses a longer one, counting the number it adds to a taken name, and `brush.options` refuses a
   longer `newName`. `brush.duplicate` does not check the length. A bristle brush that already has a longer name
   keeps it, and `brush.options` without a new name, or with a `newName` that only trims the white space around the
@@ -4737,7 +4749,7 @@ already walks Image Trace. Short agent entry points:
   keep their settings. The fields a path can set are VectorCraft's own choice: calligraphic `angle` (counter-clockwise from
   level), `roundness`, `size`, `variation` and `modes`; scatter `size`, `spacing`, `scatter`, `rotation`
   (counter-clockwise), `modes`,
-  `rotation_relative_to_path` and `colorization`; art `width`, `width_mode`, `width_max`, `flip_along`, `flip_across`,
+  `rotation_relative_to_path`, `colorization`, `hue_jitter` and `saturation_jitter`; art `width`, `width_mode`, `width_max`, `flip_along`, `flip_across`,
   `overlap` and `colorization`; pattern `scale`, `spacing`, `fit`, `flip_along`, `flip_across` and `colorization`.
   Values outside their ranges are clamped as in `brush.options`, a `colorization` object changes only the fields it
   gives, a `null` item of an array (`size: [40, null]`) keeps each path's own item, else the brush's, and a setting
