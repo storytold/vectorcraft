@@ -1001,7 +1001,7 @@ fn binary_dwg_damaged_and_foreign_files() {
     // A binary DXF opens as its ASCII form does.
     let ascii = entities(LINE);
     let tags = craft_dxf::parse(&ascii).unwrap();
-    let r = open(&craft_dxf::write_binary(&tags, true), &points());
+    let r = open(&craft_dxf::write_binary(&tags, true).unwrap(), &points());
     assert_eq!(leaves(&r.document).len(), 1);
     let e = import(b"AC1032\x00\x00\x00", &ImportOptions::default()).unwrap_err();
     assert!(e.contains("DWG"), "{e}");
