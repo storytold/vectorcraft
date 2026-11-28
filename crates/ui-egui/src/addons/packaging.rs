@@ -33,6 +33,7 @@ use vectorcraft_engine::doc::Document;
 
 use super::cleanup::Positional;
 use crate::VectorcraftApp;
+use crate::edits::{EditPath, apply_edits};
 use crate::menus::{Sep, c, cp};
 use crate::panels::empty_state;
 
@@ -302,31 +303,39 @@ pub(crate) fn open_dialog(app: &mut VectorcraftApp) -> Result<Value, String> {
 }
 
 /// The Fold Angle row, while the selection holds lines that fold and can be changed: the angle
-/// they all fold at (empty when they differ), which sets theirs when changed, and Reset, which
-/// takes away the angles of their own.
+/// they all fold at (empty when they differ), which sets theirs as it is typed, as one undo step
+/// that a cancel takes back, and Reset, which takes away the angles of their own.
 fn show_angle(app: &mut VectorcraftApp, ui: &mut Ui, kept: &Rows) {
     if !kept.selection || kept.fold_lines == 0 {
         return;
     }
-    let mut call = None;
+    let mut edit = None;
+    let mut reset = false;
     let _ = Line::new().fill_width().show(ui, |ui, _| {
         Field::new(tl!("Fold Angle")).show(ui, |ui, _| {
             let field = NumberField::new(tl!("Fold Angle"), Bind::given(kept.angle))
                 .unit_kind(UnitKind::Degrees)
                 .range(FOLD_ANGLES)
                 .max_decimals(angle_places(kept.angle));
-            if let Some(a) = field.id_salt("fold-angle").show(ui).value().copied().flatten() {
-                call = Some(json!({ "angle": a }));
+            edit = Some(field.id_salt("fold-angle").show(ui).edit);
+        });
+        reset = clicked(&Button::new(tl!("Reset")).enabled(kept.stored_angles > 0).show(ui));
+    });
+    let run = |app: &mut VectorcraftApp, p: Value| {
+        if let Err(e) = app.run(SET_FOLD_ANGLE, p) {
+            app.status(e);
+        }
+    };
+    // One undo step per edit of the field; a cancel reverts it.
+    if let Some(edit) = edit {
+        apply_edits(app, &edit, EditPath::Scope, |app, a: &Option<f64>, _| {
+            if let Some(a) = a {
+                run(app, json!({ "angle": a }));
             }
         });
-        if clicked(&Button::new(tl!("Reset")).enabled(kept.stored_angles > 0).show(ui)) {
-            call = Some(json!({ "reset": true }));
-        }
-    });
-    if let Some(p) = call
-        && let Err(e) = app.run(SET_FOLD_ANGLE, p)
-    {
-        app.status(e);
+    }
+    if reset {
+        run(app, json!({ "reset": true }));
     }
 }
 

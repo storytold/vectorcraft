@@ -17282,7 +17282,7 @@ the range or one that is not a number. One undo step, none when nothing changes.
 Set Fold Angle… opens its options (`ui.menuDialog {command: "addon.packaging.setFoldAngle"}`, kind `command`) on the
 angle that the selected lines it can change fold at (90° when they differ), shown with every decimal place it has.
 While the selection holds no such line, `ui.menuDialog` fails with the reason the command gives. While the selection
-holds such lines, the Fold Lines panel shows a Fold Angle field with that angle, empty when they differ. Typing an angle there sets it, and the Reset button beside it takes their own angles away.
+holds such lines, the Fold Lines panel shows a Fold Angle field with that angle, empty when they differ. Typing an angle there sets it as it is typed, as one undo step; canceling the edit restores the lines' angles and leaves no undo step. The Reset button beside it takes their own angles away.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.packaging.setFoldAngle","params":{"angle":135}}}
