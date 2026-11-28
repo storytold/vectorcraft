@@ -391,6 +391,7 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // Presentation Mode fits each floating window it shows to the main window: back in their
     // floating windows, those views fit their windows again.
     let presenting = presenting(app);
+    let restoring = !presenting && app.canvas.windows.presented.is_some();
     if presenting {
         let is_floating = current.is_some_and(|k| floating(app, &k));
         let shown = app.canvas.windows.presented.get_or_insert_default();
@@ -421,9 +422,15 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         return;
     }
     let raise = current.filter(|u| app.canvas.windows.current != Some(*u));
-    app.canvas.windows.current = current;
     let ctx = ui.ctx().clone();
     let os_windows = WindowHost::of(&ctx).viewports_available();
+    if restoring && !os_windows && raise.is_some() {
+        // egui raises every reappearing area in this pass, preserving their old order. Repeat
+        // the current window's raise next frame, when the other windows no longer request it.
+        ctx.request_repaint();
+    } else {
+        app.canvas.windows.current = current;
+    }
     // An OS window's place is in desktop points: the main window's own origin shifts it.
     let origin = if os_windows {
         ctx.input(|i| i.viewport().inner_rect.map(|r| r.min)).filter(|p| p.is_finite()).unwrap_or(egui::Pos2::ZERO).to_vec2()
@@ -442,6 +449,10 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         let window = DocumentWindow::new(title).id_salt((w.uid, w.number, w.generation)).first_placed(w.place.translate(origin));
         let window = if raise == Some((w.uid, w.view)) { window.raise() } else { window };
         let out = window.show(ui, |ui, _| {
+            // In an OS window of its own, a Copy or Cut that the window's labels copy nothing for runs on the art.
+            if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+                crate::shortcuts::leave_to_labels(app, ui.ctx());
+            }
             // A press anywhere on the window, its title bar and tab included, makes its document current.
             pressed = pressed_on_layer(ui);
             crate::chrome::window_tab(app, ui, win);

@@ -330,18 +330,15 @@ pub(crate) fn interpolates_handles(s: &mut Session, p: &Value, cmd: &str) -> Res
 
 /// [`transform_selected`] on the active document's selection, as one undo step `label`. A
 /// transform other than a move also transforms the selected ruler guides
-/// ([`Document::transform_ruler_guides`]).
-pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_geom::Affine, sc: Scaling, interpolate: bool) -> Result<()> {
+/// ([`Document::transform_ruler_guides`]). Returns the ids of the guide paths that adds.
+pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_geom::Affine, sc: Scaling, interpolate: bool) -> Result<Vec<NodeId>> {
     let sel = s.doc()?.selection.clone();
     // As [`transform_selected`] tells a move apart, which moves the guides itself.
     let c = xf.as_coeffs();
     let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
     s.edit(label, |doc, live| {
         transform_selected(doc, &sel, xf, sc, interpolate)?;
-        if !is_translation {
-            doc.transform_ruler_guides(live, xf);
-        }
-        Ok(())
+        Ok(if is_translation { vec![] } else { doc.transform_ruler_guides(live, xf) })
     })
 }
 

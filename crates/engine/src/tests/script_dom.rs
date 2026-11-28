@@ -46,7 +46,7 @@ fn app_documents_track_active_tab_and_new_document() {
     let out = log(
         &mut s,
         "var d = app.documents; vc.log(d.length); vc.log(app.activeDocument.width);\
-         app.activeDocument = d[0]; vc.log(app.activeDocument.width); vc.log(d[0].parent.typename);\
+         app.activeDocument = d[1]; vc.log(app.activeDocument.width); vc.log(d[0].parent.typename);\
          vc.log(d[5] === undefined); vc.log(app.activeDocument instanceof Document);\
          var n = d.add(DocumentColorSpace.CMYK, 50, 60, 2);\
          vc.log(d.length); vc.log(app.activeDocument.name === n.name); vc.log(n.documentColorSpace); vc.log(n.height);\
@@ -297,7 +297,7 @@ fn selection_assignment_is_atomic_across_invalid_items() {
     assert_eq!(s.active().unwrap().selection.objects, vec![a]);
     // An item of another document cannot be selected here.
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let e = failure(&mut s, "app.activeDocument.selection = app.documents[0].pageItems[0];");
+    let e = failure(&mut s, "app.activeDocument.selection = app.documents[1].pageItems[0];");
     assert!(e.contains("Cannot select"), "{e}");
 }
 
@@ -324,11 +324,42 @@ fn a_guide_path_is_not_selected_while_guides_are_locked() {
 fn an_inactive_document_changes_without_switching_tabs() {
     let (mut s, a, _) = doc();
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    log(&mut s, "var d = app.documents[0]; d.pageItems[1].name = 'far'; d.selection = d.pageItems[0];");
+    log(&mut s, "var d = app.documents[1]; d.pageItems[1].name = 'far'; d.selection = d.pageItems[0];");
     assert_eq!(s.active_index(), Some(1));
     let first = &s.documents()[0];
     assert_eq!(first.doc.node(a).unwrap().name.as_deref(), Some("far"));
     assert_eq!(first.selection.objects.len(), 1);
+}
+
+#[test]
+fn documents_list_the_current_document_first_then_the_most_recently_current() {
+    let mut s = Session::new();
+    for _ in 0..3 {
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    }
+    let out = log(
+        &mut s,
+        "var t = {}, n = ['A', 'B', 'C'];\
+         for (var i = 0; i < 3; i++) t[app.documents[2 - i].name] = n[i];\
+         function order() { var r = []; for (var i = 0; i < app.documents.length; i++) r.push(t[app.documents[i].name]); return r.join(''); }\
+         var A = app.documents[2], B = app.documents[1], C = app.documents[0];\
+         vc.log(order());\
+         app.activeDocument = A; vc.log(order());\
+         app.activeDocument = B; vc.log(order());\
+         app.activeDocument = app.documents[2]; vc.log(order());\
+         A.pageItems[0].name = 'far'; vc.log(order());\
+         vc.log([app.documents[0] === app.activeDocument, app.documents.getByName(B.name) === B]);",
+    );
+    // A change to a document in the back leaves the order as it was.
+    assert_eq!(out, vec![json!("CBA"), json!("ACB"), json!("BAC"), json!("CBA"), json!("CBA"), json!([true, true])]);
+    // Closing a document in the back keeps the others in their order as the tabs shift.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("document.activate", &json!({"index": 2})).unwrap();
+    assert_eq!(s.front_order(), vec![2, 1, 0]);
+    s.close_document(0);
+    assert_eq!(s.front_order(), vec![1, 0]);
 }
 
 #[test]
@@ -680,9 +711,13 @@ fn a_listed_preset_keeps_more_rows_than_artboards() {
 fn stale_documents_throw_on_every_member() {
     let (mut s, _, _) = doc();
     run(&mut s, "#targetengine keep\nvar d = app.activeDocument, p = d.pageItems, l = p[0].parent;").unwrap();
-    for (member, message) in
-        [("d.typename", "Stale document"), ("d.parent", "Stale document"), ("p.typename", "Stale document"), ("l.typename", "Stale")]
-    {
+    for (member, message) in [
+        ("d.typename", "Stale document"),
+        ("d.parent", "Stale document"),
+        ("p.typename", "Stale document"),
+        ("p.toString()", "Stale document"),
+        ("l.typename", "Stale"),
+    ] {
         let e = failure(&mut s, &format!("#targetengine keep\n{member};"));
         assert!(e.contains(message), "{member}: {e}");
     }
@@ -920,6 +955,18 @@ fn assigning_the_same_objects_clears_the_key_and_guides() {
     s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
     log(&mut s, "app.activeDocument.selection = null;");
     assert!(s.active().unwrap().selection.guides.is_empty());
+}
+
+/// Assigning `undefined` or a value that is not a page item to the selection throws and keeps it.
+#[test]
+fn assigning_undefined_to_the_selection_throws_and_keeps_it() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    for source in ["var u; app.activeDocument.selection = u;", "app.activeDocument.selection = undefined;", "app.activeDocument.selection = 1;"] {
+        let e = failure(&mut s, source);
+        assert!(e.contains("TypeError"), "{source}: {e}");
+        assert_eq!(s.active().unwrap().selection.objects, vec![a, b], "{source}");
+    }
 }
 
 #[test]
@@ -1179,12 +1226,12 @@ fn add_document_refuses_pixel_preview() {
 
 #[test]
 fn document_preset_values_count_toward_the_data_a_run_passes() {
-    // A 64 KiB title, set once, then read or handed to addDocument 32 times: 2 MiB, over a 1 MiB limit.
+    // A 4 KiB title, set once, then read or handed to addDocument 512 times: 2 MiB, over a 1 MiB limit.
     crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(Some(1 << 20)));
     let mut s = Session::new();
-    let set = "var p = new DocumentPreset(); p.title = new Array(65537).join('t');";
-    let read = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) p.title;"));
-    let added = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) try {{ app.documents.addDocument('Print', p, 5); }} catch (e) {{}}"));
+    let set = "var p = new DocumentPreset(); p.title = new Array(4097).join('t');";
+    let read = failure(&mut s, &format!("{set} for (var i = 0; i < 512; i++) p.title;"));
+    let added = failure(&mut s, &format!("{set} for (var i = 0; i < 512; i++) try {{ app.documents.addDocument('Print', p, 5); }} catch (e) {{}}"));
     let within = run(&mut s, &format!("{set} for (var i = 0; i < 8; i++) p.title;"));
     crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(None));
     for e in [read, added] {
@@ -1192,6 +1239,32 @@ fn document_preset_values_count_toward_the_data_a_run_passes() {
     }
     within.unwrap();
     assert!(s.documents().is_empty());
+}
+
+#[test]
+fn document_preset_setter_refuses_a_value_of_the_wrong_kind_or_size_and_keeps_the_old_one() {
+    let mut s = Session::new();
+    let out = log(
+        &mut s,
+        "var p = new DocumentPreset(); p.title = 'Flyer';\
+         var bad = [['title', new Array(4098).join('t')], ['title', 5], ['width', 'wide'], ['width', Infinity], ['height', null],\
+         ['colorMode', 'RGB'], ['units', {}], ['artboardLayout', 'DocumentColorSpace.RGB'], ['documentBleedLink', 1],\
+         ['documentBleedOffsetRect', [1, 2, 3]], ['documentBleedOffsetRect', [1, 2, 3, 'x']], ['transparencyGrid', 'TransparencyGridRed']];\
+         for (var i = 0; i < bad.length; i++) { try { p[bad[i][0]] = bad[i][1]; vc.log('kept ' + bad[i][0]); } catch (e) { vc.log(e.name); } }\
+         vc.log([p.title, p.width, p.height, p.colorMode === undefined, p.units === undefined, p.artboardLayout,\
+         p.documentBleedLink === undefined, p.documentBleedOffsetRect === undefined, p.transparencyGrid === undefined]);",
+    );
+    let mut names = vec![json!("RangeError")];
+    names.extend(std::iter::repeat_n(json!("TypeError"), 11));
+    assert_eq!(out[..12], names[..], "{out:?}");
+    assert_eq!(out[12], json!(["Flyer", 612, 792, true, true, "DocumentArtboardLayout.GridByRow", true, true, true]));
+    let out = log(
+        &mut s,
+        "var p = new DocumentPreset(); p.title = new Array(4097).join('t'); p.documentBleedLink = null; p.transparencyGrid = null;\
+         p.documentBleedOffsetRect = [0, 0, 0, 0]; p.width = undefined; vc.log([p.title.length, p.documentBleedLink, p.width === undefined]);\
+         p.documentBleedOffsetRect = undefined; vc.log(app.documents.addDocument('Print', p).typename);",
+    );
+    assert_eq!(out, vec![json!([4096, null, true]), json!("Document")]);
 }
 
 #[test]
@@ -1338,6 +1411,54 @@ fn duplicate_refuses_hidden_or_locked_art() {
     assert!(order.contains(&a) && order.contains(&b));
 }
 
+#[test]
+fn setters_refuse_art_on_a_locked_artboard() {
+    let (mut s, _, _) = doc();
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems[0], refused = [];\
+         var setters = [function(){p.position=[5,5]},function(){p.left=5},function(){p.top=5},\
+         function(){p.width=10},function(){p.height=10},function(){p.opacity=50},\
+         function(){p.hidden=true},function(){p.locked=true},function(){p.zOrder(ZOrderMethod.SENDTOBACK)}];\
+         for(var i=0;i<setters.length;i++){try{setters[i]();refused.push(false)}catch(e){refused.push(e.name==='Error')}}\
+         vc.log(refused);",
+    );
+    assert_eq!(out, vec![json!(vec![true; 9])]);
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(log(&mut s, "var p=app.activeDocument.pageItems[0];p.opacity=p.opacity;vc.log(p.opacity);"), vec![json!(100)]);
+}
+
+#[test]
+fn geometry_setters_refuse_locked_guide_paths() {
+    let (mut s, _, b) = doc();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
+    let out = log(
+        &mut s,
+        "var p=app.activeDocument.pageItems[0],refused=[];\
+         var setters=[function(){p.position=[5,5]},function(){p.left=5},function(){p.top=5},\
+         function(){p.width=10},function(){p.height=10},function(){p.zOrder(ZOrderMethod.SENDTOBACK)}];\
+         for(var i=0;i<setters.length;i++){try{setters[i]();refused.push(false)}catch(e){refused.push(e.name==='Error')}}\
+         vc.log(refused);",
+    );
+    assert_eq!(out, vec![json!(vec![true; 6])]);
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    log(&mut s, "var p=app.activeDocument.pageItems[0];p.left=5;p.width=10;");
+    let bounds = s.active().unwrap().doc.bounds_of(&[b], false).unwrap();
+    assert!((bounds.x0 - 5.0).abs() < 1e-9 && (bounds.width() - 10.0).abs() < 1e-9);
+}
+
 /// Reading `editable` on every member of a group on a locked artboard measures the group once.
 #[test]
 fn editable_measures_a_group_on_a_locked_artboard_once() {
@@ -1360,24 +1481,88 @@ fn editable_measures_a_group_on_a_locked_artboard_once() {
 #[test]
 fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
-    let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
+    let fixture = vectorcraft_testkit::TempDir::new("script-file-open-quoting");
+    let path = fixture.join("quote's open.svg");
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let p = serde_json::to_string(&path.to_string_lossy()).unwrap();
+    let other = serde_json::to_string(&format!("{}.other", path.to_string_lossy())).unwrap();
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.
-    let elsewhere = std::env::temp_dir().join(format!("vc-dom-roots-{}", std::process::id()));
+    let elsewhere = fixture.join("elsewhere");
     std::fs::create_dir_all(&elsewhere).unwrap();
     let roots = crate::file_access::AutomationRoots::new(&[&elsewhere], &[]).unwrap().unwrap();
     let out = crate::file_access::confine(Some(&roots), || log(&mut s, &query));
     assert_eq!(out, vec![json!(false), json!(false)]);
-    let _ = std::fs::remove_dir_all(&elsewhere);
     for bad in ["../x.svg", "a/../b.svg", "\\\\\\\\host\\\\share\\\\x.svg", "//host/share/x.svg", "a\\u0000b", ""] {
         assert!(failure(&mut s, &format!("app.getIsFileOpen('{bad}');")).contains("cannot check"), "{bad}");
     }
     assert!(failure(&mut s, "app.getIsFileOpen(new Array(5000).join('a'));").contains("too long"));
-    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_menu_command_runs_its_command_on_the_selection() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let steps = undo_steps(&s);
+    let out = log(&mut s, "app.executeMenuCommand('ungroup'); vc.log(app.activeDocument.selection.length);");
+    assert_eq!(out, vec![json!(2)]);
+    let st = s.active().unwrap();
+    assert!(st.doc.node(g).is_none(), "the group is gone");
+    assert!(st.doc.node(a).is_some() && st.doc.node(b).is_some());
+    assert_eq!(undo_steps(&s), steps + 1, "one undo step for the run");
+    // With nothing selected the menu item does nothing and adds no undo step.
+    s.execute("select.none", &json!({})).unwrap();
+    let steps = undo_steps(&s);
+    let before = s.active().unwrap().doc.clone();
+    log(&mut s, "app.executeMenuCommand('ungroup'); app.executeMenuCommand('releaseMask');");
+    assert_eq!(undo_steps(&s), steps);
+    assert!(std::sync::Arc::ptr_eq(&before, &s.active().unwrap().doc), "nothing changed");
+    // selectall then group makes one group of both rectangles.
+    let out = log(&mut s, "app.executeMenuCommand('selectall'); app.executeMenuCommand('group'); vc.log(app.activeDocument.selection[0].typename);");
+    assert_eq!(out, vec![json!("GroupItem")]);
+}
+
+#[test]
+fn the_fit_to_artwork_menu_command_fits_the_artboard_to_the_art() {
+    let (mut s, _, _) = doc();
+    let before = s.active().unwrap().doc.artboards[0].rect;
+    log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds');");
+    let after = s.active().unwrap().doc.artboards[0].rect;
+    assert!(after.width() < before.width() && after.height() < before.height(), "{before:?} -> {after:?}");
+    // An artboard that is locked, or has no art on it, leaves the menu item dimmed: it does nothing.
+    let (mut s, _, _) = doc();
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let steps = undo_steps(&s);
+    assert_eq!(log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds'); vc.log(1);"), vec![json!(1)]);
+    assert_eq!(s.active().unwrap().doc.artboards[0].rect, before);
+    assert_eq!(undo_steps(&s), steps, "locked");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let empty = s.active().unwrap().doc.artboards[0].rect;
+    assert_eq!(log(&mut s, "app.executeMenuCommand('Fit Artboard to artwork bounds'); vc.log(1);"), vec![json!(1)]);
+    assert_eq!(s.active().unwrap().doc.artboards[0].rect, empty);
+    assert_eq!(undo_steps(&s), 0, "no art");
+}
+
+#[test]
+fn an_unknown_menu_command_throws_and_names_it() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.executeMenuCommand('acmeNoSuchMenu');");
+    assert!(e.contains("acmeNoSuchMenu"), "{e}");
+    assert!(failure(&mut s, "app.executeMenuCommand('Ungroup');").contains("Ungroup"), "names are matched exactly");
+    assert!(failure(&mut s, "app.executeMenuCommand(5);").contains("string"));
+    assert!(failure(&mut s, "app.executeMenuCommand();").contains("string"));
+    assert!(failure(&mut s, "app.executeMenuCommand(new Array(5000).join('a'));").contains("too long"));
+    assert_eq!(undo_steps(&s), steps, "nothing changed");
+    // With no document open a known menu item does nothing, and an unknown one still throws.
+    let mut s = Session::new();
+    assert_eq!(log(&mut s, "app.executeMenuCommand('selectall'); vc.log(app.documents.length);"), vec![json!(0)]);
+    assert!(failure(&mut s, "app.executeMenuCommand('acmeNoSuchMenu');").contains("acmeNoSuchMenu"));
 }
 
 #[test]
@@ -1405,12 +1590,12 @@ fn prototype_changes_cannot_forge_a_page_item() {
     let (mut s, a, _) = doc();
     let out = log(
         &mut s,
-        "var f = Object.create(PathItem.prototype); var m = '';\
-         try { f.name = 'x'; } catch (e) { m = e.message; } vc.log(m);\
-         try { PathItem.prototype.name = 'y'; } catch (e) { m = e.message; } vc.log(m); PageItem = null; Document.prototype.pageItems = null;\
+        "var f = Object.create(PathItem.prototype);\
+         try { f.name = 'x'; vc.log('wrote'); } catch (e) { vc.log(e.message); }\
+         try { PathItem.prototype.name = 'y'; vc.log('wrote'); } catch (e) { vc.log(e.message); } PageItem = null; Document.prototype.pageItems = null;\
          vc.log(Object.isFrozen(PathItem.prototype) || !Object.isExtensible(PathItem.prototype));\
          vc.log(app.activeDocument.pageItems.length);\
-         try { new PathItem(); } catch (e) { m = e.name; } vc.log(m);",
+         try { new PathItem(); vc.log('made'); } catch (e) { vc.log(e.name); }",
     );
     assert_eq!(out, vec![json!("this is not a page item"), json!("this is not a page item"), json!(true), json!(2), json!("TypeError")]);
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().name, None);

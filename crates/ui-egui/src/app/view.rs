@@ -47,7 +47,8 @@ impl VectorcraftApp {
     /// new document gets its saved view.
     pub fn sync_views(&mut self) {
         let docs = self.session.documents();
-        if self.view_uids.len() == self.views.len() && docs.iter().map(|d| d.uid).ne(self.view_uids.iter().copied()) {
+        let documents_changed = docs.iter().map(|d| d.uid).ne(self.view_uids.iter().copied());
+        if documents_changed && self.view_uids.len() == self.views.len() {
             let mut old: Vec<Option<View>> = std::mem::take(&mut self.views).into_iter().map(Some).collect();
             self.views = docs
                 .iter()
@@ -65,6 +66,9 @@ impl VectorcraftApp {
             view.shown_ppi.get_or_insert(main);
         }
         let uids: Vec<u64> = docs.iter().map(|d| d.uid).collect();
+        if documents_changed {
+            self.ui.image_trace_panel.retain_open_drawings(&uids);
+        }
         if let Some(ctx) = &self.ui_ctx {
             for closed in self.view_uids.iter().filter(|u| !uids.contains(u)) {
                 panels::layers::forget(ctx, *closed);
@@ -327,7 +331,7 @@ impl VectorcraftApp {
 
     /// Preferences › User Interface › UI Scaling, as the interface applies it.
     pub(crate) fn ui_scaling(&self) -> f32 {
-        self.session.prefs.ui_scaling.clamp(0.75, 2.0) as f32
+        super::applied_ui_scaling(self.session.prefs.ui_scaling)
     }
 
     /// Ask the active view's canvas to run `request` in its next pass; `bounds` are the layers' bounds
@@ -406,7 +410,33 @@ impl VectorcraftApp {
             shape_widgets: self.ui.view.shape_widgets,
             screen: self.screen_frame(),
             artboard: self.view().map_or(0, |v| v.artboard),
-            ..ViewInfo::default()
+            precise: self.precise_cursors(),
+        }
+    }
+
+    /// Whether the drawing tools show precise cursors: General › Use Precise Cursors is on, or Caps Lock is
+    /// (`Session::caps_lock`, which the canvas keeps at the host's state and `view.capsLock` sets). The canvas's pointer
+    /// and the tools' brush tips both follow it.
+    pub(crate) fn precise_cursors(&self) -> bool {
+        self.session.prefs.use_precise_cursors || self.session.caps_lock
+    }
+
+    /// Takes the host's Caps Lock state `on` when it changes: the session follows it until the next change, and a
+    /// `view.capsLock` call between changes stays in place.
+    pub(crate) fn follow_caps_lock(&mut self, on: bool) {
+        if self.canvas.host_caps_lock == Some(on) {
+            return;
+        }
+        let first_reading = self.canvas.host_caps_lock.is_none();
+        self.canvas.host_caps_lock = Some(on);
+        // A `view.capsLock` call that ran before the first reading stays in place; that reading is only the baseline.
+        if first_reading && self.session.caps_lock {
+            return;
+        }
+        if self.session.caps_lock != on
+            && let Err(err) = self.run("view.capsLock", serde_json::json!({ "on": on }))
+        {
+            log::error!("Could not update the Caps Lock state: {err}");
         }
     }
 }

@@ -197,6 +197,7 @@ impl GraphTypeValues {
 #[derive(Clone)]
 struct GraphSubject {
     doc: u64,
+    reverts: u64,
     graph_id: u64,
     series: Vec<usize>,
     graph: GraphKind,
@@ -385,6 +386,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields.insert(PAGE.into(), json!("options"));
     let mut s = GraphSubject {
         doc: st.uid,
+        reverts: st.reverts,
         graph_id: subject.id.0,
         series: subject.series,
         graph: spec.kind,
@@ -433,8 +435,11 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &Context) {
 /// have ids of their own) or with nothing changed, else `graph.setType` with these parameters.
 /// `Err` while the dialog can't be applied.
 fn verdict(app: &VectorcraftApp, v: &GraphTypeValues, s: &GraphSubject) -> Result<Option<Value>, &'static str> {
-    if !on_its_document(app, s) {
+    let Some(st) = app.session.active().filter(|st| st.uid == s.doc) else {
         return Ok(None);
+    };
+    if st.reverts != s.reverts {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue."));
     }
     if let Some(why) = problem(v, s) {
         return Err(why);
@@ -569,7 +574,7 @@ fn pending(v: &GraphTypeValues, s: &GraphSubject) -> Value {
 
 /// Whether the active document is the one the dialog opened on.
 fn on_its_document(app: &VectorcraftApp, s: &GraphSubject) -> bool {
-    app.session.active().is_some_and(|st| st.uid == s.doc)
+    app.session.active().is_some_and(|st| (st.uid, st.reverts) == (s.doc, s.reverts))
 }
 
 /// What the calculated tick values were calculated for: the options they depend on and the
@@ -1590,5 +1595,33 @@ mod tests {
         assert!(ok(&mut app), "OK closes the dialog");
         assert_eq!(steps(&app), before);
         assert_eq!(app.session.execute(COMMAND, &json!({"id": second.0})).unwrap()["type"], "column");
+    }
+
+    #[test]
+    fn graph_type_refuses_to_change_the_restored_graph() {
+        let mut app = app_with_graph("column");
+        let graph = app.session.active().unwrap().selection.objects[0];
+        let dir = vectorcraft_testkit::TempDir::new("graph-type-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run(COMMAND, json!({"id": graph.0, "type": "bar"})).unwrap();
+        open(&mut app).unwrap();
+        set(&app, "type", json!("line")).unwrap();
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [graph.0]})).unwrap();
+        let before = steps(&app);
+        crate::tests::picks::answer_dialog(&mut app, dialog_id(KIND), &[], true);
+        assert!(matches!(with(&app, |dialog| dialog.held_state()), Some(HeldOk::Refused(_))));
+        assert_eq!(query(&mut app)["type"], "column");
+        assert_eq!(steps(&app), before);
+
+        let ctx = ctx(&app);
+        app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, dialog_id(KIND)));
+        open(&mut app).unwrap();
+        set(&app, "type", json!("line")).unwrap();
+        assert!(ok(&mut app));
+        assert_eq!(query(&mut app)["type"], "line");
     }
 }

@@ -1,6 +1,5 @@
 use craft::automation::ControlChannel;
 use craft::automation::screenshot::{DocumentId, Finished, settle_ms};
-use craft::ui::runtime::motion;
 use craft::ui::runtime::windows::WindowHost;
 use serde_json::json;
 use vectorcraft_engine::file_access::AutomationRoots;
@@ -38,15 +37,16 @@ impl VectorcraftApp {
         }
         let host = WindowHost::of(ctx);
         let document = self.document_identity();
+        let now = self.instant();
         let finished = self.channel.as_mut().map_or_else(Vec::new, |channel| {
             channel.captures.note_windows(&host, document);
-            channel.captures.drain(motion::now(), document)
+            channel.captures.drain(now, document)
         });
         self.finish_captures(finished);
         let settle = settle_ms(ctx.global_style().animation_time);
         while let Some(req) = self.deferred_control.take().or_else(|| self.channel.as_mut().and_then(ControlChannel::next_request)) {
             // A request held past its deadline is answered as one still queued then.
-            if req.deadline.is_some_and(|deadline| motion::now() >= deadline) {
+            if req.deadline.is_some_and(|deadline| self.instant() >= deadline) {
                 let _ = req.reply.send(json!({"ok": false, "error": craft::automation::control::expired_error()}));
                 continue;
             }
@@ -79,8 +79,9 @@ impl VectorcraftApp {
                 }
             };
             let document = self.document_identity();
+            let now = self.instant();
             if let Some(channel) = self.channel.as_mut() {
-                channel.settle(req, reply, document, settle);
+                channel.settle_at(req, reply, document, settle, now);
             }
         }
         // A capture is issued only after passes settle it, and an idle window runs none; a hidden
@@ -99,9 +100,10 @@ impl VectorcraftApp {
     /// due, answering those that expired or lost their window meanwhile.
     pub(crate) fn issue_captures(&mut self, ctx: &egui::Context) {
         let document = self.document_identity();
+        let now = self.instant();
         let finished = self.channel.as_mut().map_or_else(Vec::new, |channel| {
             channel.captures.note_pass();
-            channel.captures.issue(&WindowHost::of(ctx), motion::now(), document)
+            channel.captures.issue(&WindowHost::of(ctx), now, document)
         });
         self.finish_captures(finished);
     }

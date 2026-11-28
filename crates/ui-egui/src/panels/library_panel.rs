@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use craft::behavior::{IconId, Selection, SelectionModel};
-use craft::host::{PickRequest, Picked};
+use craft::host::PickRequest;
 use craft::theme::variant::Tone;
 use craft::ui::contract::{Bind, MemoKey, MemoProps, SelectMode, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
@@ -113,7 +113,7 @@ pub(crate) trait LibraryKind {
     const OPEN: &'static str;
     /// The engine command listing the libraries, for error messages.
     const LIST: &'static str;
-    /// The engine command loading a library from a file (`{path}` → `{library}`).
+    /// The engine command loading a library by path or by file name and contents (`{library}`).
     const LOAD: &'static str;
     /// The libraries menu's tooltip ("Swatch Libraries Menu").
     const MENU: &'static str;
@@ -180,7 +180,6 @@ pub(crate) struct Kind {
     find: fn(&VectorcraftApp, &str) -> Found,
     path: fn(&VectorcraftApp, &str) -> Option<String>,
     neighbour: fn(&VectorcraftApp, &str, isize) -> Option<String>,
-    add: fn(&mut VectorcraftApp, &str, Vec<String>),
     add_label: &'static str,
     body: fn(&mut VectorcraftApp, &mut Ui, &str),
 }
@@ -195,7 +194,6 @@ fn kind_of<K: LibraryKind>() -> Kind {
         find: K::find,
         path: K::path,
         neighbour: neighbour::<K>,
-        add: K::add,
         add_label: K::ADD,
         body: body::<K>,
     }
@@ -211,6 +209,21 @@ fn kind(kind: &str) -> Option<Kind> {
     ]
     .into_iter()
     .find(|k| k.kind == kind)
+}
+
+/// The document command each library's Add action runs.
+fn add_command(kind: &str) -> Option<&'static str> {
+    match kind {
+        "swatches" => Some("swatch.library.add"),
+        "brushes" => Some("brush.addFromLibrary"),
+        "symbols" => Some("symbol.addFromLibrary"),
+        "graphicStyles" => Some("graphicStyle.addFromLibrary"),
+        _ => None,
+    }
+}
+
+fn can_add(app: &VectorcraftApp, kind: &str) -> bool {
+    add_command(kind).is_some_and(|command| crate::menus::enabled(app, command))
 }
 
 /// The id of the panel of library `id` of `kind` (`library:swatches:pastels`).
@@ -502,13 +515,13 @@ pub(crate) fn locate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Strin
     }
     let path = p.get("path").and_then(Value::as_str).map(str::to_string);
     let panel = given.to_string();
-    pick_library_file(app, path, library_pick_filters(k.kind), move |app, path| located(app, &panel, &path))
+    pick_library_file(app, path, library_pick_filters(k.kind), move |app, params| located(app, &panel, params))
 }
 
-/// Locate Library… answered with the file at `path` for missing library panel `given`.
-fn located(app: &mut VectorcraftApp, given: &str, path: &str) -> Result<Value, String> {
+/// Locate Library… answered with the chosen file for missing library panel `given`.
+fn located(app: &mut VectorcraftApp, given: &str, params: Value) -> Result<Value, String> {
     let (k, id) = parse(given).ok_or_else(|| format!("`{given}` isn't a library panel (see window.swatchLibrary)"))?;
-    let r = app.run(k.load, json!({ "path": path }))?;
+    let r = app.run(k.load, params)?;
     let next = r["library"].as_str().unwrap_or_default().to_string();
     let to = panel_id(k.kind, &next);
     if to != given && is_open(&app.ui, &to) {
@@ -543,25 +556,21 @@ pub(crate) fn library_pick_filters(kind: &str) -> Vec<(&'static str, &'static [&
     }
 }
 
-/// Other Library… and Locate Library…: `then` loads the library file at `path`, else one picked in
-/// an open dialog. The pick is asked of the app (`file_asks`) and answers on a later pass, which
-/// runs `then` with the picked file; until then this returns what `file_asks::ask` returns.
+/// Other Library… and Locate Library…: `then` gets the load command parameters for the file at
+/// `path`, or for the picked file. A browser pick supplies the name and contents.
 pub(crate) fn pick_library_file(
     app: &mut VectorcraftApp,
     path: Option<String>,
     filters: Vec<(&'static str, &'static [&'static str])>,
-    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, Value) -> Result<Value, String> + 'static,
 ) -> Result<Value, String> {
     if let Some(path) = path {
-        return then(app, path);
+        return then(app, json!({ "path": path }));
     }
     let request = filters.into_iter().fold(PickRequest::open("library"), |r, (name, exts)| r.filter(name, exts));
-    Ok(file_asks::ask(app, request, Owner::Free, move |app, picked| match picked {
-        Picked::Paths(paths) => match paths.into_iter().next() {
-            Some(path) => then(app, path.to_string_lossy().into_owned()),
-            None => Ok(Value::Null),
-        },
-        _ => Ok(Value::Null),
+    Ok(file_asks::ask(app, request, Owner::Free, move |app, picked| match file_asks::open_params(&picked) {
+        Some(params) => then(app, Value::Object(params)),
+        None => Ok(Value::Null),
     }))
 }
 
@@ -666,7 +675,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     let title = library_name(id, &name).to_string();
     // The footer stays under the browser, which scrolls in the room left above it.
     let footer_out = RefCell::new(None);
-    let any = !selection.items.is_empty();
+    let any = !selection.items.is_empty() && can_add(app, K::KIND);
     let mut shown = Panel::new(title.clone())
         .collection_body()
         .footer(|ui, _| *footer_out.borrow_mut() = Some(footer_bar::<K>(any).show_footer(ui)))
@@ -707,8 +716,8 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     }
 }
 
-/// The panel's footer: the libraries menu, previous / next library, and Add to … , on while `any` item or folder is
-/// selected.
+/// The panel's footer: the libraries menu, previous / next library, and Add to … , on while items or folders are
+/// selected and the document can receive them.
 fn footer_bar<K: LibraryKind>(any: bool) -> FooterBar {
     let icon = |name: &'static str| IconSpec::svg(IconId::new(name));
     FooterBar::actions([
@@ -786,7 +795,7 @@ fn menu_entries(app: &VectorcraftApp, panel: &str) -> Vec<MenuEntry> {
         params["panel"] = json!(panel);
         MenuEntry::Row { command: CommandRef::with_params(command, params), label, enabled, checked }
     };
-    let has_selection = !selected(app, panel).items.is_empty();
+    let has_selection = !selected(app, panel).items.is_empty() && can_add(app, k.kind);
     let mut out = vec![row("ui.libraryPanel.add", json!({}), k.add_label, has_selection, None), MenuEntry::Separator];
     out.extend(View::ALL.iter().map(|&(v, label)| row("ui.libraryPanel", json!({ "view": v }), label, true, Some(v == view))));
     out.extend([
@@ -835,7 +844,7 @@ pub(crate) fn menu_states(app: &VectorcraftApp, panel: &str, states: &mut Comman
 }
 
 /// Runs a library panel command that the engine does not know: `ui.libraryPanel.add {panel}` adds the
-/// panel's selection to the document.
+/// panel's selection to the document. A refused addition returns its command's error.
 pub(crate) fn run(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<Value, String> {
     if id != "ui.libraryPanel.add" {
         return Err(format!("`{id}` isn't a library panel command"));
@@ -843,7 +852,8 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<
     let given = params.get("panel").and_then(Value::as_str).unwrap_or_default();
     let (k, lib) = parse(given).ok_or_else(|| format!("`{given}` isn't a library panel (see window.swatchLibrary)"))?;
     let names: Vec<String> = selected(app, given).items.into_iter().map(|key| key.name).collect();
-    (k.add)(app, lib, names);
+    let command = add_command(k.kind).ok_or("this library cannot add items to a drawing")?;
+    app.run(command, json!({ "library": lib, "names": names }))?;
     Ok(Value::Null)
 }
 

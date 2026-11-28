@@ -37,6 +37,9 @@ struct Context {
     breakables: u32,
     /// The current function body's directive prologue has a `"use strict"` directive.
     use_strict: bool,
+    /// The code is a generator function's body or parameters: `yield` starts a yield expression
+    /// there and is not an identifier (ECMA-262 2015 sections 12.1.1 and 14.4).
+    generator: bool,
 }
 
 /// The names declared in a scope, for the early errors of ECMA-262 2015 about redeclarations
@@ -115,6 +118,9 @@ pub(crate) struct Parser<'s> {
     /// section B.3.1). Each is also in `cover_inits`, so it is a `SyntaxError` unless the literal
     /// is read as a destructuring pattern.
     proto_twice: HashSet<u32>,
+    /// Where each yield expression read so far starts, in the order read, so the parameters of a
+    /// generator function and an arrow function's head can be checked for one.
+    yields: Vec<u32>,
 }
 
 impl<'s> Parser<'s> {
@@ -143,6 +149,7 @@ impl<'s> Parser<'s> {
             cover_ok: false,
             rest_commas: HashSet::new(),
             proto_twice: HashSet::new(),
+            yields: Vec::new(),
         };
         parser.tok = parser.next_significant()?;
         Ok(parser)
@@ -284,7 +291,16 @@ impl<'s> Parser<'s> {
         if self.ctx.strict && strict_reserved(name) {
             return Err(self.error_at_token(token, format!("'{name}' is a reserved word in strict mode")));
         }
+        if self.ctx.generator && name == "yield" {
+            return Err(self.error_at_token(token, "'yield' cannot be an identifier in a generator function"));
+        }
         Ok(())
+    }
+
+    /// A yield expression starts at `offset` or later, before `end`.
+    fn yield_between(&self, offset: u32, end: u32) -> bool {
+        let i = self.yields.partition_point(|&y| y < offset);
+        self.yields.get(i).is_some_and(|&y| y < end)
     }
 
     /// Reads an identifier that a declaration binds: checked as [`Self::check_identifier`] does,
@@ -359,7 +375,7 @@ impl<'s> Parser<'s> {
     /// Declares a function declaration that stands in a statement list: var-scoped in a function
     /// body or the script, lexical in a block.
     fn declare_function(&mut self, id: crate::ast::FunctionId) -> Result<()> {
-        let Some(name) = self.ast.function(id).and_then(|f| f.name.clone()) else { return Ok(()) };
+        let Some((name, generator)) = self.ast.function(id).and_then(|f| Some((f.name.clone()?, f.generator))) else { return Ok(()) };
         match self.scopes.last_mut() {
             Some(scope) if scope.function => {
                 if scope.lexical.contains_key(&name.name) {
@@ -368,7 +384,8 @@ impl<'s> Parser<'s> {
                 scope.vars.insert(name.name);
                 Ok(())
             }
-            Some(_) => self.declare_lexical(&name, true),
+            // Only plain function declarations may repeat in a block (Annex B.3.3.4).
+            Some(_) => self.declare_lexical(&name, !generator),
             None => Ok(()),
         }
     }
@@ -531,6 +548,9 @@ impl<'s> Parser<'s> {
                         "a function declaration cannot stand here; put it in a block"
                     };
                     return Err(self.error_at_token(&self.tok, message));
+                }
+                if self.es2015 && self.peek().is_some_and(|t| t.is_punct(Punct::Star)) {
+                    return Err(self.error_at_token(&self.tok, "a generator declaration cannot stand here; put it in a block"));
                 }
                 self.parse_function_declaration()
             }
@@ -1039,8 +1059,9 @@ impl<'s> Parser<'s> {
 
     fn parse_function_declaration(&mut self) -> Result<StmtId> {
         let start = self.expect_keyword(Keyword::Function)?.span;
+        let generator = self.es2015 && self.eat(Punct::Star)?;
         let name = self.function_name()?;
-        let id = self.parse_function_rest(FunctionKind::Declaration, Some(name), start)?;
+        let id = self.parse_function_rest(FunctionKind::Declaration, Some(name), start, generator)?;
         Ok(self.ast.push_stmt(Stmt::FunctionDecl(id), self.span_from(start)))
     }
 
@@ -1056,15 +1077,28 @@ impl<'s> Parser<'s> {
         Ok((Name { name, span: token.span }, token))
     }
 
-    /// The parameters and body of a function, from `(`.
-    fn parse_function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span) -> Result<crate::ast::FunctionId> {
+    /// The parameters and body of a function, from `(`; with `generator`, a generator function's.
+    fn parse_function_rest(
+        &mut self,
+        kind: FunctionKind,
+        name: Option<(Name, Token)>,
+        start: Span,
+        generator: bool,
+    ) -> Result<crate::ast::FunctionId> {
         self.enter()?;
-        let result = self.function_rest(kind, name, start);
+        // The parameters are read with the function's own `yield` rule, not the enclosing code's.
+        let outer_generator = std::mem::replace(&mut self.ctx.generator, generator);
+        let yields = self.yields.len();
+        let result = self.function_rest(kind, name, start, generator);
+        // The `yield` expressions of this function are not in the code around it.
+        self.yields.truncate(yields);
+        self.ctx.generator = outer_generator;
         self.leave();
         result
     }
 
-    fn function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span) -> Result<crate::ast::FunctionId> {
+    fn function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span, generator: bool) -> Result<crate::ast::FunctionId> {
+        let params_start = self.tok.span.start;
         self.expect(Punct::LParen)?;
         let mut params: Vec<Binding> = Vec::new();
         let mut defaults: Vec<Option<ExprId>> = Vec::new();
@@ -1097,6 +1131,10 @@ impl<'s> Parser<'s> {
             }
         }
         let close = self.expect(Punct::RParen)?;
+        if generator && self.yield_between(params_start, close.span.start) {
+            let at = self.yields.get(self.yields.partition_point(|&y| y < params_start)).copied().unwrap_or(params_start);
+            return Err(self.error_at_offset(at, "a yield expression cannot stand in a generator function's parameters"));
+        }
         match kind {
             FunctionKind::Getter if !params.is_empty() || rest.is_some() => {
                 return Err(self.error_at_token(&close, "a getter must not have parameters"));
@@ -1112,7 +1150,7 @@ impl<'s> Parser<'s> {
         self.expect(Punct::LBrace)?;
         let names: Vec<String> = params.iter().chain(&rest).flat_map(|p| self.ast.bound_names(p)).map(|n| n.name).collect();
         let outer_strict = self.ctx.strict;
-        let inner = Context { strict: outer_strict, in_function: true, ..Context::default() };
+        let inner = Context { strict: outer_strict, in_function: true, generator, ..Context::default() };
         let outer = std::mem::replace(&mut self.ctx, inner);
         self.push_scope(true, names);
         let body = self.parse_body(true);
@@ -1121,7 +1159,7 @@ impl<'s> Parser<'s> {
         self.ctx = outer;
         let body = body?;
         self.expect(Punct::RBrace)?;
-        let function = Function { kind, name: name.map(|(n, _)| n), params, defaults, rest, body, strict, span: self.span_from(start) };
+        let function = Function { kind, name: name.map(|(n, _)| n), params, defaults, rest, body, strict, generator, span: self.span_from(start) };
         self.check_params(&function, use_strict)?;
         Ok(self.ast.push_function(function))
     }
@@ -1153,7 +1191,8 @@ impl<'s> Parser<'s> {
             self.expect(Punct::RBrace)?;
         }
         let defaults = if defaults.iter().all(Option::is_none) { Vec::new() } else { defaults };
-        let function = Function { kind: FunctionKind::Arrow, name: None, params, defaults, rest, body, strict, span: self.span_from(start) };
+        let function =
+            Function { kind: FunctionKind::Arrow, name: None, params, defaults, rest, body, strict, generator: false, span: self.span_from(start) };
         self.check_params(&function, use_strict)?;
         let id = self.ast.push_function(function);
         Ok(self.ast.push_expr(Expr::Arrow(id), self.span_from(start)))
@@ -1271,10 +1310,15 @@ impl<'s> Parser<'s> {
     fn assignment(&mut self, no_in: bool) -> Result<ExprId> {
         let mut targets: Vec<(ExprId, AssignOp)> = Vec::new();
         loop {
-            let mut expr = self.parse_conditional(no_in)?;
-            if self.es2015 && self.at(Punct::Arrow) {
-                expr = self.arrow_from(expr, no_in)?;
-            }
+            let expr = if self.ctx.generator && self.tok.ident() == Some("yield") && !self.tok.escaped {
+                self.parse_yield(no_in)?
+            } else {
+                let mut expr = self.parse_conditional(no_in)?;
+                if self.es2015 && self.at(Punct::Arrow) {
+                    expr = self.arrow_from(expr, no_in)?;
+                }
+                expr
+            };
             let Some(op) = assign_op(&self.tok) else {
                 let mut value = expr;
                 while let Some((target, op)) = targets.pop() {
@@ -1293,10 +1337,28 @@ impl<'s> Parser<'s> {
         }
     }
 
+    /// A yield expression, from `yield` (ECMA-262 2015 section 14.4): its operand is left out when
+    /// a line break follows `yield` or the next token cannot start an expression, and `yield*`
+    /// must have one.
+    fn parse_yield(&mut self, no_in: bool) -> Result<ExprId> {
+        let start = self.bump()?.span;
+        self.yields.push(start.start);
+        let delegate = !self.tok.newline_before && self.at(Punct::Star);
+        if delegate {
+            self.bump()?;
+        }
+        let arg =
+            if delegate || (!self.tok.newline_before && starts_expression(&self.tok, self.e4x)) { Some(self.parse_assignment(no_in)?) } else { None };
+        Ok(self.ast.push_expr(Expr::Yield { arg, delegate }, self.span_from(start)))
+    }
+
     /// The arrow function whose head is `expr`, read before the current `=>`: a name standing
     /// alone, or parameters in parentheses.
     fn arrow_from(&mut self, expr: ExprId, no_in: bool) -> Result<ExprId> {
         let start = self.ast.expr_span(expr);
+        if self.yield_between(start.start, start.end) {
+            return Err(self.error_at_offset(start.start, "a yield expression cannot stand in an arrow function's parameters"));
+        }
         let params = match self.ast.expr(expr) {
             Some(Expr::Ident(name)) => (vec![Binding::Name(Name { name: name.clone(), span: start })], vec![None], None),
             Some(Expr::Paren(_)) => self.arrow_params(expr)?,
@@ -1706,8 +1768,13 @@ impl<'s> Parser<'s> {
 
     fn parse_function_expression(&mut self) -> Result<ExprId> {
         let start = self.expect_keyword(Keyword::Function)?.span;
-        let name = if matches!(self.tok.kind, TokenKind::Ident(_)) { Some(self.function_name()?) } else { None };
-        let id = self.parse_function_rest(FunctionKind::Expression, name, start)?;
+        let generator = self.es2015 && self.eat(Punct::Star)?;
+        // A generator expression's name is read with its own `yield` rule.
+        let outer_generator = std::mem::replace(&mut self.ctx.generator, generator);
+        let name = if matches!(self.tok.kind, TokenKind::Ident(_)) { self.function_name().map(Some) } else { Ok(None) };
+        self.ctx.generator = outer_generator;
+        let name = name?;
+        let id = self.parse_function_rest(FunctionKind::Expression, name, start, generator)?;
         Ok(self.ast.push_expr(Expr::Function(id), self.span_from(start)))
     }
 
@@ -1790,7 +1857,7 @@ impl<'s> Parser<'s> {
             let word = self.bump()?;
             if property_key(&self.tok).is_some() {
                 let (key, _) = self.parse_property_key()?;
-                let function = self.parse_function_rest(kind, None, start)?;
+                let function = self.parse_function_rest(kind, None, start, false)?;
                 let value = if kind == FunctionKind::Getter { PropertyValue::Get(function) } else { PropertyValue::Set(function) };
                 return Ok(Property { key, value, span: self.span_from(start) });
             }
@@ -1826,6 +1893,42 @@ fn property_key(token: &Token) -> Option<PropertyKey> {
         TokenKind::String(s) => Some(PropertyKey::String(s.clone())),
         TokenKind::Number(n) => Some(PropertyKey::Number(*n)),
         _ => token.identifier_name().map(|n| PropertyKey::Ident(n.to_string())),
+    }
+}
+
+/// The token can start an expression, so a `yield` before it on the same line takes an operand.
+fn starts_expression(token: &Token, e4x: bool) -> bool {
+    match &token.kind {
+        TokenKind::Ident(_) | TokenKind::Number(_) | TokenKind::String(_) | TokenKind::Template { .. } | TokenKind::RegExp { .. } => true,
+        TokenKind::Keyword(k) => matches!(
+            k,
+            Keyword::This
+                | Keyword::Null
+                | Keyword::True
+                | Keyword::False
+                | Keyword::Function
+                | Keyword::New
+                | Keyword::Delete
+                | Keyword::Void
+                | Keyword::Typeof
+        ),
+        TokenKind::Punct(p) => {
+            matches!(
+                p,
+                Punct::LParen
+                    | Punct::LBracket
+                    | Punct::LBrace
+                    | Punct::Plus
+                    | Punct::Minus
+                    | Punct::Bang
+                    | Punct::Tilde
+                    | Punct::PlusPlus
+                    | Punct::MinusMinus
+                    | Punct::Slash
+                    | Punct::SlashEq
+            ) || (e4x && matches!(p, Punct::Lt | Punct::At))
+        }
+        _ => false,
     }
 }
 
