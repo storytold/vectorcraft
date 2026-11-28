@@ -7508,6 +7508,15 @@ axis	Y Axis	Y-akseli
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {{"id": …}}-muotona tai sellaisena kuin se annettiin
 @msg	a string	merkkijono
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	viivalla on vain `paint`, `width`, `join`, `cap` ja `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	maalaavan live-tehosteen osalla on vain `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` ja `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	viivalla on vain `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` ja `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` voi olla vain true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` on vain reaaliaikaiselle tehosteelle, joka ilmoittaa `paintOutput`-avaimen, tasolla `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` on oltava luku 0:sta 1:een
+@msg	unknown blending mode; `blend` is one of {_1}	tuntematon sekoitustila; `blend` on yksi seuraavista: {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` on oltava enintään {MAX_LOOK_EFFECTS} tietueen taulukko
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	tuloksessa on enintään {MAX_RESULT_EFFECTS} tehostetietuetta
+@msg	this host takes no effects here	tämä isäntä ei ota tässä vastaan tehosteita
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	viivan on oltava muotoa {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	tehosteen on oltava muotoa {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	täytön tehoste palauttaa vain kentän `fills`

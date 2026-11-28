@@ -622,6 +622,60 @@ fn a_painted_live_effect_draws_its_pieces_with_their_own_paints() {
     assert_eq!(node(&s, id).appearance.effects[0].id, "plugin.test.engine.paints");
 }
 
+/// A piece that an effect declaring `appearanceOutput` returns with 50% opacity, Multiply and
+/// Offset Path keeps that look in SVG and PDF export, which leave the document alone, and Expand
+/// Appearance writes it as an ordinary path that draws the same, with the opacity and blending
+/// mode applied once, in one undo step.
+#[test]
+fn a_painted_piece_s_look_is_exported_and_expanded() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let piece = json!({"path": square_at(40.0), "fills": [solid("#00ff00")], "opacity": 0.5, "blend": "Multiply",
+        "effects": [{"id": "path.offsetPath", "params": {"offset": 5}}]});
+    let manifest =
+        r#"{"id":"test.engine.looks","name":"Looks","version":"1","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{}}"#;
+    install_wat(&mut s, &tpl::returning(manifest, &json!({ "objects": [piece] }).to_string()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.looks"}));
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": "test.engine.looks"}))["lastError"], Value::Null);
+    let near = |got: [u8; 4], want: [u8; 3]| got.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 8);
+    let img = drawn(&s);
+    let (inside, grown, outside) = (img.pixel(50, 50), img.pixel(37, 50), img.pixel(32, 50));
+    assert!(near(inside, [128, 255, 128]) && near(grown, [128, 255, 128]), "half green, grown by the offset: {inside:?} {grown:?}");
+    assert_eq!((outside, img.pixel(15, 15)), (WHITE, WHITE));
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let svg = s.execute("document.export", &json!({"format": "svg"})).unwrap();
+    let svg = String::from_utf8(vectorcraft_format::base64_decode(svg["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    assert!(svg.contains("#00ff00") && svg.contains("multiply") && svg.contains("0.5"), "{svg}");
+    let pdf = s.execute("document.export", &json!({"format": "pdf"})).unwrap();
+    let pdf = vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap();
+    assert!(pdf.windows(9).any(|w| w == b"/Multiply"), "the PDF sets the blending mode");
+    let back = vectorcraft_pdf::import(&pdf).unwrap();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let read = vectorcraft_render::Renderer::new().render(&back, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts);
+    let (got_inside, got_grown) = (read.pixel(50, 50), read.pixel(37, 50));
+    assert!(
+        near(got_inside, [128, 255, 128]) && near(got_grown, [128, 255, 128]),
+        "the PDF's piece is half green and grown: {got_inside:?} {got_grown:?}"
+    );
+    assert_eq!(read.pixel(32, 50), WHITE);
+    assert_eq!(s.doc().unwrap().doc, before, "export doesn't change the document");
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "effect.expandAppearance", json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let (mut opacity, mut multiplies) = (1.0_f32, 0);
+    s.doc().unwrap().doc.walk(|n| {
+        assert!(n.appearance.effects.iter().all(|e| !e.id.starts_with("plugin.")), "no plug-in effect left");
+        opacity *= n.opacity;
+        multiplies += usize::from(n.blend == vectorcraft_color::BlendMode::Multiply);
+    });
+    assert_eq!((opacity, multiplies), (0.5, 1), "the look applies once");
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(37, 50), img.pixel(32, 50)), (inside, grown, outside), "expanded, it draws the same");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(node(&s, id).appearance.effects[0].id, "plugin.test.engine.looks");
+}
+
 /// On a fill, a painted effect returns only fills: they replace that fill on each piece. A result
 /// that breaks a rule (strokes from an effect on a fill, a swatch the document doesn't have) is
 /// refused whole: the object is drawn as if the effect weren't there, and `plugin.info` names the

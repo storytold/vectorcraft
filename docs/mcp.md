@@ -14418,7 +14418,10 @@ id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearanc
 `effect.list` lists it. One whose manifest declares `paintOutput` (at plug-in API level 2; `plugin.list` gives `api`
 and `paintOutput: true`) draws the pieces it returns with paints of their own, and `effect.expandAppearance` writes them
 as ordinary paths with those paints; a result it refuses is drawn as if the effect weren't there, and `plugin.info`'s
-`lastError` names the plug-in and the refused field. While the app draws a document on screen, the live-effect plug-ins
+`lastError` names the plug-in and the refused field. One that also declares `appearanceOutput` (at plug-in API level 3;
+`plugin.list` gives `appearanceOutput: true`) may give each piece, fill and stroke an `opacity` from 0 to 1, a `blend`
+and built-in `effects` (16 at most in one list, 4,096 in one result, no plug-in effect), drawn and expanded with the
+piece; see `docs/plugins.md`. While the app draws a document on screen, the live-effect plug-ins
 of its first view share a 2,000 ms budget (VectorCraft's own value), and each run also keeps to its own 5,000 ms limit:
 once the budget is spent no run starts, and a result that comes back after it is not used. A stage left out for want
 of time, or one that times out, fails or has no plug-in, draws its input art unchanged and is deferred; the status bar
