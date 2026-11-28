@@ -487,10 +487,18 @@ fn operand_len(sprm: u16, rest: &[u8]) -> Option<usize> {
     })
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The Prls [`each_prl`] read on this thread.
+    pub(crate) static PRLS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Calls `f` with each Prl of `grpprl`: its sprm and its operand.
 fn each_prl(grpprl: &[u8], mut f: impl FnMut(u16, &[u8])) {
     let mut at = 0;
     while let Some(sprm) = u16_at(grpprl, at) {
+        #[cfg(test)]
+        PRLS_READ.with(|n| n.set(n.get() + 1));
         let rest = grpprl.get(at + 2..).unwrap_or_default();
         let Some((n, op)) = operand_len(sprm, rest).and_then(|n| Some((n, rest.get(..n)?))) else { return };
         // A variable operand's bytes follow its size.

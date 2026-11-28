@@ -8719,6 +8719,7 @@ dependencies = [
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-effects",
+ "vectorcraft-eps",
  "vectorcraft-geom 0.24.1",
  "vectorcraft-metafile",
  "vectorcraft-pathops 0.24.1",
