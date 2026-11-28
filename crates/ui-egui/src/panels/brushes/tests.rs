@@ -258,8 +258,8 @@ fn drops_on_the_panel_run_their_commands() {
         let star = t.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5}))["id"].as_u64().unwrap();
         // Nothing selected: what New Brush makes comes from the dropped art.
         t.run("select.none", json!({}));
-        let document = t.app().session.active().unwrap().uid;
-        t.drags(PanelDrag::Art { document, ids: vec![NodeId(star)] });
+        let (document, reverts) = t.app().session.active().map(|st| (st.uid, st.reverts)).unwrap();
+        t.drags(PanelDrag::Art { document, reverts, ids: vec![NodeId(star)] });
         let (lib, before) = (t.run("brush.list", json!({})), brushes(&t.app()).0);
         let at = t.target(on).center();
         t.drop_at(at, modifiers);
@@ -275,8 +275,8 @@ fn drops_on_the_panel_run_their_commands() {
     for (name, part) in [("Dots", "art"), ("Arrow", "art"), ("Chain", "side")] {
         let mut t = Trial::new();
         let id = t.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 12}))["id"].as_u64().unwrap();
-        let document = t.app().session.active().unwrap().uid;
-        t.drags(PanelDrag::Art { document, ids: vec![NodeId(id)] });
+        let (document, reverts) = t.app().session.active().map(|st| (st.uid, st.reverts)).unwrap();
+        t.drags(PanelDrag::Art { document, reverts, ids: vec![NodeId(id)] });
         let steps = undo_count(&t.app());
         let at = t.target(name).center();
         t.drop_at(at, Modifiers::ALT);

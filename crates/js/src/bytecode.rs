@@ -246,6 +246,30 @@ pub(crate) enum Op {
     InitIndex,
     /// `object key function` → `object`: a getter (`true`) or a setter with a computed name.
     InitAccessorIndex(bool),
+    /// Ends a generator function's call once its parameters are initialized: the frame becomes a
+    /// new generator object, which the call returns. The first `next` goes on after it.
+    GeneratorStart,
+    /// `value` → `received mode`: suspends the generator, giving its caller `{ value, done: false }`
+    /// (or, when true, the value itself, an iterator result from `yield*`'s delegate). It goes on
+    /// when the generator is resumed, with the value it was resumed with and how (0 `next`, 1
+    /// `throw`, 2 `return`).
+    Yield(bool),
+    /// `received mode` → `received`: goes on for `next`, throws the value for `throw`, and jumps
+    /// with it for `return`.
+    Resume(u32),
+    /// `value` → `iterator next`: GetIterator (ECMA-262 11th edition, section 7.4.1) for `yield*`,
+    /// which calls the iterator's methods itself.
+    DelegateIterator,
+    /// `iterator next received mode` → `iterator next mode method iterator received`, ready for
+    /// `Call(1)`: the delegate's `next`, `throw` or `return`. With `return` and no `return` method
+    /// it jumps with `iterator next received`; with `throw` and no `throw` method it closes the
+    /// iterator and throws a `TypeError` (section 14.4.14).
+    DelegateCall(u32),
+    /// `mode result` → `result` when the iterator result is not done; when it is, jumps with
+    /// `mode value`. A result that is not an object is a `TypeError`.
+    DelegateResult(u32),
+    /// `mode value` → `value`; for `return`, jumps with it.
+    DelegateDone(u32),
 }
 
 /// The names a block declares, entered with [`Op::PushBlock`].
@@ -354,6 +378,9 @@ pub(crate) struct Code {
     /// The code is a method's, a getter's or a setter's, read with [`crate::Options::es2015`]:
     /// its functions have no `prototype` and cannot be constructed (section 14.3.8).
     pub(crate) method: bool,
+    /// The code is a generator function's: a call makes a generator object ([`Op::GeneratorStart`]),
+    /// and it is not a constructor.
+    pub(crate) generator: bool,
 }
 
 /// What [`Op::SetFunctionNameKey`] puts before a computed name: `get ` and `set ` for accessors.
@@ -476,6 +503,12 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::IterClose => e(1, 0),
         Op::IterCloseThrow => end(2),
         Op::InitIndex | Op::InitAccessorIndex(_) => e(3, 1),
+        Op::GeneratorStart => e(0, 0),
+        Op::Yield(_) => e(1, 2),
+        Op::Resume(t) | Op::DelegateDone(t) => Effect { pops: 2, next: Some(1), jumps: vec![(t, 1)] },
+        Op::DelegateIterator => e(1, 2),
+        Op::DelegateCall(t) => Effect { pops: 2, next: Some(4), jumps: vec![(t, 1)] },
+        Op::DelegateResult(t) => Effect { pops: 2, next: Some(1), jumps: vec![(t, 2)] },
     })
 }
 
@@ -511,6 +544,7 @@ fn check_indices(op: Op, code: &Code) -> Result<(), String> {
         Op::PushBlock(i) => check(i, code.scopes.len(), "scope"),
         Op::TemplateObject(i) => check(i, code.templates.len(), "template"),
         Op::RegExp(i) => check(i, code.regexps.len(), "regular expression"),
+        Op::GeneratorStart | Op::Yield(_) if !code.generator => Err("a generator instruction outside a generator function".into()),
         _ => Ok(()),
     }
 }

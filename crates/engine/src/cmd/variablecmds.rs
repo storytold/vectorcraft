@@ -23,7 +23,10 @@ use vectorcraft_doc::{DataSet, DataValue, Document, NodeId, NodeKind, Selection,
 use super::edit::selected_roots;
 use super::fileio::{absolute_path, read_file_head, write_file};
 use super::textedit::set_story_text;
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selection, links, str_param};
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_or_selection, checked_ids_param, cmd, has_doc, has_selection, links,
+    str_param,
+};
 
 mod csv;
 mod library;
@@ -435,7 +438,8 @@ fn bind(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.unbind";
-    let ids = checked_ids_or_selection(s, p, C)?;
+    // Explicit bindings can include both a group and its children; retain every supplied ID.
+    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { checked_ids_or_selection(s, p, C)? };
     let name = defined_variable(s, p, C)?;
     let n = edit_variables(s, "Unbind Variable", |vars| {
         let mut n = 0;
@@ -944,11 +948,17 @@ fn dataset_step(s: &mut Session, cmd: &str, forward: bool) -> Result<Value> {
 /// result is that command's, with `format` set to `csv` or `xml`.
 fn variable_import(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.import";
-    let path = str_param(p, "path").ok_or_else(|| bad(C, "missing `path`"))?;
-    let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    let (name, input) = if let Some(path) = str_param(p, "path") {
+        (path, json!({"path": path}))
+    } else {
+        let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `path` or `name` with `dataBase64`"))?;
+        let bytes = str_param(p, "dataBase64").ok_or_else(|| bad(C, "missing `dataBase64`"))?;
+        (name, json!({"dataBase64": bytes}))
+    };
+    let ext = std::path::Path::new(name).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
     let (format, mut out) = match ext.as_deref() {
-        Some("csv" | "tsv" | "txt") => ("csv", dataset_import(s, &json!({"path": path}))?),
-        Some("xml") => ("xml", load_library(s, &json!({"path": path}))?),
+        Some("csv" | "tsv" | "txt") => ("csv", dataset_import(s, &input)?),
+        Some("xml") => ("xml", load_library(s, &input)?),
         _ => return Err(bad(C, "Import reads a data source file ending in .csv, .tsv, .txt or .xml")),
     };
     out["format"] = json!(format);
@@ -1161,7 +1171,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import…",
             ["Window", "Variables"],
             None,
-            "{path} import a data source file, chosen by its extension (any case): a .csv, .tsv or .txt file is read as dataset.import reads it, and an .xml file as variable.loadLibrary reads it, with their refusals and undo steps; any other extension, or none, is refused before the file is read → the result of that command with `format`: `csv` or `xml`",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes)} import a data source chosen by its extension (any case): a .csv, .tsv or .txt file is read as dataset.import reads it, and an .xml file as variable.loadLibrary reads it, with their refusals and undo steps; any other extension, or none, is refused before the file is read → the result of that command with `format`: `csv` or `xml`",
             has_doc,
             variable_import
         ),

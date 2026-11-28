@@ -657,6 +657,28 @@ fn pdf_pages_and_native_artboards_place_as_clipped_groups() {
     }
 }
 
+/// Place and Set Bounds use the layout of native point type, including its alignment.
+#[test]
+fn bounding_native_placement_measures_aligned_point_type() {
+    for (justify, x) in [("center", 190), ("right", 275)] {
+        let mut src = session();
+        let square = src.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 180, "height": 180})).unwrap()["id"].clone();
+        src.execute("paint.setStroke", &json!({"id": square, "none": true})).unwrap();
+        src.execute("text.create", &json!({"text": "Sample test", "x": x, "y": 150, "size": 18, "justify": justify})).unwrap();
+        let shown = vectorcraft_render::encode::art_bounds(&src.doc().unwrap().doc).unwrap();
+        let width = node(&src, &square).geometric_bounds().unwrap().width();
+        assert!(close(shown.width(), width), "the {justify}-aligned text starts inside the square");
+        let native = serialize(&mut src, "vectorcraft");
+
+        let mut placed = session();
+        let r = place(&mut placed, "aligned.vectorcraft", &native, json!({"crop": "bounding", "link": false}));
+        assert!(close(r["width"].as_f64().unwrap(), width), "{justify}: {r}");
+        placed.execute("object.setBounds", &json!({"width": width, "proportional": true})).unwrap();
+        let after = vectorcraft_render::encode::art_bounds(&placed.doc().unwrap().doc).unwrap();
+        assert!(close(after.width(), shown.width()), "{justify}: {shown:?} became {after:?}");
+    }
+}
+
 /// With crop "bounding", the art's box is the box of what shows, as an export measures it: a hidden
 /// member of a group does not count, and is still placed, hidden.
 #[test]

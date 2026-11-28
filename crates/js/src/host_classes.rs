@@ -91,6 +91,8 @@ pub(crate) struct Entry {
     parent: Option<u32>,
     /// The names of the members `hasOwnProperty` reports: every member but the unavailable ones.
     own: Rc<HashSet<Key>>,
+    /// The names of the members this class declares as unavailable.
+    unavailable: Rc<HashSet<Key>>,
 }
 
 impl Entry {
@@ -156,7 +158,9 @@ pub fn host_ref_parts(d: &Data) -> Option<(&str, Vec<f64>)> {
 
 impl Interp {
     /// Whether `k` is a member that `hasOwnProperty` reports on `id`: `id` is an object of a host
-    /// class, and `k` names an available member of that class or of a class it descends from.
+    /// class, and `k` names an available member of that class or of a class it descends from. The
+    /// nearest class that declares `k` decides, so a member a class declares unavailable is not
+    /// reported even when a class it descends from has it.
     pub(crate) fn is_host_member(&self, id: ObjId, k: &[u16]) -> JsResult<bool> {
         let Class::Host(h) = &self.object(id)?.class else { return Ok(false) };
         let mut class = Some(h.class);
@@ -164,6 +168,9 @@ impl Interp {
             let Some(e) = self.host_classes.get(c as usize) else { return Err(Abrupt::Internal("host class out of range".into())) };
             if e.own.contains(k) {
                 return Ok(true);
+            }
+            if e.unavailable.contains(k) {
+                return Ok(false);
             }
             class = e.parent;
         }
@@ -176,6 +183,12 @@ impl Interp {
         let name =
             self.host_classes.get(h.class as usize).map(|e| e.name.clone()).ok_or_else(|| Abrupt::Internal("host class out of range".into()))?;
         Ok(Some(host_ref(&name, &h.handle)))
+    }
+
+    pub(crate) fn host_ref_size(&self, id: ObjId) -> JsResult<Option<(usize, usize)>> {
+        let Class::Host(h) = &self.object(id)?.class else { return Ok(None) };
+        let name = self.host_classes.get(h.class as usize).map(|e| e.name.len()).ok_or_else(|| Abrupt::Internal("host class out of range".into()))?;
+        Ok(Some((name, h.handle.len())))
     }
 
     /// The object of a host class that `d`, which a host function gave, stands for.
@@ -226,11 +239,10 @@ impl Interp {
     /// gets `true` as a third argument.
     pub(crate) fn host_index(&mut self, f: &HostFunction, id: ObjId, k: Data, probe: bool) -> JsResult<Value> {
         self.use_fuel()?;
-        let Some(this) = self.host_ref_of(id)? else { return Ok(Value::Undefined) };
-        let mut args = vec![this, k];
-        if probe {
-            args.push(Data::Bool(true));
+        if self.host_ref_size(id)?.is_none() {
+            return Ok(Value::Undefined);
         }
+        let args = self.read_index_args(id, k, probe)?;
         match f(args) {
             Ok(d) => self.write_hosted(d),
             Err(HostError::Wait) => Err(Abrupt::Internal("a host class's indexer waited for its result".into())),
@@ -320,7 +332,8 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
     let r = fill_class(i, proto, &class);
     i.temp_roots.truncate(mark);
     let ctor = r?;
-    let members = class.members.iter().filter(|(_, m)| !matches!(m, HostMember::Unavailable(_))).map(|(name, _)| key(name)).collect();
+    let (unavailable, members): (Vec<_>, Vec<_>) = class.members.iter().partition(|(_, m)| matches!(m, HostMember::Unavailable(_)));
+    let names = |list: Vec<&(String, HostMember)>| list.into_iter().map(|(name, _)| key(name)).collect::<HashSet<Key>>();
     i.host_classes.push(Entry {
         name: class.name.as_str().into(),
         proto,
@@ -328,7 +341,8 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
         index: class.index,
         family,
         parent: parent_class,
-        own: Rc::new(members),
+        own: Rc::new(names(members)),
+        unavailable: Rc::new(names(unavailable)),
     });
     let global = i.global;
     i.define(global, key(&class.name), Prop::Data { value: Value::Object(ctor), flags: crate::heap::HIDDEN })
