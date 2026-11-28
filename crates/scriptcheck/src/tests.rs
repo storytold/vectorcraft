@@ -675,7 +675,7 @@ fn only_a_whole_var_value_makes_save_as_the_scripts_own() {
 /// leaves it the script's own.
 #[test]
 fn a_save_as_other_code_may_replace_writes_a_file() {
-    let cases: [(&str, &[usize]); 7] = [
+    let cases: [(&str, &[usize]); 9] = [
         ("var f = new File(p);\nvar d = app.activeDocument;\nif (flag) label:\nvar d = {saveAs: function () {}};\nd.saveAs(f);\n", &[5]),
         (
             "var f = new File(p);\nvar d = {\n    saveAs: function () {},\n    useDocument: function () {\n        d = null;\n        d = app.activeDocument;\n    }\n};\nd.useDocument();\nd.saveAs(f);\n",
@@ -685,6 +685,8 @@ fn a_save_as_other_code_may_replace_writes_a_file() {
         ("var f = new File(p);\nvar d = {saveAs: function () {}};\nthis.d = app.activeDocument;\nd.saveAs(f);\n", &[4]),
         ("var f = new File(p);\nvar d = {saveAs: function () {}};\neval(s);\nd.saveAs(f);\n", &[4]),
         ("#include \"other.jsx\"\nvar f = new File(p);\nvar d = {saveAs: function () {}};\nd.saveAs(f);\n", &[4]),
+        ("var f = new File(p);\nvar d = {saveAs: function () {}};\n#include \"other.jsx\"\nd.saveAs(f);\n", &[4]),
+        ("var f = new File(p);\nvar d = {saveAs: function () {}};\nwith ({d: app.activeDocument}) {\n    d.saveAs(f);\n}\n", &[4]),
         ("var f = new File(p);\nvar d = {saveAs: function () {}};\nfunction g() { var d = app.activeDocument; d = 1; }\nd.saveAs(f);\n", &[]),
     ];
     for (src, lines) in cases {

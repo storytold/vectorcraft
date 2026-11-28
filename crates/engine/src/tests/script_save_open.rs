@@ -813,11 +813,40 @@ fn path_of_a_file_saved_under_a_relative_name_is_the_working_folder() {
     let mut s = session(&base);
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     s.active_mut().unwrap().path = Some("drawing.svg".into());
-    let out = logged(&mut s, &base, "var d = app.activeDocument; vc.log([d.path instanceof Folder, d.path === '' ? '' : d.path.fsName]);");
+    let out = logged(
+        &mut s,
+        &base,
+        "var d = app.activeDocument; vc.log([d.path instanceof Folder, d.path === '' ? '' : d.path.fsName, d.fullName.fsName]);",
+    );
     let cwd = std::env::current_dir().unwrap();
     assert_eq!(out[0][0], json!(true), "{out}");
-    let shown = PathBuf::from(out[0][1].as_str().unwrap());
-    assert!(shown == cwd || std::fs::canonicalize(&shown).ok() == std::fs::canonicalize(&cwd).ok(), "{shown:?} is not {cwd:?}");
+    let same = |shown: &str, want: &Path| {
+        let shown = PathBuf::from(shown);
+        shown == want || std::fs::canonicalize(&shown).ok().zip(std::fs::canonicalize(want).ok()).is_some_and(|(a, b)| a == b)
+    };
+    assert!(same(out[0][1].as_str().unwrap(), &cwd), "{out} is not in {cwd:?}");
+    let file = out[0][2].as_str().unwrap();
+    assert!(Path::new(file).is_absolute() && Path::new(file).file_name() == Some("drawing.svg".as_ref()), "{file}");
+    assert!(same(&Path::new(file).parent().unwrap().to_string_lossy(), &cwd), "{file} is not in {cwd:?}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The warnings a save gives, such as editing data left out of a PDF of one artboard of several, go
+/// to the Script Console.
+#[test]
+fn a_saves_warnings_go_to_the_console() {
+    let base = folder("warnings");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    let save = format!(
+        "Folder.userData; var o = new PDFSaveOptions(); o.preserveEditability = true; o.artboardRange = '1';\n\
+         app.activeDocument.saveAs(new File({}), o);",
+        quoted(&dir.join("one.pdf"))
+    );
+    let r = run(&mut s, &base, &save).unwrap();
+    let lines = r["console"]["lines"].as_array().unwrap();
+    assert!(lines.iter().any(|l| l.as_str().is_some_and(|l| l.starts_with("saveAs: "))), "{lines:?}");
     let _ = std::fs::remove_dir_all(base);
 }
 

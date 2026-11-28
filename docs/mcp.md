@@ -2897,7 +2897,9 @@ other files through `$`:
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
 - `Document.saveAs(file, options?)` runs `file.saveAs`, and the document then has the new file. A save to a
   `.vctemplate` file without options writes a template copy: the document keeps its file, its `fullName` and its
-  saved state.
+  saved state. Each warning the command gives, here and for `exportFile`, `app.open` and `close` with
+  `SaveOptions.SAVECHANGES`, goes to the Script Console as a line that starts with the method's name, such as
+  `saveAs: `.
   `Document.exportFile(file, exportType, options?)` runs `document.export` and leaves the document's file as it is.
   `app.open(file, documentColorSpace?, options?)` runs `document.open` and gives the new `Document`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/Application/).
@@ -2964,7 +2966,8 @@ other files through `$`:
   writes only the file at the path, holding that artboard. Without `saveMultipleArtboards`, a `.ai` or EPS
   `artboardRange` is not checked against the document's artboards, but one that is not written as a range of
   artboard numbers (such as `abc` or `0-`) throws. `Document.path` is a `Folder` for the folder of the document's
-  file. A document that has no file has a `fullName` of a `File` for its name in `Folder.current` and a `path` of
+  file. A file saved or opened under a relative path is in the working folder of the process that wrote or read it,
+  for `fullName`, `path` and `close` alike. A document that has no file has a `fullName` of a `File` for its name in `Folder.current` and a `path` of
   `""`. `fullName` and `path` of a document whose file the automation read roots do not allow throw
   `Script file access denied`. Setting `saved` runs `document.setSaved`: `true` records the document as saved
   without saving it, so `close()` then closes it, and `false` records it as having unsaved changes; neither adds an

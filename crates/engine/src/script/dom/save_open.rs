@@ -47,8 +47,8 @@
 //!   save of one artboard writes only the file at the path, holding that artboard. Without
 //!   `saveMultipleArtboards` the range is not used, but a value that is not written as a range of
 //!   artboard numbers throws.
-//! - `Document.path` is a `Folder` for the folder of the document's file. A document that has no
-//!   file has a `fullName` of a `File` for its name in `Folder.current` and a `path` of `""`.
+//! - `Document.path` is a `Folder` for the folder of the document's file. A file saved or opened
+//!   under a relative path is in the process's working folder. A document that has no file has a `fullName` of a `File` for its name in `Folder.current` and a `path` of `""`.
 //!   `fullName` and `path` of a document whose file the automation read roots do not allow throw
 //!   `Script file access denied`. Setting `Document.saved` runs `document.setSaved`.
 //! - `Document.close` with unsaved changes closes without them with
@@ -71,8 +71,8 @@ use vectorcraft_doc::Unit;
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostMember};
 
 use super::{
-    Answer, Host, Link, MAX_TEXT_BYTES, NO_ACTIVE_DOCUMENT, arg, boolean, command, current, doc_ref, get, given, method, named, num, on_doc,
-    property, text, this_doc, whole,
+    Answer, Host, Link, MAX_TEXT_BYTES, NO_ACTIVE_DOCUMENT, arg, boolean, command, command_value, current, doc_ref, get, given, method, named, num,
+    on_doc, property, text, this_doc, whole,
 };
 
 /// The most a scale factor of an export takes, in percent.
@@ -863,8 +863,18 @@ fn doc_save_as(h: &Host, a: &[Data]) -> Answer {
     }
     let real = h.disk.borrow().save_target(path).map_err(|m| refused(m, path))?;
     p.insert("path".into(), json!(plain(real)));
-    exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "file.saveAs", &Value::Object(p))))?;
+    exactly(h, || on_doc(h, doc.uid, false, |h| warned(h, "saveAs", "file.saveAs", &Value::Object(p))))?;
     Ok(Data::Undefined)
+}
+
+/// Runs command `id` as [`command`] does, and writes each warning its result gives to the console as
+/// `method: warning`, as `addDocument` writes the warnings of `file.new`.
+fn warned(h: &Host, method: &str, id: &str, p: &Value) -> Answer {
+    let (data, value) = command_value(h, id, p)?;
+    for w in value.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+        super::super::each_line(&format!("{method}: {w}"), |line, cut| h.line(super::super::console::Entry::Log(line), cut));
+    }
+    Ok(data)
 }
 
 /// `path` with the extension of `kind` added, unless its name already ends with one of them.
@@ -933,7 +943,7 @@ fn doc_export_file(h: &Host, a: &[Data]) -> Answer {
     let named = with_extension(path, &kind, svgz);
     let real = h.disk.borrow().save_target(&named).map_err(|m| refused(m, &named))?;
     p.insert("path".into(), json!(plain(real)));
-    exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "document.export", &Value::Object(p))))?;
+    exactly(h, || on_doc(h, doc.uid, false, |h| warned(h, "exportFile", "document.export", &Value::Object(p))))?;
     Ok(Data::Undefined)
 }
 
@@ -979,7 +989,7 @@ fn app_open(h: &Host, a: &[Data]) -> Answer {
     }
     let real = h.disk.borrow().open_target(path).map_err(|m| refused(m, path))?;
     p.insert("path".into(), json!(plain(real)));
-    let r = exactly(h, || command(h, "document.open", &Value::Object(p)))?;
+    let r = exactly(h, || warned(h, "open", "document.open", &Value::Object(p)))?;
     let index = match &r {
         Data::Object(items) => items.iter().find_map(|(k, v)| match (k.as_str(), v) {
             ("index", Data::Number(n)) => whole(*n).and_then(|i| usize::try_from(i).ok()),
@@ -992,15 +1002,25 @@ fn app_open(h: &Host, a: &[Data]) -> Answer {
     Ok(doc_ref(h, st.uid))
 }
 
-/// The document's file, `None` for a document that has none, or `Script file access denied` with
-/// the document's name when the automation read roots do not allow the file to be named
+/// A document's file as the engine reads and writes it: a relative path is in the process's working
+/// folder. It stays as it is when the working folder is not known.
+fn absolute(path: &str) -> String {
+    let p = std::path::Path::new(path);
+    match std::env::current_dir() {
+        Ok(cwd) if p.is_relative() => cwd.join(p).to_string_lossy().into_owned(),
+        _ => path.to_string(),
+    }
+}
+
+/// The document's file ([`absolute`]), `None` for a document that has none, or `Script file access
+/// denied` with the document's name when the automation read roots do not allow the file to be named
 /// ([`crate::file_access::check_read`]), as `app.getIsFileOpen` reads them.
-fn shown_file(st: &crate::DocState) -> std::result::Result<Option<&str>, HostError> {
+fn shown_file(st: &crate::DocState) -> std::result::Result<Option<String>, HostError> {
     match st.path.as_deref() {
         Some(p) if crate::file_access::check_read(p).is_err() => {
             Err(HostError::Error(format!("{}: {}", super::super::files::ACCESS_DENIED, st.title())))
         }
-        p => Ok(p),
+        p => Ok(p.map(absolute)),
     }
 }
 
@@ -1010,22 +1030,19 @@ fn doc_full_name(h: &Host, a: &[Data]) -> Answer {
     let doc = this_doc(h, a)?;
     super::with_doc(h, doc, |_, st| {
         Ok(match shown_file(st)? {
-            Some(p) => vectorcraft_js::file_ref(p),
+            Some(p) => vectorcraft_js::file_ref(&p),
             None => vectorcraft_js::file_ref(&st.title()),
         })
     })
 }
 
 /// `document.path`: a `Folder` for the folder of the document's file, or an empty string for a
-/// document that has none. A file saved under a relative path, which the engine wrote in the
-/// process's working folder, is in that folder.
+/// document that has none.
 fn doc_path(h: &Host, a: &[Data]) -> Answer {
     let doc = this_doc(h, a)?;
     let folder = super::with_doc(h, doc, |_, st| {
         Ok(shown_file(st)?.and_then(|p| {
-            let p = std::path::Path::new(p);
-            let full = if p.is_relative() { std::env::current_dir().ok()?.join(p) } else { p.to_path_buf() };
-            let parent = full.parent()?.to_string_lossy().into_owned();
+            let parent = std::path::Path::new(&p).parent()?.to_string_lossy().into_owned();
             (!parent.is_empty()).then_some(parent)
         }))
     })?;
@@ -1077,12 +1094,12 @@ fn doc_close(h: &Host, a: &[Data]) -> Answer {
         match how {
             "DONOTSAVECHANGES" => {}
             "SAVECHANGES" => {
-                let path = file.ok_or_else(|| HostError::Error(NO_FILE_TO_SAVE.into()))?;
+                let path = absolute(&file.ok_or_else(|| HostError::Error(NO_FILE_TO_SAVE.into()))?);
                 // A refusal names the document, as `fullName` does when the read roots hide its file.
                 let name = super::with_doc(h, doc, |_, st| st.title());
                 let real = h.disk.borrow().save_target(&path).map_err(|m| refused(m, &name))?;
                 let p = json!({"path": plain(real), "format": format});
-                exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "file.saveAs", &p)))?;
+                exactly(h, || on_doc(h, doc.uid, false, |h| warned(h, "close", "file.saveAs", &p)))?;
             }
             _ => return Err(HostError::Error(UNSAVED_CHANGES.into())),
         }
