@@ -2440,6 +2440,93 @@ fn ruby_is_written_with_its_type() {
     assert_eq!(moves(true), moves(false) + reading, "the reading's contours are written");
 }
 
+/// Symbols that hold many instances of the next symbol expand into every instance: past the budget
+/// of objects the instances are left out with a warning, in the EPS and legacy `.ai` writers,
+/// instead of cloning and walking billions of objects.
+#[test]
+fn rejected_symbol_keeps_the_budget_for_a_later_fitting_symbol() {
+    let mut d = doc_with(|_| vec![]);
+    let leaf = red_rect(&mut d);
+    let big = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(leaf.clone()), Arc::new(leaf.clone())], clip: false });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "big".into(), art: Arc::new(big) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "small".into(), art: Arc::new(leaf) });
+    let mut first = None;
+    for name in ["big", "small"] {
+        let id = d.alloc_id();
+        first.get_or_insert(id);
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::IDENTITY })).unwrap();
+    }
+    let mut expected = d.clone();
+    expected.remove(first.unwrap()).unwrap();
+    crate::expansion_test::with_used(vectorcraft_doc::MAX_SYMBOL_NODES - 1, || {
+        let actual = export(&d, &opts(&d), None, None).unwrap();
+        let control = export(&expected, &opts(&expected), None, None).unwrap();
+        assert!(actual.warnings.iter().any(|warning| warning.contains("too many objects")));
+        assert_eq!(actual.bytes, control.bytes, "EPS preserves the later fitting instance");
+        let actual = export_legacy_ai(&d, &LegacyAiOptions::default()).unwrap();
+        let control = export_legacy_ai(&expected, &LegacyAiOptions::default()).unwrap();
+        assert!(actual.warnings.iter().any(|warning| warning.contains("too many objects")));
+        assert_eq!(actual.bytes, control.bytes, "legacy .ai preserves the later fitting instance");
+    });
+}
+
+#[test]
+fn rejected_pattern_keeps_the_budget_for_a_later_fitting_symbol() {
+    let mut d = doc_with(|_| vec![]);
+    let tile = path(&mut d, shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+    d.patterns.push(vectorcraft_doc::PatternDef::new("tile", vec![Arc::new(tile)]));
+    let fill = Paint::Pattern { pattern: "tile".into(), xf: Affine::IDENTITY };
+    let first = path(&mut d, shapes::rectangle(Rect::new(50.0, 60.0, 150.0, 100.0)), fill, Paint::None, 0.0);
+    let first_id = first.id;
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), usize::MAX, first).unwrap();
+    let leaf = red_rect(&mut d);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "small".into(), art: Arc::new(leaf) });
+    let id = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "small".into(), xf: Affine::IDENTITY })).unwrap();
+    let mut expected = d.clone();
+    expected.remove(first_id).unwrap();
+    crate::expansion_test::with_used(vectorcraft_doc::MAX_SYMBOL_NODES - 1, || {
+        let eps = export(&d, &opts(&d), None, None).unwrap();
+        let legacy = export_legacy_ai(&d, &LegacyAiOptions::default()).unwrap();
+        let eps_control = export(&expected, &opts(&expected), None, None).unwrap();
+        let legacy_control = export_legacy_ai(&expected, &LegacyAiOptions::default()).unwrap();
+        let legacy_text = String::from_utf8(legacy.bytes).unwrap();
+        assert!(text(&eps_control).contains("1 0 0 rg"));
+        assert!(String::from_utf8(legacy_control.bytes).unwrap().contains("1 0 0 Xa"));
+        assert!(eps.warnings.iter().any(|warning| warning.contains("too many objects")));
+        assert!(legacy.warnings.iter().any(|warning| warning.contains("too many objects")));
+        assert!(!text(&eps).contains("0 0 1 rg"), "the oversized pattern fill is omitted as a whole");
+        assert!(!legacy_text.contains("0 0 1 Xa"), "the oversized pattern fill is omitted as a whole");
+        assert_eq!(
+            [text(&eps).contains("1 0 0 rg"), legacy_text.contains("1 0 0 Xa")],
+            [true, true],
+            "both writers preserve the fitting symbol after rejecting a whole pattern fill"
+        );
+    });
+}
+
+#[test]
+fn symbols_holding_many_instances_of_symbols_stop_at_the_budget() {
+    let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S0".into(), xf: Affine::IDENTITY })]);
+    let leaf = path(&mut d, shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S5".into(), art: Arc::new(leaf) });
+    for level in (0..5).rev() {
+        let next = format!("S{}", level + 1);
+        let kids: Vec<Arc<Node>> =
+            (0..40).map(|_| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: next.clone(), xf: Affine::IDENTITY }))).collect();
+        let art = Node::new(d.alloc_id(), NodeKind::Group { children: kids, clip: false });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("S{level}"), art: Arc::new(art) });
+    }
+    crate::expansion_test::with_used(vectorcraft_doc::MAX_SYMBOL_NODES - 128, || {
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        assert!(out.warnings.iter().any(|w| w.contains("too many objects")), "{:?}", out.warnings);
+        let out = export_legacy_ai(&d, &LegacyAiOptions::default()).unwrap();
+        assert!(out.warnings.iter().any(|w| w.contains("too many objects")), "{:?}", out.warnings);
+    });
+}
+
 #[test]
 fn tiff_preview_round_trips_when_postscript_is_unreadable() {
     let d = doc_with(|d| vec![red_rect(d)]);

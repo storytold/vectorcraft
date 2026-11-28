@@ -11478,6 +11478,10 @@ Batch exports (#1935):
 
 ## EPS export
 
+EPS, legacy `.ai`, and EMF/WMF exports limit expanded symbol art to 16,000,000 objects per output. Pattern art in EPS and legacy `.ai` shares that allowance. Instances that would exceed it are omitted with a warning. EPS and legacy `.ai` omit a whole pattern fill when its expanded art would exceed the remaining allowance. An omitted instance or fill does not consume the allowance, so later art that fits is still written. Collapsed nine-slice cells do not add copied objects to the count. A pattern whose retained art fits the allowance does not produce an object-limit warning.
+
+Metafile export also limits pattern placement to 250,000 tiles across its output. A fill that exceeds the remaining tile allowance is written as one color.
+
 `document.exportEps` (also `document.export` / `export` with format `eps`) writes Encapsulated PostScript: a DSC header
 (`%!PS-Adobe-3.0 EPSF-3.0`, `%%BoundingBox`, `%%HiResBoundingBox`, `%%LanguageLevel`, spot colours as
 `%%DocumentCustomColors`), then the page. Without `useArtboards` the file covers the visible art, its bounding box y up

@@ -53,6 +53,7 @@ const SPREAD_CAPPED: &str =
 const CONIC_WEDGE_COUNT: usize = 360;
 /// The most colorants a DeviceN color space may have (PostScript's limit).
 const MAX_DEVICE_N: usize = 32;
+const EXPANSION_LEFT_OUT: &str = "EPS export omitted symbol instances or whole pattern fills that hold too many objects";
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
 const TOO_LARGE: &str = "the artwork is too large for EPS: what follows 256 MB of PostScript was left out";
 /// The most PostScript the page body may grow to: symbols and patterns that hold one another
@@ -292,6 +293,8 @@ pub(crate) struct Scene<'a> {
     max_body: usize,
     /// Symbols and brush art being written inside one another.
     nest: u32,
+    /// The objects of the symbol and pattern art expanded so far, within [`vectorcraft_doc::MAX_SYMBOL_NODES`].
+    expanded: u64,
     /// The document is a separation's plate: every color is the gray of one ink's coverage
     /// ([`Self::on_plate`]).
     plate: bool,
@@ -336,6 +339,10 @@ impl<'a> Scene<'a> {
             pending: 0,
             max_body: MAX_BODY,
             nest: 0,
+            #[cfg(test)]
+            expanded: crate::expansion_test::initial_used(),
+            #[cfg(not(test))]
+            expanded: 0,
             plate: false,
             keep_below: false,
             overprinting: false,
@@ -645,11 +652,30 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n), *xf)
                 {
-                    self.nest += 1;
-                    self.node(&art, true);
-                    self.nest -= 1;
+                    // Symbols holding instances of symbols are written in full for each instance, empty
+                    // or not: every instance's art counts against one budget for the export.
+                    let doc = self.doc;
+                    let art = vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n);
+                    let count = art.count_with_masks() as u64;
+                    // Placed through 9-slice guides it can make more objects than `art` holds.
+                    let most = doc.symbol_slice_map(symbol, *xf).map_or(count, |m| m.most_placed(&art, doc));
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.expanded, most, || {
+                        let placed = doc.place_symbol_art(symbol, &art, *xf);
+                        let count = placed.as_ref().map_or(0, |a| a.count_with_masks() as u64);
+                        (placed, count)
+                    });
+                    match placed {
+                        Some(Some(art)) => {
+                            self.nest += 1;
+                            self.node(&art, true);
+                            self.nest -= 1;
+                        }
+                        Some(None) => {}
+                        None => {
+                            self.warn(EXPANSION_LEFT_OUT);
+                        }
+                    }
                 }
             }
             // Live blends, envelopes, meshes and repeats (and distorted images) are written as
@@ -806,8 +832,18 @@ impl<'a> Scene<'a> {
             Paint::Gradient(g) => self.gradient(g, bounds, area),
             Paint::Pattern { pattern, xf } => match doc.pattern(pattern) {
                 Some(def) => {
-                    for inst in def.instances_in(*xf, area) {
-                        self.node(&inst, true);
+                    // Over what the budget has left, no tile is built.
+                    let left = usize::try_from(vectorcraft_doc::MAX_SYMBOL_NODES.saturating_sub(self.expanded)).unwrap_or(usize::MAX);
+                    let expanded = &mut self.expanded;
+                    let tiles = def.instances_in_at_most(*xf, area, false, left, true).filter(|tiles| {
+                        let count = tiles.iter().map(|t| t.count_with_masks() as u64).sum();
+                        vectorcraft_doc::charge_symbol_art(expanded, count, || ((), count)).is_some()
+                    });
+                    match tiles {
+                        Some(tiles) => tiles.iter().for_each(|inst| self.node(inst, true)),
+                        None => {
+                            self.warn(EXPANSION_LEFT_OUT);
+                        }
                     }
                 }
                 None => {

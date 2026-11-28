@@ -39,6 +39,8 @@ mod ai_editing;
 mod ai_graph;
 mod ai_ops;
 pub mod dcs;
+#[cfg(test)]
+mod expansion_test;
 mod gradient_key;
 mod import;
 mod latin;

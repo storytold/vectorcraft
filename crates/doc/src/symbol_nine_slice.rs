@@ -565,8 +565,26 @@ impl NineSliceMap {
         if !self.clips || draws_symbol_art(n, boxes.document()) {
             return whole;
         }
-        let (cols, rows) = self.clip_cells(n, boxes, b).0;
-        let cells = ((cols[1] - cols[0] + 1) * (rows[1] - rows[0] + 1)) as u64;
+        let keep = n.appearance.effects.iter().rposition(|e| e.visible && !PAINTED_EFFECTS.contains(&e.id.as_str())).map_or(0, |i| i + 1);
+        let piece = (keep < n.appearance.effects.len()).then(|| {
+            let mut piece = n.clone();
+            piece.appearance.effects.truncate(keep);
+            piece
+        });
+        let n = piece.as_ref().unwrap_or(n);
+        let ((cols, rows), v) = self.clip_cells(n, boxes, b);
+        let mut cells = 0u64;
+        for j in rows[0]..=rows[1] {
+            for i in cols[0]..=cols[1] {
+                if self.x.part(i, v.x0, v.x1).is_none() || self.y.part(j, v.y0, v.y1).is_none() {
+                    continue;
+                }
+                if self.cell_local(i, j).determinant().abs() < 1e-18 {
+                    continue;
+                }
+                cells += 1;
+            }
+        }
         cells.saturating_mul(whole.saturating_add(2)).saturating_add(1)
     }
 
@@ -1374,6 +1392,27 @@ mod tests {
         }
         let most = m.most_placed(&deep, &d);
         assert!(most >= m.place(&deep, &d).count() as u64 && most <= deep.count() as u64 * MAX_SLICE_GROWTH, "{most}");
+    }
+
+    #[test]
+    fn collapsed_slice_cells_do_not_reject_art_that_fits_the_budget() {
+        let mut d = markers(Some(SymbolNineSlice::default()));
+        let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(gradient, Paint::None, 0.0));
+        for scale in [(0.4, 1.5), (0.4, 0.4)] {
+            let map = d.symbol_slice_map("S", Affine::scale_non_uniform(scale.0, scale.1)).unwrap();
+            let placed = map.place(&art, &d);
+            let count = placed.count_with_masks() as u64;
+            assert!(count > 1, "the placement keeps visible cells at {scale:?}");
+            let mut used = MAX_SYMBOL_NODES - count;
+            let accepted = charge_symbol_art(&mut used, map.most_placed(&art, &d), || {
+                let placed = map.place(&art, &d);
+                let count = placed.count_with_masks() as u64;
+                (placed, count)
+            });
+            assert!(accepted.is_some(), "the {count}-object placement fits the remaining budget at {scale:?}");
+            assert_eq!(used, MAX_SYMBOL_NODES);
+        }
     }
 
     /// The bound counts the art of opacity masks, which placing copies into each cell (unlinked)

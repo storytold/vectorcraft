@@ -350,6 +350,8 @@ Gradient meshes in the editing data keep each point's own color where a patch's 
 
 ## Format by format
 
+EPS, legacy `.ai`, and EMF/WMF exports limit expanded symbol art to 16,000,000 objects per output and report omitted instances as warnings. EPS and legacy `.ai` pattern art shares the object allowance. These two writers omit a whole pattern fill when its expanded art would exceed the remaining allowance. An omitted instance or fill does not consume the allowance, so later art that fits is still written. EMF pattern warnings describe omissions in the retained art, and collapsed nine-slice cells do not add copied objects to the count. Metafile pattern fills that exceed the remaining allowance of 250,000 tiles across the output are written as one color.
+
 | Format | Illustrator | Ours: open/place | Ours: save/export | Fidelity and tests |
 |---|---|---|---|---|
 | VectorCraft `.vectorcraft` / `.vctemplate` | — | yes | yes | lossless JSON, versioned, save down to v1; property-tested round trips (`format/tests/prop_format.rs`); documents with a lot of path data are written as compact JSON, about a fifth of the size (#1492); a save falls back to a plain fsync and to writing elsewhere and copying in when the folder refuses the usual steps (#1625, #1649, part of #1620; not confirmed on a real network share); the size limits on embedded data also apply to files read from memory (#1783), and saving over a private file on Unix leaves no readable temporary copy beside it (#1778); a dynamic symbol's type (`dynamic` on the symbol) and an instance's appearance changes to its art (`symbol_overrides`, each path at most 64 deep, counted against the object budget) are written only when set, so documents without them save as before (#4938) |

@@ -31,6 +31,8 @@
 mod bytes;
 mod dib;
 mod encode;
+#[cfg(test)]
+mod expansion_test;
 mod import;
 mod scene;
 
