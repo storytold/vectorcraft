@@ -2005,7 +2005,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.dialog",
         "Plug-in…",
         "",
-        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter at the value the filter last ran with in this session, else its default, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns). On the web the dialog has no live preview, and every filter it runs, at once or on OK, runs in a Web Worker → {background: true, status}",
+        "{id: an object filter or generator plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter at the value the filter last ran with in this session, else its default, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns). On the web the filter's dialog has no live preview, and every filter it runs, at once or on OK, runs in a Web Worker → {background: true, status}. A generator draws new generated art at once when it takes no parameters or params are given (plugin.generate), else opens dialog `pluginGenerate` (a row per parameter; OK runs plugin.generate)",
+    ),
+    (
+        "ui.editGeneratedArt",
+        "Edit Generated Art…",
+        "",
+        "{id?: a generated art object (default: the one selected)} Object › Plug-ins › Edit Generated Art…: open dialog `pluginGenerate` with the parameters the object was drawn with; OK runs plugin.editGenerated, which draws its art again as one undo step (none when nothing changed). An object whose generator isn't installed, or whose saved plug-in id, parameters, transforms or scales are damaged, is an error naming it, and its art stays as it is",
     ),
     (
         "plugin.applyLastFilter",

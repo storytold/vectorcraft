@@ -611,19 +611,23 @@ impl Node {
         self.children()?.iter().find(|c| c.id == r.path)?.path_data()
     }
 
-    fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
-        // A dimension's measurement moves with it.
-        if let Some(e) = self.extras_if_any()
-            && let Some(dimension) = &mut e.dimension
-        {
+    /// Moves what `a` moves in the node's extras: a dimension's measurement, a flare's center and
+    /// end point, and the place a generator's art is drawn again at, with what `sc` scales.
+    fn transform_extras(&mut self, a: Affine, sc: &Scaling) {
+        let Some(e) = self.extras_if_any() else { return };
+        if let Some(dimension) = &mut e.dimension {
             dimension.transform(a);
         }
-        // So does a flare's center and end point.
-        if let Some(e) = self.extras_if_any()
-            && let Some(flare) = &mut e.flare
-        {
+        if let Some(flare) = &mut e.flare {
             flare.transform(a);
         }
+        if let Some(generated) = &mut e.generated {
+            generated.transform(a, sc);
+        }
+    }
+
+    fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
+        self.transform_extras(a, sc);
         // The path the objects are attached to, before it is transformed.
         let on_path_before = self.on_path_data().cloned();
         // A distorted image's placement nearest its corners, before they are transformed (`None`

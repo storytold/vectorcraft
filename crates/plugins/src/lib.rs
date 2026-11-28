@@ -26,7 +26,8 @@
 //! time it is drawn, from an appearance stack, and at `api` 2 may paint what it returns
 //! ([`painted`]); an **exporter** ([`export`]) writes the whole
 //! document in a file format of its own; an **importer** ([`import`]) reads a file in a format of
-//! its own into a new document. The process-wide [`registry`] holds the installed
+//! its own into a new document; a **generator** ([`generate`]) draws art from its parameters alone,
+//! which the document keeps with them so the art can be drawn again. The process-wide [`registry`] holds the installed
 //! plug-ins; in [`safe_mode`] none of them loads or runs. A plug-in's parameters ([`manifest`]) come with what the host's dialogs need to show
 //! them well: labels, units, groups, help and conditions ([`dialog`]). What a plug-in may do is
 //! the set of [`permissions`] its manifest lists, which the user approves when it is installed. A
@@ -43,6 +44,7 @@ pub mod deferred;
 pub mod dialog;
 pub mod effect;
 pub mod export;
+pub mod generate;
 pub mod host;
 pub mod import;
 pub mod js;

@@ -3058,6 +3058,95 @@ proptest! {
     }
 }
 
+// ---------- generated art objects' saved fields ----------
+
+/// A native document holding one generated art object (a square drawn by plug-in
+/// `org.example.gen`), as pretty JSON text.
+fn generated_sample() -> Value {
+    use std::sync::Arc;
+    use vectorcraft_doc::generated::GeneratedArt;
+    use vectorcraft_doc::{Node, NodeId};
+    let mut d = Document::new(200.0, 200.0);
+    let layer = d.layers.first().map(|l| l.id);
+    let square =
+        Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 10.0, 60.0, 60.0)), Default::default());
+    let mut g = Node::group(NodeId(0), vec![Arc::new(square)]);
+    g.id = d.alloc_id();
+    let mut params = serde_json::Map::new();
+    params.insert("size".into(), json!(50));
+    g.extras_mut().generated = Some(Box::new(GeneratedArt::new("org.example.gen", "Squares", params)));
+    d.insert(layer, usize::MAX, g).unwrap();
+    serde_json::from_slice(&vectorcraft_format::save(&d, true)).unwrap()
+}
+
+/// The object of `v` (a native file's JSON) that holds a `generated` field.
+fn generated_node(v: &mut Value) -> Option<&mut Value> {
+    match v {
+        Value::Object(o) if o.contains_key("generated") => Some(v),
+        Value::Object(o) => o.values_mut().find_map(generated_node),
+        Value::Array(a) => a.iter_mut().find_map(generated_node),
+        _ => None,
+    }
+}
+
+/// Any JSON a damaged or hand-made file may hold in a saved field: strings (empty, long, with NUL,
+/// control, bidi and path characters), numbers, booleans, null, lists and objects.
+fn arb_saved_value() -> impl Strategy<Value = Value> {
+    let leaf = prop_oneof![
+        Just(Value::Null),
+        any::<bool>().prop_map(Value::from),
+        any::<i64>().prop_map(Value::from),
+        any::<f64>().prop_map(|f| serde_json::Number::from_f64(f).map_or(Value::Null, Value::Number)),
+        ".{0,80}".prop_map(Value::from),
+        prop::sample::select(vec!["org.example.gen", "org.example.gen ", "../x", "a\u{0}b", "\u{202e}gen", "", "x.y-z_1"]).prop_map(Value::from),
+        (0usize..200_000).prop_map(|n| Value::from("p".repeat(n))),
+    ];
+    leaf.prop_recursive(3, 24, 6, |inner| {
+        prop_oneof![
+            prop::collection::vec(inner.clone(), 0..6).prop_map(Value::from),
+            prop::collection::btree_map("[a-z_]{0,8}", inner, 0..6).prop_map(|m| Value::Object(m.into_iter().collect())),
+        ]
+    })
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A generated art object's saved plug-in id, name, parameters, transforms, scales and hash
+    /// replaced by anything, and the whole field too: the file opens without running a plug-in and
+    /// keeps the art, or is refused; an id is kept only when it is a plug-in id. It then renders,
+    /// exports and saves.
+    #[test]
+    fn generated_art_saved_fields_never_panic_and_keep_the_art(field in 0usize..9, value in arb_saved_value()) {
+        let mut v = generated_sample();
+        let node = generated_node(&mut v).unwrap();
+        let art = node["kind"].clone();
+        let id = vectorcraft_doc::NodeId(node["id"].as_u64().unwrap());
+        match ["plugin", "name", "params", "transform", "strokeScale", "effectScale", "patternTransform", "hash"].get(field) {
+            Some(key) => node["generated"][*key] = value,
+            None => node["generated"] = value,
+        }
+        let bytes = serde_json::to_vec(&v).unwrap();
+        let loaded = vectorcraft_engine::cmd::fileio::load("x.vectorcraft", &bytes);
+        if let Ok(l) = &loaded {
+            // The group keeps its art whatever was read of its generated art fields.
+            let group = l.doc.node(id);
+            prop_assert!(group.is_some(), "the group is gone");
+            prop_assert_eq!(group.map(|n| serde_json::to_value(&n.kind).unwrap()), Some(art));
+            let mut plugins = vec![];
+            l.doc.walk(|n| {
+                if let Some(g) = n.extras().generated.as_deref() {
+                    plugins.push(g.plugin.clone());
+                }
+            });
+            for plugin in &plugins {
+                prop_assert!(plugin.is_empty() || vectorcraft_doc::generated::valid_id(plugin), "{plugin:?}");
+            }
+        }
+        survive("generated art fields", || loaded.ok().map(|l| l.doc))?;
+    }
+}
+
 /// A native file whose area type has 2^60 rows, 2^60 columns, or 2^32 of each (their product
 /// overflows) opens with 100 in place of each count over 100, and renders and exports.
 #[test]

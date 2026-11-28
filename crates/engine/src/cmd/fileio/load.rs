@@ -655,6 +655,8 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         doc.title = title;
     }
     warnings.extend(doc.images.values().filter_map(|b| size_note(&b.bytes)));
+    // Generated art that can't be drawn again keeps its art; opening runs no plug-in.
+    warnings.extend(crate::cmd::plugin_generated::open_notes(&doc));
     Ok(Loaded { doc, format, warnings, restored, converted, preview_only, editing_data, native_pdf_compatible })
 }
 

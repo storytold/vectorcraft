@@ -14753,7 +14753,26 @@ the web it opens File › Open's picker) and adds it to Open Recent. With `path`
 on the desktop a picked file is read off the UI thread and the reply is `{background: true, status}`, and
 `file.cancelOpen` stops the importer. An importer with parameters, given no `params`, first asks for them in the
 `pluginImport` dialog. `params` holds the importer's parameters (their defaults when
-omitted). A failing plug-in returns an error and leaves the document as it was (an export writes
+omitted). A generator ([plug-ins](plugins.md#generators)) draws art from its parameters alone:
+`plugin.generate {id, params?}` runs it and adds its art to the current layer as a new generated art object (a group
+that keeps the plug-in's id and name, the parameters and the art), selected, as one undo step named after the plug-in,
+and returns `{id, plugin}`. A parameter the manifest doesn't declare, a value of the wrong type, a number outside its
+range and text past its `maxLength` are errors; the parameters kept are at most 64 KiB of JSON, and the art at most
+16 MiB. `plugin.editGenerated {id?, params}` runs the generator of generated art object `id` (default: the selected
+one) again with the saved parameters changed by `params` and replaces its art, placed as the object has been
+transformed since it was drawn (stroke weights, effect distances and pattern tiles included), as one undo step named
+Edit Generated Art; parameters that change nothing run nothing, make no undo step and return `changed: false`. An
+object whose plug-in isn't installed or is a plug-in of another kind, or whose saved plug-in id, parameters, transforms or
+scales are damaged, is an error (naming the plug-in when it is missing or of another kind), and its art stays as it is. `plugin.generatedInfo {id?}`
+returns `{id, plugin, name, params, state, installed}`, with `state` `"intact"`, `"damaged"` or `"changed"` (its art
+doesn't match the hash its file gave). `object.expand` makes a generated art object an ordinary group. The native file
+keeps each object's plug-in id, name, parameters, transforms and scales and a SHA-256 of its art (a generated art object
+inside another one's art is saved as plain art); `document.open` never runs a
+plug-in, and its `warnings` name the plug-in of each object whose plug-in is missing or of another kind or whose art
+changed, and say so once for objects with damaged fields. `plugin.run` of a generator is an error
+that names `plugin.generate`. In the app, Object › Plug-ins lists the generators with the filters (`plugin.dialog {id}`
+opens the `pluginGenerate` dialog for one with parameters), and Object › Plug-ins › Edit Generated Art…
+(`ui.editGeneratedArt {id?}`) opens that dialog with a selected object's parameters. A failing plug-in returns an error and leaves the document as it was (an export writes
 no file, and an import opens no document). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) needs a person's approval, and `plugin.install` refuses `allowHeavy: true`
 from a request. `plugin.run`

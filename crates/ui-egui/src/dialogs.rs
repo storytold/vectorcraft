@@ -211,6 +211,8 @@ mod tests_plugin_export;
 #[cfg(test)]
 mod tests_plugin_fields;
 #[cfg(test)]
+mod tests_plugin_generate;
+#[cfg(test)]
 mod tests_plugin_import;
 #[cfg(test)]
 mod tests_raster_formats;

@@ -77,6 +77,7 @@ pub mod perspgrid;
 pub mod place;
 pub mod plugin;
 pub(crate) mod plugin_call;
+pub mod plugin_generated;
 mod preflight;
 pub mod prefscmds;
 pub mod print;
@@ -405,6 +406,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(printpresets::specs());
         v.extend(printtiling::specs());
         v.extend(plugin::specs());
+        v.extend(plugin_generated::specs());
         v.extend(scripts::specs());
         v.extend(cut::specs());
         v.extend(halftone::specs());

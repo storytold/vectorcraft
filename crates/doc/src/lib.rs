@@ -18,6 +18,7 @@ pub mod decode;
 pub mod depth;
 pub mod dimension;
 pub mod flare;
+pub mod generated;
 pub mod graph;
 mod halftone_radii;
 pub mod hit;
