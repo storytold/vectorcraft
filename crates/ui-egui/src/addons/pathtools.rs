@@ -5,7 +5,8 @@
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
 //! ([`shape`]); its tools' options dialog (a double-click on the tool); and the Tangent Circle Tool's radius dialog
 //! ([`tangent_circle_radius`]). Everything acts through `addon.pathtools.*` and `tool.setOption`, except that the radius
-//! dialog draws its circle with `shape.circleThroughPoints`.
+//! dialog draws its circle with `shape.circleThroughPoints`. Canceling an Anchor Inspector field edit restores its
+//! opening value: an anchor edit is one undo step that the cancel takes back.
 
 pub mod bridge;
 pub mod corner;
@@ -16,7 +17,7 @@ pub mod shared_edge;
 pub mod tangent_circle;
 pub mod tangent_circle_radius;
 
-use craft::behavior::ColumnWidth;
+use craft::behavior::{ColumnWidth, EditEvents};
 use craft::menu::Node;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, Scroll, Show as _, ShowContainer as _, Sizing, clicked};
@@ -35,6 +36,7 @@ use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, par
 
 use crate::canvas::rulers::general_lengths;
 use crate::dialogs::host::open_held;
+use crate::edits::{EditPath, apply_event};
 use crate::menus::{Sep, c, cp};
 use crate::panels::empty_state;
 use crate::{VectorcraftApp, fields};
@@ -73,12 +75,20 @@ const EXTEND_MODES: [(&str, &str); 3] = [("straight", "Straight"), ("bezier", "S
 pub(crate) struct Inspector {
     /// How many points Add Points puts on each segment.
     pub points_per_segment: u32,
+    /// The In and Out Angle fields' last typed values while their edits run; each field shows its handle's angle in
+    /// that value's turn, so `200` stays `200` rather than `-160`.
+    pub angles: [Option<f64>; 2],
 }
 
 impl Default for Inspector {
     fn default() -> Self {
-        Inspector { points_per_segment: 1 }
+        Inspector { points_per_segment: 1, angles: [None; 2] }
     }
+}
+
+/// `degrees` moved by whole turns to lie nearest `near`; unchanged with no `near`.
+fn in_turn_of(degrees: f64, near: Option<f64>) -> f64 {
+    near.map_or(degrees, |near| degrees + 360.0 * ((near - degrees) / 360.0).round())
 }
 
 /// The first selected anchor as the panel shows it: positions less the ruler origin, handles as length and angle.
@@ -204,36 +214,38 @@ fn show_inspector(app: &mut VectorcraftApp, ui: &mut Ui) {
     let lengths = general_lengths(app);
     let origin = app.ruler_origin();
     let mut points = app.addon_panels.inspector.points_per_segment;
-    let mut set: Option<Value> = None;
+    // Each anchor field's edits this pass, as the `addon.pathtools.setAnchor` params they send.
+    let mut edits: Vec<EditEvents<Option<Value>>> = Vec::new();
     let mut action: Option<(&str, Value)> = None;
     match anchor {
         Some(_) => Text::new(crate::i18n::fmt(tl!("Anchors selected: {count}"), &[("count", &readout.count.to_string())])).show(ui),
         None => Text::new(tl!("Direct-select anchor points to edit them.")).show(ui),
     };
     let enabled = anchor.is_some();
-    let length = |ui: &mut Ui, salt: &'static str, field: NumberField<'static>| typed(field.id_salt(salt).enabled(enabled).show(ui).value());
+    // A cleared field sends no params, and its gesture still begins and ends.
+    let length = |ui: &mut Ui, salt: &'static str, field: NumberField<'static>, to: &dyn Fn(f64) -> Value| {
+        field.id_salt(salt).enabled(enabled).show(ui).edit.events.map(|v| v.map(to))
+    };
+    let mut typed_angles = app.addon_panels.inspector.angles;
     let angle = |ui: &mut Ui, salt: &'static str, v: Option<f64>| {
         let field = NumberField::new(tl!("Angle"), Bind::given(v)).unit_kind(UnitKind::Degrees).fixed_decimals(1);
-        typed(field.id_salt(salt).enabled(enabled).show(ui).value())
+        field.id_salt(salt).enabled(enabled).show(ui).edit.events
     };
     let _ = Grid::new(&COLUMNS).show(ui, |ui, _| {
         for (label, key, v, o) in [("X", "x", anchor.map(|a| a.x), origin.x), ("Y", "y", anchor.map(|a| a.y), origin.y)] {
             Text::new(tl!(label)).show(ui);
-            if let Some(v) = length(ui, key, NumberField::length(tl!(label), Bind::given(v), lengths)) {
-                set = Some(json!({ key: v + o }));
-            }
+            edits.push(length(ui, key, NumberField::length(tl!(label), Bind::given(v), lengths), &|v| json!({ key: v + o })));
         }
         for (label, side, i) in [("In", "in", 0), ("Out", "out", 1)] {
             Text::new(tl!(label)).show(ui);
             // A handle's length is a size: `50%` is half of it.
             let len = fields::size_field(ui, tl!("Length"), anchor.map(|a| a.lengths[i]), lengths);
-            if let Some(v) = length(ui, if i == 0 { "in-length" } else { "out-length" }, len) {
-                set = Some(json!({ format!("{side}Length"): v }));
-            }
+            edits.push(length(ui, if i == 0 { "in-length" } else { "out-length" }, len, &|v| json!({ format!("{side}Length"): v })));
             Text::new("∠").show(ui);
-            if let Some(v) = angle(ui, if i == 0 { "in-angle" } else { "out-angle" }, anchor.and_then(|a| a.angles[i])) {
-                set = Some(json!({ format!("{side}Angle"): v }));
-            }
+            let shown = anchor.and_then(|a| a.angles[i]).map(|v| in_turn_of(v, typed_angles[i]));
+            let events = angle(ui, if i == 0 { "in-angle" } else { "out-angle" }, shown);
+            typed_angles[i] = if events.ended().is_some() { None } else { events.value().copied().flatten().or(typed_angles[i]) };
+            edits.push(events.map(|v| v.map(|v| json!({ format!("{side}Angle"): v }))));
         }
     });
     Divider::horizontal().show(ui);
@@ -247,7 +259,8 @@ fn show_inspector(app: &mut VectorcraftApp, ui: &mut Ui) {
             action = Some(("addon.pathtools.addPoints", json!({ "count": f64::from(points) })));
         }
         let field = NumberField::new(tl!("Points per segment"), Bind::given(Some(f64::from(points)))).range(1.0..=100.0).fixed_decimals(0);
-        if let Some(v) = typed(field.id_salt("points-per-segment").enabled(selected).show(ui).value()) {
+        // The value the field holds after its events: a cancel's is the opening value.
+        if let Some(v) = typed(field.id_salt("points-per-segment").enabled(selected).show(ui).edit.events.landed()) {
             points = v as u32;
         }
     });
@@ -261,8 +274,14 @@ fn show_inspector(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     app.addon_panels.inspector.points_per_segment = points;
-    if let Some(p) = set {
-        run(app, "addon.pathtools.setAnchor", p);
+    app.addon_panels.inspector.angles = typed_angles;
+    // One undo step per gesture; a cancel reverts it.
+    for event in edits.iter().flatten() {
+        apply_event(app, event, &EditPath::Scope, &mut |app, p: &Option<Value>, _| {
+            if let Some(p) = p {
+                run(app, "addon.pathtools.setAnchor", p.clone());
+            }
+        });
     }
     if let Some((id, p)) = action {
         run(app, id, p);
