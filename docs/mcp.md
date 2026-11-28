@@ -11985,8 +11985,32 @@ rectangles, ellipses, clipping paths and other objects the reader doesn't read y
 outline arrowheads are left out, and lenses, canvases and containers are not applied. The objects a clipping path clips come in without it. The
 `warnings` of `document.open` name each of these kinds the file had, and say when damaged parts or parts past the
 import limits were left out. Files in big-endian byte order and files with 16-bit coordinates are refused with a
-message. VectorCraft doesn't write `.cmx` files. After a file opens with warnings, an export or Save As to its own path
-needs `acknowledgeLoss: true`.
+message. After a file opens with warnings, an export or Save As to its own path needs `acknowledgeLoss: true`.
+
+## CMX export
+
+`document.export {format: "cmx"}` (and Export As, `.cmx`) writes one `.cmx` exchange file with 32-bit coordinates in
+0.1 µm units, in the layouts the CMX import reads, through `craft-cdr`'s `write_cmx`. The file has a page for the
+chosen artboard (`artboard`, default the first), or with `useArtboards: true` a page for each chosen artboard
+(`artboards` or `range`, default all), in one file; `useArtboards: false` writes the bounds of the visible art. Each
+page has a layer, with its name, for each top-level layer that has visible art over that page, holding that art as
+curves in paint order. A fill and a stroke of one path are one curve. Colors keep their model: CMYK in whole
+percents, RGB and gray in 8-bit values, a spot swatch's color as a named library color at its tint in whole percents
+with the swatch's look, and Registration; Lab colors are written as RGB. Strokes keep their width, caps, joins and
+dashes, and dash and gap lengths are rounded to whole stroke widths, the unit the file stores them in. Type is written
+as its glyph outlines, gradients and patterns as one color, and strokes the file can't hold (aligned inside or
+outside, width profiles, arrowheads) as their filled outlines. Clipping masks are not applied, and art that crosses
+the edge of a page is written whole, including the part past the edge. Layer and spot color names are written up to
+4,096 characters, and a name longer than 256 characters opens again shortened, as the CMX import reads it. Placed
+images, transparency, blend modes and raster effects are left out. A fill that uses the nonzero rule is written
+even-odd; the warnings say so when the shape crosses itself, or when parts of it that turn the same way overlap. A
+path of more than 7,281 points is written as a group of curves (one part longer than that is cut into open pieces, so
+a fill of it, and its stroke where the pieces meet, draw differently). Dash offsets and dashes aligned to corners and
+path ends are written as plain dashes from the start of each path. The file holds no miter limit, so mitered
+corners open again with VectorCraft's default limit of 10. A spot color at a low tint opens again with its
+ink's color changed (at 0% as white), a spot swatch without a name opens as a process color, and one whose color is
+not known is written as black at its tint. The `warnings` name each of these losses the document had. A coordinate
+past the 32-bit range, and a file larger than the CMX import reads, are refused with a message.
 
 ## Printing
 
