@@ -1852,6 +1852,8 @@ impl Tool for GestureTool {
                 }
                 // A release away from the press point counts as movement.
                 self.moved |= self.points.first().is_some_and(|start| p.distance(*start) > vectorcraft_geom::EPS);
+                // Where the pointer really was at the release, before a snap takes it back onto the start.
+                self.note_leaving(cx, p);
                 // Alt pressed while the pointer stood still at the press point switches the release too.
                 if self.blob_alt_smooths(ev.mods) {
                     self.smoothing = true;
