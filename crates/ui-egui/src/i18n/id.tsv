@@ -511,6 +511,15 @@
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objek baca-saja dihilangkan: kembalikan objek itu, sebagai {{"id": …}} saja atau seperti yang diberikan
 @msg	a string	string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	goresan hanya memiliki `paint`, `width`, `join`, `cap` dan `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	potongan efek langsung yang dicat hanya memiliki `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` dan `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	goresan hanya memiliki `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` dan `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` hanya boleh true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` hanya untuk efek langsung yang menyatakan `paintOutput`, pada `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` harus berupa angka dari 0 sampai 1
+@msg	unknown blending mode; `blend` is one of {_1}	mode campuran tidak dikenal; `blend` adalah salah satu dari {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` harus berupa larik berisi paling banyak {MAX_LOOK_EFFECTS} catatan
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	satu hasil membawa paling banyak {MAX_RESULT_EFFECTS} catatan efek
+@msg	this host takes no effects here	host ini tidak menerima efek di sini
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	goresan harus berupa {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	efek harus berupa {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efek pada isian hanya mengembalikan `fills`
@@ -643,6 +652,21 @@
 @msg	time budget	anggaran waktu
 @msg	memory budget (the selection is too large to hand over)	anggaran memori (seleksi terlalu besar untuk diserahkan)
 @msg	output size ({what} is {len} bytes, limit {max})	ukuran keluaran ({what} berukuran {len} byte, batas {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} baris {line}, kolom {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	anggaran memori
+@msg	call depth	kedalaman panggilan
+@msg	run(input, params) returned no output object	run(input, params) tidak mengembalikan objek keluaran
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" memerlukan `script`: nama file .js plug-in, di samping manifes
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` harus berupa nama file .js di folder manifes: 1-128 byte, tanpa folder, tanpa `:`, tidak diawali `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` adalah teks skrip dan hanya diberikan dalam JSON yang diterima dataBase64 plugin.install: file .vcplugin menamai skripnya di `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifes plug-in JavaScript memberikan `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" untuk filter objek (`kind` "filter"), bukan `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	plug-in JavaScript tidak dapat mencantumkan izin `{name}`: dari izin host, plug-in ini boleh mencantumkan `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifes modul WebAssembly menghilangkan `runtime`: "js" untuk plug-in JavaScript
+@msg	a JavaScript plug-in makes no command calls	plug-in JavaScript tidak memanggil perintah
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) menerima dua angka
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) menerima level, 0 (kesalahan), 1 (peringatan), 2 (informasi), atau 3 (debug), dan string
 @msg	the plug-in's grant can't be removed from the plug-in store	izin yang diberikan kepada plug-in tidak dapat dihapus dari penyimpanan plug-in
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	izin `{shown}` dicadangkan untuk API plug-in yang lebih baru; host ini tidak memberikannya
 @msg	unknown permission `{shown}`	izin tidak dikenal `{shown}`
@@ -1316,6 +1340,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	CMYK generik VectorCraft (mirip SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK kertas berlapis VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK kertas tanpa lapisan VectorCraft (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	RGB Macintosh lama (Gamma 1.8)
 	Internet Standard RGB (sRGB)	RGB standar Internet (sRGB)
 	Monitor RGB	RGB monitor
@@ -5607,6 +5633,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Skrip meminta izin untuk membaca dan menulis folder yang Anda pilih, beserta seluruh isinya.
 	Allow Once	Izinkan Sekali
 	Always Allow This Script	Selalu Izinkan Skrip Ini
+	No script has kept file access.	Tidak ada skrip yang memiliki akses berkas tersimpan.
+	Read file	Baca Berkas
+	Read and write file	Baca dan Tulis Berkas
+	Read and write folder	Baca dan Tulis Folder
+	Revoke	Cabut
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Cabut menghapus akses yang disimpan untuk setiap versi skrip. Akses ke folder mencakup semua isinya.
+@msg	Script file access revoked	Akses berkas skrip dicabut
+@msg	The script file access was already revoked	Akses berkas skrip sudah dicabut
 	Deny	Tolak
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
@@ -8305,6 +8339,7 @@ breakText	Glyphs	Glif
 	Place Brush Art	Tempatkan karya seni kuas
 	Replace Brush Art	Ganti karya seni kuas
 	Replace Pattern Art	Ganti karya seni pola
+	Place Pattern Art	Tempatkan karya seni pola
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Stroke menggunakan kuas ini. Terapkan karya seni baru ke stroke tersebut, atau biarkan apa adanya dan tambahkan salinan kuas dengan karya seni baru?
 	Apply to Strokes	Terapkan ke Stroke
 	Leave Strokes	Biarkan Stroke
@@ -8701,6 +8736,11 @@ breakText	Glyphs	Glif
 	No objects are selected.	Tidak ada objek yang dipilih.
 	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
 	Remove Fold Line Role	Hapus jenis garis
+	Fold Angle	Sudut lipat
+	Set Fold Angle…	Atur sudut lipat…
+	Set Fold Angle	Atur sudut lipat
+	Reset Fold Angle	Atur ulang sudut lipat
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	pilih garis lekuk, garis potong sebagian, atau garis perforasi yang tidak terkunci dan tidak tersembunyi
 	Check	Periksa
 	Check Fold Lines	Periksa garis lipat
 @msg	No cut lines are in the selection.	Tidak ada garis potong dalam seleksi.
@@ -8856,6 +8896,7 @@ breakText	Glyphs	Glif
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` untuk dialog file skrip harus salah satu dari: once, always, deny, stop
 @msg	choose a file or folder first, or deny	pilih file atau folder terlebih dahulu, atau tolak
 @msg	the script file permissions could not be saved: {e}	izin file skrip tidak dapat disimpan: {e}
+@msg	the script file permissions could not be read: {e}	izin file skrip tidak dapat dibaca: {e}
 @msg	this script's file access can be allowed only once	akses file skrip ini hanya dapat diizinkan sekali
 @msg	Only the person at the keyboard can allow a script's file access	Hanya orang yang berada di depan keyboard yang dapat mengizinkan akses file skrip
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Skrip diberi paling banyak 2.048 file: file yang dipilih sesudahnya dihilangkan

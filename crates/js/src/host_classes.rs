@@ -131,6 +131,19 @@ pub fn host_ref(class: &str, handle: &[f64]) -> Data {
     Data::Object(vec![(HOST_REF_KEY.to_string(), Data::Array(list))])
 }
 
+/// The one key of the [`Data`] object that stands for a script's `File` in the arguments of a host
+/// class's member ([`file_ref_path`]). A plain object a script made that carries it is refused.
+pub const FILE_REF_KEY: &str = "\u{0}fileRef";
+
+/// The path of the `File` that `d`, an argument of a host class's member, stands for.
+pub fn file_ref_path(d: &Data) -> Option<&str> {
+    let Data::Object(items) = d else { return None };
+    match items.as_slice() {
+        [(k, Data::String(path))] if k == FILE_REF_KEY => Some(path),
+        _ => None,
+    }
+}
+
 /// The class and handle of the object `d` stands for, when it is one [`host_ref`] made.
 pub fn host_ref_parts(d: &Data) -> Option<(&str, Vec<f64>)> {
     let Data::Object(items) = d else { return None };
@@ -170,6 +183,12 @@ impl Interp {
         let name =
             self.host_classes.get(h.class as usize).map(|e| e.name.clone()).ok_or_else(|| Abrupt::Internal("host class out of range".into()))?;
         Ok(Some(host_ref(&name, &h.handle)))
+    }
+
+    pub(crate) fn host_ref_size(&self, id: ObjId) -> JsResult<Option<(usize, usize)>> {
+        let Class::Host(h) = &self.object(id)?.class else { return Ok(None) };
+        let name = self.host_classes.get(h.class as usize).map(|e| e.name.len()).ok_or_else(|| Abrupt::Internal("host class out of range".into()))?;
+        Ok(Some((name, h.handle.len())))
     }
 
     /// The object of a host class that `d`, which a host function gave, stands for.
@@ -220,11 +239,10 @@ impl Interp {
     /// gets `true` as a third argument.
     pub(crate) fn host_index(&mut self, f: &HostFunction, id: ObjId, k: Data, probe: bool) -> JsResult<Value> {
         self.use_fuel()?;
-        let Some(this) = self.host_ref_of(id)? else { return Ok(Value::Undefined) };
-        let mut args = vec![this, k];
-        if probe {
-            args.push(Data::Bool(true));
+        if self.host_ref_size(id)?.is_none() {
+            return Ok(Value::Undefined);
         }
+        let args = self.read_index_args(id, k, probe)?;
         match f(args) {
             Ok(d) => self.write_hosted(d),
             Err(HostError::Wait) => Err(Abrupt::Internal("a host class's indexer waited for its result".into())),

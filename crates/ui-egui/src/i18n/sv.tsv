@@ -4815,6 +4815,14 @@ axis	Both	Båda
 	The script asks to read and write a folder you choose, with everything in it.	Skriptet ber om att läsa och skriva en mapp som du väljer, med allt innehåll.
 	Allow Once	Tillåt en gång
 	Always Allow This Script	Tillåt alltid det här skriptet
+	No script has kept file access.	Inget skript har sparad filåtkomst.
+	Read file	Läs fil
+	Read and write file	Läs och skriv fil
+	Read and write folder	Läs och skriv mapp
+	Revoke	Återkalla
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Återkalla tar bort åtkomsten som sparats för varje version av skriptet. Åtkomst till en mapp omfattar allt i den.
+@msg	Script file access revoked	Skriptets filåtkomst har återkallats
+@msg	The script file access was already revoked	Skriptets filåtkomst var redan återkallad
 	Deny	Neka
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
 	Do not show this warning again	Visa inte den här varningen igen
@@ -5013,6 +5021,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` för ett skripts fildialog måste vara ett av: once, always, deny, stop
 @msg	choose a file or folder first, or deny	välj först en fil eller mapp, eller neka
 @msg	the script file permissions could not be saved: {e}	skriptens filbehörigheter kunde inte sparas: {e}
+@msg	the script file permissions could not be read: {e}	skriptens filbehörigheter kunde inte läsas: {e}
 @msg	this script's file access can be allowed only once	det här skriptets filåtkomst kan bara tillåtas en gång
 @msg	Only the person at the keyboard can allow a script's file access	Bara personen vid tangentbordet kan tillåta ett skripts filåtkomst
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Ett skript får högst 2 048 filer: filerna som valdes efter dem utelämnades
@@ -6817,6 +6826,8 @@ arrowhead	Feather	Fjäder
 	VectorCraft Default	VectorCraft-standard
 	VectorCraft Defaults	VectorCraft-standardvärden
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft allmän CMYK (SWOP-liknande)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft bestruken CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft obestruken CMYK (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	VectorCraft-färgrutor (.vcswatches)
 	Vertical Align	Vertikal justering
 	Vertical Area Type	Vertikal områdestext
@@ -7430,6 +7441,15 @@ axis	Y Axis	Y-axel
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {{"id": …}} eller som det gavs
 @msg	a string	en sträng
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	en kontur har bara `paint`, `width`, `join`, `cap` och `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	en del av en målande live-effekt har bara `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` och `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	en kontur har bara `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` och `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` får bara vara true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` gäller bara en liveeffekt som anger `paintOutput`, med `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` måste vara ett tal från 0 till 1
+@msg	unknown blending mode; `blend` is one of {_1}	okänt blandningsläge; `blend` är ett av {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` måste vara en lista med högst {MAX_LOOK_EFFECTS} poster
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	ett resultat har högst {MAX_RESULT_EFFECTS} effektposter
+@msg	this host takes no effects here	den här värden tar inte emot effekter här
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	en kontur måste vara {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	en effekt måste vara {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	en effekt på en fyllning returnerar bara `fills`
@@ -8493,6 +8513,7 @@ breakText	Glyphs	Glyfer
 	Place Brush Art	Placera penselgrafik
 	Replace Brush Art	Ersätt penselgrafik
 	Replace Pattern Art	Ersätt mönstergrafik
+	Place Pattern Art	Placera mönstergrafik
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturer använder den här penseln. Använd den nya grafiken på konturerna, eller låt dem vara som de är och lägg till en kopia av penseln med den nya grafiken?
 	Apply to Strokes	Använd på konturer
 	Leave Strokes	Behåll konturer
@@ -9756,6 +9777,21 @@ digits	Hindi	Hindi
 @msg	outlineText {v}: true or false	outlineText {v}: true eller false
 @msg	output intent profile: {e}	profil för utgångsavsikt: {e}
 @msg	output size ({what} is {len} bytes, limit {max})	utdatastorlek ({what} är {len} byte, gräns {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} rad {line}, kolumn {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	minnesbudget
+@msg	call depth	anropsdjup
+@msg	run(input, params) returned no output object	run(input, params) returnerade inget utdataobjekt
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" kräver `script`: namnet på pluginets .js-fil bredvid manifestet
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` måste vara namnet på en .js-fil i manifestets mapp: 1-128 byte, ingen mapp, inget `:`, får inte börja med `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` är skriptets text och anges bara i den JSON som dataBase64 i plugin.install tar: en .vcplugin-fil namnger sitt skript i `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifestet för ett JavaScript-plugin anger `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" är för ett objektfilter (`kind` "filter"), inte `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	ett JavaScript-plugin kan inte ange behörigheten `{name}`: av värdens behörigheter får det ange `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifestet för en WebAssembly-modul utelämnar `runtime`: "js" är för ett JavaScript-plugin
+@msg	a JavaScript plug-in makes no command calls	ett JavaScript-plugin anropar inga kommandon
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) tar två tal
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) tar en nivå, 0 (fel), 1 (varning), 2 (information) eller 3 (felsökning), och en sträng
 @msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1}-filer är CMYK, och ”{name}” är en RGB-profil
 @msg	output.destination: {e}	output.destination: {e}
 @msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: ingen RGB- eller CMYK-profil heter ”{name}”
@@ -10957,6 +10993,11 @@ digits	Hindi	Hindi
 	No objects are selected.	Inga objekt är markerade.
 	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
 	Remove Fold Line Role	Ta bort linjetyp
+	Fold Angle	Falsvinkel
+	Set Fold Angle…	Ange falsvinkel…
+	Set Fold Angle	Ange falsvinkel
+	Reset Fold Angle	Återställ falsvinkel
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	markera en biglinje, halvskärlinje eller perforeringslinje som varken är låst eller dold
 	Check	Kontrollera
 	Check Fold Lines	Kontrollera falslinjer
 @msg	No cut lines are in the selection.	Det finns inga skärlinjer i markeringen.

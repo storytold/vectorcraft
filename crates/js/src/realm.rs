@@ -277,6 +277,7 @@ impl Realm {
     /// Runs `source` as a script in the global environment, then the promise jobs it queued, and
     /// returns its completion value (the value of the last expression statement that ran). A realm
     /// whose built-ins could not be installed runs nothing and gives an internal error.
+    /// A paused or waiting run ends first; its globals remain available.
     pub fn run(&mut self, source: &str) -> Result<JsValue, RunError> {
         let code = self.compile(source)?;
         let result = self.interp.run_global(code, false).and_then(|v| self.interp.drain_jobs(v));
@@ -285,6 +286,7 @@ impl Realm {
 
     /// Compiles `source` and readies the realm for a run.
     fn compile(&mut self, source: &str) -> Result<std::rc::Rc<crate::bytecode::Code>, RunError> {
+        self.end();
         self.script_tag = UNKNOWN_SOURCE;
         self.rejections = (Vec::new(), 0);
         let interp = &mut self.interp;
@@ -351,6 +353,9 @@ impl Realm {
         interp.finally_marks.clear();
         interp.finally_sites.clear();
         interp.stack.clear();
+        // A generator whose body was running when the run ended cannot go on.
+        let running: Vec<_> = interp.frames.iter().filter_map(|f| f.generator).collect();
+        running.into_iter().for_each(|g| interp.end_generator(Some(g)));
         interp.frames.clear();
         interp.temp_roots.clear();
         interp.join_stack.clear();
@@ -391,6 +396,7 @@ impl Realm {
     }
 
     /// Begins a run that [`Realm::advance`] carries on: compiles `source` and enters it.
+    /// A paused or waiting run ends first; its globals remain available.
     pub fn start(&mut self, source: &str) -> Result<(), RunError> {
         let code = self.compile(source)?;
         match self.interp.enter_global(code, false) {
@@ -606,6 +612,23 @@ impl Realm {
     /// enumerable.
     pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
         match crate::file_classes::install(&mut self.interp, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global `ExternalObject`. `new ExternalObject("lib:AdobeXMPScript")` defines the
+    /// globals `XMPMeta`, `XMPFile` and `XMPConst`; any other library name throws. `XMPFile` reads
+    /// and writes files through the host functions `xmpOpen` and `xmpWrite` of
+    /// [`Realm::define_file_classes`], which the host adds first; without `File` and `Folder`,
+    /// `XMPFile` throws. An `XMPFile` is open only in the run that opened it: each
+    /// [`Realm::reset_folder_current`] begins a new run for it, and [`Realm::run`] and
+    /// [`Realm::start`] do not. A successful close or a new file run releases its packet buffers.
+    /// Registered namespace storage counts toward the realm's heap limit.
+    /// After a successful installation, another call fails with an internal
+    /// error and preserves `ExternalObject` and registered namespaces. A failed installation can be retried.
+    pub fn define_external_object(&mut self) -> Result<(), RunError> {
+        match crate::xmp_classes::install(&mut self.interp) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }

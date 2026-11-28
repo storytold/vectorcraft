@@ -5806,6 +5806,14 @@ variable-list-end	{0}, {1}	{0}、{1}
 	The script asks to read and write a folder you choose, with everything in it.	スクリプトが、選択したフォルダーとその中身すべての読み書きを求めています。
 	Allow Once	今回のみ許可
 	Always Allow This Script	このスクリプトを常に許可
+	No script has kept file access.	ファイルアクセスを保持しているスクリプトはありません。
+	Read file	ファイルの読み取り
+	Read and write file	ファイルの読み取りと書き込み
+	Read and write folder	フォルダーの読み取りと書き込み
+	Revoke	許可を取り消す
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	「許可を取り消す」は、スクリプトのすべてのバージョンに保持されたアクセスを削除します。フォルダーへのアクセスには、その中のすべてが含まれます。
+@msg	Script file access revoked	スクリプトのファイルアクセスを取り消しました
+@msg	The script file access was already revoked	スクリプトのファイルアクセスはすでに取り消されています
 	Deny	拒否
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
 	Do not show this warning again	今後この警告を表示しない
@@ -5980,6 +5988,7 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	スクリプトのファイルダイアログの `answer` は once、always、deny、stop のいずれかにしてください
 @msg	choose a file or folder first, or deny	先にファイルまたはフォルダーを選択するか、拒否してください
 @msg	the script file permissions could not be saved: {e}	スクリプトのファイル許可を保存できませんでした: {e}
+@msg	the script file permissions could not be read: {e}	スクリプトのファイル許可を読み込めませんでした: {e}
 @msg	this script's file access can be allowed only once	このスクリプトのファイルアクセスは 1 回だけ許可できます
 @msg	Only the person at the keyboard can allow a script's file access	スクリプトのファイルアクセスを許可できるのはキーボードの前にいる人だけです
 @msg	A script is given at most 2,048 files: the files picked after them were left out	スクリプトに渡せるファイルは 2,048 個までのため、それ以降に選んだファイルは除外されました
@@ -7127,6 +7136,15 @@ axis	Y Axis	Y 軸
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	読み取り専用のオブジェクトが省かれています: {{"id": …}} だけの形か、渡されたとおりの形で返してください
 @msg	a string	文字列
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	線に使えるのは `paint`、`width`、`join`、`cap`、`miterLimit` だけです
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	ペイント型のライブ効果のピースに使えるのは `path`、`fillRule`、`fills`、`strokes`、`opacity`、`blend`、`effects` だけです
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	線に使えるのは `paint`、`width`、`join`、`cap`、`miterLimit`、`opacity`、`blend`、`effects` だけです
+@msg	`appearanceOutput` may only be true	`appearanceOutput` には true のみ指定できます
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` は `paintOutput` を宣言した `api` 3 のライブ効果専用です
+@msg	`opacity` must be a number from 0 to 1	`opacity` は 0 から 1 の数値にしてください
+@msg	unknown blending mode; `blend` is one of {_1}	不明な描画モードです。`blend` は {_1} のいずれかです
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` は最大 {MAX_LOOK_EFFECTS} 件のレコードの配列にしてください
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	1 つの結果に含められる効果レコードは最大 {MAX_RESULT_EFFECTS} 件です
+@msg	this host takes no effects here	このホストではここに効果を指定できません
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	線は {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} の形にしてください
 @msg	an effect must be {{"id", "params"?, "visible"?}}	効果は {{"id", "params"?, "visible"?}} の形にしてください
 @msg	an effect on a fill returns only `fills`	塗りの効果が返すのは `fills` だけです
@@ -7278,6 +7296,21 @@ axis	Y Axis	Y 軸
 @msg	time budget	時間予算
 @msg	memory budget (the selection is too large to hand over)	メモリ予算 (選択範囲が大きすぎて渡せません)
 @msg	output size ({what} is {len} bytes, limit {max})	出力サイズ ({what} は {len} バイト、上限 {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}、{script} {line} 行 {column} 列)
+@msg	{reason} ({id}, {script})	{reason} ({id}、{script})
+@msg	memory budget	メモリ予算
+@msg	call depth	呼び出しの深さ
+@msg	run(input, params) returned no output object	run(input, params) が出力オブジェクトを返しませんでした
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" には `script` が必要です: マニフェストと同じ場所にあるプラグインの .js ファイルの名前
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` はマニフェストのフォルダーにある .js ファイルの名前にしてください: 1-128 バイト、フォルダーなし、`:` なし、`.` で始まらないこと
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` はスクリプトのテキストで、plugin.install の dataBase64 が受け取る JSON でだけ指定します: .vcplugin ファイルはスクリプトを `script` で指定します
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript プラグインのマニフェストは `runtime` "js" を指定します
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" はオブジェクトフィルター (`kind` "filter") 用で、`kind` "{kind}" 用ではありません
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript プラグインは権限 `{name}` を指定できません: ホストの権限のうち指定できるのは `progress` です
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly モジュールのマニフェストでは `runtime` を省略します: "js" は JavaScript プラグイン用です
+@msg	a JavaScript plug-in makes no command calls	JavaScript プラグインはコマンドを呼び出しません
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) には数値を 2 つ指定します
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) にはレベル 0 (エラー)、1 (警告)、2 (情報)、3 (デバッグ) のいずれかと文字列を指定します
 @msg	the plug-in's grant can't be removed from the plug-in store	プラグインの許可をプラグインストアから削除できません
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
@@ -10024,6 +10057,7 @@ breakText	Glyphs	字形
 	Place Brush Art	ブラシのアートを配置
 	Replace Brush Art	ブラシのアートを置き換え
 	Replace Pattern Art	パターンのアートを置き換え
+	Place Pattern Art	パターンのアートを配置
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	このブラシは線で使われています。新しいアートをそれらの線に適用しますか？それとも線をそのままにして、新しいアートを持つブラシのコピーを追加しますか？
 	Apply to Strokes	線に適用
 	Leave Strokes	線を保持
@@ -10570,6 +10604,11 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Fold Angle	折り角度
+	Set Fold Angle…	折り角度を設定…
+	Set Fold Angle	折り角度を設定
+	Reset Fold Angle	折り角度をリセット
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	ロックも非表示もされていない筋入れ線、半抜き線またはミシン目線を選択してください
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ツールバーのツールとそのキーの働きを、ヒントの代わりにカードで表示。ツールヒントを表示がオンのときに使用
 	Selects whole objects and groups to move, resize or rotate them.	オブジェクトやグループ全体を選択して、移動、サイズ変更、回転を行います。

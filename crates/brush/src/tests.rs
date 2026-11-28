@@ -273,6 +273,22 @@ fn scatter_count_and_spacing() {
 }
 
 #[test]
+fn scatter_spaces_stroked_art_by_its_stroked_width() {
+    let art = Node::path(
+        NodeId(0),
+        shapes::rectangle(Rect::new(0.0, -2.0, 10.0, 2.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 2.0),
+    );
+    let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &b, &line(0.0, 0.0, 120.0, 0.0), &stroke(1.0));
+    let boxes: Vec<Rect> = out.iter().filter_map(Node::visual_bounds).collect();
+    assert!(boxes.len() > 1, "{boxes:?}");
+    for w in boxes.windows(2) {
+        assert!(near(w[1].x0, w[0].x1, 1e-6), "stroked copies at 100% spacing touch: {boxes:?}");
+    }
+}
+
+#[test]
 fn scatter_is_deterministic_and_randomised() {
     let b = Brush {
         name: "r".into(),

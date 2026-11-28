@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::scripts::TOO_LARGE;
 use vectorcraft_engine::script::MAX_SOURCE_BYTES;
+use vectorcraft_engine::script::folder::Clock;
 
 use super::script_dialogs::{cancel, confirm, frame, is_open, key, open_id, pump, set};
 use crate::dialogs::script_run::{
@@ -15,8 +16,11 @@ use crate::dialogs::script_run::{
 use crate::tests::picks::{Picker, scripted};
 use crate::{VectorcraftApp, menus, script_runs};
 
+/// An app with a document, whose folder listings take no time.
 fn app() -> VectorcraftApp {
-    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), crate::Services::default()));
+    let mut session = Session::new();
+    session.set_script_listing_clock(Clock::Fixed(std::time::Duration::ZERO));
+    let mut app = crate::testing::windowed(VectorcraftApp::new(session, crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app
 }
@@ -68,6 +72,30 @@ fn allow_once(app: &mut VectorcraftApp) {
     let paths = picked(app);
     script_run::forget::<ScriptFiles>(app);
     script_run::settle_files(app, DialogResult::Ok(FilesAnswer { answer: "once", paths, left_out: false, automated: false }));
+}
+
+#[test]
+fn a_script_file_reply_does_not_populate_a_reopened_dialog() {
+    let mut app = app();
+    let picker = scripted(&mut app);
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": "File.openDialog('Choose');"})).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    script_run::with_host(&app, |host, _| host.get_mut::<ScriptFiles>().unwrap().choose = true).unwrap();
+    pump(&mut app);
+    assert_eq!(picker.requests().len(), 1);
+
+    script_run::forget::<ScriptFiles>(&app);
+    script_run::open_picker(&app, app.session.script_picker().unwrap());
+    let old_path = std::env::temp_dir().join("original-script-picker.txt");
+    picker.answer(&[&old_path.to_string_lossy()]);
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
+
+    assert!(picked(&app).is_empty(), "the old file chooser must not populate the new open dialog");
+    set(&app, PICKER_KIND, "answer", json!("deny")).unwrap();
+    assert!(confirm(&mut app, PICKER_KIND));
+    finish(&mut app);
 }
 
 #[test]
@@ -298,6 +326,84 @@ fn quitting_asks_to_stop_and_stop_undoes_the_run() {
 }
 
 #[test]
+fn a_startup_script_stopped_by_quitting_stays_in_the_status_bar() {
+    let mut app = app();
+    let dir = folder("startup-quit");
+    std::fs::write(dir.join("a.jsx"), "for (;;) {}").unwrap();
+    app.session.attach_startup_scripts_dir(dir.clone());
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    assert!(app.session.startup_script_running());
+    script_run::ask_to_close(&mut app);
+    assert!(confirm(&mut app, CLOSE_KIND));
+    finish(&mut app);
+    script_runs::poll(&mut app);
+    let stopped = "The script was stopped and its changes were undone";
+    assert_eq!(app.ui.status, stopped);
+    assert_eq!(app.ui.status_notes.as_ref().and_then(|(_, notes)| notes.first()).map(String::as_str), Some(stopped));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn quitting_between_a_startup_script_and_the_chosen_script_stops_the_chosen_script() {
+    let mut app = app();
+    let dir = folder("startup-quit-between");
+    // A first startup script that cannot start leaves a note for the round.
+    std::fs::write(dir.join("0.jsx"), [0xff, 0xfe, 0x00]).unwrap();
+    std::fs::write(dir.join("a.jsx"), "vc.log(1);").unwrap();
+    app.session.attach_startup_scripts_dir(dir.clone());
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_name().is_none() {
+            break;
+        }
+        script_runs::poll(&mut app);
+    }
+    assert!(app.session.script_running() && app.session.script_name().is_none(), "the chosen script waits for the next frame");
+    script_run::ask_to_close(&mut app);
+    // Frames drawn while the question is open do not start the chosen script.
+    for _ in 0..3 {
+        script_runs::poll(&mut app);
+    }
+    assert!(app.session.script_running() && app.session.script_name().is_none(), "the chosen script waits for the answer");
+    // A frame takes the answer before it would start the next run, then pumps the dialogs.
+    let id = open_id(&app, CLOSE_KIND);
+    assert!(script_run::with_host(&app, |host, ctx| host.confirm_by_id(ctx, id)).unwrap());
+    script_runs::poll(&mut app);
+    assert!(!app.session.script_running());
+    pump(&mut app);
+    script_runs::poll(&mut app);
+    let message = "The scripts waiting to run were not run";
+    assert_eq!(app.ui.status, message);
+    let notes = app.ui.status_notes.clone().map(|(_, notes)| notes).unwrap_or_default();
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    assert_eq!(notes[0], message);
+    assert!(notes[1].starts_with("0.jsx: "), "{notes:?}");
+    assert_eq!(objects(&app), 0, "the chosen script did not run");
+    // A later round stopped the same way, with no notes of its own, does not show the earlier round's.
+    std::fs::remove_file(dir.join("0.jsx")).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_name().is_none() {
+            break;
+        }
+        script_runs::poll(&mut app);
+    }
+    assert!(app.session.script_running() && app.session.script_name().is_none());
+    script_run::ask_to_close(&mut app);
+    assert!(confirm(&mut app, CLOSE_KIND));
+    script_runs::poll(&mut app);
+    assert_eq!(app.ui.status, message);
+    assert_eq!(app.ui.status_notes, None);
+    assert_eq!(objects(&app), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_stop_names_the_files_the_run_left_written() {
     let mut app = app();
     app.session.prefs.show_external_script_warning = false;
@@ -502,6 +608,42 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
     choose(&mut app, &picker, &refs);
     assert_eq!(picked(&app), given[..2048]);
     assert_eq!(files_fields(&app).unwrap()["leftOut"], true);
+    cancel(&mut app, PICKER_KIND);
+    finish(&mut app);
+}
+
+/// With two files picked, the file dialog lists them in a scrolled group named Picked files.
+#[test]
+fn a_scripts_file_dialog_lists_several_picked_files_in_a_named_group() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "File.openDialog('Pick', '', true);" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    let given = vec!["/picked/a.txt".to_string(), "/picked/b.txt".to_string()];
+    script_run::with_host(&app, |host, _| host.get_mut::<ScriptFiles>().map(|d| d.add(given, true, false))).unwrap();
+    frame(&app, vec![]);
+    let out = frame(&app, vec![]);
+    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
+    let groups: Vec<_> =
+        update.nodes.iter().filter(|(_, node)| node.role() == egui::accesskit::Role::Group).filter_map(|(_, node)| node.label()).collect();
+    assert!(groups.contains(&"Picked files"), "a group named Picked files: {groups:?}");
+    let nodes: std::collections::HashMap<_, _> = update.nodes.iter().map(|(id, node)| (*id, node)).collect();
+    let (_, group) = update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == egui::accesskit::Role::Group && node.label() == Some("Picked files"))
+        .expect("the Picked files group");
+    let mut texts = Vec::new();
+    let mut pending = group.children().to_vec();
+    while let Some(id) = pending.pop() {
+        if let Some(node) = nodes.get(&id) {
+            texts.extend(node.label().into_iter().chain(node.value()).map(str::to_owned));
+            pending.extend_from_slice(node.children());
+        }
+    }
+    for path in ["/picked/a.txt", "/picked/b.txt"] {
+        assert!(texts.iter().any(|text| text == path), "{path} is inside the Picked files group: {texts:?}");
+    }
     cancel(&mut app, PICKER_KIND);
     finish(&mut app);
 }

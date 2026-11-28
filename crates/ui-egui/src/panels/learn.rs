@@ -27,7 +27,7 @@ use craft::ui::contract::{
     Bind, CollectionEvent, Gap, LabelKind, MemoProps, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, SideLabel, Sizing,
     clicked,
 };
-use craft::ui::display::Text;
+use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow};
@@ -221,8 +221,7 @@ fn steps(app: &mut VectorcraftApp, ui: &mut Ui, tutorial: &'static catalog::Tuto
             if let Some(next) = next {
                 marked = Some((i, next));
             }
-            // PLAN: the number should read in the muted ink; the caption role stands in until `Text` names it.
-            Text::new(format!("{}.", i + 1)).role(TypeRole::Caption).show(ui);
+            Text::new(format!("{}.", i + 1)).shade(Shade::Muted).show(ui);
             if step_text(ui, step) {
                 locate = step.tool;
             }

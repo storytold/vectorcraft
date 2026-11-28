@@ -32,7 +32,7 @@ use std::sync::Arc;
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_doc::live::{
     EnvelopeKind, EnvelopeOptions, GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, default_fidelity, envelope_content_boxes,
-    envelope_content_boxes_with, envelope_stroke_margin,
+    envelope_content_boxes_with, envelope_margin_lengths, envelope_stroke_margin,
 };
 use vectorcraft_doc::{Appearance, Document, Effect, ImageBlob, LayerColor, Node, NodeId, NodeKind, PatternDef};
 use vectorcraft_geom::PathData;
@@ -133,7 +133,7 @@ pub(super) fn options(o: &Obj) -> Option<(EnvelopeOptions, f64)> {
 /// `AIDeformArtHeightKey`) matches its bounds with its strokes within [`SAVED_SIZE_SLACK`] and lies
 /// nearer them than its geometric bounds. The saved size is in art space, and `scale` takes it to the
 /// contents' space (a Large Canvas copy read at its declared scale). None without that size, or for
-/// contents with no width or no height.
+/// contents with neither a width nor a height.
 fn saved_margin(o: &Obj, content: &[Arc<Node>], scale: f64) -> Option<[f32; 4]> {
     let saved = |key: &str| match o.nums(key).as_slice() {
         [v] if v.is_finite() => Some(*v * scale).filter(|v| v.is_finite()),
@@ -220,14 +220,51 @@ const PAINTED_SLACK: f64 = 1e-4;
 /// applied, so a stroke a Transform effect moves counts where it is moved to), measured by its
 /// visual bounds. Those are exact for miter joins (a tip counts where the miter limit keeps it) and
 /// round joins, and an upper bound for bevel joins, miters the limit cuts, width profiles and
-/// square-capped dashes; a contour of zero length, which paints nothing, doesn't count. Effects on
-/// the type object itself are left out: VectorCraft applies them after the envelope bends the type.
-/// `None` when nothing in it has bounds.
+/// square-capped dashes; a contour of zero length, which paints nothing in the files' drawn art,
+/// doesn't count, even where VectorCraft draws it as the dot of a round or projecting cap. Effects
+/// on the type object itself are left out: VectorCraft applies them after the envelope bends the
+/// type. `None` when nothing in it has bounds.
 fn painted_outlines(outlines: &Node) -> Option<Rect> {
     outlines.children().into_iter().flatten().fold(None, |acc, piece| {
         let baked = vectorcraft_effects::bake_type_appearance(None, piece);
-        vectorcraft_geom::union_opt(acc, baked.as_ref().unwrap_or(piece).visual_bounds())
+        let baked = baked.as_ref().unwrap_or(piece);
+        let painted = without_zero_length_contours(baked);
+        vectorcraft_geom::union_opt(acc, painted.as_ref().unwrap_or(baked).visual_bounds())
     })
+}
+
+/// `n` with its paths, and the paths in its groups and compound paths, without their subpaths of
+/// one anchor (contours of zero length, which have no segment); a path with nothing else is left
+/// empty, with no bounds. `None` when nothing changes.
+fn without_zero_length_contours(n: &Node) -> Option<Node> {
+    if let Some(path) = n.path_data() {
+        let lone = |s: &vectorcraft_geom::SubPath| s.segment_count() == 0;
+        if !path.subpaths.iter().any(lone) {
+            return None;
+        }
+        let mut kept = n.clone();
+        if let Some(p) = kept.path_data_mut() {
+            p.subpaths.retain(|s| !lone(s));
+        }
+        return Some(kept);
+    }
+    if !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. } | NodeKind::Compound { .. }) {
+        return None;
+    }
+    let members = n.children()?;
+    let changed: Vec<Option<Node>> = members.iter().map(|c| without_zero_length_contours(c)).collect();
+    if changed.iter().all(Option::is_none) {
+        return None;
+    }
+    let mut kept = n.clone();
+    if let Some(children) = kept.children_mut() {
+        for (c, new) in children.iter_mut().zip(changed) {
+            if let Some(new) = new {
+                *c = Arc::new(new);
+            }
+        }
+    }
+    Some(kept)
 }
 
 /// The box of `content` an envelope of type with Distort Appearance may map from in a file besides
@@ -268,7 +305,7 @@ fn painted_margin(painted: Rect, plain: Rect) -> Option<[f32; 4]> {
 /// Do bounds margins `a` and `b` give contents with geometric box `plain` the same box, each side
 /// within [`PAINTED_SLACK`]?
 fn same_box(a: [f32; 4], b: [f32; 4], plain: Rect) -> bool {
-    let sizes = [plain.height(), plain.height(), plain.width(), plain.width()];
+    let Some(sizes) = envelope_margin_lengths(plain) else { return a == b };
     a.iter().zip(b).zip(sizes).all(|((a, b), size)| (f64::from(*a) - f64::from(b)).abs() * size <= PAINTED_SLACK)
 }
 
@@ -1365,6 +1402,30 @@ mod tests {
         appearance.items.push(AppearanceItem::Stroke(stroke));
         let piece = Node::path(NodeId(1), PathData::from_bezpath(&bp), appearance);
         let outlines = Node::group(NodeId(2), vec![Arc::new(piece)]);
+        assert_eq!(painted_outlines(&outlines), Some(Rect::new(9.0, 9.0, 21.0, 21.0)));
+    }
+
+    /// A piece of type outlines that is only contours of zero length paints nothing either: a dot
+    /// piece with a round 2 point stroke beside a stroked square adds nothing to the square's box.
+    #[test]
+    fn a_piece_of_only_zero_length_contours_paints_nothing() {
+        let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+        (stroke.join, stroke.cap) = (LineJoin::Round, LineCap::Round);
+        let mut appearance = Appearance::default();
+        appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))));
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        let mut square = BezPath::new();
+        square.move_to((10.0, 10.0));
+        square.line_to((20.0, 10.0));
+        square.line_to((20.0, 20.0));
+        square.line_to((10.0, 20.0));
+        square.close_path();
+        let mut dot = BezPath::new();
+        dot.move_to((50.0, 50.0));
+        dot.line_to((50.0, 50.0));
+        dot.close_path();
+        let pieces = [(1, square), (2, dot)].map(|(id, bp)| Arc::new(Node::path(NodeId(id), PathData::from_bezpath(&bp), appearance.clone())));
+        let outlines = Node::group(NodeId(3), pieces.to_vec());
         assert_eq!(painted_outlines(&outlines), Some(Rect::new(9.0, 9.0, 21.0, 21.0)));
     }
 

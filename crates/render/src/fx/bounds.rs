@@ -22,11 +22,17 @@ pub(super) fn node_bezpath(n: &Node) -> Option<BezPath> {
     }
 }
 
+/// The box geometry effects on `bp` work from: the object's geometric bounds, lone anchors
+/// included, as [`vectorcraft_geom::PathData::bounds`] measures them.
+fn reference_box(bp: &BezPath) -> Rect {
+    vectorcraft_geom::path::anchored_curve_bounds(bp).unwrap_or_default()
+}
+
 pub(super) fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezPath {
     if !effects::has_geometry(effects) || bp.elements().is_empty() {
         return bp.clone();
     }
-    effects::apply_geometry_bez(effects, bp, bp.bounding_box(), ctx)
+    effects::apply_geometry_bez(effects, bp, reference_box(bp), ctx)
 }
 
 /// The object-level effected geometry of `n` (base path `bp`), with the swatches and patterns that
@@ -40,7 +46,7 @@ pub(super) fn apply_carrying(effects: &[Effect], bp: &BezPath, ctx: &GeomContext
     if !effects::has_geometry(effects) || bp.elements().is_empty() {
         return (bp.clone(), effects::Carry::default());
     }
-    effects::apply_geometry_bez_carrying(effects, bp, bp.bounding_box(), ctx)
+    effects::apply_geometry_bez_carrying(effects, bp, reference_box(bp), ctx)
 }
 
 /// [`effected_path`], and how `n`'s gradients follow its effects.
@@ -124,7 +130,7 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if carry.skipped() {
         carry.hide_skipped(&mut ran.to_mut().appearance.effects);
     }
-    let mut r: Option<Rect> = (!g.elements().is_empty()).then(|| g.bounding_box());
+    let mut r: Option<Rect> = drawn_box(&g, n.appearance.painted_strokes().any(dotted));
     for (j, item) in n.appearance.items.iter().enumerate() {
         let fx = item_effects(item);
         if effects::has_geometry(fx) {
@@ -134,10 +140,7 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             {
                 c.hide_skipped(it.effects_mut());
             }
-            if !ig.elements().is_empty() {
-                let b = ig.bounding_box();
-                r = Some(r.map_or(b, |r| r.union(b)));
-            }
+            r = vectorcraft_geom::union_opt(r, drawn_box(&ig, item_dots(item)));
         }
     }
     let s = n.appearance.outset();
@@ -324,10 +327,29 @@ fn item_bounds(doc: &Document, n: &Node, item: &AppearanceItem) -> Option<Rect> 
     if effects::has_geometry(fx) {
         let ig = apply(fx, &g, &GeomContext { doc: Some(doc), ..GeomContext::of(n) }.item(item));
         let o = if let AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
-        return (!ig.elements().is_empty()).then(|| ig.bounding_box().inflate(o, o));
+        return drawn_box(&ig, item_dots(item)).map(|b| b.inflate(o, o));
     }
     let one = vectorcraft_doc::Appearance { items: vec![item.clone()], ..Default::default() };
-    (!g.elements().is_empty()).then(|| one.stroked_bounds(g.bounding_box(), || g.clone()))
+    drawn_box(&g, item_dots(item)).map(|b| one.stroked_bounds(b, || g.clone()))
+}
+
+/// The box of what `g` draws before the strokes' reach ([`vectorcraft_geom::path::drawn_curve_bounds`]),
+/// with the lone anchors of closed subpaths when `dots`; a path that draws nothing is measured by
+/// its anchors, as [`Node::visual_bounds`] measures one. `None` for a path with no elements.
+pub(super) fn drawn_box(g: &BezPath, dots: bool) -> Option<Rect> {
+    vectorcraft_geom::path::drawn_curve_bounds(g, dots)
+        .or_else(|| g.elements().iter().filter_map(|e| e.end_point()).map(|p| Rect::from_points(p, p)).reduce(|a, b| a.union(b)))
+}
+
+/// Does `s`, a painted stroke, draw a lone anchor of a closed subpath as a dot (a round or
+/// projecting cap)?
+pub(super) fn dotted(s: &vectorcraft_doc::StrokeLayer) -> bool {
+    matches!(s.cap, vectorcraft_doc::LineCap::Round | vectorcraft_doc::LineCap::Square)
+}
+
+/// Does `item` draw lone anchors as dots: a painted stroke with a round or projecting cap?
+fn item_dots(item: &AppearanceItem) -> bool {
+    matches!(item, AppearanceItem::Stroke(s) if paints(item) && dotted(s))
 }
 
 /// `b` grown by how far raster effects `fx` paint past it, each spreading what the ones before it
@@ -382,12 +404,13 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             let mut plain = n.appearance.clone();
             plain.items.retain(|i| !(paints(i) && effects::has_geometry(item_effects(i))));
             let on_path = !n.appearance.items.iter().any(paints) || plain.items.iter().any(paints);
-            let mut r = (on_path && !g.elements().is_empty()).then(|| plain.stroked_bounds(g.bounding_box(), || g.clone()));
+            let dots = plain.painted_strokes().any(dotted);
+            let mut r = on_path.then(|| drawn_box(&g, dots)).flatten().map(|b| plain.stroked_bounds(b, || g.clone()));
             let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
             for item in n.appearance.items.iter().filter(|i| paints(i) && effects::has_geometry(item_effects(i))) {
                 let ig = apply(item_effects(item), &g, &ctx.item(item));
                 let o = if let AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
-                r = vectorcraft_geom::union_opt(r, (!ig.elements().is_empty()).then(|| ig.bounding_box().inflate(o, o)));
+                r = vectorcraft_geom::union_opt(r, drawn_box(&ig, item_dots(item)).map(|b| b.inflate(o, o)));
             }
             r
         }

@@ -9,6 +9,7 @@ use craft::ui::canvas::{
     canvas_space, tool_pass,
 };
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::primitives::PaintSlot;
 use craft::ui::runtime::env::Env;
 use craft::ui::runtime::focus::NudgeMods;
 use craft::ui::style::StyleCx;
@@ -73,7 +74,7 @@ pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
 
 /// Whether a 3D effect is edited in its dialog: the selection's marks and widgets give way to the dialog's gizmo.
 pub(crate) fn revolve_editing(app: &VectorcraftApp) -> bool {
-    app.three_d_dialog.is_some()
+    crate::dialogs::three_d::editing_current_drawing(app)
 }
 
 /// The arrows the canvas takes with nothing in the window focused, as it takes every arrow while it has the focus:
@@ -108,6 +109,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // A document that opened, closed or became active since Home was chosen replaces it.
     if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
         app.ui.home = None;
+    }
+    // The Home screen and the empty window show no marks: a closed document's text nodes are not kept.
+    if app.session.active().is_none() {
+        marks::release_text_marks(app);
     }
     let full = ui.available_rect_before_wrap();
     if crate::menus::home_showing(app) {
@@ -273,7 +278,8 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     pressed
 }
 
-/// The body of the canvas in order: controls that take presses first, the tool host, the picture last.
+/// The body of the canvas in order: controls that take presses first, the tool host, the selection's marks, the
+/// picture last.
 fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: Option<&ToolPass>, win: Win, kind: BodyKind) -> Body {
     let live = kind == BodyKind::Live;
     let presenting = app.ui.screen_mode == 3;
@@ -293,7 +299,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
         crate::dialogs::simplify_slider::show(app, ui, &space.view);
     }
     guides::show(app, ui, space, win, kind);
-    selection::show(app, ui, space, win, kind);
+    // The selection's marks paint here, under the widgets and bars, and are drawn after the tool host has taken this
+    // frame's pointer event, from the document as the event leaves it.
+    let marks = PaintSlot::reserve(ui.painter());
     widgets::show(app, ui, space, win, kind);
     if !presenting && !revolve_editing(app) {
         crate::panels::three_d::handles::show(app, ui, space);
@@ -330,6 +338,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
             crate::type_editing::show(app, ui);
         }
     }
+    let after = PaintSlot::reserve(ui.painter());
+    selection::show(app, ui, space, win, kind);
+    marks.extend(ui.ctx(), after.take_after(ui.ctx()));
     drops::show(app, ui, win, kind);
     raster::picture(app, ui, space, win, kind);
     out

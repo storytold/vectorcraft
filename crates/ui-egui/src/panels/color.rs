@@ -402,7 +402,7 @@ fn apply_tint(app: &mut VectorcraftApp, tgt: &Target, tint: &Tint, t: f32, phase
 
 /// Switch the panel to `mode`, converting the colour to its model (a tint becomes a process
 /// colour).
-fn set_mode(app: &mut VectorcraftApp, tgt: &Target, mode: ColorPanelMode) {
+pub(crate) fn set_mode(app: &mut VectorcraftApp, tgt: &Target, mode: ColorPanelMode) {
     app.ui.color_panel.mode = mode;
     if let Some(c) = tgt.color() {
         let conv = convert_to(mode, &c);
@@ -579,7 +579,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// Carry out what the panel menu asked of the app.
-fn carry_out(app: &mut VectorcraftApp, tgt: &Target, action: ColorPanelAction) {
+fn carry_out(app: &mut VectorcraftApp, tgt: &Target, action: ColorPanelAction) -> Result<(), String> {
     match action {
         ColorPanelAction::Mode(m) => set_mode(app, tgt, m),
         ColorPanelAction::Copy(text) => {
@@ -590,17 +590,21 @@ fn carry_out(app: &mut VectorcraftApp, tgt: &Target, action: ColorPanelAction) {
         ColorPanelAction::Invert => recolor(app, tgt, true, false),
         ColorPanelAction::Complement => recolor(app, tgt, false, false),
         ColorPanelAction::NewSwatch => {
+            if app.session.active().is_none() {
+                return Err(tl!("No document").into());
+            }
             if let Some(c) = tgt.color() {
                 // A tint saves a tint swatch ("Name 40%"); a color keeps its model.
                 let p = match tgt.tint() {
                     Some(t) => json!({"swatch": t.swatch, "tint": t.tint * 100.0}),
                     None => json!({"color": color_json(&c), "keepModel": true}),
                 };
-                app.run("swatch.new", p).ok();
+                app.run("swatch.new", p)?;
             }
         }
         _ => {}
     }
+    Ok(())
 }
 
 /// The panel menu: Hide Options and Show Recent Colors, the five modes, Invert, Complement, Create
@@ -615,6 +619,7 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     let tgt = target_now(app);
     let has_color = tgt.color().is_some() || mixed_now(app);
     for (command, state) in ColorPanelMenu::states(LAYOUT, &app.ui.color_panel, &shown(app, &tgt), has_color) {
+        let state = if command == ColorPanelCommand::NewSwatch && !crate::menus::enabled(app, "swatch.new") { state.enabled(false) } else { state };
         states.set(command, state);
     }
 }
@@ -624,10 +629,8 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
     let command = ColorPanelCommand::from_ref(&CommandRef::new(id))?;
     let tgt = target_now(app);
     let edited = srgba(&tgt.color().unwrap_or(Color::BLACK));
-    if let Some(action) = ColorPanelMenu::run_command(&mut app.ui.color_panel, command, edited) {
-        carry_out(app, &tgt, action);
-    }
-    Some(Ok(Value::Null))
+    let outcome = ColorPanelMenu::run_command(&mut app.ui.color_panel, command, edited).map_or(Ok(()), |action| carry_out(app, &tgt, action));
+    Some(outcome.map(|()| Value::Null))
 }
 
 #[cfg(test)]

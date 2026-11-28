@@ -721,3 +721,30 @@ fn selecting_objects_one_at_a_time_looks_up_only_the_added_objects() {
     assert!(walks.max(more_walks) <= MOST_TREE_WALKS, "walked the tree {walks} and {more_walks} times");
     assert!(more_lookups <= lookups * 5 / 2, "{lookups} lookups for 1,000 objects, {more_lookups} for 2,000");
 }
+
+/// `select.toggle` run once for each of `n` selected objects, in the order they were selected,
+/// until none is selected → the walks of the tree and the lookups by id it took.
+fn remove_one_at_a_time(n: usize) -> (u64, u64) {
+    let mut s = session(n, square);
+    let ids = layer(&s, 0);
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.add", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    assert!(selected(&s, &ids));
+    let (walks, lookups) = (vectorcraft_doc::tree_walks(), vectorcraft_doc::path_lookups());
+    for id in &ids {
+        s.execute("select.toggle", &json!({"id": id.0})).unwrap();
+    }
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    (vectorcraft_doc::tree_walks() - walks, vectorcraft_doc::path_lookups() - lookups)
+}
+
+/// Deselecting objects one at a time checks and reads only the object each `select.toggle` takes
+/// out: twice as many objects take about twice as many lookups, and the tree is not walked for
+/// each one.
+#[test]
+fn deselecting_objects_one_at_a_time_looks_up_only_the_removed_objects() {
+    let (walks, lookups) = remove_one_at_a_time(1_000);
+    let (more_walks, more_lookups) = remove_one_at_a_time(2_000);
+    assert!(walks.max(more_walks) <= MOST_TREE_WALKS, "walked the tree {walks} and {more_walks} times");
+    assert!(more_lookups <= lookups * 5 / 2, "{lookups} lookups for 1,000 objects, {more_lookups} for 2,000");
+}
