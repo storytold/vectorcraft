@@ -59,7 +59,24 @@ fn exported_png_of_a_red_square_is_red() {
     copy_red_square(&mut s);
     let r = run(&mut s, "clipboard.exportPng", json!({"scale": 2}));
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(80), Some(80)));
-    let img = image::load_from_memory(&decode(&r)).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&decode(&r))
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (80, 80));
     assert_eq!(img.get_pixel(40, 40).0, [255, 0, 0, 255]);
     assert_eq!(img.get_pixel(2, 77).0, [255, 0, 0, 255], "cropped to the square");
@@ -150,6 +167,135 @@ fn import_image_then_paste_gives_an_image() {
     assert!(s.execute("clipboard.importImage", &json!({"dataBase64": "!!"})).is_err());
 }
 
+/// An image read apart from the session (off the UI thread in the desktop app) loads as
+/// `clipboard.importImage` loads its bytes: the same reply and clipboard, and the same errors.
+#[test]
+fn an_image_read_apart_loads_as_import_image_loads_it() {
+    let mut bmp = vec![];
+    {
+        let __dyn: image::DynamicImage = (image::RgbImage::from_pixel(30, 20, image::Rgb([200, 40, 40]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Bmp, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| bmp.extend_from_slice(&__b))
+    }
+    .unwrap();
+    let (mut at_once, mut apart) = (session(), session());
+    let p = json!({"mime": "image/bmp", "center": [100, 80]});
+    let mut with_data = p.clone();
+    with_data["dataBase64"] = json!(vectorcraft_format::base64_encode(&bmp));
+    let r = run(&mut at_once, "clipboard.importImage", with_data);
+    let read = crate::cmd::clipboard::read_image(&bmp).unwrap();
+    assert_eq!(apart.import_image_read(read, &p).unwrap(), r);
+    assert_eq!(apart.clipboard, at_once.clipboard);
+    assert!(apart.image_hand_off.is_none());
+    // Errors: bytes that aren't a picture, and a type that isn't a bitmap.
+    let not_a_picture = at_once.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(b"hello")})).unwrap_err();
+    assert_eq!(crate::cmd::clipboard::read_image(b"hello").err().map(|e| e.to_string()), Some(not_a_picture.to_string()));
+    let read = crate::cmd::clipboard::read_image(&bmp).unwrap();
+    let svg = apart.import_image_read(read, &json!({"mime": SVG})).unwrap_err();
+    assert!(svg.to_string().contains("isn't a bitmap"), "{svg}");
+    assert!(apart.image_hand_off.is_none() && apart.clipboard == at_once.clipboard, "nothing loaded");
+}
+
+/// A pasted PNG cut to half its length (a copied file still downloading) has a header but not
+/// all its pixels: importing it is an error, and the clipboard keeps what it held.
+#[test]
+fn a_bitmap_whose_pixels_cant_be_read_is_not_pasted() {
+    let mut s = session();
+    copy_red_square(&mut s);
+    let held = s.clipboard.clone();
+    let cut = crate::tests_links::cut_png(600, 300);
+    let e = s.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(&cut), "mime": "image/png"})).unwrap_err();
+    assert!(e.to_string().ends_with("the image's pixels can't be read"), "{e}");
+    assert_eq!(crate::cmd::clipboard::read_image(&cut).err().map(|e| e.to_string()), Some(e.to_string()));
+    assert_eq!(s.clipboard.nodes, held.nodes);
+}
+
+/// The pixels `clipboard.importImage` decodes to check a pasted bitmap are kept in the renderers'
+/// image store, so the first render of the pasted image draws them without decoding it again.
+#[test]
+fn a_pasted_bitmap_is_drawn_without_decoding_it_again() {
+    // The image has pixels no other test uses, since every test shares the image store.
+    let img = image::RgbImage::from_fn(300, 200, |x, y| image::Rgb([(x % 253) as u8, (y % 233) as u8, 17]));
+    let mut png = vec![];
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
+    let mut s = session();
+    run(&mut s, "clipboard.importImage", json!({"dataBase64": vectorcraft_format::base64_encode(&png), "mime": "image/png"}));
+    run(&mut s, "edit.paste", json!({}));
+    let n = &pasted(&s)[0];
+    let NodeKind::Image(im) = &n.kind else { panic!("not an image: {:?}", n.kind) };
+    let d = s.doc().unwrap().doc.clone();
+    assert!(vectorcraft_render::image_cached(&d.images[&im.key]), "kept before it is drawn");
+    let decodes = vectorcraft_render::image_decodes();
+    let r = vectorcraft_render::Renderer::new().render(&d, 400, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default());
+    assert_eq!(vectorcraft_render::image_decodes(), decodes, "drawn without a decode");
+    let at = im.xf * Point::new(150.0, 100.0);
+    let px = r.pixel(at.x as u32, at.y as u32);
+    assert!(px[3] > 0 && px[2] < 100, "the image is drawn at its middle: {px:?}");
+}
+
 #[test]
 fn copied_svgz_files_paste_as_svg() {
     let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\"><rect width=\"40\" height=\"40\" fill=\"#ff0000\"/></svg>";
@@ -217,7 +363,41 @@ fn copied_files_paste_by_their_content() {
     let png = decode(&run(&mut s, "clipboard.exportPng", json!({})));
     let pdf = decode(&run(&mut s, "clipboard.exportPdf", json!({})));
     let mut jpeg = vec![];
-    image::RgbImage::new(2, 2).write_to(&mut std::io::Cursor::new(&mut jpeg), image::ImageFormat::Jpeg).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbImage::new(2, 2)).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Jpeg, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| jpeg.extend_from_slice(&__b))
+    }
+    .unwrap();
     let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"4\" height=\"4\"/></svg>";
     let of = |name: &str, bytes: &[u8]| file_flavour(name, &bytes[..bytes.len().min(FILE_HEAD)], &PASTE_ORDER);
     assert_eq!(of("red.png", &png), Some(PNG));
@@ -273,6 +453,41 @@ fn import_text_then_paste_gives_point_text() {
 }
 
 #[test]
+fn spreadsheet_cells_paste_as_a_table_of_type_over_gridlines() {
+    let mut s = session();
+    // As Excel puts three rows of two columns on the clipboard, an empty cell included.
+    let r = run(&mut s, "clipboard.importText", json!({"text": "Fruit\tQty\r\nApples\t3\r\nPears\t\r\n"}));
+    assert_eq!((r["count"].clone(), r["rows"].clone(), r["columns"].clone()), (json!(1), json!(3), json!(2)));
+    run(&mut s, "edit.paste", json!({"center": [200, 150]}));
+    let first = pasted(&s);
+    assert_eq!(first.len(), 1);
+    let table = &first[0];
+    assert_eq!(table.name.as_deref(), Some("Table"));
+    let kids = table.children().unwrap();
+    let grid = &kids[0];
+    assert_eq!(grid.name.as_deref(), Some("Gridlines"));
+    assert_eq!(grid.children().unwrap().len(), 4 + 3, "four row lines, three column lines");
+    // One type object a cell that holds text, each inside its own cell.
+    let cells: Vec<_> = kids[1..].iter().map(|n| (text_of(n).plain_text(), n.geometric_bounds().unwrap())).collect();
+    let texts: Vec<&str> = cells.iter().map(|(t, _)| t.as_str()).collect();
+    assert_eq!(texts, ["Fruit", "Qty", "Apples", "3", "Pears"]);
+    let at = |t: &str| cells.iter().find(|c| c.0 == t).unwrap().1;
+    assert!(at("Qty").x0 > at("Apples").x1, "the second column starts past the widest of the first");
+    assert!((at("Qty").x0 - at("3").x0).abs() < 1e-6 && (at("Fruit").x0 - at("Pears").x0).abs() < 1e-6, "columns line up");
+    assert!(at("Apples").y0 > at("Fruit").y1 && at("Pears").y0 > at("Apples").y1, "rows go down: {cells:?}");
+    let b = table.geometric_bounds().unwrap();
+    assert!((b.center().x - 200.0).abs() < 1.0 && (b.center().y - 150.0).abs() < 1.0, "{b:?}");
+    // table: false, and text that isn't a spreadsheet's, paste as one point type object.
+    for (text, table) in [("a\tb\nc\td", json!(false)), ("\tindented\n\tcode", Value::Null), ("x\ty\nz", Value::Null)] {
+        run(&mut s, "clipboard.importText", json!({"text": text, "table": table}));
+        run(&mut s, "edit.paste", json!({}));
+        let p = pasted(&s);
+        assert_eq!((p.len(), text_of(&p[0]).plain_text()), (1, text.to_string()), "{text:?}");
+    }
+    assert!(s.execute("clipboard.importText", &json!({"text": "a\tb", "table": "yes"})).is_err());
+}
+
+#[test]
 fn type_only_copies_offer_their_text() {
     let mut s = session();
     assert!(run(&mut s, "clipboard.exportText", json!({}))["text"].is_null());
@@ -287,6 +502,43 @@ fn type_only_copies_offer_their_text() {
     run(&mut s, "select.all", json!({}));
     run(&mut s, "edit.copy", json!({}));
     assert!(run(&mut s, "clipboard.exportText", json!({}))["text"].is_null());
+}
+
+/// Art too large to fit the clipboard's PNG side at the encoder's smallest scale gets no PNG,
+/// instead of a picture hundreds of megabytes large.
+#[test]
+fn copy_leaves_out_the_png_of_art_too_large_to_scale_down() {
+    let mut s = session();
+    let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 1_000_000, "height": 1_000_000}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [id]}));
+    run(&mut s, "edit.copy", json!({}));
+    assert!(!s.clipboard.flavour_types(false, false).contains(&PNG), "not offered either");
+    let (flavours, notes) = s.clipboard.flavours_with_warnings(false, false);
+    assert!(flavours.iter().all(|f| f.mime != PNG));
+    assert!(notes.iter().any(|n| n.contains("too large to copy as a picture")), "{notes:?}");
+    // Art that fits at that scale still gets its PNG, at most 4096 pixels a side.
+    let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 200_000, "height": 100}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [id]}));
+    run(&mut s, "edit.copy", json!({}));
+    let png = s.clipboard.flavours(false, false).into_iter().find(|f| f.mime == PNG).expect("a PNG");
+    let img = craft_image_codecs::decode(&png.data)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
+    assert!(img.width() <= 4096 && img.height() <= 4096, "{}x{}", img.width(), img.height());
 }
 
 #[test]
@@ -328,7 +580,41 @@ fn noise_png(side: u32) -> Vec<u8> {
         })
         .collect();
     let mut out = vec![];
-    image::RgbImage::from_raw(side, side, px).unwrap().write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbImage::from_raw(side, side, px).unwrap()).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -394,4 +680,22 @@ fn paste_copied_range(plain: bool) -> f64 {
 fn keep_plain_text_preference_drops_pasted_formatting() {
     assert_eq!(paste_copied_range(false), 40.0, "Keep Formatting");
     assert_eq!(paste_copied_range(true), 10.0, "Keep Plain Text");
+}
+
+/// #7975: pasted plain text is new type, filled as [Normal Character Style] is, not with the
+/// current fill.
+#[test]
+fn pasted_plain_text_takes_the_normal_character_style_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "clipboard.importText", json!({"text": "Plain"}));
+    run(&mut s, "edit.paste", json!({"center": [200, 150]}));
+    assert_eq!(text_of(&pasted(&s)[0]).runs[0].style.fill, Paint::solid(Color::BLACK));
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let attrs = crate::cmd::textstyles::char_attrs(&vectorcraft_doc::CharStyle { fill: blue.clone(), ..Default::default() });
+    run(&mut s, "charStyle.setAttrs", json!({"name": "[Normal Character Style]", "attrs": {"fill": attrs["fill"]}}));
+    run(&mut s, "clipboard.importText", json!({"text": "Plain"}));
+    run(&mut s, "edit.paste", json!({"center": [200, 150]}));
+    assert_eq!(text_of(&pasted(&s)[0]).runs[0].style.fill, blue);
 }

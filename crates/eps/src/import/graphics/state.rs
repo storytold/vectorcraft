@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, BezPath, Clip, Color, DefaultHasher, DictRef, Document, Drawn, FAR_AWAY, FillLayer, FillRule, Hash,
+    HashMap, HashSet, Hasher, LIMIT, LineCap, LineJoin, MAX_DRAWN, MAX_NEST, MAX_NODES, Node, NodeId, NodeKind, Obj, Paint, PathData, Point, Rc,
+    Rect, Shared, StrokeLayer, TOO_MUCH,
+};
 
 /// A colour space.
 #[derive(Clone, Debug)]
@@ -148,6 +152,9 @@ pub(crate) struct Out {
     pub(super) tilings: HashMap<u64, Vec<Tiling>>,
     /// How deep art drawn apart (a pattern's cell, a Type 3 glyph) is nested.
     pub apart: u32,
+    /// The glyphs of fonts the file carries for families that aren't available, gathered for the
+    /// fonts kept with the document (see `file_fonts`).
+    pub file_glyphs: super::super::file_fonts::FileFontGlyphs,
 }
 
 fn sane(r: Rect) -> bool {
@@ -197,6 +204,7 @@ impl Out {
             shadings: HashSet::new(),
             tilings: HashMap::new(),
             apart: 0,
+            file_glyphs: Default::default(),
         }
     }
 

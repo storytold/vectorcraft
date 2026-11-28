@@ -114,6 +114,41 @@ fn moving_type_in_perspective_moves_its_projection() {
 }
 
 #[test]
+fn moving_type_whose_projection_would_overflow_is_refused() {
+    let (mut s, _) = persp_session();
+    let id = persp_text(&mut s);
+    let NodeKind::Text(t) = &node(&s, id).kind else { panic!("type") };
+    let flat = t.bounds().unwrap();
+    // A stored projection that maps each point p of the type to k·(p − 0.9·q), with q its top-left
+    // corner: a document can hold it (its entries are finite, and its w row is already 1) and the
+    // type draws, but its product with a scale by 2 in perspective overflows, since its move,
+    // 0.9·k·q, is larger than any point it draws.
+    let step = grid(&s).transform_map(Plane::Right, 0.0, vectorcraft_geom::Affine::scale(2.0), 0.0).unwrap();
+    let q = flat.origin();
+    let scaled = |e: i32| {
+        let k = 2f64.powf(f64::from(e) / 16.0);
+        vectorcraft_geom::Homography([[k, 0.0, -0.9 * k * q.x], [0.0, k, -0.9 * k * q.y], [0.0, 0.0, 1.0]])
+    };
+    let finite = |m: &vectorcraft_geom::Homography| m.to_array().iter().all(|v| v.is_finite());
+    let draws = |m: &vectorcraft_geom::Homography| {
+        let drawn = m.map_rect_bbox(flat);
+        drawn.is_some_and(|b| step.map_rect_bbox(b).is_some()) && vectorcraft_geom::Homography::from_array(m.to_array()) == Some(*m)
+    };
+    let e = (0..16 * 1024).find(|e| draws(&scaled(*e)) && !finite(&step.then_after(&scaled(*e)))).unwrap_or_else(|| panic!("{step:?} {flat:?}"));
+    let big = scaled(e);
+    let mut doc = s.doc().unwrap().doc.clone();
+    let mut extras = std::sync::Arc::make_mut(&mut doc).node_mut(id).unwrap().extras_mut();
+    extras.perspective.as_deref_mut().unwrap().projection = Some(big.to_array());
+    drop(extras);
+    s.doc_mut().unwrap().doc = doc;
+    let before = (node(&s, id), undo_len(&s));
+    assert!(s.execute("perspective.transform", &json!({"ids": [id.0], "matrix": [2, 0, 0, 2, 0, 0]})).is_err());
+    assert_eq!((node(&s, id), undo_len(&s)), before, "the document is unchanged");
+    let stored = node(&s, id).extras().perspective.as_deref().and_then(|p| p.projection).unwrap();
+    assert!(stored.iter().all(|v| v.is_finite()));
+}
+
+#[test]
 fn edit_text_shows_it_flat_in_isolation_then_projects_it_again() {
     let (mut s, _) = persp_session();
     let id = persp_text(&mut s);
@@ -139,6 +174,98 @@ fn edit_text_shows_it_flat_in_isolation_then_projects_it_again() {
     // Not type in perspective: refused.
     let (mut s2, rect) = persp_session();
     assert!(s2.execute("perspective.editText", &json!({"id": rect.0})).is_err());
+}
+
+#[test]
+fn edit_text_whose_flat_view_would_overflow_is_refused() {
+    let (mut s, _) = persp_session();
+    let id = persp_text(&mut s);
+    let NodeKind::Text(t) = &node(&s, id).kind else { panic!("type") };
+    let flat = t.bounds().unwrap();
+    // A stored projection that draws the type `4k` times its size: a document can hold it (its w
+    // row is already 1) and the type draws, but the projection that shows it flat where it is
+    // drawn overflows.
+    let scaled = |e: i32| {
+        let k = 2f64.powf(f64::from(e) / 16.0);
+        vectorcraft_geom::Homography([[4.0 * k, 0.0, 0.0], [0.0, 4.0 * k, 0.0], [0.0, 0.0, 1.0]])
+    };
+    let overflows = |m: &vectorcraft_geom::Homography| {
+        let Some(drawn) = m.map_rect_bbox(flat) else { return false };
+        let shift = vectorcraft_geom::Affine::translate(drawn.center() - flat.center());
+        let moved = m.then_after(&vectorcraft_geom::Homography::from_affine(shift.inverse()));
+        vectorcraft_geom::Homography::from_array(m.to_array()) == Some(*m) && moved.to_array().iter().any(|v| !v.is_finite())
+    };
+    let e = (0..16 * 1024).find(|e| overflows(&scaled(*e))).unwrap_or_else(|| panic!("{flat:?}"));
+    let mut doc = s.doc().unwrap().doc.clone();
+    let mut extras = std::sync::Arc::make_mut(&mut doc).node_mut(id).unwrap().extras_mut();
+    extras.perspective.as_deref_mut().unwrap().projection = Some(scaled(e).to_array());
+    drop(extras);
+    s.doc_mut().unwrap().doc = doc;
+    let before = (node(&s, id), undo_len(&s));
+    assert!(s.execute("perspective.editText", &json!({"id": id.0})).is_err());
+    assert_eq!((node(&s, id), undo_len(&s)), before, "the document is unchanged");
+    assert_eq!(s.doc().unwrap().isolation, None, "not in isolation mode");
+}
+
+/// Edit Text, which shows the type in isolation mode, is off while an opacity mask is edited.
+#[test]
+fn edit_text_is_off_while_an_opacity_mask_is_edited() {
+    let (mut s, rect) = persp_session();
+    let id = persp_text(&mut s);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [rect.0]})).unwrap();
+    let layer = s.doc().unwrap().isolation;
+    assert!(layer.is_some(), "editing the new empty mask");
+    let err = s.execute("perspective.editText", &json!({"id": id.0})).unwrap_err();
+    assert!(matches!(&err, EngineError::Disabled(_, why) if why == "stop editing the opacity mask first"), "{err}");
+    assert_eq!(s.doc().unwrap().isolation, layer);
+    assert!(node(&s, id).projection().is_some(), "still projected");
+    s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
+    s.execute("perspective.editText", &json!({"id": id.0})).unwrap();
+    assert_eq!(s.doc().unwrap().isolation, Some(id));
+}
+
+#[test]
+fn isolating_ancestor_after_undo_clears_editing_from_redo_history() {
+    let (mut s, rect) = persp_session();
+    let id = persp_text(&mut s);
+    s.execute("select.set", &json!({"ids": [id.0, rect.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+
+    // Start editing text in perspective and make an edit so undo/redo has entries
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("perspective.editText", &json!({})).unwrap();
+    s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": 0, "insert": "Hello "})).unwrap();
+
+    // Undo the text edit so redo stack holds an entry while doc is not actively editing
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // Isolating the parent group must clear editing flag in redo entries too
+    s.execute("object.isolate", &json!({"id": g})).unwrap();
+    for e in &s.doc().unwrap().history.redo {
+        if let Some(p) = e.doc.node(id).and_then(|n| n.extras().perspective.as_deref()) {
+            assert!(!p.editing, "redo entry must not retain editing=true");
+        }
+    }
+}
+
+#[test]
+fn isolate_settles_pending_typing_interaction() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, rect) = persp_session();
+    let v = crate::ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 200.0, 200.0), v).unwrap();
+    }
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abc", v).unwrap();
+    assert!(s.in_interaction());
+
+    s.execute("object.isolate", &json!({"id": rect.0})).unwrap();
+    assert!(!s.in_interaction(), "isolating another object settles typing interaction");
+    let n = node(&s, id);
+    let NodeKind::Text(ref t) = n.kind else { panic!("not text") };
+    assert_eq!(t.plain_text(), "abc");
 }
 
 /// Edit Text ending while a background save writes the file leaves the document saved once the
@@ -251,6 +378,60 @@ fn flare_spiral_and_polar_grid_draw_in_perspective() {
     assert_eq!(attached(&s, NodeId(r["id"].as_u64().unwrap())).map(|a| a.0), Some(Plane::Left));
 }
 
+/// Alt-click (Option-click on macOS) with the Flare tool draws one flare with the tool's options as
+/// one undo step, without a dialog. On the active plane it is the flare the click-opened Flare Tool
+/// Options draw there; without the grid it is drawn flat. A plain click opens the dialog.
+#[test]
+fn an_alt_click_with_the_flare_tool_draws_the_flare_the_click_dialog_draws() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, _) = persp_session();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "left"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("flare", v).unwrap();
+    s.set_tool_option_cmd(&json!({"tool": "flare", "values": {"diameter": 40, "rays": 6, "ringsOn": false}})).unwrap();
+    let options = s.tool_options_of("flare");
+    let at = Point::new(300.0, 380.0);
+    let alt = Mods { alt: true, ..Default::default() };
+    let alt_click = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(alt), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y).with_mods(alt), v).unwrap()
+    };
+    let n = undo_len(&s);
+    assert_eq!(alt_click(&mut s), vec![], "no dialog");
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.journal.last().unwrap().0, "perspective.draw");
+    let id = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert_eq!(attached(&s, id).map(|a| a.0), Some(Plane::Left));
+    let drawn = node(&s, id).geometric_bounds().unwrap();
+    assert_eq!(s.tool_options_of("flare"), options, "the click leaves the options as they are");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_none());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(node(&s, id).geometric_bounds(), Some(drawn));
+    s.execute("edit.undo", &json!({})).unwrap();
+    let params = vectorcraft_tools::extra::flare_params(&options, at);
+    let (cmd, p) = crate::perspective_click(&s, "shape.flare", &params, at).unwrap();
+    let dialog = NodeId(s.execute(&cmd, &p).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(node(&s, dialog).geometric_bounds(), Some(drawn), "the flare the dialog's OK draws");
+    // A click above the ground plane's horizon draws nothing and reports the error.
+    s.execute("perspective.plane.set", &json!({"plane": "ground"})).unwrap();
+    let above = grid(&s).horizon - 50.0;
+    let n = undo_len(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, above).with_mods(alt), v).unwrap();
+    assert!(s.pointer(&PointerEvent::new(PointerKind::Up, at.x, above).with_mods(alt), v).is_err());
+    assert_eq!(undo_len(&s), n);
+    // Without the grid the flare is drawn flat; a plain click opens the dialog.
+    s.execute("perspective.grid.show", &json!({"visible": false})).unwrap();
+    assert_eq!(alt_click(&mut s), vec![]);
+    assert_eq!(s.journal.last().unwrap().0, "shape.flare");
+    let flat = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert_eq!(attached(&s, flat), None);
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y), v).unwrap();
+    let ui = s.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y), v).unwrap();
+    assert_eq!(ui, vec![UiRequest::Dialog("flare".into(), json!({"x": at.x, "y": at.y}))]);
+}
+
 #[test]
 fn click_to_size_dialogs_draw_on_the_active_plane_in_plane_units() {
     let (mut s, _) = persp_session();
@@ -270,6 +451,22 @@ fn click_to_size_dialogs_draw_on_the_active_plane_in_plane_units() {
     // Without a shown grid (or with no active plane) nothing changes.
     s.execute("perspective.plane.set", &json!({"plane": "none"})).unwrap();
     assert!(crate::perspective_click(&s, "shape.rectangle", &json!({}), at).is_none());
+}
+
+/// The Ellipse dialog's anchor count reaches the ellipse drawn on the active plane.
+#[test]
+fn an_ellipse_of_six_anchors_made_by_a_click_draws_on_the_active_plane() {
+    let (mut s, _) = persp_session();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "right"})).unwrap();
+    let at = Point::new(470.0, 300.0);
+    let p = json!({"x": at.x, "y": at.y, "width": 50, "height": 30, "anchors": 6});
+    let (cmd, p) = crate::perspective_click(&s, "shape.ellipse", &p, at).unwrap();
+    let n = undo_len(&s);
+    let id = NodeId(s.execute(&cmd, &p).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(attached(&s, id).map(|a| a.0), Some(Plane::Right));
+    assert_eq!(node(&s, id).path_data().unwrap().anchor_count(), 6);
 }
 
 #[test]

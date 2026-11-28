@@ -1,6 +1,7 @@
 //! The Curvature tool (Shift+~).
 //!
-//! Each click adds a point and the path curves smoothly through all points. Alt-click or
+//! Each click adds a point and the path curves smoothly through all points; an Alt-click adds a
+//! corner point, the first point included. Alt-click or
 //! double-click a point toggles it between smooth and corner; drag a point to move it; click the
 //! first point to close; Backspace/Delete removes the last touched point; Esc/Enter ends the path.
 //! A rubber band shows the curve to the cursor (Enable Rubber Band for Curvature Tool). Each point
@@ -8,8 +9,11 @@
 //!
 //! It edits any selected path too, whatever drew it, keeping its shape except where edited
 //! (#798). A click on one of its points makes that the current point (direct-selected); a drag
-//! moves it, re-curving only the two segments at it ([`curvature_move`]); Alt-click or
-//! double-click toggles it between smooth and corner and Backspace/Delete removes it. A click on
+//! moves it, re-curving only the two segments at it ([`curvature_move`]); double-click, or
+//! Alt-click on any point but an end of an open path, toggles it between smooth and corner. An
+//! Alt-click on an end of an open path makes it the current point without changing it, so the
+//! next click goes on from it. Backspace/Delete removes the current point, the curve
+//! where it was then following the remaining points ([`curvature_remove`]). A click on
 //! a segment adds a smooth point there without changing the shape ([`curvature_insert`]), and a
 //! drag moves the new point at once. While the current point is an end of an open path, clicks go
 //! on from it ([`curvature_extend`]): the old segments keep their shape, the new ones curve
@@ -20,7 +24,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, Selection};
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath, Vec2};
 
-use super::{FEEDBACK, anchor_in, curvature_spline, editable_paths, end_handle, remove_anchor, segment_in, smooth_handles};
+use super::{FEEDBACK, anchor_in, curvature_spline, editable_paths, end_handle, segment_in, smooth_handles};
 use crate::guides::{DrawSnap, Leave, Targets};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -34,6 +38,9 @@ pub struct CurvatureTool {
     id: Option<NodeId>,
     /// The point being dragged, the pointer at the press, and whether the drag began.
     drag: Option<(Grab, Point, bool)>,
+    /// Where the point of the path being drawn that the press grabbed was at the press, and the
+    /// current point before the press.
+    grabbed: Option<(Point, Option<usize>)>,
     /// Last touched point of the path being drawn (Backspace removes it).
     current: Option<usize>,
     hover: Option<Point>,
@@ -212,6 +219,106 @@ pub fn curvature_smooth(sp: &mut SubPath, i: usize) -> bool {
     }
 }
 
+/// Remove anchor `i` of `sp` as the Curvature tool deletes a point: the curve where it was follows
+/// the remaining points. Each neighbor that curves by the tool's rule (a smooth anchor, or an end
+/// of an open path with a handle into its segment) takes new handles from its new neighbors
+/// ([`smooth_handles`]; at an end, the one [`end_handle`] into the curve), and so does an end beyond
+/// one of them whose handle mirrors its tangent. A corner neighbor keeps its handles' directions,
+/// the one on the new segment scaled with its chord, as [`curvature_move`] scales them. With two
+/// anchors left the subpath is open, and those that curve by the tool's rule lose their handles, as
+/// [`curvature_spline`] draws two points as a line; a corner keeps its handles. On a path the tool
+/// drew, the result is the path it draws through the remaining points, except that an Alt-clicked
+/// end beside a corner without handles curves (the path stores it like any end there). False, and
+/// `sp` unchanged, when there is no anchor `i`.
+pub fn curvature_remove(sp: &mut SubPath, i: usize) -> bool {
+    let n = sp.anchors.len();
+    let Some(a) = sp.anchors.get(i).copied() else { return false };
+    let closed = sp.closed;
+    let is_end = |j: usize| !closed && (j == 0 || j + 1 == n);
+    // An end without a handle beside a corner without handles is stored the same whether it was
+    // Alt-clicked or not ([`curvature_spline`] gives it no handle either way), so it curves, as an
+    // end the tool places does by default. Beside a tangent, a missing handle means a corner.
+    let flags: Vec<bool> = sp
+        .anchors
+        .iter()
+        .enumerate()
+        .map(|(j, b)| {
+            if !is_end(j) {
+                return b.kind == AnchorKind::Smooth;
+            }
+            let near = sp.anchors.get(if j == 0 { 1 } else { n.saturating_sub(2) });
+            b.has_in() || b.has_out() || near.is_none_or(|q| end_handle(b.p, q, j == 0).is_none())
+        })
+        .collect();
+    let curved = |j: usize| flags.get(j).copied().unwrap_or(false);
+    let [prev, next] = neighbours(sp, i);
+    // A corner on both sides of the removed point: its handle on the new segment scales with it.
+    if let (Some(pi), Some(ni)) = (prev, next)
+        && pi != ni
+    {
+        for (j, other, out) in [(pi, ni, true), (ni, pi, false)] {
+            let to = sp.anchors.get(other).map(|o| o.p);
+            if curved(j) {
+                continue;
+            }
+            let Some((b, to)) = sp.anchors.get_mut(j).zip(to) else { continue };
+            let old = b.p.distance(a.p);
+            let s = if old > 1e-9 { b.p.distance(to) / old } else { 1.0 };
+            let h = if out { &mut b.h_out } else { &mut b.h_in };
+            *h = b.p + (*h - b.p) * s;
+        }
+    }
+    let mut again: Vec<usize> = [prev, next].into_iter().flatten().filter(|&j| curved(j)).collect();
+    // An end beside a smooth neighbor mirrors that neighbor's tangent, which changes.
+    for j in again.clone() {
+        if !is_end(j) {
+            again.extend(neighbours(sp, j).into_iter().flatten().filter(|&k| k != i && is_end(k) && curved(k)));
+        }
+    }
+    sp.anchors.remove(i);
+    let mut again: Vec<usize> = again.into_iter().map(|j| if j > i { j - 1 } else { j }).collect();
+    again.sort_unstable();
+    again.dedup();
+    let m = sp.anchors.len();
+    if m < 3 {
+        sp.closed = false;
+    }
+    if !sp.closed {
+        // A new end has nothing beyond it.
+        if let Some(e) = sp.anchors.first_mut() {
+            e.h_in = e.p;
+        }
+        if let Some(e) = sp.anchors.last_mut() {
+            e.h_out = e.p;
+        }
+    }
+    let end = |j: usize| !sp.closed && (j == 0 || j + 1 == m);
+    let (ends, inner): (Vec<usize>, Vec<usize>) = again.into_iter().partition(|&j| end(j));
+    // The inner anchors first: an end's handle mirrors its neighbor's tangent.
+    for j in inner {
+        let [b, c] = neighbours(sp, j).map(|k| k.and_then(|k| sp.anchors.get(k)).map(|x| x.p));
+        let Some(x) = sp.anchors.get(j).map(|x| x.p) else { continue };
+        let fresh = match (b, c) {
+            (Some(b), Some(c)) => smooth_handles(b, x, c).map(|(h_in, h_out)| Anchor { p: x, h_in, h_out, kind: AnchorKind::Smooth }),
+            _ => None,
+        };
+        if let Some(y) = sp.anchors.get_mut(j) {
+            *y = fresh.unwrap_or_else(|| Anchor::corner(x));
+        }
+    }
+    for j in ends {
+        let first = j == 0;
+        let near = if first { sp.anchors.get(1) } else { j.checked_sub(1).and_then(|k| sp.anchors.get(k)) }.copied();
+        let Some(x) = sp.anchors.get(j).map(|x| x.p) else { continue };
+        // Two points are a line.
+        let h = near.filter(|_| m >= 3).and_then(|q| end_handle(x, &q, first)).unwrap_or(x);
+        if let Some(y) = sp.anchors.get_mut(j) {
+            *y = if first { Anchor { h_out: h, ..Anchor::corner(x) } } else { Anchor { h_in: h, ..Anchor::corner(x) } };
+        }
+    }
+    true
+}
+
 /// Go on from an end of the open subpath `sp` (its start with `start`) to a new end at `p`; the old
 /// end bends into the new segment as `how` says. The new end has no handle on the outer side and,
 /// unless it is a `corner` (Alt-clicked), the one [`end_handle`] into the curve, so its segment
@@ -313,16 +420,26 @@ fn select_point((id, si, ai): (NodeId, usize, usize)) -> Action {
     Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))
 }
 
+/// Delete anchor `(id, si, ai)` of a selected path, the curve where it was following the remaining
+/// points ([`curvature_remove`]).
+fn delete_point((id, si, ai): (NodeId, usize, usize)) -> Action {
+    Action::Exec("path.removeAnchor".into(), json!({"id": id.0, "subpath": si, "anchor": ai, "curvature": true}))
+}
+
 /// Toggle anchor `(id, si, ai)` of a selected path between smooth and corner. An end of an open
 /// path counts as smooth while it has a handle into its segment (the ends the tool curves are
 /// corners with one handle).
 fn toggle(cx: &ToolContext, (id, si, ai): (NodeId, usize, usize)) -> Option<Action> {
     let sp = subpath(cx, id, si)?;
     let a = sp.anchors.get(ai)?;
-    let open_end = !sp.closed && (ai == 0 || ai + 1 == sp.anchors.len());
-    let smooth = if open_end { a.has_in() || a.has_out() } else { a.kind == AnchorKind::Smooth };
+    let smooth = if open_end(sp, ai) { a.has_in() || a.has_out() } else { a.kind == AnchorKind::Smooth };
     let to = if smooth { "corner" } else { "smooth" };
     Some(Action::Exec("path.convertAnchor".into(), json!({"id": id.0, "subpath": si, "anchor": ai, "to": to})))
+}
+
+/// Whether anchor `ai` is an end of the open subpath `sp`.
+fn open_end(sp: &SubPath, ai: usize) -> bool {
+    !sp.closed && (ai == 0 || ai + 1 == sp.anchors.len())
 }
 
 /// Snap targets for dragging anchors `anchors` of subpath `si` of `id` (the rest of the path
@@ -397,12 +514,13 @@ impl CurvatureTool {
     }
 
     /// A press on a selected path the tool isn't drawing: on the other end of the open path going
-    /// on (it closes), on a point, anywhere while an end is current (the path goes on), or on a
+    /// on (without Alt it closes), on a point, anywhere while an end is current (the path goes on), or on a
     /// segment. None elsewhere: a new path starts.
     fn press_selected(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
         let (p, tol) = (ev.pos, point_tol(cx));
         let end = current_end(cx);
-        if let Some(e) = end.filter(|e| e.anchors >= 3 && p.distance(e.other) <= tol) {
+        // An Alt-click on the other end makes it current instead (below).
+        if let Some(e) = end.filter(|e| !ev.mods.alt && e.anchors >= 3 && p.distance(e.other) <= tol) {
             let how = self.how(&e);
             self.placed = None;
             let v = json!({"id": e.id.0, "subpath": e.si, "op": "close", "end": e.name(), "from": how.name()});
@@ -410,11 +528,14 @@ impl CurvatureTool {
         }
         if let Some(hit) = anchor_in(cx, editable_paths(cx), p, tol) {
             let mut out = vec![select_point(hit)];
+            let (id, si, ai) = hit;
             if ev.mods.alt {
-                out.extend(toggle(cx, hit));
+                // On an end of an open path the path goes on from it; any other point toggles.
+                if !subpath(cx, id, si).is_some_and(|sp| open_end(sp, ai)) {
+                    out.extend(toggle(cx, hit));
+                }
                 return Some(out);
             }
-            let (id, si, ai) = hit;
             hold_targets(&mut self.snap, cx, id, si, &[ai]);
             self.drag = Some((Grab::Anchor(id, si, ai), p, false));
             return Some(out);
@@ -457,7 +578,7 @@ impl Tool for CurvatureTool {
             PointerKind::Down => {
                 if let Some(id) = active {
                     if let Some(i) = self.hit_point(cx, p) {
-                        self.current = Some(i);
+                        let was_current = self.current.replace(i);
                         if ev.mods.alt {
                             self.pts[i].1 = !self.pts[i].1;
                             return vec![Action::Exec("path.curvature".into(), self.params())];
@@ -469,6 +590,7 @@ impl Tool for CurvatureTool {
                         // The point dragged and the curve through it move: the rest pull.
                         hold_targets(&mut self.snap, cx, id, 0, &[i]);
                         self.drag = Some((Grab::Drawn(i), p, false));
+                        self.grabbed = self.pts.get(i).map(|pt| (pt.0, was_current));
                         return vec![];
                     }
                     if !self.closed {
@@ -485,7 +607,7 @@ impl Tool for CurvatureTool {
                 // Start a new path.
                 self.reset();
                 let p = self.snap.press(cx, p, &[], None);
-                self.pts.push((p, false));
+                self.pts.push((p, ev.mods.alt));
                 self.current = Some(0);
                 vec![Action::Exec("path.curvature".into(), self.params()), Action::Notify("created".into())]
             }
@@ -531,6 +653,7 @@ impl Tool for CurvatureTool {
                 self.pts[i].1 = !self.pts[i].1;
                 vec![Action::Exec("path.curvature".into(), self.params())]
             }
+            PointerKind::TripleClick => vec![],
         }
     }
     fn notify(&mut self, cx: &ToolContext, what: &str) {
@@ -538,10 +661,26 @@ impl Tool for CurvatureTool {
             self.id = Some(cx.selection.objects[0]);
         }
     }
+    /// A path being drawn: Escape ends it.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.active(cx).is_some()
+    }
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         matches!(key, ToolKey::Backspace | ToolKey::Delete)
             && self.drag.is_none()
             && if self.active(cx).is_some() { self.pts.len() > 1 } else { current_point(cx).is_some() }
+    }
+    /// A dropped press does not end the path being drawn, as Escape would: a point it grabbed
+    /// goes back to where it was at the press, and the current point to the one before the press.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        if let (Some((Grab::Drawn(i), _, _)), Some((at, current))) = (self.drag.take(), self.grabbed.take())
+            && let Some(pt) = self.pts.get_mut(i)
+        {
+            pt.0 = at;
+            self.current = current;
+        }
+        self.snap.clear();
+        vec![]
     }
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _m: Mods) -> Vec<Action> {
         match key {
@@ -560,7 +699,7 @@ impl Tool for CurvatureTool {
             }
             ToolKey::Backspace | ToolKey::Delete if self.claims_key(cx, key) => {
                 if self.active(cx).is_none() {
-                    return current_point(cx).map(remove_anchor).into_iter().collect();
+                    return current_point(cx).map(delete_point).into_iter().collect();
                 }
                 let i = self.current.unwrap_or(self.pts.len() - 1).min(self.pts.len() - 1);
                 self.pts.remove(i);
@@ -580,38 +719,44 @@ impl Tool for CurvatureTool {
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
-        let band = cx.curvature_rubber_band && self.drag.is_none();
+        // The rubber band preference hides only the preview curve; Measurement Labels decides the readout.
+        let idle = self.drag.is_none();
+        let band = cx.curvature_rubber_band;
         let mut bp = BezPath::new();
         if self.active(cx).is_none() {
             // The curve on from the current end of a selected path: its last segment and the next.
-            if band
+            if idle
                 && let (Some(e), Some(h)) = (current_end(cx), self.hover)
                 && let Some(sp) = subpath(cx, e.id, e.si)
             {
-                let n = sp.anchors.len();
-                let near = if e.start {
-                    sp.anchors.iter().take(2).rev().map(Anchor::reversed).collect()
-                } else {
-                    sp.anchors.iter().skip(n.saturating_sub(2)).copied().collect()
-                };
-                let mut tail = SubPath::new(near, false);
-                curvature_extend(&mut tail, false, h, self.how(&e), false);
-                tail.to_bezpath_into(&mut bp);
-                o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
+                if band {
+                    let n = sp.anchors.len();
+                    let near = if e.start {
+                        sp.anchors.iter().take(2).rev().map(Anchor::reversed).collect()
+                    } else {
+                        sp.anchors.iter().skip(n.saturating_sub(2)).copied().collect()
+                    };
+                    let mut tail = SubPath::new(near, false);
+                    curvature_extend(&mut tail, false, h, self.how(&e), false);
+                    tail.to_bezpath_into(&mut bp);
+                    o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
+                }
                 if cx.measurement_labels && e.p.distance(h) > 1e-9 {
                     o.push(Overlay::Measure { p: h + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.segment_measure_label(e.p, h) });
                 }
             }
             return o;
         }
-        if band
+        if idle
             && !self.closed
             && let Some(h) = self.hover
         {
-            let mut pts = self.pts.clone();
-            pts.push((h, false));
-            curvature_spline(&pts, false).to_bezpath_into(&mut bp);
-            o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
+            if band {
+                let mut pts = self.pts.clone();
+                pts.push((h, false));
+                curvature_spline(&pts, false).to_bezpath_into(&mut bp);
+                o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
+            }
             if let Some((from, _)) = self.pts.last()
                 && cx.measurement_labels
                 && from.distance(h) > 1e-9
@@ -635,15 +780,14 @@ impl Tool for CurvatureTool {
         }
         let tol = point_tol(cx);
         let end = current_end(cx);
-        if end.is_some_and(|e| e.anchors >= 3 && p.distance(e.other) <= tol) {
+        if !m.alt && end.is_some_and(|e| e.anchors >= 3 && p.distance(e.other) <= tol) {
             return Cursor::PenClose;
         }
         if let Some((id, si, ai)) = anchor_in(cx, editable_paths(cx), p, tol) {
-            let open_end = subpath(cx, id, si).is_some_and(|sp| !sp.closed && (ai == 0 || ai + 1 == sp.anchors.len()));
-            return if m.alt {
-                Cursor::PenConvert
-            } else if open_end {
+            return if subpath(cx, id, si).is_some_and(|sp| open_end(sp, ai)) {
                 Cursor::PenContinue
+            } else if m.alt {
+                Cursor::PenConvert
             } else {
                 Cursor::Move
             };

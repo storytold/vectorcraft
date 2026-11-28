@@ -4,15 +4,18 @@
 //! Outer Glow, Inner Glow or Feather. That covers `feGaussianBlur`, `feDropShadow`, the usual
 //! shadow chains (offset, blur, flood or color matrix, composite, merge), blur and shadow graphs
 //! with `feBlend` and transparent backdrops (as exported by Figma and others), the object moved and
-//! blurred with its colors scaled by `feComponentTransfer` (a drop shadow with Darkness) and what
+//! blurred with a fixed amount subtracted from its colors by `feComponentTransfer` (Darkness), and what
 //! our export writes, so export → import keeps the effects.
 
+use craft_svg::tree::usvg;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use craft_svg::tree::usvg::filter::{
+    ColorInterpolation, ColorMatrixKind, CompositeOperator, Filter, Input, Kind, MorphologyOperator, TransferFunction,
+};
+use craft_svg::tree::usvg::roxmltree;
 use serde_json::json;
-use usvg::filter::{ColorInterpolation, ColorMatrixKind, CompositeOperator, Filter, Input, Kind, MorphologyOperator, TransferFunction};
-use usvg::roxmltree;
 use vectorcraft_color::Color;
 use vectorcraft_doc::Effect;
 use vectorcraft_geom::{Affine, Vec2};
@@ -30,6 +33,136 @@ pub(super) fn blends(xml: &roxmltree::Document, markers: &str) -> HashMap<String
     xml.descendants()
         .filter(|n| n.tag_name().name() == "filter")
         .filter_map(|n| Some((n.attribute("id")?.to_string(), n.attribute(BLEND)?.to_string())))
+        .collect()
+}
+
+/// A `<filter>` element as written ([`sources`]): its XML, its primitives' element names and its
+/// place among the filters in document order, and whether it looks different outside the document
+/// ([`vectorcraft_effects::svg_filter::depends_on_styles`]). Its check and its primitives as usvg
+/// reads them are worked out once, when first asked for.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Source {
+    xml: String,
+    primitives: Vec<String>,
+    order: usize,
+    styled: bool,
+    name: std::cell::OnceCell<Option<String>>,
+    forms: std::cell::OnceCell<Option<Vec<String>>>,
+}
+
+impl Source {
+    /// The filter's name when [`vectorcraft_effects::svg_filter::check`] takes it.
+    fn name(&self) -> Option<&String> {
+        self.name.get_or_init(|| vectorcraft_effects::svg_filter::check(&self.xml).ok()).as_ref()
+    }
+
+    /// Its primitives as usvg reads them ([`vectorcraft_effects::svg_filter::primitive_forms`]).
+    fn forms(&self) -> Option<&Vec<String>> {
+        self.forms.get_or_init(|| vectorcraft_effects::svg_filter::primitive_forms(&self.xml)).as_ref()
+    }
+}
+
+/// Each `<filter>` element with an id, as written, by id, with the document's style sheets read
+/// once for all of them. A source is checked and read by usvg only when art uses it, once.
+/// `markers` is the text with its data URLs left out ([`super::depth::prescan`]). `href` gives the
+/// href, as written, of each key the prepass wrote in place of an `<feImage>` href
+/// ([`super::files::Files::data_href`]): the source holds that href.
+pub(super) fn sources(xml: &roxmltree::Document, markers: &str, href: impl Fn(&str) -> Option<Arc<str>>) -> HashMap<String, Source> {
+    if !markers.contains("<filter") && !markers.contains(":filter") {
+        return HashMap::new();
+    }
+    let text = xml.input_text();
+    let styles = vectorcraft_effects::svg_filter::Styles::of(xml);
+    xml.descendants()
+        .filter(|n| n.has_tag_name((super::SVG_NS, "filter")))
+        .enumerate()
+        .filter_map(|(order, n)| {
+            let id = n.attribute("id")?.to_string();
+            let primitives = n.children().filter(roxmltree::Node::is_element).map(|p| p.tag_name().name().to_string()).collect();
+            let xml = hrefs_as_written(n, vectorcraft_effects::svg_filter::element_xml(n, text)?, &href);
+            let styled = vectorcraft_effects::svg_filter::depends_on_styles(n, &styles);
+            Some((id, Source { xml, primitives, order, styled, ..Default::default() }))
+        })
+        .collect()
+}
+
+/// `xml`, the text of filter `n` ([`vectorcraft_effects::svg_filter::element_xml`]), with each
+/// `<feImage>` href that `href` gives a written href for put back as written, XML-escaped.
+fn hrefs_as_written(n: roxmltree::Node, mut xml: String, href: &impl Fn(&str) -> Option<Arc<str>>) -> String {
+    // `element_xml` adds namespace declarations to the start tag only, ahead of every child.
+    let (start, end) = (n.range().start, n.range().end);
+    let Some(shift) = xml.len().checked_sub(end - start) else { return xml };
+    let mut written: Vec<_> = n
+        .descendants()
+        .filter(|p| p.is_element() && p.tag_name().name() == "feImage")
+        .flat_map(|p| p.attributes())
+        .filter(|a| a.name() == "href" && matches!(a.namespace(), None | Some("http://www.w3.org/1999/xlink")))
+        .filter_map(|a| {
+            let r = a.range_value();
+            // A value written through an entity lies outside the element's text: it stays.
+            (r.start > start && r.end < end).then_some(())?;
+            Some((r.start - start + shift..r.end - start + shift, a.value(), href(a.value())?))
+        })
+        .collect();
+    written.sort_by_key(|(r, ..)| std::cmp::Reverse(r.start));
+    for (r, key, h) in written {
+        if xml.get(r.clone()) == Some(key) {
+            xml.replace_range(r, &crate::xml_escape(&h));
+        }
+    }
+    xml
+}
+
+/// The element name of primitive `k` (`feGaussianBlur`).
+fn element_name(k: &Kind) -> String {
+    let debug = format!("{k:?}");
+    format!("fe{}", debug.split(|c: char| !c.is_ascii_alphanumeric()).next().unwrap_or_default())
+}
+
+/// The source of `filter` in `sources`: by its id, else (usvg gives each further element that uses
+/// a filter a copy with an id of its own) the only source with the same primitives, compared by
+/// element name and then as usvg reads them. Sources that differ only in their ids draw alike: the
+/// first of them in document order is taken. usvg's tree doesn't say which `<filter>` an element
+/// named, so other sources with the same primitives leave the filter without a source.
+fn source_of<'a>(filter: &Filter, sources: &'a HashMap<String, Source>) -> Option<&'a Source> {
+    use vectorcraft_effects::svg_filter::with_id;
+    if let Some(s) = sources.get(filter.id()) {
+        return Some(s);
+    }
+    let names: Vec<String> = filter.primitives().iter().map(|p| element_name(p.kind())).collect();
+    let same: Vec<&Source> = sources.values().filter(|s| s.primitives == names).collect();
+    if let [one] = same.as_slice() {
+        return Some(one);
+    }
+    let forms: Vec<String> = filter.primitives().iter().map(|p| format!("{:?}", p.kind())).collect();
+    let read_alike: Vec<&Source> = same.into_iter().filter(|s| s.forms() == Some(&forms)).collect();
+    let first = read_alike.iter().copied().min_by_key(|s| s.order)?;
+    let unnamed = |s: &Source| with_id(&s.xml, "");
+    read_alike.iter().all(|s| unnamed(s) == unnamed(first)).then_some(first)
+}
+
+/// `filters` (in the order they apply) as Effect › SVG Filters effects, each holding its filter's
+/// XML from `sources` ([`sources`]), in user space mapped to the document by `ts`. `None` when one
+/// isn't there, looks different outside the document, or isn't a filter the effect draws
+/// ([`vectorcraft_effects::svg_filter::check`]), or
+/// when `ts` scales the user space past what the effect measures (0.001 to 1000 points to a unit,
+/// as the square root of its area scale) or stretches its axes past what the effect's `axes` hold.
+/// Where `ts` moves the user space is the effect's `origin`; a user space that `ts` turns, skews
+/// or scales unevenly keeps those directions in the effect's `axes`, so the filter runs in the
+/// element's own user space as SVG 1.1 defines it (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>).
+pub(super) fn kept(filters: &[Arc<Filter>], ts: Affine, sources: &HashMap<String, Source>) -> Option<Vec<Effect>> {
+    let space = vectorcraft_effects::svg_filter::user_space(ts)?;
+    filters
+        .iter()
+        .map(|filter| {
+            // A filter styled by the document is left out rather than drawn differently.
+            let source = source_of(filter, sources).filter(|s| !s.styled)?;
+            let mut params = json!({ "name": source.name()?, "xml": source.xml, "scale": space.scale, "origin": space.origin });
+            if let Some(axes) = space.axes {
+                params["axes"] = json!(axes);
+            }
+            Some(Effect { id: vectorcraft_effects::SVG_FILTER.into(), params, visible: true })
+        })
         .collect()
 }
 
@@ -69,14 +202,16 @@ enum V {
     },
     /// The source inside its own blurred silhouette (σ).
     Feathered(f64),
-    /// The source blurred (σ `sd`, on linear RGB values when `linear`), moved, its colors times
-    /// `keep` and its alpha times `opacity`: a drop shadow with Darkness 1 − `keep`.
+    /// The source blurred (σ `sd`, on linear RGB values when `linear`), moved, its colors
+    /// scaled by `keep` with `subtract` removed before blur, and alpha times `opacity`.
+    /// Only fixed subtraction and the black endpoint map to live Darkness.
     Shade {
         sd: f64,
         linear: bool,
         dx: f64,
         dy: f64,
         keep: f32,
+        subtract: f32,
         opacity: f32,
     },
     /// Layers, bottom first.
@@ -111,7 +246,9 @@ impl V {
             V::Paint { shape, color, opacity, clipped: false } => {
                 V::Paint { shape: Shape { sd: add(shape.sd), ..shape }, color, opacity, clipped: false }
             }
-            V::Shade { sd: s, linear: l, dx, dy, keep, opacity } => V::Shade { sd: add(s), linear: l || linear, dx, dy, keep, opacity },
+            V::Shade { sd: s, linear: l, dx, dy, keep, subtract, opacity } => {
+                V::Shade { sd: add(s), linear: l || linear, dx, dy, keep, subtract, opacity }
+            }
             _ => return None,
         })
     }
@@ -122,9 +259,11 @@ impl V {
             V::Alpha(s) => V::Alpha(moved(s)),
             V::Paint { shape, color, opacity, clipped: false } => V::Paint { shape: moved(shape), color, opacity, clipped: false },
             v @ (V::Graphic | V::Blurred(..)) if dx == 0.0 && dy == 0.0 => v,
-            V::Graphic => V::Shade { sd: 0.0, linear: false, dx, dy, keep: 1.0, opacity: 1.0 },
-            V::Blurred(sd, linear) => V::Shade { sd, linear, dx, dy, keep: 1.0, opacity: 1.0 },
-            V::Shade { sd, linear, dx: x, dy: y, keep, opacity } => V::Shade { sd, linear, dx: x + dx, dy: y + dy, keep, opacity },
+            V::Graphic => V::Shade { sd: 0.0, linear: false, dx, dy, keep: 1.0, subtract: 0.0, opacity: 1.0 },
+            V::Blurred(sd, linear) => V::Shade { sd, linear, dx, dy, keep: 1.0, subtract: 0.0, opacity: 1.0 },
+            V::Shade { sd, linear, dx: x, dy: y, keep, subtract, opacity } => {
+                V::Shade { sd, linear, dx: x + dx, dy: y + dy, keep, subtract, opacity }
+            }
             _ => return None,
         })
     }
@@ -132,13 +271,13 @@ impl V {
     /// The source, blurred or moved, with each color channel times `keep` and its alpha times
     /// `opacity` (`feComponentTransfer` with linear functions through 0).
     fn scaled(self, keep: f32, opacity: f32) -> Option<V> {
-        let (sd, linear, dx, dy, k, o) = match self {
-            V::Graphic => (0.0, false, 0.0, 0.0, 1.0, 1.0),
-            V::Blurred(sd, linear) => (sd, linear, 0.0, 0.0, 1.0, 1.0),
-            V::Shade { sd, linear, dx, dy, keep, opacity } => (sd, linear, dx, dy, keep, opacity),
+        let (sd, linear, dx, dy, k, subtract, o) = match self {
+            V::Graphic => (0.0, false, 0.0, 0.0, 1.0, 0.0, 1.0),
+            V::Blurred(sd, linear) => (sd, linear, 0.0, 0.0, 1.0, 0.0, 1.0),
+            V::Shade { sd, linear, dx, dy, keep, subtract, opacity } => (sd, linear, dx, dy, keep, subtract, opacity),
             _ => return None,
         };
-        Some(V::Shade { sd, linear, dx, dy, keep: k * keep, opacity: o * opacity })
+        Some(V::Shade { sd, linear, dx, dy, keep: k * keep, subtract: subtract * keep, opacity: o * opacity })
     }
 
     /// `self` in the alpha of `mask` (`feComposite operator="in"`).
@@ -179,18 +318,101 @@ impl V {
     }
 }
 
-/// σ of a blur with standard deviations `x`, `y` (their mean: the effects blur evenly).
-fn sd(x: f32, y: f32) -> f64 {
-    (x as f64 + y as f64) / 2.0
+/// σ of a blur with standard deviations `x`, `y` in a user space the document scales by the same
+/// amount in every direction when `even` (turned, flipped or scaled alike along both axes). The
+/// effects blur evenly: `None` when the blur differs by direction in the document, unless `blurs`
+/// is [`Blurs::Nearest`], which takes the mean.
+fn sd(x: f32, y: f32, even: bool, blurs: Blurs) -> Option<f64> {
+    let uneven = (x > 0.0 || y > 0.0) && (x != y || !even);
+    (blurs == Blurs::Nearest || !uneven).then_some((x as f64 + y as f64) / 2.0)
+}
+
+/// How [`effects`] reads a blur that differs by direction in the document, which the effects
+/// draw the same in every direction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Blurs {
+    /// Not as an effect: the filter is left for an SVG Filters effect ([`kept`]), which draws it.
+    Exact,
+    /// As the even blur of the mean standard deviation.
+    Nearest,
+}
+
+/// Whether the linear part of `ts` scales every direction by the same amount (a turn, a flip and
+/// an even scale), so an even blur stays even in the document.
+fn even_space(ts: Affine) -> bool {
+    let [a, b, c, d, _, _] = ts.as_coeffs();
+    let tol = 1e-9 * ts.determinant().abs().sqrt().max(1.0);
+    let near = |p: f64, q: f64| (p - q).abs() <= tol;
+    (near(a, d) && near(b, -c)) || (near(a, -d) && near(b, c))
+}
+
+/// `filters` (in the order they apply) imported in user space mapped to the document by `ts`: as
+/// the live effects they draw as ([`effects`]), else as SVG Filters effects that keep their XML
+/// ([`kept`]), else as the live effects nearest them (a blur that differs by direction drawn as
+/// an even one). With whether they are live effects. `None` when none of these takes them.
+pub(super) fn imported(
+    filters: &[Arc<Filter>],
+    ts: Affine,
+    blends: &HashMap<String, String>,
+    sources: &HashMap<String, Source>,
+) -> Option<(Vec<Effect>, bool)> {
+    if let Some(fx) = effects(filters, ts, blends, Blurs::Exact) {
+        return Some((fx, true));
+    }
+    if let Some(fx) = kept(filters, ts, sources) {
+        return Some((fx, false));
+    }
+    effects(filters, ts, blends, Blurs::Nearest).map(|fx| (fx, true))
 }
 
 fn color(c: usvg::Color) -> Color {
     Color::rgb8(c.red, c.green, c.blue)
 }
 
-/// Evaluate one filter's primitives, `k` the scale from the filter's user space to the document;
-/// `None` when one does something the effects can't.
-fn eval(f: &Filter, k: f64) -> Option<V> {
+/// Transfer functions on the source or its silhouette, separately from filter graph traversal.
+fn transferred(v: V, [r, g, b, a]: [&TransferFunction; 4], srgb: bool) -> Option<V> {
+    let identity = [r, g, b].iter().all(|f| matches!(f, TransferFunction::Identity));
+    let invert = match a {
+        TransferFunction::Table(t) => t.as_slice() == [1.0, 0.0],
+        TransferFunction::Linear { slope, intercept } => *slope == -1.0 && *intercept == 1.0,
+        _ => false,
+    };
+    let scale = |f: &TransferFunction| match f {
+        TransferFunction::Identity => Some(1.0),
+        TransferFunction::Linear { slope, intercept } if *intercept == 0.0 && (0.0..=1.0).contains(slope) => Some(*slope),
+        _ => None,
+    };
+    let keep = match [r, g, b].map(scale) {
+        [Some(r), Some(g), Some(b)] if r == g && g == b && (srgb || r == 0.0 || r == 1.0) => Some(r),
+        _ => None,
+    };
+    let solid = matches!(a,TransferFunction::Linear {slope,intercept} if *slope>=255.0 && *intercept==0.0);
+    let subtract = |f: &TransferFunction| match f {
+        TransferFunction::Linear { slope, intercept } if *slope == 1.0 && (-1.0..=0.0).contains(intercept) => Some(-*intercept),
+        _ => None,
+    };
+    let darkness = match [r, g, b].map(subtract) {
+        [Some(r), Some(g), Some(b)] if r == g && g == b && srgb => Some(r),
+        _ => None,
+    };
+    let opacity = scale(a);
+    if matches!(v, V::Graphic)
+        && let (Some(d), Some(opacity)) = (darkness, opacity)
+    {
+        return Some(V::Shade { sd: 0.0, linear: false, dx: 0.0, dy: 0.0, keep: 1.0, subtract: d, opacity });
+    }
+    match (v, keep, opacity) {
+        (V::Alpha(s), _, _) if identity && invert && s.sd == 0.0 => Some(V::Alpha(Shape { inverted: !s.inverted, ..s })),
+        (V::Alpha(s), _, _) if identity && solid && s.plain() => Some(V::Alpha(s)),
+        (v @ (V::Graphic | V::Blurred(..) | V::Shade { .. }), Some(keep), Some(opacity)) => v.scaled(keep, opacity),
+        _ => None,
+    }
+}
+
+/// Evaluate one filter's primitives, `k` the scale from its user space to the document, `even`
+/// when that scale is the same in every direction ([`even_space`]), blurs read as `blurs` says.
+/// `None` when one does something the effects cannot represent.
+fn eval(f: &Filter, k: f64, even: bool, blurs: Blurs) -> Option<V> {
     let mut results: HashMap<&str, V> = HashMap::new();
     let mut last = V::Graphic;
     for p in f.primitives() {
@@ -204,7 +426,7 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
         let v = match p.kind() {
             Kind::GaussianBlur(b) => {
                 let linear = p.color_interpolation() == ColorInterpolation::LinearRGB;
-                input(b.input())?.blur(sd(b.std_dev_x().get(), b.std_dev_y().get()), linear)?
+                input(b.input())?.blur(sd(b.std_dev_x().get(), b.std_dev_y().get(), even, blurs)?, linear)?
             }
             Kind::Offset(o) => input(o.input())?.offset(o.dx() as f64, o.dy() as f64)?,
             Kind::Flood(fl) => V::Flood(color(fl.color()), fl.opacity().get()),
@@ -259,33 +481,7 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
                 _ => return None,
             },
             Kind::ComponentTransfer(c) => {
-                let identity = [c.func_r(), c.func_g(), c.func_b()].iter().all(|f| matches!(f, TransferFunction::Identity));
-                let invert = match c.func_a() {
-                    TransferFunction::Table(t) => t.as_slice() == [1.0, 0.0],
-                    TransferFunction::Linear { slope, intercept } => *slope == -1.0 && *intercept == 1.0,
-                    _ => false,
-                };
-                // A scale (a linear function through 0, or none) of each channel.
-                let scale = |f: &TransferFunction| match f {
-                    TransferFunction::Identity => Some(1.0),
-                    TransferFunction::Linear { slope, intercept } if *intercept == 0.0 && (0.0..=1.0).contains(slope) => Some(*slope),
-                    _ => None,
-                };
-                // The same scale of R, G and B, on sRGB values (a scale of 0 or 1 is the same on
-                // linear ones).
-                let srgb = p.color_interpolation() == ColorInterpolation::SRGB;
-                let keep = match [c.func_r(), c.func_g(), c.func_b()].map(scale) {
-                    [Some(r), Some(g), Some(b)] if r == g && g == b && (srgb || r == 0.0 || r == 1.0) => Some(r),
-                    _ => None,
-                };
-                // Our Outer Glow's solid silhouette (alpha × 255): an object's silhouette as far as the effects go.
-                let solid = matches!(c.func_a(), TransferFunction::Linear { slope, intercept } if *slope >= 255.0 && *intercept == 0.0);
-                match (input(c.input())?, keep, scale(c.func_a())) {
-                    (V::Alpha(s), _, _) if identity && invert && s.sd == 0.0 => V::Alpha(Shape { inverted: !s.inverted, ..s }),
-                    (V::Alpha(s), _, _) if identity && solid && s.plain() => V::Alpha(s),
-                    (v @ (V::Graphic | V::Blurred(..) | V::Shade { .. }), Some(keep), Some(opacity)) => v.scaled(keep, opacity)?,
-                    _ => return None,
-                }
+                transferred(input(c.input())?, [c.func_r(), c.func_g(), c.func_b(), c.func_a()], p.color_interpolation() == ColorInterpolation::SRGB)?
             }
             // Our Outer Glow's silhouette grown by a quarter raster pixel (`export`): a dilation of a
             // plain silhouette by up to that much at 72 ppi is that step.
@@ -300,8 +496,8 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
                 }
             }
             Kind::DropShadow(d) if matches!(input(d.input())?, V::Graphic) => {
-                let shape =
-                    Shape { sd: sd(d.std_dev_x().get(), d.std_dev_y().get()), dx: d.dx() as f64, dy: d.dy() as f64, moved: true, inverted: false };
+                let sd = sd(d.std_dev_x().get(), d.std_dev_y().get(), even, blurs)?;
+                let shape = Shape { sd, dx: d.dx() as f64, dy: d.dy() as f64, moved: true, inverted: false };
                 V::Stack(vec![V::Paint { shape, color: color(d.color()), opacity: d.opacity().get(), clipped: false }, V::Graphic])
             }
             _ => return None,
@@ -313,10 +509,12 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
 }
 
 /// The live effects `filters` (in the order they apply) stand for, in user space mapped to the
-/// document by `ts`; `blends`: the modes our export recorded ([`blends`]). `None` when one of
-/// them isn't an effect the canvas draws.
-pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<String, String>) -> Option<Vec<Effect>> {
+/// document by `ts`; `blends`: the modes our export recorded ([`blends`]); `blurs`: how a blur
+/// that differs by direction reads ([`Blurs`]). `None` when one of them isn't an effect the
+/// canvas draws.
+fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<String, String>, blurs: Blurs) -> Option<Vec<Effect>> {
     let k = ts.determinant().abs().sqrt();
+    let even = even_space(ts);
     let [a, b, c, d, _, _] = ts.as_coeffs();
     let along = |dx: f64, dy: f64| Vec2::new(a * dx + c * dy, b * dx + d * dy);
     let num = |v: f64| (v * 1000.0).round() / 1000.0;
@@ -325,9 +523,11 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
         let blur = |sd: f64| num(2.0 * sd * k);
         let mode = blends.get(f.id()).map_or("normal", String::as_str);
         let paint = |c: Color, o: f32| (c.to_hex(), num(o as f64 * 100.0));
-        let (id, params) = match eval(f, k)? {
+        let (id, params) = match eval(f, k, even, blurs)? {
             V::Graphic => continue,
-            V::Blurred(sd, _) => ("blur.gaussian", json!({ "radius": blur(sd) })),
+            // SVG blurs in linear light unless the filter asks for sRGB (`color-interpolation-filters`).
+            V::Blurred(sd, true) => ("blur.gaussian", json!({ "radius": blur(sd), "linear": true })),
+            V::Blurred(sd, false) => ("blur.gaussian", json!({ "radius": blur(sd) })),
             V::Feathered(sd) => ("stylize.feather", json!({ "radius": blur(sd) })),
             V::Stack(layers) => match layers.as_slice() {
                 [V::Paint { shape, color, opacity, clipped: false }, V::Graphic] if !shape.inverted => {
@@ -340,10 +540,11 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
                         ("stylize.outerGlow", json!({ "blur": blur(shape.sd), "color": color, "opacity": opacity, "mode": mode }))
                     }
                 }
-                // A drop shadow with Darkness below 100% blurs the object's sRGB values.
-                [V::Shade { sd, linear, dx, dy, keep, opacity }, V::Graphic] if !*linear || *keep == 0.0 => {
+                // A fixed subtraction before blur maps to Darkness; proportional intermediate
+                // color filters must not be reinterpreted as a different-looking effect.
+                [V::Shade { sd, linear, dx, dy, keep, subtract, opacity }, V::Graphic] if *keep == 0.0 || !*linear && *keep == 1.0 => {
                     let v = along(*dx, *dy);
-                    let (darkness, opacity) = (num((1.0 - *keep as f64) * 100.0), num(*opacity as f64 * 100.0));
+                    let (darkness, opacity) = (num(if *keep == 0.0 { 100.0 } else { *subtract as f64 * 100.0 }), num(*opacity as f64 * 100.0));
                     let p = json!({ "x": num(v.x), "y": num(v.y), "blur": blur(*sd), "shade": "darkness", "darkness": darkness, "opacity": opacity, "mode": mode });
                     ("stylize.dropShadow", p)
                 }

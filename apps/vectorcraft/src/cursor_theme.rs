@@ -8,12 +8,14 @@
 //! `default` theme is a dangling symlink; the desktop's own setting names a theme that loads.
 //!
 //! Where no cursor theme can be found at all (KDE or sway without gsettings), the env fix does
-//! nothing: [`theme_missing`] tells the canvas to keep the system pointer visible beside the tool glyph.
+//! nothing: [`shell_caps`] leaves out [`Caps::SYSTEM_CURSOR`], and the framework keeps the system
+//! pointer and paints no tool cursor beside it (#5311).
 //!
 //! This reads the desktop's cursor theme and size and sets what the user left unset, once, before
 //! any thread starts and before the window opens.
 #![cfg_attr(not(target_os = "linux"), allow(dead_code))]
 
+use craft::host::target::Caps;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -107,10 +109,17 @@ pub fn theme_usable(
 }
 
 /// On this machine, after [`apply`]: is there no cursor theme Xcursor can load? Then winit never
-/// sets a pointer, and the canvas must not hide the system one (#2450).
+/// sets a pointer, and a hidden system pointer does not come back (#2450).
 pub fn theme_missing() -> bool {
     let home = std::env::var_os("HOME").filter(|h| !h.is_empty()).map(PathBuf::from);
     !theme_usable(|n| std::env::var_os(n), home.as_deref(), |p| std::fs::read_to_string(p).ok(), |p| p.exists())
+}
+
+/// The shell's capabilities `caps`, without [`Caps::SYSTEM_CURSOR`] when the window opens on
+/// Wayland and `theme_missing` finds no cursor theme. The framework then keeps the system pointer
+/// and paints no tool cursor beside it (#5311). `theme_missing` runs only on Wayland.
+pub fn shell_caps(caps: Caps, wayland: bool, theme_missing: impl FnOnce() -> bool) -> Caps {
+    if wayland && theme_missing() { caps.difference(Caps::SYSTEM_CURSOR) } else { caps }
 }
 
 /// The value of a `gsettings get` line: `'Adwaita'` becomes `Adwaita`, `24` stays `24`.
@@ -202,6 +211,17 @@ mod tests {
         assert!(!theme_usable(with("Loop"), None, read, exists));
         // Unset: Xcursor's default folders and the `default` theme.
         assert!(!theme_usable(|_| None, Some(Path::new("/home/u")), read, exists));
+    }
+
+    #[test]
+    fn without_a_cursor_theme_on_wayland_the_system_pointer_stays_alone() {
+        let native = Caps::native(craft::host::target::Os::Linux);
+        assert!(native.contains(Caps::SYSTEM_CURSOR));
+        let without = shell_caps(native, true, || true);
+        assert!(!without.contains(Caps::SYSTEM_CURSOR), "Wayland with no cursor theme: no painted cursor beside the system pointer");
+        assert_eq!(without.union(Caps::SYSTEM_CURSOR), native, "only the system cursor is left out");
+        assert_eq!(shell_caps(native, true, || false), native, "Wayland with a theme");
+        assert_eq!(shell_caps(native, false, || panic!("the theme is looked up only on Wayland")), native, "X11 and XWayland");
     }
 
     #[test]

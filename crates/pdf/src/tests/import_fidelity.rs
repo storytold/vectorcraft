@@ -112,7 +112,24 @@ fn mask_image_pixels(s: &str) -> [[u8; 4]; 2] {
         }
     });
     let [key] = keys.as_slice() else { panic!("one image in the mask art: {keys:?}") };
-    let px = image::load_from_memory(&d.images[key].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&d.images[key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     [px.get_pixel(0, 0).0, px.get_pixel(1, 0).0]
 }
 
@@ -239,6 +256,41 @@ fn isolate_and_knockout_flags_of_a_group_are_kept() {
     );
     let d = open(&one_page("/X0 Do", &format!("/XObject << /X0 {x} 0 R >>"), &[&plain]));
     assert!(all(&d).iter().all(|n| !matches!(n.kind, NodeKind::Group { .. })));
+}
+
+#[test]
+fn knockout_groups_after_a_group_drawn_straight_keep_their_flag() {
+    // Two knockout groups (ISO 32000-1, 11.4.6.3), each of a full-opacity element and a 50% one,
+    // both elements groups of their own. A full-opacity element adds nothing as a group and is
+    // drawn straight onto its parent; the knockout group after it still knocks out.
+    let x = first_extra(1);
+    let ring = |at: usize| {
+        let res = format!("/ExtGState << /A << /ca 1 >> /B << /ca 0.5 >> >> /XObject << /E {} 0 R /F {} 0 R >>", at, at + 1);
+        stream(
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /K true >> /Resources << {res} >>"),
+            "q /A gs /E Do Q q /B gs /F Do Q",
+        )
+    };
+    let element = |art: &str| stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency >>", art);
+    let d = open(&one_page(
+        "/X0 Do /X1 Do",
+        &format!("/XObject << /X0 {x} 0 R /X1 {} 0 R >>", x + 1),
+        &[
+            &ring(x + 2),
+            &ring(x + 4),
+            &element("0 0 1 rg 10 10 40 40 re f"),
+            &element("0 0 1 rg 20 20 20 20 re f"),
+            &element("0 0 1 rg 50 50 40 40 re f"),
+            &element("0 0 1 rg 60 60 20 20 re f"),
+        ],
+    ));
+    let groups: Vec<Node> = all(&d).into_iter().filter(|n| matches!(n.kind, NodeKind::Group { .. })).collect();
+    assert_eq!(groups.len(), 2, "{groups:?}");
+    for g in &groups {
+        assert_eq!(g.knockout, Knockout::On, "{g:?}");
+        let opacities: Vec<f32> = g.children().unwrap().iter().map(|c| c.opacity).collect();
+        assert_eq!(opacities, [1.0, 0.5]);
+    }
 }
 
 // ---------- tiling patterns ----------
@@ -371,6 +423,140 @@ fn font_names_resolve_to_available_families() {
     assert_eq!((family.as_str(), style.as_str(), found), ("Missing Sans Pro", "Bold Italic", false));
 }
 
+/// A family can hold hyphens (`Noto-Sans-Bold` is Noto Sans, Bold): the longest part of the name
+/// before a hyphen that names an available family is the family, the rest its style. Synthetic
+/// family names, so the host's fonts don't matter.
+#[test]
+fn hyphenated_font_names_resolve_to_the_longest_available_family() {
+    let f = crate::import_text::Families::of(&["Vctest", "Vctest Sans", "Vctest Sans CJK JP", "Vctest Mono"]);
+    let ok = |family: &str, style: &str| (family.to_string(), style.to_string(), true);
+    assert_eq!(f.resolve("HUHQIP+Vctest-Sans", None, false), ok("Vctest Sans", "Regular"));
+    assert_eq!(f.resolve("Vctest-Sans-Bold", None, false), ok("Vctest Sans", "Bold"));
+    assert_eq!(f.resolve("Vctest-Sans-Italic", None, false), ok("Vctest Sans", "Italic"));
+    assert_eq!(f.resolve("Vctest-Sans", Some(700), true), ok("Vctest Sans", "Bold Italic"));
+    assert_eq!(f.resolve("Vctest-Sans-CJK-JP", None, false), ok("Vctest Sans CJK JP", "Regular"));
+    // The family is there but not the style: the family, which then draws its closest style.
+    assert_eq!(f.resolve("Vctest-Mono-Bold", None, false), ok("Vctest Mono", "Bold"));
+    // A shorter family still takes the name when no longer one is available.
+    assert_eq!(f.resolve("Vctest-BoldOblique", None, false), ok("Vctest", "Bold Oblique"));
+    assert_eq!(f.resolve("Vctest,Bold", None, false), ok("Vctest", "Bold"));
+}
+
+/// A missing font's name is split only at a comma (`Arial,Bold`) or before the first part that is
+/// a style (`Family-BoldOblique`); otherwise the whole name is the family, so the missing font is
+/// reported as `Vcmissing Sans`, not `Vcmissing`.
+#[test]
+fn a_missing_font_is_split_only_before_a_style() {
+    let f = crate::import_text::Families::of(&[]);
+    let missing = |family: &str, style: &str| (family.to_string(), style.to_string(), false);
+    assert_eq!(f.resolve("Vcmissing-Sans", None, false), missing("Vcmissing Sans", "Regular"));
+    assert_eq!(f.resolve("Vcmissing-Sans-CJK-JP", None, false), missing("Vcmissing Sans CJK JP", "Regular"));
+    assert_eq!(f.resolve("Vcmissing-Sans-BoldOblique", None, false), missing("Vcmissing Sans", "Bold Oblique"));
+    assert_eq!(f.resolve("VcmissingPro-SemiboldIt", None, false), missing("Vcmissing Pro", "Semibold It"));
+    assert_eq!(f.resolve("VcmissingPSMT-XBold", None, false), missing("Vcmissing", "XBold"));
+    assert_eq!(f.resolve("Vcmissing-Bold-SC700", None, false), missing("Vcmissing", "Bold-SC 700"));
+    assert_eq!(f.resolve("Vcmissing-Regular-Regular", None, false), missing("Vcmissing", "Regular-Regular"));
+    assert_eq!(f.resolve("Vcmissing,Bold", None, false), missing("Vcmissing", "Bold"));
+    assert_eq!(f.resolve("-Vcmissing", None, false), missing("Vcmissing", "Regular"));
+    assert_eq!(f.resolve("Vcmissing-Roman", Some(700), false), missing("Vcmissing", "Bold"));
+    assert_eq!(f.resolve("Vcmissing-", None, true), missing("Vcmissing", "Italic"));
+    assert_eq!(f.resolve("-Bold", None, false), missing("", "Bold"));
+}
+
+/// A composite (Type 0) font's base name is its CIDFont's name, a hyphen and its CMap's
+/// (`SomeFont-Italic-Identity-H`, ISO 32000-1 §9.7.6.1): the font is noted by its CIDFont's name,
+/// the PostScript name of the font program (§9.7.4.1), so it is found among the installed fonts.
+#[test]
+fn a_composite_font_is_noted_by_its_cid_font_name() {
+    let noted = |font: &str| {
+        let resources = format!("/Font << /F1 {font} >>");
+        let bytes = one_page("BT /F1 24 Tf 10 30 Td <0001> Tj ET", &resources, &[]);
+        let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
+        let mut fonts = crate::import_scan::FontNames::new();
+        let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
+        crate::import_scan::scan_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();
+        fonts.into_values().map(|f| f.name).collect::<Vec<_>>()
+    };
+    let type0 = |base: &str, enc: &str, descendant: &str| {
+        let info = "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>";
+        format!(
+            "<< /Type /Font /Subtype /Type0 /BaseFont /{base} /Encoding /{enc} /DescendantFonts [<< /Type /Font /Subtype /CIDFontType0 {descendant} {info} >>] >>"
+        )
+    };
+    assert_eq!(noted(&type0("MGZJFV+Vctest-Italic-Identity-H", "Identity-H", "/BaseFont /MGZJFV+Vctest-Italic")), ["MGZJFV+Vctest-Italic"]);
+    // No name in the descendant: the CMap's name comes off the end of the base name.
+    assert_eq!(noted(&type0("Vctest-Italic-UniJIS-UCS2-H", "UniJIS-UCS2-H", "")), ["Vctest-Italic"]);
+    // A base name without the CMap's is kept, as is a simple font's.
+    assert_eq!(noted(&type0("Vctest-Italic", "Identity-H", "")), ["Vctest-Italic"]);
+    assert_eq!(noted("<< /Type /Font /Subtype /Type1 /BaseFont /Vctest-Identity-H >>"), ["Vctest-Identity-H"]);
+}
+
+/// A form drawn again and again without resources of its own reads the page's font dictionary once,
+/// not at every drawing; the fonts are noted all the same.
+#[test]
+fn a_form_drawn_many_times_reads_its_font_resources_once() {
+    let form_no = first_extra(1);
+    let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100]", "0 0 1 rg 50 50 30 30 re f");
+    let resources = format!("/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> /XObject << /X0 {form_no} 0 R >>");
+    let page = PdfPage { resources, ..PdfPage::new(100.0, 100.0, &format!("BT /F1 24 Tf 10 30 Td (Hi) Tj ET {}", "/X0 Do ".repeat(500))) };
+    let pdf = craft::pdf::syntax::Pdf::new(pdf_with(&[page], &[&form], None)).unwrap();
+    let mut fonts = crate::import_scan::FontNames::new();
+    let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
+    let walk = crate::import_scan::walk_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream());
+    assert_eq!(walk.font_dicts.len(), 1);
+    assert_eq!(walk.fonts.len(), 1);
+}
+
+/// A Type 3 font that every page lists in a font dictionary of its own, and a form lists in its
+/// resources, has its glyph procedures read once for the document. Each page still maps the font's
+/// glyphs, and the font whose glyphs set their own color (`d0`) is told from the one whose glyphs
+/// don't (`d1`).
+#[test]
+fn a_type3_font_on_every_page_has_its_glyph_procedures_read_once() {
+    const PAGES: usize = 6;
+    let n = first_extra(PAGES);
+    let (shape, color, shape_a, shape_b, color_a, form) = (n, n + 1, n + 2, n + 3, n + 4, n + 5);
+    let font = |name: &str, procs: &str| {
+        format!(
+            "<< /Type /Font /Subtype /Type3 /Name /{name} /FontBBox [0 0 1000 1000] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << {procs} >> /Encoding << /Type /Encoding /Differences [97 /a /b] >> /FirstChar 97 /LastChar 98 /Widths [1000 1000] /Resources << >> >>"
+        )
+    };
+    let objects = [
+        font("Vcshape", &format!("/a {shape_a} 0 R /b {shape_b} 0 R")),
+        font("Vccolor", &format!("/a {color_a} 0 R /b {color_a} 0 R")),
+        stream("", "1000 0 0 0 1000 1000 d1 0 0 1000 1000 re f"),
+        stream("", "1000 0 0 0 1000 1000 d1 0 0 500 500 re f"),
+        stream("", "1000 0 d0 1 0 0 rg 0 0 1000 1000 re f"),
+        stream(
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /Font << /C {color} 0 R /S {shape} 0 R >> >>"),
+            "BT /S 12 Tf (ab) Tj /C 12 Tf (ab) Tj ET",
+        ),
+    ];
+    let pages: Vec<PdfPage> = (0..PAGES)
+        .map(|_| PdfPage {
+            resources: format!("/Font << /S {shape} 0 R /C {color} 0 R >> /XObject << /X0 {form} 0 R >>"),
+            ..PdfPage::new(100.0, 100.0, "BT /S 24 Tf 10 30 Td (ab) Tj /C 24 Tf (ab) Tj ET /X0 Do")
+        })
+        .collect();
+    let extra: Vec<&str> = objects.iter().map(String::as_str).collect();
+    let pdf = craft::pdf::syntax::Pdf::new(pdf_with(&pages, &extra, None)).unwrap();
+    let mut fonts = crate::import_scan::FontNames::new();
+    let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
+    crate::import_scan::TEST_CHARPROC_DECODES.with(|d| d.set(0));
+    for page in pdf.pages().iter() {
+        let scan = crate::import_scan::scan_page(page, &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();
+        let mapped: std::collections::HashSet<(u128, bool)> = scan.type3_cache_map.values().copied().collect();
+        let noted: std::collections::HashSet<(u128, bool)> = fonts.keys().map(|k| (*k, false)).collect();
+        assert_eq!(scan.type3_cache_map.len(), 2 * 257);
+        assert_eq!(mapped, noted);
+        let mut colors: Vec<(String, bool)> = fonts.values().map(|f| (f.name.clone(), f.is_colour)).collect();
+        colors.sort();
+        assert_eq!(colors, [("Vccolor".to_string(), true), ("Vcshape".to_string(), false)]);
+    }
+    // The `d1` font's two procedures and the `d0` font's one.
+    assert_eq!(crate::import_scan::TEST_CHARPROC_DECODES.with(std::cell::Cell::get), 3);
+}
+
 /// A value of the page's font dictionary that the reader can't parse (a name with a broken `#`
 /// escape, a number with a stray `-`) is left out when the page's fonts are noted, and the fonts
 /// after it are noted.
@@ -380,7 +566,7 @@ fn fonts_are_noted_past_font_resources_the_reader_cannot_parse() {
         let resources = format!("/Font << /A {junk} /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>");
         let bytes = one_page("BT /F1 24 Tf 10 30 Td (Hello) Tj ET", &resources, &[]);
         // Opened by the reader alone, without the checks of `pages::open`.
-        let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+        let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
         let mut fonts = crate::import_scan::FontNames::new();
         let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
         crate::import_scan::scan_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream()).unwrap();
@@ -395,10 +581,12 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("") + ">"
 }
 
-#[test]
-fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
-    // One patch over (10, 10)–(90, 90): corner colours red (0, 0), green (0, 1), blue (1, 1),
-    // white (1, 0) in u/v.
+/// A Coons patch mesh shading's dictionary for [`coons_patch`] data.
+const COONS_MESH: &str = "/ShadingType 6 /ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 255 0 255 0 1 0 1 0 1] /Filter /ASCIIHexDecode";
+
+/// One patch over (10, 10)–(90, 90): corner colours red (0, 0), green (0, 1), blue (1, 1), white
+/// (1, 0) in u/v.
+fn coons_patch() -> Vec<u8> {
     let pts: [(u8, u8); 12] =
         [(10, 10), (10, 37), (10, 63), (10, 90), (37, 90), (63, 90), (90, 90), (90, 63), (90, 37), (90, 10), (63, 10), (37, 10)];
     let mut data = vec![0u8];
@@ -406,11 +594,13 @@ fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
         data.extend([x, y]);
     }
     data.extend([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]);
+    data
+}
+
+#[test]
+fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
     let s = first_extra(1);
-    let sh = stream(
-        "/ShadingType 6 /ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 255 0 255 0 1 0 1 0 1] /Filter /ASCIIHexDecode",
-        &hex(&data),
-    );
+    let sh = stream(COONS_MESH, &hex(&coons_patch()));
     let d = open(&one_page("/Sh0 sh", &format!("/Shading << /Sh0 {s} 0 R >>"), &[&sh]));
     let meshes: Vec<vectorcraft_doc::live::GradientMesh> =
         all(&d).into_iter().filter_map(|n| if let NodeKind::Mesh(m) = n.kind { Some(m) } else { None }).collect();
@@ -425,6 +615,48 @@ fn a_coons_patch_mesh_becomes_a_gradient_mesh() {
     assert_eq!(at(1, 1).color.to_rgb(), [0.0, 0.0, 1.0]);
     assert_eq!(at(0, 1).color.to_rgb(), [1.0, 1.0, 1.0]);
     assert!(!all(&d).iter().any(|n| matches!(n.kind, NodeKind::Group { clip: true, .. })), "the mesh lies inside the page");
+}
+
+/// Illustrator writes meshes of many thousands of patches (14,355 in one of a user's files): one
+/// of 5,000 comes in as gradient meshes, not a flat grey.
+#[test]
+fn a_mesh_shading_of_thousands_of_patches_becomes_gradient_meshes() {
+    let data: Vec<u8> = std::iter::repeat_n(coons_patch(), 5000).flatten().collect();
+    let s = first_extra(1);
+    let sh = stream(COONS_MESH, &hex(&data));
+    let r = open_with(&one_page("/Sh0 sh", &format!("/Shading << /Sh0 {s} 0 R >>"), &[&sh]), |_| {});
+    assert!(!r.warnings.iter().any(|w| w.contains("flat grey")), "{:?}", r.warnings);
+    assert_eq!(all(&r.document).iter().filter(|n| matches!(n.kind, NodeKind::Mesh(_))).count(), 5000);
+}
+
+/// A stroke painted with a mesh shading (how Illustrator writes a freeform gradient on a stroke)
+/// is the mesh clipped to the area the stroke paints, dashes included, not a flat grey.
+#[test]
+fn a_stroke_painted_with_a_mesh_shading_is_the_mesh_clipped_to_the_stroke() {
+    let s = first_extra(1);
+    let sh = stream(COONS_MESH, &hex(&coons_patch()));
+    let resources = format!("/Pattern << /P0 << /PatternType 2 /Shading {s} 0 R >> >>");
+    // A 10 pt line from (20, 50) to (80, 50) with butt caps: page y 45 to 55. Dashed 10 on, 10
+    // off: pieces at 20–30, 40–50 and 60–70.
+    for (dash, pieces, end) in [("[] 0 d", 1, 80.0), ("[10 10] 0 d", 3, 70.0)] {
+        let content = format!("/Pattern CS /P0 SCN 10 w {dash} 20 50 m 80 50 l S");
+        let r = open_with(&one_page(&content, &resources, &[&sh]), |_| {});
+        assert!(!r.warnings.iter().any(|w| w.contains("flat grey")), "{:?}", r.warnings);
+        let nodes = all(&r.document);
+        assert_eq!(nodes.iter().filter(|n| matches!(n.kind, NodeKind::Mesh(_))).count(), 1, "{dash}");
+        let clip = nodes
+            .iter()
+            .find_map(|n| match &n.kind {
+                NodeKind::Group { children, clip: true } => children.first().cloned(),
+                _ => None,
+            })
+            .expect("a clip group");
+        let NodeKind::Path { path, .. } = &clip.kind else { panic!("{:?}", clip.kind) };
+        let b = path.bounds().unwrap();
+        assert!((b.x0 - 20.0).abs() < 0.01 && (b.x1 - end).abs() < 0.01 && (b.y0 - 45.0).abs() < 0.01 && (b.y1 - 55.0).abs() < 0.01, "{dash}: {b:?}");
+        let subpaths = path.to_bezpath().elements().iter().filter(|e| matches!(e, kurbo::PathEl::MoveTo(_))).count();
+        assert_eq!(subpaths, pieces, "{dash}");
+    }
 }
 
 #[test]
@@ -536,6 +768,115 @@ fn a_function_based_shading_along_one_axis_becomes_a_linear_gradient() {
     }
 }
 
+/// A function-based shading whose calculator function turns the angle about the origin into a gray
+/// ramp (`atan` gives the angle of `y` over `x` in degrees, 0 to 360, ISO 32000-1 7.10.5) comes in
+/// as a conic gradient about the origin's place on the page, turning the way the page shows it.
+#[test]
+fn a_function_based_shading_around_the_origin_becomes_a_conic_gradient() {
+    use vectorcraft_geom::Point;
+    let _held = shadings();
+    // The origin at the square's center, a unit 50 pt.
+    let r = function_shading("-1 1 -1 1", "50 0 0 50 50 50", "{ exch atan 360 div dup dup }");
+    assert!(!r.warnings.iter().any(|w| w.contains("flat")), "{:?}", r.warnings);
+    let g = all(&r.document)
+        .into_iter()
+        .find_map(|n| match n.appearance.fill().map(|f| &f.paint) {
+            Some(Paint::Gradient(g)) => Some(g.clone()),
+            _ => None,
+        })
+        .expect("a gradient fill");
+    assert_eq!(g.gradient.kind, GradientKind::Conic);
+    let geom = g.geom.unwrap();
+    assert!(geom.start.distance(Point::new(50.0, 50.0)) < 0.01, "{geom:?}");
+    // The page's y runs up, the document's down: the sweep turns counterclockwise on the page,
+    // through the top of the square a quarter turn on.
+    assert!(geom.is_mirrored(), "{geom:?}");
+    for (x, y, want) in [(90.0, 48.0, 0.0), (50.0, 10.0, 0.25), (10.0, 50.0, 0.5), (50.0, 90.0, 0.75), (90.0, 52.0, 1.0)] {
+        let gray = g.gradient.sample(geom.param_at(GradientKind::Conic, Point::new(x, y)) as f32).0.to_rgb()[0];
+        assert!((gray - want).abs() < 0.03, "({x}, {y}): {gray} vs {want}");
+    }
+}
+
+/// The same shading over a domain that leaves the origin out (the conic's center lies off the
+/// painted area) comes in as a conic gradient too, with the colors the domain shows, whether or not
+/// the seam (angle 0) runs through it.
+#[test]
+fn a_function_based_shading_beside_the_origin_becomes_a_conic_gradient() {
+    use vectorcraft_geom::Point;
+    let _held = shadings();
+    // The shading's x and y from a point of the 100 pt page (its y up, the document's down).
+    let turn = |x: f64, y: f64| {
+        let (sx, sy) = ((x - 50.0) / 50.0, (50.0 - y) / 50.0);
+        sy.atan2(sx).to_degrees().rem_euclid(360.0) / 360.0
+    };
+    for (domain, points) in [
+        // Right of the origin, across the seam.
+        ("0.2 1 -0.6 0.6", [(70.0, 30.0), (70.0, 70.0), (90.0, 45.0), (90.0, 55.0), (65.0, 25.0)]),
+        // Above it.
+        ("-1 1 0.2 1", [(50.0, 20.0), (20.0, 30.0), (80.0, 30.0), (5.0, 35.0), (95.0, 5.0)]),
+        // The origin on its left edge: the rays it shows run from straight down to straight up.
+        ("0 1 -1 1", [(52.0, 5.0), (52.0, 95.0), (90.0, 40.0), (90.0, 60.0), (75.0, 20.0)]),
+    ] {
+        let r = function_shading(domain, "50 0 0 50 50 50", "{ exch atan 360 div dup dup }");
+        let g = all(&r.document)
+            .into_iter()
+            .find_map(|n| match n.appearance.fill().map(|f| &f.paint) {
+                Some(Paint::Gradient(g)) => Some(g.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{domain}: a gradient fill, {:?}", r.warnings));
+        assert_eq!(g.gradient.kind, GradientKind::Conic, "{domain}");
+        let geom = g.geom.unwrap();
+        assert!(geom.start.distance(Point::new(50.0, 50.0)) < 0.01, "{domain}: {geom:?}");
+        for (x, y) in points {
+            let gray = g.gradient.sample(geom.param_at(GradientKind::Conic, Point::new(x, y)) as f32).0.to_rgb()[0];
+            let want = turn(x, y) as f32;
+            assert!((gray - want).abs() < 0.03, "{domain} ({x}, {y}): {gray} vs {want}");
+        }
+    }
+}
+
+/// A function-based shading whose calculator function turns `abs(x) + abs(y)` into a gray ramp
+/// (ISO 32000-1 7.10.5; the ramp clipped to 1 past the square with corners at the domain's edges)
+/// comes in as a diamond gradient about the origin's place on the page. A ramp along a circle
+/// about the origin does not.
+#[test]
+fn a_function_based_shading_of_squares_about_the_origin_becomes_a_diamond_gradient() {
+    use vectorcraft_geom::Point;
+    let _held = shadings();
+    let fill = |r: &ImportReport| {
+        all(&r.document).into_iter().find_map(|n| match n.appearance.fill().map(|f| &f.paint) {
+            Some(Paint::Gradient(g)) => Some(g.clone()),
+            _ => None,
+        })
+    };
+    // The origin at the square's center, a unit 50 pt.
+    let r = function_shading("-1 1 -1 1", "50 0 0 50 50 50", "{ abs exch abs add dup dup }");
+    let g = fill(&r).unwrap_or_else(|| panic!("a gradient fill, {:?}", r.warnings));
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    let geom = g.geom.unwrap();
+    assert!(geom.start.distance(Point::new(50.0, 50.0)) < 0.01, "{geom:?}");
+    for (x, y) in [(50.0, 50.0), (75.0, 50.0), (50.0, 20.0), (70.0, 70.0), (35.0, 60.0), (95.0, 95.0), (10.0, 80.0)] {
+        let gray = g.gradient.sample(geom.param_at(GradientKind::Diamond, Point::new(x, y)) as f32).0.to_rgb()[0];
+        let want = (((x - 50.0) as f32).abs() / 50.0 + ((y - 50.0) as f32).abs() / 50.0).min(1.0);
+        assert!((gray - want).abs() < 0.03, "({x}, {y}): {gray} vs {want}");
+    }
+    // A radial ramp (the distance from the origin) is not one.
+    let r = function_shading("-1 1 -1 1", "50 0 0 50 50 50", "{ dup mul exch dup mul add sqrt dup dup }");
+    assert!(fill(&r).is_none_or(|g| g.gradient.kind != GradientKind::Diamond));
+    // A domain wider than it is tall: the ramp keeps changing out to its far corners, past the
+    // largest square the domain holds whole.
+    let r = function_shading("-2 2 -1 1", "50 0 0 50 50 50", "{ abs exch abs add 3 div dup dup }");
+    let g = fill(&r).unwrap_or_else(|| panic!("a gradient fill, {:?}", r.warnings));
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    let geom = g.geom.unwrap();
+    for (x, y) in [(50.0, 50.0), (125.0, 90.0), (-20.0, 10.0), (140.0, 50.0), (60.0, 95.0), (0.0, 30.0)] {
+        let gray = g.gradient.sample(geom.param_at(GradientKind::Diamond, Point::new(x, y)) as f32).0.to_rgb()[0];
+        let want = (((x - 50.0) as f32).abs() / 50.0 + ((y - 50.0) as f32).abs() / 50.0) / 3.0;
+        assert!((gray - want).abs() < 0.03, "({x}, {y}): {gray} vs {want}");
+    }
+}
+
 /// A function-based shading paints only over its domain: a square filled with one whose domain
 /// covers its left half is clipped to that half; one whose domain covers it all isn't clipped.
 #[test]
@@ -614,6 +955,53 @@ fn function_based_shadings_share_one_budget_per_import() {
     let gradients = all(&r.document).iter().filter(|n| matches!(n.appearance.fill().map(|f| &f.paint), Some(Paint::Gradient(_)))).count();
     assert!(gradients > 0 && gradients < n, "{gradients} of {n} read as gradients");
     assert!(r.warnings.iter().any(|w| w.contains("too many to read")), "{:?}", r.warnings);
+}
+
+/// An import that stops on a later page still counts the evaluations the shadings of the pages
+/// before it took, once each.
+#[test]
+fn an_import_that_stops_on_a_later_page_counts_its_function_evaluations() {
+    use std::sync::atomic::Ordering::Relaxed;
+    let _held = shadings();
+    let resources = format!(
+        "/Pattern << /P0 << /PatternType 2 /Shading << /ShadingType 1 /ColorSpace /DeviceRGB /Domain [0 4 0 1] /Matrix [25 0 0 100 0 0] /Function {} 0 R >> >> >>",
+        first_extra(2)
+    );
+    let function = stream("/FunctionType 4 /Domain [0 4 0 1] /Range [0 1 0 1 0 1]", STRIPES);
+    let shaded = PdfPage { resources, ..PdfPage::new(100.0, 100.0, "/Pattern cs /P0 scn 0 0 100 100 re f") };
+    // The second page's content ends inside a string, so the import stops there.
+    let cut = PdfPage::new(100.0, 100.0, "0 0 5 5 re f (unterminated");
+    let bytes = pdf_with(&[shaded, cut], &[&function], None);
+    crate::import_shading::EVALUATIONS.store(0, Relaxed);
+    let before = function_evaluations_of(&bytes);
+    assert!(import(&bytes).is_err());
+    let used = crate::import_shading::EVALUATIONS.load(Relaxed);
+    assert!(used > 0, "the first page's shading is read");
+    assert_eq!(function_evaluations_of(&bytes) - before, used);
+}
+
+/// A page drawing one small form over and over makes objects only up to the import's limit, then
+/// leaves the rest out with a warning, instead of taking memory for every drawing (#3569).
+#[test]
+fn a_form_drawn_over_and_over_stops_at_the_import_s_objects() {
+    let squares: String = (0..25).map(|i| format!("{} {} 2 2 re f ", i % 5 * 4, i / 5 * 4)).collect();
+    let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 20 20]", &squares);
+    let bytes = one_page(&"/F Do ".repeat(200), &format!("/XObject << /F {} 0 R >>", first_extra(1)), &[&form]);
+    // With the import's objects lowered to `limit` (on this thread: the limit is this thread's).
+    let open_within = |limit: usize| {
+        let old = crate::import::TEST_MAX_OBJECTS.replace(limit);
+        let r = crate::import::read(&bytes, &ImportOptions::default());
+        crate::import::TEST_MAX_OBJECTS.set(old);
+        r.unwrap()
+    };
+    let paths = |r: &ImportReport| all(&r.document).iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).count();
+    let left_out = |r: &ImportReport| r.warnings.iter().any(|w| w.contains("the rest were left out"));
+    let whole = open_within(10_000);
+    assert_eq!(paths(&whole), 5000);
+    assert!(!left_out(&whole), "{:?}", whole.warnings);
+    let cut = open_within(1000);
+    assert_eq!(paths(&cut), 1000);
+    assert!(left_out(&cut), "{:?}", cut.warnings);
 }
 
 /// A colour that changes in step with the sampling grid along y only (one colour at every grid

@@ -46,6 +46,56 @@ fn revolve_commands_keep_profile_live_edit_options_expand_and_undo() {
     assert_eq!(effects_for_test(&s, id), before);
 }
 
+/// `effect.setParams` checks the values it is given for a 3D effect when the same edit hides it:
+/// a bad value is refused and the document is left as it was, and good values are stored.
+#[test]
+fn hiding_a_3d_effect_still_checks_its_new_values() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let rect = |s: &mut Session, x: u32| {
+        NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap())
+    };
+    let classic = rect(&mut s, 20);
+    s.execute("effect.apply", &json!({"effect": effects::CLASSIC_EXTRUDE, "ids": [classic.0], "item": null})).unwrap();
+    let extrude = rect(&mut s, 120);
+    s.execute("effect.apply", &json!({"effect": effects::EXTRUDE, "ids": [extrude.0], "item": null})).unwrap();
+    let profile = NodeId(s.execute("path.create", &json!({"d": "M 300 40 L 330 60 L 330 140 L 300 160"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("effect.apply", &json!({"effect": effects::REVOLVE, "ids": [profile.0], "item": null})).unwrap();
+    for (id, params, why) in [
+        (classic, json!({"depth": 2001}), "`depth` must be between 0 and 2000"),
+        (classic, json!({"surface": "glossy"}), "`surface` must be one of"),
+        (classic, json!({"bevel": "wavy"}), "bevel must be none or one of"),
+        (extrude, json!({"lights": []}), "lights must contain one to ten lights"),
+        (extrude, json!({"lightColor": "red"}), "lightColor must be an opaque RGB color"),
+        (profile, json!({"edge": "top"}), "Revolve edge must be left or right"),
+    ] {
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let p = json!({"ids": [id.0], "index": 0, "item": null, "params": params, "visible": false});
+        let e = s.execute("effect.setParams", &p).unwrap_err().to_string();
+        assert!(e.contains(why), "{params}: {e}");
+        assert_eq!(s.doc().unwrap().doc, before, "{params}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{params}");
+    }
+    // A hidden switch of 3D type checks the values given with it for the new type.
+    let before = s.doc().unwrap().doc.clone();
+    let p = json!({"ids": [extrude.0], "index": 0, "item": null, "threeDType": "inflate", "params": {"lights": []}, "visible": false});
+    let e = s.execute("effect.setParams", &p).unwrap_err().to_string();
+    assert!(e.contains("lights must contain one to ten lights"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    // Hiding alone checks nothing.
+    s.execute("effect.setParams", &json!({"ids": [extrude.0], "index": 0, "item": null, "visible": false})).unwrap();
+    assert!(!node(&s, extrude).appearance.effects[0].visible);
+    s.execute("effect.setParams", &json!({"ids": [classic.0], "index": 0, "item": null, "params": {"depth": 2000}, "visible": false})).unwrap();
+    let e = &node(&s, classic).appearance.effects[0];
+    assert_eq!((e.params["depth"].as_f64(), e.visible), (Some(2000.0), false));
+    // A value the effect already holds is not checked again: a key it does not take, as a file
+    // can carry, does not stop a hidden edit of another value.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(classic).unwrap().appearance.effects[0].params["extra"] = json!(1);
+    s.execute("effect.setParams", &json!({"ids": [classic.0], "index": 0, "item": null, "params": {"depth": 10}, "visible": false})).unwrap();
+    assert_eq!(node(&s, classic).appearance.effects[0].params["depth"].as_f64(), Some(10.0));
+}
+
 /// Extrude & Bevel, Inflate and Rotate: applied by command, saved and reopened, edited,
 /// exported, expanded and undone; one 3D effect per object.
 #[test]
@@ -68,7 +118,7 @@ fn solid_effects_apply_save_edit_export_expand_and_undo() {
         assert!(s.execute("effect.setParams", &json!({"index": 0, "params": {"bevel": "nope"}, "ids": [id.0], "item": null})).is_err());
         let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
         let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
-        assert!(svg.matches("<path").count() >= 2, "{effect}: exported as vector faces");
+        assert!(vectorcraft_testkit::svg_shapes(&svg) >= 2, "{effect}: exported as vector faces");
         s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
         assert!(matches!(node(&s, id).kind, NodeKind::Group { .. }), "{effect}");
         assert!(!effects::has_solid(&node(&s, id)));
@@ -77,12 +127,318 @@ fn solid_effects_apply_save_edit_export_expand_and_undo() {
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(node(&s, id).appearance.effects.len(), 0, "{effect}: back to the plain rectangle");
     }
-    // Type has no outline to extrude.
+}
+
+/// #4506: a 3D effect on a group builds a solid from each member, turned about one shared axis;
+/// the members stay editable. A group holding a clipping group builds from the art it shows, and a
+/// group holding what can't become a solid is refused.
+#[test]
+fn solid_effects_apply_to_a_group_and_its_members_stay_editable() {
+    for effect in effects::SOLIDS {
+        let (mut s, a) = session_with_rect();
+        let b = s.execute("shape.ellipse", &json!({"x": 250, "y": 120, "width": 80, "height": 60})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
+        let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("effect.apply", &json!({"effect": effect, "ids": [g.0], "item": null})).unwrap();
+        let art = effects::solid_art(&node(&s, g)).unwrap_or_else(|| panic!("{effect}"));
+        assert_eq!(node(&s, g).children().unwrap().len(), 2, "{effect}: the members stay as they were");
+        // A member moved, the solid follows.
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": -40, "dy": 0})).unwrap();
+        assert_ne!(effects::solid_art(&node(&s, g)).unwrap(), art, "{effect}");
+        let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+        assert!(vectorcraft_testkit::svg_shapes(&svg) >= 4, "{effect}: both members exported as vector faces");
+        s.execute("effect.expandAppearance", &json!({"ids": [g.0]})).unwrap();
+        assert!(!effects::has_solid(&node(&s, g)), "{effect}: expanded");
+    }
+    // A clipping group in the group: each effect builds from the art it shows.
+    for effect in effects::SOLIDS {
+        let (mut s, _, g) = group_with_a_clipping_group();
+        s.execute("effect.apply", &json!({"effect": effect, "ids": [g.0], "item": null})).unwrap_or_else(|e| panic!("{effect}: {e}"));
+        let n = node(&s, g);
+        assert_eq!(n.children().unwrap().len(), 2, "{effect}: the members stay as they were");
+        let art = effects::solid_art_in(Some(&s.doc().unwrap().doc), &n);
+        assert!(art.is_some_and(|a| a.visual_bounds().is_some()), "{effect}: draws its solid");
+    }
+    // An image in the group: refused, nothing changed.
+    let (mut s, _, g) = group_with_an_image();
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [g.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("Image Trace"), "{err}");
+    assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
+}
+
+/// Extrude & Bevel is refused, and nothing changes, on a path whose fill's and strokes' solids each
+/// fit but together pass the limit of their faces; with one stroke the effect applies.
+#[test]
+fn extrude_is_refused_when_its_solids_together_are_too_complex() {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, AppearanceItem};
+    let (mut s, id) = session_with_rect();
+    let points: Vec<vectorcraft_geom::Point> = (0..16_384)
+        .map(|k| {
+            let (sin, cos) = (k as f64 * std::f64::consts::TAU / 16_384.0).sin_cos();
+            vectorcraft_geom::Point::new(20_000.0 + 10_000.0 * cos, 20_000.0 + 10_000.0 * sin)
+        })
+        .collect();
+    let polygon = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+    let painted = |strokes: usize| {
+        let mut items = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).items;
+        let stroke = AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::WHITE), 20.0));
+        items.extend(std::iter::repeat_n(stroke, strokes));
+        items
+    };
+    let set = |s: &mut Session, strokes: usize| {
+        let n = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap();
+        let NodeKind::Path { path, live, .. } = &mut n.kind else { panic!("a path") };
+        *path = polygon.clone();
+        *live = None;
+        n.appearance.items = painted(strokes);
+    };
+    // The fill's solid and each stroke's fit on their own; sixty strokes' together do not.
+    set(&mut s, 60);
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("The 3D surface is too complex; simplify the shape"), "{err}");
+    assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
+    set(&mut s, 1);
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap();
+    assert!(effects::solid_art(&node(&s, id)).is_some());
+}
+
+/// A group of a clipping group (a rectangle clipped by an ellipse) and a rectangle: the session,
+/// the clipping group and the group.
+fn group_with_a_clipping_group() -> (Session, NodeId, NodeId) {
+    let (mut s, a) = session_with_rect();
+    let b = s.execute("shape.ellipse", &json!({"x": 120, "y": 120, "width": 60, "height": 60})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
+    let clip = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let c = s.execute("shape.rectangle", &json!({"x": 250, "y": 250, "width": 50, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [clip.0, c]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    (s, clip, g)
+}
+
+/// A group of a rectangle and an image: the session, the image and the group.
+fn group_with_an_image() -> (Session, NodeId, NodeId) {
+    let (mut s, a) = session_with_rect();
+    let image = s
+        .edit("Place", |d, _| {
+            let id = d.alloc_id();
+            let img = vectorcraft_doc::ImageObject {
+                key: "k".into(),
+                width: 4,
+                height: 4,
+                xf: vectorcraft_geom::Affine::translate((250.0, 250.0)),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let (parent, index, _) = d.position(a).unwrap();
+            d.insert(parent, index + 1, vectorcraft_doc::Node::new(id, NodeKind::Image(Box::new(img))))?;
+            Ok(id)
+        })
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, image.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    (s, image, g)
+}
+
+/// #4715: type extrudes as its glyph outlines, painted with its characters' colour, and stays
+/// type: editing its text reshapes the solid.
+#[test]
+fn type_extrudes_as_its_glyphs_and_stays_editable() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-    let t = s.execute("text.create", &json!({"x": 50, "y": 50, "text": "3D"})).unwrap();
-    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [t["id"]], "item": null})).unwrap_err();
-    assert!(err.to_string().contains("requires a path"), "{err}");
+    let t = s.execute("text.create", &json!({"x": 50, "y": 100, "text": "3D", "size": 72})).unwrap();
+    let id = NodeId(t["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#cc2200"})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap();
+    let n = node(&s, id);
+    assert!(matches!(n.kind, NodeKind::Text(_)), "still type");
+    let art = effects::solid_art(&n).expect("a solid of the glyphs");
+    let mut faces = 0;
+    let mut tinted = false;
+    art.walk(&mut |c| {
+        if c.path_data().is_some() {
+            faces += 1;
+            // Shaded from the characters' red: red stays the strongest channel.
+            if let Some([r, g, b, _]) = c.appearance.fill_paint().color().map(|c| c.to_rgba8(1.0)) {
+                tinted |= r > g && r > b;
+            }
+        }
+    });
+    assert!(faces > 2 && tinted, "{faces} faces, tinted {tinted}");
+    s.execute("text.setText", &json!({"ids": [id.0], "text": "3DD"})).unwrap();
+    assert_ne!(effects::solid_art(&node(&s, id)).unwrap(), art, "the solid follows the edited text");
+}
+
+/// #3617: Revolve takes live type and stays type, updating when the text changes, and saves,
+/// exports, expands and undoes as one step.
+#[test]
+fn type_revolves_as_its_glyphs_and_stays_editable() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let t = s.execute("text.create", &json!({"x": 50, "y": 100, "text": "O", "size": 72})).unwrap();
+    let id = NodeId(t["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#cc2200"})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": null, "params": {"segments": 16}})).unwrap();
+    let n = node(&s, id);
+    assert!(matches!(n.kind, NodeKind::Text(_)), "still type");
+    let art = effects::revolve_art(&n).expect("a surface of the glyphs");
+    let mut tinted = false;
+    art.walk(&mut |c| {
+        if let Some([r, g, b, _]) = c.appearance.fill_paint().color().map(|c| c.to_rgba8(1.0)) {
+            tinted |= r > g && r > b;
+        }
+    });
+    assert!(tinted, "shaded from the characters' red");
+    let doc = &s.doc().unwrap().doc;
+    let restored = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert_eq!(effects::revolve_art(restored.node(id).unwrap()).unwrap(), art, "the same art after a save");
+    let meshes = effects::three_d_meshes(&n).unwrap();
+    assert_eq!(meshes.len(), 1, "one mesh of every contour of the type");
+    s.execute("text.setText", &json!({"ids": [id.0], "text": "OO"})).unwrap();
+    assert_ne!(effects::revolve_art(&node(&s, id)).unwrap(), art, "the surface follows the edited text");
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    assert!(!effects::has_revolve(&node(&s, id)), "expanded");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(matches!(node(&s, id).kind, NodeKind::Text(_)));
+    assert!(effects::has_revolve(&node(&s, id)));
+    // Extrude & Bevel on type expands the same way.
+    s.execute("effect.remove", &json!({"index": 0, "ids": [id.0], "item": null})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap();
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    assert!(!effects::has_solid(&node(&s, id)), "expanded");
+}
+
+/// Revolve refuses type with no outlines, and a group with no visible shape, without adding an
+/// effect. Extrude & Bevel gives the same reason for empty type.
+#[test]
+fn revolve_refuses_type_and_groups_without_a_shape() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    for text in ["", "   "] {
+        let t = s.execute("text.create", &json!({"x": 50, "y": 100, "text": text, "size": 72})).unwrap();
+        let id = NodeId(t["id"].as_u64().unwrap());
+        for effect in ["threeD.revolve", "threeD.extrude"] {
+            let err = s.execute("effect.apply", &json!({"effect": effect, "ids": [id.0], "item": null})).unwrap_err().to_string();
+            assert!(err.contains("at least two anchors"), "{effect}, {text:?}: {err}");
+            assert!(node(&s, id).appearance.effects.is_empty());
+        }
+    }
+    let (mut s, a) = session_with_rect();
+    let b = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    for member in [a.0, b] {
+        s.execute("select.set", &json!({"ids": [member]})).unwrap();
+        s.execute("object.hide", &json!({})).unwrap();
+    }
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [g.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("group holding a shape"), "{err}");
+    assert!(node(&s, g).appearance.effects.is_empty());
+}
+
+/// A Revolve on one fill is checked in that fill's paint, and `effect.setParams` on it as well.
+#[test]
+fn revolve_on_a_fill_is_checked_in_that_fills_paint() {
+    use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+    use vectorcraft_doc::{AppearanceItem, FillLayer};
+    let (mut s, id) = session_with_rect();
+    // The paint copies of 100 faces reach the 256 MiB budget: 8 segments stay under, 64 pass it.
+    let count = (256 << 20) / (4 * 100 * std::mem::size_of::<GradientStop>());
+    let stops = (0..count).map(|i| GradientStop::new(i as f32 / count as f32, Color::rgb(1.0, 0.0, 0.0))).collect();
+    let ramp = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    s.edit("fills", |d, _| {
+        let n = d.node_mut(id).unwrap();
+        n.appearance.items =
+            vec![AppearanceItem::Fill(FillLayer::new(ramp)), AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0))))];
+        Ok(())
+    })
+    .unwrap();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": 0})).unwrap_err().to_string();
+    assert!(err.contains("simplify the gradient"), "{err}");
+    assert!(node(&s, id).appearance.items[0].effects().is_empty());
+    s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": 0, "params": {"segments": 8}})).unwrap();
+    let err = s.execute("effect.setParams", &json!({"index": 0, "ids": [id.0], "item": 0, "params": {"segments": 128}})).unwrap_err().to_string();
+    assert!(err.contains("simplify the gradient"), "{err}");
+}
+
+/// A hidden Revolve still counts as the object's one Revolve: a second one is refused, and the
+/// hidden one can be shown again over the geometry effects after it.
+#[test]
+fn a_second_revolve_is_refused_over_a_hidden_one() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": null})).unwrap();
+    s.execute("effect.setParams", &json!({"index": 0, "ids": [id.0], "item": null, "visible": false})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [id.0], "item": null})).unwrap();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [id.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("one Revolve effect"), "{err}");
+    let ids: Vec<_> = node(&s, id).appearance.effects.iter().map(|e| e.id.clone()).collect();
+    assert_eq!(ids, ["threeD.revolve", "distort.roughen"]);
+    s.execute("effect.setParams", &json!({"index": 0, "ids": [id.0], "item": null, "visible": true})).unwrap();
+    assert!(node(&s, id).appearance.effects[0].visible);
+}
+
+/// Revolve on a group sweeps every member about one axis on the left edge of their bounds, keeps
+/// each member's paint, follows an edited member, expands and undoes as one step.
+#[test]
+fn revolve_on_a_group_shares_one_axis_and_members_stay_editable() {
+    let (mut s, a) = session_with_rect();
+    s.execute("paint.setFill", &json!({"ids": [a.0], "color": "#cc2200"})).unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 250, "y": 100, "width": 50, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [b], "color": "#0022cc"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [g.0], "item": null, "params": {"segments": 16, "rotationX": 90}})).unwrap();
+    assert_eq!(node(&s, g).children().unwrap().len(), 2, "the members stay as they were");
+    let art = effects::revolve_art(&node(&s, g)).expect("a surface of the members");
+    // The axis is the left edge of both members together (x = 100), so the right member's far
+    // wall sweeps out to 200 pt from it on either side: x = 300 and x = -100.
+    let bounds = art.visual_bounds().unwrap();
+    assert!((bounds.x1 - 300.0).abs() < 2.0 && (bounds.x0 + 100.0).abs() < 2.0, "{bounds:?}");
+    let (mut red, mut blue) = (false, false);
+    art.walk(&mut |c| {
+        if let Some([r, _, b, _]) = c.appearance.fill_paint().color().map(|c| c.to_rgba8(1.0)) {
+            red |= r > b;
+            blue |= b > r;
+        }
+    });
+    assert!(red && blue, "each member keeps its own paint");
+    assert_eq!(effects::three_d_meshes(&node(&s, g)).unwrap().len(), 2, "a mesh for each member");
+    let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+    let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+    assert!(vectorcraft_testkit::svg_shapes(&svg) >= 4, "both members exported as vector faces");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": -40, "dy": 0})).unwrap();
+    assert_ne!(effects::revolve_art(&node(&s, g)).unwrap(), art, "a moved member reshapes the surface");
+    s.execute("effect.expandAppearance", &json!({"ids": [g.0]})).unwrap();
+    assert!(!effects::has_revolve(&node(&s, g)), "expanded");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(effects::has_revolve(&node(&s, g)));
+}
+
+/// A group holding what can't be swept is refused as a whole, and an image is named. A clipping
+/// group, alone or in a group, sweeps the art it shows.
+#[test]
+fn revolve_refuses_a_group_with_a_member_it_can_not_sweep() {
+    let (mut s, image, g) = group_with_an_image();
+    let before = s.doc().unwrap().doc.clone();
+    for target in [image, g] {
+        let err = s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [target.0], "item": null})).unwrap_err().to_string();
+        assert!(err.contains("Revolve") && err.contains("Image Trace"), "{err}");
+        assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
+    }
+    for clipping_group_itself in [true, false] {
+        let (mut s, clip, g) = group_with_a_clipping_group();
+        let target = if clipping_group_itself { clip } else { g };
+        s.execute("effect.apply", &json!({"effect": "threeD.revolve", "ids": [target.0], "item": null}))
+            .unwrap_or_else(|e| panic!("{clipping_group_itself}: {e}"));
+        let art = effects::revolve_art_in(Some(&s.doc().unwrap().doc), &node(&s, target));
+        assert!(art.is_some_and(|a| a.visual_bounds().is_some()), "{clipping_group_itself}: draws its surface");
+    }
 }
 
 /// Scripts from before the Perspective angle give `perspective` as a 0–100 % strength: it is
@@ -308,6 +664,50 @@ fn warp_options_non_warp_target_rejection_is_atomic() {
     assert!(!state.is_dirty());
 }
 
+/// `effect.setParams` refuses a `visible` that is not true or false, when called and when a step
+/// plays, and the effect, the document and the undo history stay as they were. `null` leaves the
+/// visibility as it is.
+#[test]
+fn set_params_refuses_a_visible_that_is_not_true_or_false() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "item": null})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for visible in [json!(1), json!(0), json!("false"), json!([])] {
+        let p = json!({"index": 0, "item": null, "visible": visible, "params": {"size": 9}});
+        for replay in [false, true] {
+            let r = if replay { s.replay("effect.setParams", &p) } else { s.execute("effect.setParams", &p) };
+            let err = r.err().map(|e| e.to_string()).unwrap_or_default();
+            assert!(err.contains("`visible` must be true or false"), "{visible} (replay {replay}): {err}");
+            let state = s.doc().unwrap();
+            assert_eq!(state.doc, before, "{visible} (replay {replay})");
+            assert_eq!(state.history.undo.len(), undo, "{visible} (replay {replay})");
+            assert!(!state.is_dirty());
+        }
+    }
+    s.execute("effect.setParams", &json!({"index": 0, "item": null, "visible": null, "params": {"size": 9}})).unwrap();
+    let n = node(&s, id);
+    assert!(n.appearance.effects[0].visible);
+    assert_eq!(n.appearance.effects[0].params["size"], 9);
+}
+
+/// The effect `effect.setParams` checks the parameters against is the one it leaves: a Warp's new
+/// style and a 3D effect's new type, and the effect as it is otherwise.
+#[test]
+fn set_params_checks_the_effect_it_leaves() {
+    use super::edited_effect_id;
+    assert_eq!(edited_effect_id("warp.arc", None, Some("flag")), "warp.flag");
+    assert_eq!(edited_effect_id("warp.arc", None, None), "warp.arc");
+    assert_eq!(edited_effect_id("distort.roughen", None, Some("flag")), "distort.roughen");
+    assert_eq!(edited_effect_id("threeD.extrude", Some("threeD.revolve"), None), "threeD.revolve");
+    assert_eq!(edited_effect_id("warp.arc", Some("threeD.revolve"), None), "warp.arc");
+    let (mut s, _) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "warp.arc", "item": null})).unwrap();
+    let p = json!({"index": 0, "item": null, "warpStyle": "flag", "params": {"bend": 25}});
+    assert_eq!(super::set_params_effects(&s, &p), ["warp.flag"]);
+}
+
 #[test]
 fn list_remove_and_set_params() {
     let (mut s, id) = session_with_rect();
@@ -343,14 +743,16 @@ fn expand_appearance_bakes_geometry() {
     assert!(s.execute("effect.expandAppearance", &json!({})).is_err());
 }
 
+/// Each copy is an object of its own (#5612).
 #[test]
-fn expand_transform_copies_makes_compound() {
+fn expand_transform_copies_makes_a_group_of_the_copies() {
     let (mut s, id) = session_with_rect();
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 120, "copies": 1}})).unwrap();
     s.execute("effect.expandAppearance", &json!({})).unwrap();
     let n = node(&s, id);
-    assert!(matches!(n.kind, NodeKind::Compound { .. }));
+    assert!(matches!(n.kind, NodeKind::Group { .. }), "{}", n.kind_label());
+    assert_eq!(n.children().map(|c| c.len()), Some(2));
     let b = n.geometric_bounds().unwrap();
     assert!((b.x1 - 320.0).abs() < 1e-6, "{b:?}");
 }
@@ -406,6 +808,7 @@ fn pathfinder_effect_on_a_group_with_type_cuts_the_glyphs_out() {
     assert!((left - (10_000.0 - glyph_area)).abs() < 0.5, "{left} left of the square for a glyph area of {glyph_area}");
 }
 
+/// A Pathfinder effect on a group renders live and expands to its result.
 #[test]
 fn pathfinder_effect_on_a_group_renders_live_and_expands() {
     let (mut s, a) = session_with_rect();
@@ -425,6 +828,7 @@ fn pathfinder_effect_on_a_group_renders_live_and_expands() {
     assert_eq!(ch.len(), 1);
     assert!((ch[0].geometric_bounds().unwrap().width() - 50.0).abs() < 1e-6);
 }
+/// Expand Appearance on a Transform effect with copies gives each copy its own gradient.
 #[test]
 fn expand_appearance_gives_each_copy_of_a_transform_its_own_gradient() {
     use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
@@ -447,4 +851,428 @@ fn expand_appearance_gives_each_copy_of_a_transform_its_own_gradient() {
         }
     });
     assert_eq!(boxes, vec![100.0; 3], "three squares, each with its own gradient");
+}
+
+/// Expand Appearance on a solid-filled path whose Transform effect makes copies gives a group of
+/// one path per copy, each with the path's fill, not one compound path (#5612); a second Transform
+/// effect's copies of those copies nest, a group per copy of the first.
+#[test]
+fn expand_appearance_makes_each_copy_of_a_transform_an_object() {
+    use vectorcraft_color::{Color, Paint};
+    let fill = |n: &vectorcraft_doc::Node| n.appearance.fill_paint().color();
+    let (mut s, id) = session_with_rect();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("effect.apply", &json!({"effect":"distort.transform","ids":[id.0],"item":null})).unwrap();
+    s.execute("effect.setParams", &json!({"index":0,"params":{"moveH":150,"copies":2},"ids":[id.0],"item":null})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+    let n = node(&s, id);
+    assert!(matches!(n.kind, NodeKind::Group { clip: false, .. }), "{}", n.kind_label());
+    assert!(n.appearance.effects.is_empty());
+    let copies = n.children().unwrap();
+    assert_eq!(copies.len(), 3, "the path and its two copies");
+    let xs: Vec<f64> = copies.iter().map(|c| c.geometric_bounds().unwrap().x0).collect();
+    assert_eq!(xs, vec![400.0, 250.0, 100.0], "the original on top");
+    for c in copies {
+        assert!(matches!(c.kind, NodeKind::Path { .. }), "{}", c.kind_label());
+        assert_eq!(fill(c), Some(Color::rgb(1.0, 0.0, 0.0)));
+        assert!((c.geometric_bounds().unwrap().width() - 100.0).abs() < 1e-9);
+    }
+    let mut ids: Vec<NodeId> = vec![];
+    n.walk(&mut |c| ids.push(c.id));
+    ids.sort();
+    ids.dedup();
+    assert_eq!(ids.len(), 4, "the group and each copy have ids of their own");
+    // Two Transform effects: three columns, each a group of the column's two copies.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    s.execute("effect.apply", &json!({"effect":"distort.transform","ids":[id.0],"item":null})).unwrap();
+    s.execute("effect.setParams", &json!({"index":1,"params":{"moveV":150,"copies":1},"ids":[id.0],"item":null})).unwrap();
+    s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+    let columns = node(&s, id).children().unwrap().to_vec();
+    assert_eq!(columns.len(), 3);
+    for (col, x) in columns.iter().zip([400.0, 250.0, 100.0]) {
+        let cells = col.children().unwrap_or_else(|| panic!("a column is a group: {}", col.kind_label()));
+        let ys: Vec<(f64, f64)> = cells.iter().map(|c| (c.geometric_bounds().unwrap().x0, c.geometric_bounds().unwrap().y0)).collect();
+        assert_eq!(ys, vec![(x, 250.0), (x, 100.0)]);
+        assert!(cells.iter().all(|c| matches!(c.appearance.fill_paint(), Paint::Solid { .. })));
+    }
+}
+
+/// The object's own effect ids, in order.
+fn object_effects(s: &Session, id: NodeId) -> Vec<String> {
+    node(s, id).appearance.effects.iter().map(|e| e.id.clone()).collect()
+}
+
+/// A rectangle with Drop Shadow, Outer Glow and Twist on the object.
+fn three_effects() -> (Session, NodeId) {
+    let (mut s, id) = session_with_rect();
+    for e in ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"] {
+        s.execute("effect.apply", &json!({"effect": e, "ids": [id.0], "item": null})).unwrap();
+    }
+    assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"]);
+    (s, id)
+}
+
+/// `effect.remove` with `indices` removes several effects in one undo step.
+#[test]
+fn remove_takes_several_effects_in_one_undo_step() {
+    let (mut s, id) = three_effects();
+    s.execute("effect.remove", &json!({"indices": [2, 0], "ids": [id.0], "item": null})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.outerGlow"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"]);
+    // An index past the list fails and changes nothing; so does an empty list.
+    for bad in [json!([0, 3]), json!([]), json!(["x"])] {
+        assert!(s.execute("effect.remove", &json!({"indices": bad, "ids": [id.0], "item": null})).is_err(), "{bad}");
+        assert_eq!(object_effects(&s, id).len(), 3, "{bad}");
+    }
+}
+
+/// `effect.duplicate` with `indices` puts each copy right after its original.
+#[test]
+fn duplicate_takes_several_effects_each_copy_after_its_original() {
+    let (mut s, id) = three_effects();
+    s.execute("effect.duplicate", &json!({"indices": [0, 2], "ids": [id.0], "item": null})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.dropShadow", "stylize.outerGlow", "distort.twist", "distort.twist"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(object_effects(&s, id).len(), 3);
+    assert!(s.execute("effect.duplicate", &json!({"indices": [1, 5], "ids": [id.0], "item": null})).is_err());
+    assert_eq!(object_effects(&s, id).len(), 3);
+}
+
+/// `effect.move` with several `from` lands them together, in their order.
+#[test]
+fn move_takes_several_effects_that_land_together_in_order() {
+    // [Shadow, Glow, Twist]: Shadow and Twist moved to the end of the list land as one block.
+    let (mut s, id) = three_effects();
+    let r = s.execute("effect.move", &json!({"from": [0, 2], "to": 1, "ids": [id.0], "fromItem": null})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.outerGlow", "stylize.dropShadow", "distort.twist"]);
+    assert_eq!(r["index"], json!(1), "where the first of them landed");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(object_effects(&s, id), ["stylize.dropShadow", "stylize.outerGlow", "distort.twist"]);
+    // Into the stroke's list (item 1), copying: the object keeps its effects.
+    s.execute("effect.move", &json!({"from": [1, 2], "to": 0, "fromItem": null, "toItem": 1, "copy": true, "ids": [id.0]})).unwrap();
+    let n = node(&s, id);
+    let on_stroke: Vec<_> = n.appearance.items[1].effects().iter().map(|e| e.id.clone()).collect();
+    assert_eq!(on_stroke, ["stylize.outerGlow", "distort.twist"]);
+    assert_eq!(object_effects(&s, id).len(), 3);
+    // A bad index fails and changes nothing.
+    let before = node(&s, id).appearance;
+    assert!(s.execute("effect.move", &json!({"from": [0, 9], "to": 0, "fromItem": null, "ids": [id.0]})).is_err());
+    assert_eq!(node(&s, id).appearance, before);
+}
+
+/// A 3D effect's shadow is set with `effect.setParams` in one undo step, saved in the native file,
+/// drawn in exports and kept as a path by Expand Appearance; settings out of range are refused
+/// without an undo step.
+#[test]
+fn a_3d_shadow_is_one_undo_step_saved_exported_and_expanded() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": effects::EXTRUDE, "ids": [id.0], "item": null})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (params, why) in [
+        (json!({"shadowBounds": 401}), "shadowBounds must be a number from 10 to 400"),
+        (json!({"shadowPosition": "left"}), "shadowPosition must be behind or below"),
+    ] {
+        let before = s.doc().unwrap().doc.clone();
+        let e = s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": params})).unwrap_err().to_string();
+        assert!(e.contains(why), "{params}: {e}");
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    let params = json!({"shadow": true, "shadowPosition": "below", "shadowDistance": 20, "shadowBounds": 150});
+    s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": params})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let art = effects::solid_art(&node(&s, id)).unwrap();
+    let shadow = art.children().unwrap()[0].clone();
+    assert!(matches!(shadow.kind, NodeKind::Path { .. }));
+    // Saved and opened again, the effect keeps its shadow settings and draws the same shadow.
+    let doc = &s.doc().unwrap().doc;
+    let restored = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    let fx = &restored.node(id).unwrap().appearance.effects[0];
+    for (key, value) in params.as_object().unwrap() {
+        assert_eq!(fx.params.get(key), Some(value), "{key}");
+    }
+    assert_eq!(effects::solid_art(restored.node(id).unwrap()).unwrap(), art);
+    // SVG export draws it: one more shape than without the shadow.
+    let shapes = |s: &mut Session| {
+        let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+        vectorcraft_testkit::svg_shapes(&svg)
+    };
+    let with = shapes(&mut s);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let without = shapes(&mut s);
+    assert_eq!(with, without + 1);
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    let mut shadows = 0;
+    s.doc().unwrap().doc.walk(|n| {
+        if n.path_data().is_some() && n.path_data() == shadow.path_data() && n.appearance.items == shadow.appearance.items {
+            shadows += 1;
+        }
+    });
+    assert_eq!(shadows, 1);
+}
+
+/// With the light's Softness, the 3D shadow is blurred: the canvas paints past the hard shadow's
+/// edge, the object's bounds take the blur in, SVG export blurs it as it does a Gaussian Blur
+/// effect, and Expand Appearance keeps it as an image with no live effect left.
+#[test]
+fn a_soft_3d_shadow_is_drawn_measured_exported_and_expanded_blurred() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": effects::EXTRUDE, "ids": [id.0], "item": null})).unwrap();
+    let set = |s: &mut Session, params: serde_json::Value| {
+        s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": params})).unwrap();
+    };
+    let draw = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    let bounds = |s: &Session| {
+        let doc = &s.doc().unwrap().doc;
+        vectorcraft_render::effect_bounds(&doc.symbol_boxes(), doc.node(id).unwrap()).unwrap()
+    };
+    let blurs = |s: &mut Session| {
+        let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+        svg.matches("<feGaussianBlur").count()
+    };
+    let none = draw(&s);
+    set(&mut s, json!({"shadow": true, "shadowDistance": 50}));
+    let (hard, hard_bounds, hard_blurs) = (draw(&s), bounds(&s), blurs(&mut s));
+    let undo = s.doc().unwrap().history.undo.len();
+    set(&mut s, json!({"lightSoftness": 100}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let (soft, soft_bounds) = (draw(&s), bounds(&s));
+    // Pixels the hard shadow leaves as they are, the soft one paints.
+    let spread = none.chunks(4).zip(hard.chunks(4)).zip(soft.chunks(4)).filter(|((n, h), s)| n == h && n != s).count();
+    assert!(spread > 100, "{spread}");
+    assert!(soft_bounds.contains_rect(hard_bounds) && soft_bounds.area() > hard_bounds.area(), "{hard_bounds:?} {soft_bounds:?}");
+    assert_eq!(blurs(&mut s), hard_blurs + 1, "SVG export blurs the shadow as a Gaussian Blur effect");
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    let (mut live, mut pictures) = (0, 0);
+    s.doc().unwrap().doc.walk(|n| {
+        live += usize::from(!n.appearance.effects.is_empty() || n.appearance.items.iter().any(|i| !i.effects().is_empty()));
+        pictures += usize::from(matches!(n.kind, NodeKind::Image(_)));
+    });
+    assert_eq!((live, pictures), (0, 1), "the blurred shadow expands to an image");
+}
+
+/// Radial Blur's Blur Center: stored as given, drawn about that point of the object's bounds, and
+/// a value outside 0 to 1 (or not a number) is refused with nothing changed and no undo step.
+#[test]
+fn radial_blur_center_is_stored_drawn_and_checked() {
+    let (mut s, id) = session_with_rect();
+    let draw = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    s.execute("effect.apply", &json!({"effect": "blur.radial", "params": {"amount": 40}})).unwrap();
+    assert_eq!(node(&s, id).appearance.effects[0].params["centerX"], json!(0.5), "the default center is stored");
+    let middle = draw(&s);
+    s.execute("effect.setParams", &json!({"index": 0, "params": {"centerX": 0.5, "centerY": 0.5}})).unwrap();
+    assert_eq!(draw(&s), middle, "the default center draws as before");
+    s.execute("effect.setParams", &json!({"index": 0, "params": {"centerX": 0, "centerY": 1}})).unwrap();
+    let params = node(&s, id).appearance.effects[0].params.clone();
+    assert_eq!((params["centerX"].clone(), params["centerY"].clone()), (json!(0), json!(1)));
+    let corner = draw(&s);
+    assert_ne!(corner, middle, "the blur turns about the bottom-left corner");
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, params) in [
+        ("effect.setParams", json!({"index": 0, "params": {"centerX": 1.5}})),
+        ("effect.setParams", json!({"index": 0, "params": {"centerY": -0.01}})),
+        ("effect.setParams", json!({"index": 0, "params": {"centerX": "0.5"}})),
+        ("effect.apply", json!({"effect": "blur.radial", "params": {"centerY": 2}})),
+    ] {
+        let e = s.execute(cmd, &params).unwrap_err().to_string();
+        assert!(e.contains("must be a number"), "{cmd} {params}: {e}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{cmd} {params}");
+        assert_eq!(node(&s, id).appearance.effects.len(), 1, "{cmd} {params}");
+        assert_eq!(draw(&s), corner, "{cmd} {params}");
+    }
+    // A replayed journal is checked too: the refusal is the command's own.
+    let e = s.replay("effect.setParams", &json!({"index": 0, "params": {"centerX": 7}})).unwrap_err().to_string();
+    assert!(e.contains("`centerX` must be a number from 0 to 1"), "{e}");
+    // Moving the object moves the blur with it.
+    s.execute("object.move", &json!({"ids": [id.0], "dx": 40, "dy": 20})).unwrap();
+    let moved = draw(&s);
+    let at = |px: &[u8], x: usize, y: usize| px[(y * 300 + x) * 4..][..4].to_vec();
+    for (x, y) in [(95, 150), (150, 205), (205, 95), (120, 120)] {
+        assert_eq!(at(&moved, x + 40, y + 20), at(&corner, x, y), "({x}, {y})");
+    }
+}
+
+/// A Rasterize with transparent room around the art, before another Rasterize, splits the stack,
+/// and the part after the split paints around content the room spreads. The Blur Center still
+/// lies in the object's own bounds, so the blur draws as it does without the room.
+#[test]
+fn radial_blur_center_stays_in_the_object_when_the_stack_splits() {
+    let draw = |room: bool| {
+        let (mut s, _) = session_with_rect();
+        let mut stack = vec![("rasterize", json!({})), ("blur.radial", json!({"amount": 60, "centerX": 0, "centerY": 0}))];
+        if room {
+            stack.insert(0, ("rasterize", json!({"addAround": 40})));
+        }
+        for (effect, params) in stack {
+            s.execute("effect.apply", &json!({"effect": effect, "params": params})).unwrap();
+        }
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    let (plain, split) = (draw(false), draw(true));
+    let alpha = |px: &[u8]| px.iter().skip(3).step_by(4).map(|a| u64::from(*a)).sum::<u64>();
+    assert!(alpha(&plain) > 0, "the blurred art draws");
+    let differ = (0..300 * 300).filter(|i| plain[i * 4 + 3].abs_diff(split[i * 4 + 3]) > 8).count();
+    assert!(differ < 50, "{differ} pixels' coverage moved with the room around the art");
+}
+
+/// The raster budget charges each image its pixels before it is made: an image past what is left
+/// is refused and counted, and the object keeps its blur.
+#[test]
+fn an_image_past_the_pixels_left_stays_unmade() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "blur.gaussian", "params": {"radius": 3}})).unwrap();
+    let mut d = s.doc().unwrap().doc.as_ref().clone();
+    let n = d.node(id).cloned().unwrap();
+    let pixels = super::rasterfx::raster_pixels(&d, &n, false, true);
+    assert!(pixels > 10_000, "a 100 pt square at 72 ppi: {pixels}");
+
+    let mut budget = super::RasterBudget { images: 10, pixels: pixels - 1, left: 0 };
+    assert!(super::raster_image(&mut d, &n, &mut budget).is_err());
+    assert_eq!((budget.images, budget.pixels, budget.left), (10, pixels - 1, 1), "nothing is taken");
+
+    let mut budget = super::RasterBudget { images: 10, pixels, left: 0 };
+    let (image, _) = super::raster_image(&mut d, &n, &mut budget).unwrap().expect("the image is made");
+    let NodeKind::Image(img) = &image.kind else { panic!("not an image") };
+    assert_eq!(u64::from(img.width) * u64::from(img.height), pixels, "the charge is the image's size");
+    assert_eq!((budget.images, budget.pixels, budget.left), (9, 0, 0));
+
+    let mut budget = super::RasterBudget { images: 0, pixels, left: 0 };
+    assert!(super::raster_image(&mut d, &n, &mut budget).is_err(), "no image is left");
+}
+
+/// A group whose Transform effect's copies each carry the drop shadow listed before it, with a
+/// symbol instance whose random Transform effect takes its seed from the instance's id, stays as it
+/// is when the raster budget has no image left for a copy's shadow, with none left or with one for
+/// the first copy's: the copies keep the ids their random moves are drawn with, the group draws as
+/// before, and the document holds no image the first copy's expansion made, nor the budget its
+/// charge.
+#[test]
+fn copies_the_raster_budget_leaves_keep_their_random_moves() {
+    let (mut s, id) = session_with_rect();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let id = NodeId(s.execute("symbol.new", &json!({"name": "Box"})).unwrap()["id"].as_u64().unwrap());
+    let random = json!({"moveH": 40, "moveV": 40, "random": true});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "distort.transform", "params": random})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "stylize.dropShadow", "params": shadow})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "distort.transform", "params": {"moveV": 150, "copies": 1}})).unwrap();
+    let draw = |d: &vectorcraft_doc::Document| {
+        vectorcraft_render::Renderer::new().render(d, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    for images in [0, 1] {
+        let mut d = s.doc().unwrap().doc.as_ref().clone();
+        let before = d.node(g).cloned().unwrap();
+        assert!(effects::outer_effects(&before).len() < before.appearance.effects.len(), "each copy carries the shadow");
+        let (drawn, keys) = (draw(&d), d.images.keys().cloned().collect::<Vec<_>>());
+
+        let mut budget = super::RasterBudget { images, pixels: u64::MAX, left: 0 };
+        let mut out = vec![];
+        super::expand_node(&mut d, g, &[], &mut out, &mut budget);
+        assert!(budget.left > 0, "{images}: a copy's shadow is left");
+        assert!(out.is_empty(), "{images}: nothing expands: {out:?}");
+        assert_eq!(d.node(g), Some(&before), "{images}: the group stays as it is");
+        assert!(draw(&d) == drawn, "{images}: the group draws as before");
+        assert_eq!(d.images.keys().cloned().collect::<Vec<_>>(), keys, "{images}: no image is added");
+        assert_eq!((budget.images, budget.pixels), (images, u64::MAX), "{images}: the budget gets back what the copies took");
+    }
+}
+
+/// A group whose Transform effect copies its symbol instance, which has a drop shadow and a random
+/// Transform effect that takes its seed from the instance's id: each copy's instance has that id.
+/// When the raster budget has no image left for a copy's shadow, with none left or with one for the
+/// first copy's, the group stays as it is: the copies keep the ids their random moves are drawn
+/// with, the group draws as before, and the document holds no image the first copy's expansion
+/// made, nor the budget its charge. With the whole budget, the group expands and each object gets
+/// an id of its own.
+#[test]
+fn a_member_the_raster_budget_leaves_keeps_its_random_move() {
+    let (mut s, id) = session_with_rect();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let id = NodeId(s.execute("symbol.new", &json!({"name": "Box"})).unwrap()["id"].as_u64().unwrap());
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "stylize.dropShadow", "params": shadow})).unwrap();
+    let random = json!({"moveH": 40, "moveV": 40, "random": true});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "distort.transform", "params": random})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "distort.transform", "params": {"moveV": 150, "copies": 1}})).unwrap();
+    let draw = |d: &vectorcraft_doc::Document| {
+        vectorcraft_render::Renderer::new().render(d, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    for images in [0, 1, 1_024] {
+        let mut d = s.doc().unwrap().doc.as_ref().clone();
+        let before = d.node(g).cloned().unwrap();
+        assert!(effects::outer_effects(&before).len() == before.appearance.effects.len(), "the copies carry no shadow of the group's");
+        let art = effects::evaluate_container(Some(&d), &before).unwrap();
+        let mut instances = 0;
+        art.walk(&mut |n| instances += usize::from(n.id == id && super::has_seeded(n)));
+        assert!(instances >= 2, "{images}: each copy's instance has the id and its random effect: {instances}");
+        let (drawn, keys) = (draw(&d), d.images.keys().cloned().collect::<Vec<_>>());
+
+        let mut budget = super::RasterBudget { images, pixels: u64::MAX, left: 0 };
+        let mut out = vec![];
+        super::expand_node(&mut d, g, &[], &mut out, &mut budget);
+        if images < 2 {
+            assert!(budget.left > 0, "{images}: a shadow is left");
+            assert!(out.is_empty(), "{images}: nothing expands: {out:?}");
+            assert_eq!(d.node(g), Some(&before), "{images}: the group stays as it is");
+            assert!(draw(&d) == drawn, "{images}: the group draws as before");
+            assert_eq!(d.images.keys().cloned().collect::<Vec<_>>(), keys, "{images}: no image is added");
+            assert_eq!((budget.images, budget.pixels), (images, u64::MAX), "{images}: the budget gets back what the copies took");
+        } else {
+            assert_eq!(budget.left, 0, "no shadow is left");
+            assert!(!out.is_empty(), "the group expands");
+            let (mut ids, mut count, mut seeded) = (std::collections::HashSet::new(), 0, false);
+            d.node(g).unwrap().walk(&mut |n| {
+                ids.insert(n.id);
+                count += 1;
+                seeded |= super::has_seeded(n);
+            });
+            assert_eq!(ids.len(), count, "each object has an id of its own");
+            assert!(!seeded, "no random Transform effect is left");
+        }
+    }
+}
+
+/// An object with Crop Marks, a drop shadow and a random Transform effect that takes its seed from
+/// the object's id stays as it is when the raster budget has no image left for its shadow: the
+/// object keeps its id and its random move, and draws as before.
+#[test]
+fn crop_marks_the_raster_budget_leaves_keep_their_random_move() {
+    let (mut s, id) = session_with_rect();
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "stylize.dropShadow", "params": shadow})).unwrap();
+    let random = json!({"moveH": 40, "moveV": 40, "random": true});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "distort.transform", "params": random})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "cropMarks", "params": {}})).unwrap();
+    let draw = |d: &vectorcraft_doc::Document| {
+        vectorcraft_render::Renderer::new().render(d, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    let mut d = s.doc().unwrap().doc.as_ref().clone();
+    let before = d.node(id).cloned().unwrap();
+    assert!(effects::crop_marks_art(&before).is_some(), "the object has crop marks");
+    let (drawn, keys) = (draw(&d), d.images.keys().cloned().collect::<Vec<_>>());
+
+    let mut budget = super::RasterBudget { images: 0, pixels: u64::MAX, left: 0 };
+    let mut out = vec![];
+    super::expand_node(&mut d, id, &[], &mut out, &mut budget);
+    assert!(budget.left > 0, "the shadow is left");
+    assert!(out.is_empty(), "nothing expands: {out:?}");
+    assert_eq!(d.node(id), Some(&before), "the object stays as it is");
+    assert!(draw(&d) == drawn, "the object draws as before");
+    assert_eq!(d.images.keys().cloned().collect::<Vec<_>>(), keys, "no image is added");
+    assert_eq!((budget.images, budget.pixels), (0, u64::MAX), "the budget is as it was");
 }

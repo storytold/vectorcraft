@@ -284,8 +284,8 @@ mod tests {
     #[test]
     fn fonts_only_gdi_has_loaded_are_listed_by_their_files() {
         use windows::Win32::Graphics::Gdi::{AddFontResourceExW, FR_PRIVATE, RemoveFontResourceExW};
-        let dir = std::env::temp_dir().join(format!("vc-gdi-fonts-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let temp = tempfile::Builder::new().prefix("vc-gdi-fonts-").tempdir().unwrap();
+        let dir = temp.path();
         let file = dir.join("29457");
         let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts/SourceSans3-Regular.ttf");
         let mut data = std::fs::read(source).unwrap();
@@ -303,7 +303,6 @@ mod tests {
         assert_eq!(unsafe { AddFontResourceExW(&path, FR_PRIVATE, None) }, 1);
         let files = super::font_files();
         let _ = unsafe { RemoveFontResourceExW(&path, FR_PRIVATE.0, None) };
-        let _ = std::fs::remove_dir_all(&dir);
         let wanted = file.to_string_lossy().to_lowercase();
         assert!(files.iter().any(|f| f.to_lowercase() == wanted), "{wanted} not in {} files", files.len());
     }

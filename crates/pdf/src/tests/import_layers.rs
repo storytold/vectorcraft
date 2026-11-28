@@ -416,3 +416,93 @@ fn a_pdfs_private_data_is_its_pdf_streams_joined() {
     let both = format!("/AIPDFPrivateData1 {a} 0 R /AIPDFPrivateData2 {b} 0 R /AIPrivateData1 {c} 0 R");
     assert_eq!(illustrator_data(&pdf_with_catalog(&[page(both)], &[&one, &two, &other], "", None), None).unwrap(), b"%AI24_ZStandard_Data other");
 }
+
+/// The private data of a file whose other objects the import refuses (#4366) is read without its
+/// PDF part, and only then; a private data stream under a filter the reader doesn't know, or with
+/// decode parameters, is read neither way.
+#[test]
+fn private_data_reads_without_a_pdf_part_that_cant_be_read() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let page = PdfPage {
+        entries: format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {a} 0 R /AIPrivateData2 {b} 0 R /NumBlock 2 >> >> >>"),
+        ..PdfPage::new(100.0, 100.0, "1 0 0 rg 10 10 30 30 re f")
+    };
+    let (one, two) = (stream("", "%AI24_ZStandard_Data first "), stream("", "second"));
+    let refused = stream("/DecodeParms << /Predictor 12 /Columns 0 >>", "x");
+    let pdf = pdf_with_catalog(std::slice::from_ref(&page), &[&one, &two, &refused], "", None);
+    assert!(illustrator_data(&pdf, None).is_none());
+    let read = illustrator_data_without_pdf_part(&pdf, None).unwrap();
+    assert_eq!((read.data.as_slice(), read.user_unit, read.trim), (&b"%AI24_ZStandard_Data first second"[..], 1.0, (100.0, 100.0)));
+    let whole = pdf_with_catalog(std::slice::from_ref(&page), &[&one, &two], "", None);
+    assert_eq!(illustrator_data_without_pdf_part(&whole, None).map(|p| p.data), illustrator_data(&whole, None));
+    // The trim box in points, as the page shows it.
+    let large = PdfPage { entries: format!("{} /UserUnit 10 /TrimBox [10 10 60 30] /Rotate 90", page.entries), ..page.clone() };
+    let read = illustrator_data_without_pdf_part(&pdf_with_catalog(&[large], &[&one, &two, &refused], "", None), None).unwrap();
+    assert_eq!((read.user_unit, read.trim), (10.0, (200.0, 500.0)));
+    assert!(illustrator_data_without_pdf_part(b"not a pdf", None).is_none());
+    for odd in ["/Filter /Bogus", "/Filter [/Bogus]", "/DP << /Predictor 2 >>", "/Filter /FlateDecode /DecodeParms [<< /Predictor 2 >>]", "/Filter 5"]
+    {
+        let first = stream(odd, "%AI24_ZStandard_Data first ");
+        let pdf = pdf_with_catalog(std::slice::from_ref(&page), &[&first, &two], "", None);
+        assert!(illustrator_data(&pdf, None).is_none(), "{odd}");
+        assert!(illustrator_data_without_pdf_part(&pdf, None).is_none(), "{odd}");
+        let why = read_illustrator_data_without_pdf_part(&pdf, None);
+        assert_eq!(why, Err("it is stored in a form that isn't read".to_string()), "{odd}");
+    }
+    // Damaged zlib data, and a file without private data or that isn't a PDF.
+    let damaged = stream("/Filter /FlateDecode", "not zlib");
+    let pdf = pdf_with_catalog(std::slice::from_ref(&page), &[&damaged, &two], "", None);
+    assert_eq!(read_illustrator_data_without_pdf_part(&pdf, None), Err("its zlib compression is damaged".to_string()));
+    let bare = pdf_with_catalog(&[PdfPage::new(100.0, 100.0, "")], &[], "", None);
+    assert_eq!(read_illustrator_data_without_pdf_part(&bare, None), Ok(None));
+    assert_eq!(read_illustrator_data_without_pdf_part(b"not a pdf", None), Ok(None));
+}
+
+/// The private data streams read one after the other, each decoded as it is reached, give what
+/// joining them gives, with the same refusals: a stream in a form that isn't read, or with damaged
+/// zlib data, stops the read with why (also after the streams before it were read), and streams
+/// that hold nothing are no private data.
+#[test]
+fn private_data_streams_read_one_after_the_other_as_when_joined() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let page = PdfPage {
+        entries: format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {a} 0 R /AIPrivateData2 {b} 0 R /NumBlock 2 >> >> >>"),
+        ..PdfPage::new(100.0, 100.0, "1 0 0 rg 10 10 30 30 re f")
+    };
+    let file = |streams: &[&str]| pdf_with_catalog(std::slice::from_ref(&page), streams, "", None);
+    let read_all = |r: &mut dyn std::io::Read| {
+        let mut data = vec![];
+        r.read_to_end(&mut data).map(|_| data).map_err(|e| e.to_string())
+    };
+    let streamed = |pdf: &[u8]| read_illustrator_data_without_pdf_part_with(pdf, None, read_all);
+    // (A file the import refuses has no PDF part to read the data of.)
+    let opened = |pdf: &[u8]| open_pdf(pdf, None).ok().and_then(|o| o.read_illustrator_data(read_all));
+    let (one, two) = (stream("", "%AI24_ZStandard_Data first "), stream("", "second"));
+    let whole = file(&[&one, &two]);
+    let joined = b"%AI24_ZStandard_Data first second".to_vec();
+    assert_eq!(streamed(&whole), Ok(Some(IllustratorData { data: Ok(joined.clone()), user_unit: 1.0, trim: (100.0, 100.0) })));
+    assert_eq!(opened(&whole), Some(Ok(joined)));
+    assert_eq!(streamed(b"not a pdf"), Ok(None));
+    for odd in ["/Filter /Bogus", "/DecodeParms << /Predictor 12 /Columns 0 >>"] {
+        let pdf = file(&[&one, &stream(odd, "second")]);
+        assert_eq!(streamed(&pdf), Err("it is stored in a form that isn't read".to_string()), "{odd}");
+        assert_eq!(opened(&pdf), None, "{odd}");
+    }
+    let damaged = file(&[&one, &stream("/Filter /FlateDecode", "not zlib")]);
+    assert_eq!(streamed(&damaged), Err("its zlib compression is damaged".to_string()));
+    assert_eq!(opened(&damaged), None);
+    let empty = file(&[&stream("", ""), &stream("", "")]);
+    assert_eq!((illustrator_data(&empty, None), streamed(&empty), opened(&empty)), (None, Ok(None), None));
+}
+
+/// Art in ordinary tags nested inside a layer's sequence goes to that layer; the group is kept
+/// with each level, not searched for through the tags for each object.
+#[test]
+fn art_deep_in_tags_inside_a_layer_reaches_it() {
+    let (objs, catalog, ids) = groups(1, "/OFF [{B}]");
+    let content = format!("/OC /MC0 BDC {} 1 0 0 rg 10 10 30 30 re f {} EMC 0 1 0 rg 0 0 5 5 re f", "/Span BMC ".repeat(200), "EMC ".repeat(200));
+    let page = PdfPage { resources: format!("/Properties << /MC0 {} 0 R /MC1 {} 0 R >>", ids[0], ids[1]), ..PdfPage::new(100.0, 100.0, &content) };
+    let d = import(&pdf_with_catalog(&[page], &[&objs[0], &objs[1]], &catalog, None)).unwrap();
+    let shapes = d.layers.iter().find(|l| l.name.as_deref() == Some("Shapes")).unwrap();
+    assert_eq!(colors(shapes), [Color::rgb(1.0, 0.0, 0.0)]);
+}

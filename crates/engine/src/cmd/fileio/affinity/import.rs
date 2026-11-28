@@ -1,4 +1,4 @@
-use super::*;
+use super::{Builder, Document, Result, err, raster_doc};
 
 /// What an Affinity file opened as.
 pub(in super::super) struct Imported {
@@ -30,13 +30,11 @@ fn preview(name: &str, bytes: &[u8], native: &vectorcraft_affinity::Error) -> Re
     let p = vectorcraft_affinity::preview(bytes).map_err(|e| err(format!("{native}; its embedded preview can't be read either ({e})")))?;
     // `raster_doc` normally probes PNG dimensions and keeps its encoded bytes. Verify this
     // untrusted preview's complete pixels first, so corrupt data cannot create a blank image.
-    let mut reader = image::ImageReader::with_format(Cursor::new(p.png), image::ImageFormat::Png);
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(4096);
-    limits.max_image_height = Some(4096);
-    limits.max_alloc = Some(128 << 20);
-    reader.limits(limits);
-    let _pixels = reader.decode().map_err(err)?;
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_width = 4096;
+    opts.limits.max_height = 4096;
+    opts.limits.max_alloc = 128 << 20;
+    let _pixels = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Png, p.png, &opts).map_err(err)?;
     let d = raster_doc(name, p.png)?;
     Ok((
         d,

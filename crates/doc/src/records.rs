@@ -1,4 +1,4 @@
-use super::*;
+use super::{Affine, Arc, Deserialize, Node, NodeId, Point, Serialize};
 
 /// New art on a locked artboard ([`Document::new_art`]). Setting it changes the document in
 /// place, so a selection change that sets it doesn't replace the document.
@@ -42,6 +42,29 @@ impl std::fmt::Debug for NewArtIds {
 pub struct MaskEdit {
     pub object: NodeId,
     pub layer: NodeId,
+}
+
+/// Symbol editing mode: the art of symbol `symbol` lives on the temporary `layer` while editing,
+/// placed by `xf` (from the symbol's coordinates to the document's), and goes back into the symbol
+/// after each edit, so every instance follows it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SymbolEdit {
+    pub symbol: String,
+    pub layer: NodeId,
+    /// The instance editing was entered from (a double-click on it), selected again on leaving after an edit;
+    /// `None` when it was entered from the Symbols panel.
+    pub instance: Option<NodeId>,
+    pub xf: Affine,
+    /// The symbol's art is a group whose members are on the layer: the group takes them back.
+    pub group: bool,
+    /// An edit changed the art since editing was entered.
+    pub changed: bool,
+    /// The isolated object from before editing was entered, isolated again on leaving.
+    #[serde(default)]
+    pub back_isolation: Option<NodeId>,
+    /// The current layer from before editing was entered, current again on leaving.
+    #[serde(default)]
+    pub back_layer: Option<NodeId>,
 }
 
 /// A saved view (View → New View…): zoom, centre and rotation, listed at the bottom of the View menu.
@@ -103,15 +126,37 @@ impl SavedSelection {
     }
 }
 
+/// An SVG filter the document holds (Effect › SVG Filters): a `<filter>` element named by its
+/// `id`, listed in the SVG Filters submenu and in Apply SVG Filter.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SvgFilter {
+    /// The filter element's `id`.
+    pub name: String,
+    /// The `<filter>` element's XML, as it was written.
+    pub xml: String,
+}
+
+impl SvgFilter {
+    /// Most SVG filters a document holds.
+    pub const MAX: usize = 64;
+    /// Longest filter element, in bytes.
+    pub const MAX_XML: usize = 64 * 1024;
+}
+
 /// A symbol definition.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Symbol {
     pub name: String,
     pub art: Arc<Node>,
+    /// Symbol Options › Symbol Type › Dynamic Symbol: each instance may change the appearance of
+    /// objects in the art and stay linked (see [`crate::symbol_overrides`]). Static by default.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub dynamic: bool,
 }
 
-/// Encoded image bytes (PNG/JPEG/WebP…) shared by image objects.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Encoded image bytes (PNG/JPEG/WebP…) shared by image objects, and the fonts files carried for
+/// type ([`crate::FileFonts`], MIME [`crate::FILE_FONT_MIME`]), which save and travel the same way.
+#[derive(Serialize, Deserialize)]
 pub struct ImageBlob {
     pub mime: String,
     #[serde(skip)]
@@ -120,4 +165,32 @@ pub struct ImageBlob {
     /// linked images show this blob, and what `bytes` hold while the linked file can't be read.
     #[serde(skip)]
     pub proxy: Option<Arc<Vec<u8>>>,
+    /// Runtime ownership of an admitted font face. Image resources (including undo and clipboard
+    /// copies) own it; cached text nodes carry only weak references.
+    #[serde(skip)]
+    pub file_font: std::sync::Mutex<Option<Arc<dyn crate::FileFontFace>>>,
+}
+
+impl std::fmt::Debug for ImageBlob {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImageBlob").field("mime", &self.mime).field("bytes", &self.bytes).field("proxy", &self.proxy).finish()
+    }
+}
+
+impl Clone for ImageBlob {
+    fn clone(&self) -> Self {
+        let mut owner = self.file_font.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if owner.as_ref().is_some_and(|face| {
+            self.mime != crate::FILE_FONT_MIME || (!std::ptr::eq(face.bytes(), self.bytes.as_slice()) && face.bytes() != self.bytes.as_slice())
+        }) {
+            *owner = None;
+        }
+        Self { mime: self.mime.clone(), bytes: self.bytes.clone(), proxy: self.proxy.clone(), file_font: std::sync::Mutex::new(owner.clone()) }
+    }
+}
+
+impl PartialEq for ImageBlob {
+    fn eq(&self, other: &Self) -> bool {
+        self.mime == other.mime && self.bytes == other.bytes && self.proxy == other.proxy
+    }
 }

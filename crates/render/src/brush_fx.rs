@@ -107,7 +107,12 @@ impl BrushCache {
             vectorcraft_brush::serde_json::to_string(v).unwrap_or_default().hash(&mut h);
             h.finish()
         });
-        self.lib = vectorcraft_brush::library(doc).into_iter().map(|b| (b.name.clone(), Arc::new(b))).collect();
+        // Of two brushes with one name, a stroke that names it draws with the first, as
+        // `vectorcraft_brush::find` and the exports take it.
+        self.lib.clear();
+        for b in vectorcraft_brush::library(doc) {
+            self.lib.entry(b.name.clone()).or_insert_with(|| Arc::new(b));
+        }
     }
 
     /// [`Self::key`] for the brush library `doc` holds (checked once a frame, `stamp`).
@@ -115,28 +120,54 @@ impl BrushCache {
         self.library(doc, stamp);
         self.key
     }
+
+    /// [`Self::library_key`] checked now, between frames: `doc` may be the document of the last
+    /// frame, edited in place.
+    pub(crate) fn library_key_now(&mut self, doc: &Document, stamp: u64) -> u64 {
+        self.checked = (u64::MAX, 0);
+        self.library_key(doc, stamp)
+    }
 }
 
 /// Cull bounds that allow for brush art reaching past the stroke (scatter, wide nibs), symbol
-/// instances measured by their art from `symbols`, with the brushed strokes in that art.
+/// instances measured by their art from `symbols`, with the brushed strokes in that art. A path
+/// whose live-effect plug-ins paint their pieces leaves that room past each piece
+/// ([`crate::fx::painted_cull_bounds`]). A group or layer leaves that room past each of its
+/// members, as the renderer measures a group by its members (`Renderer::bounds_of`).
 pub(crate) fn cull_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let b = crate::fx::cull_bounds(symbols, n)?;
+    if let Some(b) = crate::fx::painted_cull_bounds(symbols, n) {
+        return b;
+    }
+    let b = crate::fx::brushed_cull_bounds(symbols, n)?;
     let pad = pad(symbols, n);
     Some(b.inflate(pad, pad))
 }
 
+/// [`cull_bounds`] of path or compound path `n` made from `visual`, its visual bounds, when the
+/// renderer measures it by those ([`crate::fx::path_cull_bounds`]); else `None`.
+pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnOnce() -> Option<Rect>) -> Option<Option<Rect>> {
+    let b = crate::fx::path_cull_bounds(symbols, n, visual)?;
+    Some(b.map(|b| {
+        let pad = pad(symbols, n);
+        b.inflate(pad, pad)
+    }))
+}
+
 /// How far brush art can paint past `n`'s brushed strokes, or past the brushed strokes in the art
 /// of symbol instance `n`: `16 × w + 8`, where `w` is the widest stroke (at least 1) of `n` when it
-/// has a visible brushed stroke and of the objects in that art that have one
-/// ([`SymbolBoxes::brush_width`]), and 0 when neither has one.
+/// has a visible brushed stroke with a paint and of the objects in that art that have one
+/// ([`SymbolBoxes::brush_width`]) or the pieces live-effect plug-ins paint for them
+/// ([`crate::fx::painted_brush_width`]), and 0 when neither has one. The room for `n`'s own strokes
+/// is [`vectorcraft_brush::reach`], which the exports leave too.
 pub(crate) fn pad(symbols: &SymbolBoxes, n: &Node) -> f64 {
-    let own = vectorcraft_brush::has_brush(n)
-        .then(|| n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.width) } else { None }).fold(1.0, f64::max));
+    let own = vectorcraft_brush::reach(n);
     let art = match &n.kind {
-        NodeKind::SymbolInstance { symbol, .. } => symbols.brush_width(symbol).map(|w| w.max(1.0)),
+        NodeKind::SymbolInstance { symbol, .. } => {
+            symbols.brush_width(symbol).into_iter().chain(crate::fx::painted_brush_width(symbols, symbol)).reduce(f64::max).map(|w| w.max(1.0))
+        }
         _ => None,
     };
-    own.into_iter().chain(art).reduce(f64::max).map_or(0.0, |w| 16.0 * w + 8.0)
+    art.map_or(own, |w| own.max(16.0 * w + 8.0))
 }
 
 pub use vectorcraft_brush::instance_art;
@@ -212,7 +243,7 @@ impl Renderer {
                 self.draw_kept_node(ctx, f, p);
                 self.fx_owner = owner;
             } else {
-                self.draw_node(ctx, f, p, true);
+                self.draw_forced_arc(ctx, f, p);
             }
         }
         (self.made_again, self.cur) = outer;
@@ -258,6 +289,94 @@ mod tests {
         // Second frame hits the cache and paints the same.
         let again = render(&mut r, &d);
         assert_eq!(again.pixels, img.pixels);
+    }
+
+    #[test]
+    fn art_brush_piece_applies_its_root_mask() {
+        use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization};
+        use vectorcraft_doc::OpacityMask;
+
+        let mut d = doc_with_line(Some("Masked art"), 1.0);
+        let mut art = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, -5.0, 10.0, 5.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        let black = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        art.extras_mut().mask = Some(Box::new(OpacityMask::new(black, true)));
+        let brush = Brush {
+            name: "Masked art".into(),
+            kind: BrushKind::Art(ArtBrush { art, scale: ArtScale::Stretch, colorization: Colorization::None, ..Default::default() }),
+        };
+        vectorcraft_brush::store(&mut d, &[brush]);
+
+        let mut renderer = Renderer::new();
+        for _ in 0..2 {
+            let img = render(&mut renderer, &d);
+            assert_eq!(img.pixel(100, 50), [255, 255, 255, 255]);
+        }
+    }
+
+    /// A proof that preserves the colors' numbers proofs an art brush's own colors, as it proofs
+    /// the document's: the brush's blue shows as the simulated device shows that color's numbers.
+    #[test]
+    fn a_proof_that_preserves_numbers_proofs_brush_art() {
+        use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization};
+        use vectorcraft_color::cms;
+
+        let mut d = doc_with_line(Some("Blue art"), 1.0);
+        let blue = Color::rgb(0.0, 0.0, 1.0);
+        let art =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, -10.0, 10.0, 10.0)), Appearance::basic(Paint::solid(blue), Paint::None, 0.0));
+        let brush = Brush {
+            name: "Blue art".into(),
+            kind: BrushKind::Art(ArtBrush { art, scale: ArtScale::Stretch, colorization: Colorization::None, ..Default::default() }),
+        };
+        vectorcraft_brush::store(&mut d, &[brush]);
+        let proof = cms::ProofSetup { target: cms::ProofTarget::Cmyk(cms::DEVICE_CMYK.into()), preserve_numbers: true, ..Default::default() };
+        let want = cms::active().proof_color(&blue, &proof).map(|v| (v * 255.0).round() as i32);
+        let opts = RenderOptions { proof: Some(proof), background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut r = Renderer::new();
+        for _ in 0..2 {
+            let px = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixel(100, 50);
+            assert!(want != [0, 0, 255], "{want:?}");
+            assert!(px.iter().zip(want).all(|(p, w)| (i32::from(*p) - w).abs() <= 2), "{px:?} vs {want:?}");
+        }
+    }
+
+    /// A proof that preserves the colors' numbers keeps the channels a CMYK document's filters run
+    /// on: an art brush's Color Halftone screens ink channels with the proof on, as with it off.
+    #[test]
+    fn a_proof_that_preserves_numbers_keeps_cmyk_filter_channels() {
+        use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization};
+        use vectorcraft_color::cms;
+
+        let mut d = doc_with_line(Some("Halftone art"), 40.0);
+        d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+        let grey = Color::cmyk(0.3, 0.3, 0.3, 0.2);
+        let mut art =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, -10.0, 10.0, 10.0)), Appearance::basic(Paint::solid(grey), Paint::None, 0.0));
+        art.appearance.effects =
+            vec![vectorcraft_doc::Effect { id: "pixelate.colorHalftone".into(), params: serde_json::json!({"maxRadius": 4}), visible: true }];
+        let brush = Brush {
+            name: "Halftone art".into(),
+            kind: BrushKind::Art(ArtBrush { art, scale: ArtScale::Stretch, colorization: Colorization::None, ..Default::default() }),
+        };
+        vectorcraft_brush::store(&mut d, &[brush]);
+        let shown = |proof: Option<cms::ProofSetup>| {
+            let opts = RenderOptions { proof, background: Some([255, 255, 255, 255]), ..Default::default() };
+            Renderer::new().render(&d, 200, 100, Affine::IDENTITY, &opts).pixels
+        };
+        let plain = shown(None);
+        assert!(plain.chunks(4).any(|p| p[..3] != [255, 255, 255]), "the brush draws");
+        // The working CMYK space proofed from its own numbers shows the colors as they are shown.
+        let proofed = shown(Some(cms::ProofSetup { target: cms::ProofTarget::WorkingCmyk, preserve_numbers: true, ..Default::default() }));
+        let differ = plain.chunks(4).zip(proofed.chunks(4)).filter(|(a, b)| a.iter().zip(b.iter()).any(|(x, y)| x.abs_diff(*y) > 8)).count();
+        assert!(differ * 100 < plain.len() / 4, "{differ} of {} pixels differ", plain.len() / 4);
     }
 
     /// Object opacity fades a brushed stroke's art as a whole, with or without a dash and a fill:
@@ -332,6 +451,24 @@ mod tests {
         assert!(!dark(a.pixel(100, 58)) && dark(b.pixel(100, 58)));
     }
 
+    /// Of two brushes with one name, a stroke that names it draws with the first.
+    #[test]
+    fn a_stroke_draws_with_the_first_of_two_brushes_with_its_name() {
+        use vectorcraft_brush::{Brush, BrushKind, Calligraphic};
+        let nib = |size: f64| Brush { name: "Twin".into(), kind: BrushKind::Calligraphic(Calligraphic { size, ..Default::default() }) };
+        let doc = |lib: &[Brush]| {
+            let mut d = doc_with_line(Some("Twin"), 1.0);
+            vectorcraft_brush::store(&mut d, lib);
+            d
+        };
+        let (thin, wide) = (nib(1.0), nib(20.0));
+        let first = render(&mut Renderer::new(), &doc(std::slice::from_ref(&thin))).pixels;
+        let second = render(&mut Renderer::new(), &doc(std::slice::from_ref(&wide))).pixels;
+        assert_ne!(first, second, "the two nibs paint differently");
+        let both = render(&mut Renderer::new(), &doc(&[thin, wide])).pixels;
+        assert!(both == first, "the stroke draws with the first brush named Twin");
+    }
+
     #[test]
     fn stained_symbol_instance() {
         let mut d = Document::new(100.0, 100.0);
@@ -340,7 +477,7 @@ mod tests {
             shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
             Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
         );
-        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: std::sync::Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: std::sync::Arc::new(art) });
         let id = d.alloc_id();
         let mut inst = Node::new(id, vectorcraft_doc::NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((50.0, 50.0)) });
         inst.appearance.set_fill(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
@@ -364,7 +501,7 @@ mod tests {
         let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
         ap.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
         let art = Node::path(vectorcraft_doc::NodeId(0), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), ap);
-        d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: std::sync::Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: std::sync::Arc::new(art) });
         let id = d.alloc_id();
         let inst = Node::new(id, vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Nib".into(), xf: Affine::translate((-6.0, 0.0)) });
         let l = d.layers[0].id;
@@ -394,7 +531,7 @@ mod tests {
             let moved = Affine::translate((-8.0, 0.0));
             let source = if instance {
                 let art = line(&mut d);
-                d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: std::sync::Arc::new(art) });
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: std::sync::Arc::new(art) });
                 Node::new(d.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Nib".into(), xf: moved })
             } else {
                 let mut n = line(&mut d);

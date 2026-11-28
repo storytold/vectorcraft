@@ -1,4 +1,4 @@
-use super::*;
+use super::{Deserialize, Serialize};
 
 /// Measurement units (display only; the model is always in points).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,6 +14,11 @@ pub enum Unit {
     Meters,
     Yards,
     Feet,
+    /// Q (級), a quarter of a millimetre: the Japanese typesetting unit of type size.
+    Q,
+    /// Ha (歯), also a quarter of a millimetre: the Japanese unit of spacing, leading and
+    /// positions.
+    Ha,
 }
 
 impl Unit {
@@ -29,6 +34,23 @@ impl Unit {
         Unit::Yards,
         Unit::Feet,
     ];
+    /// The units Preferences › Units › East Asian Type offers: all of [`Unit::ALL`], then Q and
+    /// Ha. Only that preference lists Q and Ha; rulers, documents and the other Units
+    /// preferences stay on [`Unit::ALL`].
+    pub const EAST_ASIAN: [Unit; 12] = [
+        Unit::Points,
+        Unit::Picas,
+        Unit::Inches,
+        Unit::Millimeters,
+        Unit::Centimeters,
+        Unit::Pixels,
+        Unit::FeetInches,
+        Unit::Meters,
+        Unit::Yards,
+        Unit::Feet,
+        Unit::Q,
+        Unit::Ha,
+    ];
     /// Points per unit.
     pub fn points(self) -> f64 {
         match self {
@@ -37,6 +59,8 @@ impl Unit {
             Unit::Inches => 72.0,
             Unit::Millimeters => 72.0 / 25.4,
             Unit::Centimeters => 72.0 / 2.54,
+            // 0.25 mm each.
+            Unit::Q | Unit::Ha => 72.0 / 101.6,
             Unit::Meters => 72.0 / 0.0254,
             Unit::Yards => 72.0 * 36.0,
             Unit::Feet | Unit::FeetInches => 72.0 * 12.0,
@@ -53,9 +77,38 @@ impl Unit {
             Unit::FeetInches | Unit::Feet => "ft",
             Unit::Meters => "m",
             Unit::Yards => "yd",
+            Unit::Q => "Q",
+            Unit::Ha => "H",
         }
     }
-    pub fn label(self) -> &'static str {
+    /// Whether this unit is a physical measurement unit (not points or pixels).
+    pub fn is_physical(self) -> bool {
+        self.svg_suffix().is_some() || matches!(self, Unit::FeetInches | Unit::Meters | Unit::Yards | Unit::Feet | Unit::Q | Unit::Ha)
+    }
+    /// The standard SVG length unit suffix, if this unit is a physical unit supported in SVG
+    /// (`mm`, `cm`, `in`, `pc`).
+    pub fn svg_suffix(self) -> Option<&'static str> {
+        match self {
+            Unit::Millimeters => Some("mm"),
+            Unit::Centimeters => Some("cm"),
+            Unit::Inches => Some("in"),
+            Unit::Picas => Some("pc"),
+            _ => None,
+        }
+    }
+    /// The SVG length unit an export writes this unit's sizes in: the unit itself when SVG has it,
+    /// else an SVG unit of the same kind (inches for feet and yards, centimeters for meters,
+    /// millimeters for Q and Ha). `None` for points and pixels.
+    pub fn svg_unit(self) -> Option<Unit> {
+        match self {
+            Unit::Millimeters | Unit::Centimeters | Unit::Inches | Unit::Picas => Some(self),
+            Unit::FeetInches | Unit::Feet | Unit::Yards => Some(Unit::Inches),
+            Unit::Meters => Some(Unit::Centimeters),
+            Unit::Q | Unit::Ha => Some(Unit::Millimeters),
+            Unit::Points | Unit::Pixels => None,
+        }
+    }
+    pub const fn label(self) -> &'static str {
         match self {
             Unit::Points => "Points",
             Unit::Picas => "Picas",
@@ -66,6 +119,8 @@ impl Unit {
             Unit::FeetInches => "Feet & Inches",
             Unit::Meters => "Meters",
             Unit::Yards => "Yards",
+            Unit::Q => "Q",
+            Unit::Ha => "Ha",
             Unit::Feet => "Feet",
         }
     }
@@ -111,28 +166,61 @@ impl Unit {
     pub fn format(self, pt: f64) -> String {
         format!("{} {}", self.number(pt), self.suffix())
     }
+    /// Format an area in square points into this unit (e.g. `12.5 mm²`, `4.5 in²`, `100 pt²`).
+    pub fn format_area(self, pt2: f64) -> String {
+        if !pt2.is_finite() || pt2 <= 0.0 {
+            return format!("0 {}²", self.suffix());
+        }
+        let side = self.from_pt(1.0);
+        let val = pt2 * side * side;
+        let decimals = if matches!(self, Unit::Points | Unit::Pixels | Unit::Picas | Unit::Q | Unit::Ha) { 3 } else { 4 };
+        let s = format!("{:.*}", decimals, val);
+        let s = s.trim_end_matches('0').trim_end_matches('.');
+        let s = if s == "-0" || s.is_empty() { "0" } else { s };
+        format!("{s} {}²", self.suffix())
+    }
     /// [`Unit::format`] without the suffix (`12.5`), for narrow fields.
     pub fn number(self, pt: f64) -> String {
         // Three decimals for the small units (`595.276 pt`), four for the large ones (`8.2677 in`,
         // `35.2778 mm`, the `0.0078 in` stroke preset); trailing zeros are trimmed (`1 pt` is `1`).
-        let decimals = if matches!(self, Unit::Points | Unit::Pixels | Unit::Picas) { 3 } else { 4 };
+        let decimals = if matches!(self, Unit::Points | Unit::Pixels | Unit::Picas | Unit::Q | Unit::Ha) { 3 } else { 4 };
         let s = format!("{:.*}", decimals, self.from_pt(pt));
         let s = s.trim_end_matches('0').trim_end_matches('.');
         if s == "-0" { "0".into() } else { s.into() }
     }
-    /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), simple `+ - * /` arithmetic.
+    /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), `6q` (Q) and `6h` (Ha), simple
+    /// `+ - * /` arithmetic.
     ///
     /// A unit after a `*` or `/` operand measures the whole expression (`1080/2 px` is 540 px), so
     /// math typed before a field's unit suffix works. After `*` or `/`, a percentage scales the term
     /// before it (`3cm*50%` is 1.5 cm, `3cm/50%` is 6 cm). After `+` or `-`, it adds or takes away
     /// that share of everything before it (`50pt+25%` is 62.5 pt, `100pt+20pt-50%` is 60 pt). A
     /// percentage on its own (`50%`) reads as nothing.
+    ///
+    /// `x`, `X` and `×` multiply as `*` does (`10x2` is 20, `2x3 mm` is 6 mm), except a lowercase
+    /// `x` right after a `p`, which is the `px` suffix (`2px x 3` is 6 px, and `2px3` reads as
+    /// nothing; write `2p x 3` for picas). `X` and `×` after a `p` multiply (`2pX3` is 6 picas).
+    ///
+    /// Text with more than 128 `+ - * /` signs ([`arithmetic_signs`], a multiplication sign counted
+    /// as `*`) reads as nothing.
     pub fn parse(self, s: &str) -> Option<f64> {
-        parse_measure(s, self).filter(|v| v.is_finite())
+        if arithmetic_signs(s) > MAX_MEASURE_OPERATORS {
+            return None;
+        }
+        parse_measure(&times_as_asterisks(s), self).filter(|v| v.is_finite())
+    }
+
+    /// Parse a measurement with decimal points or commas and no input locale. Refuse a
+    /// number that looks like a grouped integer, even when it is part of an expression.
+    pub fn parse_with_decimal_comma(self, text: &str) -> Option<f64> {
+        if text.contains(',') && times_as_asterisks(text).split(['+', '-', '*', '/']).any(thousands_operand) {
+            return None;
+        }
+        self.parse(&decimal_point(text))
     }
     /// The value naming this unit in the Units preferences (`points`, `millimeters`,
     /// `feetInches`).
-    pub fn key(self) -> &'static str {
+    pub const fn key(self) -> &'static str {
         match self {
             Unit::Points => "points",
             Unit::Picas => "picas",
@@ -144,25 +232,81 @@ impl Unit {
             Unit::Meters => "meters",
             Unit::Yards => "yards",
             Unit::Feet => "feet",
+            Unit::Q => "q",
+            Unit::Ha => "ha",
         }
     }
-    /// The unit `name` names: its label, suffix or [`Unit::key`] in any case, ignoring spaces and
-    /// punctuation (`Millimeters`, `mm`, `Feet & Inches`, `feetInches`).
+    /// The unit of [`Unit::ALL`] that `name` names: its label, suffix or [`Unit::key`] in any
+    /// case, ignoring spaces and punctuation (`Millimeters`, `mm`, `Feet & Inches`, `feetInches`).
+    /// Q and Ha are named by [`Unit::named_east_asian`] only.
     pub fn named(name: &str) -> Option<Unit> {
+        Self::named_in(&Unit::ALL, name)
+    }
+    /// [`Unit::named`] among the units of Preferences › Units › East Asian Type
+    /// ([`Unit::EAST_ASIAN`]): also `Q` and `Ha` (`q`, `H`).
+    pub fn named_east_asian(name: &str) -> Option<Unit> {
+        Self::named_in(&Unit::EAST_ASIAN, name)
+    }
+    fn named_in(units: &[Unit], name: &str) -> Option<Unit> {
         let letters = |s: &'static str| s.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase());
         let given = || name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase());
         // Feet and Feet & Inches share the suffix `ft`: it names the plain unit, so Feet & Inches
         // is left to its label and key.
-        Unit::ALL
-            .into_iter()
-            .find(|u| letters(u.label()).eq(given()))
-            .or_else(|| Unit::ALL.into_iter().filter(|u| *u != Unit::FeetInches).find(|u| u.suffix().chars().eq(given())))
+        units.iter().copied().find(|u| letters(u.label()).eq(given())).or_else(|| {
+            units.iter().copied().filter(|u| *u != Unit::FeetInches).find(|u| u.suffix().chars().map(|c| c.to_ascii_lowercase()).eq(given()))
+        })
     }
     /// A point value as the canvas measurement labels show it: two decimals and the suffix
     /// (`12.50 mm`).
     pub fn readout(self, pt: f64) -> String {
-        format!("{:.2} {}", self.from_pt(pt), self.suffix())
+        let s = format!("{:.2}", self.from_pt(pt));
+        // A small negative value rounds to `-0.00`; show it as `0.00`.
+        let s = if s == "-0.00" { "0.00" } else { &s };
+        format!("{} {}", s, self.suffix())
     }
+}
+
+/// The most `+ - * /` signs [`Unit::parse`] reads in one text.
+const MAX_MEASURE_OPERATORS: usize = 128;
+
+/// The number of `+ - * /` signs in `s`, each multiplication sign typed as `x`, `X` or `×`
+/// ([`Unit::parse`]) counted as a `*`.
+pub fn arithmetic_signs(s: &str) -> usize {
+    let mut prev = None;
+    s.chars()
+        .filter(|&c| {
+            let sign = matches!(c, '+' | '-' | '*' | '/') || is_times(c, prev);
+            prev = Some(c);
+            sign
+        })
+        .count()
+}
+
+/// Is `c`, after `prev`, a multiplication sign typed as `x`, `X` or `×`? A lowercase `x` right
+/// after a `p` is the `px` suffix (`2px x 3`), also where a number follows it (`2px3`).
+fn is_times(c: char, prev: Option<char>) -> bool {
+    matches!(c, 'X' | '×') || (c == 'x' && prev != Some('p'))
+}
+
+/// `s` with each multiplication sign ([`is_times`]) written as `*` (`10 x 2` is `10 * 2`); text
+/// without one is not copied.
+fn times_as_asterisks(s: &str) -> std::borrow::Cow<'_, str> {
+    let mut prev = None;
+    let any = s.chars().any(|c| {
+        let times = is_times(c, prev);
+        prev = Some(c);
+        times
+    });
+    if !any {
+        return s.into();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut prev = None;
+    for c in s.chars() {
+        out.push(if is_times(c, prev) { '*' } else { c });
+        prev = Some(c);
+    }
+    out.into()
 }
 
 fn parse_measure(s: &str, default: Unit) -> Option<f64> {
@@ -251,6 +395,8 @@ fn number_unit(s: &str) -> Option<(f64, Option<Unit>)> {
         "ft" | "'" => Some(Unit::Feet),
         "yd" => Some(Unit::Yards),
         "p" | "pc" => Some(Unit::Picas),
+        "q" | "Q" => Some(Unit::Q),
+        "h" | "H" | "ha" | "Ha" => Some(Unit::Ha),
         _ => return None,
     };
     Some((v, unit))
@@ -264,10 +410,55 @@ fn percent(s: &str) -> Option<f64> {
     }
 }
 
+/// `text` typed in a numeric field, with a decimal comma read as a point: `0,1 mm` is `0.1 mm`
+/// (#3837), and each number of a sum reads its own separator, so `100.5 mm-0,5` (a comma typed
+/// after the value the field shows) is 100 mm (#5684). A number written with both separators has
+/// two points once read, so `1,000.5` and `1.234,5` are refused rather than guessed at; so is a
+/// number that reads as thousands ([`thousands`]).
+pub fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
+}
+
+/// Does the operand contain a thousands comma? Check both parts of a compact pica value and
+/// read a percentage's number without its percent sign.
+fn thousands_operand(operand: &str) -> bool {
+    let operand = operand.trim();
+    if let Some((picas, points)) = operand.split_once('p')
+        && !points.trim().is_empty()
+        && points.trim().bytes().all(|b| b.is_ascii_digit() || matches!(b, b'.' | b','))
+    {
+        return thousands(picas) || thousands(points);
+    }
+    thousands(operand.strip_suffix('%').unwrap_or(operand))
+}
+
+/// Is `text` a number written with a thousands comma, as `1,000`, `+1,000`, `12,500 mm` or
+/// `1,000"`: a sign, one to three digits (not a lone 0), a comma, exactly three digits, then at
+/// most a unit? Read as a decimal it would be a thousand times too small, so the field refuses it
+/// instead (`0,125` and `1,25` are decimals).
+fn thousands(text: &str) -> bool {
+    let number = text.trim();
+    let number = number.strip_prefix(['+', '-']).unwrap_or(number);
+    let Some((whole, rest)) = number.split_once(',') else { return false };
+    let (part, unit) = rest.split_at(rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len()));
+    (1..=3).contains(&whole.len())
+        && whole.bytes().all(|b| b.is_ascii_digit())
+        && !whole.starts_with('0')
+        && part.len() == 3
+        && unit.trim().chars().all(|c| c.is_alphabetic() || c == '"' || c == '\'')
+}
+
+/// Is the length `pt` (points) a finite number in every unit of [`Unit::EAST_ASIAN`]? A length
+/// near the largest number in points is too large in Q and Ha.
+pub fn finite_in_every_unit(pt: f64) -> bool {
+    pt.is_finite() && Unit::EAST_ASIAN.iter().all(|u| u.from_pt(pt).is_finite())
+}
+
 /// A unitless field value (percent, degrees, counts) with the same `+ - * /` arithmetic as
-/// [`Unit::parse`] (`45*2`, `100/3`); text other than digits, `.` and operators reads as nothing.
+/// [`Unit::parse`] (`45*2`, `45x2`, `100/3`); text other than digits, `.` and operators reads as
+/// nothing.
 pub fn parse_number(s: &str) -> Option<f64> {
-    if !s.chars().all(|c| c.is_ascii_digit() || " .+-*/".contains(c)) {
+    if !s.chars().all(|c| c.is_ascii_digit() || " .+-*/xX×".contains(c)) {
         return None;
     }
     // A leading `+` is a sign (`+5`), as a plain number read it.

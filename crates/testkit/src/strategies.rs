@@ -2,7 +2,8 @@
 
 use proptest::prelude::*;
 use serde_json::{Value, json};
-use vectorcraft_engine::{Session, command_specs};
+use vectorcraft_engine::cmd::{Location, ParamsPlace, key_location, location_keys};
+use vectorcraft_engine::{CommandSpec, Session, command_specs};
 use vectorcraft_geom::{Anchor, PathData, Point, Rect, SubPath};
 
 use crate::fixtures::{art_nodes, top_level_ids};
@@ -141,6 +142,8 @@ pub enum Op {
     ClipRelease,
     Compound,
     CompoundRelease,
+    /// Make Compound Shape in one of the four shape modes, a member's mode, Release or Expand.
+    CompoundShape(u8),
     Lock,
     UnlockAll,
     Hide,
@@ -238,6 +241,7 @@ fn arb_leaf_op() -> impl Strategy<Value = Op> {
         1 => Just(Op::ClipRelease),
         1 => Just(Op::Compound),
         1 => Just(Op::CompoundRelease),
+        1 => (0u8..7).prop_map(Op::CompoundShape),
         1 => Just(Op::Lock),
         1 => Just(Op::UnlockAll),
         1 => Just(Op::Hide),
@@ -369,6 +373,15 @@ impl Op {
             Op::ClipRelease => c("object.clippingMask.release", json!({})),
             Op::Compound => c("object.compoundPath.make", json!({})),
             Op::CompoundRelease => c("object.compoundPath.release", json!({})),
+            Op::CompoundShape(i) => {
+                const MODES: [&str; 4] = ["add", "subtract", "intersect", "exclude"];
+                match i % 7 {
+                    i @ 0..4 => c("object.compoundShape.make", json!({"mode": MODES[i as usize]})),
+                    4 => c("object.compoundShape.setMode", json!({"mode": "exclude"})),
+                    5 => c("object.compoundShape.release", json!({})),
+                    _ => c("object.compoundShape.expand", json!({})),
+                }
+            }
             Op::Lock => c("object.lock", json!({})),
             Op::UnlockAll => c("object.unlockAll", json!({})),
             Op::Hide => c("object.hide", json!({})),
@@ -461,8 +474,11 @@ pub fn all_param_keys() -> Vec<String> {
     keys.into_iter().collect()
 }
 
-/// Keys of a params doc string like `{x, y, width?, radius?: pt} → {id}` (only the part before `→`).
+/// Keys of a params doc string like `{x, y, width?, radius?: pt} → {id}` (only the part before `→`),
+/// with every key the engine reads in it ([`vectorcraft_engine::cmd::params::doc_keys`]: `path | name`,
+/// `folder? (…)`).
 pub fn param_keys(doc: &str) -> Vec<String> {
+    let described = vectorcraft_engine::cmd::params::doc_keys(doc).map(|p| p.keys).unwrap_or_default();
     let doc = doc.split('→').next().unwrap_or("");
     let chars: Vec<char> = doc.chars().collect();
     let mut out = vec![];
@@ -485,39 +501,166 @@ pub fn param_keys(doc: &str) -> Vec<String> {
             i += 1;
         }
     }
+    out.extend(described.into_iter().map(str::to_string));
     out.sort();
     out.dedup();
     out
 }
 
-/// Parameter-name keys that name filesystem paths: fuzzing these with arbitrary strings could
-/// write files anywhere, so callers substitute a temp path.
-pub fn is_path_key(k: &str) -> bool {
-    k == "path"
+/// The keys of command `spec`: those of its params doc ([`param_keys`]), of its schema and its file
+/// and folder keys ([`location_keys`]).
+pub fn command_param_keys(spec: &CommandSpec) -> Vec<String> {
+    let mut keys = param_keys(spec.params);
+    keys.extend(spec.schema.into_iter().flat_map(|s| s.params.iter().map(|p| p.name.to_string())));
+    keys.extend(location_keys(spec).into_iter().map(|(k, _)| k.to_string()));
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
+/// The location to send under the path key `k` ([`key_location`]): `safe_path` for a file, a folder
+/// next to it (in the same temp folder) for a folder key.
+pub fn safe_location(k: &str, safe_path: &str) -> String {
+    location(key_location(k).unwrap_or(Location::File), safe_path)
+}
+
+/// The temp location for a key that names `l`: `safe_path` for a file, a folder next to it (in
+/// the same temp folder) for a folder.
+fn location(l: Location, safe_path: &str) -> String {
+    if l == Location::Folder { format!("{safe_path}-folder") } else { safe_path.to_string() }
+}
+
+/// `v`, found at `place` in a command's params, with every string in it that can name a place on
+/// disk sent to the temp location: `v` itself and the members of arrays in it, at any depth, when
+/// `kind` is `Some`, and in an object at any depth, the strings under a key that names a file or a
+/// folder there ([`ParamsPlace::member`]: a call or a recorded step inside `v` keeps its command's
+/// meaning). Other values keep their junk shape.
+fn redirect(place: ParamsPlace, kind: Option<Location>, v: &Value, safe_path: &str) -> Value {
+    match v {
+        Value::String(_) => kind.map_or_else(|| v.clone(), |l| json!(location(l, safe_path))),
+        Value::Array(a) => {
+            let step = ParamsPlace::step(a);
+            Value::Array(a.iter().enumerate().map(|(i, x)| redirect(place.item(i, step), kind, x, safe_path)).collect())
+        }
+        Value::Object(o) => {
+            let carried = ParamsPlace::carried(o);
+            let member = |k: &String, x: &Value| {
+                let (below, l) = place.member(k, carried);
+                (k.clone(), redirect(below, l, x, safe_path))
+            };
+            Value::Object(o.iter().map(|(k, x)| member(k, x)).collect())
+        }
+        _ => v.clone(),
+    }
+}
+
+/// `v`, sent under key `k` at `place`, as [`redirect`] makes it.
+fn redirect_under(place: ParamsPlace, k: &str, v: &Value, safe_path: &str) -> Value {
+    let (below, kind) = place.member(k, None);
+    redirect(below, kind, v, safe_path)
+}
+
+/// `v`, with its strings sent to the temp location when `k` is a path key in a command that gives it
+/// no other meaning ([`key_location`]), and the strings under path keys in objects inside it too.
+pub fn safe_value(k: &str, v: &Value, safe_path: &str) -> Value {
+    redirect_under(ParamsPlace::top(None), k, v, safe_path)
+}
+
+/// `v` as [`safe_value`] makes it for command `spec` ([`vectorcraft_engine::cmd::location_in`]): a key that names part of
+/// the document in it keeps its strings, at the top level and below.
+pub fn safe_value_for_command(spec: &CommandSpec, k: &str, v: &Value, safe_path: &str) -> Value {
+    redirect_under(ParamsPlace::top(Some(spec)), k, v, safe_path)
 }
 
 /// A deterministic list of junk param objects for `doc` (the command's params doc): each
-/// documented key set to each junk value, all keys junk at once, wrong top-level types.
+/// documented key set to each junk value, all keys junk at once, wrong top-level types. A string
+/// under a key that names a file or folder in a command that gives it no other meaning
+/// ([`key_location`]) is a temp location.
 pub fn junk_params(doc: &str, safe_path: &str) -> Vec<Value> {
-    let keys = param_keys(doc);
+    junk_params_with(&param_keys(doc), ParamsPlace::top(None), safe_path)
+}
+
+/// [`junk_params`] for command `spec`, with the keys of its schema and its file and folder keys too
+/// ([`command_param_keys`]), and a string under each key that names a file or folder in it
+/// ([`vectorcraft_engine::cmd::location_in`]) a temp location, as are the strings in an array of them and under the path
+/// keys of objects in one (`paths: [{ids, path}]`), which it also sends.
+pub fn junk_params_for_command(spec: &CommandSpec, safe_path: &str) -> Vec<Value> {
+    junk_params_with(&command_param_keys(spec), ParamsPlace::top(Some(spec)), safe_path)
+}
+
+/// The junk cases for `keys` at `place`, the top of a command's params: what is sent for a junk value
+/// under a key is [`redirect_under`] it, and a key that names a file or a folder there also gets a
+/// list of locations and a list of objects with a `path`.
+fn junk_params_with(keys: &[String], place: ParamsPlace, safe_path: &str) -> Vec<Value> {
     let junk = junk_values();
     let mut out = vec![Value::Null, json!([]), json!("str"), json!(42), json!({"unknownKey": 1})];
-    for k in &keys {
+    for k in keys {
+        let (below, kind) = place.member(k, None);
         for (i, v) in junk.iter().enumerate() {
-            let v = if is_path_key(k) && v.is_string() { json!(safe_path) } else { v.clone() };
+            let v = redirect(below, kind, v, safe_path);
             // Sparse: one key at a time with every junk value, plus a few combos.
             let mut o = serde_json::Map::new();
             o.insert(k.clone(), v.clone());
             out.push(Value::Object(o));
             if i % 5 == 0 {
                 let mut all = serde_json::Map::new();
-                for k2 in &keys {
-                    let v2 = if is_path_key(k2) { json!(safe_path) } else { v.clone() };
+                for k2 in keys {
+                    let v2 = place.member(k2, None).1.map_or_else(|| v.clone(), |l| json!(location(l, safe_path)));
                     all.insert(k2.clone(), v2);
                 }
                 out.push(Value::Object(all));
             }
         }
+        if let Some(l) = kind {
+            for v in [json!(["junk", "", 1]), json!([{"ids": [1], "path": "junk"}, {"path": null}])] {
+                out.push(json!({ k.as_str(): redirect(below, Some(l), &v, safe_path) }));
+            }
+        }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The strings the sweeps send keep the meaning the command gives their key, at every depth: an
+    /// export's folder grouping and a web link stay as sent, also inside a `command.batch` step and
+    /// a recorded step, and a real file or folder key there goes to the temp location. A key that names
+    /// part of the document in a recorded step's command stays, and the same key in a command that
+    /// doesn't take it as a param names a file.
+    #[test]
+    fn nested_locations_keep_command_meaning() {
+        let spec = |id: &str| command_specs().iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no command {id}"));
+        let safe = "/tmp/sweep/out.bin";
+        let settings = json!({"folders": "rows", "formats": [{"format": "png", "folder": "junk"}]});
+        assert_eq!(
+            safe_value_for_command(spec("document.exportPresets.save"), "settings", &settings, safe),
+            json!({"folders": "rows", "formats": [{"format": "png", "folder": "/tmp/sweep/out.bin-folder"}]})
+        );
+        let steps = json!([
+            {"command": "attributes.set", "params": {"url": "https://example.com/a"}},
+            {"command": "document.save", "params": {"path": "junk"}},
+            {"command": "object.path.simplify", "params": {"wholePaths": "junk"}},
+        ]);
+        assert_eq!(
+            safe_value_for_command(spec("command.batch"), "commands", &steps, safe),
+            json!([
+                {"command": "attributes.set", "params": {"url": "https://example.com/a"}},
+                {"command": "document.save", "params": {"path": safe}},
+                {"command": "object.path.simplify", "params": {"wholePaths": "junk"}},
+            ])
+        );
+        let recorded = json!([
+            ["text.createInPath", {"path": "junk"}],
+            ["object.setLiveShape", {"path": "junk"}],
+            ["document.compare", {"diffPath": "junk"}],
+        ]);
+        assert_eq!(
+            safe_value("steps", &recorded, safe),
+            json!([["text.createInPath", {"path": "junk"}], ["object.setLiveShape", {"path": safe}], ["document.compare", {"diffPath": safe}]])
+        );
+        assert_eq!(safe_value("url", &json!("https://example.com/a"), safe), json!("https://example.com/a"));
+        assert_eq!(safe_value("destinationFolder", &json!("junk"), safe), json!("/tmp/sweep/out.bin-folder"));
+    }
 }

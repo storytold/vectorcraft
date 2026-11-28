@@ -1,4 +1,4 @@
-use super::*;
+use super::{VectorcraftApp, io};
 
 /// The active document's perspective grid (View → Perspective Grid toggles).
 pub(super) fn perspective_grid(app: &VectorcraftApp) -> Option<vectorcraft_tools::distort::perspective::PerspectiveGrid> {
@@ -49,6 +49,14 @@ pub(super) fn saved_selection_name(app: &VectorcraftApp, id: &str) -> Option<Str
 pub(super) fn recent_slot<'a>(app: &'a VectorcraftApp, id: &str) -> Option<&'a String> {
     let n: usize = id.strip_prefix("file.openRecent")?.parse().ok()?;
     io::recent_files(app).get(n.checked_sub(1)?)
+}
+
+/// May the request being served read recent file `path`? Under an automation read root (a control
+/// client's request), a recent file outside the root is left out of `ui.menu.list` and
+/// `file.recentFiles`, and its `file.openRecentN` slot answers as an empty one, as a listed script
+/// outside the root is left out ([`crate::scripts_menu::readable`]).
+pub(super) fn recent_readable(path: &str) -> bool {
+    vectorcraft_engine::file_access::check_read(path).is_ok()
 }
 
 /// View → Perspective Grid → One/Two/Three Point Perspective: the saved-preset slots of each type.

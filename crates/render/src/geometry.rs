@@ -1,4 +1,4 @@
-use super::*;
+use super::{BezPath, Rect, kurbo};
 
 /// Most dashes a dotted guide is drawn with (1.5 on, 2.5 off on screen); a longer one is solid.
 pub(crate) const MAX_GUIDE_DASHES: f64 = 100_000.0;

@@ -1,20 +1,7 @@
-use super::*;
+use craft::behavior::CanvasView;
+use vectorcraft_geom::Point;
 
-/// The active tool's cursor at the pointer, as `mods` make it. While the view moves (`still`
-/// false), the cursor the tool last gave for the same tool and keys stays: asking the tool again
-/// would hit-test the art under the pointer at every frame of the move (#2452).
-pub(super) fn hover_cursor(app: &mut VectorcraftApp, mods: Mods, view: vectorcraft_engine::ViewInfo, still: bool) -> Option<Cursor> {
-    let id = app.session.tool_id();
-    if !still
-        && let Some((was, with, c)) = app.canvas.hover_cursor
-        && (was, with) == (id, mods)
-    {
-        return Some(c);
-    }
-    let c = app.session.cursor(app.hover_doc?, mods, view);
-    app.canvas.hover_cursor = Some((id, mods, c));
-    Some(c)
-}
+use crate::CacheKey;
 
 /// How long (seconds) the view must stay still before a canvas with
 /// [`crate::CanvasCache::waits_for_still`] set renders a heavy document again.
@@ -35,9 +22,16 @@ pub struct ViewKey {
     pub(super) rotation: f64,
 }
 
-/// Note the view `key` at time `now` (seconds, egui's input time) → how many more seconds the
-/// canvas leaves the art under the pointer alone: the view changed less than [`HOVER_STILL_SECS`]
-/// ago. The first view noted counts as still.
+impl ViewKey {
+    /// The key of the view `view` shows.
+    pub fn of(view: &CanvasView) -> Self {
+        Self { rect: view.rect, zoom: view.zoom, center: view.center, rotation: view.rotation }
+    }
+}
+
+/// Note the view `key` at time `now` (seconds; the pass time, `frame::clock`, which every pass of a
+/// frame shares) → how many more seconds the canvas leaves the art under the pointer alone: the
+/// view changed less than [`HOVER_STILL_SECS`] ago. The first view noted counts as still.
 pub(super) fn hover_wait(moved: &mut Option<(ViewKey, f64)>, key: ViewKey, now: f64) -> Option<f64> {
     match moved {
         Some((k, at)) if *k != key => (*k, *at) = (key, now),
@@ -49,13 +43,15 @@ pub(super) fn hover_wait(moved: &mut Option<(ViewKey, f64)>, key: ViewKey, now: 
     (0.0..HOVER_STILL_SECS).contains(&waited).then_some(HOVER_STILL_SECS - waited)
 }
 
-/// Note that the canvas asks for `key` at time `now` (seconds, egui's input time) → how many more
-/// seconds it draws the frame `shown` reprojected instead of rendering `key`: while the last
-/// render was `slow`, only the view differs between the two, and the canvas has asked for `key`
-/// for less than [`STILL_SECS`]. `still` holds the key last asked for and when the canvas first
-/// asked for it. None: the canvas renders `key` now, unless it is the frame shown.
+/// Note that the canvas asks for `key` at time `now` (seconds; the pass time, `frame::clock`) → how
+/// many more seconds it draws the frame `shown` reprojected instead of rendering `key`: while the last
+/// render was `slow`, only the view differs between the two, and the canvas has asked for the view
+/// of `key` for less than [`STILL_SECS`]. `still` holds the key last asked for and when the canvas first
+/// asked for its view. An edit leaves that time as it is: with the view still and edits drawn into
+/// the frame shown at each step of a drag, the canvas still renders whole once the view has been
+/// still for [`STILL_SECS`]. None: the canvas renders `key` now, unless it is the frame shown.
 pub(super) fn still_wait(still: &mut Option<(CacheKey, f64)>, shown: Option<&CacheKey>, key: &CacheKey, slow: bool, now: f64) -> Option<f64> {
-    if still.as_ref().is_none_or(|(k, _)| k != key) {
+    if still.as_ref().is_none_or(|(k, _)| !same_view(k, key)) {
         *still = Some((key.clone(), now));
     }
     let waited = still.as_ref().map_or(0.0, |(_, at)| now - at);
@@ -64,89 +60,15 @@ pub(super) fn still_wait(still: &mut Option<(CacheKey, f64)>, shown: Option<&Cac
     (slow && waiting && shown.is_some_and(|s| s != key && only_view_differs(s, key))).then_some(STILL_SECS - waited)
 }
 
-/// Whether two cache keys differ only in the view (zoom, center, rotation, canvas size, pixel
-/// density and Pixel Preview's document pixels), with Pixel Preview on in both or off in both.
-fn only_view_differs(a: &CacheKey, b: &CacheKey) -> bool {
-    a.pixel.is_some() == b.pixel.is_some()
-        && *a == CacheKey { zoom: a.zoom, cx: a.cx, cy: a.cy, w: a.w, h: a.h, ppp: a.ppp, rot: a.rot, pixel: a.pixel, ..b.clone() }
+/// Whether two cache keys are of the same document at the same view (zoom, center, rotation,
+/// canvas size, pixel density and Pixel Preview's document pixels), whatever else differs.
+fn same_view(a: &CacheKey, b: &CacheKey) -> bool {
+    (a.doc, a.zoom, a.cx, a.cy, a.w, a.h, a.ppp, a.rot, a.pixel) == (b.doc, b.zoom, b.cx, b.cy, b.w, b.h, b.ppp, b.rot, b.pixel)
 }
 
-pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
-    use egui::CursorIcon as C;
-    match c {
-        Cursor::Arrow
-        | Cursor::ArrowHollow
-        | Cursor::DirectAnchor
-        | Cursor::DirectAnchorSelected
-        | Cursor::ReshapeSegment
-        | Cursor::GroupSelection
-        | Cursor::CornerRadius
-        | Cursor::PathBracket
-        | Cursor::TypeWidget
-        | Cursor::LoadedText => C::Default,
-        Cursor::SelectionCopy => C::Copy,
-        Cursor::Move => C::Move,
-        Cursor::Crosshair => C::Crosshair,
-        Cursor::ResizeH | Cursor::ShearH => C::ResizeHorizontal,
-        Cursor::ResizeV | Cursor::ShearV => C::ResizeVertical,
-        Cursor::ResizeNwSe => C::ResizeNwSe,
-        Cursor::ResizeNeSw => C::ResizeNeSw,
-        Cursor::Rotate | Cursor::RotateToward(_) => C::Alias,
-        Cursor::Pen
-        | Cursor::PenDrawing
-        | Cursor::PenAdd
-        | Cursor::PenDelete
-        | Cursor::PenClose
-        | Cursor::PenContinue
-        | Cursor::PenJoin
-        | Cursor::PenConvert
-        | Cursor::AnchorPoint
-        | Cursor::Curvature => C::Crosshair,
-        Cursor::Text => C::Text,
-        Cursor::Hand => C::Grab,
-        Cursor::HandGrab => C::Grabbing,
-        Cursor::ZoomIn => C::ZoomIn,
-        Cursor::ZoomOut => C::ZoomOut,
-        Cursor::Eyedropper => C::Crosshair,
-        Cursor::NotAllowed => C::NotAllowed,
-        Cursor::Busy => C::Progress,
-        Cursor::AddStop => C::Copy,
-        Cursor::RemoveStop => C::NotAllowed,
-        Cursor::Slice => C::Crosshair,
-        Cursor::SliceSelect => C::Default,
-        Cursor::Width | Cursor::WidthAdd => C::Crosshair,
-        Cursor::WidthPoint => C::Move,
-        Cursor::PencilNew => C::Crosshair,
-        Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor | Cursor::ShapeBuilder | Cursor::ShapeBuilderErase => C::Crosshair,
-        Cursor::PencilClose | Cursor::PencilStraight | Cursor::PencilContinue | Cursor::PaintbrushClose => C::Crosshair,
-        Cursor::TypeVertical => C::VerticalText,
-        // Not drawn yet: the cursor each borrows.
-        Cursor::Lasso
-        | Cursor::MagicWand
-        | Cursor::Pencil
-        | Cursor::Paintbrush
-        | Cursor::BlobBrush
-        | Cursor::Eraser
-        | Cursor::Smooth
-        | Cursor::PathEraser
-        | Cursor::Join
-        | Cursor::Knife
-        | Cursor::Shaper
-        | Cursor::LivePaintBucket
-        | Cursor::Measure
-        | Cursor::PrintTiling
-        | Cursor::SymbolSprayer
-        | Cursor::SymbolShifter
-        | Cursor::SymbolScruncher
-        | Cursor::SymbolSizer
-        | Cursor::SymbolSpinner
-        | Cursor::SymbolStainer
-        | Cursor::SymbolScreener
-        | Cursor::SymbolStyler
-        | Cursor::ObjectsOnPath
-        | Cursor::Scissors
-        | Cursor::ScissorsNotAllowed
-        | Cursor::MeshAdd
-        | Cursor::PuppetPin => cursor_icon(c.stand_in().unwrap_or(Cursor::Crosshair)),
-    }
+/// Whether two cache keys differ only in the view (zoom, center, rotation, canvas size, pixel
+/// density and Pixel Preview's document pixels), with Pixel Preview on in both or off in both.
+pub(super) fn only_view_differs(a: &CacheKey, b: &CacheKey) -> bool {
+    a.pixel.is_some() == b.pixel.is_some()
+        && *a == CacheKey { zoom: a.zoom, cx: a.cx, cy: a.cy, w: a.w, h: a.h, ppp: a.ppp, rot: a.rot, pixel: a.pixel, ..b.clone() }
 }

@@ -1,34 +1,4 @@
-use super::traits::FontTraits;
-use super::*;
-
-/// One installed family found by the system font scan: its name and the file of each style.
-#[derive(Debug, Default)]
-pub(super) struct CatalogFamily {
-    pub(super) name: String,
-    /// Non-English family name from the name table, when the scan found one.
-    pub(super) native: Option<String>,
-    pub(super) faces: Vec<CatalogFace>,
-    /// The family's kind (from its first face found); variable when any face found is.
-    pub(super) traits: Option<FontTraits>,
-}
-
-/// One style of an installed family: a face, or a named instance of a variable font.
-#[derive(Debug)]
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-pub(super) struct CatalogFace {
-    pub(super) style: String,
-    pub(super) path: PathBuf,
-    /// Weight and italic as the style lists them (by its name, or a named instance's axes).
-    pub(super) weight: f32,
-    pub(super) italic: bool,
-}
-
-/// The installed fonts by ASCII-lowercased family name (lookups ignore ASCII case, as
-/// [`FontDb::face`] does). Always empty on wasm, which has no system fonts.
-pub(super) type Catalog = HashMap<String, CatalogFamily>;
-
-/// The installed faces' (family, style) by normalized PostScript name ([`norm`]).
-pub(super) type PostScriptNames = HashMap<String, (String, String)>;
+use super::{Arc, ColourContent, GlyphImage, HashMap, IMAGE_CACHE_BYTES, IMAGE_CACHE_MAX};
 
 /// Maps the family and style [`FontDb::canonical`] was asked for to its answer, for names that
 /// are neither a loaded nor an installed family.

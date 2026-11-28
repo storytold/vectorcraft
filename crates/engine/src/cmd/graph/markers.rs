@@ -1,7 +1,7 @@
-use super::designs::design_names;
+use super::designs::{bring_in_for, design_names, from_library, libraries_json};
 use super::edit::{regenerate, spec_of, target};
 use super::series::{picked_series, reselect_series};
-use super::*;
+use super::{Affine, Arc, Document, GraphSpec, Node, NodeKind, Rect, Result, Session, Value, bad, json};
 
 /// Most objects a graph's marker designs may add (each data point and legend swatch draws a copy of its design).
 pub(super) const MARKER_BUDGET: usize = 200_000;
@@ -55,7 +55,7 @@ pub(super) fn set_marker(s: &mut Session, p: &Value) -> Result<Value> {
     let mut spec = spec_of(s, id)?;
     let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
     let picked = picked_series(s, p, id, count, C)?;
-    let names = design_names(&s.doc()?.doc);
+    let mut names = design_names(&s.doc()?.doc);
     let Some(v) = p.get("design") else {
         // The design the picked series (all of them with none picked) share, or null.
         let all: Vec<usize> = if picked.is_empty() { (0..count).collect() } else { picked };
@@ -63,8 +63,15 @@ pub(super) fn set_marker(s: &mut Session, p: &Value) -> Result<Value> {
         let used: Vec<Option<&String>> =
             all.iter().map(|i| spec.series_markers.get(*i).and_then(Option::as_ref).filter(|n| names.contains(n))).collect();
         let shared = used.first().copied().flatten().filter(|d| used.iter().all(|x| *x == Some(*d)));
-        return Ok(json!({ "designs": names, "design": shared }));
+        let mut out = json!({ "designs": names, "design": shared });
+        if let Some(libs) = libraries_json(s) {
+            out["libraries"] = libs;
+        }
+        return Ok(out);
     };
+    // A design of a loaded library comes into the document in the same undo step.
+    let library = from_library(s, p, C)?;
+    names.extend(library.as_ref().map(|(_, n)| n.clone()));
     let design = match v {
         Value::Null => None,
         Value::String(n) if names.contains(n) => Some(n.clone()),
@@ -83,10 +90,21 @@ pub(super) fn set_marker(s: &mut Session, p: &Value) -> Result<Value> {
     while spec.series_markers.last().is_some_and(Option::is_none) {
         spec.series_markers.pop();
     }
-    if marker_cost(&spec, &marker_designs(&s.doc()?.doc, &spec)) > MARKER_BUDGET {
+    let cost = match &library {
+        Some((lib, name)) => {
+            let mut probe = (*s.doc()?.doc).clone();
+            bring_in_for(&mut probe, lib, name, id, &mut spec)?;
+            marker_cost(&spec, &marker_designs(&probe, &spec))
+        }
+        None => marker_cost(&spec, &marker_designs(&s.doc()?.doc, &spec)),
+    };
+    if cost > MARKER_BUDGET {
         return Err(bad(C, "the design is too big to draw at every data point of this graph"));
     }
     s.edit("Graph Marker", |d, sel| {
+        if let Some((lib, name)) = &library {
+            bring_in_for(d, lib, name, id, &mut spec)?;
+        }
         regenerate(d, id, spec)?;
         if !reselect.is_empty() {
             reselect_series(d, sel, id, &reselect);

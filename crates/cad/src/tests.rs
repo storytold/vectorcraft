@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Dash, Document, ImageBlob, ImageObject, Node, NodeKind, TextObject, Unit};
-use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, ParamCurve, PathData, Point, Rect, Shape, shapes};
 
 use crate::*;
 
@@ -125,6 +125,71 @@ fn every_version_declares_its_acadver_and_is_well_formed() {
     assert_eq!(DxfVersion::from_id("2019"), None);
 }
 
+/// The structure strict readers (Autodesk Fusion, #3085) need: the required sections and table
+/// entries, handles that every reference resolves to, and LAYOUT objects with only the group codes
+/// the DXF Reference defines for PLOTSETTINGS and LAYOUT (AutoCAD DXF Reference, OBJECTS section:
+/// https://help.autodesk.com/view/OARX/2018/ENU/?guid=GUID-1113675E-AB07-4567-BD47-B7FBE7290D1C).
+#[test]
+fn r2000_and_later_files_have_the_structure_cad_apps_require() {
+    use std::collections::HashSet;
+    // Common object codes, then AcDbPlotSettings, then AcDbLayout (76 is the shade plot mode in
+    // the first and the UCS type in the second).
+    let layout_codes: HashSet<i32> = [0, 5, 102, 330, 360, 100]
+        .into_iter()
+        .chain([1, 2, 4, 6, 7, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 140, 141, 142, 143, 70, 72, 73, 74, 75, 76, 77, 78, 147, 148, 149, 333])
+        .chain([71, 10, 20, 11, 21, 12, 22, 32, 14, 24, 34, 15, 25, 35, 146, 13, 23, 33, 16, 26, 36, 17, 27, 37, 331, 345, 346])
+        .collect();
+    let d = shapes_doc();
+    for v in DxfVersion::ALL.into_iter().filter(|v| *v >= DxfVersion::R2000) {
+        let out = export(&d, &DxfOptions { version: v, ..opts(&d) }).unwrap();
+        let p = pairs(&out.bytes);
+        for name in ["HEADER", "CLASSES", "TABLES", "BLOCKS", "ENTITIES", "OBJECTS"] {
+            assert!(p.windows(2).any(|w| w[0] == (0, "SECTION".into()) && w[1] == (2, name.into())), "{v:?}: {name} section");
+        }
+        let tables = section(&p, "TABLES");
+        let names = |k: &str| -> Vec<String> { tables.iter().filter(|o| kind(o) == k).filter_map(|o| get(o, 2).map(str::to_string)).collect() };
+        for (k, want) in [
+            ("LTYPE", "ByBlock"),
+            ("LTYPE", "ByLayer"),
+            ("LTYPE", "Continuous"),
+            ("LAYER", "0"),
+            ("STYLE", "Standard"),
+            ("APPID", "ACAD"),
+            ("DIMSTYLE", "Standard"),
+            ("BLOCK_RECORD", "*Model_Space"),
+            ("BLOCK_RECORD", "*Paper_Space"),
+        ] {
+            assert!(names(k).iter().any(|n| n == want), "{v:?}: {k} {want}");
+        }
+        // Every object after the header has a handle below $HANDSEED, and every reference to
+        // another object (owner 330, soft/hard pointers 340/350/390) names one of them.
+        let body = &p[p.iter().position(|x| *x == (0, "ENDSEC".into())).unwrap()..];
+        let handles: HashSet<u32> = body.iter().filter(|x| x.0 == 5 || x.0 == 105).map(|x| u32::from_str_radix(&x.1, 16).unwrap()).collect();
+        let seed = u32::from_str_radix(&header(&p, "$HANDSEED").unwrap(), 16).unwrap();
+        assert!(handles.iter().all(|h| *h < seed), "{v:?}: handles below the seed");
+        for (code, value) in body.iter().filter(|x| matches!(x.0, 330 | 340 | 350 | 390)) {
+            let h = u32::from_str_radix(value, 16).unwrap();
+            assert!(h == 0 || handles.contains(&h), "{v:?}: group {code} points at missing handle {value}");
+        }
+        let objects = section(&p, "OBJECTS");
+        let layouts: Vec<&Pairs> = objects.iter().filter(|o| kind(o) == "LAYOUT").collect();
+        assert_eq!(layouts.len(), 2, "{v:?}: Model and Layout1");
+        for l in &layouts {
+            let bad: Vec<i32> = l.iter().map(|x| x.0).filter(|c| !layout_codes.contains(c)).collect();
+            assert!(bad.is_empty(), "{v:?}: LAYOUT has group codes the DXF Reference doesn't define: {bad:?}");
+            // The paper image origin is 148 (x) and 149 (y).
+            assert!(get(l, 148).is_some() && get(l, 149).is_some(), "{v:?}: paper image origin");
+            // Flag 1024 marks the model space layout, and only it.
+            let name = l.iter().skip_while(|x| x.1 != "AcDbLayout").find(|x| x.0 == 1).map(|x| x.1.as_str());
+            let flags: i64 = get(l, 70).unwrap().parse().unwrap();
+            assert_eq!(flags & 1024 != 0, name == Some("Model"), "{v:?}: model type flag of {name:?}");
+        }
+        // The plot style placeholder carries only the common object codes.
+        let holder = objects.iter().find(|o| kind(o) == "ACDBPLACEHOLDER").expect("placeholder");
+        assert!(holder.iter().all(|x| matches!(x.0, 0 | 5 | 102 | 330)), "{v:?}: placeholder {holder:?}");
+    }
+}
+
 #[test]
 fn r12_viewport_has_no_duplicate_group_codes() {
     let d = shapes_doc();
@@ -208,10 +273,360 @@ fn circles_and_circular_arcs_are_native_dxf_entities() {
         assert_eq!((all(&e[1], 10), all(&e[1], 20), all(&e[1], 40)), (vec![120.0], vec![50.0], vec![30.0]), "{version:?}");
         assert_eq!((all(&e[1], 50), all(&e[1], 51)), (vec![0.0], vec![90.0]), "{version:?}");
     }
+}
 
-    // An actual ellipse is not close enough to a circle and remains a spline.
-    let ellipse = doc_with(|d| vec![path(d, shapes::ellipse(Rect::new(20.0, 20.0, 100.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
-    assert_eq!(kinds(&export(&ellipse, &opts(&ellipse)).unwrap()), ["SPLINE"]);
+/// A cubic arc about `c` of radius `r` from `deg0` to `deg1` (degrees, y down), from the current
+/// point, which is the arc's start.
+fn arc_cubic(b: &mut vectorcraft_geom::BezPath, c: Point, r: f64, deg0: f64, deg1: f64) {
+    let (a0, a1) = (deg0.to_radians(), deg1.to_radians());
+    let k = 4.0 / 3.0 * ((a1 - a0) / 4.0).tan() * r;
+    let (p0, p3) = (Point::new(c.x + r * a0.cos(), c.y + r * a0.sin()), Point::new(c.x + r * a1.cos(), c.y + r * a1.sin()));
+    b.curve_to(Point::new(p0.x - k * a0.sin(), p0.y + k * a0.cos()), Point::new(p3.x + k * a1.sin(), p3.y - k * a1.cos()), p3);
+}
+
+/// A slot (two lines, two half circles) about y = 50, a D shape (a half circle closed by its
+/// diameter) and a rounded rectangle with 10 pt corners.
+fn lines_and_arcs() -> [PathData; 3] {
+    let mut slot = vectorcraft_geom::BezPath::new();
+    slot.move_to((60.0, 30.0));
+    slot.line_to((140.0, 30.0));
+    arc_cubic(&mut slot, Point::new(140.0, 50.0), 20.0, -90.0, 0.0);
+    arc_cubic(&mut slot, Point::new(140.0, 50.0), 20.0, 0.0, 90.0);
+    slot.line_to((60.0, 70.0));
+    arc_cubic(&mut slot, Point::new(60.0, 50.0), 20.0, 90.0, 180.0);
+    arc_cubic(&mut slot, Point::new(60.0, 50.0), 20.0, 180.0, 270.0);
+    slot.close_path();
+    let mut d = vectorcraft_geom::BezPath::new();
+    d.move_to((150.0, 20.0));
+    arc_cubic(&mut d, Point::new(150.0, 50.0), 30.0, -90.0, 0.0);
+    arc_cubic(&mut d, Point::new(150.0, 50.0), 30.0, 0.0, 90.0);
+    d.close_path();
+    [PathData::from_bezpath(&slot), PathData::from_bezpath(&d), shapes::rounded_rectangle(Rect::new(20.0, 20.0, 100.0, 80.0), 10.0)]
+}
+
+/// A polyline entity's vertices as (x, y, bulge): an LWPOLYLINE's, or those of the VERTEX
+/// entities that follow a POLYLINE at `e[i]`.
+fn vertices(e: &[Pairs], i: usize) -> Vec<(f64, f64, f64)> {
+    let mut out = vec![];
+    let mut read = |o: &Pairs| {
+        for (code, value) in o {
+            let v: f64 = value.trim().parse().unwrap_or(0.0);
+            match code {
+                10 => out.push((v, 0.0, 0.0)),
+                20 => out.last_mut().expect("x before y").1 = v,
+                42 => out.last_mut().expect("a vertex before its bulge").2 = v,
+                _ => {}
+            }
+        }
+    };
+    if kind(&e[i]) == "LWPOLYLINE" {
+        read(&e[i]);
+    } else {
+        e[i + 1..].iter().take_while(|o| kind(o) == "VERTEX").for_each(&mut read);
+    }
+    out
+}
+
+#[test]
+fn paths_of_lines_and_circular_arcs_are_polylines_with_bulges() {
+    let [slot, d_shape, rounded] = lines_and_arcs();
+    let d = doc_with(|d| {
+        let black = || Paint::solid(Color::BLACK);
+        let mut open = vectorcraft_geom::BezPath::new();
+        open.move_to((10.0, 90.0));
+        open.line_to((30.0, 90.0));
+        arc_cubic(&mut open, Point::new(30.0, 80.0), 10.0, 90.0, 0.0);
+        vec![
+            path(d, slot, Paint::None, black(), 1.0),
+            path(d, d_shape, Paint::None, black(), 1.0),
+            path(d, rounded, Paint::None, black(), 1.0),
+            path(d, PathData::from_bezpath(&open), Paint::None, black(), 1.0),
+        ]
+    });
+    let b = (std::f64::consts::PI / 8.0).tan();
+    for version in DxfVersion::ALL {
+        let out = export(&d, &DxfOptions { version, ..opts(&d) }).unwrap();
+        let e = entities(&out);
+        let polys: Vec<usize> = (0..e.len()).filter(|i| matches!(kind(&e[*i]), "LWPOLYLINE" | "POLYLINE")).collect();
+        let k = kinds(&out);
+        assert_eq!(polys.len(), 4, "{version:?}: {k:?}");
+        assert!(!k.iter().any(|k| matches!(k.as_str(), "SPLINE" | "ARC" | "CIRCLE")), "{version:?}: {k:?}");
+        let want = if version.lwpolyline() { "LWPOLYLINE" } else { "POLYLINE" };
+        assert!(polys.iter().all(|i| kind(&e[*i]) == want), "{version:?}: {k:?}");
+        let flags: Vec<i64> = polys.iter().map(|i| get(&e[*i], 70).unwrap().parse::<i64>().unwrap() & 1).collect();
+        assert_eq!(flags, [1, 1, 1, 0], "{version:?}: closed, closed, closed, open");
+        // The slot's half circles turn clockwise with y up: a bulge of -1 after each long side.
+        assert_eq!(vertices(&e, polys[0]), [(60.0, 70.0, 0.0), (140.0, 70.0, -1.0), (140.0, 30.0, 0.0), (60.0, 30.0, -1.0)], "{version:?}");
+        // The D shape: the half circle, then the straight closing edge.
+        assert_eq!(vertices(&e, polys[1]), [(150.0, 80.0, -1.0), (150.0, 20.0, 0.0)], "{version:?}");
+        // The rounded rectangle: eight anchors, a quarter circle (bulge tan 22.5°) at each corner.
+        let r = vertices(&e, polys[2]);
+        assert_eq!(r.len(), 8, "{version:?}: {r:?}");
+        let bulges: Vec<f64> = r.iter().map(|v| v.2).filter(|b| *b != 0.0).collect();
+        assert!(close_to(&bulges, &[-b; 4], 1e-6), "{version:?}: {r:?}");
+        // An open line then a quarter circle turning counterclockwise with y up.
+        let o = vertices(&e, polys[3]);
+        assert!(
+            close_to(&o.iter().flat_map(|v| [v.0, v.1, v.2]).collect::<Vec<_>>(), &[10.0, 10.0, 0.0, 30.0, 10.0, b, 40.0, 20.0, 0.0], 1e-6),
+            "{version:?}: {o:?}"
+        );
+    }
+}
+
+#[test]
+fn polylines_with_bulges_read_back_as_the_same_outline() {
+    for (i, shape) in lines_and_arcs().into_iter().enumerate() {
+        let original = shape.to_bezpath();
+        let d = doc_with(|d| vec![path(d, shape, Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+        let out = export(&d, &opts(&d)).unwrap();
+        assert_eq!(kinds(&out), ["LWPOLYLINE"], "shape {i}");
+        let o = ImportOptions { unit: Some(Unit::Points), scale: Some(1.0), center: false, ..ImportOptions::default() };
+        let back = import(&out.bytes, &o).unwrap().document;
+        let mut paths = vec![];
+        back.walk(|n| {
+            if let NodeKind::Path { path, .. } = &n.kind {
+                paths.push(path.to_bezpath());
+            }
+        });
+        assert_eq!(paths.len(), 1, "shape {i}");
+        assert!(paths[0].elements().last().is_some_and(|el| matches!(el, kurbo::PathEl::ClosePath)), "shape {i} reads back closed");
+        let (a, b) = (original.bounding_box(), paths[0].bounding_box());
+        assert!(close_to(&[a.width(), a.height()], &[b.width(), b.height()], 1e-2), "shape {i}: {a:?} against {b:?}");
+        // Every point read back lies on the original outline, once both are centered.
+        let shift = a.center() - b.center();
+        let outline: Vec<Point> = original.segments().flat_map(|s| (0..=64).map(move |t| s.eval(f64::from(t) / 64.0))).collect();
+        for seg in paths[0].segments() {
+            for t in 0..=16 {
+                let p = seg.eval(f64::from(t) / 16.0) + shift;
+                let near = outline
+                    .windows(2)
+                    .map(|w| {
+                        let (u, v) = (w[1] - w[0], p - w[0]);
+                        let s = if u.hypot2() > 0.0 { (v.dot(u) / u.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
+                        (v - u * s).hypot()
+                    })
+                    .fold(f64::INFINITY, f64::min);
+                assert!(near < 1e-2, "shape {i}: {p:?} is {near} pt off the outline");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_path_with_a_curve_that_is_not_a_circular_arc_stays_a_spline() {
+    // The slot with one end drawn by a longer-handled curve.
+    let mut slot = vectorcraft_geom::BezPath::new();
+    slot.move_to((60.0, 30.0));
+    slot.line_to((140.0, 30.0));
+    slot.curve_to((165.0, 30.0), (165.0, 70.0), (140.0, 70.0));
+    slot.line_to((60.0, 70.0));
+    arc_cubic(&mut slot, Point::new(60.0, 50.0), 20.0, 90.0, 180.0);
+    arc_cubic(&mut slot, Point::new(60.0, 50.0), 20.0, 180.0, 270.0);
+    slot.close_path();
+    let d = doc_with(|d| {
+        vec![
+            path(d, PathData::from_bezpath(&slot), Paint::None, Paint::solid(Color::BLACK), 1.0),
+            path(d, shapes::ellipse(Rect::new(150.0, 20.0, 190.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 1.0),
+        ]
+    });
+    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["SPLINE", "CIRCLE"]);
+}
+
+#[test]
+fn drawing_extents_reach_the_extreme_points_of_arcs() {
+    // An arc about (100, 50) of radius 40 from -60° to 30° passes x = 140 at 0°, between the points
+    // along it that recognition samples.
+    let arc = |closed: bool| {
+        let mut b = vectorcraft_geom::BezPath::new();
+        let start = Point::new(100.0 + 40.0 * 60f64.to_radians().cos(), 50.0 - 40.0 * 60f64.to_radians().sin());
+        b.move_to(start);
+        arc_cubic(&mut b, Point::new(100.0, 50.0), 40.0, -60.0, 30.0);
+        if closed {
+            b.close_path();
+        }
+        PathData::from_bezpath(&b)
+    };
+    for (closed, entity) in [(false, "ARC"), (true, "LWPOLYLINE")] {
+        let d = doc_with(|d| vec![path(d, arc(closed), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+        let out = export(&d, &opts(&d)).unwrap();
+        assert_eq!(kinds(&out), [entity]);
+        let x: f64 = header(&pairs(&out.bytes), "$EXTMAX").unwrap().trim().parse().unwrap();
+        assert!((x - 140.0).abs() < 1e-6, "{entity}: $EXTMAX x {x}");
+    }
+}
+
+#[test]
+fn a_shallow_curve_that_is_not_circular_is_not_an_arc() {
+    // 100 pt across and 1.5 pt deep: the circle through its ends and middle has a radius of about
+    // 834 pt, and the curve is 0.12 pt off it a quarter of the way along.
+    let mut b = vectorcraft_geom::BezPath::new();
+    b.move_to((0.0, 50.0));
+    b.curve_to((20.0, 48.0), (80.0, 48.0), (100.0, 50.0));
+    let d = doc_with(|d| vec![path(d, PathData::from_bezpath(&b), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["SPLINE"]);
+}
+
+/// The path `p` with `xf` applied.
+fn transformed(p: &PathData, xf: Affine) -> PathData {
+    PathData::from_bezpath(&(xf * p.to_bezpath()))
+}
+
+fn close_to(a: &[f64], b: &[f64], tol: f64) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| (x - y).abs() <= tol)
+}
+
+#[test]
+fn ellipses_and_unevenly_scaled_circles_are_native_ellipses() {
+    let circle = shapes::ellipse(Rect::new(20.0, 20.0, 80.0, 80.0));
+    let d = doc_with(|d| {
+        let stroke = || Paint::solid(Color::BLACK);
+        vec![
+            // 80 × 40 pt about (60, 40): DXF center (60, 60), major axis (40, 0), ratio 0.5.
+            path(d, shapes::ellipse(Rect::new(20.0, 20.0, 100.0, 60.0)), Paint::None, stroke(), 1.0),
+            // A 60 pt circle scaled 150% across about (50, 50): 90 × 60 pt, ratio 2/3.
+            path(
+                d,
+                transformed(&circle, Affine::translate((50.0, 50.0)) * Affine::scale_non_uniform(1.5, 1.0) * Affine::translate((-50.0, -50.0))),
+                Paint::None,
+                stroke(),
+                1.0,
+            ),
+            // The first ellipse turned 30° about its center, filled: the outline is the ellipse too.
+            path(
+                d,
+                transformed(&shapes::ellipse(Rect::new(20.0, 20.0, 100.0, 60.0)), Affine::rotate_about(30f64.to_radians(), Point::new(60.0, 40.0))),
+                Paint::solid(Color::BLACK),
+                Paint::None,
+                0.0,
+            ),
+        ]
+    });
+    for version in DxfVersion::ALL.into_iter().filter(|version| *version >= DxfVersion::R13) {
+        let out = export(&d, &DxfOptions { version, ..opts(&d) }).unwrap();
+        let e = entities(&out);
+        assert_eq!(e.iter().map(|x| kind(x)).collect::<Vec<_>>(), ["ELLIPSE", "ELLIPSE", "ELLIPSE", "HATCH"], "{version:?}");
+        let ellipse = |x: &Pairs| (all(x, 10), all(x, 20), all(x, 11), all(x, 21), all(x, 40), all(x, 41), all(x, 42));
+        let (cx, cy, mx, my, ratio, start, end) = ellipse(&e[0]);
+        assert_eq!((cx, cy, mx, my, ratio), (vec![60.0], vec![60.0], vec![40.0], vec![0.0], vec![0.5]), "{version:?}");
+        assert!(close_to(&start, &[0.0], 1e-9) && close_to(&end, &[std::f64::consts::TAU], 1e-12), "{version:?}: a whole turn");
+        let (cx, cy, mx, my, ratio, ..) = ellipse(&e[1]);
+        assert!(close_to(&[cx, cy, mx, my, ratio].concat(), &[50.0, 50.0, 45.0, 0.0, 2.0 / 3.0], 1e-6), "{version:?}: {:?}", e[1]);
+        // Turned 30° counterclockwise on screen, so clockwise with DXF's y up.
+        let (cx, cy, mx, my, ratio, ..) = ellipse(&e[2]);
+        let (cos, sin) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+        assert!(close_to(&[cx, cy, mx, my, ratio].concat(), &[60.0, 60.0, 40.0 * cos, -40.0 * sin, 0.5], 1e-6), "{version:?}: {:?}", e[2]);
+        assert!(e[0].contains(&(100, "AcDbEllipse".into())), "{version:?}");
+    }
+    // R12 has no ELLIPSE: the curves are flattened polylines.
+    let r12 = kinds(&export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap());
+    assert!(!r12.iter().any(|k| k == "ELLIPSE") && r12.iter().any(|k| k == "POLYLINE"), "{r12:?}");
+    // A thin ellipse keeps its ratio in full (six decimals would write 0.000002).
+    let thin = doc_with(|d| vec![path(d, shapes::ellipse(Rect::new(0.0, 50.0, 200.0, 50.0003)), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+    let e = entities(&export(&thin, &opts(&thin)).unwrap());
+    assert_eq!(kind(&e[0]), "ELLIPSE");
+    assert!(close_to(&all(&e[0], 40), &[1.5e-6], 1e-10), "{:?}", e[0]);
+}
+
+#[test]
+fn exported_ellipses_read_back_as_the_same_ellipse() {
+    let xf = Affine::rotate_about(30f64.to_radians(), Point::new(60.0, 40.0));
+    let d = doc_with(|d| {
+        vec![path(d, transformed(&shapes::ellipse(Rect::new(20.0, 20.0, 100.0, 60.0)), xf), Paint::None, Paint::solid(Color::BLACK), 1.0)]
+    });
+    let out = export(&d, &opts(&d)).unwrap();
+    assert_eq!(kinds(&out), ["ELLIPSE"]);
+    let o = ImportOptions { unit: Some(Unit::Points), scale: Some(1.0), center: false, ..ImportOptions::default() };
+    let back = import(&out.bytes, &o).unwrap().document;
+    let mut paths = vec![];
+    back.walk(|n| {
+        if let NodeKind::Path { path, .. } = &n.kind {
+            paths.push(path.to_bezpath());
+        }
+    });
+    assert_eq!(paths.len(), 1);
+    assert!(paths[0].elements().last().is_some_and(|el| matches!(el, kurbo::PathEl::ClosePath)), "the ellipse reads back closed");
+    // Every point of the curve read back lies on the 80 × 40 pt ellipse turned 30°, once both are centered.
+    let bp = &paths[0];
+    let found = bp.bounding_box().center();
+    let inverse = xf.inverse();
+    let original = Point::new(60.0, 40.0);
+    for seg in bp.segments() {
+        for i in 0..=16 {
+            let p = seg.eval(f64::from(i) / 16.0) - found.to_vec2() + original.to_vec2();
+            let q = inverse * p;
+            let r = ((q.x - 60.0) / 40.0).hypot((q.y - 40.0) / 20.0);
+            assert!((r - 1.0).abs() < 1e-3, "{p:?} is off the ellipse ({r})");
+        }
+    }
+}
+
+#[test]
+fn closed_four_cubic_shapes_that_are_not_writable_ellipses_stay_splines() {
+    // A rounded square: four cubics through the ellipse's anchors with longer handles.
+    let (c, r, k) = (Point::new(50.0, 50.0), 30.0, 30.0 * 0.8);
+    let mut squircle = vectorcraft_geom::BezPath::new();
+    squircle.move_to(Point::new(c.x + r, c.y));
+    squircle.curve_to(Point::new(c.x + r, c.y - k), Point::new(c.x + k, c.y - r), Point::new(c.x, c.y - r));
+    squircle.curve_to(Point::new(c.x - k, c.y - r), Point::new(c.x - r, c.y - k), Point::new(c.x - r, c.y));
+    squircle.curve_to(Point::new(c.x - r, c.y + k), Point::new(c.x - k, c.y + r), Point::new(c.x, c.y + r));
+    squircle.curve_to(Point::new(c.x + k, c.y + r), Point::new(c.x + r, c.y + k), Point::new(c.x + r, c.y));
+    squircle.close_path();
+    // An egg: one half wider than the other.
+    let egg = shapes::ellipse(Rect::new(110.0, 20.0, 190.0, 60.0)).to_bezpath();
+    let mut els: Vec<kurbo::PathEl> = egg.elements().to_vec();
+    if let Some(kurbo::PathEl::CurveTo(a, b, _)) = els.get_mut(1) {
+        a.x -= 10.0;
+        b.x -= 10.0;
+    }
+    let d = doc_with(|d| {
+        vec![
+            path(d, PathData::from_bezpath(&squircle), Paint::None, Paint::solid(Color::BLACK), 1.0),
+            path(d, PathData::from_bezpath(&kurbo::BezPath::from_vec(els)), Paint::None, Paint::solid(Color::BLACK), 1.0),
+            // An ellipse thinner than the smallest ratio DXF readers take (5e-7 against 1e-6). Its
+            // quarters fit shallow circular arcs within the tolerance, so it is a polyline with bulges.
+            path(d, shapes::ellipse(Rect::new(0.0, 90.0, 200.0, 90.0001)), Paint::None, Paint::solid(Color::BLACK), 1.0),
+        ]
+    });
+    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["SPLINE", "SPLINE", "LWPOLYLINE"]);
+}
+
+#[test]
+fn a_lone_straight_segment_is_a_line() {
+    let segment = |closed: bool, extra: Option<Point>| {
+        let mut b = vectorcraft_geom::BezPath::new();
+        b.move_to(Point::new(20.0, 30.0));
+        b.line_to(Point::new(120.0, 70.0));
+        if let Some(p) = extra {
+            b.line_to(p);
+        }
+        if closed {
+            b.close_path();
+        }
+        PathData::from_bezpath(&b)
+    };
+    let d = doc_with(|d| vec![path(d, segment(false, None), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+    for version in DxfVersion::ALL.into_iter().filter(|v| v.r2000()) {
+        let e = entities(&export(&d, &DxfOptions { version, ..opts(&d) }).unwrap());
+        assert_eq!(e.iter().map(|x| kind(x)).collect::<Vec<_>>(), ["LINE"], "{version:?}");
+        assert_eq!(e[0].iter().rfind(|p| p.0 == 100).map(|p| p.1.as_str()), Some("AcDbLine"), "{version:?}");
+        assert_eq!((all(&e[0], 10), all(&e[0], 20)), (vec![20.0], vec![70.0]), "{version:?}: y up from the artboard's bottom");
+        assert_eq!((all(&e[0], 11), all(&e[0], 21)), (vec![120.0], vec![30.0]), "{version:?}");
+    }
+
+    // Without a width (R12 writes a fill as its outline), R12 writes a LINE too; a stroke weight
+    // before 2000 keeps its polyline width.
+    let filled = doc_with(|d| vec![path(d, segment(false, None), Paint::solid(Color::BLACK), Paint::None, 0.0)]);
+    let r12 = |d: &Document| kinds(&export(d, &DxfOptions { version: DxfVersion::R12, ..opts(d) }).unwrap());
+    assert_eq!(r12(&filled), ["LINE"]);
+    assert_eq!(r12(&d), ["POLYLINE", "VERTEX", "VERTEX", "SEQEND"]);
+    let r14 = entities(&export(&d, &DxfOptions { version: DxfVersion::R14, ..opts(&d) }).unwrap());
+    assert_eq!((kind(&r14[0]), get(&r14[0], 43)), ("LWPOLYLINE", Some("1")));
+
+    // A closed segment and two segments stay polylines.
+    for p in [segment(true, None), segment(false, Some(Point::new(150.0, 20.0)))] {
+        let d = doc_with(|d| vec![path(d, p, Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+        assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["LWPOLYLINE"]);
+    }
 }
 
 #[test]
@@ -239,11 +654,65 @@ fn closed_circular_arc_with_a_closing_chord_is_not_a_circle() {
         vec![path(d, PathData::from_bezpath(&arc), Paint::None, Paint::solid(Color::BLACK), 1.0)]
     });
 
+    // The three quarters turn counterclockwise with y up (bulge tan 67.5°), then the chord closes it.
     let modern = export(&d, &opts(&d)).unwrap();
-    assert_eq!(kinds(&modern), ["SPLINE"]);
+    assert_eq!(kinds(&modern), ["LWPOLYLINE"]);
+    let v = vertices(&entities(&modern), 0);
+    let flat: Vec<f64> = v.iter().flat_map(|v| [v.0, v.1, v.2]).collect();
+    assert!(close_to(&flat, &[80.0, 50.0, 67.5f64.to_radians().tan(), 50.0, 20.0, 0.0], 1e-6), "{v:?}");
     let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap();
     assert!(kinds(&r12).iter().any(|k| k == "POLYLINE"));
     assert!(!kinds(&r12).iter().any(|k| k == "CIRCLE"));
+}
+
+#[test]
+fn a_closed_sliver_along_a_circle_is_not_a_circle() {
+    let d = doc_with(|d| {
+        let (cx, cy, r) = (60.0, 250.0, 200.0);
+        let at = |deg: f64| {
+            let rad = deg.to_radians();
+            Point::new(cx + r * rad.cos(), cy + r * rad.sin())
+        };
+        let along = |sliver: &mut vectorcraft_geom::BezPath, deg0: f64, deg1: f64| {
+            let p0 = at(deg0);
+            let p3 = at(deg1);
+            let step = (deg1 - deg0).to_radians();
+            let k = 4.0 / 3.0 * (step / 4.0).tan();
+            let r0 = deg0.to_radians();
+            let r1 = deg1.to_radians();
+            let p1 = Point::new(p0.x - r * r0.sin() * k, p0.y + r * r0.cos() * k);
+            let p2 = Point::new(p3.x + r * r1.sin() * k, p3.y - r * r1.cos() * k);
+            sliver.curve_to(p1, p2, p3);
+        };
+        let mut sliver = vectorcraft_geom::BezPath::new();
+        sliver.move_to(at(-110.0));
+        along(&mut sliver, -110.0, -90.0);
+        along(&mut sliver, -90.0, -70.0);
+        along(&mut sliver, -70.0, -110.0);
+        sliver.close_path();
+        vec![path(d, PathData::from_bezpath(&sliver), Paint::None, Paint::solid(Color::BLACK), 1.0)]
+    });
+
+    // Two arcs, out along the circle and back: one polyline with a bulge each way.
+    let modern = export(&d, &opts(&d)).unwrap();
+    assert_ne!(kinds(&modern), ["CIRCLE"]);
+    assert_eq!(kinds(&modern), ["LWPOLYLINE"]);
+    let bulges: Vec<f64> = vertices(&entities(&modern), 0).iter().map(|v| v.2).collect();
+    let b = 10f64.to_radians().tan();
+    assert!(close_to(&bulges, &[-b, b], 1e-6) || close_to(&bulges, &[b, -b], 1e-6), "{bulges:?}");
+}
+
+#[test]
+fn cubic_with_hidden_angular_reversal_is_not_promoted_to_arc() {
+    let d = doc_with(|d| {
+        let mut b = vectorcraft_geom::BezPath::new();
+        b.move_to(Point::new(-8.404028665134, 62.061475842818));
+        b.curve_to(Point::new(-13.285253116737, 62.103123153545), Point::new(52.811163576591, 52.471253544459), Point::new(60.0, 50.0));
+        vec![path(d, PathData::from_bezpath(&b), Paint::None, Paint::solid(Color::BLACK), 1.0)]
+    });
+    let dxf = export(&d, &opts(&d)).unwrap();
+    assert_ne!(kinds(&dxf), ["ARC"]);
+    assert_eq!(kinds(&dxf), ["SPLINE"]);
 }
 
 #[test]
@@ -355,6 +824,221 @@ fn units_scale_coordinates_and_set_insunits() {
 }
 
 #[test]
+fn the_cnc_preset_writes_version_2000_in_millimeters_with_type_as_paths_and_strokes_as_lines() {
+    let mut d = text_doc("Cut", 20.0);
+    let layer = d.layers[0].id;
+    let frame = path(&mut d, shapes::rectangle(Rect::new(5.0, 5.0, 195.0, 95.0)), Paint::None, Paint::solid(Color::BLACK), 10.0);
+    d.insert(Some(layer), usize::MAX, frame).unwrap();
+    let o = DxfOptions { region: d.artboards[0].rect, ..DxfPreset::Cnc.options() };
+    let out = export(&d, &o).unwrap();
+    let p = pairs(&out.bytes);
+    assert_eq!(header(&p, "$ACADVER").as_deref(), Some("AC1015"));
+    assert_eq!(header(&p, "$INSUNITS").as_deref(), Some("4"));
+    let k = kinds(&out);
+    assert!(!k.iter().any(|k| matches!(k.as_str(), "TEXT" | "MTEXT" | "IMAGE")), "type is paths: {k:?}");
+    assert!(k.len() > 2, "the glyphs' outlines: {k:?}");
+    // The 10 pt stroke (wider than the widest lineweight) is one center line, not a filled outline.
+    assert_eq!(k.last().map(String::as_str), Some("LWPOLYLINE"), "{k:?}");
+    assert_ne!(k.get(k.len() - 2).map(String::as_str), Some("LWPOLYLINE"), "{k:?}");
+    assert!(out.images.is_empty());
+    assert_eq!(DxfPreset::of(&o), DxfPreset::Cnc);
+    assert_eq!(DxfPreset::of(&DxfOptions { colors: ColorDepth::True, ..o.clone() }), DxfPreset::Custom);
+    assert_eq!(DxfPreset::of(&DxfOptions { include_images: true, ..o.clone() }), DxfPreset::Custom);
+    assert_eq!(DxfPreset::of(&DxfOptions { include_hatches: true, ..o.clone() }), DxfPreset::Custom);
+    assert_eq!(DxfPreset::of(&DxfOptions::default()), DxfPreset::Custom);
+    assert_eq!(DxfPreset::from_id(" CNC "), Some(DxfPreset::Cnc));
+}
+
+/// A 4 × 2 px PNG placed at (10, 20) under key `raster-1`, and before it in paint order
+/// `fill`'s rectangle.
+fn image_and_fill_doc(fill: Paint) -> Document {
+    let png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(
+            4,
+            2,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [0u8, 0, 255, 255].repeat(8),
+        )
+        .unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
+    let mut d = doc_with(|d| {
+        let im = ImageObject {
+            key: "raster-1".into(),
+            width: 4,
+            height: 2,
+            xf: Affine::translate((10.0, 20.0)) * Affine::scale(5.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        vec![
+            path(d, shapes::rectangle(Rect::new(50.0, 10.0, 150.0, 60.0)), fill, Paint::None, 0.0),
+            Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))),
+        ]
+    });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
+    d
+}
+
+const IMAGES_OFF: &str = "placed images are left out (Include Placed Images is off)";
+const HATCHES_OFF: &str = "fill hatches are left out: filled areas are written as their outlines (Include Fill Hatches is off)";
+
+#[test]
+fn fills_without_hatches_keep_their_outlines() {
+    let d = shapes_doc();
+    let out = export(&d, &DxfOptions { include_hatches: false, ..opts(&d) }).unwrap();
+    assert_eq!(kinds(&out), ["LWPOLYLINE", "LWPOLYLINE", "CIRCLE"], "the fill's outline, the stroke, the circle");
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(out.setting_notes, [HATCHES_OFF]);
+    let e = entities(&out);
+    assert_eq!((get(&e[0], 70), get(&e[0], 370)), (Some("1"), None), "the closed outline, without a lineweight");
+    // Hatches stay by default, with no note.
+    let on = export(&d, &opts(&d)).unwrap();
+    assert!(kinds(&on).iter().any(|k| k == "HATCH") && on.setting_notes.is_empty());
+    // The outlines are the ones written beside hatches, also for overlapping subpaths, which are
+    // merged first; a fill with no area (a flat rectangle, a diagonal line) writes nothing either way.
+    let compound = doc_with(|d| {
+        let mut bp = shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 60.0)).to_bezpath();
+        bp.extend(shapes::rectangle(Rect::new(40.0, 40.0, 90.0, 90.0)).to_bezpath().elements().iter().copied());
+        let p = PathData::from_bezpath(&bp);
+        vec![
+            path(d, p, Paint::solid(Color::BLACK), Paint::None, 0.0),
+            path(d, shapes::rectangle(Rect::new(10.0, 70.0, 90.0, 70.0)), Paint::solid(Color::BLACK), Paint::None, 0.0),
+            path(d, shapes::line(Point::new(100.0, 10.0), Point::new(150.0, 60.0)), Paint::solid(Color::BLACK), Paint::None, 0.0),
+        ]
+    });
+    let without_hatches = |o: &DxfOutput| {
+        let mut e = entities(o);
+        e.retain(|x| kind(x) != "HATCH");
+        e.into_iter().map(|x| x.into_iter().filter(|p| p.0 != 5).collect::<Pairs>()).collect::<Vec<_>>()
+    };
+    let (c_on, c_off) =
+        (export(&compound, &opts(&compound)).unwrap(), export(&compound, &DxfOptions { include_hatches: false, ..opts(&compound) }).unwrap());
+    assert_eq!(kinds(&c_on), ["LWPOLYLINE", "HATCH"], "one merged outline");
+    assert_eq!(without_hatches(&c_off), without_hatches(&c_on));
+    assert_eq!(without_hatches(&out), without_hatches(&on));
+    // Strokes outlined for their look are areas too: their outlines stay.
+    let altered =
+        export(&d, &DxfOptions { include_hatches: false, alter_paths: true, preserve: Preserve::Editability, version: DxfVersion::R14, ..opts(&d) })
+            .unwrap();
+    assert!(!kinds(&altered).iter().any(|k| k == "HATCH") && !kinds(&altered).is_empty(), "{:?}", kinds(&altered));
+    // Nothing filled: no note.
+    let lines = doc_with(|d| vec![path(d, shapes::ellipse(Rect::new(120.0, 20.0, 180.0, 80.0)), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+    let none = export(&lines, &DxfOptions { include_hatches: false, ..opts(&lines) }).unwrap();
+    assert!(none.warnings.is_empty() && none.setting_notes.is_empty());
+    // R12 has no hatches anyway: the same outlines, and its own note alone.
+    let r12 = |include_hatches| export(&d, &DxfOptions { version: DxfVersion::R12, include_hatches, ..opts(&d) }).unwrap();
+    let (off, on) = (r12(false), r12(true));
+    assert_eq!(off.bytes, on.bytes);
+    assert_eq!(off.warnings, on.warnings);
+    assert!(off.setting_notes.is_empty());
+}
+
+#[test]
+fn an_open_path_s_fill_outline_keeps_its_closing_edge() {
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((10.0, 10.0));
+    bp.line_to((90.0, 10.0));
+    bp.line_to((50.0, 80.0));
+    let open = PathData::from_bezpath(&bp);
+    let d = doc_with(|d| vec![path(d, open.clone(), Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 1.0)]);
+    let closed = |e: &Pairs| get(e, 70).and_then(|v| v.trim().parse::<i64>().ok()).is_some_and(|v| v & 1 == 1);
+    for include_hatches in [false, true] {
+        let out = export(&d, &DxfOptions { include_hatches, ..opts(&d) }).unwrap();
+        let e: Vec<Pairs> = entities(&out).into_iter().filter(|x| kind(x) == "LWPOLYLINE").collect();
+        assert_eq!(e.len(), 2, "the fill's outline and the stroke: {:?}", kinds(&out));
+        assert!(closed(&e[0]), "the fill's outline closes as the fill does (hatches {include_hatches})");
+        assert!(!closed(&e[1]), "the stroke stays open (hatches {include_hatches})");
+    }
+    // R12 writes the outline alone, closed too.
+    let fill_only = doc_with(|d| vec![path(d, open.clone(), Paint::solid(Color::BLACK), Paint::None, 0.0)]);
+    let r12 = export(&fill_only, &DxfOptions { version: DxfVersion::R12, ..opts(&fill_only) }).unwrap();
+    let e = entities(&r12);
+    assert_eq!(kind(&e[0]), "POLYLINE", "{:?}", kinds(&r12));
+    assert!(closed(&e[0]), "R12's outline closes as the fill does");
+}
+
+#[test]
+fn images_can_be_left_out_with_their_files() {
+    let d = image_and_fill_doc(Paint::None);
+    let out = export(&d, &DxfOptions { include_images: false, ..opts(&d) }).unwrap();
+    assert!(entities(&out).is_empty() && out.images.is_empty(), "{:?}", kinds(&out));
+    let p = pairs(&out.bytes);
+    assert!(!section(&p, "OBJECTS").iter().any(|o| matches!(kind(o), "IMAGEDEF" | "IMAGEDEF_REACTOR" | "RASTERVARIABLES")));
+    assert!(!section(&p, "CLASSES").iter().any(|o| get(o, 1) == Some("IMAGE")));
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(out.setting_notes, [IMAGES_OFF]);
+    // An image that can't be decoded is not read when images are left out.
+    let mut broken = d.clone();
+    broken.images.insert(
+        "raster-1".into(),
+        ImageBlob { mime: "image/png".into(), bytes: Arc::new(b"not a png".to_vec()), proxy: None, file_font: Default::default() },
+    );
+    let left_out = export(&broken, &DxfOptions { include_images: false, ..opts(&broken) }).unwrap();
+    assert!(left_out.warnings.is_empty(), "{:?}", left_out.warnings);
+    assert_eq!(left_out.setting_notes, [IMAGES_OFF]);
+    assert!(export(&broken, &opts(&broken)).unwrap().warnings.iter().any(|w| w.contains("couldn't be decoded")));
+    // R12 has no images anyway: its own note alone.
+    let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, include_images: false, ..opts(&d) }).unwrap();
+    assert!(r12.warnings.iter().any(|w| w.contains("no images")) && r12.setting_notes.is_empty());
+}
+
+/// DXF does not clip, so an image changed by Perspective Distort is written as one image at the
+/// placement nearest its corners, with a warning; an undistorted image gets no warning.
+#[test]
+fn a_distorted_image_is_written_as_its_nearest_parallelogram_with_a_warning() {
+    let mut d = image_and_fill_doc(Paint::None);
+    let warned = |o: &DxfOutput| o.warnings.iter().any(|w| w.contains("Perspective Distort or Free Distort"));
+    assert!(!warned(&export(&d, &opts(&d)).unwrap()));
+    let id = d.layers[0].children().unwrap()[1].id;
+    let q = [(12.0, 20.0), (28.0, 20.0), (30.0, 30.0), (10.0, 30.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let out = export(&d, &opts(&d)).unwrap();
+    assert!(warned(&out), "{:?}", out.warnings);
+    assert_eq!(kinds(&out).iter().filter(|k| *k == "IMAGE").count(), 1, "{:?}", kinds(&out));
+    // Placed as an undistorted image with the nearest affine placement as its transform would be.
+    let near = vectorcraft_doc::image_quad::nearest_affine(d.node(id).unwrap()).unwrap();
+    let mut plain = d.clone();
+    let n = plain.node_mut(id).unwrap();
+    n.extras_mut().image_quad = None;
+    if let NodeKind::Image(im) = &mut n.kind {
+        im.xf = near;
+    }
+    let placement = |o: &DxfOutput| {
+        let e = entities(o).into_iter().find(|e| kind(e) == "IMAGE").expect("an IMAGE");
+        [10, 20, 11, 21, 12, 22].map(|c| all(&e, c))
+    };
+    assert_eq!(placement(&out), placement(&export(&plain, &opts(&plain)).unwrap()));
+    // With images left out, no IMAGE is written and the distortion warning does not appear.
+    let left_out = export(&d, &DxfOptions { include_images: false, ..opts(&d) }).unwrap();
+    assert!(!warned(&left_out), "{:?}", left_out.warnings);
+}
+
+#[test]
+fn images_and_hatches_are_left_out_independently_and_the_cnc_preset_leaves_out_both() {
+    let d = image_and_fill_doc(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    let run = |o: DxfOptions| export(&d, &DxfOptions { region: d.artboards[0].rect, ..o }).unwrap();
+    let both = run(DxfOptions::default());
+    assert_eq!(kinds(&both), ["LWPOLYLINE", "HATCH", "IMAGE"]);
+    assert_eq!(both.images.len(), 1);
+    let no_images = run(DxfOptions { include_images: false, ..DxfOptions::default() });
+    assert_eq!((kinds(&no_images), no_images.images.len()), (vec!["LWPOLYLINE".to_string(), "HATCH".into()], 0));
+    let no_hatches = run(DxfOptions { include_hatches: false, ..DxfOptions::default() });
+    assert_eq!((kinds(&no_hatches), no_hatches.images.len()), (vec!["LWPOLYLINE".to_string(), "IMAGE".into()], 1));
+    // CNC / CAM: the cutting path alone, with no image file and both notes.
+    let cnc = run(DxfPreset::Cnc.options());
+    assert_eq!(kinds(&cnc), ["LWPOLYLINE"]);
+    assert!(cnc.images.is_empty());
+    assert!(cnc.setting_notes.iter().any(|w| w == IMAGES_OFF) && cnc.setting_notes.iter().any(|w| w == HATCHES_OFF), "{:?}", cnc.setting_notes);
+    let custom = DxfPreset::Custom.options();
+    assert!(custom.include_images && custom.include_hatches, "Custom keeps both");
+}
+
+#[test]
 fn layers_become_dxf_layers() {
     let mut d = shapes_doc();
     let second = d.add_layer(Some("Dims: <top>"));
@@ -407,14 +1091,44 @@ fn dashes_become_linetypes_and_opacity_transparency() {
 
 #[test]
 fn alter_paths_writes_strokes_as_filled_outlines() {
-    let d = shapes_doc();
-    let out = export(&d, &DxfOptions { alter_paths: true, ..opts(&d) }).unwrap();
-    // Each fill and stroke: its outlines, then its hatch.
     let fill = ["LWPOLYLINE", "HATCH"];
     let rect_stroke = ["LWPOLYLINE", "LWPOLYLINE", "HATCH"];
+    // Strokes a lineweight draws stay lines: the rectangle, the circle and an open arc.
+    let mut d = shapes_doc();
+    let c = Point::new(150.0, 95.0);
+    let k = 20.0 * shapes::KAPPA;
+    let mut arc = vectorcraft_geom::BezPath::new();
+    arc.move_to(Point::new(c.x + 20.0, c.y));
+    arc.curve_to(Point::new(c.x + 20.0, c.y - k), Point::new(c.x + k, c.y - 20.0), Point::new(c.x, c.y - 20.0));
+    let arc = path(&mut d, PathData::from_bezpath(&arc), Paint::None, Paint::solid(Color::BLACK), 1.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), usize::MAX, arc).unwrap();
+    let out = export(&d, &DxfOptions { alter_paths: true, ..opts(&d) }).unwrap();
+    assert_eq!(kinds(&out), [&fill[..], &["LWPOLYLINE", "CIRCLE", "ARC"]].concat());
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    // R12 polylines carry any width, so its strokes stay lines too.
+    let r12 = export(&d, &DxfOptions { alter_paths: true, version: DxfVersion::R12, ..opts(&d) }).unwrap();
+    assert!(!kinds(&r12).iter().any(|k| k == "HATCH"));
+    assert!(entities(&r12).iter().any(|e| kind(e) == "POLYLINE" && get(e, 40) == Some("2")));
+    // R13 and R14 have no lineweights: every stroke becomes its outline, then its hatch.
+    let d = shapes_doc();
+    let out = export(&d, &DxfOptions { alter_paths: true, version: DxfVersion::R14, ..opts(&d) }).unwrap();
     assert_eq!(kinds(&out), [&fill[..], &rect_stroke, &["CIRCLE", "CIRCLE", "HATCH"]].concat());
     // The rectangle's stroke: an outer and an inner boundary.
     assert_eq!(get(&entities(&out)[4], 91), Some("2"));
+    // A stroke wider than the widest lineweight (2.11 mm) is outlined at its true width.
+    let wide = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 8.0)]);
+    let out = export(&wide, &DxfOptions { alter_paths: true, ..opts(&wide) }).unwrap();
+    assert_eq!(kinds(&out), rect_stroke);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let lines = export(&wide, &opts(&wide)).unwrap();
+    assert_eq!(kinds(&lines), ["LWPOLYLINE"]);
+    assert!(lines.warnings.iter().any(|w| w.contains("2.11 mm")));
+    // To the hundredth of a millimetre: 6 pt (2.117 mm) is outlined, 5.98 pt (2.110 mm) is a line.
+    for (width, expected) in [(6.0, &rect_stroke[..]), (5.98, &["LWPOLYLINE"][..])] {
+        let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), width)]);
+        assert_eq!(kinds(&export(&d, &DxfOptions { alter_paths: true, ..opts(&d) }).unwrap()), expected, "{width} pt");
+    }
     // Preserve Appearance outlines only the strokes a line can't draw.
     let mut d = shapes_doc();
     let rect = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
@@ -425,6 +1139,65 @@ fn alter_paths_writes_strokes_as_filled_outlines() {
     let editable = export(&d, &DxfOptions { preserve: Preserve::Editability, ..opts(&d) }).unwrap();
     assert_eq!(kinds(&editable), ["LWPOLYLINE", "HATCH", "LWPOLYLINE", "CIRCLE"]);
     assert!(editable.warnings.iter().any(|w| w.contains("stroke alignment")));
+    // With Maximize Editability, Alter Paths outlines that stroke and keeps the circle a line.
+    let altered = export(&d, &DxfOptions { preserve: Preserve::Editability, alter_paths: true, ..opts(&d) }).unwrap();
+    assert_eq!(kinds(&altered), [&fill[..], &rect_stroke, &["CIRCLE"]].concat());
+    assert!(altered.warnings.is_empty(), "{:?}", altered.warnings);
+}
+
+#[test]
+fn dashes_that_start_part_way_into_their_pattern_are_outlined() {
+    let dashed = |offset: f64| {
+        doc_with(|d| {
+            let mut n = path(d, shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 1.0);
+            if let Some(st) = n.appearance.stroke_mut() {
+                st.dash = Some(Dash { pattern: vec![6.0, 3.0, 2.0], offset, align_corners: false });
+            }
+            vec![n]
+        })
+    };
+    // A linetype starts at the start of its pattern: an offset of a whole period (the odd
+    // pattern twice) keeps the line, any other offset needs the dashes' outlines and a hatch.
+    for (offset, outlined) in [(0.0, false), (22.0, false), (4.0, true), (11.0, true)] {
+        let d = dashed(offset);
+        let k = kinds(&export(&d, &opts(&d)).unwrap());
+        if outlined {
+            assert!(k.len() > 2 && k.last().is_some_and(|k| k == "HATCH"), "offset {offset}: {k:?}");
+        } else {
+            assert_eq!(k, ["LWPOLYLINE"], "offset {offset}");
+        }
+        let altered = kinds(&export(&d, &DxfOptions { alter_paths: true, ..opts(&d) }).unwrap());
+        assert_eq!(altered, k, "offset {offset}, Alter Paths");
+    }
+    // Maximize Editability keeps the line and its linetype.
+    let d = dashed(4.0);
+    let editable = export(&d, &DxfOptions { preserve: Preserve::Editability, ..opts(&d) }).unwrap();
+    assert_eq!(kinds(&editable), ["LWPOLYLINE"]);
+    assert_eq!(get(&entities(&editable)[0], 6), Some("DASHED1"));
+}
+
+#[test]
+fn dashed_polylines_continue_their_pattern_around_corners() {
+    let rect = |dash: Option<Dash>| {
+        doc_with(|d| {
+            let mut n = path(d, shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 1.0);
+            if let Some(st) = n.appearance.stroke_mut() {
+                st.dash = dash.clone();
+            }
+            vec![n]
+        })
+    };
+    let flags = |out: &DxfOutput| entities(out).first().and_then(|e| get(e, 70).map(str::to_string));
+    // Group 70 bit 128 makes the linetype run on through the vertices instead of restarting
+    // at each one; a solid polyline keeps only its closed bit.
+    let dashed = rect(Some(Dash { pattern: vec![6.0, 3.0], offset: 0.0, align_corners: false }));
+    for o in [opts(&dashed), DxfOptions { alter_paths: true, ..opts(&dashed) }, DxfOptions { preserve: Preserve::Editability, ..opts(&dashed) }] {
+        assert_eq!(flags(&export(&dashed, &o).unwrap()).as_deref(), Some("129"));
+    }
+    let r12 = export(&dashed, &DxfOptions { version: DxfVersion::R12, ..opts(&dashed) }).unwrap();
+    assert_eq!((kinds(&r12).first().map(String::as_str), flags(&r12).as_deref()), (Some("POLYLINE"), Some("129")));
+    let solid = rect(None);
+    assert_eq!(flags(&export(&solid, &opts(&solid)).unwrap()).as_deref(), Some("1"));
 }
 
 fn text_doc(text: &str, size: f64) -> Document {
@@ -494,15 +1267,15 @@ fn a_bullet_is_text_of_its_own_before_its_paragraph() {
 
 /// A numbered list paragraph's number and period are a TEXT entity of their own where they are
 /// drawn, in the order they are drawn: in a right-to-left paragraph the period comes first, at the
-/// number's left.
+/// number's left, with the marker aligned left or right.
 #[test]
 fn a_number_is_text_of_its_own_before_its_paragraph() {
-    use vectorcraft_doc::text::{NumberStyle, ParaList};
-    let numbered = |text: &str, count: u32| {
+    use vectorcraft_doc::text::{ListAlign, NumberStyle, ParaList};
+    let numbered_aligned = |text: &str, count: u32, align: ListAlign| {
         let mut d = text_doc(text, 20.0);
         let id = d.layers[0].children().unwrap()[0].id;
         if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
-            t.para.list = Some(ParaList::numbered(NumberStyle::Arabic));
+            t.para.list = Some(ParaList::numbered(NumberStyle::Arabic).aligned(align));
             t.para.left_indent = 30.0;
             t.para.first_line_indent = -30.0;
             t.list_count = count;
@@ -510,10 +1283,27 @@ fn a_number_is_text_of_its_own_before_its_paragraph() {
         let out = export(&d, &DxfOptions { version: DxfVersion::R2018, preserve: Preserve::Editability, ..opts(&d) }).unwrap();
         entities(&out).iter().map(|e| (get(e, 1).map(str::to_string), all(e, 10)[0])).collect::<Vec<_>>()
     };
+    let numbered = |text: &str, count: u32| numbered_aligned(text, count, ListAlign::Left);
     assert_eq!(numbered("Item", 11), [(Some("12.".to_string()), 10.0), (Some("Item".to_string()), 40.0)]);
     let rtl = numbered("שלום", 11);
     assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
     assert!(rtl[1].1 > rtl[0].1, "the number right of the text: {rtl:?}");
+    // Aligned right, the number keeps its order and moves right, against the text.
+    let right = numbered_aligned("Item", 11, ListAlign::Right);
+    assert_eq!((right[0].0.as_deref(), right[1].clone()), (Some("12."), (Some("Item".to_string()), 40.0)));
+    assert!(right[0].1 > 10.0 && right[0].1 < 40.0, "{right:?}");
+    let rtl = numbered_aligned("שלום", 11, ListAlign::Right);
+    assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
+    // A mixed paragraph: the period follows the paragraph's direction, not the script of the
+    // words it holds, with either alignment.
+    let marker = |text: &str, align: ListAlign| {
+        let out = numbered_aligned(text, 11, align);
+        out.into_iter().filter_map(|(s, _)| s).find(|s| s.contains("12")).unwrap_or_default()
+    };
+    for align in [ListAlign::Left, ListAlign::Right] {
+        assert_eq!(marker("Item שלום", align), "12.", "{align:?}");
+        assert_eq!(marker("שלום Item", align), ".12", "{align:?}");
+    }
 }
 
 /// Area type that Shrink Text to Fit scales down is written at the height it draws at.
@@ -548,10 +1338,38 @@ fn text_outside_ascii_is_escaped_before_2007() {
     assert_eq!(text(DxfVersion::R2018), "Größe");
 }
 
+/// Type whose font size measures the cap height is written at the em size it is drawn at: 14 pt
+/// measuring a 0.7 em cap height is 20 pt type, whose TEXT height is 14.
+#[test]
+fn a_font_height_reference_is_written_as_the_size_drawn() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut d = text_doc("Plan A", 14.0);
+    let id = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id).unwrap();
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.font_family = HEIGHT_FAMILY.into();
+        t.runs[0].style.font_height_reference = vectorcraft_doc::FontHeightReference::CapHeight;
+    }
+    let editable = export(&d, &DxfOptions { preserve: Preserve::Editability, ..opts(&d) }).unwrap();
+    let e = entities(&editable);
+    assert!((all(&e[0], 40)[0] - 14.0).abs() < 1e-6, "{:?}", all(&e[0], 40));
+}
+
 #[test]
 fn images_link_png_or_jpeg_files() {
-    let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 128])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(
+            4,
+            2,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [255u8, 0, 0, 128].repeat(8),
+        )
+        .unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     let mut d = doc_with(|d| {
         let im = ImageObject {
             key: "raster-1".into(),
@@ -564,7 +1382,7 @@ fn images_link_png_or_jpeg_files() {
         };
         vec![Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))]
     });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     let out = export(&d, &opts(&d)).unwrap();
     let e = entities(&out);
     assert_eq!(kind(&e[0]), "IMAGE");
@@ -607,7 +1425,7 @@ fn images_without_pixels_are_left_out_with_one_note() {
             })
             .collect()
     });
-    d.images.insert("raster-2".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![]), proxy: None });
+    d.images.insert("raster-2".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![]), proxy: None, file_font: Default::default() });
     let out = export(&d, &opts(&d)).unwrap();
     assert!(entities(&out).is_empty() && out.images.is_empty());
     assert_eq!(out.warnings, ["an image has no pixels and was left out"]);
@@ -628,7 +1446,282 @@ fn crop_keeps_an_instance_whose_art_reaches_the_region() {
     // while the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
     let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })]);
     let art = path(&mut d, shapes::rectangle(Rect::new(100.0, 50.0, 140.0, 90.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let o = DxfOptions { crop: true, ..opts(&d) };
     assert!(!kinds(&export(&d, &o).unwrap()).is_empty());
+}
+
+/// An instance stained blue by its fill writes its symbol's red art in blue, as the canvas draws it.
+#[test]
+fn a_stained_instance_is_written_in_its_stained_color() {
+    let mut d = doc_with(|d| {
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((30.0, 30.0)) });
+        n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+        vec![n]
+    });
+    let art = path(&mut d, shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+    let out = export(&d, &opts(&d)).unwrap();
+    let colors: Vec<Option<String>> = entities(&out).iter().map(|e| get(e, 420).map(str::to_string)).collect();
+    assert!(!colors.is_empty() && colors.iter().all(|c| c.as_deref() == Some("255")), "{colors:?}");
+}
+
+#[test]
+fn symbol_art_effects_are_written_where_they_draw() {
+    // A line and the symbol's line below it, each moved 100 pt right by a Transform effect, start
+    // at the same x.
+    let moved = |mut n: Node| {
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "distort.transform".into(),
+            params: serde_json::json!({"moveH": 100.0}),
+            visible: true,
+        });
+        n
+    };
+    let mut d = doc_with(|d| {
+        let line = path(d, shapes::line((10.0, 10.0).into(), (20.0, 10.0).into()), Paint::None, Paint::solid(Color::BLACK), 1.0);
+        vec![moved(line), Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY })]
+    });
+    let art = path(&mut d, shapes::line((10.0, 40.0).into(), (20.0, 40.0).into()), Paint::None, Paint::solid(Color::BLACK), 1.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(moved(art)) });
+    let starts: Vec<f64> = entities(&export(&d, &opts(&d)).unwrap()).iter().map(|e| all(e, 10).into_iter().fold(f64::INFINITY, f64::min)).collect();
+    assert_eq!(starts.len(), 2, "{starts:?}");
+    assert!((starts[0] - starts[1]).abs() < 1e-6, "{starts:?}");
+}
+
+#[test]
+fn symbols_fanning_out_into_empty_symbols_stop_at_the_symbol_budget() {
+    // Five levels of 100 instances of the level below, ending in an empty symbol: 10^10 empty
+    // instances, which write no entities, past the million objects tests export with.
+    let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "L5".into(), xf: Affine::IDENTITY })]);
+    let empty = Node::group(d.alloc_id(), vec![]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "L0".into(), art: Arc::new(empty) });
+    for level in 1..=5 {
+        let below = format!("L{}", level - 1);
+        let children =
+            (0..100).map(|_| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: below.clone(), xf: Affine::IDENTITY }))).collect();
+        let art = Node::group(d.alloc_id(), children);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("L{level}"), art: Arc::new(art) });
+    }
+    let out = export(&d, &opts(&d)).unwrap();
+    assert!(entities(&out).is_empty());
+    assert!(out.warnings.iter().any(|w| w.contains("symbols placed inside symbols")), "{:?}", out.warnings);
+}
+
+#[test]
+fn export_bytes_match_shared_writer_goldens() {
+    use std::path::PathBuf;
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data");
+    let cases: [(&str, DxfVersion, Document); 2] =
+        [("shapes_r12.dxf", DxfVersion::R12, shapes_doc()), ("shapes_r2018.dxf", DxfVersion::R2018, shapes_doc())];
+    for (name, version, doc) in cases {
+        let out = export(&doc, &DxfOptions { version, ..opts(&doc) }).unwrap();
+        let got = std::str::from_utf8(&out.bytes).expect("UTF-8 DXF");
+        let path = dir.join(name);
+        if std::env::var_os("WRITE_DXF_GOLDENS").is_some() {
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(&path, got).unwrap();
+            continue;
+        }
+        let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        assert_eq!(got, expected, "DXF bytes changed versus {}", path.display());
+    }
+}
+
+/// One drawing written by applying the live effects for it alone and walking the result, as each
+/// drawing of a multi-drawing export was written before [`export_drawings`].
+fn export_baking_alone(doc: &Document, opts: &DxfOptions) -> DxfOutput {
+    let baked = crate::bake_for_drawings(doc);
+    crate::scene::Scene::new(baked.as_ref().unwrap_or(doc), opts).run()
+}
+
+/// A written drawing's bytes, linked images (name and bytes), warnings and setting notes.
+type Written = (Vec<u8>, Vec<(String, Vec<u8>)>, Vec<String>, Vec<String>);
+
+/// Every field of a written drawing, for comparing two.
+fn written(out: &DxfOutput) -> Written {
+    let images = out.images.iter().map(|i| (i.name.clone(), i.bytes.clone())).collect();
+    (out.bytes.clone(), images, out.warnings.clone(), out.setting_notes.clone())
+}
+
+/// A Transform effect that moves its object `x` pt right.
+fn moved_by(mut n: Node, x: f64) -> Node {
+    n.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": x}), visible: true });
+    n
+}
+
+/// A line moved by a Transform effect, an instance of a symbol whose art carries the same effect
+/// stained by its fill, a semi-transparent line in a blending mode, and a placed PNG image.
+fn drawings_doc() -> Document {
+    let png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(
+            2,
+            2,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [0u8, 128, 255, 255].repeat(4),
+        )
+        .unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
+    let mut d = doc_with(|d| {
+        let line = path(d, shapes::line((10.0, 10.0).into(), (20.0, 10.0).into()), Paint::None, Paint::solid(Color::BLACK), 1.0);
+        let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY });
+        instance.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+        let mut faint = path(d, shapes::line((10.0, 90.0).into(), (190.0, 90.0).into()), Paint::None, Paint::solid(Color::BLACK), 1.0);
+        faint.opacity = 0.5;
+        faint.blend = vectorcraft_color::BlendMode::Multiply;
+        let im = ImageObject {
+            key: "raster-1".into(),
+            width: 2,
+            height: 2,
+            xf: Affine::translate((150.0, 20.0)) * Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        vec![moved_by(line, 100.0), instance, faint, Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))]
+    });
+    let art = path(&mut d, shapes::rectangle(Rect::new(10.0, 40.0, 30.0, 60.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(moved_by(art, 20.0)) });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
+    d
+}
+
+#[test]
+fn drawings_apply_the_live_effects_once_and_match_drawings_written_alone() {
+    let d = drawings_doc();
+    assert!(crate::bake_for_drawings(&d).is_some(), "the document has live effects to apply");
+    // The left and right halves cropped, the whole page uncropped, and a region off the page.
+    let drawings = [
+        (Rect::new(0.0, 0.0, 100.0, 100.0), true),
+        (Rect::new(100.0, 0.0, 200.0, 100.0), true),
+        (Rect::new(0.0, 0.0, 200.0, 100.0), false),
+        (Rect::new(300.0, 0.0, 400.0, 100.0), true),
+    ];
+    // With every option, and with images and hatches left out (which adds setting notes).
+    let all_in = opts(&d);
+    for o in [all_in.clone(), DxfOptions { include_images: false, include_hatches: false, ..all_in }] {
+        let bakes = std::cell::Cell::new(0);
+        let outs = crate::export_drawings_with(&d, &o, &drawings, |doc| {
+            bakes.set(bakes.get() + 1);
+            crate::bake_for_drawings(doc)
+        })
+        .unwrap();
+        assert_eq!(bakes.get(), 1, "the live effects are applied once for every drawing");
+        assert_eq!(outs.len(), drawings.len());
+        for ((region, crop), out) in drawings.iter().zip(&outs) {
+            let alone = export_baking_alone(&d, &DxfOptions { region: *region, crop: *crop, ..o.clone() });
+            assert_eq!(written(out), written(&alone), "the drawing over {region:?}, crop {crop}");
+            let one = export(&d, &DxfOptions { region: *region, crop: *crop, ..o.clone() }).unwrap();
+            assert_eq!(written(&one), written(&alone), "export over {region:?}, crop {crop}");
+        }
+        let public: Vec<_> = export_drawings(&d, &o, &drawings).unwrap().iter().map(written).collect();
+        assert_eq!(public, outs.iter().map(written).collect::<Vec<_>>());
+        // The halves hold different art, the left half a line with losses, and the region off the
+        // page nothing.
+        assert!(!entities(&outs[0]).is_empty() && !entities(&outs[1]).is_empty() && !outs[0].warnings.is_empty());
+        assert_ne!(outs[0].bytes, outs[1].bytes);
+        assert!(entities(&outs[3]).is_empty() && outs[3].images.is_empty());
+        if o.include_images {
+            assert_eq!(outs[2].images.len(), 1);
+        } else {
+            assert!(!outs[2].setting_notes.is_empty() && outs[2].images.is_empty());
+        }
+    }
+}
+
+#[test]
+fn drawings_are_checked_before_the_live_effects_are_applied() {
+    let d = drawings_doc();
+    let o = opts(&d);
+    let bakes = std::cell::Cell::new(0);
+    let count = |doc: &Document| {
+        bakes.set(bakes.get() + 1);
+        crate::bake_for_drawings(doc)
+    };
+    let page = (d.artboards[0].rect, false);
+    let off = (Rect::new(0.0, 0.0, f64::NAN, 100.0), false);
+    assert_eq!(crate::export_drawings_with(&d, &o, &[page, off], count).unwrap_err(), "the export region is not finite");
+    let e = crate::export_drawings_with(&d, &DxfOptions { scale: 0.0, ..o.clone() }, &[page], count).unwrap_err();
+    assert!(e.starts_with("scale must be a number"), "{e}");
+    assert!(crate::export_drawings_with(&d, &o, &[], count).unwrap().is_empty());
+    assert_eq!(bakes.get(), 0, "nothing is applied for drawings that are refused or for none");
+}
+
+/// The thread's time on the CPU in nanoseconds where Linux reports it, otherwise `None`.
+fn thread_cpu_ns() -> Option<u64> {
+    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+}
+
+/// Time a Use Artboards export of eight artboards whose art has live effects, written drawing by
+/// drawing with the effects applied for each (as before [`export_drawings`]) and with
+/// [`export_drawings`], alternating, seven times each, and check that both write the same
+/// drawings. Prints the median of each in milliseconds of the thread's CPU time (on Linux) and of
+/// wall-clock time.
+/// Run with `cargo test --release -p vectorcraft-cad --lib dxf_artboards_bake_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn dxf_artboards_bake_perf() {
+    const BOARDS: usize = 8;
+    let mut d = Document::new(200.0 * BOARDS as f64, 200.0);
+    let layer = d.layers[0].id;
+    let effect = |id: &str, params: serde_json::Value| vectorcraft_doc::Effect { id: id.into(), params, visible: true };
+    let mut art = vec![];
+    for i in 0..50 {
+        let (x, y) = (f64::from(i % 10) * 5.0, f64::from(i / 10) * 5.0);
+        art.push(Arc::new(path(&mut d, shapes::rectangle(Rect::new(x, y, x + 4.0, y + 4.0)), Paint::None, Paint::solid(Color::BLACK), 0.5)));
+    }
+    let mut cell = Node::group(d.alloc_id(), art);
+    cell.appearance.effects.push(effect("distort.zigZag", serde_json::json!({"size": 1.0, "relative": false, "ridges": 4, "points": "smooth"})));
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Cell".into(), art: Arc::new(cell) });
+    for b in 0..BOARDS {
+        let x0 = 200.0 * b as f64;
+        for i in 0..250 {
+            let (x, y) = (x0 + f64::from(i % 25) * 8.0, f64::from(i / 25) * 8.0);
+            let mut n = path(&mut d, shapes::ellipse(Rect::new(x, y, x + 6.0, y + 6.0)), Paint::None, Paint::solid(Color::BLACK), 0.5);
+            let params = serde_json::json!({"size": 1.0, "relative": false, "detail": 10.0, "points": "smooth", "seed": i});
+            n.appearance.effects.push(effect("distort.roughen", params));
+            d.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        for i in 0..20 {
+            let xf = Affine::translate((x0 + f64::from(i % 5) * 40.0, 100.0 + f64::from(i / 5) * 25.0));
+            let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Cell".into(), xf });
+            d.insert(Some(layer), usize::MAX, instance).unwrap();
+        }
+    }
+    let o = DxfOptions { unit: Unit::Points, ..DxfOptions::default() };
+    let drawings: Vec<(Rect, bool)> = (0..BOARDS).map(|b| (Rect::new(200.0 * b as f64, 0.0, 200.0 * (b + 1) as f64, 200.0), true)).collect();
+    let before = || drawings.iter().map(|&(region, crop)| export_baking_alone(&d, &DxfOptions { region, crop, ..o.clone() })).collect::<Vec<_>>();
+    let after = || export_drawings(&d, &o, &drawings).unwrap();
+    let time = |f: &dyn Fn() -> Vec<DxfOutput>| {
+        let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+        let outs = f();
+        let wall = wall.elapsed().as_secs_f64() * 1000.0;
+        let cpu = cpu.zip(thread_cpu_ns()).map(|(a, b)| (b - a) as f64 / 1e6);
+        (outs, cpu, wall)
+    };
+    let (mut runs_before, mut runs_after) = (vec![], vec![]);
+    for _ in 0..7 {
+        let (a, cpu_a, wall_a) = time(&before);
+        let (b, cpu_b, wall_b) = time(&after);
+        assert_eq!(a.len(), BOARDS);
+        assert_eq!(a.iter().map(written).collect::<Vec<_>>(), b.iter().map(written).collect::<Vec<_>>(), "both write the same drawings");
+        runs_before.push((cpu_a, wall_a));
+        runs_after.push((cpu_b, wall_b));
+    }
+    let median = |runs: &[(Option<f64>, f64)], cpu: bool| {
+        let mut v: Vec<f64> = runs.iter().filter_map(|r| if cpu { r.0 } else { Some(r.1) }).collect();
+        v.sort_by(f64::total_cmp);
+        v.get(v.len() / 2).copied()
+    };
+    for (name, runs) in [("drawing by drawing", &runs_before), ("export_drawings", &runs_after)] {
+        println!(
+            "{name}: {BOARDS} artboards, median CPU {:?} ms, median wall {:?} ms; runs (CPU ms, wall ms) {runs:?}",
+            median(runs, true),
+            median(runs, false)
+        );
+    }
 }

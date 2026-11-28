@@ -1,8 +1,9 @@
 use super::*;
 
-/// XML 1.0 literal attribute whitespace is normalized to spaces; references retain the value.
+/// Escape a double-quoted attribute, retaining VectorCraft's apostrophe entity spelling.
 pub(super) fn xml_attr_escape(s: &str) -> String {
-    xml_escape(s).replace('\t', "&#9;").replace('\n', "&#10;").replace('\r', "&#13;")
+    let escaped = craft_xml::esc_attr(s);
+    if escaped.contains('\'') { escaped.replace('\'', "&apos;") } else { escaped }
 }
 
 /// Escape type for XML content. Characters XML 1.0 does not allow are dropped, except the line
@@ -12,7 +13,7 @@ pub(super) fn xml_text(s: &str) -> String {
         .chars()
         .filter_map(|c| match c {
             '\u{b}' | '\u{c}' => Some(' '),
-            c if valid_xml_value(c.encode_utf8(&mut [0; 4])) => Some(c),
+            c if craft_xml::is_xml_char(c) => Some(c),
             _ => None,
         })
         .collect();
@@ -20,11 +21,11 @@ pub(super) fn xml_text(s: &str) -> String {
 }
 
 pub(super) fn valid_xml_value(s: &str) -> bool {
-    s.chars().all(|c| matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}'))
+    s.chars().all(craft_xml::is_xml_char)
 }
 
 /// An XML name without a colon (an NCName): a letter or `_`, then [`xml_name_char`]s.
-fn xml_ncname(s: &str) -> bool {
+pub(super) fn xml_ncname(s: &str) -> bool {
     let mut chars = s.chars();
     chars.next().is_some_and(|c| c.is_alphabetic() || c == '_') && chars.all(xml_name_char)
 }
@@ -82,7 +83,7 @@ fn dublin_core(doc: &Document) -> Vec<(&'static str, String)> {
     let info = &doc.metadata;
     let mut terms = vec![("format", "image/svg+xml".to_string())];
     let created = info.created.map(vectorcraft_doc::metadata::iso8601).unwrap_or_default();
-    let fields = [("title", doc.title.as_str()), ("creator", info.author.as_str()), ("description", info.description.as_str())];
+    let fields = [("title", doc.info_title()), ("creator", info.author.as_str()), ("description", info.description.as_str())];
     let rights = [("rights", info.copyright_notice.as_str()), ("rights", info.copyright_url.as_str()), ("date", created.as_str())];
     let keywords = info.keywords.iter().map(|k| ("subject", k.as_str()));
     terms.extend(fields.into_iter().chain(keywords).chain(rights).filter(|(_, v)| !v.trim().is_empty()).map(|(k, v)| (k, v.to_string())));
@@ -115,7 +116,7 @@ impl Writer<'_> {
     pub(super) fn line(&mut self, s: &str) {
         let ind = self.indent(self.depth);
         self.body.push_str(&ind);
-        self.body.push_str(s);
+        self.body.push_str(&merge_class_attrs(s));
         if !self.opts.minify {
             self.body.push('\n');
         }
@@ -131,13 +132,13 @@ impl Writer<'_> {
     }
 
     pub(super) fn fresh_id(&mut self, prefix: &str) -> String {
-        let mut i = 1;
+        let next = self.next_fresh.entry(prefix.to_owned()).or_insert(1);
         loop {
-            let id = format!("{}{prefix}-{i}", self.id_prefix);
+            let id = format!("{}{prefix}-{next}", self.id_prefix);
+            *next += 1;
             if self.used_ids.insert(id.clone()) {
                 return id;
             }
-            i += 1;
         }
     }
 
@@ -158,12 +159,24 @@ impl Writer<'_> {
     }
 
     /// Reserve ids for every named object up front so generated def ids never collide with them.
+    /// Symbols' art takes no ids, also where the drawing holds it placed by an instance (every
+    /// instance of the symbol writes it).
     pub(super) fn assign_name_ids(&mut self) {
         if self.opts.object_ids == ObjectIds::Minimal {
             return;
         }
+        let mut art = HashSet::new();
+        for s in &self.doc.symbols {
+            s.art.walk(&mut |n| {
+                art.insert(n.id);
+            });
+        }
         let mut named: Vec<(NodeId, String)> = Vec::new();
         self.doc.walk(|n| {
+            // Ruler guides are not written, so their names reserve no id.
+            if n.is_ruler_guide() || art.contains(&n.id) {
+                return;
+            }
             if let Some(name) = &n.name {
                 named.push((n.id, sanitize_id(name)));
             }
@@ -183,6 +196,9 @@ impl Writer<'_> {
             return String::new();
         }
         let mut out = self.names.get(&n.id).map_or_else(String::new, |id| format!(" id=\"{}\"", xml_escape(id)));
+        if let Some(id) = self.names.get(&n.id).filter(|_| !self.bound.is_empty()).cloned() {
+            self.note_bound(n.id, &id);
+        }
         if let (Some(id), Some(name)) = (self.names.get(&n.id), n.name.as_deref())
             && name != id
         {
@@ -195,6 +211,19 @@ impl Writer<'_> {
         // Preserve sublayer identity independently of object data attributes.
         if !out.is_empty() && n.is_layer() && self.layer_nest > 1 {
             out.push_str(&format!(" {}=\"sublayer\"", crate::import::SUBLAYER));
+        }
+        let classes: Vec<&str> = n
+            .extras()
+            .attrs
+            .as_deref()
+            .map_or(&[][..], |a| a.classes.as_slice())
+            .iter()
+            .map(String::as_str)
+            .filter(|c| !c.is_empty() && !c.chars().any(|ch| ch.is_control() || matches!(ch, '\u{fffe}' | '\u{ffff}')))
+            .collect();
+        // SVG Tiny 1.2 has `class` among its core attributes, so every profile writes them.
+        if !classes.is_empty() {
+            out.push_str(&format!(" class=\"{}\"", xml_attr_escape(&classes.join(" "))));
         }
         let mut keys = HashSet::new();
         for (k, v) in n.extras().attrs.as_deref().map_or(&[][..], |a| a.data.as_slice()) {
@@ -292,14 +321,18 @@ impl Writer<'_> {
         format!("matrix({} {} {} {} {} {})", self.num(c[0]), self.num(c[1]), self.num(c[2]), self.num(c[3]), self.num(c[4]), self.num(c[5]))
     }
 
+    /// How style properties are written: the styling option, but SVG Tiny has presentation
+    /// attributes alone.
+    pub(super) fn styling(&self) -> Styling {
+        if self.tiny() { Styling::PresentationAttributes } else { self.opts.styling }
+    }
+
     /// Style properties as attributes, an inline style, or a CSS class, per the styling option.
     pub(super) fn attrs(&mut self, props: &Props) -> String {
         if props.is_empty() {
             return String::new();
         }
-        // SVG Tiny has presentation attributes alone.
-        let styling = if self.tiny() { Styling::PresentationAttributes } else { self.opts.styling };
-        match styling {
+        match self.styling() {
             Styling::PresentationAttributes => {
                 // CSS-only properties go in a style attribute (SVG Tiny has none: left out).
                 let (style, attrs): (Vec<_>, Vec<_>) = props.iter().partition(|(k, _)| {
@@ -353,7 +386,7 @@ impl Writer<'_> {
             line(2, "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">");
             line(3, "<rdf:Description rdf:about=\"\">");
             for (term, value) in dublin_core(self.doc) {
-                line(4, &format!("<dc:{term}>{}</dc:{term}>", xml_escape(&value)));
+                line(4, &format!("<dc:{term}>{}</dc:{term}>", xml_text(&value)));
             }
             line(3, "</rdf:Description>");
             line(2, "</rdf:RDF>");
@@ -414,9 +447,134 @@ impl Writer<'_> {
         s
     }
 
+    /// `p` written with `m` as the SVG basic shape it exactly is, as the reference app's SVG
+    /// export writes simple shapes (#4652): an axis-aligned `<rect>`, `<circle>` or `<ellipse>`,
+    /// a `<line>`, or a `<polygon>`/`<polyline>` of straight segments. The element name and its
+    /// geometry attributes, at the written precision; `None` keeps `<path>`. `<rect>` and
+    /// `<ellipse>` start their outline elsewhere than the path, so with a `dashed` stroke a
+    /// rectangle is a `<polygon>` and an ellipse stays `<path>`.
+    /// Sources: an Illustrator ellipse is an `ellipse` tag unless an anchor is added
+    /// (<https://community.adobe.com/t5/illustrator-discussions/trouble-exporting-shape-with-points-to-svg/td-p/10720325>);
+    /// rectangles export as `<rect>` and `<polygon>`
+    /// (<https://community.adobe.com/t5/illustrator-discussions/force-svg-export-using-all-lt-rect-gt/td-p/11282378>);
+    /// a triangle without curves exports as a polygon (<https://hackaday.io/project/170755/log/175565>).
+    pub(super) fn basic_shape(&self, p: &PathData, m: Affine, dashed: bool) -> Option<(&'static str, String)> {
+        let [sp] = p.subpaths.as_slice() else { return None };
+        if !(0..sp.segment_count()).all(|i| sp.segment_is_line(i)) {
+            return self.ellipse_shape(sp, m).filter(|_| !dashed);
+        }
+        let pts: Vec<Point> = sp.anchors.iter().map(|a| m * a.p).collect();
+        if sp.closed && !dashed && pts.len() == 4 {
+            // The corners as written, so the rectangle's numbers are the path's own.
+            let snap = |v: f64| self.num(v).parse::<f64>().unwrap_or(v);
+            let corners: Vec<Point> = pts.iter().map(|q| Point::new(snap(q.x), snap(q.y))).collect();
+            if let Some(r) = axis_rect(&corners) {
+                let (x, y, w, h) = (self.num(r.x0), self.num(r.y0), self.num(r.width()), self.num(r.height()));
+                return Some(("rect", format!(" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"")));
+            }
+        }
+        let points = |tag: &'static str| {
+            let mut s = String::from(" points=\"");
+            for (i, q) in pts.iter().enumerate() {
+                if i > 0 {
+                    s.push(' ');
+                }
+                crate::push_num(&mut s, q.x, self.opts.decimals);
+                s.push(',');
+                crate::push_num(&mut s, q.y, self.opts.decimals);
+            }
+            s.push('"');
+            Some((tag, s))
+        };
+        match (sp.closed, pts.as_slice()) {
+            (false, [a, b]) => {
+                let (x1, y1, x2, y2) = (self.num(a.x), self.num(a.y), self.num(b.x), self.num(b.y));
+                // A line of zero length as written keeps `<path>`: renderers disagree on its caps.
+                ((&x1, &y1) != (&x2, &y2)).then(|| ("line", format!(" x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\"")))
+            }
+            (false, [_, _, _, ..]) => points("polyline"),
+            (true, [_, _, _, ..]) => points("polygon"),
+            _ => None,
+        }
+    }
+
+    /// A closed 4-anchor subpath that is an axis-aligned ellipse drawn the standard way (each
+    /// quarter a cubic with handles [`KAPPA`] of the radii long), within the written precision:
+    /// `<circle>` when its radii are written the same, else `<ellipse>`.
+    fn ellipse_shape(&self, sp: &SubPath, m: Affine) -> Option<(&'static str, String)> {
+        let tol = 10f64.powi(-i32::from(self.opts.decimals));
+        let (anchors, closed) = (sp.anchors.contiguous(), sp.closed);
+        let [a0, a1, a2, a3] = &*anchors else { return None };
+        let [p0, p1, p2, p3] = [a0.p, a1.p, a2.p, a3.p].map(|p| m * p);
+        let c = p0.midpoint(p2);
+        let near = |a: f64, b: f64| (a - b).abs() <= tol;
+        // Opposite anchors share the centre: one pair on the horizontal axis, the other on the vertical.
+        let (rx, ry) = if near(p0.y, c.y) && near(p1.x, c.x) {
+            ((p0.x - c.x).abs(), (p1.y - c.y).abs())
+        } else if near(p0.x, c.x) && near(p1.y, c.y) {
+            ((p1.x - c.x).abs(), (p0.y - c.y).abs())
+        } else {
+            return None;
+        };
+        let quarters = anchors.iter().zip(anchors.iter().cycle().skip(1)).all(|(a, b)| {
+            let (pa, pb) = (m * a.p, m * b.p);
+            (m * a.h_out).distance(pa + (pb - c) * KAPPA) <= tol && (m * b.h_in).distance(pb + (pa - c) * KAPPA) <= tol
+        });
+        if !closed || c.distance(p1.midpoint(p3)) > tol || rx <= tol || ry <= tol || !quarters {
+            return None;
+        }
+        let (cx, cy, rx, ry) = (self.num(c.x), self.num(c.y), self.num(rx), self.num(ry));
+        Some(if rx == ry {
+            ("circle", format!(" cx=\"{cx}\" cy=\"{cy}\" r=\"{rx}\""))
+        } else {
+            ("ellipse", format!(" cx=\"{cx}\" cy=\"{cy}\" rx=\"{rx}\" ry=\"{ry}\""))
+        })
+    }
+
+    /// Note `w`, once, about something of the document that the file leaves out or that reaches
+    /// it changed ([`crate::Output::warnings`]). A note about an option goes to [`Self::note_setting`].
     pub(super) fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
         }
     }
+
+    /// Note `w`, once, about an option that wasn't applied or was applied another way while the
+    /// art reaches the file as it looks ([`crate::Output::setting_notes`]).
+    pub(super) fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
+        }
+    }
+}
+
+/// An element that has both its own classes and a generated `cls-N` would write `class` twice:
+/// join the two into one attribute (the first, the object's own, comes first).
+fn merge_class_attrs(s: &str) -> std::borrow::Cow<'_, str> {
+    const KEY: &str = " class=\"";
+    let tag_end = s.find('>').unwrap_or(s.len());
+    let tag = s.get(..tag_end).unwrap_or(s);
+    let Some(first) = tag.find(KEY) else { return s.into() };
+    let first_val = first + KEY.len();
+    let Some(first_len) = tag.get(first_val..).and_then(|t| t.find('"')) else { return s.into() };
+    let first_end = first_val + first_len;
+    let Some(second) = tag.get(first_end..).and_then(|t| t.find(KEY)).map(|i| i + first_end) else { return s.into() };
+    let second_val = second + KEY.len();
+    let Some(second_len) = tag.get(second_val..).and_then(|t| t.find('"')) else { return s.into() };
+    let second_end = second_val + second_len;
+    let (Some(b), Some(head), Some(mid), Some(rest)) =
+        (s.get(second_val..second_end), s.get(..first_end), s.get(first_end + 1..second), s.get(second_end + 1..))
+    else {
+        return s.into();
+    };
+    format!("{head} {b}\"{mid}{rest}").into()
+}
+
+/// The rectangle whose corners `q` are, in order either way round, with its edges alternately
+/// horizontal and vertical and none of zero length (`<rect>` doesn't draw an empty one).
+fn axis_rect(q: &[Point]) -> Option<Rect> {
+    let [a, b, c, d] = *q else { return None };
+    let h = |p: Point, q: Point| p.y == q.y && p.x != q.x;
+    let v = |p: Point, q: Point| p.x == q.x && p.y != q.y;
+    ((h(a, b) && v(b, c) && h(c, d) && v(d, a)) || (v(a, b) && h(b, c) && v(c, d) && h(d, a))).then(|| Rect::from_points(a, c))
 }

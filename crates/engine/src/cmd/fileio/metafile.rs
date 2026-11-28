@@ -2,12 +2,13 @@
 //! `document.export {format: emf|wmf}` and Export As (one picture of an artboard, or one per
 //! artboard with Use Artboards; raster effects as images, rendered at the document's raster
 //! effects resolution), `document.open` and File → Place (one artboard, the picture's frame).
+//! QuickDraw pictures (PICT) open and place the same way; they are never written.
 
 use serde_json::Value;
 use vectorcraft_doc::Document;
 use vectorcraft_metafile::Kind;
 
-use super::super::*;
+use super::super::{Result, bad};
 use super::{ArtboardPick, Encoded, FormatOption};
 
 const C: &str = "document.export";
@@ -18,6 +19,18 @@ pub(super) const OPTIONS: &[FormatOption] = &[super::ARTBOARD, super::ARTBOARDS,
 /// Encode `doc` as `kind`: the chosen artboard (default the first), or with `use_artboards` one
 /// picture per chosen artboard (default all).
 pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>, kind: Kind) -> Result<Encoded> {
+    encode_flattening(doc, p, use_artboards, kind, crate::flatten_raster_effects)
+}
+
+/// [`encode`] with `flatten` turning raster effects into images. The chosen artboards are checked
+/// first, so an export that is refused does not call `flatten`.
+pub(super) fn encode_flattening(
+    doc: &Document,
+    p: &Value,
+    use_artboards: Option<bool>,
+    kind: Kind,
+    flatten: impl FnOnce(&Document) -> Option<Document>,
+) -> Result<Encoded> {
     let f = super::format(kind.id()).ok_or_else(|| bad(C, "no metafile format"))?;
     let pick: ArtboardPick = super::encode::options(f, p)?;
     let n = doc.artboards.len();
@@ -25,13 +38,20 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>, kin
         Some(true) => pick.resolve(n).map_err(|e| bad(C, e))?.unwrap_or_else(|| (0..n).collect()),
         _ => vec![pick.one(n).map_err(|e| bad(C, e))?],
     };
+    if boards.is_empty() {
+        return Err(bad(C, "the document has no artboard"));
+    }
+    let rects = boards
+        .iter()
+        .map(|&b| doc.artboards.get(b).map(|a| a.rect).ok_or_else(|| bad(C, format!("no artboard {}", b + 1))))
+        .collect::<Result<Vec<_>>>()?;
+    vectorcraft_metafile::check_regions(&rects).map_err(|e| bad(C, e))?;
     // Raster effects (shadows, glows, blurs) as images, as PDF export does.
-    let flat = crate::flatten_raster_effects(doc);
+    let flat = flatten(doc);
     let src = flat.as_ref().unwrap_or(doc);
+    let outs = vectorcraft_metafile::export_regions(src, &rects, kind).map_err(|e| bad(C, e))?;
     let mut enc = Encoded::default();
-    for b in boards {
-        let region = doc.artboards.get(b).ok_or_else(|| bad(C, format!("no artboard {}", b + 1)))?.rect;
-        let out = vectorcraft_metafile::export(src, region, kind).map_err(|e| bad(C, e))?;
+    for (b, out) in boards.into_iter().zip(outs) {
         enc.files.push((Some(b), out.bytes));
         for w in out.warnings {
             if !enc.warnings.contains(&w) {
@@ -51,4 +71,10 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>, kin
 pub(super) fn import(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
     let i = vectorcraft_metafile::import(bytes).map_err(super::err)?;
     Ok((i.document, i.warnings))
+}
+
+/// A QuickDraw picture's document and the import's warnings.
+pub(super) fn import_pict(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
+    let p = vectorcraft_metafile::import_pict(bytes).map_err(super::err)?;
+    Ok((p.document, p.warnings))
 }

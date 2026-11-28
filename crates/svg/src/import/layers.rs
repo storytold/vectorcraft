@@ -1,6 +1,7 @@
 use super::convert::made_up;
 use super::importer::{CSS_PX_PER_IN, PT_PER_IN};
-use super::*;
+use super::{Affine, Arc, FromStr, HashSet, Node, NodeId, NodeKind, Rect, Unit, XNode, roxmltree};
+use craft_svg::tree::usvg;
 
 /// What marks a nested `<g>` as a sublayer rather than a group: our export writes it on the layers
 /// it writes inside layers. (Inkscape's `inkscape:groupmode="layer"` counts too.)
@@ -14,6 +15,16 @@ pub(super) const INKSCAPE: &str = "http://www.inkscape.org/namespaces/inkscape";
 pub(super) fn root_layer_name(root: XNode) -> Option<String> {
     let id = root.attribute("id").filter(|_| root.attribute((INKSCAPE, "version")).is_none());
     root.attribute("data-name").or(id).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string)
+}
+
+/// The title the file gives root element `root`: the text of its first `<title>` child (the one
+/// SVG 1.1 §5.4 and SVG 2 §5.4 give a document or element; a `<title>` inside a shape or group is
+/// that element's tooltip, not the document's), its runs of white space made single spaces. `None`
+/// without one, or when it is blank.
+pub(super) fn root_title(root: XNode) -> Option<String> {
+    let title = root.children().find(|c| c.is_element() && c.tag_name().name() == "title" && c.tag_name().namespace() == Some(super::SVG_NS))?;
+    let text: Vec<&str> = title.descendants().filter_map(|n| n.text().filter(|_| n.is_text())).flat_map(str::split_whitespace).collect();
+    (!text.is_empty()).then(|| text.join(" "))
 }
 
 /// Is element `g` a `<g>` marked as a layer ([`SUBLAYER`])? Only one with an id counts: the id (or
@@ -84,7 +95,7 @@ impl RootUnits {
 
 /// `'id' (feA, feB)` for each filter: its id and the primitives it uses, for warnings.
 pub(super) fn filter_names(filters: &[Arc<usvg::filter::Filter>]) -> String {
-    use usvg::filter::Kind as K;
+    use craft_svg::tree::usvg::filter::Kind as K;
     let names: Vec<String> = filters
         .iter()
         .map(|f| {
@@ -146,6 +157,7 @@ pub(super) fn inkscape_pages(xml: &roxmltree::Document, user: Affine) -> Option<
             show_video_safe_areas: false,
             video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
+            guide_label: None,
         })
         .collect();
     (!pages.is_empty()).then_some(pages)

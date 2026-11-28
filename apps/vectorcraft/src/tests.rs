@@ -1,39 +1,62 @@
 use super::*;
 
-fn ui_state_with_prefs(engine_prefs: serde_json::Value) -> vectorcraft_ui_egui::UiState {
-    vectorcraft_ui_egui::UiState { engine_prefs, ..Default::default() }
+/// The saved UI state of an old `ui.json`, as the legacy import reads it.
+fn legacy_ui(bytes: &[u8]) -> Option<vectorcraft_ui_egui::UiState> {
+    vectorcraft_ui_egui::parse_legacy(bytes).ok().map(|(settings, _)| settings.ui)
 }
 
-/// Shortcut overrides an earlier version saved still load: its spellings, `panel:` keys, an
-/// override that can't fire (#487), an entry for a command this version lacks, and an old set
-/// name.
+/// Shortcut overrides an earlier version saved still load: its spellings, `panel:` keys, a cleared
+/// shortcut and an entry for a command this version lacks become a set of the user's.
 #[test]
 fn shortcut_overrides_from_an_earlier_version_load() {
     use serde_json::json;
-    use vectorcraft_ui_egui::{keymap, shortcut_editor};
+    use vectorcraft_ui_egui::{keymap::stored_key, shortcut_editor};
     let mut raw = serde_json::to_value(vectorcraft_ui_egui::UiState::default()).unwrap();
+    raw.as_object_mut().unwrap().remove("shortcut_sets");
     raw["shortcut_overrides"] = json!({
         "tool:pen": "Shift+9",
         "edit.preferences": "",
         "panel:layers": "Cmd+Alt+Shift+F7",
-        "tool:groupSelection": "Shift+ShiftLeft",
         "test.unknown": "Cmd+Alt+Shift+F9",
-        "view.grid": "Cmd+Period",
     });
     raw["shortcut_set"] = json!(shortcut_editor::LEGACY_PRESETS[0].0);
-    let ui = decode_saved_prefs(&serde_json::to_vec(&raw).unwrap()).unwrap().sanitized();
-    assert_eq!(ui.shortcut_set, shortcut_editor::LEGACY_PRESETS[0].1);
-    let km = keymap::keymap_with(&ui.shortcut_overrides);
-    let text = |key: &str| keymap::effective_with(&km, key);
-    assert_eq!(text("tool:pen").as_deref(), Some("Shift+9"));
-    assert_eq!(text("edit.preferences"), None);
-    assert_eq!(text("panel:layers").as_deref(), Some("Cmd+Alt+Shift+F7"));
-    assert_eq!(text("tool:groupSelection").as_deref(), shortcut_editor::default_of("tool:groupSelection"), "back on its default");
-    assert_eq!(text("view.grid").as_deref(), Some("Cmd+Period"));
-    let period = keymap::vc_chord("Cmd+.").unwrap();
-    assert_eq!(keymap::lookup(&km, &period).map(|c| c.id), Some("view.grid".to_string()));
-    assert_eq!(text("test.unknown").as_deref(), Some("Cmd+Alt+Shift+F9"), "kept");
-    assert!(km.problems().iter().any(|p| format!("{p:?}") == r#"UnknownCommand { key: "test.unknown" }"#), "reported");
+    let ui = legacy_ui(&serde_json::to_vec(&raw).unwrap()).unwrap().sanitized();
+    let sets = &ui.shortcut_sets;
+    assert!(!shortcut_editor::PRESETS.contains(&sets.active_name(&shortcut_editor::BUILTINS)), "the overrides are a set of the user's");
+    let overrides = sets.active_overrides(&shortcut_editor::BUILTINS);
+    let text = |key: &str| overrides.get(&stored_key(key)).map(|t| t.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(text("tool:pen"), Some(vec!["Shift+9"]));
+    assert!(text("edit.preferences").is_none_or(|t| t.iter().all(|k| k.is_empty())), "cleared");
+    assert_eq!(text("panel:layers"), Some(vec!["Cmd+Alt+Shift+F7"]));
+    assert_eq!(text("test.unknown"), Some(vec!["Cmd+Alt+Shift+F9"]), "kept");
+}
+
+/// The command line's files wait for the choice about a stopped plug-in, so they open with the
+/// plug-ins it loads; with no choice up they open at once.
+#[test]
+fn command_line_files_wait_for_the_choice_about_a_stopped_plug_in() {
+    let temp = tempfile::Builder::new().prefix("vectorcraft-held-files-").tempdir().unwrap();
+    let file = temp.path().join("a.svg");
+    std::fs::write(&file, r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>"#).unwrap();
+    let files = vec![file.to_string_lossy().into_owned()];
+    // The files the app reads to open them.
+    let read = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let reads = read.clone();
+    let services = vectorcraft_ui_egui::Services {
+        read: Some(Box::new(move |p: &str| {
+            reads.borrow_mut().push(p.to_owned());
+            std::fs::read(p).map_err(|e| e.to_string())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), services);
+    let held = serde_json::json!({"id": "test.held", "name": "Held"});
+    app.ui.stopped_plugin = Some(serde_json::json!({"item": held, "items": [held]}));
+    assert_eq!(open_or_hold(&mut app, files.clone()), files, "held while the choice is up");
+    assert!(read.borrow().is_empty(), "nothing opened before the choice");
+    app.ui.stopped_plugin = None;
+    assert!(open_or_hold(&mut app, files.clone()).is_empty());
+    assert_eq!(*read.borrow(), files, "opened with no choice up");
 }
 
 #[test]
@@ -47,123 +70,55 @@ fn opening_files_unminimizes_and_focuses_the_window() {
     assert!(cmds.contains(&egui::ViewportCommand::Focus));
 }
 
+/// An old file whose docking data this version can't read keeps its preferences and every one of
+/// its workspaces: only the unreadable layout is dropped.
 #[test]
 fn unreadable_saved_docking_keeps_preferences_and_every_workspace() {
     use serde_json::json;
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.run("window.panel.float", json!({"panel":"layers"})).unwrap();
-    app.ui.toolbar = false;
-    app.ui.engine_prefs = json!({"interfaceLanguage":"fr", "uiBrightness":"light"});
-    app.ui.custom_workspaces =
-        vec![vectorcraft_ui_egui::workspaces::capture(&app.ui, "Future"), vectorcraft_ui_egui::workspaces::capture(&app.ui, "Valid")];
-    app.ui.workspace_changes = vec![vectorcraft_ui_egui::workspaces::capture(&app.ui, "Future")];
-    let original = serde_json::to_value(&app.ui).unwrap();
-    let valid_location = original["docking_hidden"]["layers"].clone();
-    assert!(valid_location.is_object());
-    for invalid_layout in [json!({"root":{"FutureNode":{}},"floating":[]}), json!(false)] {
-        for invalid_hidden in [json!({"layers":{"placement":{"FuturePlacement":{}}},"swatches":valid_location}), json!(["malformed"])] {
-            let mut raw = original.clone();
-            raw["docking"] = invalid_layout.clone();
-            raw["docking_hidden"] = invalid_hidden.clone();
-            raw["custom_workspaces"][0]["docking"] = invalid_layout.clone();
-            raw["custom_workspaces"][0]["dockingHidden"] = invalid_hidden.clone();
-            raw["workspace_changes"][0]["docking"] = invalid_layout.clone();
-            raw["workspace_changes"][0]["dockingHidden"] = invalid_hidden.clone();
-            assert!(serde_json::from_value::<vectorcraft_ui_egui::UiState>(raw.clone()).is_err(), "runtime serde stays strict");
-            let loaded = decode_saved_prefs(&serde_json::to_vec(&raw).unwrap()).unwrap();
-            assert_eq!(loaded.engine_prefs, app.ui.engine_prefs);
-            assert!(!loaded.toolbar);
-            assert!(loaded.docking.is_none());
-            assert!(!loaded.docking_hidden.contains_key("layers"));
-            if invalid_hidden.is_object() {
-                assert_eq!(serde_json::to_value(loaded.docking_hidden.get("swatches")).unwrap(), valid_location);
-            } else {
-                assert!(loaded.docking_hidden.is_empty());
+    let prefs = json!({"interfaceLanguage": "fr", "uiBrightness": "light"});
+    for layout in [json!({"root": {"FutureNode": {}}, "floating": []}), json!(false)] {
+        for hidden in [json!({"layers": {"placement": {"FuturePlacement": {}}}}), json!(["malformed"])] {
+            let saved = json!({
+                "engine_prefs": prefs,
+                "control_bar": false,
+                "docking": layout,
+                "docking_hidden": hidden,
+                "custom_workspaces": [{"name": "Future", "docking": layout, "dockingHidden": hidden}, {"name": "Valid", "dockTab": "Layers"}],
+                "workspace_changes": [{"name": "Future", "docking": layout, "dockingHidden": hidden}],
+            });
+            let ui = legacy_ui(&serde_json::to_vec(&saved).unwrap()).unwrap();
+            assert_eq!(ui.engine_prefs, prefs);
+            assert!(!ui.control_bar);
+            let names = vectorcraft_ui_egui::workspaces::names(&ui);
+            for name in ["Future", "Valid"] {
+                assert!(names.iter().any(|n| n == name), "{name} kept: {names:?}");
             }
-            assert_eq!(loaded.custom_workspaces.len(), 2);
-            assert_eq!(loaded.custom_workspaces[0].name, "Future");
-            assert!(loaded.custom_workspaces[0].docking.is_none());
-            assert!(!loaded.custom_workspaces[0].docking_hidden.contains_key("layers"));
-            assert_eq!(serde_json::to_value(&loaded.custom_workspaces[1]).unwrap(), original["custom_workspaces"][1]);
-            assert_eq!(loaded.workspace_changes.len(), 1, "a remembered layout is recovered, not the whole file lost");
-            assert!(loaded.workspace_changes[0].docking.is_none());
         }
     }
-    let roundtrip = decode_saved_prefs(&serde_json::to_vec(&original).unwrap()).unwrap();
-    assert_eq!(serde_json::to_value(roundtrip).unwrap(), original);
-    assert!(
-        decode_saved_prefs(&serde_json::to_vec(&json!({"toolbar":"invalid"})).unwrap()).is_none(),
-        "unrelated fields retain normal strict parsing"
-    );
 }
 
+/// The format boundary of the preferences file: a state with its saved fields off their defaults
+/// goes through `config.toml` and comes back equal (a field TOML cannot hold fails here).
 #[test]
-fn an_unreadable_ui_json_is_kept_beside_it() {
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-prefs-{}-{stamp}", std::process::id()));
-    std::fs::create_dir(&dir).unwrap();
-    let path = dir.join("ui.json");
-    super::keep_prefs_copy(&path, b"{\"docking\": {\"root\": {\"FutureNode\": {}}}}", "ui.unreadable");
-    super::keep_prefs_copy(&path, b"not json", "ui.unreadable");
-    super::keep_prefs_copy(&path, b"{}", "ui.before-layout-migration");
-    let first = std::fs::read(dir.join("ui.unreadable.json")).unwrap();
-    let second = std::fs::read(dir.join("ui.unreadable-2.json")).unwrap();
-    let before = std::fs::read(dir.join("ui.before-layout-migration.json")).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
-    assert!(first.starts_with(b"{\"docking\""), "the first copy is not replaced");
-    assert_eq!(second, b"not json");
-    assert_eq!(before, b"{}");
-    assert!(!super::KEEP_UI_PREFS.load(std::sync::atomic::Ordering::Relaxed), "ui.json can be saved once a copy is kept");
-}
-
-#[test]
-fn the_image_trace_preview_setting_is_kept_across_a_restart() {
-    for preview in [false, true] {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.ui.image_trace_preview = preview;
-        let saved = prefs_bytes(&app).unwrap();
-        let loaded = decode_saved_prefs(&saved).unwrap().sanitized();
-        assert_eq!(loaded.image_trace_preview, preview, "Preview {preview} after a restart");
-    }
-}
-
-#[test]
-fn the_system_title_bar_preference_keeps_the_window_decorations() {
-    use craft_window::{Frame, Layout};
-
-    // The System Title Bar preference (Preferences › User Interface) is read the same way on
-    // every platform; a missing or unreadable value is `false`.
-    assert!(!super::opted_into_system_title_bar(None), "no preferences: the default");
-    let off = ui_state_with_prefs(serde_json::json!({"systemTitleBar": false}));
-    assert!(!super::opted_into_system_title_bar(Some(&off)));
-    let on = ui_state_with_prefs(serde_json::json!({"systemTitleBar": true}));
-    assert!(super::opted_into_system_title_bar(Some(&on)));
-
-    // The suite-wide mapping (Frame + preference -> whether VectorCraft draws its own title
-    // bar). The desktop frame (macOS, Windows, X11, KDE/Wayland, …) always keeps native
-    // decorations; the app frame (GNOME/Wayland, or a `VECTORCRAFT_TITLEBAR` override) draws
-    // our own title bar — unless the user opted into the system title bar, which forces the
-    // native frame back on.
-    let app = Frame::App(Layout::default());
-    let desktop = Frame::Desktop;
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        assert!(super::custom_titlebar_from(&app, false), "GNOME/Wayland: VectorCraft draws its own");
-        assert!(!super::custom_titlebar_from(&app, true), "System Title Bar preference forces native");
-        assert!(!super::custom_titlebar_from(&desktop, false), "KDE/X11/…: keep the compositor's frame");
-        assert!(!super::custom_titlebar_from(&desktop, true));
-    }
-    // macOS and Windows keep today's behavior, independent of the probed frame: the pref still
-    // forces the native frame back on where a custom one would otherwise be drawn.
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    {
-        assert_eq!(super::custom_titlebar_from(&desktop, false), super::CUSTOM_TITLEBAR);
-        assert_eq!(super::custom_titlebar_from(&app, false), super::CUSTOM_TITLEBAR, "the probe does not change macOS/Windows");
-        assert!(!super::custom_titlebar_from(&desktop, true));
-    }
-
-    assert_eq!(super::native_options(false).viewport.decorations, Some(true));
-    assert_eq!(super::native_options(true).viewport.decorations, Some(false));
+fn a_saved_ui_state_survives_a_config_toml_round_trip() {
+    use craft::settings::SettingsStore;
+    use serde_json::json;
+    use vectorcraft_ui_egui::{AppSettings, from_app, workspaces};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("window.panel.float", json!({"panel":"layers"})).unwrap();
+    app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
+    app.ui.status_bar = false;
+    app.ui.image_trace_preview = false;
+    app.ui.last_folders.insert("open".to_string(), std::env::temp_dir());
+    workspaces::save_as(&mut app.ui, "Mine").unwrap();
+    let temp = tempfile::Builder::new().prefix("vectorcraft-config-toml-").tempdir().unwrap();
+    let wanted = from_app(&app);
+    let (mut store, _) = SettingsStore::<AppSettings>::open_at(temp.path());
+    store.set(wanted.clone());
+    store.flush().unwrap();
+    let (back, report) = SettingsStore::<AppSettings>::open_at(temp.path());
+    assert!(report.section_errors.is_empty(), "{:?}", report.section_errors);
+    assert_eq!(back.get(), &wanted);
 }
 
 /// The file extensions the macOS bundle declares: its document types and its own exported type.

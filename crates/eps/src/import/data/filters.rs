@@ -1,12 +1,17 @@
 use super::ops::MAX_DATA;
-use super::*;
+use super::{DictRef, ImageBlob, Key, Obj, PsError, Rc, RefCell, Res, find, hex_decode, jpeg_components, ps, ps_err};
+use craft_stream_codecs::CcittParams;
 
 /// A file object: the program itself, or data a filter decoded.
 #[derive(Debug)]
 pub(crate) enum Stream {
     Current,
-    /// Filters over the program's own data, decoded when first read.
-    Pending(Vec<Filter>),
+    /// Filters over the data the program reads, decoded when first read, from the file they were
+    /// made over: a file being run (`from`), or else the program's own file.
+    Pending {
+        chain: Vec<Filter>,
+        from: Option<Rc<RefCell<Stream>>>,
+    },
     Buf {
         data: Vec<u8>,
         pos: usize,
@@ -71,14 +76,28 @@ fn flate(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
 
 /// LZW data (`EarlyChange` 1) decoded, and how many bytes of `raw` it took.
 fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
+    let mut out = vec![];
+    let used = lzw_into(raw, &mut |bytes| {
+        out.extend_from_slice(bytes);
+        if out.len() > MAX_DATA {
+            return Err(PsError::Limit("decoded data is too large"));
+        }
+        Ok(())
+    })?;
+    Ok((out, used))
+}
+
+/// LZW data (`EarlyChange` 1) decoded into `sink` as it goes, and how many bytes of `raw` it
+/// took.
+fn lzw_into(raw: &[u8], sink: &mut dyn FnMut(&[u8]) -> Res) -> Res<usize> {
     let mut table: Vec<Vec<u8>> = (0..=255u8).map(|b| vec![b]).collect();
     table.push(vec![]);
     table.push(vec![]);
-    let (mut out, mut prev): (Vec<u8>, Option<Vec<u8>>) = (vec![], None);
+    let mut prev: Option<Vec<u8>> = None;
     let (mut acc, mut bits, mut width, mut i) = (0u32, 0u32, 9u32, 0usize);
     loop {
         while bits < width {
-            let Some(&b) = raw.get(i) else { return Ok((out, i)) };
+            let Some(&b) = raw.get(i) else { return Ok(i) };
             i += 1;
             acc = (acc << 8) | u32::from(b);
             bits += 8;
@@ -91,7 +110,7 @@ fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
                 width = 9;
                 prev = None;
             }
-            257 => return Ok((out, i)),
+            257 => return Ok(i),
             _ => {
                 let entry = match (table.get(code), &prev) {
                     (Some(e), _) if !e.is_empty() => e.clone(),
@@ -102,7 +121,7 @@ fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
                     }
                     _ => return io("LZWDecode"),
                 };
-                out.extend_from_slice(&entry);
+                sink(&entry)?;
                 if let Some(mut p) = prev.take()
                     && table.len() < 4096
                 {
@@ -116,13 +135,81 @@ fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
                     _ => 9,
                 };
                 prev = Some(entry);
-                if out.len() > MAX_DATA {
-                    return Err(PsError::Limit("decoded data is too large"));
-                }
             }
         }
     }
 }
+
+/// zlib data inflated into `sink` as it goes (64 KiB at a time), and how many bytes of `raw` it
+/// took.
+fn flate_into(raw: &[u8], sink: &mut dyn FnMut(&[u8]) -> Res) -> Res<usize> {
+    let mut z = flate2::Decompress::new(true);
+    let mut scratch = vec![0u8; 64 * 1024];
+    loop {
+        let before = (z.total_in(), z.total_out());
+        let input = raw.get(usize::try_from(z.total_in()).unwrap_or(usize::MAX)..).unwrap_or_default();
+        let status = z.decompress(input, &mut scratch, flate2::FlushDecompress::None).map_err(|_| PsError::Ps("ioerror", "FlateDecode".into()))?;
+        let made = usize::try_from(z.total_out() - before.1).unwrap_or(0);
+        sink(scratch.get(..made).unwrap_or_default())?;
+        match status {
+            flate2::Status::StreamEnd => break,
+            _ if (z.total_in(), z.total_out()) == before => break,
+            _ => {}
+        }
+    }
+    Ok(usize::try_from(z.total_in()).unwrap_or(raw.len()))
+}
+
+/// Data compressed with filter `f` (`FlateDecode` or `LZWDecode` without a predictor) decoded
+/// into `sink` as it goes, and how many bytes of `raw` it took; `None` for other filters.
+pub(super) fn decode_into(f: &Filter, raw: &[u8], sink: &mut dyn FnMut(&[u8]) -> Res) -> Option<Res<usize>> {
+    match &*f.name {
+        _ if f.predictor.is_some() => None,
+        "FlateDecode" => Some(flate_into(raw, sink)),
+        "LZWDecode" => Some(lzw_into(raw, sink)),
+        _ => None,
+    }
+}
+
+/// How many bytes of `raw` filter `f` would read, found without keeping what it decodes, for
+/// data whose decoded form is too large to hold: compressed data (`FlateDecode`, `LZWDecode`,
+/// `RunLengthDecode`) is decoded and dropped as it goes, a JPEG ends at its end-of-image
+/// marker, as [`dct`] reads it. `None` for other filters, data that can't be decoded, or data
+/// that decodes to more than `most` bytes (what the caller's operation budget still pays for).
+/// With it, how many bytes were decoded on the way, for the caller to charge: measuring costs
+/// the work of decoding, so a program that measures the same data in a loop has to end.
+pub(super) fn encoded_len(f: &Filter, raw: &[u8], most: usize) -> (Option<usize>, usize) {
+    let mut decoded = 0usize;
+    let mut count = |bytes: &[u8]| -> Res {
+        decoded = decoded.saturating_add(bytes.len());
+        if decoded > most {
+            return Err(PsError::Limit("the program runs too long"));
+        }
+        Ok(())
+    };
+    let used = match &*f.name {
+        "FlateDecode" => flate_into(raw, &mut count).ok(),
+        "LZWDecode" => lzw_into(raw, &mut count).ok(),
+        "RunLengthDecode" => {
+            let mut i = 0usize;
+            while let Some(&n) = raw.get(i) {
+                i += match n {
+                    128 => return (Some(i + 1), 0),
+                    0..=127 => 2 + usize::from(n),
+                    _ => 2,
+                };
+            }
+            Some(raw.len())
+        }
+        "DCTDecode" => Some(find(raw, &[0xFF, 0xD9]).map_or(raw.len(), |e| e + 2)),
+        _ => None,
+    };
+    (used, decoded)
+}
+
+/// Most pixels a DCTDecode JPEG may have: twice the most an image is read with, so every image that
+/// was read before is still read.
+const MAX_DCT_PIXELS: u64 = 1 << 27;
 
 /// A JPEG's pixels (gray, RGB or CMYK, 8 bits) with its channel count, and how many bytes of
 /// `raw` it took. A CMYK JPEG gives its samples as stored, for the image's Decode array to read
@@ -136,6 +223,12 @@ fn dct(raw: &[u8]) -> Res<(Vec<u8>, usize, u8)> {
     {
         return Ok((inks.data.into_iter().map(|v| 255 - v).collect(), end, 4));
     }
+    // The header's size is checked before the decoder allocates for it (a progressive JPEG keeps its
+    // coefficients besides its output).
+    let size = image::ImageReader::with_format(std::io::Cursor::new(jpeg), image::ImageFormat::Jpeg).into_dimensions();
+    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > MAX_DCT_PIXELS) {
+        return Err(PsError::Limit("decoded data is too large"));
+    }
     let img = image::load_from_memory_with_format(jpeg, image::ImageFormat::Jpeg).map_err(|_| PsError::Ps("ioerror", "DCTDecode".into()))?;
     if img.color().channel_count() == 1 { Ok((img.to_luma8().into_raw(), end, 1)) } else { Ok((img.to_rgb8().into_raw(), end, 3)) }
 }
@@ -146,36 +239,29 @@ fn dct(raw: &[u8]) -> Res<(Vec<u8>, usize, u8)> {
 /// `Rows`; without it they end after `Rows` rows, or at the end of the data when `Rows` is 0.
 /// Damaged data ends the rows: those decoded before it are kept, and damage in the first row is an
 /// `ioerror`. Rows that would take more than `MAX_DATA` bytes are refused.
-fn fax(raw: &[u8], settings: DecodeSettings) -> Res<(Vec<u8>, usize)> {
+fn fax(raw: &[u8], settings: CcittParams) -> Res<(Vec<u8>, usize)> {
     let row = (settings.columns as usize).div_ceil(8).max(1);
     let most = u32::try_from(MAX_DATA / row).unwrap_or(u32::MAX);
-    if !settings.end_of_block && settings.rows > most {
+    if !settings.end_of_block && settings.rows > i64::from(most) {
         return Err(PsError::Limit("decoded data is too large"));
     }
     // Without a row count that ends the data, a row past `most` shows that the data is too large.
-    let rows = if settings.end_of_block || settings.rows == 0 { most.saturating_add(1) } else { settings.rows };
+    let rows = if settings.end_of_block || settings.rows == 0 { most.saturating_add(1) } else { settings.rows as u32 };
+    // With `EndOfBlock` the rows end at the end-of-block code, whatever `Rows` says.
+    let params = if settings.end_of_block { CcittParams { rows: 0, ..settings } } else { settings };
     // The decoder reads the RTC of Group 3 two-dimensional data as rows: it gets the data before it.
-    let rtc = match settings.encoding {
-        EncodingMode::Group3_2D { .. } if settings.end_of_block => rtc(raw),
-        _ => None,
-    };
+    let rtc = if settings.k > 0 && settings.end_of_block { rtc(raw) } else { None };
     let data = rtc.and_then(|(cut, _)| raw.get(..cut)).unwrap_or(raw);
-    let mut out = FaxRows::default();
-    let read = hayro_ccitt::decode(data, &mut out, &mut DecoderContext::new(DecodeSettings { rows, ..settings }));
-    if out.rows > most {
+    let out = craft_stream_codecs::decode_ccitt_raw(data, &params, rows).map_err(|_| PsError::Limit("decoded data is too large"))?;
+    if out.rows_decoded > most {
         return Err(PsError::Limit("decoded data is too large"));
     }
-    let used = match read {
-        Ok(used) => used,
-        Err(_) if out.rows > 0 => {
-            out.data.truncate(out.rows as usize * row);
-            // The whole rows decoded again, for how many bytes they took.
-            let used = hayro_ccitt::decode(data, &mut Dropped, &mut DecoderContext::new(DecodeSettings { rows: out.rows, ..settings }));
-            used.unwrap_or(data.len())
-        }
-        Err(_) => return io("CCITTFaxDecode"),
-    };
-    Ok((out.data, rtc.map_or(used, |(_, end)| end)))
+    // Damaged data ends the rows: those decoded before it are kept, and damage in the first row
+    // is an `ioerror`.
+    if out.error.is_some() && out.rows_decoded == 0 {
+        return io("CCITTFaxDecode");
+    }
+    Ok((out.data, rtc.map_or(out.bytes_consumed, |(_, end)| end)))
 }
 
 /// The RTC that ends Group 3 two-dimensional data (six EOLs, each followed by a 1 tag bit, ITU-T
@@ -208,50 +294,6 @@ fn rtc(raw: &[u8]) -> Option<(usize, usize)> {
     None
 }
 
-/// Rows of 1-bit samples from a CCITT decoder, each padded to a whole byte: 1 is white, or black
-/// with `BlackIs1`.
-#[derive(Default)]
-struct FaxRows {
-    data: Vec<u8>,
-    /// Samples in the row being decoded.
-    x: u32,
-    /// Whole rows decoded.
-    rows: u32,
-}
-
-impl Decoder for FaxRows {
-    fn push_pixel(&mut self, white: bool) {
-        if self.x.is_multiple_of(8) {
-            self.data.push(0);
-        }
-        if white && let Some(b) = self.data.last_mut() {
-            *b |= 0x80 >> (self.x % 8);
-        }
-        self.x = self.x.saturating_add(1);
-    }
-
-    fn push_pixel_chunk(&mut self, white: bool, chunk_count: u32) {
-        self.data.extend(std::iter::repeat_n(if white { 0xff } else { 0 }, chunk_count as usize));
-        self.x = self.x.saturating_add(chunk_count.saturating_mul(8));
-    }
-
-    fn next_line(&mut self) {
-        self.x = 0;
-        self.rows = self.rows.saturating_add(1);
-    }
-}
-
-/// A CCITT decoder that drops what it decodes.
-struct Dropped;
-
-impl Decoder for Dropped {
-    fn push_pixel(&mut self, _: bool) {}
-
-    fn push_pixel_chunk(&mut self, _: bool, _: u32) {}
-
-    fn next_line(&mut self) {}
-}
-
 /// A decoding filter and its parameters.
 #[derive(Clone, Debug)]
 pub(crate) struct Filter {
@@ -261,7 +303,7 @@ pub(crate) struct Filter {
     /// `FlateDecode`'s and `LZWDecode`'s `Predictor`: what it undoes.
     pub(super) predictor: Option<Predictor>,
     /// `CCITTFaxDecode`'s parameters.
-    pub(super) fax: Option<DecodeSettings>,
+    pub(super) fax: Option<CcittParams>,
 }
 
 /// A `Predictor` (2: TIFF, 10–15: PNG) with its `Colors`, `BitsPerComponent` and `Columns`.
@@ -390,7 +432,7 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
 /// §7.4.6): `K` (below 0 Group 4, 0 Group 3 one-dimensional, above 0 Group 3 mixed), `Columns`,
 /// `Rows`, `EndOfBlock`, `EndOfLine`, `EncodedByteAlign` and `BlackIs1`, with their defaults where
 /// `d` leaves them out. `Columns` outside 1 to 65,535 and `Rows` below 0 are a `rangecheck`.
-pub(super) fn fax_settings(d: Option<&DictRef>) -> Res<DecodeSettings> {
+pub(super) fn fax_settings(d: Option<&DictRef>) -> Res<CcittParams> {
     let get = |k: &str| d.and_then(|d| d.borrow().get(&Key::name(k)).cloned());
     let num = |k: &str, default: f64| get(k).and_then(|o| o.as_num()).unwrap_or(default);
     let flag = |k: &str, default: bool| match get(k) {
@@ -401,21 +443,23 @@ pub(super) fn fax_settings(d: Option<&DictRef>) -> Res<DecodeSettings> {
     if !k.is_finite() || !(1.0..=65_535.0).contains(&columns) || !(0.0..=f64::from(u32::MAX)).contains(&rows) {
         return ps_err("rangecheck", "CCITTFaxDecode");
     }
-    let encoding = if k < 0.0 {
-        EncodingMode::Group4
+    // Group 4 below 0, one-dimensional Group 3 at 0, mixed Group 3 above (the row's tag bit says
+    // how it is coded, so any positive `K` reads the same); `as` saturates.
+    let k = if k < 0.0 {
+        -1
     } else if k == 0.0 {
-        EncodingMode::Group3_1D
+        0
     } else {
-        EncodingMode::Group3_2D { k: k.min(f64::from(u32::MAX)) as u32 }
+        (k as i64).max(1)
     };
-    Ok(DecodeSettings {
-        columns: columns as u32,
-        rows: rows as u32,
+    Ok(CcittParams {
+        k,
+        columns: columns as i64,
+        rows: rows as i64,
         end_of_block: flag("EndOfBlock", true),
         end_of_line: flag("EndOfLine", false),
-        rows_are_byte_aligned: flag("EncodedByteAlign", false),
-        encoding,
-        invert_black: flag("BlackIs1", false),
+        encoded_byte_align: flag("EncodedByteAlign", false),
+        black_is_1: flag("BlackIs1", false),
     })
 }
 

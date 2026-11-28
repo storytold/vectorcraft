@@ -1,16 +1,22 @@
-use super::*;
+use super::{BidiInfo, Level, ParaDirection, Range, SGlyph};
 
 /// The bidirectional resolution (UAX #9) of paragraph `text`, its base direction `direction` or,
 /// without one, from its first strong character. `None` for the usual paragraph with nothing right
 /// to left in it (no right-to-left character or direction), which skips the algorithm.
 pub(crate) fn para_bidi(text: &str, direction: Option<ParaDirection>) -> Option<BidiInfo<'_>> {
-    use unicode_bidi::BidiClass::{AL, AN, FSI, R, RLE, RLI, RLO};
     let rtl_set = direction == Some(ParaDirection::RightToLeft);
-    if !rtl_set && !text.chars().any(|c| matches!(unicode_bidi::bidi_class(c), R | AL | AN | RLE | RLO | RLI | FSI)) {
+    if !rtl_set && !text.chars().any(starts_bidi) {
         return None;
     }
     let level = direction.map(|d| if d == ParaDirection::RightToLeft { Level::rtl() } else { Level::ltr() });
     Some(BidiInfo::new(text, level))
+}
+
+/// Whether character `c` makes [`para_bidi`] resolve a paragraph that holds it: a right-to-left
+/// letter, an Arabic number, or a right-to-left embedding, override or isolate.
+pub(crate) fn starts_bidi(c: char) -> bool {
+    use unicode_bidi::BidiClass::{AL, AN, FSI, R, RLE, RLI, RLO};
+    matches!(unicode_bidi::bidi_class(c), R | AL | AN | RLE | RLO | RLI | FSI)
 }
 
 /// [`para_bidi`] for a paragraph whose characters in `set` (byte ranges of `text`, in order and not
@@ -75,34 +81,9 @@ pub(super) fn visual_order(bidi: Option<&BidiInfo<'_>>, paragraph_start: usize, 
         return vec![];
     }
     let levels = bidi.reordered_levels(para, line.start.saturating_sub(paragraph_start)..line.end.saturating_sub(paragraph_start));
-    // A list marker (length 0) is a cluster of its own.
-    let mut clusters: Vec<Range<usize>> = Vec::new();
-    for (i, g) in glyphs.iter().enumerate() {
-        if i > 0 && glyphs.get(i - 1).is_some_and(|p| p.byte == g.byte && (p.len == 0) == (g.len == 0)) {
-            if let Some(c) = clusters.last_mut() {
-                c.end = i + 1;
-            }
-        } else {
-            clusters.push(i..i + 1);
-        }
-    }
-    // A list marker is at the paragraph's level, and at a right-to-left one its tab is drawn
-    // before (left of) its characters.
-    let cluster_levels: Vec<_> = clusters
-        .iter()
-        .filter_map(|c| glyphs.get(c.start))
-        .map(|g| if g.len == 0 { g.level } else { levels.get(g.byte.saturating_sub(paragraph_start)).copied().unwrap_or(g.level) })
-        .collect();
-    let reversed = |i: usize| glyphs.get(clusters.get(i).map_or(0, |c| c.start)).is_some_and(|g| g.len == 0 && g.level.is_rtl());
-    unicode_bidi::BidiInfo::reorder_visual(&cluster_levels)
-        .into_iter()
-        .filter_map(|i| clusters.get(i).map(|c| (c.clone(), reversed(i))))
-        .flat_map(|(c, rev)| {
-            let mut v: Vec<usize> = c.collect();
-            if rev {
-                v.reverse();
-            }
-            v
-        })
-        .collect()
+    craft::font_catalog::visual_order(
+        glyphs.iter().map(|g| craft::font_catalog::VisualGlyph { byte: g.byte, len: g.len, level: g.level }),
+        paragraph_start,
+        &levels,
+    )
 }

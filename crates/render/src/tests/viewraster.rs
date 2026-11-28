@@ -115,7 +115,41 @@ fn rasters_cropped_to_the_view_follow_a_pan_and_a_zoom() {
 fn large_image(effects: &[(&str, serde_json::Value)]) -> Document {
     let img = image::RgbaImage::from_fn(300, 200, |x, y| image::Rgba([(x * 7) as u8, (y * 13) as u8, ((x + y) * 3) as u8, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut d = Document::new(6000.0, 4000.0);
     d.images.insert("viewraster-pan".into(), ImageBlob::new("image/png", png));
     let im = ImageObject {
@@ -178,6 +212,76 @@ fn pans_within_a_cropped_rasters_margin_draw_it_kept() {
             assert!(worst <= 1, "{name}: ({dx}, {dy}): a channel differs by {worst}");
         }
     }
+}
+
+/// A frame counts the art it draws in a way that depends on its size: an effect raster cropped to
+/// it or made at a lower resolution, drawn from the raster kept as well as made; a filter layer
+/// cropped to it or made at a lower resolution; any filter layer drawn on a single-threaded context,
+/// as on a single-threaded renderer or in a group drawn offscreen; and a mesh past the mesh buffer.
+/// Art with a raster of its own whole, and a filter layer that stays inside the frame, are not
+/// counted.
+#[test]
+fn a_frame_counts_the_art_it_draws_by_its_size() {
+    let effect = |id: &str, params: serde_json::Value| backdrop(&[(id, params)]).0;
+    let mesh = |side: f64| {
+        let mut d = Document::new(595.0, 842.0);
+        let m = vectorcraft_doc::GradientMesh::from_surface(2, 2, &|u, v| vectorcraft_geom::Point::new(u * side, v * side), &|u, v| {
+            Color::rgb(u as f32, v as f32, 0.5)
+        });
+        let layer = d.layers[0].id;
+        let node = Node::new(d.alloc_id(), NodeKind::Mesh(m));
+        d.insert(Some(layer), 0, node).unwrap();
+        d
+    };
+    let blur = effect("blur.gaussian", json!({"radius": 8}));
+    let shadow = effect("stylize.dropShadow", json!({"blur": 8, "x": 4, "y": 4}));
+    let outer_glow = effect("stylize.outerGlow", json!({"blur": 8}));
+    let glow = effect("stylize.innerGlow", json!({"blur": 8}));
+    let wide_glow = effect("stylize.innerGlow", json!({"blur": 2000}));
+    let group_glow = {
+        let mut d = Document::new(595.0, 842.0);
+        let basic = |c: Color| Appearance::basic(Paint::solid(c), Paint::None, 0.0);
+        let wide = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 595.0, 842.0)), basic(Color::rgb(0.9, 0.8, 0.3)));
+        let mut child = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(200.0, 200.0, 330.0, 500.0)), basic(Color::rgb(0.1, 0.3, 0.9)));
+        child.appearance.effects = vec![Effect { id: "stylize.innerGlow".into(), params: json!({"blur": 40}), visible: true }];
+        child.blend = vectorcraft_doc::color::BlendMode::Multiply;
+        let mut group = Node::group(d.alloc_id(), vec![std::sync::Arc::new(wide), std::sync::Arc::new(child)]);
+        group.isolate = true;
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, group).unwrap();
+        d
+    };
+    let cases = [
+        ("a whole blur raster", &blur, 1.0, (640, 900), 2, false),
+        ("a blur raster cropped to the frame", &blur, 10.0, (256, 128), 2, true),
+        ("a blur raster at a lower resolution", &blur, 5.0, (3200, 4400), 2, true),
+        ("a whole shadow raster", &shadow, 1.0, (640, 900), 2, false),
+        ("a shadow raster cropped to the frame", &shadow, 40.0, (256, 128), 2, true),
+        ("an outer glow raster at a lower resolution", &outer_glow, 5.0, (3200, 4400), 2, true),
+        ("a filter layer inside the frame", &glow, 1.0, (640, 900), 2, false),
+        ("a filter layer past the frame's edge", &glow, 1.0, (256, 128), 2, true),
+        ("a filter layer at a lower resolution", &wide_glow, 1.0, (640, 900), 2, true),
+        ("a filter layer on a single-threaded renderer", &glow, 1.0, (640, 900), 0, true),
+        ("a filter layer in a group drawn offscreen", &group_glow, 1.0, (640, 900), 2, true),
+    ];
+    for (name, d, zoom, size, threads, counted) in cases {
+        let opts = RenderOptions::default();
+        let mut r = Renderer::new();
+        r.threads = threads;
+        r.render(d, size.0, size.1, view(zoom, size), &opts);
+        assert_eq!(r.stats.view_sized > 0, counted, "{name}");
+        r.render(d, size.0, size.1, view(zoom, size), &opts);
+        assert_eq!(r.stats.view_sized > 0, counted, "{name}, drawn again");
+    }
+    let mut r = Renderer::new();
+    r.render(&mesh(100.0), 2100, 2100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(r.stats.view_sized, 0, "a mesh within the mesh buffer");
+    assert!(
+        r.render_plain_patch(&mesh(100.0), 60, 60, Affine::translate((-50.0, -50.0)), &RenderOptions::default()).is_none(),
+        "a patch through a mesh must fall back even when the full mesh fits"
+    );
+    r.render(&mesh(3000.0), 2100, 2100, Affine::IDENTITY, &RenderOptions::default());
+    assert!(r.stats.view_sized > 0, "a mesh past the mesh buffer");
 }
 
 /// Scrolls by amounts that are not whole pixels, as the wheel and a trackpad give them, moved in whole pixels with the part left
@@ -362,4 +466,20 @@ fn backdrop_drag_perf() {
             hash(&fresh.pixels)
         );
     }
+}
+
+/// A gradient mesh far larger than any buffer (a damaged file can give one) is drawn without
+/// flattening its whole outline in device pixels, which would make more segments than memory holds.
+#[test]
+fn a_mesh_past_any_buffer_draws_without_flattening_its_outline() {
+    let side = 1e30;
+    let mut d = Document::new(595.0, 842.0);
+    let m = vectorcraft_doc::GradientMesh::from_surface(2, 2, &|u, v| vectorcraft_geom::Point::new(u * side, v * side + u * u * side), &|u, v| {
+        Color::rgb(u as f32, v as f32, 0.5)
+    });
+    let layer = d.layers[0].id;
+    let node = Node::new(d.alloc_id(), NodeKind::Mesh(m));
+    d.insert(Some(layer), 0, node).unwrap();
+    let image = Renderer::new().render(&d, 640, 900, view(1.0, (640, 900)), &RenderOptions::default());
+    assert_eq!(image.pixels.len(), 640 * 900 * 4);
 }

@@ -1,26 +1,65 @@
 use super::slots::{PERSPECTIVE_SLOTS, RECENT_FONT_IDS, RECENT_IDS, SAVED_SELECTION_IDS, SAVED_VIEW_IDS};
 use super::submenus::{INSERT_BREAK, INSERT_SPECIAL, INSERT_WHITESPACE, PATH_EFFECTS, TYPE_SIZES, effect_menu, font_items, insert_items};
-use super::*;
+use super::{Node, Sep, c, cp, json, sub};
+use craft::keymap::CommandRef;
+use craft::menu::{Item, ItemRole, Platforms};
+
+use crate::i18n::LangExt as _;
+
+/// `label` running `id`, and with Shift+Alt held as it is chosen, `id` within the selected object's group.
+fn within_group(label: &'static str, id: &'static str) -> Node {
+    let held = craft::keymap::Mods { cmd: false, ctrl: false, alt: true, shift: true };
+    let group = craft::ui::menu::Alternate::new(held, CommandRef::with_params(id, json!({ "scope": "group" })));
+    Node::Item(Item::new(CommandRef::with_params(id, serde_json::Value::Null), label).alternate(group))
+}
 
 /// The in-window and native menu tree. The in-window bar skips the VectorCraft menu (see
 /// `menu_bar`); the native Mac bar is composed from the whole tree (see `native_menu`).
 /// `english_names` is Preferences › Type › Show Font Names in English (the Type → Font labels
 /// follow it; tests use the default `true`).
-pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
-    menu_tree_named(true)
+/// The fixed rows only: none of the [`Listed`] names.
+pub fn menu_tree() -> Vec<(&'static str, Vec<Node>)> {
+    menu_tree_named(true, &Listed::default())
 }
 
-pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
+/// The names the menus list as rows of their own after their fixed rows.
+#[derive(Default, Hash)]
+pub struct Listed {
+    /// Window › Workspace: the saved workspaces.
+    pub workspaces: Vec<String>,
+    /// Window › Toolbars: the toolbars made with New Toolbar.
+    pub toolbars: Vec<String>,
+    /// Effect › SVG Filters: the active document's filters that are not a default's.
+    pub svg_filters: Vec<String>,
+}
+
+impl Listed {
+    /// The names `app` holds now.
+    pub fn of(app: &crate::VectorcraftApp) -> Listed {
+        Listed {
+            workspaces: app.ui.workspaces.set.saved.iter().map(|w| w.name.clone()).collect(),
+            toolbars: app.ui.custom_toolbars.iter().map(|b| b.name.clone()).collect(),
+            svg_filters: app.session.active().map(|st| crate::dialogs::svg_filter::own_names(&st.doc.svg_filters)).unwrap_or_default(),
+        }
+    }
+}
+
+pub fn menu_tree_named(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec<Node>)> {
+    let mut tree = built_in_tree(english_names, listed);
+    crate::dialogs::plugin::place_commands(&mut tree);
+    tree
+}
+
+/// The menus with each plug-in command in its plug-in's submenu, before
+/// [`crate::dialogs::plugin::place_commands`] moves those whose manifest names another menu.
+fn built_in_tree(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec<Node>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id, "toggle": true }));
     vec![
         (
-            // The application menu: About and Discord only. The in-window bar never shows it (File
-            // is first there, as in Illustrator); on macOS `native_menu::mac_layout` composes the
-            // App menu from this entry and the other menus (About from Help, Settings from Edit,
-            // Quit from File, Language and Appearance synthesized). It stays first: `from_tree`
-            // gives the first menu the App role.
+            // The application menu, shown on macOS only: the layout merges it with the items the
+            // other menus tag with a role (Settings, Quit). It stays first.
             "VectorCraft",
-            vec![c("About VectorCraft", "help.about"), c("Join Our Discord", "help.discord")],
+            app_menu(),
         ),
         (
             "File",
@@ -28,8 +67,9 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("New…", "file.newDialog"),
                 c("New from Template…", "file.newFromTemplate"),
                 c("Open…", "file.open"),
+                sub("Open With", crate::dialogs::plugin::open_with_menu()),
                 sub("Open Recent Files", {
-                    let mut v: Vec<Item> = RECENT_IDS.iter().map(|id| c("Recent File", id)).collect();
+                    let mut v: Vec<Node> = RECENT_IDS.iter().map(|id| c("Recent File", id)).collect();
                     v.push(Sep);
                     v.push(c("Clear Recent Files", "file.clearRecent"));
                     v
@@ -61,7 +101,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Export Selection…", "file.exportSelection"),
                 Sep,
                 c("Package…", "ui.packageDialog"),
-                sub("Scripts", vec![c("Check Script…", "ui.checkScript"), todos("Other Script…", "Cmd+F12")]),
+                sub("Scripts", crate::scripts_menu::items()),
                 Sep,
                 c("Document Setup…", "file.documentSetup"),
                 sub(
@@ -75,7 +115,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Print…", "file.print"),
                 Sep,
-                c("Exit", "app.quit"),
+                c("Exit", "app.quit").role(ItemRole::Quit),
             ],
         ),
         (
@@ -94,9 +134,12 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Paste without Formatting", "edit.pasteWithoutFormatting"),
                 c("Clear", "edit.clear"),
                 Sep,
-                cp("Find and Replace…", "edit.findReplace", json!({"find": "", "replace": "", "matchCase": false, "wholeWord": false})),
+                cp("Find and Replace…", "edit.findReplace", crate::dialogs::find_replace::menu_params()),
                 cp("Find Next", "edit.findNext", json!({"find": ""})),
-                sub("Spelling", vec![todo("Auto Spell Check"), todos("Check Spelling…", "Cmd+I"), todo("Edit Custom Dictionary…")]),
+                sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck"), c("Check Spelling…", crate::dialogs::check_spelling::COMMAND)]),
+                // Edit › Edit Custom Dictionary…, beside Spelling, on the public Check and correct
+                // spelling page.
+                c("Edit Custom Dictionary…", crate::dialogs::custom_dictionary::COMMAND),
                 Sep,
                 sub(
                     "Edit Colors",
@@ -105,10 +148,10 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         sub(
                             "Recolor with Preset",
                             vec![
-                                cp("1 Color Job…", "ui.recolorDialog", json!({"colors": 1})),
-                                cp("2 Color Job…", "ui.recolorDialog", json!({"colors": 2})),
-                                cp("3 Color Job…", "ui.recolorDialog", json!({"colors": 3})),
-                                cp("Color Library…", "ui.recolorDialog", json!({"library": ""})),
+                                cp("1 Color Job…", "ui.recolorDialog", json!({"colors": 1, "preset": true})),
+                                cp("2 Color Job…", "ui.recolorDialog", json!({"colors": 2, "preset": true})),
+                                cp("3 Color Job…", "ui.recolorDialog", json!({"colors": 3, "preset": true})),
+                                cp("Color Library…", "ui.recolorDialog", json!({"library": "", "preset": true})),
                             ],
                         ),
                         c("Adjust Color Balance…", "ui.colorBalanceDialog"),
@@ -117,6 +160,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Blend Vertically", "edit.colors.blendVertically"),
                         c("Convert to CMYK", "edit.colors.toCMYK"),
                         c("Convert to Grayscale", "edit.colors.toGrayscale"),
+                        c("Convert to Indexed Color…", "ui.indexedColorDialog"),
                         c("Convert to RGB", "edit.colors.toRGB"),
                         c("Invert Colors", "edit.colors.invert"),
                         cp(
@@ -132,13 +176,15 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 c("Print Presets…", "ui.printPresetsDialog"),
                 c("PDF Presets…", "ui.pdfPresetsDialog"),
+                c("Tracing Presets…", "ui.tracingPresetsDialog"),
                 c("Perspective Grid Presets…", "ui.perspectivePresetsDialog"),
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),
                 c("Assign Profile…", "edit.assignProfile"),
+                c("Refresh Monitor Profile", "view.refreshMonitorProfile"),
                 Sep,
                 c("Keyboard Shortcuts…", "edit.keyboardShortcuts"),
-                c("Preferences…", "edit.preferences"),
+                c("Preferences…", "edit.preferences").role(ItemRole::Settings).platforms(not_mac()),
             ],
         ),
         (
@@ -158,6 +204,28 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Vertical Align Top", "object.align", json!({"vertical": "top"})),
                         cp("Vertical Align Center", "object.align", json!({"vertical": "center"})),
                         cp("Vertical Align Bottom", "object.align", json!({"vertical": "bottom"})),
+                        Sep,
+                        // The Align panel's Align To choices, checked as the panel shows them.
+                        c("Align to Selection", "align.toSelection"),
+                        c("Align to Key Object", "align.toKeyObject"),
+                        c("Align to Artboard", "align.toArtboard"),
+                    ],
+                ),
+                // The Align panel's Distribute Objects and Distribute Spacing buttons: each item runs
+                // what a click on its button runs (`crate::panels::align::run_button`).
+                sub(
+                    "Distribute",
+                    vec![
+                        c("Horizontal Distribute Left", "align.distributeHorizontalLeft"),
+                        c("Horizontal Distribute Center", "align.distributeHorizontalCenter"),
+                        c("Horizontal Distribute Right", "align.distributeHorizontalRight"),
+                        Sep,
+                        c("Vertical Distribute Top", "align.distributeVerticalTop"),
+                        c("Vertical Distribute Center", "align.distributeVerticalCenter"),
+                        c("Vertical Distribute Bottom", "align.distributeVerticalBottom"),
+                        Sep,
+                        c("Horizontal Distribute Space", "align.distributeHorizontalSpace"),
+                        c("Vertical Distribute Space", "align.distributeVerticalSpace"),
                     ],
                 ),
                 Sep,
@@ -167,12 +235,17 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     "Lock",
                     vec![c("Selection", "object.lock"), c("All Artwork Above", "object.lock.above"), c("Other Layers", "object.lock.otherLayers")],
                 ),
-                c("Unlock All", "object.unlockAll"),
+                within_group("Unlock All", "object.unlockAll"),
                 sub(
                     "Hide",
-                    vec![c("Selection", "object.hide"), c("All Artwork Above", "object.hide.above"), c("Other Layers", "object.hide.otherLayers")],
+                    vec![
+                        c("Selection", "object.hide"),
+                        c("All Artwork Above", "object.hide.above"),
+                        c("Other Layers", "object.hide.otherLayers"),
+                        c("Unselected Artwork", "object.hide.unselected"),
+                    ],
                 ),
-                c("Show All", "object.showAll"),
+                within_group("Show All", "object.showAll"),
                 Sep,
                 c("Expand…", "ui.expandDialog"),
                 c("Expand Appearance", "effect.expandAppearance"),
@@ -213,12 +286,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     vec![
                         c("Join", "path.join"),
                         c("Average…", "path.average"),
+                        c("Average & Join…", "path.averageJoin"),
                         Sep,
                         c("Outline Stroke", "object.path.outlineStroke"),
                         c("Offset Path…", "object.path.offsetPath"),
                         c("Reverse Path Direction", "path.reverse"),
                         Sep,
                         c("Simplify…", "object.path.simplify"),
+                        c("Smooth…", "object.path.smooth"),
                         c("Add Anchor Points", "object.path.addAnchorPoints"),
                         c("Remove Anchor Points", "path.removeAnchors"),
                         c("Divide Objects Below", "object.path.divideObjectsBelow"),
@@ -360,7 +435,10 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 Sep,
-                sub("Plug-ins", crate::dialogs::plugin::object_menu()),
+                sub(
+                    "Plug-ins",
+                    [crate::dialogs::plugin::last_filter_menu(), crate::addons::plugin_menu(), crate::dialogs::plugin::object_menu()].concat(),
+                ),
             ],
         ),
         (
@@ -368,7 +446,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             vec![
                 sub("Font", font_items(english_names)),
                 sub("Recent Fonts", RECENT_FONT_IDS.iter().map(|id| c("Recent Font", id)).collect()),
-                sub("Size", TYPE_SIZES.iter().map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n }))).collect()),
+                sub(
+                    "Size",
+                    TYPE_SIZES
+                        .iter()
+                        .map(|(l, n)| cp(l, "text.setStyle", json!({ "size": n })))
+                        .chain([Sep, c("Other…", "type.highlightFontSize")])
+                        .collect(),
+                ),
                 c("Bold", "type.bold"),
                 c("Italic", "type.italic"),
                 Sep,
@@ -385,8 +470,23 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     PATH_EFFECTS
                         .iter()
                         .map(|&(label, effect)| cp(label, "type.pathOptions", json!({ "effect": effect })))
-                        .chain([Sep, c("Type on a Path Options…", "type.pathOptions")])
+                        .chain([
+                            Sep,
+                            c("Center on Top", "type.pathCenter.top"),
+                            c("Center on Bottom", "type.pathCenter.bottom"),
+                            Sep,
+                            c("Type on a Path Options…", "type.pathOptions"),
+                        ])
                         .collect(),
+                ),
+                c("Dynamic Text", "type.dynamicText"),
+                sub(
+                    "Dynamic Text Presets",
+                    vec![
+                        cp("Circle", "type.dynamicTextPreset", json!({"preset": "circle"})),
+                        cp("Arch", "type.dynamicTextPreset", json!({"preset": "arch"})),
+                        cp("Bow", "type.dynamicTextPreset", json!({"preset": "bow"})),
+                    ],
                 ),
                 sub(
                     "Threaded Text",
@@ -399,6 +499,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Fit Headline", "text.fitHeadline"),
                 Sep,
                 c("Find Font…", "type.findFont"),
+                c("Composite Fonts…", crate::dialogs::composite_fonts::COMMAND),
+                c("Kinsoku Shori Settings…", crate::dialogs::kinsoku_sets::COMMAND),
                 sub(
                     "Change Case",
                     vec![
@@ -408,7 +510,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Sentence case", "type.changeCase", json!({"case": "sentence"})),
                     ],
                 ),
-                cp("Smart Punctuation…", "type.smartPunctuation", json!({"quotes": true, "dashes": true, "ellipsis": true, "scope": "selection"})),
+                c("Smart Punctuation…", "type.smartPunctuation"),
                 sub(
                     "Bullets and Numbering",
                     vec![
@@ -419,6 +521,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 Sep,
                 c("Create Outlines", "type.createOutlines"),
+                c("Retype", "type.retype"),
                 c("Scale Text Attributes", "type.scaleTextAttributes"),
                 c("Optical Margin Alignment", "type.opticalMarginAlignment"),
                 Sep,
@@ -455,6 +558,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Graphic Style", "select.same.graphicStyle"),
                         c("Shape", "select.same.shapeType"),
                         c("Symbol Instance", "select.same.symbolInstance"),
+                        c("Link Block Series", "select.same.linkBlockSeries"),
                         Sep,
                         c("Font Family", "select.same.fontFamily"),
                         c("Font Family & Style", "select.same.fontFamilyStyle"),
@@ -462,6 +566,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Font Size", "select.same.fontSize"),
                         c("Text Fill Color", "select.same.textFillColor"),
                         c("Text Stroke Color", "select.same.textStrokeColor"),
+                        c("Text Fill & Stroke Color", "select.same.textFillAndStrokeColor"),
                     ],
                 ),
                 sub(
@@ -476,6 +581,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Slices", "select.object.slices"),
                         c("Stray Points", "select.object.strayPoints"),
                         c("Open Paths", "select.object.openPaths"),
+                        c("Not Aligned to Pixel Grid", "select.object.notAlignedToPixelGrid"),
                         Sep,
                         c("All Text Objects", "select.object.textObjects"),
                         c("Point Text Objects", "select.object.pointText"),
@@ -492,7 +598,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             v.extend(SAVED_SELECTION_IDS.iter().map(|id| c("Saved Selection", id)));
             v
         }),
-        ("Effect", effect_menu()),
+        ("Effect", effect_menu(&listed.svg_filters)),
         ("View", {
             let mut v = vec![
                 c("Outline", "view.outline"),
@@ -509,9 +615,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 Sep,
-                sub(
-                    "Proof Setup",
-                    vec![
+                sub("Proof Setup", {
+                    let mut v = vec![
                         cp("Working CMYK", "view.proofSetup", json!({"target": "workingCmyk", "proof": true})),
                         cp("Legacy Macintosh RGB (Gamma 1.8)", "view.proofSetup", json!({"target": "legacyMacRgb", "proof": true})),
                         cp("Internet Standard RGB (sRGB)", "view.proofSetup", json!({"target": "srgb", "proof": true})),
@@ -519,9 +624,16 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Color blindness – Protanopia-type", "view.proofSetup", json!({"target": "protanopia", "proof": true})),
                         cp("Color blindness – Deuteranopia-type", "view.proofSetup", json!({"target": "deuteranopia", "proof": true})),
                         cp("Color blindness – Tritanopia-type", "view.proofSetup", json!({"target": "tritanopia", "proof": true})),
-                        cp("Customize…", "window.panel", json!({"panel": "separations"})),
-                    ],
-                ),
+                        c("Customize…", "ui.proofSetupDialog"),
+                    ];
+                    // The setups saved in the Proof Setups folder.
+                    let saved = crate::dialogs::proof_setup::saved_items();
+                    if !saved.is_empty() {
+                        v.push(Sep);
+                        v.extend(saved);
+                    }
+                    v
+                }),
                 c("Proof Colors", "view.proofColors"),
                 Sep,
                 c("Zoom In", "view.zoomIn"),
@@ -589,6 +701,18 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Snap to Pixel", "view.snapToPixel"),
                 c("Snap to Point", "view.snapToPoint"),
                 c("Snap to Glyph", "view.snapToGlyph"),
+                sub(
+                    "Snapping",
+                    vec![
+                        c("Smart Guides", "view.smartGuides"),
+                        c("Snap to Point", "view.snapToPoint"),
+                        c("Snap to Grid", "view.snapToGrid"),
+                        c("Snap to Pixel", "view.snapToPixel"),
+                        c("Snap to Glyph", "view.snapToGlyph"),
+                        Sep,
+                        c("Pixel Snapping Options…", "view.snapToPixel.options"),
+                    ],
+                ),
                 Sep,
                 c("New View…", "view.saved.new"),
                 c("Edit Views…", "view.saved.edit"),
@@ -597,18 +721,32 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             v.extend(SAVED_VIEW_IDS.iter().map(|id| c("Saved View", id)));
             v
         }),
-        (
-            "Window",
-            vec![
+        ("Window", {
+            let mut window_items = vec![
                 c("New Window", "window.newWindow"),
-                sub("Arrange", vec![todo("Cascade"), todo("Tile"), todo("Float in Window"), todo("Consolidate All Windows")]),
-                sub("Workspace", crate::workspaces::menu_items()),
+                sub("Arrange", {
+                    let mut arrange = vec![c("Cascade", "window.arrange.cascade")];
+                    arrange.extend(tile_items());
+                    arrange.extend([
+                        c("Float in Window", "window.arrange.floatInWindow"),
+                        c("Float All in Windows", "window.arrange.floatAllInWindows"),
+                        c("Consolidate All Windows", "window.arrange.consolidateAllWindows"),
+                    ]);
+                    arrange
+                }),
+                sub("Workspace", crate::workspaces::menu_items(&listed.workspaces)),
                 Sep,
                 c("Control", "window.control"),
+                c("Help Bar", "window.helpBar"),
                 c("Contextual Task Bar", "window.taskBar"),
+                c("Quick Pen Toolbar", "window.quickPenToolbar"),
                 c("Tools", "window.toolbar"),
-                sub("Toolbars", vec![c("Advanced", "window.toolbarAdvanced"), c("Double Column", "window.toolbarColumns")]),
+                sub("Toolbars", crate::custom_toolbars::menu_items(&listed.toolbars)),
                 Sep,
+            ];
+            let lang = crate::i18n::current();
+            let mut panels = vec![
+                panel("3D and Materials", crate::panels::three_d::ID),
                 panel("Actions", "actions"),
                 panel("Align", "align"),
                 panel("Appearance", "appearance"),
@@ -620,6 +758,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Color", "color"),
                 panel("Color Guide", "colorGuide"),
                 panel("Color Themes", "colorThemes"),
+                panel("Color Wheel", crate::panels::color_wheel::ID),
                 panel("CSS Properties", crate::panels::css_properties::ID),
                 panel("Document Info", "docInfo"),
                 panel("Flattener Preview", crate::panels::flattener_preview::ID),
@@ -629,6 +768,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Image Trace", "imageTrace"),
                 panel("Info", "info"),
                 panel("Layers", "layers"),
+                cp("Learn", "window.learn", json!({})),
                 panel("Libraries", "libraries"),
                 panel("Links", crate::panels::links::ID),
                 panel("Magic Wand", "magicWand"),
@@ -636,6 +776,9 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Pathfinder", "pathfinder"),
                 panel("Pattern Options", "patternOptions"),
                 panel("Properties", "properties"),
+                panel("Production Preflight", crate::panels::preflight::ID),
+                panel("Retype", crate::panels::retype::ID),
+                panel("Script Console", crate::panels::script_console::ID),
                 panel("Separations Preview", "separations"),
                 panel("Stroke", "stroke"),
                 panel("SVG Interactivity", crate::panels::svg_interactivity::ID),
@@ -643,9 +786,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Symbols", "symbols"),
                 panel("Transform", "transform"),
                 panel("Transparency", "transparency"),
-                sub(
-                    "Type",
-                    vec![
+                sub("Type", {
+                    let mut type_items = vec![
                         panel("Character", "character"),
                         panel("Character Styles", "charStyles"),
                         panel("Glyphs", "glyphs"),
@@ -653,36 +795,48 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         panel("Paragraph", "paragraph"),
                         panel("Paragraph Styles", "paraStyles"),
                         panel("Tabs", "tabs"),
-                    ],
-                ),
+                    ];
+                    sort_by_localized_label(&mut type_items, lang);
+                    type_items
+                }),
                 panel("Variables", crate::panels::variables::ID),
-                Sep,
+            ];
+            sort_by_localized_label(&mut panels, lang);
+            window_items.extend(panels);
+            window_items.push(Sep);
+            let mut lib_items = vec![
                 sub("Brush Libraries", crate::panels::brushes::window_menu()),
                 sub("Graphic Style Libraries", crate::panels::graphic_styles::window_menu()),
                 sub("Swatch Libraries", crate::panels::swatches::window_menu()),
                 sub("Symbol Libraries", crate::panels::symbols::window_menu()),
-            ],
-        ),
+            ];
+            sort_by_localized_label(&mut lib_items, lang);
+            window_items.extend(lib_items);
+            window_items
+        }),
         (
             "Help",
             vec![
+                c("Search Commands…", "help.commandPalette"),
+                Sep,
                 c("Join Our Discord", "help.discord"),
                 c("ArtCraft Website", "help.website"),
                 c("VectorCraft on getartcraft.com", "help.appPage"),
                 c("VectorCraft on GitHub", "help.github"),
                 Sep,
-                c("Search Commands…", "help.commandPalette"),
-                todos("VectorCraft Help…", "F1"),
+                c("VectorCraft Help…", "help.discover"),
+                c("Safe Mode…", "help.safeMode"),
+                c("Copy Troubleshooting Info", "help.copyTroubleshootingInfo"),
                 Sep,
                 c("Check for Updates…", "help.checkForUpdates"),
-                c("About VectorCraft", "help.about"),
+                c("About VectorCraft", "help.about").role(ItemRole::About).platforms(not_mac()),
             ],
         ),
     ]
 }
 
 /// Object → Transform (also in the canvas context menu).
-pub(super) fn transform_items() -> Vec<Item> {
+pub(super) fn transform_items() -> Vec<Node> {
     vec![
         c("Transform Again", "object.transformAgain"),
         Sep,
@@ -695,11 +849,25 @@ pub(super) fn transform_items() -> Vec<Item> {
         c("Transform Each…", "object.transformEach"),
         Sep,
         c("Reset Bounding Box", "object.resetBoundingBox"),
+        cp("Rotate Bounding Box…", "object.rotateBoundingBox", json!({"angle": 0})),
+    ]
+}
+
+/// Window → Arrange's Tile layouts, one `window.arrange.tile` `layout` each.
+fn tile_items() -> Vec<Node> {
+    vec![
+        c("Tile", "window.arrange.tile"),
+        cp("Tile All Vertically", "window.arrange.tile", json!({"layout": "vertical"})),
+        cp("Tile All Horizontally", "window.arrange.tile", json!({"layout": "horizontal"})),
+        cp("2-Up Layout", "window.arrange.tile", json!({"layout": "2up"})),
+        cp("3-Up Layout", "window.arrange.tile", json!({"layout": "3up"})),
+        cp("4-Up Layout", "window.arrange.tile", json!({"layout": "4up"})),
+        cp("6-Up Layout", "window.arrange.tile", json!({"layout": "6up"})),
     ]
 }
 
 /// Object → Arrange (also in the canvas context menu).
-pub(super) fn arrange_items() -> Vec<Item> {
+pub(super) fn arrange_items() -> Vec<Node> {
     vec![
         c("Bring to Front", "object.arrange.bringToFront"),
         c("Bring Forward", "object.arrange.bringForward"),
@@ -707,5 +875,50 @@ pub(super) fn arrange_items() -> Vec<Item> {
         c("Send to Back", "object.arrange.sendToBack"),
         Sep,
         c("Send to Current Layer", "object.arrange.sendToCurrentLayer"),
+    ]
+}
+
+/// Sort menu items alphabetically by their display label in `lang`, folding Latin accents so
+/// panels and submenus appear in the expected alphabetical order in every interface language (#4143).
+fn sort_by_localized_label(items: &mut [Node], lang: crate::i18n::Lang) {
+    items.sort_by_cached_key(|node| {
+        let (shown, english) = match node {
+            Node::Item(it) => (crate::i18n::tr_id(lang, &it.command.id, &it.label), it.label.as_str()),
+            Node::Submenu { label, .. } | Node::Heading(label) => (crate::i18n::tr(lang, label), label.as_str()),
+            _ => ("", ""),
+        };
+        (crate::i18n::name_sort_key(shown), english.to_string())
+    });
+}
+
+/// The platforms with no application menu: the items the Mac layout moves there (About, Settings)
+/// are tagged for these in their own menus, and their Mac twins live in [`app_menu`].
+fn not_mac() -> Platforms {
+    Platforms::WINDOWS | Platforms::LINUX | Platforms::WEB
+}
+
+/// The application menu, shown on macOS only: About and Discord, and the Settings pages, Language
+/// and Appearance the Mac layout places by their roles.
+fn app_menu() -> Vec<Node> {
+    let settings: Vec<Node> = vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES
+        .iter()
+        // Only the first page carries Preferences' shortcut, which the menus' model gives it from the keymap.
+        .map(|page| {
+            Node::Item(
+                Item::new(CommandRef::with_params("edit.preferences", json!({ "category": page })), format!("{page}…")).role(ItemRole::Settings),
+            )
+        })
+        .collect();
+    let mut language = vec![cp("Automatic", "app.language", json!({ "lang": "auto" })), Sep];
+    language.extend(crate::i18n::Lang::for_picker().into_iter().map(|l| super::named(l.name(), "app.language", json!({ "lang": l.code() }))));
+    let appearance: Vec<Node> =
+        crate::theme::Brightness::ALL.iter().map(|b| cp(b.label(), "window.brightness", json!({ "brightness": b.id() }))).collect();
+    let mac = Platforms::MAC;
+    vec![
+        c("About VectorCraft", "help.about").role(ItemRole::About).platforms(mac),
+        c("Join Our Discord", "help.discord").platforms(mac),
+        sub("Settings", settings).role(ItemRole::Settings).platforms(mac),
+        sub("Language", language).role(ItemRole::Language).platforms(mac),
+        sub("Appearance", appearance).role(ItemRole::Appearance).platforms(mac),
     ]
 }

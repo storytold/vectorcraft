@@ -1,12 +1,14 @@
 //! Delete and Backspace through shortcut routing: Artboard editing protects selected artwork,
 //! including when no artboard can be deleted. Width points and Puppet Warp pins take the keys
-//! while selected, then leave them to Clear.
+//! while selected, then leave them to Clear. Escape deselects the selected width points before it
+//! leaves isolation mode.
 
 use egui::{Key, Modifiers};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_tools::{PointerEvent, PointerKind};
 
+use super::synthetic::key_frame;
 use crate::VectorcraftApp;
 
 /// A 300×300 document with a selected 10 pt line from (100, 200) to (300, 200) → its id.
@@ -19,12 +21,12 @@ fn app_with_line() -> (VectorcraftApp, u64) {
     (app, id)
 }
 
-/// One frame pressing `key` through the shortcut handler.
+/// One app frame pressing `key`, after an empty frame that builds the board's keymap.
 fn press(app: &mut VectorcraftApp, key: Key) {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
+    key_frame(app, &ctx, vec![]);
     let ev = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
-    let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
-    out.textures_delta.clear();
+    key_frame(app, &ctx, vec![ev]);
 }
 
 #[test]
@@ -84,6 +86,34 @@ fn delete_and_backspace_remove_the_selected_width_point_then_clear() {
 }
 
 #[test]
+fn escape_deselects_the_selected_width_point_then_leaves_isolation() {
+    let (mut app, id) = app_with_line();
+    app.run("stroke.widthPoint.set", json!({"id": id, "t": 0.5, "left": 12, "right": 12})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("object.isolate", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.select_tool("width");
+    click(&mut app, 200.0, 200.0);
+    let st = app.session.active().unwrap();
+    let (doc, undo) = (st.doc.clone(), st.history.undo.len());
+    // Escape deselects the width point only: the line, its widths, the undo history and isolation
+    // mode stay as they were.
+    press(&mut app, Key::Escape);
+    let st = app.session.active().unwrap();
+    assert!(*st.doc == *doc && st.history.undo.len() == undo, "Escape changes nothing in the document");
+    assert!(st.isolation.is_some(), "the first Escape stays in isolation mode");
+    assert_eq!((app.session.tool_id(), width_points(&app, id)), ("width", json!(3)));
+    // With no width point selected, Escape leaves isolation mode as with other tools.
+    press(&mut app, Key::Escape);
+    assert!(app.session.active().unwrap().isolation.is_none(), "the next Escape leaves isolation mode");
+    // Delete after Escape clears the line instead of removing the width point.
+    click(&mut app, 200.0, 200.0);
+    press(&mut app, Key::Escape);
+    press(&mut app, Key::Delete);
+    assert!(!exists(&app, id), "Delete after Escape clears the selected line");
+}
+
+#[test]
 fn delete_and_backspace_remove_the_selected_pin_then_clear() {
     for key in [Key::Delete, Key::Backspace] {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -101,6 +131,47 @@ fn delete_and_backspace_remove_the_selected_pin_then_clear() {
         assert_eq!(pins(&app), n - 1, "{key:?} removed the pin");
         press(&mut app, key);
         assert!(!exists(&app, id), "{key:?} with no pin selected clears the selection");
+    }
+}
+
+#[test]
+fn escape_cancels_a_puppet_warp_perspective_or_liquify_drag() {
+    let grid = |app: &VectorcraftApp| vectorcraft_tools::distort::perspective::PerspectiveGrid::current(&app.session.doc().unwrap().doc);
+    for tool in ["puppetWarp", "perspectiveGrid", "perspectiveSelection", "warp"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.select_tool(tool);
+        // Where the drag starts: a new pin, a vanishing point, a plane widget, the art's right edge.
+        let from = match tool {
+            "puppetWarp" => {
+                click(&mut app, 112.0, 188.0);
+                (112.0, 188.0)
+            }
+            "perspectiveGrid" => (grid(&app).vp_left, grid(&app).horizon),
+            "perspectiveSelection" => {
+                let q = grid(&app).plane_widgets()[0].1;
+                (q.x, q.y)
+            }
+            _ => (290.0, 150.0),
+        };
+        let st = app.session.doc().unwrap();
+        let (before, undo) = (st.doc.clone(), st.history.undo.len());
+        let view = app.view_info();
+        for (kind, x, y) in [(PointerKind::Down, from.0, from.1), (PointerKind::Drag, from.0 + 30.0, from.1 - 20.0)] {
+            app.session.pointer(&PointerEvent::new(kind, x, y), view).unwrap();
+        }
+        assert!(app.session.tool_busy(), "{tool}");
+        assert_ne!(*app.session.doc().unwrap().doc, *before, "{tool}: the drag changes the preview");
+        press(&mut app, Key::Escape);
+        assert_eq!(*app.session.doc().unwrap().doc, *before, "{tool}: Escape cancels the drag");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "{tool}: and adds no undo step");
+        assert!(!app.session.tool_busy(), "{tool}");
+        assert_eq!(app.session.tool_id(), tool, "{tool}: Escape keeps the tool");
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, from.0 + 30.0, from.1 - 20.0), view).unwrap();
+        assert_eq!(*app.session.doc().unwrap().doc, *before, "{tool}: the release changes nothing");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "{tool}");
     }
 }
 
@@ -146,23 +217,17 @@ fn protected_artboard_key(key: Key) {
 }
 
 #[test]
-fn artboard_keys_delete_keeps_first_of_all_selected_boards() {
-    delete_artboards_with_key(Key::Delete, true);
+fn artboard_keys_keep_first_of_all_selected_boards() {
+    for key in [Key::Delete, Key::Backspace] {
+        delete_artboards_with_key(key, true);
+    }
 }
 
 #[test]
-fn artboard_keys_backspace_keeps_first_of_all_selected_boards() {
-    delete_artboards_with_key(Key::Backspace, true);
-}
-
-#[test]
-fn artboard_keys_delete_protects_last_board_and_art() {
-    protected_artboard_key(Key::Delete);
-}
-
-#[test]
-fn artboard_keys_backspace_protects_last_board_and_art() {
-    protected_artboard_key(Key::Backspace);
+fn artboard_keys_protect_last_board_and_art() {
+    for key in [Key::Delete, Key::Backspace] {
+        protected_artboard_key(key);
+    }
 }
 
 fn delete_artboards_with_key(key: Key, select_all: bool) {
@@ -202,13 +267,10 @@ fn delete_artboards_with_key(key: Key, select_all: bool) {
 }
 
 #[test]
-fn artboard_keys_delete_removes_partial_selection_in_one_step() {
-    delete_artboards_with_key(Key::Delete, false);
-}
-
-#[test]
-fn artboard_keys_backspace_removes_partial_selection_in_one_step() {
-    delete_artboards_with_key(Key::Backspace, false);
+fn artboard_keys_remove_partial_selection_in_one_step() {
+    for key in [Key::Delete, Key::Backspace] {
+        delete_artboards_with_key(key, false);
+    }
 }
 
 /// Keyboard-only history sequences must not need a canvas event to align the navigator and tool.

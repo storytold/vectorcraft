@@ -1,9 +1,17 @@
 use super::cid::drawn_paths;
 use super::state::Builder;
-use super::*;
+use super::{
+    Affine, Arc, Artboard, AtomicBool, BlendMode, ColorMode, Colors, Context, CropTo, Document, FillRule, HashMap, HashSet, ImportOptions,
+    ImportReport, InterpreterCache, InterpreterSettings, InterpreterWarning, LayerColor, MAX_NESTING, Mutex, Node, NodeKind, Ocgs, Ordering, Paint,
+    PdfError, Rect, Shape, Swatch, all_on, contains, hides_forms, scan_page, white_cover,
+};
+use crate::import_text::keep_file_fonts;
 
 /// Mixed into an image's cache key when it is read white inside an alpha soft mask.
 pub(super) const WHITE_KEY: u128 = 0x7717_e000_a1fa;
+
+/// Mixed into an image's cache key when a DeviceCMYK image there takes the output intent's profile.
+pub(super) const INTENT_KEY: u128 = 0x1e7e_0c3c_0b5a;
 
 /// The name of the paths text imports as.
 pub(super) const TEXT_OUTLINES: &str = "<Text Outlines>";
@@ -20,6 +28,35 @@ pub(super) const MAX_NESTED: u32 = 8;
 
 /// A tiling pattern read this many times with the same art is taken to always draw it.
 pub(super) const PATTERN_REUSE: u32 = 16;
+
+/// The most objects one import makes (paths, images, lines of type, and the copies of mask art
+/// each masked object takes): half of what a saved document may hold to open again
+/// ([`vectorcraft_doc::node::MAX_READ_NODES`]: 4M, 512K in the web build), leaving room for the
+/// groups, clips and layers around them. A page of a million paths still comes in whole, as an
+/// SVG or CAD drawing of two million objects does. What it stops is a small file drawing one form
+/// over and over, which neither the scan's operator limit nor the interpreter's budgets bound
+/// (#3569: 1 KB drawing 25 squares 32,000 times took 877 MB, about 1 KB an object, so this is
+/// about 2 GB).
+const MAX_OBJECTS: usize = vectorcraft_doc::node::MAX_READ_NODES / 2;
+
+/// Warning: the import reached [`MAX_OBJECTS`].
+pub(super) const TOO_MANY_OBJECTS: &str = "the file draws more objects than can be imported: the rest were left out";
+
+/// [`MAX_OBJECTS`], lowered by tests that need an import past it.
+#[cfg(not(test))]
+pub(super) fn max_objects() -> usize {
+    MAX_OBJECTS
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_MAX_OBJECTS: std::cell::Cell<usize> = const { std::cell::Cell::new(MAX_OBJECTS) };
+}
+
+#[cfg(test)]
+pub(super) fn max_objects() -> usize {
+    TEST_MAX_OBJECTS.with(std::cell::Cell::get)
+}
 
 /// Stands for the group of art whose group couldn't be told (see [`Builder::unsure`]): it goes
 /// to a hidden, non-printing layer of its page.
@@ -138,14 +175,22 @@ pub const INVISIBLE_TEXT_NOTE: &str = "invisible text (such as a scanned page's 
 /// Warning: glyphs that differ from the installed font of their name were kept as outlines.
 pub const UNMATCHED_GLYPHS_NOTE: &str = "text whose glyphs differ from the installed font of the same name was kept as outlines";
 
+/// Warning: type in a script whose letters reorder and join (Indic scripts) that, set again from
+/// its characters, wouldn't draw the glyphs where the file drew them was kept as outlines (#5235).
+pub const RESHAPED_TEXT_NOTE: &str =
+    "text that would not look as it does in the file if set as type (a script whose letters join) was kept as outlines";
+
 /// The end of the warning that glyphs whose characters the file doesn't name were kept as
 /// outlines, after "text in" and the font's name.
 pub const UNNAMED_CHARACTERS_NOTE: &str = "whose characters the file doesn't name (U+FFFD) was kept as outlines";
 
 /// Is `note` one of the warnings that glyphs were kept as outlines ([`OUTLINED_TEXT_NOTE`],
-/// [`UNMATCHED_GLYPHS_NOTE`], [`UNNAMED_CHARACTERS_NOTE`])?
+/// [`UNMATCHED_GLYPHS_NOTE`], [`RESHAPED_TEXT_NOTE`], [`UNNAMED_CHARACTERS_NOTE`])?
 pub fn is_outlines_note(note: &str) -> bool {
-    note == OUTLINED_TEXT_NOTE || note == UNMATCHED_GLYPHS_NOTE || note.starts_with("text in ") && note.ends_with(UNNAMED_CHARACTERS_NOTE)
+    note == OUTLINED_TEXT_NOTE
+        || note == UNMATCHED_GLYPHS_NOTE
+        || note == RESHAPED_TEXT_NOTE
+        || note.starts_with("text in ") && note.ends_with(UNNAMED_CHARACTERS_NOTE)
 }
 
 /// Is `n` glyphs kept as outlines (a path the import names `<Text Outlines>`)?
@@ -167,81 +212,134 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     vectorcraft_doc::depth::with_deep_stack(|| read(bytes, opts))
 }
 
+/// [`import_with_report`] of `opened`, the PDF `bytes` already read and checked
+/// ([`crate::open_pdf`] with `opts`' password), so the file isn't read again.
+pub fn import_opened(bytes: &[u8], opened: &crate::Opened, opts: &ImportOptions) -> Result<ImportReport, PdfError> {
+    vectorcraft_doc::depth::with_deep_stack(|| read_opened(bytes, opts, &crate::pages::open_options(), &opened.pdf))
+}
+
 /// [`import_with_report`] on the thread that asks.
 pub(crate) fn read(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
     read_with_reader_options(bytes, opts, &crate::pages::open_options())
 }
 
 #[cfg(test)]
-pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
+pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft::pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     vectorcraft_doc::depth::with_deep_stack(|| read_with_reader_options(bytes, opts, reader))
 }
 
-fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
+fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft::pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open_with_options(bytes, opts.password.as_deref(), reader)?;
-    let picked = crate::pages::picked(opts, original.pages().len())?;
-    let mut ocgs = Ocgs::read(&original);
-    let route = opts.layers && !ocgs.list.is_empty();
-    // Content that is off imports as hidden layers: an update of the file turns every group on
-    // (unless a form is hidden by its own group: its art couldn't be told apart).
-    let hide = route && ocgs.skips_any();
-    let mut hidden_form = false;
-    if hide {
-        for page in picked.iter().filter_map(|&n| original.pages().get(n)) {
-            hidden_form |= hides_forms(page, &mut ocgs, original.decode_limits().max_decoded_stream())?;
-            if hidden_form {
-                break;
+    read_opened(bytes, opts, reader, &original)
+}
+
+/// How many times each buffer's pages have been imported, by its address (tests).
+#[cfg(any(test, feature = "read-count"))]
+static IMPORTS: std::sync::Mutex<std::collections::BTreeMap<usize, usize>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// How many times the pages of `bytes`, at its address, have been imported on any thread (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn imports_of(bytes: &[u8]) -> usize {
+    IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
+}
+
+/// The work the imports of each buffer took, by its address (tests): the function evaluations of
+/// its function-based shadings, and the bytes of form content its pages' scans walked.
+#[cfg(any(test, feature = "read-count"))]
+static WORK: std::sync::Mutex<std::collections::BTreeMap<usize, (usize, usize)>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// Adds `evaluations` and `form_content` to the work of the imports of `bytes` (tests).
+#[cfg(any(test, feature = "read-count"))]
+fn note_work(bytes: &[u8], evaluations: usize, form_content: usize) {
+    if let Ok(mut work) = WORK.lock() {
+        let (e, f) = work.entry(bytes.as_ptr() as usize).or_default();
+        (*e, *f) = (e.saturating_add(evaluations), f.saturating_add(form_content));
+    }
+}
+
+/// How many function evaluations the function-based shadings of `bytes`, at its address, have
+/// taken in its imports on any thread (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn function_evaluations_of(bytes: &[u8]) -> usize {
+    WORK.lock().ok().and_then(|w| w.get(&(bytes.as_ptr() as usize)).map(|w| w.0)).unwrap_or(0)
+}
+
+/// How many bytes of form content the pages of `bytes`, at its address, have walked in its imports
+/// on any thread, up to [`crate::import_scan::form_content_limit`] a page (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn form_content_of(bytes: &[u8]) -> usize {
+    WORK.lock().ok().and_then(|w| w.get(&(bytes.as_ptr() as usize)).map(|w| w.1)).unwrap_or(0)
+}
+
+/// The notes on the fonts the file draws with that aren't available: type in a font the file
+/// carries keeps its look until it is edited; the rest shows in the fallback font.
+fn warn_missing_fonts(b: &mut Builder, doc: &Document) {
+    let mut bound = std::collections::HashSet::new();
+    doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            for font in t.file_fonts_in_use() {
+                if t.file_fonts.as_ref().and_then(|fonts| fonts.face(&font.key)).is_some() {
+                    bound.insert(font.family.clone());
+                }
             }
         }
+    });
+    let (carried, missing): (Vec<String>, Vec<String>) = std::mem::take(&mut b.missing_fonts).into_iter().partition(|family| bound.contains(family));
+    if !carried.is_empty() {
+        b.warn(&format!(
+            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): {}",
+            carried.join(", ")
+        ));
     }
-    let turned_on = (hide && !hidden_form)
-        .then(|| all_on(bytes, &original))
-        .flatten()
-        .and_then(|b| crate::pages::open_with_options(&b, opts.password.as_deref(), reader).ok())
-        .filter(|p| Ocgs::read(p).list.is_empty());
-    let mut notes = vec![];
-    if hide && turned_on.is_none() {
-        notes.push("the art of hidden layers couldn't be read and was left out".to_string());
+    if !missing.is_empty() {
+        let list = missing.join(", ");
+        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
     }
-    let all_on = turned_on.is_some();
-    let pdf = turned_on.unwrap_or(original);
+}
+
+/// The widest bleed of `pages` on each side (`[top, bottom, left, right]`, see [`crate::pages::bleed`]).
+fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft::pdf::syntax::page::Page<'d>>) -> [f64; 4] {
+    pages.fold([0.0; 4], |widest, page| {
+        let bleed = crate::pages::bleed(page);
+        std::array::from_fn(|i| widest[i].max(bleed[i]))
+    })
+}
+
+/// [`read_with_reader_options`] of `original`, the PDF `bytes` read with `reader`.
+fn read_opened(
+    bytes: &[u8],
+    opts: &ImportOptions,
+    reader: &craft::pdf::OpenOptions,
+    original: &craft::pdf::syntax::Pdf,
+) -> Result<ImportReport, PdfError> {
+    #[cfg(any(test, feature = "read-count"))]
+    if let Ok(mut imports) = IMPORTS.lock() {
+        let n = imports.entry(bytes.as_ptr() as usize).or_default();
+        *n = n.saturating_add(1);
+    }
+    let picked = crate::pages::picked(opts, original.pages().len())?;
+    let mut ocgs = Ocgs::read(original);
+    let route = opts.layers && !ocgs.list.is_empty();
+    let (turned_on, all_on, notes) = reopen_with_groups_on(bytes, opts, reader, original, &picked, &mut ocgs, route)?;
+    let pdf = turned_on.as_ref().unwrap_or(original);
     let pages = pdf.pages();
 
     let sink: Arc<Mutex<Vec<String>>> = Arc::default();
-    let sink2 = sink.clone();
     let incomplete = Arc::new(AtomicBool::new(false));
-    let incomplete_sink = incomplete.clone();
-    let settings = InterpreterSettings {
-        warning_sink: Arc::new(move |w| {
-            let msg = match w {
-                InterpreterWarning::UnsupportedFont => "a font could not be read; its text was skipped",
-                InterpreterWarning::ImageDecodeFailure => "an image could not be decoded and was skipped",
-                InterpreterWarning::ContentTruncated => {
-                    incomplete_sink.store(true, Ordering::Relaxed);
-                    return;
-                }
-            };
-            if let Ok(mut v) = sink2.lock()
-                && !v.iter().any(|x| x == msg)
-            {
-                v.push(msg.to_string());
-            }
-        }),
-        render_annotations: false,
-        ..Default::default()
-    };
+    let settings = interpreter_settings(sink.clone(), incomplete.clone());
 
     let mut doc = Document::new(1.0, 1.0);
     doc.title = "Imported PDF".into();
     doc.artboards.clear();
     doc.layers.clear();
     let taken: Vec<String> = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
-    let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken.clone()), opts.text_as, route);
+    let mut b = Builder::new(doc.peek_next_id(), Colors::new(pdf, taken.clone()), opts.text_as, route).with_embedded_fonts(opts.embedded_fonts);
     // The art of a group that is off (drawn as `all_on` turned it on) or doesn't print mustn't
     // show or print on its page's layer.
     b.unsure = route && ocgs.list.iter().any(|g| (all_on && !g.on) || !g.print);
     b.taken = taken;
     b.warnings = notes;
+    b.intent_cmyk = crate::import_image::output_intent_cmyk(pdf);
     b.colors.uncalibrated_rgb = opts.uncalibrated_rgb && picked.iter().filter_map(|&n| pages.get(n)).any(crate::pages::has_private_data);
     let cache = InterpreterCache::new();
     let mut x = 0.0;
@@ -255,15 +353,17 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
     let mut nesting = Nesting::new();
     // The top-level groups in the order the pages mark them, bottom first.
     let (mut order, mut known) = (vec![], HashSet::new());
+    // Artboards on the trim boxes have the bleed boxes round them as the document's bleed, so the
+    // art there shows and prints as bleed.
+    if opts.crop == CropTo::Trim {
+        doc.setup.bleed = widest_bleed(picked.iter().filter_map(|&n| pages.get(n)));
+    }
+    // The artboards are the gap apart plus the document's bleed on both sides, which export adds
+    // round every artboard, so no page's bleed reaches into the next artboard.
+    let [_, _, bleed_left, bleed_right] = doc.setup.bleed;
+    let spacing = opts.artboard_gap + bleed_left + bleed_right;
     for (i, &number) in picked.iter().enumerate() {
         let Some(page) = pages.get(number) else { continue };
-        // Artboards on the trim boxes have the bleed boxes round them as the document's bleed
-        // (the widest of the pages' on each side), so the art there shows and prints as bleed.
-        if opts.crop == CropTo::Trim {
-            for (side, b) in doc.setup.bleed.iter_mut().zip(crate::pages::bleed(page)) {
-                *side = side.max(b);
-            }
-        }
         // The chosen box sits at (x, 0); the page draws round it.
         let (init, frame) = crate::pages::frame(page, opts.crop);
         let mut ab = Rect::new(x, 0.0, x + frame.width(), frame.height());
@@ -272,7 +372,12 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
         b.page = ab;
         // The first id of this page's art.
         let first_id = b.next;
-        let mut scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream())?;
+        #[cfg(any(test, feature = "read-count"))]
+        crate::import_scan::FORM_CONTENT_WALKED.set(0);
+        let scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream());
+        #[cfg(any(test, feature = "read-count"))]
+        note_work(bytes, 0, crate::import_scan::FORM_CONTENT_WALKED.take());
+        let mut scan = scan?;
         // The walk's ink names pick between spaces of inks that look the same to the interpreter. A
         // page keeps them only when it uses such an ink and the interpreter draws as many paths
         // there as the walk counts.
@@ -286,7 +391,12 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
             merge_order(&mut order, &mut known, &marked);
         }
         b.begin_page(scan);
-        craft_pdf::interpret_page(page, &mut ctx, &mut b).map_err(|e| PdfError::Parse(e.to_string()))?;
+        let drawn = craft::pdf::interpret_page(page, &mut ctx, &mut b);
+        // The page's shadings take their evaluations while it is drawn: they count even when the
+        // import stops on this page or a later one.
+        #[cfg(any(test, feature = "read-count"))]
+        note_work(bytes, b.function_budget.take_spent(), 0);
+        drawn.map_err(|e| PdfError::Parse(e.to_string()))?;
         if incomplete.load(Ordering::Relaxed) {
             return Err(crate::import_scan::incomplete_content());
         }
@@ -316,17 +426,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
         // crossing the artboard edge isn't clipped, so it opens whole (#646).
         let shown = xf.transform_rect_bbox(crate::pages::page_box(page, CropTo::Crop));
         let page_box = shown.inflate(0.01, 0.01);
-        let mut clipped = false;
-        for (_, art) in parts.iter_mut().filter(|_| !ai) {
-            for n in art.iter_mut() {
-                if n.visual_bounds().is_some_and(|r| !contains(page_box, r)) {
-                    let clip = Arc::new(b.clip_node(&shown.to_path(0.1), FillRule::NonZero));
-                    *n = Arc::new(Node::new(b.id(), NodeKind::Group { children: vec![clip, n.clone()], clip: true }));
-                    clipped = true;
-                }
-            }
-        }
-        if clipped {
+        if !ai && clip_past_page(&mut parts, &mut b, shown, page_box) {
             b.warn(PAST_PAGE_NOTE);
         }
         // A `.ai` page keeps its art past the artboard edge, unclipped (#646), so a page whose art
@@ -336,24 +436,8 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
         // art clears the art before it.
         let mut art_right = f64::NEG_INFINITY;
         if ai && let Some(art) = parts.iter().flat_map(|(_, v)| v.iter()).filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b)) {
-            // Art at a coordinate that isn't a number (a damaged file) moves nothing.
-            let dx = Some((clear - art.x0).max(0.0)).filter(|dx| dx.is_finite()).unwrap_or(0.0);
-            if dx > 0.0 {
-                let shift = Affine::translate((dx, 0.0));
-                for (_, v) in &mut parts {
-                    for n in v.iter_mut() {
-                        Arc::make_mut(n).transform(shift, false);
-                    }
-                }
-                // What the page's lines of type were is told where their glyphs are (the outlines
-                // stroked on them are looked for there), so that moves with them.
-                for facts in b.lines.iter_mut().filter(|(id, _)| id.0 >= first_id).map(|(_, facts)| facts) {
-                    for ink in &mut facts.ink {
-                        *ink = *ink + kurbo::Vec2::new(dx, 0.0);
-                    }
-                }
-                ab = Rect::new(ab.x0 + dx, ab.y0, ab.x1 + dx, ab.y1);
-            }
+            let dx = shift_ai_page(&mut parts, &mut b, first_id, clear, art);
+            ab = Rect::new(ab.x0 + dx, ab.y0, ab.x1 + dx, ab.y1);
             art_right = art.x1 + dx;
         }
         let children: Vec<Arc<Node>> = parts.iter().flat_map(|(_, v)| v.iter().cloned()).collect();
@@ -366,7 +450,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
             right = right.max(art.x1);
             ab = art;
         }
-        x = right + opts.artboard_gap;
+        x = right + spacing;
         clear = right.max(art_right) + opts.artboard_gap;
         doc.artboards.push(Artboard {
             id: i as u32 + 1,
@@ -378,6 +462,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
             show_video_safe_areas: false,
             video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
+            guide_label: None,
         });
         let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>, shown: bool| {
             let name = if shown { format!("Page {}", number + 1) } else { format!("Page {} (unsorted)", number + 1) };
@@ -416,15 +501,10 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
     }
     // The groups' layers stack as the pages mark them (the art outside them stays where it was
     // drawn): a group that first paints on a later page doesn't go on top of the others.
-    let rank: HashMap<usize, usize> = order.iter().enumerate().map(|(i, &g)| (g, i)).collect();
-    let at: Vec<usize> = slots.iter().enumerate().filter(|(_, s)| matches!(s, Slot::Group(_))).map(|(i, _)| i).collect();
-    let mut stacked: Vec<usize> = slots.iter().filter_map(|s| if let Slot::Group(g) = s { Some(*g) } else { None }).collect();
-    stacked.sort_by_key(|g| rank.get(g).copied().unwrap_or(usize::MAX));
-    for (i, g) in at.into_iter().zip(stacked) {
-        if let Some(s) = slots.get_mut(i) {
-            *s = Slot::Group(g);
-        }
-    }
+    stack_groups(&mut slots, &order);
+    // The fonts the file carries for families that aren't available, kept with the document: the
+    // type set in them is drawn in them and spaced from the file's own widths.
+    let kept = std::mem::take(&mut b.file_glyphs).keep(&mut b.images);
     for (n, slot) in slots.into_iter().enumerate() {
         let mut layer = match slot {
             Slot::Page(l) => *l,
@@ -435,6 +515,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
             },
         };
         if let Some(art) = layer.children_mut() {
+            keep_file_fonts(art, &b.lines, &kept, &b.images);
             crate::import_lines::rebuild(art, &b.lines);
         }
         doc.layers.push(Arc::new(layer));
@@ -462,10 +543,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
     if b.colors.mixed {
         b.warn("colours mixing several inks (DeviceN) were imported as RGB");
     }
-    if !b.missing_fonts.is_empty() {
-        let list = b.missing_fonts.join(", ");
-        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
-    }
+    warn_missing_fonts(&mut b, &doc);
     // Before anything walks the tree by recursion (`fix_next_id` does): nested clips can be deeper
     // than the stack goes.
     let mut depth_notes = vec![];
@@ -474,6 +552,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
     doc.reserve_ids(b.next);
 
     let mut warnings = b.warnings;
+    warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
     if let Ok(v) = sink.lock() {
         for w in v.iter() {
             if !warnings.contains(w) {
@@ -483,7 +562,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
     }
     warnings.extend(depth_notes);
     let user_unit = picked.first().and_then(|&n| pages.get(n)).map_or(1.0, |page| f64::from(page.user_unit()));
-    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf), only_text, user_unit })
+    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(pdf), only_text, user_unit })
 }
 
 /// The page a PDF-compatible `.ai` paints under its layers is the editor's page, not art: an opaque
@@ -527,4 +606,115 @@ fn is_only_text(nodes: &[Arc<Node>]) -> bool {
     }
     let mut text = false;
     walk(nodes, &mut text) && text
+}
+
+/// Opens the file again with every layer group turned on when the pages hide art in groups that are
+/// off, and tells whether it did. Gives the turned-on copy (`None`: read `original`), whether there
+/// is one, and the notes for the import's report.
+fn reopen_with_groups_on(
+    bytes: &[u8],
+    opts: &ImportOptions,
+    reader: &craft::pdf::OpenOptions,
+    original: &craft::pdf::syntax::Pdf,
+    picked: &[usize],
+    ocgs: &mut Ocgs,
+    route: bool,
+) -> Result<(Option<craft::pdf::syntax::Pdf>, bool, Vec<String>), PdfError> {
+    // Content that is off imports as hidden layers: an update of the file turns every group on
+    // (unless a form is hidden by its own group: its art couldn't be told apart).
+    let hide = route && ocgs.skips_any();
+    let mut hidden_form = false;
+    if hide {
+        for page in picked.iter().filter_map(|&n| original.pages().get(n)) {
+            hidden_form |= hides_forms(page, ocgs, original.decode_limits().max_decoded_stream())?;
+            if hidden_form {
+                break;
+            }
+        }
+    }
+    let turned_on = (hide && !hidden_form)
+        .then(|| all_on(bytes, original))
+        .flatten()
+        .and_then(|b| crate::pages::open_with_options(&b, opts.password.as_deref(), reader).ok())
+        .filter(|p| Ocgs::read(p).list.is_empty());
+    let mut notes = vec![];
+    if hide && turned_on.is_none() {
+        notes.push("the art of hidden layers couldn't be read and was left out".to_string());
+    }
+    let all_on = turned_on.is_some();
+    Ok((turned_on, all_on, notes))
+}
+
+/// The interpreter's settings, its warnings noted once each in `sink` (truncated content in `incomplete`).
+fn interpreter_settings(sink: Arc<Mutex<Vec<String>>>, incomplete: Arc<AtomicBool>) -> InterpreterSettings {
+    InterpreterSettings {
+        warning_sink: Arc::new(move |w| {
+            let msg = match w {
+                InterpreterWarning::UnsupportedFont => "a font could not be read; its text was skipped",
+                InterpreterWarning::ImageDecodeFailure => "an image could not be decoded and was skipped",
+                InterpreterWarning::ContentTruncated => {
+                    incomplete.store(true, Ordering::Relaxed);
+                    return;
+                }
+            };
+            if let Ok(mut v) = sink.lock()
+                && !v.iter().any(|x| x == msg)
+            {
+                v.push(msg.to_string());
+            }
+        }),
+        render_annotations: false,
+        ..Default::default()
+    }
+}
+
+/// Moves a `.ai` page's art (`art`, its bounds) right until it clears the art before it (at
+/// `clear`), and its lines of type with it. Gives how far.
+fn shift_ai_page(parts: &mut [(Option<usize>, Vec<Arc<Node>>)], b: &mut Builder<'_>, first_id: u64, clear: f64, art: Rect) -> f64 {
+    // Art at a coordinate that isn't a number (a damaged file) moves nothing.
+    let dx = Some((clear - art.x0).max(0.0)).filter(|dx| dx.is_finite()).unwrap_or(0.0);
+    if dx > 0.0 {
+        let shift = Affine::translate((dx, 0.0));
+        for (_, v) in parts.iter_mut() {
+            for n in v.iter_mut() {
+                Arc::make_mut(n).transform(shift, false);
+            }
+        }
+        // What the page's lines of type were is told where their glyphs are (the outlines
+        // stroked on them are looked for there), so that moves with them.
+        for facts in b.lines.iter_mut().filter(|(id, _)| id.0 >= first_id).map(|(_, facts)| facts) {
+            for ink in &mut facts.ink {
+                *ink = *ink + kurbo::Vec2::new(dx, 0.0);
+            }
+        }
+    }
+    dx
+}
+
+/// Clips each object reaching past `page_box` to `shown`. Tells whether any did.
+fn clip_past_page(parts: &mut [(Option<usize>, Vec<Arc<Node>>)], b: &mut Builder<'_>, shown: Rect, page_box: Rect) -> bool {
+    let mut clipped = false;
+    for (_, art) in parts.iter_mut() {
+        for n in art.iter_mut() {
+            if n.visual_bounds().is_some_and(|r| !contains(page_box, r)) {
+                let clip = Arc::new(b.clip_node(&shown.to_path(0.1), FillRule::NonZero));
+                *n = Arc::new(Node::new(b.id(), NodeKind::Group { children: vec![clip, n.clone()], clip: true }));
+                clipped = true;
+            }
+        }
+    }
+    clipped
+}
+
+/// The groups' layers stack as the pages mark them (`order`, bottom first).
+fn stack_groups(slots: &mut [Slot], order: &[usize]) {
+    let rank: HashMap<usize, usize> = order.iter().enumerate().map(|(i, &g)| (g, i)).collect();
+    let at: Vec<usize> = slots.iter().enumerate().filter(|(_, s)| matches!(s, Slot::Group(_))).map(|(i, _)| i).collect();
+    let mut stacked: Vec<usize> = slots.iter().filter_map(|s| if let Slot::Group(g) = s { Some(*g) } else { None }).collect();
+    stacked.sort_by_key(|g| rank.get(g).copied().unwrap_or(usize::MAX));
+    for (i, g) in at.into_iter().zip(stacked) {
+        if let Some(s) = slots.get_mut(i) {
+            *s = Slot::Group(g);
+        }
+    }
 }

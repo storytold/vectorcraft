@@ -1,10 +1,13 @@
 use super::data::fmt_value;
-use super::designs::design_names;
+use super::designs::{bring_in_for, design_names, from_library, libraries_json};
 use super::edit::{regenerate, spec_of, target};
 use super::generate::generate_with;
 use super::markers::{design_frame, fit_affine};
 use super::series::{picked_series, reselect_series};
-use super::*;
+use super::{
+    Affine, Arc, ColumnDesign, ColumnType, Document, FillRule, Fractions, GraphSpec, Node, NodeKind, Point, Rect, Result, Session, TextObject, Value,
+    bad, json, refresh_bounds, shapes,
+};
 
 /// Most objects a graph's column designs may add (each column, repeated copy and legend swatch draws a copy).
 const COLUMN_BUDGET: usize = 200_000;
@@ -434,7 +437,7 @@ pub(super) fn set_column(s: &mut Session, p: &Value) -> Result<Value> {
     let mut spec = spec_of(s, id)?;
     let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
     let picked = picked_series(s, p, id, count, C)?;
-    let names = design_names(&s.doc()?.doc);
+    let mut names = design_names(&s.doc()?.doc);
     let all: Vec<usize> = if picked.is_empty() { (0..count).collect() } else { picked.clone() };
     // The column design the picked series (all of them with none picked) share; a design deleted since doesn't count,
     // as those series draw plain columns.
@@ -443,14 +446,21 @@ pub(super) fn set_column(s: &mut Session, p: &Value) -> Result<Value> {
     let shared = used.first().copied().flatten().filter(|c| used.iter().all(|x| *x == Some(*c))).cloned();
     let Some(v) = p.get("design") else {
         let options = shared.clone().unwrap_or_default();
-        return Ok(json!({
+        let mut out = json!({
             "designs": names,
             "design": shared.map(|c| c.design),
             "columnType": options.column_type.id(),
             "each": options.each,
             "fractions": options.fractions.id(),
-        }));
+        });
+        if let Some(libs) = libraries_json(s) {
+            out["libraries"] = libs;
+        }
+        return Ok(out);
     };
+    // A design of a loaded library comes into the document in the same undo step.
+    let library = from_library(s, p, C)?;
+    names.extend(library.as_ref().map(|(_, n)| n.clone()));
     let design = match v {
         Value::Null => None,
         Value::String(n) if names.contains(n) => Some(n.clone()),
@@ -482,11 +492,17 @@ pub(super) fn set_column(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Drawn once on a copy of the document, to refuse designs past the budget before the edit.
     let mut probe = (*s.doc()?.doc).clone();
+    if let Some((lib, name)) = &library {
+        bring_in_for(&mut probe, lib, name, id, &mut spec)?;
+    }
     let looks = column_designs(&probe, &spec);
     if generate_with(&mut probe, &spec, &looks).is_none() {
         return Err(bad(C, "the design is too big to draw in every column of this graph"));
     }
     s.edit("Graph Column", |d, sel| {
+        if let Some((lib, name)) = &library {
+            bring_in_for(d, lib, name, id, &mut spec)?;
+        }
         regenerate(d, id, spec)?;
         if !reselect.is_empty() {
             reselect_series(d, sel, id, &reselect);

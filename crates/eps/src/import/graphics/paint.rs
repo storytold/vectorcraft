@@ -1,5 +1,22 @@
 use super::state::{GState, Space, process, tiling_hash};
-use super::*;
+use super::{
+    Affine, Arc, Color, DictRef, FUNCTION_OPS, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, HashSet, Interp, Key, LIMIT,
+    MAX_APART, MAX_FUNCTION_VISITS, MAX_HIVAL, MAX_INKS, MAX_STITCH_STOPS, NESTED_PATTERNS, Node, NodeId, NodeKind, Obj, Paint, PatternDef, Point,
+    PsError, REGISTRATION, Rc, Rect, Res, SHADING_SAMPLES, Shared, UNKNOWN_FUNCTIONS, UNKNOWN_SHADINGS, Vec2, clamp_between, ps_err,
+};
+
+#[cfg(test)]
+thread_local! {
+    /// How many patterns the lookups of tiling patterns on this thread compared with the pattern
+    /// they looked for.
+    static TILINGS_COMPARED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`TILINGS_COMPARED`] of this thread.
+#[cfg(test)]
+pub(crate) fn tilings_compared() -> u64 {
+    TILINGS_COMPARED.get()
+}
 
 impl Interp<'_> {
     // ---------- colour ----------
@@ -208,7 +225,13 @@ impl Interp<'_> {
         let proc = get("PaintProc").ok_or(PsError::Ps("undefined", "PaintProc".into()))?;
         let key = proc.items().cloned().ok_or(PsError::Ps("typecheck", "PaintProc".into()))?;
         let hash = tiling_hash(&key, tile, under.as_ref());
-        let made = self.out.tilings.get(&hash).and_then(|list| list.iter().find(|(p, t, u, _)| p.same(&key) && *t == tile && *u == under));
+        let made = self.out.tilings.get(&hash).and_then(|list| {
+            list.iter().find(|(p, t, u, _)| {
+                #[cfg(test)]
+                TILINGS_COMPARED.set(TILINGS_COMPARED.get().saturating_add(1));
+                p.same(&key) && *t == tile && *u == under
+            })
+        });
         if let Some((.., name)) = made {
             return Ok(Paint::Pattern { pattern: name.clone(), xf });
         }
@@ -288,7 +311,9 @@ impl Interp<'_> {
         // there are too many).
         let mut visits = 0;
         let points = linear_points(&f, 0, &mut visits).filter(|p| p.len() <= MAX_STITCH_STOPS);
-        let stitched = points.is_some();
+        // A sampled function is continuous: no hard colour changes at its samples.
+        let stitched =
+            points.is_some() && !matches!(&f, Obj::Dict(d) if d.borrow().get(&Key::name("FunctionType")).and_then(Obj::as_num) == Some(0.0));
         let ts: Vec<f64> = match points {
             Some(mut pts) => {
                 pts.retain(|t| (d0.min(d1)..=d0.max(d1)).contains(t));
@@ -425,6 +450,135 @@ fn is_gradient(sh: &DictRef) -> bool {
     matches!(sh.borrow().get(&Key::name("ShadingType")).and_then(Obj::as_num), Some(2.0 | 3.0))
 }
 
+/// How far (points) the sides of the polygon a radial shading's circle is cut to may lie inside it.
+const RING_TOLERANCE: f64 = 0.01;
+/// Most sides of that polygon.
+const MAX_RING: usize = 1024;
+
+/// The part of `area` (in the document) that axial or radial shading `sh`, mapped into the
+/// document by `m`, paints, as a convex polygon; `None` when it paints all of it. Without
+/// `Extend` an axial shading paints only between the lines through its ends across its axis, and
+/// a radial one only over its circles (PLRM 3rd ed. §4.9.3, shading types 2 and 3: `Extend`
+/// defaults to `[false false]`). A radial shading extended at one end only, or starting from a
+/// circle with a radius, is not bounded here (it paints all of `area`).
+pub(super) fn shading_extent(sh: &DictRef, m: Affine, area: Rect) -> Option<Vec<Point>> {
+    let d = sh.borrow();
+    let nums = |k: &str| -> Vec<f64> {
+        d.get(&Key::name(k)).and_then(Obj::items).map(|i| i.borrow().iter().filter_map(Obj::as_num).collect()).unwrap_or_default()
+    };
+    let extend: Vec<bool> = d
+        .get(&Key::name("Extend"))
+        .and_then(Obj::items)
+        .map(|i| i.borrow().iter().map(|o| matches!(o, Obj::Bool(true))).collect())
+        .unwrap_or_default();
+    let (e0, e1) = (extend.first().copied().unwrap_or(false), extend.get(1).copied().unwrap_or(false));
+    if (e0 && e1) || area.width() <= 0.0 || area.height() <= 0.0 || m.determinant().abs() < 1e-12 || !m.as_coeffs().iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let inv = m.inverse();
+    // `area` in the shading's own space, where its axis and circles are.
+    let corners: Vec<Point> =
+        [(area.x0, area.y0), (area.x1, area.y0), (area.x1, area.y1), (area.x0, area.y1)].map(|(x, y)| inv * Point::new(x, y)).to_vec();
+    let mut poly = corners.clone();
+    let c = nums("Coords");
+    let at = |i: usize| c.get(i).copied().filter(|v| v.is_finite()).unwrap_or(0.0);
+    match d.get(&Key::name("ShadingType")).and_then(Obj::as_num) {
+        Some(2.0) => {
+            let (p0, p1) = (Point::new(at(0), at(1)), Point::new(at(2), at(3)));
+            let axis = p1 - p0;
+            if axis.hypot2() < 1e-18 {
+                return None;
+            }
+            if !e0 {
+                poly = clip_half(&poly, |p| (p - p0).dot(axis));
+            }
+            if !e1 {
+                poly = clip_half(&poly, |p| (p1 - p).dot(axis));
+            }
+        }
+        Some(3.0) if !e0 && !e1 && at(2) <= 0.0 && at(5) > 0.0 => {
+            // The circles from a point to a circle cover the hull of that point and circle.
+            let (p0, c1, r1) = (Point::new(at(0), at(1)), Point::new(at(3), at(4)), at(5));
+            // Enough sides that each lies within `RING_TOLERANCE` of the circle in the document
+            // (the radius scaled by the most `m` stretches any direction), from 64 to `MAX_RING`.
+            let [a, b, c, d, ..] = m.as_coeffs();
+            let (sum, det) = (a * a + b * b + c * c + d * d, a * d - b * c);
+            let stretch = ((sum + (sum * sum - 4.0 * det * det).max(0.0).sqrt()) / 2.0).sqrt();
+            let r = r1 * stretch;
+            let sides = (std::f64::consts::PI / (1.0 - RING_TOLERANCE / r).clamp(-1.0, 1.0).acos()).ceil();
+            let sides = if sides.is_finite() { (sides as usize).clamp(64, MAX_RING) } else { MAX_RING };
+            let ring: Vec<Point> = (0..sides).map(|i| c1 + Vec2::from_angle(i as f64 * std::f64::consts::TAU / sides as f64) * r1).collect();
+            for edge in hull(&[ring, vec![p0]].concat()).windows(2) {
+                if let [a, b] = edge {
+                    let (a, b) = (*a, *b);
+                    poly = clip_half(&poly, |p| (b - a).cross(p - a));
+                }
+            }
+        }
+        _ => return None,
+    }
+    // Nothing cut: it paints the whole area.
+    if poly.len() == 4 && poly.iter().zip(&corners).all(|(a, b)| (*a - *b).hypot2() < 1e-18) {
+        return None;
+    }
+    Some(poly.into_iter().map(|p| m * p).collect())
+}
+
+/// Convex polygon `poly` cut to where `f` (a linear function) is zero or more.
+fn clip_half(poly: &[Point], f: impl Fn(Point) -> f64) -> Vec<Point> {
+    let mut out = Vec::with_capacity(poly.len() + 1);
+    for (i, &a) in poly.iter().enumerate() {
+        let Some(&b) = poly.get((i + 1) % poly.len()) else { continue };
+        let (fa, fb) = (f(a), f(b));
+        if fa >= 0.0 {
+            out.push(a);
+        }
+        if (fa >= 0.0) != (fb >= 0.0) {
+            out.push(a.lerp(b, fa / (fa - fb)));
+        }
+    }
+    out
+}
+
+/// The convex hull of `pts`, counter-clockwise, its first point repeated at the end.
+fn hull(pts: &[Point]) -> Vec<Point> {
+    let mut p = pts.to_vec();
+    p.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    let mut h: Vec<Point> = Vec::with_capacity(p.len() * 2);
+    let turn = |h: &[Point], q: Point| match h {
+        [.., a, b] => (*b - *a).cross(q - *a) <= 0.0,
+        _ => false,
+    };
+    for &q in &p {
+        while turn(&h, q) {
+            h.pop();
+        }
+        h.push(q);
+    }
+    let lower = h.len() + 1;
+    for &q in p.iter().rev().skip(1) {
+        while h.len() >= lower && turn(&h, q) {
+            h.pop();
+        }
+        h.push(q);
+    }
+    h
+}
+
+/// A closed path through `pts`.
+pub(super) fn polygon(pts: &[Point]) -> kurbo::BezPath {
+    let mut bp = kurbo::BezPath::new();
+    for (i, p) in pts.iter().enumerate() {
+        if i == 0 {
+            bp.move_to(*p);
+        } else {
+            bp.line_to(*p);
+        }
+    }
+    bp.close_path();
+    bp
+}
+
 /// Is shading `sh` one [`Interp::mesh_fill`] paints?
 pub(super) fn is_mesh(sh: &DictRef) -> bool {
     matches!(sh.borrow().get(&Key::name("ShadingType")).and_then(Obj::as_num), Some(1.0 | 4.0 | 5.0 | 6.0 | 7.0))
@@ -448,6 +602,23 @@ fn linear_points(f: &Obj, depth: u32, visits: &mut usize) -> Option<Vec<f64>> {
     let num = |k: &str| d.get(&Key::name(k)).and_then(Obj::as_num);
     match num("FunctionType")? {
         2.0 if num("N").unwrap_or(1.0) == 1.0 => Some(vec![]),
+        // A sampled function of one input, interpolated linearly: straight between its samples.
+        0.0 if depth == 0 && num("Order").unwrap_or(1.0) == 1.0 => {
+            let nums = |k: &str| -> Vec<f64> {
+                d.get(&Key::name(k)).and_then(Obj::items).map(|i| i.borrow().iter().filter_map(Obj::as_num).collect()).unwrap_or_default()
+            };
+            let (domain, size, encode) = (nums("Domain"), nums("Size"), nums("Encode"));
+            let ([a, b], [s]) = (<[f64; 2]>::try_from(domain).ok()?, <[f64; 1]>::try_from(size).ok()?);
+            if !(1.0..=MAX_STITCH_STOPS as f64).contains(&s) || !a.is_finite() || !b.is_finite() {
+                return None;
+            }
+            let (e0, e1) = (encode.first().copied().unwrap_or(0.0), encode.get(1).copied().unwrap_or(s - 1.0));
+            if e1 == e0 || !e0.is_finite() || !e1.is_finite() {
+                return None;
+            }
+            // Where each sample index `k` falls in the domain, through `Encode`.
+            Some((0..s as usize).map(|k| a + (k as f64 - e0) * (b - a) / (e1 - e0)).filter(|x| x.is_finite()).collect())
+        }
         3.0 => {
             let items = d.get(&Key::name("Functions"))?.items()?;
             // More pieces than the stop cap allows: sample the function instead (tested before

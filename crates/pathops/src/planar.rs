@@ -26,15 +26,17 @@ use vectorcraft_geom::{FillRule, PathData, SubPath};
 use crate::boolean::{DEFAULT_PRECISION, Seg, Tidy, eps_for, is_sliver, segs_to_subpath, snap_horizontals, tidy_segments, to_seg};
 use crate::pathfinder::{Region, Shape};
 
+mod adjacency;
 mod graph;
 mod index;
 mod live_paint;
 mod map;
 mod shape_builder;
 
+pub use adjacency::{Adjacency, MapEdge, MapFace, MapOutline, adjacency};
 pub(crate) use graph::pin_ends;
 #[cfg(test)]
-use index::{Crossings, RectIndex, reference_budget, segment_footprint};
+use index::{Crossings, RectIndex, reference_budget, segment_footprint, work_done};
 pub use live_paint::{find_gaps, live_paint, live_paint_with_gaps};
 pub use map::interior_point;
 pub(crate) use map::{Map, Rest, map};

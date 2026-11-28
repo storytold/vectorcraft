@@ -1,5 +1,5 @@
 use super::entries::{Drawn, Inputs, Made, raster_bytes};
-use super::*;
+use super::{Affine, Document, EdgeMode, Filter, FilterPrimitive, Ink, RasterFx, Rect, RenderContext, Vec2, effects, peniko};
 
 pub(super) fn shadow_filter(dx: f64, dy: f64, blur: f64, color: peniko::Color) -> Filter {
     Filter::from_primitive(FilterPrimitive::DropShadowOnly {
@@ -11,19 +11,9 @@ pub(super) fn shadow_filter(dx: f64, dy: f64, blur: f64, color: peniko::Color) -
     })
 }
 
-/// The layer filter of a drop shadow with Darkness: the object's own pixels blurred.
+/// The layer filter of a drop shadow with Darkness: source paints are adjusted before blur.
 pub(super) fn shade_filter(blur: f64) -> Filter {
     Filter::from_primitive(FilterPrimitive::GaussianBlur { std_deviation: (blur / 2.0).max(0.0) as f32, edge_mode: EdgeMode::None })
-}
-
-/// How much darker (0..1) a drop shadow with Darkness `darkness` makes the values `ink` paints:
-/// black added leaves the cyan, magenta and yellow plane of a CMYK document as it is and scales
-/// the complemented black plane, as it scales screen colors, by 1 − `darkness`.
-pub(super) fn shade(ink: Ink, darkness: f32) -> f32 {
-    match ink {
-        Ink::Cmy => 0.0,
-        Ink::K | Ink::Display | Ink::RichBlack => darkness,
-    }
 }
 
 /// What a shadow or glow raster is made from ([`Made::pixels`]): the silhouette's alpha, or its
@@ -39,7 +29,7 @@ pub(super) fn pcolor(ink: Ink, c: &vectorcraft_doc::color::Color) -> peniko::Col
 
 /// Most pixels the raster of [`Renderer::pixel_content`] holds (a 4K screen's): larger content is
 /// cropped to the view when its effects only look nearby, else rendered at a lower resolution.
-pub(super) const PIXEL_BUDGET: f64 = 8.4e6;
+pub(crate) const PIXEL_BUDGET: f64 = 8.4e6;
 
 /// Most Rasterize effects of one stack that [`Renderer::raster_fx`] draws (the last ones): each
 /// draws the content again inside the one after it.
@@ -80,12 +70,12 @@ pub(super) fn hard_edged(chain: &[&RasterFx], px: f64) -> bool {
     matches!(chain.first(), Some(RasterFx::Rasterize(r)) if !r.anti_alias && r.cell(72.0) >= px)
 }
 
-/// How far (document units) from a pixel the content deciding it after `fx` lies; `None` when
-/// anywhere in the object.
-pub(super) fn looks_around(fx: &RasterFx) -> Option<f64> {
+/// How far (document units) from a pixel the content deciding it after `fx` lies, with the
+/// document's raster grid lines `line` apart; `None` when anywhere in the object.
+pub(super) fn looks_around(fx: &RasterFx, line: f64) -> Option<f64> {
     match fx {
-        RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius } => Some(1.5 * radius),
-        RasterFx::Pixel(p) => p.reach(),
+        RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius, .. } => Some(1.5 * radius),
+        RasterFx::Pixel(p) => p.reach(line),
         RasterFx::Rasterize(r) => Some(r.reach()),
         _ => Some(0.0),
     }
@@ -99,7 +89,7 @@ pub(crate) struct PixelEntry {
     pub(super) anchor: vectorcraft_geom::Point,
     pub(super) rel: (f64, f64),
     pub(super) k: f64,
-    pub(super) image: std::sync::Arc<vello_cpu::Pixmap>,
+    pub(crate) image: std::sync::Arc<vello_cpu::Pixmap>,
     /// For a raster of the content's whole reach at full size, `None`: it draws after a pan too.
     /// For one cropped to the view, or made at a lower resolution, the view and the rect it was
     /// made for: it draws only there, so dragging other art over the object keeps it (a wide blur,
@@ -117,6 +107,9 @@ pub(crate) struct PixelEntry {
     /// ([`crate::paint::decode_failures`]): each frame that draws the raster counts them
     /// again ([`crate::paint::add_decode_failures`]).
     pub(super) failed: u64,
+    /// Whether an image in the content failed to draw while the raster was made: each frame that
+    /// draws the raster inside opacity-mask art notes it again.
+    pub(crate) image_left_out: bool,
     pub(crate) stamp: u64,
 }
 
@@ -128,7 +121,7 @@ impl PixelEntry {
 }
 
 /// The four linear coefficients of `view` (zoom and rotation, not the pan), as cache keys.
-pub(super) fn linear_key(view: Affine) -> [u64; 4] {
+pub(crate) fn linear_key(view: Affine) -> [u64; 4] {
     let c = view.as_coeffs();
     [c[0].to_bits(), c[1].to_bits(), c[2].to_bits(), c[3].to_bits()]
 }

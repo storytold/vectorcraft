@@ -4,24 +4,40 @@
 //!
 //! Fields: `color` (`#rrggbb`, or a preset's name such as "Light Blue").
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use vectorcraft_color::Color;
 use vectorcraft_doc::LAYER_COLORS;
 
-use super::swatch_options::{grid, label};
-use super::{DialogSpec, run_and_close};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::option_form::{self, OptionSpec};
+use crate::VectorcraftApp;
 
 /// The dialog kind of Tile Edge Color.
 pub const KIND: &str = "tileEdgeColor";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Tile Edge Color").into(), body, confirm, min_width: 300.0, ..DialogSpec::FORM };
+/// The dialog's description for the option form.
+pub(super) static SPEC: OptionSpec = OptionSpec {
+    key: KIND,
+    title: || tl!("Tile Edge Color").to_owned(),
+    keys: &["color"],
+    colors: &["color"],
+    preview: false,
+    body: |ui, rows| rows.field(ui, tl!("Color"), true, |ui, rows, label| rows.color(ui, "color", label, true)),
+    inactive: |_, _| false,
+    run,
+    cancelled: None,
+};
 
 /// Open Tile Edge Color on the current preference.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "color": app.session.prefs.pattern_tile_edge_color })));
+    let values = Map::from_iter([("color".to_owned(), json!(app.session.prefs.pattern_tile_edge_color))]);
+    option_form::open(app, &SPEC, values, Value::Null).ok_or("no window")?;
     Ok(Value::Null)
+}
+
+/// OK: the colour as `#rrggbb` is the preference.
+fn run(app: &mut VectorcraftApp, values: &Map<String, Value>, _: &Value) -> Result<Value, String> {
+    let hex = checked(values.get("color").and_then(Value::as_str).unwrap_or_default())?.to_hex();
+    app.run("prefs.set", json!({ "key": "patternTileEdgeColor", "value": hex }))
 }
 
 /// `color` (a preset's name or a hex colour) as a colour.
@@ -32,62 +48,63 @@ pub(super) fn resolve(color: &str) -> Option<Color> {
     }
 }
 
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let color = resolve(&d.str("color")).unwrap_or(Color::BLACK);
-    let [r, g, b, _] = color.to_rgba8(1.0);
-    let preset = LAYER_COLORS.iter().position(|(_, c)| *c == [r, g, b]);
-    let names: Vec<&str> = LAYER_COLORS.iter().map(|(n, _)| *n).chain(["Custom"]).collect();
-    grid(ui, |ui| {
-        label(ui, tl!("Color:"));
-        ui.horizontal(|ui| {
-            if let Some((_, [r, g, b])) =
-                widgets::dropdown(ui, "tile-edge", names[preset.unwrap_or(LAYER_COLORS.len())], &names, 140.0).and_then(|i| LAYER_COLORS.get(i))
-            {
-                d.fields.insert("color".into(), json!(Color::rgb8(*r, *g, *b).to_hex()));
-            }
-            // Any other colour (the preset list shows Custom then).
-            let mut rgb = [r, g, b];
-            if ui.color_edit_button_srgb(&mut rgb).changed() {
-                d.fields.insert("color".into(), json!(Color::rgb8(rgb[0], rgb[1], rgb[2]).to_hex()));
-            }
-        });
-        ui.end_row();
-    });
-    false
+/// Whether `color` is an 8-digit hex color, `#rrggbbaa` (with or without `#`).
+pub(super) fn has_alpha(color: &str) -> bool {
+    let color = color.trim();
+    let digits = color.strip_prefix('#').unwrap_or(color);
+    digits.len() == 8 && digits.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let color = d.str("color");
-    let hex = resolve(&color).ok_or_else(|| format!("`{color}` is not a colour (#rrggbb or a preset name)"))?.to_hex();
-    run_and_close(app, "prefs.set", json!({ "key": "patternTileEdgeColor", "value": hex }))
+/// `color` as [`resolve`] reads it, or an error naming the forms it takes. A hex color with an
+/// alpha part (`#rrggbbaa` or `#rgba`) is an error.
+pub(super) fn checked(color: &str) -> Result<Color, String> {
+    let refused = || format!("`{color}` is not a colour (#rrggbb or a preset name)");
+    if has_alpha(color) {
+        return Err(refused());
+    }
+    resolve(color).ok_or_else(refused)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::option_form::tests::{app, fields, held, is_open, press_ok, set};
     use super::*;
-    use vectorcraft_engine::Session;
+    use craft::ui::dialog::HeldOk;
 
     #[test]
     fn presets_or_custom_colours_set_the_preference() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = app();
         app.run("ui.tileEdgeColor", json!({})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("color"), app.session.prefs.pattern_tile_edge_color);
-        // Drawn headlessly in the shared frame: the preset's name shows.
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(Default::default(), |ui| super::super::show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        let set = |app: &mut VectorcraftApp, v: &str| {
-            app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!(v));
-            super::super::confirm(app)
-        };
-        set(&mut app, "Red").unwrap();
+        assert_eq!(fields(&app)["color"], json!(app.session.prefs.pattern_tile_edge_color));
+        set(&app, "color", json!("Red")).unwrap();
+        assert!(press_ok(&mut app));
         assert_eq!(app.session.prefs.pattern_tile_edge_color, "#ff4f4f");
-        assert!(app.ui.dialog.is_none());
         app.run("ui.tileEdgeColor", json!({})).unwrap();
-        set(&mut app, "#00FF00").unwrap();
+        set(&app, "color", json!("#00FF00")).unwrap();
+        assert!(press_ok(&mut app));
         assert_eq!(app.session.prefs.pattern_tile_edge_color, "#00ff00");
+        // A word that is no colour is refused at OK: the dialog stays open and the preference is as it was.
         app.run("ui.tileEdgeColor", json!({})).unwrap();
-        assert!(set(&mut app, "nope").is_err());
+        set(&app, "color", json!("nope")).unwrap();
+        assert!(!press_ok(&mut app));
+        assert!(is_open(&app));
+        assert!(matches!(held(&app), Some(HeldOk::Refused(_))));
+        assert_eq!(app.session.prefs.pattern_tile_edge_color, "#00ff00");
+    }
+
+    /// A hex color with an alpha part is refused and leaves the preference as it was; `#rrggbb` still sets it.
+    #[test]
+    fn a_color_with_an_alpha_part_is_refused() {
+        let mut app = app();
+        app.run("ui.tileEdgeColor", json!({})).unwrap();
+        let before = app.session.prefs.pattern_tile_edge_color.clone();
+        set(&app, "color", json!("#ff000080")).unwrap();
+        assert!(!press_ok(&mut app));
+        assert!(is_open(&app), "the dialog stays open");
+        assert!(matches!(held(&app), Some(HeldOk::Refused(_))), "with the reason");
+        assert_eq!(app.session.prefs.pattern_tile_edge_color, before);
+        set(&app, "color", json!("#ff0000")).unwrap();
+        assert!(press_ok(&mut app));
+        assert_eq!(app.session.prefs.pattern_tile_edge_color, "#ff0000");
     }
 }

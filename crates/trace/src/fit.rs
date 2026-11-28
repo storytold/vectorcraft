@@ -4,7 +4,10 @@ use kurbo::ParamCurveArea;
 use vectorcraft_geom::{Anchor, AnchorKind, Point, SubPath};
 
 use crate::contour::Loop;
-use crate::logo::{Cubic, Stats, Style, all_within, fit_cubics, fit_open, fit_outline, resample_closed, resample_open, sample_cubics, tangent};
+use crate::logo::{
+    Cubic, Stats, Style, all_within, fit_cubics, fit_open, fit_outline, resample_closed, resample_open, sample_cubics, smooth_closed, smooth_pinned,
+    tangent,
+};
 use crate::subpixel::{self, Crack};
 
 #[cfg(test)]
@@ -140,7 +143,9 @@ pub(crate) fn fit_closed(pts: &[Point], style: &Style) -> Option<Vec<Cubic>> {
     let mut segs = fit_outline(&pts, style, &mut stats)?;
     // A fit that strayed was replaced by a plain one that nothing has checked: one that strays too
     // (a wild handle on a tiny or ragged loop) gives way to the outline's own points.
-    if stats.reverted > 0 && !all_within(&sample_cubics(&segs, 0.25), &resample_closed(&pts, 0.5).map_or_else(|| pts.clone(), |(p, _)| p), 1.5) {
+    let followed =
+        resample_closed(&pts, 0.5).map_or_else(|| pts.clone(), |(p, step)| if style.contour { smooth_closed(&p, style.sigma / step) } else { p });
+    if stats.reverted > 0 && !all_within(&sample_cubics(&segs, 0.25), &followed, 1.5) {
         segs = polygon(&pts, style.tol);
     }
     // A coarse fit of a tiny loop can be a single cubic. A closed editable
@@ -250,8 +255,11 @@ pub(crate) fn fit_piece(pts: &[Point], style: &Style, fixed_ends: bool) -> Vec<C
         pts.reverse();
     }
     let mut segs = fit_open(&pts, style, &mut Stats::default());
-    // Nothing else checks this fit: one that strays gives way to the piece's own points.
-    if !all_within(&sample_cubics(&segs, 0.25), &resample_open(&pts, 0.5).map_or_else(|| pts.clone(), |(p, _)| p), 1.5) {
+    // Nothing else checks this fit: one that strays from the points it follows (the contour of a
+    // smooth area follows them smoothed) gives way to the piece's own points.
+    let followed =
+        resample_open(&pts, 0.5).map_or_else(|| pts.clone(), |(p, step)| if style.contour { smooth_pinned(&p, style.sigma / step) } else { p });
+    if !all_within(&sample_cubics(&segs, 0.25), &followed, 1.5) {
         let mut keep = vec![false; n];
         rdp(&pts, 0, n - 1, style.tol, &mut keep);
         keep[0] = true;
@@ -288,16 +296,26 @@ pub(crate) fn fit_piece(pts: &[Point], style: &Style, fixed_ends: bool) -> Vec<C
     if flip { reversed(segs) } else { segs }
 }
 
+/// How far (px) the contour of a smooth area is smoothed: bumps shorter than about 8 px along it
+/// are noise.
+const CONTOUR_SIGMA: f64 = 4.0;
+
+/// The least fitting tolerance (px) for the contour of a smooth area.
+const CONTOUR_TOL: f64 = 0.5;
+
 /// Fit one loop of a `w × h` image into a closed Bézier subpath (pixel coordinates): its points
 /// are placed to a fraction of a pixel ([`subpixel::outline`], which explains `across`) and fitted
 /// as Flat Logo mode fits its outlines (corners restored, straight runs as lines, the rest as few
 /// curves as `style.tol` allows), piece by piece between its junctions, so that the regions on
-/// either side of an edge get the same curve for it.
+/// either side of an edge get the same curve for it. A piece that is the contour of a smooth area
+/// ([`subpixel::low_contrast`]) has no corners and is smoothed by [`CONTOUR_SIGMA`] (a closed one
+/// by at most an eighth of its smaller width or height, so that it keeps its size) and fitted to at
+/// least [`CONTOUR_TOL`].
 pub(crate) fn fit_loop(
     l: &Loop,
     w: usize,
     h: usize,
-    across: &dyn Fn(Crack) -> (f64, u32),
+    across: &dyn Fn(Crack) -> (f64, u32, [f64; 5]),
     junction_at: &dyn Fn(i32, i32) -> Option<Point>,
     style: &Style,
 ) -> Option<(SubPath, bool)> {
@@ -311,6 +329,21 @@ pub(crate) fn fit_loop(
             style.line_tol *= 1.8;
             style.circle_tol *= 1.8;
             style.sigma = 0.9;
+        }
+        if piece.contour {
+            style.sigma = CONTOUR_SIGMA;
+            if piece.closed {
+                // (The box is the same whichever way the loop runs.)
+                let (x0, x1, y0, y1) =
+                    piece.pts.iter().fold((f64::MAX, f64::MIN, f64::MAX, f64::MIN), |b, p| (b.0.min(p.x), b.1.max(p.x), b.2.min(p.y), b.3.max(p.y)));
+                // Smoothing a loop of radius r by s draws it in by about s²/2r: an eighth of its
+                // width keeps that to about 3%.
+                style.sigma = style.sigma.min((x1 - x0).min(y1 - y0) / 8.0);
+            }
+            style.contour = true;
+            style.corner_deg = f64::INFINITY;
+            style.restore = None;
+            style.tol = style.tol.max(CONTOUR_TOL);
         }
         if piece.closed {
             segs = fit_closed(&piece.pts, &style)?;

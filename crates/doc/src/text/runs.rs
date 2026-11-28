@@ -1,5 +1,5 @@
 use super::char_style::CharStyle;
-use super::*;
+use super::{Affine, Deserialize, PathData, Point, Rect, Serialize, Vec2, yes};
 
 /// A named character or paragraph style: the attributes it sets (a subset of [`CharStyle`] or
 /// [`ParaStyle`] fields, by their serialized names). Text using it records the name.
@@ -93,8 +93,10 @@ pub enum TextKind {
     /// Area type flowed inside `frame` (document coordinates, untransformed by `xf`).
     Area { frame: PathData },
     /// Type on a path, flowing from its start bracket `start` to its end bracket `end` (0..1 of the
-    /// path length; no `end`: the end of the path, or once round a closed path). See
-    /// [`TextKind::path_span`].
+    /// path length; no `end`: the end of the path, or once round a closed path). On an open path
+    /// `start` may be below 0: the type starts that far before the path's start, and the characters
+    /// whose middle falls before the path's start are not drawn ([`TextKind::path_text_start`]).
+    /// See [`TextKind::path_span`].
     OnPath {
         path: PathData,
         start: f64,
@@ -117,7 +119,21 @@ impl TextKind {
             (s, end.map_or(1.0, |e| fraction(e).max(s)))
         })
     }
+    /// Where type on a path's text starts, as a fraction of its path's length: its start bracket
+    /// ([`Self::path_span`]), or on an open path a start before the path's start (below 0, at most
+    /// [`PATH_LEAD_MAX`] path lengths before it). None for other type.
+    pub fn path_text_start(&self) -> Option<f64> {
+        let TextKind::OnPath { path, start, .. } = self else { return None };
+        if !path.is_closed() && start.is_finite() && *start < 0.0 { Some(start.max(-PATH_LEAD_MAX)) } else { self.path_span().map(|(s, _)| s) }
+    }
+    /// Does type on an open path start before its path's start ([`Self::path_text_start`])?
+    pub fn starts_before_path(&self) -> bool {
+        self.path_text_start().is_some_and(|s| s < 0.0)
+    }
 }
+
+/// How far before its path's start type on an open path may start, in lengths of the path.
+pub const PATH_LEAD_MAX: f64 = 1e6;
 
 /// Move anchors `refs` of `path`, in text space, by `d` in document space (`to_text`: the
 /// document → text map). False when an anchor doesn't exist.
@@ -141,6 +157,44 @@ pub(super) fn reverse_from_end(path: &mut PathData) {
         if sp.closed && !sp.anchors.is_empty() {
             sp.anchors.rotate_right(1);
         }
+    }
+}
+
+/// The anti-aliasing method of a type object (Character panel › Anti-aliasing Method): how the
+/// edges of its characters are drawn when the type is drawn as pixels (the canvas, raster exports,
+/// rasterizing). SVG, PDF and EPS export ignore it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TypeAntiAlias {
+    /// Hard edges: a pixel takes the type's color where the type covers at least half of it, and
+    /// nothing elsewhere.
+    None,
+    /// Each edge pixel shows the share of it the type covers.
+    #[default]
+    Sharp,
+    /// An edge pixel covered by a share `c` shows `2c - 0.5`, between 0 and 1: edges about half as
+    /// wide as Sharp's.
+    Crisp,
+    /// An edge pixel covered by a share `c` shows `2c`, at most 1: heavier type.
+    Strong,
+}
+
+impl TypeAntiAlias {
+    pub const ALL: [Self; 4] = [Self::None, Self::Sharp, Self::Crisp, Self::Strong];
+
+    /// The id used in command params and files (`none`, `sharp`, `crisp`, `strong`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Sharp => "sharp",
+            Self::Crisp => "crisp",
+            Self::Strong => "strong",
+        }
+    }
+
+    /// The method an id names.
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|a| a.id() == id)
     }
 }
 

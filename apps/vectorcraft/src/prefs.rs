@@ -1,20 +1,26 @@
-use super::*;
+//! The preferences file: opened before the window, sampled while the app runs and saved on exit.
 
-/// Where UI preferences live: ~/Library/Application Support/VectorCraft (macOS),
-/// %APPDATA%\VectorCraft (Windows), $XDG_CONFIG_HOME or ~/.config/vectorcraft (Linux).
-pub(crate) fn prefs_path() -> Option<std::path::PathBuf> {
-    prefs_dir::prefs_path_for("VectorCraft", "vectorcraft")
-}
+use std::path::PathBuf;
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
-/// The same place under the project's former name (DrawCraft): read once if there are no
-/// VectorCraft preferences yet, so settings survive the rename.
-fn legacy_prefs_path() -> Option<std::path::PathBuf> {
-    prefs_dir::prefs_path_for("DrawCraft", "drawcraft")
+use craft::settings::{LegacyFile, LoadReport, Location, OpenOptions, SettingsStore, SharedSettings};
+use vectorcraft_ui_egui::{AppSettings, from_app, parse_legacy};
+
+use super::{VectorcraftApp, prefs_dir};
+
+/// The file the settings were kept in before `config.toml`.
+const LEGACY_FILE: &str = "ui.json";
+
+/// The DrawCraft folder (the project's former name), read once if there are no VectorCraft
+/// preferences yet, so settings survive the rename.
+fn legacy_dir() -> Option<PathBuf> {
+    prefs_dir::profile::prefs_dir(true)
 }
 
 /// Where the log files live: `logs` in the preferences folder (see `logging`).
-pub(crate) fn log_dir() -> Option<std::path::PathBuf> {
-    Some(prefs_path()?.parent()?.join("logs"))
+pub(crate) fn log_dir() -> Option<PathBuf> {
+    Some(prefs_dir::prefs_dir()?.join("logs"))
 }
 
 /// Runs without preferences (`VECTORCRAFT_NO_PREFS`, agents' test runs) neither read nor write them.
@@ -22,86 +28,164 @@ pub(crate) fn prefs_enabled() -> bool {
     std::env::var_os("VECTORCRAFT_NO_PREFS").is_none()
 }
 
-/// The saved UI preferences, read before the window opens (they hold its size and position).
-/// A file read only in part, or with layouts converted from an older version, is copied beside
-/// itself before anything saves over it.
-pub(crate) fn read_prefs() -> Option<vectorcraft_ui_egui::UiState> {
-    if !prefs_enabled() {
-        return None;
-    }
-    if let Some(p) = prefs_path()
-        && let Ok(bytes) = std::fs::read(&p)
-    {
-        let read = vectorcraft_ui_egui::UiState::read_preferences(&bytes);
-        if read.as_ref().is_none_or(|read| !read.intact) {
-            keep_prefs_copy(&p, &bytes, "ui.unreadable");
+/// The saved preferences, opened before the window (they hold its size and position). The folder is
+/// `profile.rs`'s; the old `ui.json` files are read once when there is no `config.toml` yet. A run
+/// without preferences keeps them in memory.
+pub(crate) fn open_store() -> (SharedSettings<AppSettings>, LoadReport) {
+    let (location, legacy) = match prefs_dir::prefs_dir().filter(|_| prefs_enabled()) {
+        Some(dir) => {
+            let file = |dir: PathBuf| LegacyFile { path: dir.join(LEGACY_FILE), parse: parse_legacy };
+            let legacy = std::iter::once(file(dir.clone())).chain(legacy_dir().map(file)).collect();
+            (Location::Dir(dir), legacy)
         }
-        if read.as_ref().is_some_and(|read| read.converted) {
-            keep_prefs_copy(&p, &bytes, "ui.before-layout-migration");
-        }
-        return read.map(|read| read.ui);
-    }
-    let bytes = legacy_prefs_path().and_then(|p| std::fs::read(p).ok())?;
-    decode_saved_prefs(&bytes)
+        None => (Location::Memory, Vec::new()),
+    };
+    let (store, report) = SettingsStore::open_with(OpenOptions::new(location).legacy(legacy));
+    (SharedSettings::new(store), report)
 }
 
-/// Saved preferences, with what this version cannot read of their docking data dropped and
-/// older layouts converted (`vectorcraft_ui_egui::layout_migration`).
-pub(crate) fn decode_saved_prefs(bytes: &[u8]) -> Option<vectorcraft_ui_egui::UiState> {
-    vectorcraft_ui_egui::UiState::read_preferences(bytes).map(|read| read.ui)
-}
-
-/// Set when `ui.json` needed a copy kept ([`keep_prefs_copy`]) and none could be: the file is
-/// then left as it is rather than overwritten.
-pub(crate) static KEEP_UI_PREFS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Copy `ui.json` beside it as `<stem>.json` or the first free `<stem>-N.json`, before the next
-/// save replaces it: `ui.unreadable` when it could not be read in full (a newer VectorCraft may
-/// have written it), `ui.before-layout-migration` when its layouts were converted.
-pub(crate) fn keep_prefs_copy(path: &std::path::Path, bytes: &[u8], stem: &str) {
-    use std::io::Write as _;
-    for n in 1..100u32 {
-        let name = if n == 1 { format!("{stem}.json") } else { format!("{stem}-{n}.json") };
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(path.with_file_name(name)) {
-            Ok(mut file) => {
-                if file.write_all(bytes).is_ok() {
-                    return;
-                }
-                break;
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(_) => break,
-        }
-    }
-    KEEP_UI_PREFS.store(true, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub(crate) fn load_prefs(app: &mut VectorcraftApp, saved: Option<vectorcraft_ui_egui::UiState>) {
+pub(crate) fn load_prefs(app: &mut VectorcraftApp, store: &SharedSettings<AppSettings>) {
     if !prefs_enabled() {
         return;
     }
-    if let Some(ui) = saved {
-        app.ui = ui.sanitized();
-    }
+    let ui = store.lock().get().ui.clone();
+    app.ui = ui.sanitized();
     vectorcraft_ui_egui::prefs_dialog::restore(app);
 }
 
-pub(crate) fn save_prefs(app: &VectorcraftApp) {
-    if !prefs_enabled() || KEEP_UI_PREFS.load(std::sync::atomic::Ordering::Relaxed) {
+/// How often [`save_tick`] samples the UI state for changes.
+const SAVE_EVERY: Duration = Duration::from_secs(2);
+
+/// Once per frame: hand the store the current settings when a preference was confirmed (#1747) or
+/// every [`SAVE_EVERY`] (the workspace, panels, toolbars and the other UI settings change without
+/// the dialog, #4625), then let the store write what it holds. The store decides when to write and
+/// merges another window's changes; a sample equal to what it holds saves nothing.
+pub(crate) fn save_tick(app: &mut VectorcraftApp, store: &SharedSettings<AppSettings>, now: Instant) {
+    static LAST: Mutex<Option<Instant>> = Mutex::new(None);
+    let confirmed = app.take_prefs_changed();
+    let sample = {
+        let mut last = LAST.lock().unwrap_or_else(PoisonError::into_inner);
+        let sample = confirmed || last.is_none_or(|t| now.duration_since(t) >= SAVE_EVERY);
+        if sample {
+            *last = Some(now);
+        }
+        sample
+    };
+    let mut store = store.lock();
+    if sample && store.is_persistent() {
+        store.set(from_app(app));
+    }
+    store.tick(now);
+}
+
+/// On exit: save the app's last state, with what changed since the last sample.
+pub(crate) fn flush(app: &VectorcraftApp, store: &SharedSettings<AppSettings>) {
+    let mut store = store.lock();
+    if !store.is_persistent() {
         return;
     }
-    if let Some(p) = prefs_path() {
-        let _ = std::fs::create_dir_all(p.parent().unwrap_or(std::path::Path::new(".")));
-        if let Ok(bytes) = prefs_bytes(app) {
-            // Preferences are best effort: a failed write keeps the previous file.
-            let _ = fileio::write_atomic(&p, &bytes);
-        }
+    store.set(from_app(app));
+    // Preferences are best effort: a failed write is logged, never fatal at exit.
+    if let Err(e) = store.flush() {
+        log::warn!("the preferences were not saved: {e}");
     }
 }
 
-/// The preferences file's contents: the UI state with the engine preferences.
-pub(crate) fn prefs_bytes(app: &VectorcraftApp) -> serde_json::Result<Vec<u8>> {
-    let mut ui = app.ui.clone();
-    ui.engine_prefs = app.session.prefs.to_json();
-    serde_json::to_vec_pretty(&ui)
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    /// One VectorCraft window: its store over the folder and its app, as loaded from it.
+    struct Window {
+        store: SettingsStore<AppSettings>,
+        app: VectorcraftApp,
+    }
+
+    impl Window {
+        fn open(dir: &Path) -> Self {
+            let (store, _) = SettingsStore::<AppSettings>::open_at(dir);
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.ui = store.get().ui.clone();
+            Window { store, app }
+        }
+
+        fn save(&mut self) {
+            self.store.set(from_app(&self.app));
+            self.store.flush().unwrap();
+        }
+
+        fn set_sets(&mut self, names: &[&str]) {
+            self.app.ui.actions = craft::automation::actions::ActionList::new();
+            for name in names {
+                self.app.ui.actions.new_set(name).unwrap();
+            }
+        }
+    }
+
+    fn temp() -> tempfile::TempDir {
+        tempfile::Builder::new().prefix("vc-prefs-").tempdir().unwrap()
+    }
+
+    fn saved(dir: &Path) -> AppSettings {
+        SettingsStore::<AppSettings>::open_at(dir).0.get().clone()
+    }
+
+    fn set_names(settings: &AppSettings) -> Vec<String> {
+        settings.ui.actions.sets().into_iter().map(str::to_string).collect()
+    }
+
+    /// The status line and open palette reset at start: a window that has them up neither saves
+    /// them nor writes over another window's setting it did not change.
+    #[test]
+    fn what_a_start_resets_is_left_out() {
+        let dir = temp();
+        Window::open(dir.path()).save();
+        let (mut first, mut second) = (Window::open(dir.path()), Window::open(dir.path()));
+        second.store.update(|s| s.ui.status_bar = false);
+        second.store.flush().unwrap();
+        first.app.ui.status = "Saved".to_string();
+        first.app.ui.palette_query = "find".to_string();
+        first.save();
+        let back = saved(dir.path());
+        assert!(!back.ui.status_bar, "the other window's setting survives");
+        assert!(back.ui.status.is_empty() && back.ui.palette_query.is_empty(), "nothing a start resets is written");
+    }
+
+    /// The current Actions set is saved by name: another window inserting a set before it does not
+    /// make a different set current.
+    #[test]
+    fn the_current_action_set_follows_its_set_in_the_merged_list() {
+        let dir = temp();
+        let mut base = Window::open(dir.path());
+        base.set_sets(&["A", "B", "C"]);
+        base.save();
+        let (mut chooser, mut inserter) = (Window::open(dir.path()), Window::open(dir.path()));
+        chooser.app.ui.action_set = Some("C".to_string());
+        chooser.save();
+        inserter.set_sets(&["Z", "A", "B", "C"]);
+        inserter.save();
+        let back = saved(dir.path());
+        assert_eq!(back.ui.action_set.as_deref(), Some("C"));
+        assert_eq!(set_names(&back), ["Z", "A", "B", "C"]);
+    }
+
+    /// The window that did not choose keeps the other's choice, still by name after it deleted the
+    /// set before it.
+    #[test]
+    fn the_other_windows_current_action_set_follows_its_set() {
+        let dir = temp();
+        let mut base = Window::open(dir.path());
+        base.set_sets(&["A", "B", "C"]);
+        base.save();
+        let (mut chooser, mut deleter) = (Window::open(dir.path()), Window::open(dir.path()));
+        deleter.set_sets(&["B", "C"]);
+        deleter.save();
+        chooser.app.ui.action_set = Some("C".to_string());
+        chooser.save();
+        let back = saved(dir.path());
+        assert_eq!(back.ui.action_set.as_deref(), Some("C"));
+        assert_eq!(set_names(&back), ["B", "C"]);
+    }
 }

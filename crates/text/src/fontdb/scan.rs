@@ -3,8 +3,10 @@ use super::build::{style_italic, style_weight};
 use super::dirs::sfnt_of;
 use super::face::{MAX_AXES, MAX_INSTANCES};
 use super::names::{all_names, name, norm};
+#[cfg(not(target_arch = "wasm32"))]
+use super::traits::may_set_thai;
 use super::traits::{FaceKeys, FaceStyle, FontTraits, face_styles};
-use super::*;
+use super::{FileRef, MetadataProvider, Path, StringId, Tag};
 
 /// The named instances of a variable font face (its `fvar` table) as styles of the face's family,
 /// named by their subfamily names, without the default instance (the face itself) and without
@@ -126,40 +128,53 @@ pub(super) fn font_files(path: &Path) -> Vec<Vec<u8>> {
 const OUTLINE_TABLES: [&[u8; 4]; 6] = [b"glyf", b"CFF ", b"CFF2", b"VARC", b"sbix", b"CBDT"];
 
 /// The styles of every face in the font file at `path` ([`face_styles`]), reading only its table
-/// directories and `name`, `fvar` and `OS/2` tables: a scan opens hundreds of font files, many of
+/// directories and `name`, `fvar` and `OS/2` tables (and the `cmap` table of a face that may set
+/// Thai, [`may_set_thai`]): a scan opens hundreds of font files, many of
 /// them megabytes long. Faces without outlines the font engine draws (no [`OUTLINE_TABLES`] table)
 /// are left out.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn file_face_names(path: &Path) -> Vec<FaceStyle> {
-    file_face_names_within(path, MAX_FACES, u64::MAX)
+    file_face_names_reading(path, MAX_FACES, u64::MAX, true)
 }
 
-/// [`file_face_names`], reading at most `max_faces` faces and `max_read` bytes of the file in all.
-/// A suitcase font's resource fork is read whole when it is at most `max_read` bytes long, and the
-/// limits then apply to each of its fonts; a longer fork gives none.
+/// [`file_face_names`], reading at most `max_faces` faces and `max_read` bytes of the file in all,
+/// and no `cmap` table: a face's [`FontTraits::thai`] is false. A suitcase font's resource fork is
+/// read whole when it is at most `max_read` bytes long, and the limits then apply to each of its
+/// fonts; a longer fork gives none.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn file_face_names_within(path: &Path, max_faces: u32, max_read: u64) -> Vec<FaceStyle> {
+    file_face_names_reading(path, max_faces, max_read, false)
+}
+
+/// [`file_face_names_within`], reading the `cmap` table of a face that may set Thai when
+/// `read_cmap` is true.
+#[cfg(not(target_arch = "wasm32"))]
+fn file_face_names_reading(path: &Path, max_faces: u32, max_read: u64, read_cmap: bool) -> Vec<FaceStyle> {
     if crate::suitcase::is_suitcase(path) {
         if crate::suitcase::fork_len(path) > max_read {
             return vec![];
         }
         return crate::suitcase::read_fonts(path)
             .into_iter()
-            .flat_map(|font| reader_face_names_within(std::io::Cursor::new(font), max_faces, max_read))
+            .flat_map(|font| reader_face_names_within(std::io::Cursor::new(font), max_faces, max_read, read_cmap))
             .collect();
     }
     match std::fs::File::open(path) {
-        Ok(file) => reader_face_names_within(file, max_faces, max_read),
+        Ok(file) => reader_face_names_within(file, max_faces, max_read, read_cmap),
         Err(_) => vec![],
     }
 }
 
-/// [`file_face_names_within`] for the font file `file` reads.
+/// [`file_face_names_reading`] for the font file `file` reads.
 #[cfg(not(target_arch = "wasm32"))]
-fn reader_face_names_within(mut file: impl std::io::Read + std::io::Seek, max_faces: u32, max_read: u64) -> Vec<FaceStyle> {
+fn reader_face_names_within(mut file: impl std::io::Read + std::io::Seek, max_faces: u32, max_read: u64, read_cmap: bool) -> Vec<FaceStyle> {
     use std::io::SeekFrom;
-    /// The largest table read from a (possibly damaged) file.
+    /// The largest table read from a (possibly damaged) file, other than `cmap`.
     const MAX_NAME_TABLE: u32 = 1 << 20;
+    /// The largest `cmap` table read.
+    const MAX_CMAP_TABLE: u32 = 16 << 20;
+    /// The `post` table's header: version, italic angle, underline and fixed-pitch fields.
+    const POST_HEADER: u32 = 32;
     let mut read = 0u64;
     let mut read_at = |offset: u64, len: usize| -> Option<Vec<u8>> {
         read = read.checked_add(u64::try_from(len).ok()?).filter(|r| *r <= max_read)?;
@@ -186,28 +201,43 @@ fn reader_face_names_within(mut file: impl std::io::Read + std::io::Seek, max_fa
             if !records.as_chunks::<16>().0.iter().any(|r| OUTLINE_TABLES.iter().any(|t| r.starts_with(*t))) {
                 return None;
             }
-            let mut table = |tag: &[u8; 4]| -> Option<Vec<u8>> {
+            // A table's first `most` bytes at most; a table read whole longer than `MAX_NAME_TABLE`
+            // (`MAX_CMAP_TABLE` for `cmap`) gives nothing.
+            let mut table_within = |tag: &[u8; 4], most: u32| -> Option<Vec<u8>> {
                 let rec: &[u8] = records.as_chunks::<16>().0.iter().find(|r| r.starts_with(tag))?;
-                let (offset, len) = (be32(rec, 8)?, be32(rec, 12)?);
-                if len > MAX_NAME_TABLE {
+                let (offset, len) = (be32(rec, 8)?, be32(rec, 12)?.min(most));
+                if len > if tag == b"cmap" { MAX_CMAP_TABLE } else { MAX_NAME_TABLE } {
                     return None;
                 }
                 read_at(offset.into(), len as usize)
             };
-            let name = table(b"name")?;
+            let name = table_within(b"name", u32::MAX)?;
             // A variable font's named instances are styles too.
-            let fvar = table(b"fvar");
+            let fvar = table_within(b"fvar", u32::MAX);
             // Its OS/2 table (the font's classification, for the menus' filters), when it has one.
-            let os2 = table(b"OS/2");
+            let os2 = table_within(b"OS/2", u32::MAX);
+            // Its units per em and italic angle, for Show Similar Fonts ([`super::FontLikeness`]):
+            // the `head` table and the `post` table's 32-byte header, as a version 3 table (one
+            // without glyph names).
+            let head = table_within(b"head", u32::MAX);
+            let post = table_within(b"post", POST_HEADER).filter(|p| p.len() == POST_HEADER as usize).map(|mut p| {
+                p[..4].copy_from_slice(&0x0003_0000_u32.to_be_bytes());
+                p
+            });
             // A font holding just these tables, to read them as the font itself would.
             let mut tables: Vec<(&[u8; 4], &[u8])> = vec![(b"name", &name)];
-            if let Some(fvar) = &fvar {
-                tables.push((b"fvar", fvar));
+            for (tag, data) in [(b"fvar", &fvar), (b"OS/2", &os2), (b"head", &head), (b"post", &post)] {
+                if let Some(data) = data {
+                    tables.push((tag, data.as_slice()));
+                }
             }
-            if let Some(os2) = &os2 {
-                tables.push((b"OS/2", os2));
+            let mut font = sfnt_of(&tables)?;
+            // Its character map too when it may set Thai, to tell whether it does.
+            let cmap = if read_cmap && may_set_thai(&skrifa::FontRef::new(&font).ok()?) { table_within(b"cmap", u32::MAX) } else { None };
+            if let Some(cmap) = &cmap {
+                tables.push((b"cmap", cmap.as_slice()));
+                font = sfnt_of(&tables)?;
             }
-            let font = sfnt_of(&tables)?;
             Some(face_styles(&skrifa::FontRef::new(&font).ok()?))
         })
         .flatten()

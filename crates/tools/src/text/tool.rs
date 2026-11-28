@@ -1,9 +1,9 @@
-use super::plain::{
-    char_range_to_bytes, ime_surrounding_window, plain_ceil_boundary, plain_chars_after, plain_chars_before, plain_floor_boundary, plain_is_boundary,
-    plain_len, step_key,
-};
+use super::plain::{char_range_to_bytes, plain_ceil_boundary, plain_chars_after, plain_chars_before, plain_floor_boundary, plain_len};
 use super::ports::{ported, ports, ports_shown};
-use super::*;
+use super::{
+    Action, BezPath, Cursor, Mode, Mods, NodeId, Overlay, Point, PointerEvent, PointerKind, Preedit, Range, Rect, Shape, SurroundingUnit, TextKind,
+    TextRun, Tool, ToolContext, ToolKey, TypeTool, Value, edit, json,
+};
 
 impl Tool for TypeTool {
     fn id(&self) -> &'static str {
@@ -22,17 +22,42 @@ impl Tool for TypeTool {
     fn wants_text(&self) -> bool {
         self.editing.is_some()
     }
-    /// Escape while editing is the tool's: it goes on to the Selection tool (#1686).
+    /// Escape while editing is the tool's: it goes back to the tool whose double-click on type
+    /// chose this tool, or to the Selection tool when none did (#1686).
     fn claims_key(&self, _: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.editing.is_some()
+    }
+    /// If the original text still exists, a dropped press restores its edit target, caret, and anchor.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let mut out = vec![];
+        if let Some(before) = self.before_press.take() {
+            if self.editing != before.editing {
+                out.extend(self.finish(cx));
+                if let Some(id) = before.editing.filter(|id| Self::text(cx, *id).is_some()) {
+                    self.start_editing(id, before.caret);
+                    self.remember(cx);
+                }
+            }
+            self.fresh = before.fresh.filter(|id| self.editing == Some(*id));
+            (self.caret, self.anchor) = (before.caret, before.anchor);
+        }
+        self.selecting = false;
+        self.clicks = (None, 0);
+        self.press = None;
+        self.held = None;
+        self.drag = None;
+        self.snap.clear();
+        out
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
             PointerKind::Down => {
+                let before = super::BeforePress { editing: self.editing, fresh: self.fresh, caret: self.caret, anchor: self.anchor };
                 if let Some(byte) = self.hit_edited(cx, ev.pos) {
                     let same = self.clicks.0.is_some_and(|q| (q - ev.pos).hypot() <= cx.tol(4.0));
                     let n = if same { self.clicks.1 + 1 } else { 1 };
                     self.clicks = (Some(ev.pos), n);
+                    self.before_press = Some(before);
                     let out = self.move_to(byte, ev.mods.shift);
                     self.goal_x = None;
                     if n >= 3 {
@@ -45,12 +70,18 @@ impl Tool for TypeTool {
                 }
                 self.clicks = (None, 0);
                 // A press on other type edits it from there, so a drag selects its text at once,
-                // as it does in the type being edited.
+                // as it does in the type being edited. While the question about its fonts is open,
+                // the press does nothing more, and the edit in progress goes on.
                 if let Some(out) = self.edit_at(cx, ev.pos) {
+                    if self.pending_edit.is_some() {
+                        return out;
+                    }
                     self.selecting = true;
+                    self.before_press = Some(before);
                     return out;
                 }
                 self.press = Some((ev.pos, self.snap.press(cx, ev.pos, self.editing.as_slice(), None)));
+                self.held = Some(self.acting(ev.mods));
                 self.drag = None;
                 vec![]
             }
@@ -67,6 +98,7 @@ impl Tool for TypeTool {
                 vec![]
             }
             PointerKind::Up => {
+                self.before_press = None;
                 if self.selecting {
                     self.selecting = false;
                     return vec![];
@@ -82,6 +114,7 @@ impl Tool for TypeTool {
                 }
                 vec![]
             }
+            PointerKind::TripleClick => vec![],
             PointerKind::Move => {
                 // The type being edited is no target: its guides would only point at itself.
                 self.snap.hover(cx, ev.pos, self.editing.as_slice(), None);
@@ -108,7 +141,7 @@ impl Tool for TypeTool {
         self.clicks = (None, 0);
         // Pasting what we copied keeps its formatting (unless pasted text is kept plain).
         let clip: String = self.clipboard.iter().map(|r| r.text.as_str()).collect();
-        if !committing && s.len() > 1 && s == clip && !cx.paste_plain_text {
+        if !committing && !s.is_empty() && s == clip && !cx.paste_plain_text {
             let runs = self.clipboard.clone();
             return self.replace(cx, "", Some(runs));
         }
@@ -117,42 +150,6 @@ impl Tool for TypeTool {
             out.extend(self.start_typed_list(cx));
         }
         out
-    }
-    /// Would [`Tool::text_input`] change `s` before inserting it? Control characters are dropped,
-    /// `\r` becomes `\n`, Typographer's Quotes rewrites a straight quote, and copied text keeps
-    /// its run styles. An IME commit the application rewrites is an application edit, not an
-    /// accepted IME insertion (its receipt must stay `Other`).
-    fn text_input_is_verbatim(&self, cx: &ToolContext, s: &str) -> bool {
-        if self.editing.is_none() {
-            return true;
-        }
-        if s.is_empty() {
-            return true;
-        }
-        // A straight quote's direction depends on the character before the insertion. During a
-        // commit this check still sees the pre-edit at the caret, while `text_input` replaces it
-        // from its start; with a custom pair whose opening quote is straight, that can look
-        // verbatim here and then be rewritten. Never claim verbatim for one.
-        if cx.doc.setup.typographers_quotes && matches!(s, "\"" | "'") {
-            return false;
-        }
-        let Some(normalized) = self.input_text(cx, s) else { return false };
-        if normalized != s {
-            return false;
-        }
-        let clip: String = self.clipboard.iter().map(|r| r.text.as_str()).collect();
-        !(self.preedit.is_none() && normalized.len() > 1 && normalized == clip && !cx.paste_plain_text)
-    }
-    /// Whether the typing session still describes the edited document; a session ended by an outside
-    /// command reports false until a replacement commit starts a new one.
-    fn ime_session_matches_document(&self, cx: &ToolContext) -> bool {
-        match (self.editing, &self.typing) {
-            (Some(id), Some(ty)) => Self::text(cx, id).is_none_or(|t| ty.cur == t.runs),
-            // An outside command settled the session: the document may have changed under it, and
-            // the commit that starts a new session cannot claim the IME made that change.
-            (Some(_), None) => !self.typing_ended,
-            _ => true,
-        }
     }
     /// Handle an editing key: ignore keys while an IME composes, remap arrows in vertical text, step
     /// type attributes with Alt, and otherwise edit, navigate or end the session.
@@ -167,17 +164,14 @@ impl Tool for TypeTool {
         };
         let text = t.plain_text();
         let len = text.len();
+        let story = self.story_selected(cx);
+        let selected = (self.caret, self.anchor);
         self.caret = self.caret.min(len);
         self.anchor = self.anchor.min(len);
         let (a, b) = self.sel();
         // Alt+arrows step the type by the Preferences › Type increments (Cmd/Ctrl too: five steps).
-        if mods.alt
-            && let Some(id) = self.editing
-            && let Some((attribute, by)) = step_key(key, mods.shift, a == b)
-        {
-            let mut out = self.commit();
-            let by = if mods.cmd { by * 5.0 } else { by };
-            out.push(Action::Exec("type.step".into(), json!({"id": id.0, "start": a, "end": b, "attribute": attribute, "by": by})));
+        if let Some(out) = self.step_attribute(cx, key, mods, a, b, t.vertical) {
+            self.keep_story_offsets(story, selected);
             return out;
         }
         let word = mods.cmd || mods.alt;
@@ -201,15 +195,11 @@ impl Tool for TypeTool {
             // Escape ends editing and goes back to the tool used before double-clicking into type
             // (or to the Selection tool by default), the type selected: the keyboard is free for
             // tool shortcuts again (#1686).
-            ToolKey::Escape => {
-                let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
-                let mut out = self.finish(cx);
-                out.push(Action::SwitchTool(target));
-                out
-            }
-            ToolKey::Enter => self.replace(cx, "\n", None),
-            ToolKey::Tab => self.replace(cx, "\t", None),
-            ToolKey::Backspace | ToolKey::Delete if a != b => self.replace(cx, "", None),
+            ToolKey::Escape => self.end_editing(cx),
+            ToolKey::Enter => self.enter(cx, mods),
+            ToolKey::Tab if story => self.replace(cx, "\t", None),
+            ToolKey::Tab => self.tab(cx, &t, &text, (a, b), mods.shift),
+            ToolKey::Backspace | ToolKey::Delete if a != b || story => self.replace(cx, "", None),
             ToolKey::Backspace if self.caret > 0 => {
                 self.anchor = if word { edit::prev_word(&text, self.caret) } else { edit::prev_char(&text, self.caret) };
                 self.replace(cx, "", None)
@@ -289,7 +279,10 @@ impl Tool for TypeTool {
                 let to = if mods.cmd { len } else { vectorcraft_text::line_end_of(&lay, self.caret) };
                 self.move_to(to, mods.shift)
             }
-            _ => vec![],
+            _ => {
+                self.keep_story_offsets(story, selected);
+                vec![]
+            }
         }
     }
     fn ime_preedit(&mut self, cx: &ToolContext, text: &str, active_chars: Option<Range<usize>>) -> Vec<Action> {
@@ -384,48 +377,6 @@ impl Tool for TypeTool {
         Self::text(cx, id)?;
         Some((cx.revision.0, id.0, self.edit_session))
     }
-    /// Return a bounded logical text window around the caret, anchor and optional pre-edit; a stale
-    /// typing session publishes the document's current text, and unusable or non-boundary offsets
-    /// return `Unavailable` rather than stale data.
-    fn ime_surrounding(&self, cx: &ToolContext, max_bytes: usize) -> ImeSurrounding {
-        let Some(id) = self.editing else {
-            return ImeSurrounding::Unavailable("no text object is being edited");
-        };
-        let Some(current) = Self::text(cx, id) else {
-            return ImeSurrounding::Unavailable("the edited text object is gone");
-        };
-        // The document changed under the typing session (undo, a panel or control edit): the
-        // session's runs, marked-text range and caret offsets no longer describe the document.
-        // Publish the document's own text (never the stale session's, which the IME cannot see);
-        // the marked text has no range in it, so it is excluded from the logical view. The
-        // commit-time check (`ime_session_matches_document`) reports the reset as application
-        // origin instead of letting a receipt describe the wrong text.
-        let stale = self.typing.as_ref().is_some_and(|ty| ty.cur != current.runs);
-        if self.preedit.is_some() && self.typing.is_none() {
-            return ImeSurrounding::Unavailable("the IME pre-edit has no typing session");
-        }
-        let Some(segments) = self.plain_segments(cx) else {
-            return ImeSurrounding::Unavailable("the edited text object is gone");
-        };
-        let len = plain_len(&segments);
-        let caret = self.caret.min(len);
-        let anchor = self.anchor.min(len);
-        if !plain_is_boundary(&segments, caret) || !plain_is_boundary(&segments, anchor) {
-            return ImeSurrounding::Unavailable("the caret or selection anchor is not a UTF-8 boundary");
-        }
-        let preedit = match self.preedit.as_ref().filter(|_| !stale) {
-            Some(p) => {
-                let start = p.range.start.min(len);
-                let end = p.range.end.min(len);
-                if start > end || !plain_is_boundary(&segments, start) || !plain_is_boundary(&segments, end) {
-                    return ImeSurrounding::Unavailable("the IME pre-edit is not on UTF-8 boundaries");
-                }
-                Some(start..end)
-            }
-            None => None,
-        };
-        ime_surrounding_window(&segments, preedit, len, caret, anchor, max_bytes)
-    }
     /// Whether an IME pre-edit is currently shown for this Type-tool session.
     fn composing(&self) -> bool {
         self.preedit.is_some()
@@ -444,7 +395,16 @@ impl Tool for TypeTool {
     }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.prev_tool = None;
+        self.pending_edit = None;
+        self.frames.get_mut().unwrap_or_else(|e| e.into_inner()).clear();
         self.finish(cx)
+    }
+    /// OK on the question about type in missing fonts started an edit the next poll begins.
+    fn waiting(&self) -> bool {
+        self.pending_edit.as_ref().is_some_and(|e| e.accepted)
+    }
+    fn poll(&mut self, cx: &ToolContext, _wait: bool) -> Vec<Action> {
+        self.resume_edit(cx)
     }
     /// Editing ends when a command takes the text out of the selection (Deselect, another object
     /// picked in the Layers panel) or removes it. After an Undo that takes back a list typed
@@ -452,6 +412,7 @@ impl Tool for TypeTool {
     /// goes before the paragraph's text.
     fn after_command(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.after_typed_list(cx);
+        self.after_outside_command(cx);
         let Some(id) = self.editing else { return vec![] };
         let mut cur = Some(id).filter(|i| cx.doc.node(*i).is_some());
         while let Some(c) = cur {
@@ -462,26 +423,33 @@ impl Tool for TypeTool {
         }
         self.finish(cx)
     }
-    /// After `text.create` / `text.createInPath` the engine selects the new object; edit it.
+    /// After `text.create` / `text.createInPath` the engine selects the new object; edit it. After
+    /// `edit.undo` / `edit.redo` the caret goes to where the step changed the edited text. The
+    /// `batch.*` notices keep what a failed `command.batch` changed from staying ([`TypeTool::batch_notice`]).
     fn notify(&mut self, cx: &ToolContext, what: &str) {
-        if what == "text.editNew"
+        if matches!(what, "edit.undo" | "edit.redo") {
+            self.after_history_step(cx, what == "edit.undo");
+        } else if what.starts_with("batch.") {
+            self.batch_notice(what);
+        } else if what == "text.editNew"
             && let Some(id) = cx.selection.objects.first().copied()
         {
             self.start_editing(id, 0);
+            self.remember(cx);
             let t = Self::text(cx, id);
             self.fresh = t.filter(|t| matches!(t.kind, TextKind::Point)).map(|_| id);
             // Placeholder text comes selected: typing replaces it.
             self.caret = t.map_or(0, |t| edit::runs_len(&t.runs));
         }
     }
-    /// `{editing, start, end, caret, anchor, typing, composing}` — the Character panel styles
-    /// `start..end`.
+    /// `{editing, start, end, caret, anchor, typing, composing, story?}` — the Character panel styles
+    /// `start..end`; `story` lists the frames of a threaded story whose whole text Select All selected.
     fn options(&self) -> Value {
         match self.editing {
             Some(id) => {
                 // Offsets may exceed the text after Select All; callers clamp to the text length.
                 let (a, b) = self.sel();
-                json!({
+                let mut o = json!({
                     "editing": id.0,
                     "start": a,
                     "end": b,
@@ -490,25 +458,42 @@ impl Tool for TypeTool {
                     "typing": self.typing.is_some(),
                     "composing": self.preedit.is_some(),
                     "prevTool": self.prev_tool,
-                })
+                });
+                // After Select All in threaded text, the frames whose whole text is selected too.
+                if !self.story.is_empty() {
+                    o["story"] = json!(self.story.iter().map(|f| f.0).collect::<Vec<_>>());
+                }
+                o
             }
             None => json!({"editing": null, "prevTool": self.prev_tool}),
         }
     }
     /// `select {start, end}` / `selectAll` / `copy` (with `runs` of the selection) /
-    /// `commitTyping` (the caller commits the engine interaction).
+    /// `commitTyping` (the caller commits the engine interaction) / `missingFontEdit {token, ok}`
+    /// (the answer to the question about type in missing fonts; never a saved setting).
     fn set_option(&mut self, key: &str, v: &Value) {
         match key {
+            "missingFontEdit" => {
+                if let (Some(token), Some(ok)) = (v.get("token").and_then(Value::as_u64), v.get("ok").and_then(Value::as_bool)) {
+                    self.answer_edit(token, ok);
+                }
+            }
             // Transient selection transferred between Type and Eyedropper; never a saved setting.
             "textSelection" => {
                 if let (Some(id), Some(a), Some(b)) = (
-                    v.get("editing").and_then(Value::as_u64),
+                    v.get("editing").or_else(|| v.get("id")).and_then(Value::as_u64),
                     v.get("anchor").or_else(|| v.get("start")).and_then(Value::as_u64),
                     v.get("caret").or_else(|| v.get("end")).and_then(Value::as_u64),
                 ) && let (Ok(a), Ok(b)) = (usize::try_from(a), usize::try_from(b))
                 {
                     self.start_editing(NodeId(id), b);
                     self.anchor = a;
+                    // The frames of a threaded story whose whole text Select All selected.
+                    let story: Vec<NodeId> =
+                        v.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+                    if story.len() >= 2 && story.contains(&NodeId(id)) {
+                        self.story = story;
+                    }
                 }
             }
             "prevTool" | "previousTool" => {
@@ -517,9 +502,24 @@ impl Tool for TypeTool {
             "commitTyping" | "endTyping" => {
                 self.typing = None;
                 self.preedit = None;
-                self.typing_ended = true;
             }
+            // `{story: [id…], editing?: id}`: the frames of the threaded story being edited, in
+            // thread order. The tool edits frame `editing` of them (default: the first), and the
+            // whole story's text is selected.
             "selectAll" if self.editing.is_some() => {
+                let story: Vec<NodeId> =
+                    v.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+                if story.len() >= 2
+                    && let Some(first) = story.first().copied()
+                {
+                    let target = v.get("editing").and_then(Value::as_u64).map(NodeId).filter(|t| story.contains(t)).unwrap_or(first);
+                    if self.editing != Some(target) {
+                        self.start_editing(target, 0);
+                    }
+                    self.story = story;
+                } else {
+                    self.story.clear();
+                }
                 self.anchor = 0;
                 self.caret = usize::MAX / 4;
             }
@@ -528,6 +528,7 @@ impl Tool for TypeTool {
                 if let (Some(a), Some(b)) = (g("start"), g("end")) {
                     self.anchor = a;
                     self.caret = b;
+                    self.story.clear();
                 }
             }
             "copy" => {
@@ -539,10 +540,33 @@ impl Tool for TypeTool {
                 self.typing = None;
                 self.preedit = None;
                 self.editing = None;
+                self.story.clear();
                 self.prev_tool = None;
             }
             _ => {}
         }
+    }
+    /// The calls [`Self::set_option`] takes: `commitTyping`, `endTyping`, `selectAll` and
+    /// `stopEditing` take any value, the others the shapes they read (`missingFontEdit` a whole-number
+    /// `token` and a true or false `ok`).
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        let index = |a: &str, b: &str| v.get(a).or_else(|| v.get(b)).and_then(Value::as_u64).is_some();
+        let ok = match key {
+            "textSelection" => index("editing", "id") && index("anchor", "start") && index("caret", "end"),
+            "select" => index("start", "start") && index("end", "end"),
+            "prevTool" | "previousTool" => return crate::option_check::string_or_null(key, v),
+            "copy" => serde_json::from_value::<Vec<TextRun>>(v.clone()).is_ok(),
+            "commitTyping" | "endTyping" | "selectAll" | "stopEditing" => true,
+            "missingFontEdit" => v.get("token").and_then(Value::as_u64).is_some() && v.get("ok").and_then(Value::as_bool).is_some(),
+            _ => return Err(crate::option_check::unknown(key)),
+        };
+        let shape = match key {
+            "textSelection" => "{editing, anchor, caret} with whole numbers",
+            "select" => "{start, end} with whole numbers",
+            "missingFontEdit" => "{token, ok} with a whole number and true or false",
+            _ => "a list of text runs",
+        };
+        if ok { Ok(()) } else { Err(format!("`{key}` must be {shape}")) }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
@@ -568,13 +592,17 @@ impl Tool for TypeTool {
                 o.push(Overlay::Measure { p: d, text: cx.size_label(size.width, size.height) });
             }
         }
+        // The other frames this call draws keep their layouts for the next call; the rest are dropped.
+        let fonts = vectorcraft_text::layout_inputs();
+        let mut now = self.frames.lock().unwrap_or_else(|e| e.into_inner());
+        let mut was = std::mem::take(&mut *now);
         // The ports of selected area type and type on a path, as many as show ([`PORTS_MAX`]), the
         // edited one's included.
         let shown = ports_shown(cx.doc, &cx.selection.objects);
         if shown {
             for id in cx.selection.objects.iter().filter(|id| Some(**id) != self.editing) {
                 if let Some(t) = ported(cx.doc, *id) {
-                    let lay = self.layout(t);
+                    let lay = Self::frame_layout(&mut now, &mut was, fonts, *id, t);
                     ports(cx, *id, t, lay.overflow, &mut o);
                 }
             }
@@ -618,15 +646,38 @@ impl Tool for TypeTool {
                 o.push(Overlay::Highlight { quad: q.map(|p| t.xf * p), color: [60, 120, 255, 90] });
             }
         }
+        // The whole story is selected: the other frames' text is highlighted too, also when the
+        // edited frame holds no text.
+        if self.preedit.is_none() {
+            for f in self.story_others(cx) {
+                let Some(other) = Self::text(cx, f) else { continue };
+                let lay = Self::frame_layout(&mut now, &mut was, fonts, f, other);
+                for q in vectorcraft_text::selection_quads(&lay, 0, edit::runs_len(&other.runs)) {
+                    o.push(Overlay::Highlight { quad: q.map(|p| other.xf * p), color: [60, 120, 255, 90] });
+                }
+            }
+        }
         if let Some(id) = self.editing.filter(|id| shown && ported(cx.doc, *id).is_some()) {
             ports(cx, id, &t, lay.overflow, &mut o);
         }
         o
     }
-    fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
-        if self.mode != Mode::Type && Self::path_at(cx, p, self.mode == Mode::Area).is_some() {
-            return Cursor::Crosshair;
+    /// The pointer of the Type tool that a press would act as with the keys held, or, while a
+    /// press is held, of the one it acts as ([`TypeTool::acting`]).
+    fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
+        let (mode, vertical) = match (self.press, self.held) {
+            (Some(_), Some(held)) => held,
+            _ => self.acting(m),
+        };
+        // While type is being edited a click on a path only ends the editing.
+        let in_path = if self.editing.is_some() { None } else { Self::in_path(cx, p, mode) };
+        match (in_path, vertical) {
+            (Some((_, false)), false) => Cursor::TypeArea,
+            (Some((_, false)), true) => Cursor::TypeAreaVertical,
+            (Some((_, true)), false) => Cursor::TypeOnPath,
+            (Some((_, true)), true) => Cursor::TypeOnPathVertical,
+            (None, false) => Cursor::Text,
+            (None, true) => Cursor::TypeVertical,
         }
-        if self.vertical { Cursor::TypeVertical } else { Cursor::Text }
     }
 }

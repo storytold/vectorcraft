@@ -1,4 +1,4 @@
-use super::*;
+use super::{Document, MAX_COORD, NodeId, NodeKind, Selection, cmd};
 
 /// Is `id` a path made into a guide (View → Guides → Make Guides)?
 pub(crate) fn is_guide_path(d: &Document, id: NodeId) -> bool {
@@ -45,16 +45,51 @@ pub(crate) fn doc_sane(d: &Document, sel: &Selection) -> bool {
         && d.ruler_origin.x.abs() <= MAX_COORD
         && d.ruler_origin.y.abs() <= MAX_COORD
         && d.artboards.iter().all(|a| rect_in_range(a.rect))
-        && d.guides.iter().all(|g| g.pos.is_finite() && g.pos.abs() <= MAX_COORD)
+        && d.ruler_guides().iter().all(|g| g.pos.is_finite() && g.pos.abs() <= MAX_COORD)
         && objects_in_range(d, &sel.objects)
 }
 
-fn rect_in_range(r: vectorcraft_geom::Rect) -> bool {
+/// Is every edge of `r` finite and within [`MAX_COORD`] of the origin?
+pub(crate) fn rect_in_range(r: vectorcraft_geom::Rect) -> bool {
     [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_COORD)
 }
 
 /// Do the objects `ids` have finite geometry within [`MAX_COORD`] (the ones not there pass)?
+///
+/// A path or compound path whose anchors and handles are all finite and inside the range by a
+/// margin passes without being measured: its curves stay inside their control points. Any other
+/// object, and a path with a point outside that margin, is measured.
 pub(crate) fn objects_in_range(d: &Document, ids: &[NodeId]) -> bool {
-    let paths = d.index_paths(ids.iter().copied());
-    ids.iter().all(|id| paths.get(id).and_then(|p| d.node_at(p)).and_then(|n| n.geometric_bounds()).is_none_or(rect_in_range))
+    if ids.is_empty() {
+        return true;
+    }
+    let node_ok = |n: &vectorcraft_doc::Node| points_in_range(n) || n.geometric_bounds().is_none_or(rect_in_range);
+    // A cached document or a few ids: look each one up. Otherwise one walk of the tree, with no
+    // path vectors allocated.
+    if d.has_lookup_cache() || ids.len() <= 16 {
+        return ids.iter().all(|id| d.node(*id).is_none_or(node_ok));
+    }
+    let want: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+    let mut ok = true;
+    d.walk(|n| {
+        if ok && want.contains(&n.id) && !node_ok(n) {
+            ok = false;
+        }
+    });
+    ok
+}
+
+/// Coordinates at most this far from 0 keep a curve's measured bounds within [`MAX_COORD`]
+/// whatever the rounding of its extrema.
+const POINTS_LIMIT: f64 = MAX_COORD * (1.0 - 1e-9);
+
+/// Whether every anchor and handle of path `n`, or of each path of compound path `n`, is finite and
+/// within [`POINTS_LIMIT`]. `false` for any other object.
+fn points_in_range(n: &vectorcraft_doc::Node) -> bool {
+    let near = |p: vectorcraft_geom::Point| p.x.is_finite() && p.y.is_finite() && p.x.abs() <= POINTS_LIMIT && p.y.abs() <= POINTS_LIMIT;
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| near(a.p) && near(a.h_in) && near(a.h_out)),
+        NodeKind::Compound { .. } => n.editing_children().iter().all(|c| points_in_range(c)),
+        _ => false,
+    }
 }

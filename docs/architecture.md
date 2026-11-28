@@ -1,6 +1,6 @@
 # Architecture
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (shared PDF reader and writer; app output policy and editable-import adapter retained; verified PngSuite downloads, #1729; synthetic control-input budgets, #1709; desktop printing uses craft-print; Windows 7 fallback retained) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (shared PDF reader and writer; app output policy and editable-import adapter retained; verified PngSuite downloads, #1729; synthetic control-input budgets, #1709; desktop printing uses craft-print) · **Target:** Adobe Illustrator 2026 (30.x)
 
 How VectorCraft is built today. The design rationale lives in the local, gitignored `plan/architecture.md`;
 this file describes what is committed. Day-to-day rules (clean-room, never crash, quality gates) are in
@@ -19,7 +19,7 @@ nothing below L6 depends on a UI toolkit (egui, eframe, winit, rfd). Table: `xta
 
 | Layer | Crates | Role |
 |---|---|---|
-| L0 | `geom`, `color`; `affinity` (standalone, no workspace deps) | curves and transforms (on `kurbo`), colour models, ICC and conversions; the Affinity reader |
+| L0 | `geom`, `color`; `affinity` (standalone, no workspace deps) | curves and transforms (on `kurbo`), colour models, ICC and conversions; the Affinity reader (CDR/CMX moved to `craft-cdr`) |
 | L1 | `doc` | the document model: artboards, layers, objects, appearance, text, symbols; pure data + serde, structural sharing |
 | L2 | `pathops`, `brush`, `trace`, `text`, `effects`, `plugins`, `three-d` | booleans/Shape Builder/offset/outline; brushes; Image Trace; fonts, shaping (HarfRust, skrifa), bidi and layout; live effects and the pixel-filter pipeline; sandboxed WebAssembly plug-ins (wasmi); 3D surfaces of revolution, projection and shading (`three-d`, on `geom` only) |
 | L3 | `render`, `svg`, `pdf`, `format`, `eps`, `cad`, `metafile` | document to pixels (`vello_cpu`, multithreaded); SVG, PDF, native JSON, EPS/PostScript (with its own interpreter), DXF, EMF/WMF readers and writers |
@@ -55,9 +55,7 @@ lists every format read or written; importers are fuzzed (`crates/engine/tests/i
 Desktop printer discovery and PDF submission use `craft-print`, pinned to an immutable
 craft-libs revision. The engine still owns sheet composition, copies, separations and colour
 management. Submission runs on the existing background worker; its receipt or refusal
-reaches the status bar, and Quit waits for pending submissions. Windows 7 retains WMI discovery
-and the installed viewer's Print/PrintTo verb;
-its target excludes the shared backend because Windows.Data.Pdf is unavailable there.
+reaches the status bar, and Quit waits for pending submissions.
 
 PDF writing uses the optional `craft-pdf` writer at an immutable craft-libs revision. Shared
 configuration, metadata, font preparation and guarded serialization leave drawing, colour

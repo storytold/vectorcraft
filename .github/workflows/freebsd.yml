@@ -31,3 +31,8 @@ jobs:
       require-craft-fonts: true
       craft-fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
       run-package-check: true
+      # The test builds of this workspace's largest crates (engine, ui-egui) need more than the
+      # VM's 12 GB when two compile at once: the build was killed (exit 137) every night with
+      # four jobs and again with two. One rustc at a time; it still uses every core.
+      cargo-build-extra-args: "-j 1"
+      cargo-test-extra-args: "-j 1"

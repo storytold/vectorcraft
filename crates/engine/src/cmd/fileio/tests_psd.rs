@@ -70,6 +70,23 @@ fn psd_writes_layers_groups_and_text_named_after_it() {
 }
 
 #[test]
+fn preserve_text_writes_point_type_as_type_layers_and_needs_layers() {
+    let mut s = session();
+    let file = export(&mut s, json!({"preserveText": true}));
+    let (_, count, names) = layers(&file);
+    assert_eq!((count, names), (-4, vec!["Layer 1".into(), "</Layer group>".into(), "Hello".into(), "Words".into()]), "Words becomes a group");
+    assert_eq!(file.windows(8).filter(|w| w == b"8BIMTySh").count(), 1, "one type layer");
+    assert_eq!(export(&mut s, json!({"preserveText": false})), export(&mut s, json!({})));
+    // Without layers there are no type layers to write.
+    let err = s.execute("document.export", &json!({"format": "psd", "layers": false, "preserveText": true})).unwrap_err().to_string();
+    assert!(err.contains("preserveText") && err.contains("layers: true"), "{err}");
+    assert!(s.execute("document.export", &json!({"format": "psd", "preserveText": "yes"})).is_err());
+    // Other formats don't take it.
+    let r = s.execute("document.export", &json!({"format": "png", "preserveText": true})).unwrap();
+    assert!(r["warnings"].to_string().contains("preserveText"), "{r}");
+}
+
+#[test]
 fn psd_is_listed_with_its_options_and_writes_one_file_per_artboard() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 30, "height": 20, "artboards": 2})).unwrap();
@@ -79,7 +96,7 @@ fn psd_is_listed_with_its_options_and_writes_one_file_per_artboard() {
         (psd["label"].as_str(), psd["write"].as_bool(), psd["read"].as_bool(), psd["raster"].as_bool()),
         (Some("PSD"), Some(true), Some(true), Some(true))
     );
-    for k in ["colorModel", "layers", "maxEditability", "hiddenLayers", "embedIcc", "ppi", "antiAlias", "background"] {
+    for k in ["colorModel", "layers", "preserveText", "maxEditability", "hiddenLayers", "embedIcc", "ppi", "antiAlias", "background"] {
         assert!(psd["options"].get(k).is_some(), "psd takes {k}");
     }
     let r = s.execute("document.export", &json!({"format": "psd", "useArtboards": true})).unwrap();

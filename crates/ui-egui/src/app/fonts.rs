@@ -1,4 +1,6 @@
-use super::*;
+use serde_json::json;
+
+use super::VectorcraftApp;
 
 /// The most fonts Type › Recent Fonts lists (Preferences › Type › Number of Recent Fonts).
 pub const MAX_RECENT_FONTS: usize = 15;
@@ -12,48 +14,40 @@ impl VectorcraftApp {
     }
 }
 
+// PLAN: hub-w1 calls `watch_fonts` once in `VectorcraftApp::new` (beside `scan_in_background`, app.rs:49) and `follow_fonts` once per frame in `tick` (app.rs:354-359), adds the fields `font_watch: Option<craft::font_catalog::Watch>` and `fonts_seen: u64` (lib.rs:280-285), makes `FONT_INSTALL_POLL` a `Duration` (state.rs:1585) and drops the `WindowFocused` refresh (app/input.rs:210).
 impl VectorcraftApp {
-    /// Fonts installed or removed while the app runs are listed without Refresh Font List: a look
-    /// at the font folders and the platform's font list on a timer and when the window comes back,
-    /// a scan only when they changed.
-    /// The look runs on another thread (asking DirectWrite for the fonts font services loaded
-    /// meanwhile takes tens of milliseconds on Windows, #579), [`Self::poll_font_check`] scans;
-    /// `wake` wakes the app for the answer.
-    pub(super) fn refresh_installed_fonts(&mut self, wake: bool) {
-        if let Some((_, w)) = &mut self.font_check {
-            *w |= wake;
-            return;
+    /// Fonts installed or removed while the app runs are listed without Refresh Font List: the
+    /// font catalog looks at the font folders every [`FONT_INSTALL_POLL`] on a thread of its own
+    /// (asking the platform for the fonts font services loaded meanwhile takes tens of milliseconds
+    /// on Windows, #579), rescans only when they changed, and wakes the app for
+    /// [`Self::follow_fonts`]. Called once, at start; the watch stops with the app. Not on wasm,
+    /// which has no installed fonts.
+    ///
+    /// [`FONT_INSTALL_POLL`]: crate::state::FONT_INSTALL_POLL
+    pub(super) fn watch_fonts(&mut self, ctx: &egui::Context) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (ctx, changed) = (ctx.clone(), std::sync::Arc::clone(&self.fonts_changed));
+            let watch = vectorcraft_text::FontDb::global().catalog().watch(crate::state::FONT_INSTALL_POLL, move |_| {
+                changed.store(true, std::sync::atomic::Ordering::Release);
+                ctx.request_repaint();
+            });
+            self.font_watch = Some(watch);
         }
-        let (tx, rx) = std::sync::mpsc::channel();
-        let look = move || {
-            // The UI gone meanwhile has nothing to refresh.
-            let _ = tx.send(vectorcraft_text::FontDb::global().installed_fonts_changed());
-        };
-        let spawned =
-            if cfg!(target_arch = "wasm32") { None } else { std::thread::Builder::new().name("font-check".into()).spawn(look.clone()).ok() };
-        if spawned.is_none() {
-            look();
-        }
-        self.font_check = Some((rx, wake));
+        #[cfg(target_arch = "wasm32")]
+        let _ = ctx;
     }
 
-    /// Rescan the fonts once [`Self::refresh_installed_fonts`]'s look says they changed.
-    pub(super) fn poll_font_check(&mut self, ctx: &egui::Context) {
-        let Some((check, wake)) = &self.font_check else { return };
-        match check.try_recv() {
-            Ok(changed) => {
-                self.font_check = None;
-                if changed {
-                    // A failure shows in the status bar, as the menu item's does.
-                    let _ = self.run("text.rescanFonts", json!({}));
-                }
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {
-                if *wake {
-                    ctx.request_repaint_after(std::time::Duration::from_millis(50));
-                }
-            }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.font_check = None,
+    /// Once per frame: when the watch ([`Self::watch_fonts`]) found fonts installed or removed since the last look,
+    /// runs `text.rescanFonts`, so documents and lists take up the fonts it found. It reads no input, so a second pass
+    /// of a frame changes nothing.
+    // PLAN: contract row ty.S2 keys this on the catalog's generation; that also moves when a document's own fonts are
+    // added or removed and when another app in the process rescans, which production's look at the installed fonts
+    // never rescanned for, so it is keyed on what the watch found.
+    pub(super) fn follow_fonts(&mut self) {
+        if self.fonts_changed.swap(false, std::sync::atomic::Ordering::AcqRel) {
+            // A failure shows in the status bar, as the menu item's does.
+            let _ = self.run("text.rescanFonts", json!({}));
         }
     }
 }

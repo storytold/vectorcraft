@@ -1,38 +1,210 @@
-use super::exporter::{UNDECODED, writable, xf};
-use super::*;
+use super::exporter::{UNCONVERTED, UNDECODED, UNWRITABLE_IMAGE, q, writable, xf};
+use super::{Arc, BlendMode, Color, Exporter, Image, Node, NodeKind, Paint, Rect, Size, Surface, cmyk, krilla};
+use krilla::color::device_n::{Colorant, DeviceNSpace, Process};
+use krilla::image::{BitsPerComponent, CustomImage, ImageColorspace};
+
+use crate::images::SourceProfiles;
+
+/// The byte count of a repeated color channel, within [`vectorcraft_doc::MAX_RASTER_ALLOC`].
+fn tinted_color_len(samples: usize, pixels: usize) -> Option<usize> {
+    let bytes = samples.checked_mul(pixels)?;
+    (u64::try_from(bytes).ok()? <= vectorcraft_doc::MAX_RASTER_ALLOC).then_some(bytes)
+}
+
+/// A colorized image's pixels: one color in every pixel, shown as much as its soft mask says.
+#[derive(Clone, Hash)]
+struct Tinted {
+    color: Arc<Vec<u8>>,
+    alpha: Arc<Vec<u8>>,
+    width: u32,
+    height: u32,
+    space: ImageColorspace,
+    device_n: Option<DeviceNSpace>,
+}
+
+impl CustomImage for Tinted {
+    fn color_channel(&self) -> &[u8] {
+        &self.color
+    }
+
+    fn alpha_channel(&self) -> Option<&[u8]> {
+        Some(&self.alpha)
+    }
+
+    fn bits_per_component(&self) -> BitsPerComponent {
+        BitsPerComponent::Eight
+    }
+
+    fn size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    fn icc_profile(&self) -> Option<&[u8]> {
+        None
+    }
+
+    fn color_space(&self) -> ImageColorspace {
+        self.space
+    }
+
+    fn device_n_space(&self) -> Option<DeviceNSpace> {
+        self.device_n.clone()
+    }
+}
 
 impl Exporter<'_> {
-    /// Image `im` placed `size` points wide and high, resampled and compressed as the Compression
-    /// settings say ([`crate::images::recode`], [`crate::images::recode_cmyk`] for CMYK images);
-    /// cached by key (and size when images are resampled). `None`, with [`UNDECODED`] among the
-    /// warnings, for an image that is missing, can't be decoded or is in [`Self::left_out`].
-    fn load_image(&mut self, im: &vectorcraft_doc::ImageObject, size: (f64, f64)) -> Option<Image> {
-        let key = im.key.as_str();
-        let c = self.compression;
-        let sized = [c.color.downsample, c.gray.downsample, c.mono.downsample].iter().any(|d| *d != crate::Downsample::None);
-        let cache = if sized { format!("{key}\u{0}{:.3}x{:.3}", size.0, size.1) } else { key.to_string() };
+    /// Image `im` colorized with `paint` ([`vectorcraft_doc::NodeExtras::colorize`]): every pixel
+    /// in the paint's color, with the image's coverage ([`vectorcraft_doc::ImageBlob::coverage`])
+    /// as its soft mask, so white pixels are transparent. A spot color is written as its tint of
+    /// that ink (a DeviceN space of the one ink, which lists its Separation space), Registration in
+    /// every process ink and every spot ink of the document, other colors in gray, RGB or CMYK as
+    /// the Output settings write them. The coverage is resampled as the Compression settings ask
+    /// ([`crate::images::coverage_sized`]). `None` when the paint isn't a solid color, the image is
+    /// missing or left out, its pixels can't be decoded, or its color channel exceeds
+    /// [`vectorcraft_doc::MAX_RASTER_ALLOC`]; cached by key and paint (and size when images are
+    /// resampled), image rejections too.
+    /// With `interpolate` (and the export's own setting), viewers may smooth it, unless every
+    /// pixel is covered or not ([`crate::images::bilevel_coverage`]). With `overprint`
+    /// a gray or CMYK color is written as a DeviceN space of the process inks it holds, so the plates it
+    /// leaves at zero keep the inks below: the nonzero overprint mode does not apply to an image's
+    /// samples (ISO 32000-1 §8.6.7).
+    pub(super) fn colorized_image(&mut self, im: &vectorcraft_doc::ImageObject, paint: &Paint, interpolate: bool, overprint: bool) -> Option<Image> {
+        let Paint::Solid { color, swatch, tint } = paint else { return None };
+        let size = self.image_size(im);
+        let interpolate = interpolate && self.interpolate;
+        let mut cache = format!("{}\u{0}{paint:?}", im.key);
+        if overprint {
+            cache.push_str("\u{0}overprint");
+        }
+        if self.downsampled() {
+            cache.push_str(&format!("\u{0}{:.3}x{:.3}", size.0, size.1));
+        }
+        if !interpolate && self.interpolate {
+            cache.push_str("\u{0}pixelated");
+        }
         if let Some(i) = self.images.get(&cache) {
             return i.clone();
         }
-        let interpolate = self.interpolate;
+        let doc = self.doc;
+        let Some((width, height, alpha)) = doc
+            .image_blob(im)
+            .filter(|_| !self.left_out.contains(&im.key))
+            .and_then(|b| b.coverage())
+            .and_then(|(w, h, cover)| crate::images::coverage_sized(w, h, cover, size, self.compression))
+        else {
+            self.images.insert(cache, None);
+            return None;
+        };
+        // A mask that only covers or doesn't, a 1-bit image mask as both importers open one, is
+        // never smoothed: a RIP that smooths it greys its edges, so where the same mask is drawn
+        // over itself in another ink the ink below shows at the edges. krilla has no 1-bit soft
+        // mask or /ImageMask, so it stays an 8-bit mask that isn't smoothed.
+        let interpolate = interpolate && !crate::images::bilevel_coverage(&alpha);
+        let n = alpha.len();
+        let registration = swatch.as_deref() == Some(vectorcraft_color::swatch::REGISTRATION);
+        let inks: Vec<(String, [f32; 4])> = if registration {
+            let spots: Vec<String> = doc.swatches_iter().filter(|w| w.spot).map(|w| w.name.clone()).collect();
+            spots.iter().filter_map(|name| self.spot_ink(name)).collect()
+        } else {
+            swatch.as_deref().and_then(|name| self.spot_ink(name)).into_iter().collect()
+        };
+        let spot_colorants =
+            inks.into_iter().map(|(name, full)| Colorant::Spot { name, alternate: cmyk::Color::new_f32(full[0], full[1], full[2], full[3]) });
+        let device_n = if registration {
+            DeviceNSpace::new(Process::ALL.into_iter().map(Colorant::Process).chain(spot_colorants))
+        } else {
+            DeviceNSpace::new(spot_colorants)
+        };
+        let (samples, space, device_n) = match &device_n {
+            Some(d) if registration => (vec![q(*tint); d.colorants().len()], ImageColorspace::DeviceN, Some(d.clone())),
+            Some(d) => (vec![q(*tint)], ImageColorspace::DeviceN, Some(d.clone())),
+            None if registration => (vec![q(*tint); 4], ImageColorspace::Cmyk, None),
+            None => match self.page_color(color) {
+                // An overprinting gray: black ink only.
+                Color::Gray { k } if overprint && k > 0.0 => {
+                    (vec![q(k)], ImageColorspace::DeviceN, DeviceNSpace::new([Colorant::Process(Process::Black)]))
+                }
+                Color::Gray { k } => (vec![q(1.0 - k)], ImageColorspace::Luma, None),
+                // An overprinting CMYK color: the process inks it puts down.
+                Color::Cmyk { c, m, y, k } if overprint && [c, m, y, k].iter().any(|v| *v > 0.0) => {
+                    let inks: Vec<(Process, f32)> = Process::ALL.into_iter().zip([c, m, y, k]).filter(|(_, v)| *v > 0.0).collect();
+                    let space = DeviceNSpace::new(inks.iter().map(|(p, _)| Colorant::Process(*p)));
+                    (inks.iter().map(|(_, v)| q(*v)).collect(), ImageColorspace::DeviceN, space)
+                }
+                Color::Cmyk { c, m, y, k } => ([c, m, y, k].map(q).to_vec(), ImageColorspace::Cmyk, None),
+                other => (other.to_rgb().map(q).to_vec(), ImageColorspace::Rgb, None),
+            },
+        };
+        if tinted_color_len(samples.len(), n).is_none() {
+            self.images.insert(cache, None);
+            return None;
+        }
+        let color = Arc::new(samples.repeat(n));
+        let img = Image::from_custom(Tinted { color, alpha: Arc::new(alpha), width, height, space, device_n }, interpolate).ok();
+        self.images.insert(cache, img.clone());
+        img
+    }
+    /// Image `im` placed `size` points wide and high, resampled and compressed as the Compression
+    /// settings say ([`crate::images::recode`], [`crate::images::recode_cmyk`] for CMYK images);
+    /// cached by key (and size when images are resampled). With `interpolate` (and the export's
+    /// own setting), viewers may smooth it. `None`, with [`UNDECODED`] among the warnings, for an
+    /// image that is missing, can't be decoded or is in [`Self::left_out`]; `None`, with
+    /// [`UNCONVERTED`], for one whose colors the Output settings convert but that can only be
+    /// written in its own ([`crate::images::Recoded::unconverted`]).
+    fn load_image(&mut self, im: &vectorcraft_doc::ImageObject, size: (f64, f64), interpolate: bool) -> Option<Image> {
+        let key = im.key.as_str();
+        let c = self.compression;
+        let interpolate = interpolate && self.interpolate;
+        let mut cache = if self.downsampled() { format!("{key}\u{0}{:.3}x{:.3}", size.0, size.1) } else { key.to_string() };
+        if !interpolate && self.interpolate {
+            cache.push_str("\u{0}pixelated");
+        }
+        if let Some(i) = self.images.get(&cache) {
+            return i.clone();
+        }
         let doc = self.doc;
         let out = self.out.clone();
+        let profiles = out.source_profiles();
+        let then = out.converts_tagged_pixels().then_some(&*out);
+        let grey = out.converts_grey_images();
+        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit, then, grey });
+        let mut unconverted = false;
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
-            if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk {
-                self.rgb_in_cmyk.images.insert(key.to_string());
-            }
+            // RGB images of a CMYK document go to CMYK only with a CMYK destination; grey ones stay
+            // grey ([`crate::images::recode`]).
+            let rgb_in_cmyk =
+                !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && !crate::images::is_grey(&blob.bytes);
+            let to_cmyk = matches!(out.pixels(), Some(crate::output::Pixels::Cmyk(_)));
             let r = if cmyk_image {
-                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None)
+                let icc = out.cmyk_image_icc(blob);
+                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, out.cmyk_tag(icc.as_deref()))
             } else {
-                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels())
+                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles, to_srgb)
             };
-            if let Some(w) = r.warning {
+            if r.unconverted {
+                // The source image would be written in its own colors: it is left out, with a
+                // warning that names the conversion when it could have been written.
+                unconverted = embed(blob, interpolate, self.sixteen_bit, profiles).is_some();
+                return None;
+            }
+            // An RGB image of a CMYK document is counted once it is written: converted when the
+            // recoded image goes to CMYK, kept when it is written in RGB, as it is or recoded.
+            let converted = to_cmyk && r.image.is_some();
+            let img = r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles));
+            if rgb_in_cmyk && img.is_some() {
+                let set = if converted { &mut self.rgb_in_cmyk.converted } else { &mut self.rgb_in_cmyk.kept };
+                set.insert(key.to_string());
+            }
+            // An image left out gets the warning below instead.
+            for w in [r.warning, r.note].into_iter().flatten().filter(|_| img.is_some()) {
                 self.warn(w);
             }
-            r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit))
+            img
         });
-        if img.is_none() {
+        if unconverted {
+            self.warn(UNCONVERTED);
+        } else if img.is_none() {
             self.warn(UNDECODED);
         }
         self.images.insert(cache, img.clone());
@@ -42,25 +214,60 @@ impl Exporter<'_> {
     /// CMYK image `im` with the alpha of its opacity mask `m`, when the mask is a greyscale image
     /// on the image's own pixel grid (an image's soft mask as it opens): the alpha is written as the
     /// image's soft mask, as an RGBA image's is, rather than as a luminosity soft mask over it,
-    /// through which CoreGraphics draws CMYK images on black boxes (#2159). `None` for other
-    /// images and masks; cached like [`Self::load_image`].
-    pub(super) fn masked_image(&mut self, im: &vectorcraft_doc::ImageObject, m: &vectorcraft_doc::OpacityMask) -> Option<Image> {
+    /// through which CoreGraphics draws CMYK images on black boxes (#2159). `shown` is `im` as it is
+    /// shown ([`vectorcraft_doc::Document::shown_image`]). When a color mask shows other pixels
+    /// that are not CMYK (`im`'s own pixels with the hidden colors clear), `im`'s inks are written
+    /// with the mask's alpha multiplied by the shown pixels' alpha, so the hidden colors stay
+    /// hidden; shown pixels that are CMYK are written themselves. `None` for other images and
+    /// masks, and for shown pixels of another size; cached like [`Self::load_image`],
+    /// `interpolate` as there.
+    pub(super) fn masked_image(
+        &mut self,
+        im: &vectorcraft_doc::ImageObject,
+        shown: &vectorcraft_doc::ImageObject,
+        m: &vectorcraft_doc::OpacityMask,
+        interpolate: bool,
+    ) -> Option<Image> {
         let art = &m.art;
         let NodeKind::Image(mi) = &art.kind else { return None };
+        // A color-masked image in the mask's art masks with the pixels it shows.
+        let shown_mask = self.doc.shown_image(art, mi);
+        let mi = &*shown_mask;
         let plain =
             art.opacity >= 1.0 && art.blend == BlendMode::Normal && art.extras().mask.is_none() && !art.appearance.effects.iter().any(|e| e.visible);
         if m.invert || !plain || (mi.xf, mi.width, mi.height) != (im.xf, im.width, im.height) {
             return None;
         }
-        let size = placed_size(im);
-        let cache = format!("{}\u{0}{}\u{0}{}\u{0}{:.3}x{:.3}", im.key, mi.key, m.clip, size.0, size.1);
+        let size = self.image_size(shown);
+        let interpolate = interpolate && self.interpolate;
+        let mut cache = format!("{}\u{0}{}\u{0}{}\u{0}{}", im.key, shown.key, mi.key, m.clip);
+        if self.downsampled() {
+            cache.push_str(&format!("\u{0}{:.3}x{:.3}", size.0, size.1));
+        }
+        if !interpolate && self.interpolate {
+            cache.push_str("\u{0}pixelated");
+        }
         if let Some(i) = self.images.get(&cache) {
             return i.clone();
         }
         let doc = self.doc;
-        let img = doc.image_blob(im).filter(|b| b.is_cmyk()).and_then(|blob| {
-            let alpha = crate::images::mask_alpha(doc.image_blob(mi)?, im.width, im.height, m.clip)?;
-            let r = crate::images::recode_cmyk(blob, size, self.compression, self.interpolate, self.out.cmyk_pixels(), Some(alpha));
+        // Pixels a color mask shows that are not CMYK carry the hidden colors as their alpha.
+        let shown_blob = doc.image_blob(shown);
+        let (source, hidden) = match shown_blob {
+            Some(b) if shown.key != im.key && !b.is_cmyk() => (doc.image_blob(im), Some(b)),
+            b => (b, None),
+        };
+        let img = source.filter(|b| b.is_cmyk()).and_then(|blob| {
+            let mut alpha = crate::images::mask_alpha(doc.image_blob(mi)?, im.width, im.height, m.clip)?;
+            if let Some(hidden) = hidden {
+                let shown_alpha = crate::images::image_alpha(hidden, im.width, im.height)?;
+                for (a, s) in alpha.iter_mut().zip(shown_alpha) {
+                    *a = ((u32::from(*a) * u32::from(s) + 127) / 255) as u8;
+                }
+            }
+            let icc = self.out.cmyk_image_icc(blob);
+            let tag = self.out.cmyk_tag(icc.as_deref());
+            let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha), tag);
             if let (Some(w), Some(_)) = (r.warning, &r.image) {
                 self.warn(w);
             }
@@ -70,18 +277,110 @@ impl Exporter<'_> {
         img
     }
 
-    /// Draw image `im`: `img` when given (its pixels already written), else as it is loaded.
-    pub(super) fn image(&mut self, s: &mut Surface, im: &vectorcraft_doc::ImageObject, img: Option<Image>) {
+    /// [`Self::masked_image`] of image `im` of node `n`. A distorted image's is resampled for the
+    /// size every piece of its mesh shares ([`Self::warp_image_size`]), since each piece draws this
+    /// one image; its expanded art, whose pieces were measured, is left in `expanded` for drawing.
+    pub(super) fn node_masked_image(
+        &mut self,
+        n: &Node,
+        im: &vectorcraft_doc::ImageObject,
+        m: &vectorcraft_doc::OpacityMask,
+        expanded: &mut Option<Node>,
+    ) -> Option<Image> {
+        let interpolate = !n.extras().pixelated;
+        // A color-masked image keeps the colors it hides hidden.
+        let shown = self.doc.shown_image(n, im);
+        if !n.is_distorted_image() {
+            return self.masked_image(im, &shown, m, interpolate);
+        }
+        let g = expanded.insert(vectorcraft_effects::expand_live_deep(Some(self.doc), n));
+        let pieces = g.children().and_then(|c| c.first()).map_or(&[][..], |art| vectorcraft_doc::image_quad::distorted_pieces(art));
+        let shared =
+            self.warp_image_size(pieces).map(|s| SharedSize { key: shown.key.clone(), width: shown.width, height: shown.height, size: s.size });
+        let outer = shared.map(|w| self.warp_size.replace(w));
+        let img = self.masked_image(im, &shown, m, interpolate);
+        if let Some(outer) = outer {
+            self.warp_size = outer;
+        }
+        img
+    }
+
+    /// Draw image `im`: `img` when given (its pixels already written), else as it is loaded; with
+    /// `pixelated` ([`vectorcraft_doc::NodeExtras::pixelated`]) viewers are asked not to smooth it.
+    pub(super) fn image(&mut self, s: &mut Surface, im: &vectorcraft_doc::ImageObject, img: Option<Image>, pixelated: bool) {
         // An image placed or sized beyond [`MAX_COORD`] is left out.
         if !writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
+            if self.image_left_out.is_some() {
+                self.image_left_out = Some(true);
+                self.warn(UNWRITABLE_IMAGE);
+            }
             return;
         }
-        let Some(img) = img.or_else(|| self.load_image(im, placed_size(im))) else { return };
-        let Some(size) = Size::from_wh(im.width.max(1) as f32, im.height.max(1) as f32) else { return };
+        let Some(img) = img.or_else(|| self.load_image(im, self.image_size(im), !pixelated)) else {
+            self.image_left_out = self.image_left_out.map(|_| true);
+            return;
+        };
+        let Some(size) = Size::from_wh(im.width.max(1) as f32, im.height.max(1) as f32) else {
+            if self.image_left_out.is_some() {
+                self.image_left_out = Some(true);
+                self.warn(UNWRITABLE_IMAGE);
+            }
+            return;
+        };
         s.push_transform(&xf(im.xf));
         s.draw_image(img, size);
         s.pop();
     }
+
+    /// Whether the Compression settings resample any kind of image.
+    fn downsampled(&self) -> bool {
+        let c = self.compression;
+        [c.color.downsample, c.gray.downsample, c.mono.downsample].iter().any(|d| *d != crate::Downsample::None)
+    }
+
+    /// The size image `im` is resampled for: [`Self::warp_image_size`]'s while the pieces of a
+    /// mesh-warped image of the same pixels are written, else the size it is placed at.
+    fn image_size(&self, im: &vectorcraft_doc::ImageObject) -> (f64, f64) {
+        match &self.warp_size {
+            Some(w) if (w.key.as_str(), w.width, w.height) == (im.key.as_str(), im.width, im.height) => w.size,
+            _ => placed_size(im),
+        }
+    }
+
+    /// When `children` are the pieces of a mesh-warped image ([`Node::warp_piece_image`]) and the
+    /// Compression settings resample images: the image they show, and the widest and highest any
+    /// piece places it, which every piece's image is resampled for, so that the pieces paint one
+    /// image. `None` for other children, pieces of different images, or a size that isn't finite
+    /// and positive.
+    pub(super) fn warp_image_size(&self, children: &[Arc<Node>]) -> Option<SharedSize> {
+        if !self.downsampled() {
+            return None;
+        }
+        let mut shared: Option<SharedSize> = None;
+        for c in children {
+            let n = c.warp_piece_image()?;
+            let NodeKind::Image(im) = &n.kind else { return None };
+            let im = self.doc.shown_image(n, im);
+            let (w, h) = placed_size(&im);
+            match &mut shared {
+                Some(s) if (s.key.as_str(), s.width, s.height) == (im.key.as_str(), im.width, im.height) => {
+                    s.size = (s.size.0.max(w), s.size.1.max(h));
+                }
+                Some(_) => return None,
+                None => shared = Some(SharedSize { key: im.key.clone(), width: im.width, height: im.height, size: (w, h) }),
+            }
+        }
+        shared.filter(|s| s.size.0.is_finite() && s.size.1.is_finite() && s.size.0 > 0.0 && s.size.1 > 0.0)
+    }
+}
+
+/// The size the pixels of image `key` (`width` × `height` pixels) are resampled for while the
+/// pieces of a mesh-warped image are written ([`Exporter::warp_image_size`]).
+pub(super) struct SharedSize {
+    key: String,
+    width: u32,
+    height: u32,
+    size: (f64, f64),
 }
 
 /// The size image `im` is placed at: its pixel grid's sides through its transform.
@@ -119,11 +418,42 @@ pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
-/// other formats decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG of 16 bits a
-/// sample is written at 8 bits ([`png_8_bit`]).
-pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool) -> Option<Image> {
+/// other formats (a TIFF) decoded with their 16-bit samples and, when `profiles` keeps it (not in
+/// PDF/X-1a), the ICC profile they carry ([`crate::images::decoded_image`]). When `profiles`
+/// doesn't keep it, an image that carries a gray or RGB profile is written without it, and so is
+/// one whose gray or RGB profile is malformed ([`crate::images::valid_icc`]): a JPEG with its data
+/// unchanged, an image of another format decoded. With [`SourceProfiles::Remove`], an image that
+/// carries any profile is written without it, a JPEG without its `ICC_PROFILE` segments (decoded
+/// when those can't be taken out). Without `sixteen_bit` (a file before PDF 1.5), a PNG or another
+/// image of 16 bits a sample is written at 8 bits ([`png_8_bit`]).
+pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool, profiles: SourceProfiles) -> Option<Image> {
+    // The header's size first: the writer's decoders allocate what it declares, and the encoded
+    // bytes of an image that is far larger than any the app reads may be a few kilobytes.
+    let size = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions();
+    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > crate::images::MAX_EMBED_PIXELS) {
+        return None;
+    }
     let bytes = blob.bytes.as_ref().clone();
+    // The PDF writer keeps a gray or RGB image's ICC profile: unless `profiles` keeps it, or when
+    // the profile is malformed, such a JPEG is written without its profile, and an image of another
+    // format is decoded and written without it. The color space is read from the header's bytes
+    // 16..20 even in a profile cut short, as the PDF writer reads it. With `Remove`, a JPEG's
+    // `ICC_PROFILE` segments are taken out also when they don't make up a profile the decoder reads.
+    let remove = profiles == SourceProfiles::Remove;
+    let jpeg = matches!(blob.mime.as_str(), "image/jpeg" | "image/jpg");
+    let unkept = crate::images::source_icc(&bytes).is_some_and(|icc| match icc.get(16..20) {
+        _ if remove => true,
+        Some(space @ (b"GRAY" | b"RGB ")) => {
+            profiles != SourceProfiles::Keep || <[u8; 4]>::try_from(space).is_ok_and(|s| !crate::images::valid_icc(&icc, s))
+        }
+        _ => false,
+    });
+    let strip = (remove && jpeg) || unkept;
     let direct = match blob.mime.as_str() {
+        "image/jpeg" | "image/jpg" if strip => {
+            crate::images::jpeg_data(&bytes, remove).and_then(|data| Image::from_jpeg_with_icc(data.into(), None, interpolate).ok())
+        }
+        _ if strip => None,
         "image/png" if !sixteen_bit && png_16_bit(&bytes) => png_8_bit(&bytes).and_then(|png| Image::from_png(png.into(), interpolate).ok()),
         "image/png" => Image::from_png(bytes.clone().into(), interpolate).ok(),
         "image/jpeg" | "image/jpg" => Image::from_jpeg(bytes.clone().into(), interpolate).ok(),
@@ -131,9 +461,90 @@ pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixtee
         "image/webp" => Image::from_webp(bytes.clone().into(), interpolate).ok(),
         _ => None,
     };
-    direct.or_else(|| {
-        let rgba = image::load_from_memory(&bytes).ok()?.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        Some(Image::from_rgba8(rgba.into_raw(), w, h))
-    })
+    direct.or_else(|| crate::images::decoded_image(&bytes, interpolate, sixteen_bit, profiles))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Exporter, tinted_color_len};
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Document, ImageBlob, ImageObject};
+    use vectorcraft_geom::Affine;
+
+    #[test]
+    fn an_image_whose_header_declares_far_more_pixels_than_the_app_reads_is_left_out() {
+        // A real 8 × 8 PNG whose IHDR (width, height at 16..24) claims 65535 × 65535, with its CRC fixed.
+        let mut png = vec![];
+        image::DynamicImage::ImageRgb8(image::RgbImage::new(8, 8)).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        png[16..24].copy_from_slice(&[0, 0, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF]);
+        let crc =
+            !png[12..29].iter().fold(!0u32, |c, b| (0..8).fold(c ^ u32::from(*b), |c, _| if c & 1 == 1 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 }));
+        png[29..33].copy_from_slice(&crc.to_be_bytes());
+        assert!(super::embed(&ImageBlob::png(png), false, true, super::SourceProfiles::Keep).is_none());
+    }
+
+    #[test]
+    fn colorized_image_caches_rejected_images() {
+        let mut doc = Document::new(10.0, 10.0);
+        doc.images.insert("bad".into(), ImageBlob::png(vec![1, 2, 3]));
+        doc.images.insert("left-out".into(), ImageBlob::png(vec![1, 2, 3]));
+        let settings = crate::PdfSettings::default();
+        let mut exporter = Exporter::new(&doc, &settings);
+        exporter.left_out.insert("left-out".into());
+        let paint = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+
+        for key in ["missing", "bad", "left-out"] {
+            let image =
+                ImageObject { key: key.into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+            assert!(exporter.colorized_image(&image, &paint, true, false).is_none(), "{key}");
+            let cache = format!("{key}\u{0}{paint:?}");
+            assert!(matches!(exporter.images.get(&cache), Some(None)), "rejection for {key} was not cached");
+            assert!(exporter.colorized_image(&image, &paint, true, false).is_none(), "second call for {key}");
+        }
+        assert_eq!(exporter.images.len(), 3);
+    }
+
+    /// Without downsampling, a colorized image and a CMYK image with a grid mask are made once for
+    /// every size they are placed at.
+    #[test]
+    fn colorized_and_grid_masked_images_are_made_once_for_every_size_without_downsampling() {
+        let gray = |pixels: Vec<u8>| {
+            let mut png = vec![];
+            image::GrayImage::from_raw(2, 2, pixels).unwrap().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+            ImageBlob::png(png)
+        };
+        let mut doc = Document::new(100.0, 100.0);
+        doc.images.insert("pic".into(), gray(vec![0, 255, 128, 64]));
+        doc.images.insert("alpha".into(), gray(vec![255, 128, 0, 64]));
+        let inks = vectorcraft_doc::cmyk::Inks::new(2, 2, [0u8, 102, 255, 0].repeat(4)).unwrap();
+        doc.images.insert("inks".into(), ImageBlob::cmyk_tiff(&inks).unwrap());
+        let settings = crate::PdfSettings::default();
+        let mut exporter = Exporter::new(&doc, &settings);
+        let paint = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let image = |key: &str, scale: f64| ImageObject {
+            key: key.into(),
+            width: 2,
+            height: 2,
+            xf: Affine::scale(scale),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        for scale in [10.0, 20.0] {
+            assert!(exporter.colorized_image(&image("pic", scale), &paint, true, false).is_some(), "colorized at {scale}");
+            let art = vectorcraft_doc::Node::new(doc.layers[0].id, vectorcraft_doc::NodeKind::Image(Box::new(image("alpha", scale))));
+            let mask = vectorcraft_doc::OpacityMask::new(art, true);
+            let inks = image("inks", scale);
+            assert!(exporter.masked_image(&inks, &inks, &mask, true).is_some(), "masked at {scale}");
+        }
+        assert_eq!(exporter.images.len(), 2, "{:?}", exporter.images.keys().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn tinted_color_rejects_oversized_and_overflowing_buffers() {
+        let max = usize::try_from(vectorcraft_doc::MAX_RASTER_ALLOC).unwrap_or(usize::MAX);
+        assert_eq!(tinted_color_len(4, max / 4), Some(max));
+        assert_eq!(tinted_color_len(4, max / 4 + 1), None);
+        assert_eq!(tinted_color_len(4, usize::MAX), None);
+    }
 }
