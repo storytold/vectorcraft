@@ -16883,7 +16883,8 @@ holds such lines, the Fold Lines panel shows a Fold Angle field with that angle,
 the fold lines as `addon.packaging.check` does, and folds the blank that holds the base panel: the panel under `base`, or
 the largest panel of all the blanks. The base panel stays in place. Every other panel turns about the hinges that join it
 to the base, each by its angle times `amount` (0 is flat, 1 is folded). A hinge's angle is the fold angle of the line
-with the most length in it (see Fold angles), the one with the lowest id among lines of equal length. A hinge that closes
+with the most length in it (see Fold angles), the one with the lowest id among lines of equal length. A valid stored
+angle sets that line's fold angle; without one, a Crease or Perforation uses 90° and a Partial Cut uses -90°. A hinge that closes
 a loop of panels is not turned about; `gap` says how far apart its two placements end up when every hinge is folded all
 the way, whatever `amount` is, and it `closes` when that is within `tolerance` or 0.5% of its length. A panel that no
 chain of hinges joins to the base stays flat where it is. `amount` must be from 0 to 1 and `base` a point in a panel;
