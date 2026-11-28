@@ -369,6 +369,10 @@ pub struct Session {
     pub(crate) script_high_water: std::collections::HashMap<u64, u64>,
     /// While a slice of a script runs in this session.
     pub(crate) script_in_run: bool,
+    /// The one command a member of the script object model runs past
+    /// [`script::refused_to_scripts`] while it is set: `file.print` for `Document.print`, after the
+    /// member checked its options and its file.
+    pub(crate) script_unfenced: Option<&'static str>,
     /// Write recovery copies of the unsaved documents before a run, and don't start without them.
     pub script_copy_first: bool,
     /// While the active tool's actions run: their commands aren't "a command from outside the

@@ -2652,7 +2652,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   while 4,096 other `[` are open, assign a property in brackets whose name is a string literal of more than 256
   characters, assign properties of more than 1,000 different names on members (`o.d = …`, `o['d'] = …`), or
   assign or declare `Folder`; a variable whose name a member assignment writes counts as one that may hold a File
-  object; the same objects left out are not counted for the File-only functions `open`, `read`, `readch`,
+  object; a document's `saveAs` or `exportFile` counts too, and so does `print` called on `app.activeDocument`,
+  `app.documents[i]`, `documents.add()`, `documents.getByName()` or `app.open()`, or on a variable that holds one of
+  them; the same objects left out are not counted for the File-only functions `open`, `read`, `readch`,
   `readln`, `write`, `writeln`, `copy`, `createAlias`, `openDlg` and `saveDlg`, which a Folder object does not
   have), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
@@ -2893,6 +2895,89 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `Document.saveAs(file, options?)` runs `file.saveAs`, and the document then has the new file.
+  `Document.exportFile(file, exportType, options?)` runs `document.export` and leaves the document's file as it is.
+  `app.open(file, documentColorSpace?, options?)` runs `document.open` and gives the new `Document`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/Application/).
+  `file` is a `File`. `new IllustratorSaveOptions()`, `new EPSSaveOptions()` and `new PDFSaveOptions()` pick the
+  format (https://ai-scripting.docsforadobe.dev/jsobjref/IllustratorSaveOptions/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/EPSSaveOptions/, https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/);
+  without options the path's extension picks it. Without options, `saveAs` to a `.ai`, `.eps` or `.pdf` path and
+  `exportFile` as `PNG24`, `JPEG` or `SVG` use the defaults a new options object of that class holds. `saveAs` maps `compressed`, `pdfCompatible`, `embedICCProfile` and
+  `compatibility` (`ILLUSTRATOR17` and `ILLUSTRATOR19`) of `.ai`; `cmykPostScript`, `includeDocumentThumbnails`,
+  `postScript`, `preview`, `overprint` and `compatibility` of EPS; and `pDFPreset`, `compatibility` (`ACROBAT4` to
+  `ACROBAT8` as PDF 1.3 to 1.7), `artboardRange`, `preserveEditability`, `acrobatLayers` and `compressArt` of PDF.
+  `exportType` is an `ExportType`: `PNG24`, `JPEG` and `SVG` take `new ExportOptionsPNG24()`, `new ExportOptionsJPEG()`
+  and `new ExportOptionsSVG()` (https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/, https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/),
+  with `antiAliasing`, `artBoardClipping`, `horizontalScale` and `verticalScale` (the same value, from 1 to
+  776.19; 100 writes one pixel per point whatever the raster effects resolution), `transparency` (PNG24), `qualitySetting` (0 to 100) and `optimization` (JPEG), and
+  `coordinatePrecision` (1 to 7), `embedRasterImages`, `compressed`, `preserveEditability` and
+  `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `app.open`'s
+  `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
+  `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
+  each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
+  `EPSPostScriptLevelEnum`, `PDFOverprint` and `UserInteractionLevel` hold strings such as `"ExportType.PNG24"`.
+  VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
+  command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
+  document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is
+  read-only`; a file a `File` object holds open for writing throws `Script file is open for writing` on `saveAs`
+  and `exportFile`, and `Script file access denied` when a command would write it besides the file named; and the
+  files a command reads or writes besides the one named, such as an SVG's linked files, are
+  read and written only where the script's folders allow. `userInteractionLevel` does not change what a command
+  does or where it may read and write, since a command a script runs never shows a dialog. `exportFile` adds the
+  format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.svgz` with
+  `compressed`), and writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
+  visible art. An SVG with `embedRasterImages` false also writes the document's embedded images beside it, and
+  when one of those files may not be written, none of them is. A listed option that is not mapped is accepted at its help page's default, and any other value throws
+  an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`; properties the help
+  pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
+  keeps the preset's value. A bad value throws an error before anything is written.
+- `Document.print(options?)` runs `file.print` on the document, with the options a script assigned over the
+  document's print settings, or over the preset's when `printPreset` is assigned. The document's print settings
+  stay as they are, and `print` adds no undo step
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/PrintOptions/).
+  `options` is a `new PrintOptions()`, whose `jobOptions`, `colorManagementOptions`, `colorSeparationOptions`,
+  `coordinateOptions`, `flattenerOptions`, `fontOptions`, `pageMarksOptions`, `paperOptions` and `postScriptOptions`
+  are `new PrintJobOptions()`, `new PrintColorManagementOptions()`, `new PrintColorSeparationOptions()`,
+  `new PrintCoordinateOptions()`, `new PrintFlattenerOptions()`, `new PrintFontOptions()`,
+  `new PrintPageMarksOptions()`, `new PrintPaperOptions()` and `new PrintPostScriptOptions()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PrintJobOptions/ and the pages beside it). Each property reads as
+  its help page's default until it is assigned, and a `PrintOptions` holds its option objects by reference, so a change
+  made after the assignment is printed. `print` maps `printPreset` (a print preset's name) and `flattenerPreset`;
+  `copies` (1 to 999), `collate`, `reversePages`, `designation`, `printAllArtboards`, `artboardRange`,
+  `printAsBitmap` and `file` of the job; `colorProfileMode` (`SOURCEPROFILE` and `CUSTOMPROFILE`), `intent` and
+  `name` (an RGB or CMYK profile) of color management; `colorSeparationMode` (`COMPOSITE` and
+  `HOSTBASEDSEPARATION`), `convertSpotColors` and `overPrintBlack`; `emulsion`, `fitToPage`, `horizontalScale` and
+  `verticalScale` (1 to 1000), `orientation`, `position` and `tiling`; `overprint` of the flattener; `colorBars`,
+  `pageInfoMarks`, `registrationMarks`, `trimMarks`, `pageMarksType` and `trimMarksWeight`; `name`, `width`,
+  `height` and `transverse` of the paper; and `negativePrinting` and `postScriptLevel` (`PSLEVEL2` and `PSLEVEL3`).
+  `app.printPresetsList` gives the print presets' names, `[Default]` first, and `app.PPDFileList` is empty.
+  The enumerations `PrintColorProfile`, `PrintColorIntent`, `PrintColorSeparationMode`, `PrintOrientation`,
+  `PrintPosition`, `PrintTiling`, `PrintArtworkDesignation`, `PrintingBounds`, `PrintFontDownloadMode`,
+  `FontSubstitutionPolicy`, `PageMarksTypes`, `PostScriptImageCompressionType` and `PrinterPostScriptLevelEnum` hold
+  strings such as `"PrintTiling.TILEFULLPAGES"`. VectorCraft's own rules: `print` writes the file `jobOptions.file`
+  names, checked as `saveAs` checks its file: PostScript when the name ends with `.ps` or `postScriptLevel` is
+  assigned, a print-ready PDF otherwise, also when that name is a link to a file with another extension. The
+  PostScript is level 2 when `postScriptLevel` is not assigned, the default it reads as. Without a file it throws `Printing to a printer is not available to scripts yet`, and `app.printerList` throws an error
+  that says it is not available yet. `fitToPage` set to true wins over the scale factors and the tiling mode. With
+  `printAllArtboards` false, `artboardRange` picks the artboards, and without a range every artboard prints. With
+  `printAllArtboards` not assigned, an assigned `artboardRange` replaces the range of the settings `print` starts
+  from, which prints when those settings print a range. `print` starts from the preset's settings when `printPreset`
+  is assigned, otherwise from the document's saved settings. When those settings ignore the artboards, an assigned
+  `printArea` prints the artboards an assigned `artboardRange` names, or each artboard without a range. With one of
+  `horizontalScale` and `verticalScale` assigned, the other keeps its value in the settings `print` starts from. `print` throws before anything is written when an assigned `artboardRange` names an
+  artboard the document does not have, also with `printAllArtboards` true, when `printPreset` or `flattenerPreset`
+  is not a preset's name (any case), when `colorManagementOptions.name` is not an RGB or CMYK profile's name (any
+  case), when `paperOptions.name` is not a paper `file.print` knows, or when it names a paper other than `custom`
+  and `width` or `height` is assigned above 0. An assigned name that is empty or only spaces, or holds `/`, `\` or
+  a control character (also at either end), throws too, and each checked name is sent without the spaces around it. `printerName` and `PPDName` take only `""`. A listed option that is not mapped, or a value that is not mapped such as
+  `PrintingBounds.ARTWORKBOUNDS`, `INRIPSEPARATION`, `PSLEVEL1` or a scale above 1000, throws an error that says it
+  is not available yet. Each value is checked when it is assigned: a wrong type, a number that is not finite or is
+  out of range, a string longer than 4,096 bytes, an option object of the wrong class or from an earlier run, and a
+  path given as a string all throw. A run makes at most 256 option objects. Each warning `file.print` gives goes to
+  the Script Console as a line that starts with `Document.print: `. `vc.run` still cannot run `file.print` or
+  `print.*`.
 - `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
   with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
   `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page

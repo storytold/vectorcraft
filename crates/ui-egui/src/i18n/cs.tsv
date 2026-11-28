@@ -5426,6 +5426,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Script file could not be written	Soubor skriptu nelze zapsat
 @msg	Script file dialogs need a person to answer them	Dialogy souborů skriptu potřebují osobu, která na ně odpoví
 @msg	Script file is not open for writing	Soubor skriptu není otevřený pro zápis
+@msg	Script file is read-only	Soubor skriptu je jen pro čtení
+@msg	Script file is open for writing	Soubor skriptu je otevřený pro zápis
 @msg	Script file name is already in use	Název souboru skriptu se už používá
 @msg	Script file name must be a name without a folder	Název souboru skriptu musí být název bez složky
 @msg	Script file permission can be kept only for a script run from a file	Oprávnění k souborům lze zachovat jen pro skript spuštěný ze souboru

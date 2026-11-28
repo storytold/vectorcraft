@@ -67,6 +67,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod print;
+mod save_open;
 mod tags;
 
 /// The error for a member read or called with no document open.
@@ -125,6 +127,10 @@ pub(super) struct State {
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
+    /// `app.userInteractionLevel` ([`save_open`]).
+    save_options: save_open::State,
+    /// The print option objects ([`print`]).
+    printing: print::State,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
 }
 
@@ -2212,7 +2218,7 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// Adds `app`, its classes and the enumerations to `realm`; their members act for the run `link`
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
-    for (name, members) in ENUMS {
+    for (name, members) in ENUMS.iter().chain(save_open::ENUMS).chain(print::ENUMS) {
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
@@ -2228,6 +2234,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
+    application.extend(save_open::application_members(l));
+    application.extend(print::application_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |_: Vec<Data>| {
@@ -2273,10 +2281,12 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("toString", method(l, doc_to_string)),
     ]);
     document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
+        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "close"]
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
+    document.extend(save_open::document_members(l));
+    document.extend(print::document_members(l));
     document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
@@ -2344,6 +2354,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     );
     classes.push(class("PageItem", None, page_item, None));
     classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(save_open::classes(l));
+    classes.extend(print::classes(l));
     classes.push(class(
         "Layer",
         None,

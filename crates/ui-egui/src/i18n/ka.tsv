@@ -8648,6 +8648,8 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	Script file could not be written	სკრიპტის ფაილის ჩაწერა ვერ მოხერხდა
 @msg	Script file dialogs need a person to answer them	სკრიპტის ფაილის დიალოგებს სჭირდება ადამიანი, რომელიც უპასუხებს
 @msg	Script file is not open for writing	სკრიპტის ფაილი ჩასაწერად გახსნილი არ არის
+@msg	Script file is read-only	სკრიპტის ფაილი მხოლოდ წასაკითხია
+@msg	Script file is open for writing	სკრიპტის ფაილი ჩასაწერად გახსნილია
 @msg	Script file name is already in use	სკრიპტის ფაილის სახელი უკვე გამოიყენება
 @msg	Script file name must be a name without a folder	სკრიპტის ფაილის სახელი უნდა იყოს სახელი საქაღალდის გარეშე
 @msg	Script file permission can be kept only for a script run from a file	ფაილების ნებართვის შენახვა შესაძლებელია მხოლოდ ფაილიდან გაშვებული სკრიპტისთვის
