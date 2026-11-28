@@ -874,3 +874,65 @@ fn full_layers_are_the_layers_with_all_their_art_selected() {
         assert_eq!(rows::full_layers(&doc, &sel), want, "selection {bits:b}");
     }
 }
+
+/// A target circle's appearance held across File › Revert and dropped on another row's circle
+/// leaves the restored objects with the same IDs as they were; a drag started after the revert
+/// still moves the appearance.
+#[test]
+fn a_target_circle_drop_after_file_revert_leaves_the_restored_appearance_in_place() {
+    use crate::panel_drag::PanelDrag;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::Modifiers;
+
+    let (mut app, _, [a, b]) = two_rects();
+    name_row(&mut app, a, "A");
+    name_row(&mut app, b, "B");
+    app.run("paint.setFill", json!({"color": "#ff0000", "ids": [a.0]})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff", "ids": [b.0]})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let folder = vectorcraft_testkit::TempDir::new("layers-appearance-drag-revert");
+    let path = folder.join("drawing.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    let fill = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().appearance.fill_paint();
+    let (red, blue) = (fill(&app, a), fill(&app, b));
+    assert_ne!(red, blue);
+    // An edit that leaves the rows where they are, so the revert has changes to discard.
+    app.run("paint.setFill", json!({"color": "#00ff00", "ids": [b.0]})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+
+    let mut panel = Panel::new(app, show);
+    let from = panel.rect_role("Target A", Role::BUTTON).center();
+    let to = panel.rect_role("Target B", Role::BUTTON).center();
+    panel.drag_hold_role("Target A", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "the other row's circle takes the appearance before the revert");
+    let opening = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    panel.frame();
+    let history = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+        st.history.undo.len()
+    };
+    let carried = drag::active::<PanelDrag>(panel.ctx());
+    assert!(matches!(carried.as_deref(), Some(PanelDrag::Appearance { source, .. }) if *source == a), "the revert leaves the drag held");
+    assert!(drag::mark(panel.ctx()).is_none(), "the circle refuses an appearance carried from before the revert");
+    panel.release();
+    {
+        let app = panel.app();
+        assert_eq!((fill(&app, a), fill(&app, b)), (red.clone(), blue.clone()), "the restored objects with the same IDs keep their looks");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), history, "the stale drop makes no edit");
+    }
+
+    panel.drag("Target A", "Target B", Modifiers::NONE);
+    assert_eq!(fill(&panel.app(), b), red, "a target circle drag started after the revert still moves the appearance");
+}
