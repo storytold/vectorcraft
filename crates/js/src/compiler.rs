@@ -1655,6 +1655,14 @@ impl<'a> FnCompiler<'a> {
         let ctor = self.function(class.constructor)?;
         self.at(class.span.start);
         self.emit(Op::ClassStart { ctor, heritage: class.heritage.is_some() });
+        // A named class's constructor is named after it before its methods are defined, so a
+        // static method `name` replaces that name (ECMA-262 2015 section 14.5.15).
+        if let Some(name) = &class.name {
+            let n = self.name_key(key_of(&name.name));
+            self.emit(Op::Pick(1));
+            self.emit(Op::SetFunctionName(n));
+            self.emit(Op::Pop);
+        }
         for element in &class.elements {
             match &element.key {
                 ClassKey::Fixed(k) => {
@@ -1766,6 +1774,16 @@ impl<'a> FnCompiler<'a> {
                 }
                 self.emit(Op::InitIndex);
             }
+            // A method or an accessor with a home object is named as it is defined.
+            PropertyValue::Method(f) | PropertyValue::Get(f) | PropertyValue::Set(f) if self.ast.function(*f).is_some_and(|f| f.home) => {
+                let func = self.function(*f)?;
+                let kind = match value {
+                    PropertyValue::Get(_) => 1,
+                    PropertyValue::Set(_) => 2,
+                    _ => 0,
+                };
+                self.emit(Op::InitMethodKey { func, kind });
+            }
             PropertyValue::Get(f) | PropertyValue::Set(f) => {
                 let getter = matches!(value, PropertyValue::Get(_));
                 let i = self.function(*f)?;
@@ -1784,11 +1802,13 @@ impl<'a> FnCompiler<'a> {
     }
 
     /// The expression is an anonymous function definition (ECMA-262 2015 section 14.1.9): a
-    /// function expression without a name or an arrow function, parenthesized or not.
+    /// function expression without a name or an arrow function, parenthesized or not, or a class
+    /// expression without a name.
     fn is_anonymous_function(&self, e: ExprId) -> bool {
         match self.ast.expr(self.ast.unparenthesized(e)) {
             Some(Expr::Arrow(_)) => true,
             Some(Expr::Function(fid)) => self.ast.function(*fid).is_some_and(|f| f.name.is_none()),
+            Some(Expr::Class(class)) => class.name.is_none(),
             _ => false,
         }
     }

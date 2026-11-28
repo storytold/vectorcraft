@@ -13,12 +13,13 @@
 
 use std::rc::Rc;
 
-use crate::bytecode::Code;
+use crate::bytecode::{Code, NamePrefix};
 use crate::heap::{
-    Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, Func, HIDDEN, Key, OBJECT_BYTES, ObjId, Object, Prop, PropMap, WRITABLE, key,
+    Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, Func, HIDDEN, OBJECT_BYTES, ObjId, Object, Prop, PropMap, WRITABLE, key,
     string_bytes,
 };
 use crate::interp::{ARROW_THIS, Abrupt, Desc, Entry, ErrorType, Interp, JsResult, binding_bytes, closure_bytes, internal};
+use crate::symbol::PropKey;
 use crate::value::{Str, Value};
 
 const FUNC: &[u16] = &[0, 0x66, 0x75, 0x6E, 0x63];
@@ -329,7 +330,7 @@ impl Interp {
     /// 14.3.8 and 14.5.14, step 21).
     pub(crate) fn op_class_method(&mut self, func: u32, kind: u8, is_static: bool) -> JsResult<()> {
         let kv = self.peek(0)?;
-        let k: Key = self.to_key(&kv)?;
+        let k = self.to_prop_key(&kv)?;
         let Value::Object(target) = self.peek(if is_static { 2 } else { 1 })? else { return internal("class operand is not an object") };
         self.define_method(target, k, func, kind, false)?;
         self.pop().map(drop)
@@ -340,64 +341,138 @@ impl Interp {
     pub(crate) fn op_init_method(&mut self, func: u32, kind: u8, name: u32) -> JsResult<()> {
         let k = self.name(name)?;
         let Value::Object(target) = self.peek(0)? else { return internal("object literal is not an object") };
-        self.define_method(target, k, func, kind, true)
+        self.define_method(target, PropKey::Str(k), func, kind, true)
+    }
+
+    /// `object key` → `object`: defines an object literal's method or accessor `functions[func]`
+    /// under a computed key, already a name or a Symbol (section 12.2.6.8).
+    pub(crate) fn op_init_method_key(&mut self, func: u32, kind: u8) -> JsResult<()> {
+        let kv = self.peek(0)?;
+        let k = self.to_prop_key(&kv)?;
+        let Value::Object(target) = self.peek(1)? else { return internal("object literal is not an object") };
+        self.define_method(target, k, func, kind, true)?;
+        self.pop().map(drop)
     }
 
     /// Defines the method (`kind` 0), getter (1) or setter (2) made from `functions[func]` of the
-    /// running code under `k` on `target`, its home object (MakeMethod, section 14.3.8). The
-    /// caller keeps `target` reachable.
-    fn define_method(&mut self, target: ObjId, k: Key, func: u32, kind: u8, enumerable: bool) -> JsResult<()> {
+    /// running code under `k` on `target`, its home object (MakeMethod, section 14.3.8), and
+    /// names the function after `k`, with `get ` or `set ` before an accessor's name (section
+    /// 9.2.11). The caller keeps `target` and a Symbol key reachable.
+    fn define_method(&mut self, target: ObjId, k: PropKey, func: u32, kind: u8, enumerable: bool) -> JsResult<()> {
         self.use_fuel()?;
         let frame = self.frame()?;
         let env = frame.env;
         let Some(code) = frame.code.functions.get(func as usize).cloned() else { return internal("function out of range") };
+        let named = code.own_name.is_some();
+        let key_bytes = match &k {
+            PropKey::Str(name) => binding_bytes(name.len()),
+            PropKey::Sym(_) => binding_bytes(0),
+        };
         let need = OBJECT_BYTES
             .saturating_add(ENV_BYTES)
             .saturating_add(binding_bytes(HOME.len()))
             .saturating_add(closure_bytes(&code))
-            .saturating_add(binding_bytes(k.len()));
-        let root = Value::String(Str::from_rc(k.clone()));
-        self.rooted(&[root], |i| i.reserve_heap(need))?;
+            .saturating_add(key_bytes);
+        let root = match &k {
+            PropKey::Str(name) => Value::String(Str::from_rc(name.clone())),
+            PropKey::Sym(s) => Value::Symbol(s.clone()),
+        };
+        self.rooted(std::slice::from_ref(&root), |i| i.reserve_heap(need))?;
         let home = self.home_env(target, env);
         let f = self.make_closure(code, home)?;
+        if named {
+            let prefix = match kind {
+                0 => NamePrefix::None,
+                1 => NamePrefix::Get,
+                _ => NamePrefix::Set,
+            };
+            self.rooted(&[Value::Object(f), root], |i| {
+                let name = i.key_name(prefix, &k)?;
+                i.set_function_name(f, name)
+            })?;
+        }
         let (enumerable, configurable) = (Some(enumerable), Some(true));
         let desc = match kind {
             0 => Desc { value: Some(Value::Object(f)), writable: Some(true), enumerable, configurable, ..Desc::default() },
             1 => Desc { get: Some(Some(f)), enumerable, configurable, ..Desc::default() },
             _ => Desc { set: Some(Some(f)), enumerable, configurable, ..Desc::default() },
         };
-        self.rooted(&[Value::Object(f)], |i| i.define_own_property(target, k, &desc, true)).map(drop)
+        self.rooted(&[Value::Object(f)], |i| i.define_own_pk(target, k, &desc, true)).map(drop)
+    }
+
+    /// The `name` of a function defined under `k`: the name with `prefix` before it, or a
+    /// Symbol's description in brackets, or `prefix` alone for a Symbol without one (SetFunctionName,
+    /// section 9.2.11).
+    fn key_name(&mut self, prefix: NamePrefix, k: &PropKey) -> JsResult<Value> {
+        match k {
+            PropKey::Str(name) if prefix == NamePrefix::None => Ok(Value::String(Str::from_rc(name.clone()))),
+            PropKey::Str(name) => self.wrap_str(prefix.text(), Some(&Str::from_rc(name.clone())), ""),
+            PropKey::Sym(s) => match s.description() {
+                Some(d) => {
+                    let d = d.clone();
+                    self.wrap_str(&format!("{}[", prefix.text()), Some(&d), "]")
+                }
+                None => self.wrap_str(prefix.text(), None, ""),
+            },
+        }
     }
 
     /// `this key` → `this home key`: the prototype of the running method's home object, `null`
-    /// when it has none, and the key as a property name (MakeSuperPropertyReference, section
-    /// 12.3.5.3).
+    /// when it has none, and the key as a property name or a Symbol (MakeSuperPropertyReference,
+    /// section 12.3.5.3).
     pub(crate) fn op_super_ref(&mut self) -> JsResult<()> {
         let kv = self.peek(0)?;
-        let k = self.to_key(&kv)?;
+        let k = match self.to_prop_key(&kv)? {
+            PropKey::Str(name) => Value::String(Str::from_rc(name)),
+            PropKey::Sym(s) => Value::Symbol(s),
+        };
         let Value::Object(home) = self.hidden_value(HOME)? else { return Err(self.throw(ErrorType::Syntax, "'super' is allowed only in methods")) };
         let proto = self.object(home)?.proto.map_or(Value::Null, Value::Object);
         self.replace(1, proto)?;
-        self.push(Value::String(Str::from_rc(k)))
+        self.push(k)
     }
 
     /// The three operands of a `super` property: `this`, the prototype and the key.
-    fn super_operands(&mut self, depth: usize) -> JsResult<(Value, ObjId, Key)> {
+    fn super_operands(&mut self, depth: usize) -> JsResult<(Value, ObjId, PropKey)> {
         let k = self.peek(depth)?;
         let proto = self.peek(depth + 1)?;
         let this = self.peek(depth + 2)?;
-        let k = self.to_key(&k)?;
+        let k = self.to_prop_key(&k)?;
         let Value::Object(p) = proto else {
-            let name = String::from_utf16_lossy(&k);
+            let name = self.pk_name(&k)?;
             return Err(self.type_error(&format!("cannot use super property '{name}': the home object has no prototype")));
         };
         Ok((this, p, k))
     }
 
+    /// The key as text for a message.
+    fn pk_name(&mut self, k: &PropKey) -> JsResult<String> {
+        match k {
+            PropKey::Str(name) => Ok(String::from_utf16_lossy(name)),
+            PropKey::Sym(s) => self.sym_name(s),
+        }
+    }
+
+    /// The property `k` of `start` or an object it inherits from.
+    fn find_pk(&mut self, start: ObjId, k: &PropKey) -> JsResult<Option<Prop>> {
+        match k {
+            PropKey::Str(name) => self.find_property(start, name),
+            PropKey::Sym(s) => self.find_sym(start, s),
+        }
+    }
+
+    /// [[Get]] of `k` from `start` with `receiver` as `this`.
+    fn get_pk_from(&mut self, start: ObjId, k: &PropKey, receiver: &Value) -> JsResult<Value> {
+        match k {
+            PropKey::Str(name) => self.get_from(start, name, receiver),
+            PropKey::Sym(s) => self.get_sym_from(start, s, receiver),
+        }
+    }
+
     /// `this home key` → `value`, or with `with_this` → `value this`.
     pub(crate) fn op_super_get(&mut self, with_this: bool) -> JsResult<()> {
         let (this, p, k) = self.super_operands(0)?;
-        let v = self.get_from(p, &k, &this)?;
+        let v = self.get_pk_from(p, &k, &this)?;
         self.replace(3, v)?;
         if with_this { self.push(this) } else { Ok(()) }
     }
@@ -413,7 +488,7 @@ impl Interp {
     /// `this home key` → the old or new number of a `++` or `--` on a `super` property.
     pub(crate) fn op_super_inc(&mut self, prefix: bool, dec: bool) -> JsResult<()> {
         let (this, p, k) = self.super_operands(0)?;
-        let v = self.get_from(p, &k, &this)?;
+        let v = self.get_pk_from(p, &k, &this)?;
         let old = self.to_number(&v)?;
         let new = if dec { old - 1.0 } else { old + 1.0 };
         self.super_put(p, k, Value::Number(new), &this)?;
@@ -424,9 +499,9 @@ impl Interp {
     /// that cannot be made throws a `TypeError` in strict mode code and in code from a source with
     /// [`crate::bytecode::Source::strict_writes`], and does nothing otherwise (PutValue, section
     /// 6.2.3.2).
-    fn super_put(&mut self, proto: ObjId, k: Key, v: Value, receiver: &Value) -> JsResult<()> {
+    fn super_put(&mut self, proto: ObjId, k: PropKey, v: Value, receiver: &Value) -> JsResult<()> {
         let throw = self.strict_writes();
-        let why = match self.find_property(proto, &k)? {
+        let why = match self.find_pk(proto, &k)? {
             Some(Prop::Accessor { set: Some(s), .. }) => return self.call(&Value::Object(s), receiver, &[v]).map(drop),
             Some(Prop::Accessor { set: None, .. }) => Some("it has only a getter"),
             Some(Prop::Data { flags, .. }) if flags & WRITABLE == 0 => Some("it is read-only"),
@@ -434,7 +509,7 @@ impl Interp {
         };
         let (r, desc) = match (why, receiver) {
             (Some(why), _) => return self.super_reject(throw, &k, why),
-            (None, Value::Object(r)) => match self.get_own_property(*r, &k)? {
+            (None, Value::Object(r)) => match self.get_own_pk(*r, &k)? {
                 Some(Prop::Accessor { .. }) => return self.super_reject(throw, &k, "it is an accessor"),
                 Some(Prop::Data { flags, .. }) if flags & WRITABLE == 0 => return self.super_reject(throw, &k, "it is read-only"),
                 Some(Prop::Data { .. }) => (*r, Desc { value: Some(v), ..Desc::default() }),
@@ -442,14 +517,14 @@ impl Interp {
             },
             (None, _) => return self.super_reject(throw, &k, "`this` is a primitive value"),
         };
-        self.define_own_property(r, k, &desc, throw).map(drop)
+        self.define_own_pk(r, k, &desc, throw).map(drop)
     }
 
-    fn super_reject(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<()> {
+    fn super_reject(&mut self, throw: bool, k: &PropKey, why: &str) -> JsResult<()> {
         if !throw {
             return Ok(());
         }
-        let name = String::from_utf16_lossy(k);
+        let name = self.pk_name(k)?;
         Err(self.type_error(&format!("cannot assign to property '{name}': {why}")))
     }
 

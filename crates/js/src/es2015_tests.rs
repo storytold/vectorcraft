@@ -1206,6 +1206,64 @@ fn classes_make_constructors_with_methods_on_their_prototype() {
 }
 
 #[test]
+fn classes_and_their_methods_are_named_after_their_keys() {
+    let named = |f: &str| {
+        format!(
+            "(function (f) {{ var d = Object.getOwnPropertyDescriptor(f, 'name'); return d.value + (d.writable || d.enumerable ? '!' : '') + (d.configurable ? '' : '!'); }})({f})"
+        )
+    };
+    let src = "var d = Symbol('d'), e = Symbol(); class A { m() {} get g() {} set s(v) {} static [Symbol.iterator]() {} static [d]() {} [e]() {} ['c' + 1]() {} }";
+    assert_eq!(string(&format!("{src} {}", named("A"))), "A");
+    assert_eq!(string(&format!("{src} {}", named("A.prototype.m"))), "m");
+    assert_eq!(string(&format!("{src} {}", named("Object.getOwnPropertyDescriptor(A.prototype, 'g').get"))), "get g");
+    assert_eq!(string(&format!("{src} {}", named("Object.getOwnPropertyDescriptor(A.prototype, 's').set"))), "set s");
+    assert_eq!(string(&format!("{src} {}", named("A[Symbol.iterator]"))), "[Symbol.iterator]");
+    assert_eq!(string(&format!("{src} {}", named("A.prototype.c1"))), "c1");
+    truth(&format!("{src} A[d].name === '[d]' && A.prototype[e].name === ''"));
+    // A static `name` member replaces the class's name.
+    truth("class B { static name() { return 1; } } typeof B.name === 'function' && B.name() === 1");
+    // An anonymous class takes the name of what it is assigned to.
+    truth("var C = class {}; var o = { D: class {} }; C.name === 'C' && o.D.name === 'D' && (class {}).name === ''");
+    truth("var E = class { static name() {} }; typeof E.name === 'function'");
+    truth("var G = class { static ['foo']() {} static [Symbol.iterator]() {} }; G.name === 'G'");
+    truth("var H = class { static ['na' + 'me']() {} }; typeof H.name === 'function'");
+    truth("var I = class { static get name() { return 'x'; } }; I.name === 'x'");
+    truth("var F = class Inner {}; F.name === 'Inner'");
+}
+
+#[test]
+fn classes_have_generator_methods() {
+    let src = "class P { *items() { yield 1; } } class A extends P { *m(n) { yield n; yield* super.items(); } static *[Symbol.iterator]() { yield 'a'; yield 'b'; } }";
+    truth(&format!("{src} var it = new A().m(5); it.next().value === 5 && it.next().value === 1 && it.next().done"));
+    truth(&format!("{src} [...A].join() === 'a,b' && A.prototype.m.name === 'm'"));
+    truth(&format!(
+        "{src} var d = Object.getOwnPropertyDescriptor(A.prototype, 'm'); !d.enumerable && Object.getPrototypeOf(new A().m()) === A.prototype.m.prototype"
+    ));
+    throws(&format!("{src} new A.prototype.m()"), "TypeError");
+    syntax("class A { static *prototype() {} }");
+    syntax("class A { *m() { yield = 1; } }");
+    truth("class A { *get() { yield 2; } } new A().get().next().value === 2");
+}
+
+#[test]
+fn computed_methods_and_accessors_of_object_literals_have_a_home_object() {
+    let src = "var p = { x: 1 }; var k = Symbol('k'); var o = { __proto__: p, ['m']() { return super.x; }, get [k]() { return super.x + 1; }, set ['s'](v) { super.x = v; } };";
+    truth(&format!("{src} o.m() === 1 && o[k] === 2 && o.m.name === 'm'"));
+    truth(&format!("{src} o.s = 5; o.x === 5 && p.x === 1 && Object.getOwnPropertyDescriptor(o, k).get.name === 'get [k]'"));
+    truth(&format!("{src} Object.getOwnPropertyDescriptor(o, 'm').enumerable && !o.m.hasOwnProperty('prototype')"));
+    throws(&format!("{src} new o.m()"), "TypeError");
+}
+
+#[test]
+fn super_properties_read_and_write_symbol_keys() {
+    let src = "var s = Symbol('s'); class P {} P.prototype[s] = 5; class Q extends P { f() { return super[s]; } g() { super[s] = 7; return this[s]; } h() { super[s]++; return this[s]; } }";
+    truth(&format!("{src} new Q().f() === 5"));
+    truth(&format!("{src} var q = new Q(); q.g() === 7 && q.hasOwnProperty(s) && P.prototype[s] === 5"));
+    truth(&format!("{src} new Q().h() === 6"));
+    truth("var s = Symbol(); var o = { __proto__: { [s]() { return 3; } }, m() { return super[s](); } }; o.m() === 3");
+}
+
+#[test]
 fn static_and_accessor_members_go_on_the_constructor_and_prototype() {
     truth("class A { static make() { return new A(); } } A.make() instanceof A");
     truth("class A { static get n() { return 4; } } A.n === 4 && !A.prototype.hasOwnProperty('n')");
@@ -1514,7 +1572,7 @@ fn class_bindings_follow_let_rules() {
     syntax("class {}");
     syntax("class A { constructor() {} constructor() {} }");
     syntax("class A { get constructor() {} }");
-    syntax("class A { *g() {} }");
+    syntax("class A { *constructor() {} }");
     syntax("class A { m() { super(); } }");
     syntax("class A extends Object { m() { super(); } }");
     syntax("function f() { super.x; }");

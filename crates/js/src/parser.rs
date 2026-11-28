@@ -1973,16 +1973,14 @@ impl<'s> Parser<'s> {
             self.bump()?;
         }
         let start = self.tok.span;
-        if self.at(Punct::Star) {
-            return Err(self.error_at_token(&self.tok, "generator methods are not supported"));
-        }
+        let generator = self.eat(Punct::Star)?;
         // `get` and `set` start an accessor only when written without escapes and followed by a name.
         let accessor = match self.tok.ident().filter(|_| !self.tok.escaped) {
             Some("get") => Some(MethodKind::Get),
             Some("set") => Some(MethodKind::Set),
             _ => None,
         }
-        .filter(|_| self.peek().is_some_and(|t| property_key(&t).is_some() || t.is_punct(Punct::LBracket)));
+        .filter(|_| !generator && self.peek().is_some_and(|t| property_key(&t).is_some() || t.is_punct(Punct::LBracket)));
         if accessor.is_some() {
             self.bump()?;
         }
@@ -1999,6 +1997,9 @@ impl<'s> Parser<'s> {
             if kind != MethodKind::Method {
                 return Err(self.error_at_offset(start.start, "a class constructor cannot be a getter or a setter"));
             }
+            if generator {
+                return Err(self.error_at_offset(start.start, "a class constructor cannot be a generator"));
+            }
             let ctor = if derived { FunctionKind::DerivedConstructor } else { FunctionKind::ClassConstructor };
             return Ok(Err(self.parse_function_with(ctor, None, start, true, false)?));
         }
@@ -2010,7 +2011,7 @@ impl<'s> Parser<'s> {
             MethodKind::Get => FunctionKind::Getter,
             MethodKind::Set => FunctionKind::Setter,
         };
-        let function = self.parse_function_with(fkind, None, start, true, false)?;
+        let function = self.parse_function_with(fkind, None, start, true, generator)?;
         Ok(Ok(ClassElement { key, is_static, kind, function }))
     }
 

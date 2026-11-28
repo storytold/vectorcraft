@@ -1309,6 +1309,7 @@ impl Interp {
             }
             Op::ClassMethod { func, kind, is_static } => self.op_class_method(func, kind, is_static),
             Op::InitMethod { func, kind, name } => self.op_init_method(func, kind, name),
+            Op::InitMethodKey { func, kind } => self.op_init_method_key(func, kind),
             Op::SuperRef => self.op_super_ref(),
             Op::SuperGet => self.op_super_get(false),
             Op::SuperGetThis => self.op_super_get(true),
@@ -2465,6 +2466,18 @@ impl Interp {
     /// Gives `f` its `name` (ECMA-262 2015 section 9.2.11): not writable, not enumerable,
     /// configurable.
     pub(crate) fn set_function_name(&mut self, f: ObjId, name: Value) -> JsResult<()> {
+        // A class whose static members define `name` keeps that member (section 12.14.4,
+        // step 1.e): its own `name` is no longer the empty string it was made with.
+        let object = self.object(f)?;
+        let class_ctor = matches!(&object.class, Class::Function(Func::Closure { code, .. }) if code.class_ctor);
+        let default = match object.props.get(&key("name")) {
+            None => true,
+            Some(Prop::Data { value: Value::String(s), .. }) => s.len() == 0,
+            Some(_) => false,
+        };
+        if class_ctor && !default {
+            return Ok(());
+        }
         // The empty `name` an ECMAScript 2015 function is made with is replaced in place.
         if !self.object(f)?.props.contains(&key("name")) {
             self.rooted(&[name.clone(), Value::Object(f)], |i| i.reserve_heap(PROP_BYTES + string_bytes("name".len())))?;

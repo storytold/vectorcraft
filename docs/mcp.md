@@ -2733,7 +2733,7 @@ an own empty `name` otherwise, as the 12th edition gives it (https://262.ecma-in
 20.2.4.2). A function's `length` can be redefined. The built-in functions get their names the first time a run reads
 ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. A `.js` script also has
 generator functions (ECMA-262 11th edition, sections 14.4 and 25.4, https://262.ecma-international.org/11.0/):
-`function*` declarations and expressions, `*name() {…}` methods in object literals, `yield`, and `yield*`, which
+`function*` declarations and expressions, `*name() {…}` methods in object literals and classes, `yield`, and `yield*`, which
 passes `next`, `throw` and `return` on to the iterator it delegates to. Calling a generator function returns a
 generator object whose `next`, `return` and `throw` run its body to the next `yield`; `return` runs the body's
 `finally` blocks, and resuming a generator while its body runs throws a `TypeError`. Each resumption takes fuel and

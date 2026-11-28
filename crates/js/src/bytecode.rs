@@ -251,6 +251,12 @@ pub(crate) enum Op {
         kind: u8,
         name: u32,
     },
+    /// `object key` → `object`: [`Op::InitMethod`] under a computed key, already a name or a
+    /// Symbol.
+    InitMethodKey {
+        func: u32,
+        kind: u8,
+    },
     /// `this key` → `this home key`: the key as a property name, with the prototype of the
     /// running method's home object between, for a `super` property (section 12.3.5.3).
     SuperRef,
@@ -575,6 +581,7 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::ClassStart { heritage, .. } => e(u32::from(heritage), 2),
         Op::ClassMethod { .. } => e(3, 2),
         Op::InitMethod { .. } => e(1, 1),
+        Op::InitMethodKey { .. } => e(2, 1),
         Op::SuperRef => e(2, 3),
         Op::SuperGet => e(3, 1),
         Op::SuperGetThis => e(3, 2),
@@ -629,7 +636,9 @@ fn check_indices(op: Op, code: &Code) -> Result<(), String> {
         | Op::InitVar(i)
         | Op::LoadParam(i)
         | Op::AnnexB(i) => check(i, code.names.len(), "name"),
-        Op::Closure(i) | Op::ClassStart { ctor: i, .. } | Op::ClassMethod { func: i, .. } => check(i, code.functions.len(), "function"),
+        Op::Closure(i) | Op::ClassStart { ctor: i, .. } | Op::ClassMethod { func: i, .. } | Op::InitMethodKey { func: i, .. } => {
+            check(i, code.functions.len(), "function")
+        }
         Op::InitMethod { func, name, .. } => {
             check(func, code.functions.len(), "function")?;
             check(name, code.names.len(), "name")
