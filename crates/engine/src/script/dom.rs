@@ -70,6 +70,20 @@ use crate::{DocState, Document, NodeId, NodeKind, Session};
 mod colors;
 mod paths;
 mod tags;
+mod variables;
+
+pub use variables::{MAX_HANDLES, STALE_DATASET, STALE_VARIABLE};
+
+/// What [`after_command`] compares with, taken before each command a script runs
+/// ([`variables::before_command`]).
+pub(super) fn before_command(h: &Host, id: &str) -> Option<(u64, Vec<crate::doc::DataSet>)> {
+    variables::before_command(h, id)
+}
+
+/// After each command a script runs ([`variables::after_command`]).
+pub(super) fn after_command(h: &Host, before: Option<(u64, Vec<crate::doc::DataSet>)>) {
+    variables::after_command(h, before);
+}
 
 pub(super) use colors::of_color as color_data;
 
@@ -123,8 +137,8 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
 /// each kept while its document is unchanged, the point changes of a path not written yet, how many
 /// times each path's points went stale and each path as the run last saw its points, whether a
-/// call's own savepoint ([`atomically`]) is open, and the settings of each `DocumentPreset` the run
-/// made.
+/// call's own savepoint ([`atomically`]) is open, the settings of each `DocumentPreset` the run
+/// made, and the `Variable` and `Dataset` objects it gave out.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
@@ -149,6 +163,7 @@ pub(super) struct State {
     editing: Cell<Option<Item>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    vars: variables::Handles,
 }
 
 impl State {
@@ -2292,6 +2307,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
+    variables::define_enums(realm)?;
     let l = link;
     let mut application = named(vec![
         ("typename", typename_of("Application")),
@@ -2355,6 +2371,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
+    document.extend(variables::document_members(l));
     document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
@@ -2407,7 +2424,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "sliced",
             "uRL",
             "uuid",
-            "visibilityVariable",
             "wrapInside",
             "wrapOffset",
             "wrapped",
@@ -2420,12 +2436,18 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .into_iter()
         .map(|m| later(l, "PageItem", m)),
     );
+    page_item.extend(variables::page_item_members(l));
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(
-        ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), if *c == "PathItem" { paths::path_item_members(l) } else { Vec::new() }, None)),
-    );
+    classes.extend(ITEM_CLASSES.iter().map(|c| {
+        let mut members = variables::item_members(l, c);
+        if *c == "PathItem" {
+            members.extend(paths::path_item_members(l));
+        }
+        class(c, Some("PageItem"), members, None)
+    }));
     classes.extend(paths::classes(l));
     classes.extend(colors::classes(l));
+    classes.extend(variables::classes(l));
     paths::install_enums(realm)?;
     classes.push(class(
         "Layer",

@@ -186,6 +186,7 @@ mod script_include;
 mod script_io;
 mod script_run;
 mod script_tags;
+mod script_variables;
 mod script_xmp;
 mod scripts;
 mod segment_nudge;

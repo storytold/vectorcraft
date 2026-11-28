@@ -29,7 +29,8 @@ pub(crate) struct NewTextStyle {
     opening: Opening,
     /// Whether the dialog makes a paragraph style.
     pub(crate) para: bool,
-    document: u64,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
     target: Value,
 }
 
@@ -56,7 +57,7 @@ style_dialog!(NewTextStyle, KIND);
 /// the style, to make it from the text `target` names.
 pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value, String> {
     let state = app.session.active().ok_or("no document open")?;
-    let (document, doc) = (state.uid, &state.doc);
+    let (document, doc) = ((state.uid, state.reverts), &state.doc);
     let name = vectorcraft_engine::cmd::textstyles::new_style_name(doc, para);
     let mut target = if target.is_object() { target } else { json!({}) };
     let selected_attrs = vectorcraft_engine::cmd::textstyles::target_style_attrs(&app.session, &target, para);
@@ -80,7 +81,8 @@ pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value
 /// into view when it next draws.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
-    let Some((para, document, frame)) = dialogs.with(|host| host.get_mut::<NewTextStyle>().map(|d| (d.para, d.document, d.frame()))) else {
+    let Some((para, (document, reverts), frame)) = dialogs.with(|host| host.get_mut::<NewTextStyle>().map(|d| (d.para, d.document, d.frame())))
+    else {
         // The dialog closed: its answer or cancel has nothing left for the app to do.
         let _ = dialogs.with(|host| host.take::<NewTextStyle>());
         return;
@@ -88,8 +90,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     if !frame.ok {
         return;
     }
-    let made = if app.session.active().is_some_and(|doc| doc.uid == document) {
+    let made = if app.session.active().is_some_and(|doc| (doc.uid, doc.reverts) == (document, reverts)) {
         frame.params.and_then(|params| app.run(if para { "paraStyle.new" } else { "charStyle.new" }, params))
+    } else if app.session.active().is_some_and(|doc| doc.uid == document) {
+        Err("The document was reverted. Reopen this dialog to continue.".into())
     } else if app.session.documents().iter().any(|doc| doc.uid == document) {
         Err("switch back to the document where this style was opened".into())
     } else {
@@ -149,6 +153,46 @@ mod tests {
         pump(&mut app, &ctx);
         assert!(style_exists(&app, para, name), "the original document can accept the same draft");
         assert_eq!(app.ui.text_styles.made, [(opening, para, name.to_string())]);
+    }
+
+    fn assert_style_is_refused_after_file_revert(para: bool) {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("text.create", json!({"x": 10, "y": 40, "text": "Opening document"})).unwrap();
+        let dir = vectorcraft_testkit::TempDir::new("new-text-style-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run(if para { "ui.newParaStyle" } else { "ui.newCharStyle" }, json!({})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        let dialog = host.with(|h| h.get::<NewTextStyle>().unwrap().id());
+        let name = "Draft Style";
+        host.with(|h| h.set_json_field(&ctx, dialog, "name", json!(name))).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
+        pump(&mut app, &ctx);
+
+        assert!(!style_exists(&app, para, name), "OK must not make the draft's style in the restored document");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        assert!(app.ui.text_styles.made.is_empty(), "the restored document must not highlight a style");
+        assert!(matches!(
+            host.with(|h| h.held_state(dialog)),
+            Some(HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
+    }
+
+    #[test]
+    fn new_character_style_is_refused_after_file_revert() {
+        assert_style_is_refused_after_file_revert(false);
+    }
+
+    #[test]
+    fn new_paragraph_style_is_refused_after_file_revert() {
+        assert_style_is_refused_after_file_revert(true);
     }
 
     #[test]
