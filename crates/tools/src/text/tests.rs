@@ -693,13 +693,8 @@ fn split_caret_overlay_follows_the_active_run_and_the_object_transform() {
             let (a, b) = split.primary;
             let sign = if split.rtl { -1.0 } else { 1.0 };
             let flag = Point::new(a.x + (b.y - a.y) * sign, a.y - (b.x - a.x) * sign);
-            let expected = Overlay::SplitCaret {
-                a: xf * a,
-                b: xf * b,
-                other_a: xf * split.alternate.0,
-                other_b: xf * split.alternate.1,
-                flag: xf * flag,
-            };
+            let expected =
+                Overlay::SplitCaret { a: xf * a, b: xf * b, other_a: xf * split.alternate.0, other_b: xf * split.alternate.1, flag: xf * flag };
             assert!(tool.overlays(&c).contains(&expected));
             assert_eq!(tool.sel(), (byte, byte), "drawing does not change editing affinity");
         }
