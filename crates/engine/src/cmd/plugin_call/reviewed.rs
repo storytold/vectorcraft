@@ -544,6 +544,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "select.object.strayPoints",
     "select.object.textObjects",
     "select.recall",
+    "select.remove",
     "select.reselect",
     "select.same.appearance",
     "select.same.appearanceAttribute",

@@ -45,6 +45,72 @@ fn remove_all_does_what_removing_each_does() {
     assert_eq!(none, s);
 }
 
+/// `expand_to` selects a member of a selected group in the group's place, beside the group's other
+/// objects at each level down to it, and leaves a selection it cannot open alone.
+#[test]
+fn expand_to_selects_a_member_in_place_of_its_selected_group() {
+    let rect = || vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let [x, g, e, h, b, c, dd] = [(); 7].map(|_| d.alloc_id());
+    let path = |id| Arc::new(Node::path(id, rect(), crate::Appearance::default_art()));
+    let inner = Node::group(h, vec![path(b), path(c)]);
+    let group = Node::group(g, vec![path(e), Arc::new(inner), path(dd)]);
+    d.insert(Some(l), 0, Node::path(x, rect(), crate::Appearance::default_art())).unwrap();
+    d.insert(Some(l), 1, group).unwrap();
+    let mut s = Selection::default();
+    s.set([x, g]);
+    s.key = Some(g);
+    assert!(s.expand_to(&d, b));
+    assert_eq!(s.objects, [x, e, dd, b, c], "the group's objects beside the inner group, then the inner group's");
+    assert_eq!(s.key, None, "the group leaves the selection with its key");
+    assert!(!s.expand_to(&d, b), "a member selected itself with nothing selected around it");
+    assert!(!s.expand_to(&d, x), "an object inside nothing selected");
+    // A member selected beside the group around it keeps its place.
+    let mut with_member = Selection::default();
+    with_member.set([b, g]);
+    assert!(with_member.expand_to(&d, b));
+    assert_eq!(with_member.objects, [b, e, dd, c]);
+    // An inner group selected beside the group leaves the selection too.
+    let mut both = Selection::default();
+    both.set([h, g]);
+    assert!(both.expand_to(&d, b));
+    assert_eq!(both.objects, [e, dd, b, c]);
+    // A group with anchors recorded for it is left as it is.
+    let mut partly = Selection::default();
+    partly.set([g]);
+    partly.anchors.insert(g, BTreeSet::from([(0, 0)]));
+    let before = partly.clone();
+    assert!(!partly.expand_to(&d, b));
+    assert_eq!(partly, before);
+    // A Shaper Group opens to its faces and never to its original shapes.
+    let [shaper, sources, o1, o2, face] = [(); 5].map(|_| d.alloc_id());
+    let mut sources_group = Node::group(sources, vec![path(o1), path(o2)]);
+    sources_group.name = Some(crate::shaper::SOURCES.into());
+    let mut shaper_group = Node::group(shaper, vec![Arc::new(sources_group), path(face)]);
+    shaper_group.extras_mut().shaper = Some(Box::default());
+    d.insert(Some(l), 2, shaper_group).unwrap();
+    let mut shaped = Selection::default();
+    shaped.set([shaper]);
+    let before = shaped.clone();
+    assert!(!shaped.expand_to(&d, o1), "an original shape");
+    assert_eq!(shaped, before);
+    assert!(shaped.expand_to(&d, face));
+    assert_eq!(shaped.objects, [face]);
+    // Hidden and locked objects beside the member stay out of the selection.
+    let [k, shown, hidden, locked, last] = [(); 5].map(|_| d.alloc_id());
+    let mut hidden_path = Node::path(hidden, rect(), crate::Appearance::default_art());
+    hidden_path.visible = false;
+    let mut locked_path = Node::path(locked, rect(), crate::Appearance::default_art());
+    locked_path.locked = true;
+    let kept = Node::group(k, vec![path(shown), Arc::new(hidden_path), Arc::new(locked_path), path(last)]);
+    d.insert(Some(l), 3, kept).unwrap();
+    let mut with_locked = Selection::default();
+    with_locked.set([k]);
+    assert!(with_locked.expand_to(&d, last));
+    assert_eq!(with_locked.objects, [shown, last]);
+}
+
 /// A selection with every field set: objects 1 to 6 with 3 listed twice, anchors, segments, a key,
 /// a key anchor, a target, slices, guides, a key guide, new art, a symbol part and an on-path member.
 fn seeded() -> Selection {

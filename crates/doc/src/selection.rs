@@ -187,6 +187,48 @@ impl Selection {
             self.key_anchor = None;
         }
     }
+    /// Select `id` itself in place of the selected object around it, keeping the rest of that
+    /// object selected. The outermost selected object that holds `id` (a group, or a compound path
+    /// selected whole) and every selected object between it and `id` leave the selection. In their
+    /// place go, at the outermost one's position, the objects inside them on the way down to `id`,
+    /// level by level: at each level the objects beside the one that holds `id`, and at the last
+    /// level `id` and the objects beside it, each level in stacking order. A Shaper Group's
+    /// original shapes, and objects that are hidden, locked or on a locked artboard
+    /// ([`Document::is_editable`]), are not taken in.
+    ///
+    /// When `id` is also selected itself, it keeps its place in the selection.
+    ///
+    /// Returns whether the selection changed. It does not change when `id` is not inside a selected
+    /// object, is inside one that is partly selected (anchors or segments), or is one of a selected
+    /// Shaper Group's original shapes.
+    pub fn expand_to(&mut self, doc: &Document, id: NodeId) -> bool {
+        let Some(chain) = doc.ancestry(id) else { return false };
+        let Some(top) = chain.iter().position(|a| self.contains(*a)) else { return false };
+        let holder = chain[top];
+        if self.anchors.contains_key(&holder) || self.segments.contains_key(&holder) {
+            return false;
+        }
+        let editable = doc.editable();
+        let mut members = Vec::new();
+        for pair in chain[top..].windows(2) {
+            let Some(n) = doc.node(pair[0]) else { return false };
+            let originals = usize::from(n.extras().shaper.is_some());
+            let children = n.children().map(Vec::as_slice).unwrap_or_default();
+            if children.iter().take(originals).any(|c| c.id == pair[1]) {
+                return false;
+            }
+            members.extend(children.iter().skip(originals).map(|c| c.id).filter(|c| *c == id || (*c != pair[1] && editable(*c))));
+        }
+        if !members.contains(&id) {
+            return false;
+        }
+        let around: HashSet<NodeId> = chain[top..chain.len() - 1].iter().copied().collect();
+        let at = self.objects.iter().take_while(|o| **o != holder).filter(|o| !around.contains(o)).count();
+        self.remove_all(around);
+        let selected: HashSet<NodeId> = self.objects.iter().copied().collect();
+        self.objects.splice(at..at, members.into_iter().filter(|m| !selected.contains(m)));
+        true
+    }
     /// [`Self::add`] for each of `ids` in order, going through the selected objects once.
     pub fn add_all(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.each(ids, false);

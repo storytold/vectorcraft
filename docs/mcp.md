@@ -3750,12 +3750,18 @@ underlines clipping-path names.
 
 ## Object selection
 
-`select.set {ids}` replaces the selection, `select.add {ids}` adds to it, and
-`select.toggle {id}` or `select.toggle {ids}` toggles each target.
+`select.set {ids}` replaces the selection, `select.add {ids}` adds to it,
+`select.toggle {id}` or `select.toggle {ids}` toggles each target, and `select.remove {id}` or `select.remove {ids}`
+takes each target out of the selection.
+`select.remove` also takes out an object inside a selected group or compound path and keeps the rest of the group
+selected: the outermost selected object around it leaves the selection, and the objects inside it on the way down to
+the target are selected in its place, except hidden and locked objects and a Shaper Group's original shapes. Direct Selection's Shift-click on the fill of a path inside a selected group runs
+it, and a Shift-drag from there moves nothing. A Shift-click on an anchor of such a path runs `select.anchors` with mode
+`toggle`, which deselects only that anchor: the path's other anchors and the group's other objects stay selected.
 Every id must be a non-negative integer naming an existing object.
 A malformed or unknown id is an error naming that value; the entire selection is left unchanged.
-All three commands return `{count, ids}` for the resulting selection, in selection order.
-An empty array clears the selection for `select.set` and leaves it alone for Add and Toggle.
+All four commands return `{count, ids}` for the resulting selection, in selection order.
+An empty array clears the selection for `select.set` and leaves it alone for Add, Toggle and Remove.
 
 `select.key {id}` makes `id` the key object that Align aligns to and Distribute Spacing spaces from (`object.align` without `to`, `object.distributeSpacing` with `spacing`), and `select.key {}` cancels it.
 The id must name a selected top-level object.

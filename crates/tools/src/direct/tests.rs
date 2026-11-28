@@ -1383,6 +1383,52 @@ fn a_press_inside_a_selected_group_keeps_the_group() {
     assert!(moves(&t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 115.0))));
 }
 
+/// With Direct Selection, a Shift-press on the fill of a path inside a selected group deselects
+/// the path and keeps the group's other objects selected (`select.remove`), and a drag from it
+/// moves nothing. A Shift-press on one of the path's anchors toggles that anchor, which the engine
+/// deselects alone. A Shift-press on a path selected itself still toggles it.
+#[test]
+fn a_shift_press_inside_a_selected_group_deselects_the_path() {
+    let (d, inside, outside, _, outer) = nested_group_doc();
+    let p = paint();
+    let shift = Mods { shift: true, ..Mods::default() };
+    let mut s = Selection::default();
+    s.set([outer]);
+    let c = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0).with_mods(shift)),
+        vec![Action::Exec("select.remove".into(), json!({"id": inside.0}))],
+        "a Shift-press on the fill"
+    );
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 180.0, 165.0).with_mods(shift)).is_empty(), "a Shift-drag from the fill");
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 180.0, 165.0).with_mods(shift)).is_empty());
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(shift)),
+        vec![Action::Exec("select.anchors".into(), json!({"id": inside.0, "anchors": [[0, 0]], "mode": "toggle"}))],
+        "a Shift-press on an anchor"
+    );
+    let mut both = Selection::default();
+    both.set([inside, outer]);
+    let c = cx(&d, &both, &p);
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0).with_mods(shift)),
+        vec![Action::Exec("select.remove".into(), json!({"id": inside.0}))],
+        "a Shift-press on a path selected beside the group around it"
+    );
+    let mut own = Selection::default();
+    own.set([outside]);
+    let c = cx(&d, &own, &p);
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 350.0, 350.0).with_mods(shift)),
+        vec![Action::Exec("select.toggle".into(), json!({"id": outside.0}))],
+        "a Shift-press on a path selected itself"
+    );
+}
+
 /// Isolation mode: a marquee and an anchor click take the path inside the isolated group and
 /// leave the path beside it. Group Selection stops at the isolated group instead of adding
 /// the group around it.
