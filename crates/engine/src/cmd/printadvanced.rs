@@ -14,7 +14,7 @@ use vectorcraft_render::{AntiAlias, RenderOptions};
 use super::fileio::pdf::pdf_error;
 use super::flatten::{FlattenOptions, FlattenerPreset, flatten_document};
 use super::menucmds::{MAX_PIXELS, unique_key};
-use super::*;
+use super::{EngineError, Result, bad};
 
 /// The flattener options of `set`'s preset (`None`: transparency prints live); an error naming
 /// `cmd` for a preset that is neither built in nor in `saved`.
@@ -48,12 +48,13 @@ pub(crate) fn prepare(cmd: &str, doc: &Document, set: &PrintSettings, saved: &[F
     Ok(Some(flatten_document(&printed, &o)?.unwrap_or_else(|| printed.into_owned())))
 }
 
-/// Leave guide paths out of `nodes` (the renderer draws them; they never print).
+/// Leave guides out of `nodes`: guide paths (the renderer draws them; they never print) and ruler
+/// guides.
 fn drop_guides(nodes: &mut Vec<Arc<Node>>) {
     fn has_guides(n: &Node) -> bool {
-        matches!(n.kind, NodeKind::Path { guide: true, .. }) || n.children().is_some_and(|c| c.iter().any(|c| has_guides(c)))
+        n.is_guide() || n.children().is_some_and(|c| c.iter().any(|c| has_guides(c)))
     }
-    nodes.retain(|n| !matches!(n.kind, NodeKind::Path { guide: true, .. }));
+    nodes.retain(|n| !n.is_guide());
     for n in nodes.iter_mut().filter(|n| has_guides(n)) {
         if let Some(children) = Arc::make_mut(n).children_mut() {
             drop_guides(children);
@@ -66,7 +67,7 @@ fn drop_guides(nodes: &mut Vec<Arc<Node>>) {
 /// nothing is drawn get none.
 fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: bool) -> Result<Document> {
     let regions = vectorcraft_pdf::print_regions(doc, set).map_err(|e| pdf_error(cmd, e))?;
-    let bleed = set.bleed.of(doc);
+    let bleed = vectorcraft_pdf::page_bleed(&set.bleed, doc);
     let mut art = doc.clone();
     drop_guides(&mut art.layers);
     let anti_alias = if doc.raster_effects.anti_alias { AntiAlias::Art } else { AntiAlias::None };
@@ -76,9 +77,11 @@ fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: b
     let mut images = vec![];
     for (_, r) in regions {
         let area = outset(r, bleed);
-        // At most MAX_PIXELS, and 65535 pixels a side.
+        // At most MAX_PIXELS, and no side longer than the renderer draws (rounded up to whole
+        // pixels below).
         let side = area.width().max(area.height()).max(1.0);
-        let scale = (doc.raster_effects_ppi / 72.0).min((MAX_PIXELS / (area.width() * area.height()).max(1.0)).sqrt()).min(65_535.0 / side);
+        let longest = f64::from(vectorcraft_render::MAX_RASTER_SIDE) - 2.0;
+        let scale = (doc.raster_effects_ppi / 72.0).min((MAX_PIXELS / (area.width() * area.height()).max(1.0)).sqrt()).min(longest / side);
         if !(scale.is_finite() && scale > 0.0) {
             continue;
         }
@@ -96,7 +99,7 @@ fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: b
         let key = unique_key(&out, "print-bitmap");
         out.images.insert(key.clone(), ImageBlob::new("image/png", img.to_png().map_err(EngineError::Other)?));
         let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-        let image = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default() };
+        let image = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default(), pixels: None };
         images.push(Arc::new(Node::new(out.alloc_id(), NodeKind::Image(Box::new(image)))));
     }
     let mut layer = Node::layer(out.alloc_id(), "Bitmap", LayerColor::Preset(0));

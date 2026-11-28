@@ -1,0 +1,423 @@
+use super::cid::{CidText, FontInfo};
+use super::{
+    Affine, Arc, BezPath, BlendMode, Colors, Dash, Families, FillRule, FontNames, FunctionBudget, HashMap, HashSet, ImageBlob, LineCap, LineFacts,
+    LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine, TypeStroke,
+};
+use crate::import_fonts::FileFontGlyphs;
+
+/// Decoded RGBA pixels, width, height and hayro's scale factors.
+pub(super) type Decoded = (Vec<u8>, u32, u32, (f32, f32));
+
+pub(super) enum FrameKind {
+    Root,
+    /// A clip group whose clip path node is stored here.
+    Clip(Box<Node>),
+    /// A clip that was redundant (covers the page); children go straight to the parent.
+    Skip,
+    Group {
+        opacity: f32,
+        blend: BlendMode,
+        mask: Option<Arc<MaskSpec>>,
+        isolate: bool,
+        knockout: bool,
+    },
+}
+
+pub(super) struct Frame {
+    pub(super) kind: FrameKind,
+    pub(super) children: Vec<Arc<Node>>,
+    /// The first optional content group entered inside (where the frame's art goes).
+    pub(super) group: Option<usize>,
+    /// The group each child was drawn in, where the frame's art goes when the frame dissolves
+    /// into its parent (a layer's form drawing its sublayers' forms).
+    pub(super) child_groups: Vec<Option<usize>>,
+}
+
+impl Frame {
+    pub(super) fn new(kind: FrameKind) -> Self {
+        Self { kind, children: vec![], group: None, child_groups: vec![] }
+    }
+}
+
+/// A dissolving frame's `children`, each with the group it was drawn in (`groups`, else the
+/// frame's `group`).
+pub(super) fn grouped(
+    children: Vec<Arc<Node>>,
+    groups: Vec<Option<usize>>,
+    group: Option<usize>,
+) -> impl Iterator<Item = (Arc<Node>, Option<usize>)> {
+    children.into_iter().zip(groups.into_iter().map(move |g| g.or(group)).chain(std::iter::repeat(group)))
+}
+
+/// Glyphs drawn consecutively with the same paint, merged into one path.
+pub(super) struct GlyphRun {
+    pub(super) path: BezPath,
+    pub(super) paint: Paint,
+    pub(super) opacity: f32,
+    pub(super) stroke: Option<StrokeProps>,
+    pub(super) scale: f64,
+    pub(super) overprint: bool,
+}
+
+/// A stroke over a glyph filled before it (fill and stroke rendering), held with the stroke pass
+/// it is part of ([`Builder::hold_stroke`]): the glyph's font, placement, opacity and text, the
+/// stroke, whether it overprints, the glyph's outline as drawn (kept as for a line of type kept
+/// as outlines; none for a glyph set upright or one of an ActualText span), whether it is one of
+/// an ActualText span, and the first glyph filled so it may go over, as its line's place among
+/// the parked lines and the open one and its index in the line's filled glyphs.
+pub(super) struct HeldStroke {
+    pub(super) font: u128,
+    pub(super) at: super::Placement,
+    pub(super) opacity: f32,
+    pub(super) text: String,
+    pub(super) stroke: TypeStroke,
+    pub(super) overprint: bool,
+    pub(super) glyph: Option<GlyphRun>,
+    pub(super) actual: bool,
+    pub(super) first: (usize, usize),
+}
+
+/// How often a tiling pattern was read, and the art (as its paints) each reading drew with the
+/// swatch made for it.
+pub(super) type PatternReadings = (u32, Vec<(Vec<Paint>, String)>);
+
+/// A run of Type 3 glyph graphics preserved inside a named group.
+#[derive(Clone, Debug)]
+pub(super) struct Type3Run {
+    pub(super) nodes: Vec<Arc<Node>>,
+    pub(super) group: Option<usize>,
+}
+
+/// Builder state a nested interpretation (soft mask, pattern cell) starts afresh and gives back.
+pub(super) struct Saved {
+    pub(super) stack: Vec<Frame>,
+    pub(super) root_groups: Vec<Option<usize>>,
+    pub(super) blend: BlendMode,
+    pub(super) mask: Option<Arc<MaskSpec>>,
+    pub(super) page: Rect,
+    pub(super) type3_run: Option<Type3Run>,
+}
+
+pub(super) struct Builder<'p> {
+    pub(super) colors: Colors<'p>,
+    pub(super) next: u64,
+    pub(super) stack: Vec<Frame>,
+    /// The optional content group of each child of the root frame.
+    pub(super) root_groups: Vec<Option<usize>>,
+    pub(super) blend: BlendMode,
+    pub(super) page: Rect,
+    pub(super) glyphs: Option<GlyphRun>,
+    pub(super) type3_run: Option<Type3Run>,
+    pub(super) text: Option<TextLine>,
+    /// The glyphs of the open line of type (`text`) that show, each as the outline it would be
+    /// kept as: what the line becomes when its type wouldn't draw as the file does
+    /// ([`super::reshaped`]).
+    pub(super) text_glyphs: Vec<GlyphRun>,
+    /// Lines of type a text-showing operator's fill pass finished (a `TJ`'s kerning starts a new
+    /// line part way through) that its stroke pass may still go over, oldest first, each with
+    /// its [`text_glyphs`](Self::text_glyphs): written before the open line, in this order
+    /// ([`Builder::park_text`]).
+    pub(super) parked: Vec<(TextLine, Vec<GlyphRun>)>,
+    /// The strokes of a text-showing operator's stroke pass over glyphs it filled on the
+    /// [`parked`](Self::parked) lines and the open one, held until the pass ends to be matched to
+    /// the glyphs it strokes ([`Builder::settle_strokes`]).
+    pub(super) held: Vec<HeldStroke>,
+    /// The glyphs of the lines a fill pass finished beyond the most kept for their stroke pass that
+    /// a stroke may still have gone over, until the first stroke after them
+    /// ([`Builder::hold_stroke`]), a boundary of stroke passes ([`Builder::end_fills`]) or
+    /// anything else drawn ([`Builder::flush_text`]).
+    pub(super) lost: Option<crate::import_text::LostFills>,
+    pub(super) text_as: TextAs,
+    /// Fonts the file embeds are kept (ImportOptions::embedded_fonts).
+    pub(super) embedded_fonts: bool,
+    pub(super) actual: super::actual_text::ActualText,
+    pub(super) images: HashMap<String, ImageBlob>,
+    pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
+    /// The scale factors of each decoded raster by its key: drawn again, it is placed from them
+    /// without its pixels being decoded and converted again.
+    pub(super) raster_scales: HashMap<u128, (f32, f32)>,
+    /// The images kept with their CMYK samples ([`crate::import_image`]).
+    pub(super) cmyk_keys: HashSet<u128>,
+    /// The file's PDF/X output intent profile of CMYK, which DeviceCMYK images are tagged with
+    /// ([`crate::import_image::output_intent_cmyk`]).
+    pub(super) intent_cmyk: Option<Vec<u8>>,
+    /// Images in a Separation space, by key: the paint of their ink, or `None` when they open in
+    /// RGB (an ink that can't be told, tints that can't be read).
+    pub(super) separation_paints: HashMap<u128, Option<Paint>>,
+    /// Mask keys of CMYK images whose mask turned out to hide nothing.
+    pub(super) opaque: HashSet<u128>,
+    pub(super) warnings: Vec<String>,
+    /// Fonts by cache key → base font name and whether the file carries its glyphs (from
+    /// [`scan_page`]).
+    pub(super) fonts: FontNames,
+    pub(super) font_names: HashMap<u128, FontInfo>,
+    pub(super) families: Option<Families>,
+    pub(super) missing_fonts: Vec<String>,
+    /// The glyphs drawn in fonts the file carries for families that aren't available, for the
+    /// fonts kept with the document ([`crate::import_fonts`]).
+    pub(super) file_glyphs: FileFontGlyphs,
+    /// Font (cache key) → its font among `file_glyphs`; `None`: its type takes the font it names.
+    pub(super) file_fonts: HashMap<u128, Option<usize>>,
+    /// Font (cache key) → its characters by glyph, for CID-keyed fonts embedded without a
+    /// ToUnicode map.
+    pub(super) cid_text: HashMap<u128, Option<Arc<CidText>>>,
+    /// Font (cache key) → the character of each glyph its embedded font program maps
+    /// ([`font_chars`]), for glyphs the file's ToUnicode map doesn't name (#708).
+    pub(super) font_chars: HashMap<u128, Option<Arc<HashMap<u32, char>>>>,
+    /// Font (cache key) → the installed face that draws its glyphs, decided from its first glyph
+    /// that can be compared ([`matching_face`]); `None`: its glyphs differ, so it stays outlines.
+    pub(super) matched: HashMap<u128, Option<Arc<vectorcraft_text::FontFace>>>,
+    /// (Font, glyph) → the character its outline matches in the installed face, for glyphs no
+    /// mapping names ([`Builder::identified_char`]).
+    pub(super) identified: HashMap<(u128, u32), Option<char>>,
+    /// Per font: the installed version its type names, when it isn't the one its family and style
+    /// resolve to (see `CharStyle::font_version`).
+    pub(super) versions: HashMap<u128, Option<String>>,
+    /// The soft mask of the graphics state, the art drawn through it so far, and the masks read.
+    pub(super) mask: Option<Arc<MaskSpec>>,
+    pub(super) masked: Vec<Arc<Node>>,
+    pub(super) masks: HashMap<u128, Arc<MaskSpec>>,
+    /// Pattern swatches made, and per (pattern, stroke) the art signatures read and their names.
+    pub(super) patterns: Vec<PatternDef>,
+    pub(super) pattern_keys: HashMap<(u128, bool), PatternReadings>,
+    /// Per function-based shading (and the inks it paints with): what it comes in as, read once.
+    pub(super) function_paints: HashMap<(u128, Option<Vec<String>>), Paint>,
+    /// What is left of the import's function evaluations for those shadings.
+    pub(super) function_budget: FunctionBudget,
+    /// What is left of the import's objects ([`super::entry::max_objects`]).
+    pub(super) objects_left: usize,
+    /// Swatch names in use.
+    pub(super) taken: Vec<String>,
+    /// The page as walked by [`scan_page`], and how far the interpreter is through it.
+    pub(super) scan: Scan,
+    pub(super) tag_at: usize,
+    /// The fills and strokes of paths drawn so far ([`Scan::paints`]).
+    pub(super) paint_at: usize,
+    pub(super) aligned: bool,
+    /// Whether optional content groups become layers.
+    pub(super) route: bool,
+    /// Some groups are hidden or don't print: art in marked content whose group can't be told
+    /// (once the scan and the interpreter part) is [`UNSORTED`] rather than the page's.
+    pub(super) unsure: bool,
+    /// The marked-content sequences open: the group each marks, and the innermost group marked
+    /// at or around it (kept per level, so art drawn deep in sequences finds its group at once).
+    pub(super) marked: Vec<(Option<usize>, Option<usize>)>,
+    pub(super) nested: u32,
+    /// Reading an alpha soft mask's art: images are read white with their own alpha, so the
+    /// mask's luminance is their alpha, as whitened vector art's is (cairo, and so Inkscape,
+    /// rasterizes masks into such images).
+    pub(super) white_images: bool,
+    /// The last filled path: its node and its outline (a stroke of the same outline joins it).
+    pub(super) last_fill: Option<(NodeId, BezPath)>,
+    /// What each line of type made tells beyond its text object ([`crate::import_lines`]).
+    pub(super) lines: HashMap<NodeId, LineFacts>,
+}
+
+pub(super) fn blend(b: craft::pdf::interpret::BlendMode) -> BlendMode {
+    use craft::pdf::interpret::BlendMode as H;
+    match b {
+        H::Normal => BlendMode::Normal,
+        H::Multiply => BlendMode::Multiply,
+        H::Screen => BlendMode::Screen,
+        H::Overlay => BlendMode::Overlay,
+        H::Darken => BlendMode::Darken,
+        H::Lighten => BlendMode::Lighten,
+        H::ColorDodge => BlendMode::ColorDodge,
+        H::ColorBurn => BlendMode::ColorBurn,
+        H::HardLight => BlendMode::HardLight,
+        H::SoftLight => BlendMode::SoftLight,
+        H::Difference => BlendMode::Difference,
+        H::Exclusion => BlendMode::Exclusion,
+        H::Hue => BlendMode::Hue,
+        H::Saturation => BlendMode::Saturation,
+        H::Color => BlendMode::Color,
+        H::Luminosity => BlendMode::Luminosity,
+    }
+}
+
+pub(super) fn fill_rule(r: craft::pdf::interpret::FillRule) -> FillRule {
+    match r {
+        craft::pdf::interpret::FillRule::NonZero => FillRule::NonZero,
+        craft::pdf::interpret::FillRule::EvenOdd => FillRule::EvenOdd,
+    }
+}
+
+/// `p` with every subpath closed: how a fill reads it.
+pub(crate) fn closed_subpaths(p: &BezPath) -> BezPath {
+    let mut out = BezPath::new();
+    let mut open = false;
+    for el in p.elements() {
+        if open && matches!(el, PathEl::MoveTo(_)) {
+            out.push(PathEl::ClosePath);
+        }
+        out.push(*el);
+        open = !matches!(el, PathEl::ClosePath);
+    }
+    if open {
+        out.push(PathEl::ClosePath);
+    }
+    out
+}
+
+/// Do a fill of `fill` and a stroke of `stroke` paint one object's outline? Applications write the
+/// fill without closing the path (filling closes it) and the stroke closed.
+pub(super) fn same_outline(fill: &BezPath, stroke: &BezPath) -> bool {
+    fill.elements() == stroke.elements() || closed_subpaths(fill).elements() == closed_subpaths(stroke).elements()
+}
+
+pub(super) fn mean_scale(a: Affine) -> f64 {
+    a.determinant().abs().sqrt()
+}
+
+/// Width a PDF line width of 0 imports as, points: a print hairline. In PDF `0 w` is the thinnest
+/// line the device can draw (ISO 32000-1, 8.4.3.2), not no line.
+const HAIRLINE: f64 = 0.25;
+
+/// Document width of the stroke `p` drawn at `scale`: `0 w` becomes a [`HAIRLINE`].
+pub(super) fn line_width(p: &StrokeProps, scale: f64) -> f64 {
+    if p.line_width == 0.0 { HAIRLINE } else { p.line_width as f64 * scale }
+}
+
+/// Do strokes `a` and `b` draw alike: both unstroked, or the same width, caps, joins, miter limit
+/// and dashes ([`stroke_layer`] takes all of them)?
+pub(super) fn same_stroke(a: Option<&StrokeProps>, b: Option<&StrokeProps>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            a.line_width == b.line_width
+                && a.line_cap == b.line_cap
+                && a.line_join == b.line_join
+                && a.miter_limit == b.miter_limit
+                && a.dash_array == b.dash_array
+                && a.dash_offset == b.dash_offset
+        }
+        _ => false,
+    }
+}
+
+pub(super) fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f64) -> StrokeLayer {
+    let mut st = StrokeLayer::new(paint, line_width(p, scale));
+    st.opacity = opacity;
+    st.cap = match p.line_cap {
+        kurbo::Cap::Butt => LineCap::Butt,
+        kurbo::Cap::Round => LineCap::Round,
+        kurbo::Cap::Square => LineCap::Square,
+    };
+    st.join = match p.line_join {
+        kurbo::Join::Miter => LineJoin::Miter,
+        kurbo::Join::Round => LineJoin::Round,
+        kurbo::Join::Bevel => LineJoin::Bevel,
+    };
+    st.miter_limit = p.miter_limit as f64;
+    // (Every stroke keeps its own copy: a dash array has a few entries, and one with thousands is cut.)
+    let dash = Dash {
+        pattern: p.dash_array.iter().take(MAX_DASH_ENTRIES).map(|v| *v as f64 * scale).collect(),
+        offset: p.dash_offset as f64 * scale,
+        align_corners: false,
+    };
+    // An invalid dash array (a negative value, or all zeros) strokes solid.
+    st.dash = dash.is_dashed().then_some(dash);
+    st
+}
+
+/// The stroke `p` draws type with in `paint` at `scale`: width, cap, join and miter limit as
+/// [`stroke_layer`] takes them (#7741).
+pub(super) fn type_stroke(paint: Paint, p: &StrokeProps, scale: f64) -> TypeStroke {
+    let st = stroke_layer(paint, 1.0, p, scale);
+    TypeStroke { paint: st.paint, width: st.width, cap: st.cap, join: st.join, miter_limit: st.miter_limit }
+}
+
+/// The most entries of a dash array kept (an even count keeps it a pattern of dashes and gaps).
+const MAX_DASH_ENTRIES: usize = 64;
+/// Most dash periods [`stroke_outline`] cuts a stroke into.
+const MAX_OUTLINE_DASHES: f64 = 1e5;
+
+/// The area stroke `p` paints along `path` (in its own space, before `transform`), in the document:
+/// where a shading painting the stroke shows. Width, caps, joins and dashes as [`stroke_layer`]
+/// takes them. `None` when it paints nothing.
+pub(super) fn stroke_outline(path: &BezPath, transform: Affine, p: &StrokeProps) -> Option<BezPath> {
+    let scale = mean_scale(transform);
+    if !(scale.is_finite() && scale > 1e-9) {
+        return None;
+    }
+    let mut style =
+        kurbo::Stroke::new(line_width(p, scale) / scale).with_join(p.line_join).with_caps(p.line_cap).with_miter_limit(p.miter_limit as f64);
+    let dashes: Vec<f64> = p.dash_array.iter().take(MAX_DASH_ENTRIES).map(|v| *v as f64).collect();
+    let dash = Dash { pattern: dashes.clone(), offset: p.dash_offset as f64, align_corners: false };
+    // A dash pattern far finer than the path would cut it into countless pieces: it strokes solid.
+    let period: f64 = dashes.iter().sum();
+    if dash.is_dashed() && period > 0.0 && kurbo::Shape::perimeter(path, 1e-3) / period < MAX_OUTLINE_DASHES {
+        style = style.with_dashes(dash.offset, dashes);
+    }
+    // To a hundredth of a point in the document, within reason at extreme scales.
+    let tolerance = (0.01 / scale).clamp(1e-4, 1.0);
+    let mut out = kurbo::stroke(path.iter(), &style, &kurbo::StrokeOpts::default(), tolerance);
+    out.apply_affine(transform);
+    (!out.elements().is_empty()).then_some(out)
+}
+
+pub(crate) fn round3(v: f32) -> f32 {
+    (v * 1000.0).round() / 1000.0
+}
+
+/// The paints of `nodes`' leaves, in order, colorized images' colors included: what tells two
+/// readings of a pattern cell apart.
+pub(super) fn paints(nodes: &[Arc<Node>]) -> Vec<Paint> {
+    let mut out = vec![];
+    for n in nodes {
+        n.walk(&mut |c| {
+            out.extend(c.appearance.items.iter().map(|i| i.paint().clone()));
+            out.extend(c.extras().colorize.as_deref().cloned());
+        });
+    }
+    out
+}
+
+/// Visual bounds of `nodes`; `None` when one has none.
+pub(super) fn bounds(nodes: &[Arc<Node>]) -> Option<Rect> {
+    nodes.iter().try_fold(None, |acc, n| n.visual_bounds().map(|b| Some(acc.map_or(b, |a: Rect| a.union(b)))))?
+}
+
+pub(super) fn rgba_png(rgba: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
+}
+
+pub(super) fn rgb_png(rgb: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, rgb).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
+}
+
+pub(super) fn gray_png(gray: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, gray).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
+}
+
+pub(super) fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {
+    if a.width == w && a.height == h {
+        return a.data.clone();
+    }
+    match image::GrayImage::from_raw(a.width, a.height, a.data.clone()) {
+        Some(g) => image::imageops::resize(&g, w, h, image::imageops::FilterType::Triangle).into_raw(),
+        None => vec![255; (w * h) as usize],
+    }
+}
+
+#[cfg(test)]
+mod stroke_outline_tests {
+    use super::*;
+
+    /// A dash pattern far finer than the path strokes it solid instead of cutting it into
+    /// millions of pieces; one in reason dashes it.
+    #[test]
+    fn a_dash_far_finer_than_the_path_strokes_solid() {
+        let mut path = BezPath::new();
+        path.move_to((0.0, 0.0));
+        path.line_to((1000.0, 0.0));
+        let props = |dash: f32| StrokeProps { line_width: 2.0, dash_array: [dash; 4].into(), ..StrokeProps::default() };
+        let solid = stroke_outline(&path, Affine::IDENTITY, &props(1e-6)).unwrap();
+        assert!(solid.elements().len() < 20, "{} elements", solid.elements().len());
+        let dashed = stroke_outline(&path, Affine::IDENTITY, &props(10.0)).unwrap();
+        assert!(dashed.elements().len() > 100, "dashed: {} elements", dashed.elements().len());
+    }
+}

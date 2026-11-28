@@ -1,0 +1,533 @@
+use super::face::{MAX_AXES, Variation};
+use super::names::{MAX_LEGACY_NAMES, all_names, localized, name, native_family_name, norm};
+use super::scan::named_instances;
+use super::{MetadataProvider, StringId};
+
+/// The names a face answers to besides its (English) family and style, normalized ([`norm`]):
+/// its family in every language (typographic, else legacy: `ヒラギノ角ゴシック`), its style likewise
+/// (`ミディアム`), its legacy family names (`Hiragino Sans W3`) with their legacy styles, paired per
+/// language record (the Mac and Windows records of a face differ), its full names (name ID 4),
+/// and its PostScript names (`HiraginoSans-W3`, as PDF and `.ai` files name fonts).
+#[derive(Clone, Debug, Default)]
+pub(super) struct FaceKeys {
+    pub(super) families: Vec<String>,
+    pub(super) styles: Vec<String>,
+    pub(super) legacy: Vec<(String, String)>,
+    pub(super) full_names: Vec<String>,
+    pub(super) postscript: Vec<String>,
+}
+
+impl FaceKeys {
+    pub(super) fn of(font: &skrifa::FontRef<'_>, family: &str, style: &str) -> Self {
+        let (typo_family, typo_style) = (all_names(font, StringId::TYPOGRAPHIC_FAMILY_NAME), all_names(font, StringId::TYPOGRAPHIC_SUBFAMILY_NAME));
+        let (mut legacy_family, mut legacy_style) = (localized(font, StringId::FAMILY_NAME), localized(font, StringId::SUBFAMILY_NAME));
+        // Records repeat (platforms, encodings) and are paired below: once each, and no more than a
+        // font has any use for, or the pairs multiply.
+        for names in [&mut legacy_family, &mut legacy_style] {
+            names.sort();
+            names.dedup();
+            names.truncate(MAX_LEGACY_NAMES);
+        }
+        // Without typographic names, the legacy ones are the family's.
+        let family_names: Vec<&str> = if typo_family.is_empty() {
+            legacy_family.iter().map(|(_, f)| f.as_str()).collect()
+        } else {
+            typo_family.iter().map(String::as_str).collect()
+        };
+        let mut families: Vec<String> = std::iter::once(family).chain(family_names).map(norm).collect();
+        // A legacy style only names the face beside its legacy family when the font has a
+        // typographic style: every weight of `Hiragino Sans` is `Regular` in its own legacy family.
+        let style_names: Vec<&str> = if typo_style.is_empty() {
+            legacy_style.iter().map(|(_, s)| s.as_str()).collect()
+        } else {
+            typo_style.iter().map(String::as_str).collect()
+        };
+        let mut styles: Vec<String> = std::iter::once(style).chain(style_names).map(norm).collect();
+        let mut legacy: Vec<(String, String)> = if typo_family.is_empty() {
+            vec![]
+        } else {
+            legacy_family
+                .iter()
+                .flat_map(|(lf, f)| legacy_style.iter().filter(move |(ls, _)| ls == lf).map(move |(_, s)| (norm(f), norm(s))))
+                .filter(|(f, s)| !f.is_empty() && !s.is_empty())
+                .collect()
+        };
+        let mut postscript: Vec<String> = all_names(font, StringId::POSTSCRIPT_NAME).iter().map(|n| norm(n)).collect();
+        let mut full_names: Vec<String> = all_names(font, StringId::FULL_NAME).iter().map(|n| norm(n)).collect();
+        for v in [&mut families, &mut styles, &mut full_names, &mut postscript] {
+            v.retain(|k| !k.is_empty());
+            v.sort();
+            v.dedup();
+        }
+        legacy.sort();
+        legacy.dedup();
+        FaceKeys { families, styles, legacy, full_names, postscript }
+    }
+}
+
+/// A font's kind, for filtering font menus: the classification of its OS/2 table (IBM family
+/// class, PANOSE) and, for CJK fonts whose tables seldom say, its names (明朝, ゴシック, 丸…).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum FontClass {
+    /// Serif (Latin) or Mincho (CJK).
+    Serif,
+    /// Sans serif (Latin) or Gothic (CJK).
+    Sans,
+    /// Rounded sans / Maru Gothic.
+    Rounded,
+    /// Script, handwriting, brush (楷書・行書・教科書…).
+    Script,
+    Monospaced,
+    /// Decorative, display, symbol and pictorial fonts.
+    Decorative,
+    #[default]
+    Other,
+}
+
+impl FontClass {
+    /// The kinds a font menu filters by (all but `Other`).
+    pub const ALL: [FontClass; 6] =
+        [FontClass::Serif, FontClass::Sans, FontClass::Rounded, FontClass::Script, FontClass::Monospaced, FontClass::Decorative];
+}
+
+/// What a font menu filters on: whether a family sets Japanese or Thai, its kind, and whether it
+/// is a variable font.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FontTraits {
+    pub japanese: bool,
+    /// Its OS/2 table allows Thai ([`may_set_thai`]) and its character map has Thai (ก and า).
+    pub thai: bool,
+    pub class: FontClass,
+    /// The face has variation axes (an `fvar` table of at most 64 axes); for a family, one of
+    /// its faces has.
+    pub variable: bool,
+    /// What Show Similar Fonts compares; for a family, its face nearest an upright Regular.
+    pub likeness: FontLikeness,
+}
+
+/// The numbers a font menu's Show Similar Fonts compares faces by ([`FontLikeness::distance`]),
+/// read from the face's OS/2, `head` and `post` tables only, so that the system font scan reads
+/// the same numbers without loading the font ([`super::scan::file_face_names`]). Each is 0 (the
+/// italic angle `None`) when the face does not say (no such table, or an OS/2 table too old to
+/// hold the value).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FontLikeness {
+    /// The OS/2 PANOSE digits (0 is "any" and 1 "no fit" in each digit).
+    pub panose: [u8; 10],
+    /// The OS/2 weight class, at most 1000; a named instance's `wght` setting.
+    pub weight: u16,
+    /// The OS/2 width class, 1 to 9.
+    pub width: u8,
+    /// The OS/2 x-height and cap height in thousandths of the em.
+    pub x_height: u16,
+    pub cap_height: u16,
+    /// The OS/2 average character width in thousandths of the em.
+    pub avg_width: u16,
+    /// The `post` table's italic angle in tenths of a degree (negative: leaning right); a named
+    /// instance's `slnt` setting.
+    pub italic_angle: Option<i16>,
+    /// The face is italic or oblique: by its OS/2 selection flags or a nonzero italic angle; a
+    /// named instance by its `ital` or `slnt` setting or its name. Not compared; it picks a
+    /// family's face nearest an upright Regular.
+    pub italic: bool,
+}
+
+impl FontLikeness {
+    /// From a face's tables, with a named instance's `variations` (its axis settings in user
+    /// units; empty for the face itself): its `weight` (`wght` setting) in place of the OS/2
+    /// weight class, its `slnt` setting in place of the italic angle, and whether it is
+    /// `italic`. The heights and the average width need the `head` table's units per em (16 to
+    /// 16384).
+    fn of(font: &skrifa::FontRef<'_>, variations: &[Variation], weight: Option<f32>, italic: Option<bool>) -> Self {
+        use skrifa::raw::TableProvider;
+        let em = font.head().ok().map(|h| h.units_per_em()).filter(|u| (16..=16384).contains(u)).map(f32::from);
+        // Thousandths of the em, 0 for nothing (and for a value at or below 0).
+        let per_mille = |v: i16| match em {
+            Some(em) if v > 0 => (f32::from(v) / em * 1000.0).round().min(4000.0) as u16,
+            _ => 0,
+        };
+        let mut likeness = Self::default();
+        if let Ok(o) = font.os2() {
+            for (digit, value) in likeness.panose.iter_mut().zip(o.panose_10()) {
+                *digit = *value;
+            }
+            likeness.weight = o.us_weight_class().min(1000);
+            likeness.width = u8::try_from(o.us_width_class()).ok().filter(|w| (1..=9).contains(w)).unwrap_or(0);
+            likeness.x_height = o.sx_height().map_or(0, per_mille);
+            likeness.cap_height = o.s_cap_height().map_or(0, per_mille);
+            likeness.avg_width = per_mille(o.x_avg_char_width());
+            // fsSelection's ITALIC (bit 0) and OBLIQUE (bit 9) flags.
+            likeness.italic = o.fs_selection().bits() & 0x0201 != 0;
+        }
+        if let Some(w) = weight.filter(|w| w.is_finite()) {
+            likeness.weight = w.round().clamp(1.0, 1000.0) as u16;
+        }
+        let angle = |a: f32| (a.is_finite() && a.abs() <= 90.0).then(|| (a * 10.0).round() as i16);
+        likeness.italic_angle = match variations.iter().find(|(tag, _)| tag == b"slnt") {
+            Some((_, slant)) => angle(*slant),
+            None => font.post().ok().and_then(|p| angle(p.italic_angle().to_f32())),
+        };
+        likeness.italic = italic.unwrap_or(likeness.italic || likeness.italic_angle.is_some_and(|a| a != 0));
+        likeness
+    }
+
+    /// How unlike two faces look: 0 for faces whose numbers are all the same, more the further
+    /// apart they are. A number one of the faces does not give is left out. PANOSE digits are
+    /// compared only between faces of the same PANOSE family kind; faces of different kinds count
+    /// 3 apart. Faces that share no number to compare (neither a PANOSE family kind, a weight, a
+    /// width, a height, an average width nor an italic angle) are `f32::INFINITY` apart, further
+    /// than any faces that share one. The weights and scales are VectorCraft's own.
+    pub fn distance(&self, other: &Self) -> f32 {
+        let mut d = 0.0;
+        let mut compared = false;
+        let (kind, other_kind) = (self.panose[0], other.panose[0]);
+        if kind > 1 && other_kind > 1 {
+            compared = true;
+            if kind == other_kind {
+                for (a, b) in self.panose.iter().zip(&other.panose).skip(1) {
+                    if *a > 1 && *b > 1 {
+                        d += f32::from(a.abs_diff(*b)) * 0.15;
+                    }
+                }
+            } else {
+                d += 3.0;
+            }
+        }
+        if self.weight != 0 && other.weight != 0 {
+            compared = true;
+            d += f32::from(self.weight.abs_diff(other.weight)) / 200.0;
+        }
+        if self.width != 0 && other.width != 0 {
+            compared = true;
+            d += f32::from(self.width.abs_diff(other.width)) * 0.5;
+        }
+        for (a, b, scale) in [(self.x_height, other.x_height, 10.0), (self.cap_height, other.cap_height, 5.0), (self.avg_width, other.avg_width, 8.0)]
+        {
+            if a != 0 && b != 0 {
+                compared = true;
+                d += f32::from(a.abs_diff(b)) / 1000.0 * scale;
+            }
+        }
+        if let (Some(a), Some(b)) = (self.italic_angle, other.italic_angle) {
+            compared = true;
+            d += f32::from(a.abs_diff(b)) / 50.0;
+        }
+        if compared { d } else { f32::INFINITY }
+    }
+}
+
+/// Whether a face may set Thai by its OS/2 table: it has none, or the table's Unicode ranges have
+/// Thai (bit 24) or its code pages have Thai (bit 16, code page 874). Only such a face has its
+/// character map checked for Thai ([`FontTraits::thai`]); the system font scan reads a face's
+/// `cmap` table only then ([`super::scan::file_face_names`]).
+pub(super) fn may_set_thai(font: &skrifa::FontRef<'_>) -> bool {
+    use skrifa::raw::TableProvider;
+    match font.os2() {
+        Ok(o) => o.ul_unicode_range_1() & (1 << 24) != 0 || o.ul_code_page_range_1().unwrap_or(0) & (1 << 16) != 0,
+        Err(_) => true,
+    }
+}
+
+impl FontTraits {
+    /// From a face's OS/2 and `fvar` tables (when it has them), names and, when it may set Thai
+    /// ([`may_set_thai`]), character map.
+    fn of(font: &skrifa::FontRef<'_>, keys: &FaceKeys) -> Self {
+        use skrifa::raw::TableProvider;
+        let os2 = font.os2().ok();
+        let names: Vec<&str> = keys.families.iter().chain(&keys.postscript).map(String::as_str).collect();
+        let named = |words: &[&str]| names.iter().any(|n| words.iter().any(|w| n.contains(w)));
+        let has_japanese_name = keys.families.iter().any(|k| k.chars().any(|c| matches!(c as u32, 0x3040..=0x30FF | 0x4E00..=0x9FFF)));
+        let (class_id, panose, ranges2, codepages) = match &os2 {
+            Some(o) => (o.s_family_class(), o.panose_10().to_vec(), o.ul_unicode_range_2(), o.ul_code_page_range_1().unwrap_or(0)),
+            None => (0, vec![], 0, 0),
+        };
+        // Hiragana (bit 49) or Katakana (bit 50) in the Unicode ranges, or the JIS code page.
+        let japanese = ranges2 & (0b11 << 17) != 0 || codepages & (1 << 17) != 0 || has_japanese_name;
+        let thai = may_set_thai(font) && ['\u{0E01}', '\u{0E32}'].iter().all(|c| font.charmap().map(*c).is_some());
+        let family_type = panose.first().copied().unwrap_or(0);
+        let serif_style = panose.get(1).copied().unwrap_or(0);
+        let proportion = panose.get(3).copied().unwrap_or(0);
+        let ibm = (class_id >> 8) as u8;
+        let class = if named(&["丸", "maru", "rounded", "round"]) || japanese && named(&["jun"]) {
+            FontClass::Rounded
+        } else if named(&[
+            "楷書",
+            "行書",
+            "草書",
+            "隷書",
+            "教科書",
+            "毛筆",
+            "筆",
+            "kaisho",
+            "gyosho",
+            "sosho",
+            "reisho",
+            "kyokasho",
+            "brush",
+            "script",
+            "hand",
+            "kaiti",
+            "xingkai",
+            "libian",
+        ]) {
+            FontClass::Script
+        } else if named(&["mono", "code", "courier", "menlo", "consol"]) {
+            FontClass::Monospaced
+        } else if named(&[
+            "明朝",
+            "mincho",
+            "ryumin",
+            "hiramin",
+            "yumin",
+            "kozmin",
+            "serif",
+            "songti",
+            "simsun",
+            "stsong",
+            "fangsong",
+            "myungjo",
+            "times",
+            "georgia",
+            "garamond",
+            "baskerville",
+            "bodoni",
+            "caslon",
+            "palatino",
+            "didot",
+            "century",
+            "cambria",
+            "minion",
+            "charter",
+            "hoefler",
+        ]) && !named(&["sansserif", "sans"])
+        {
+            FontClass::Serif
+        } else if named(&[
+            "ゴシック",
+            "gothic",
+            "goth",
+            "sans",
+            "kakugo",
+            "kaku",
+            "heiti",
+            "helvetica",
+            "arial",
+            "grotesk",
+            "grotesque",
+            "futura",
+            "gill",
+            "verdana",
+            "tahoma",
+            "frutiger",
+            "avenir",
+            "geneva",
+            "lucidagrande",
+            "inter",
+            "roboto",
+            "optima",
+            "pingfang",
+        ]) {
+            FontClass::Sans
+        } else if family_type == 2 && proportion == 9 {
+            FontClass::Monospaced
+        } else if family_type == 3 || ibm == 10 {
+            FontClass::Script
+        } else if family_type == 4 || family_type == 5 || ibm == 9 || ibm == 12 {
+            FontClass::Decorative
+        } else if matches!(ibm, 1..=5 | 7) || family_type == 2 && (2..=10).contains(&serif_style) {
+            FontClass::Serif
+        } else if ibm == 8 || family_type == 2 && (11..=13).contains(&serif_style) {
+            FontClass::Sans
+        } else {
+            FontClass::Other
+        };
+        let variable = (1..=MAX_AXES).contains(&font.axes().len());
+        FontTraits { japanese, thai, class, variable, likeness: FontLikeness::of(font, &[], None, None) }
+    }
+}
+
+/// How far a face is from an upright Regular by its `likeness`: an italic or oblique face
+/// ([`FontLikeness::italic`]) after every upright one, then by how far its weight is from 400 (a
+/// face that gives no weight last), then by the numbers themselves, so that the same faces give
+/// the same answer whichever is found or loaded first. The lower, the nearer. A family's likeness
+/// ([`FontTraits::likeness`]) is its lowest-ranked face's, whether the faces are scanned or loaded.
+pub(super) fn regular_rank(likeness: &FontLikeness) -> (bool, u16, FontLikeness) {
+    let off = if likeness.weight == 0 { u16::MAX } else { likeness.weight.abs_diff(400) };
+    (likeness.italic, off, *likeness)
+}
+
+/// What a name other than a family's own one stands for ([`FontDb::canonical`]).
+#[derive(Clone, Debug)]
+pub(super) struct Alias {
+    /// The family's own name.
+    pub(super) family: String,
+    /// The face the name names, for legacy family names, full names and PostScript names.
+    pub(super) style: Option<String>,
+    /// A legacy family name's legacy style (`Regular` beside `Hiragino Sans W3`).
+    pub(super) paired: Option<String>,
+}
+
+impl Alias {
+    /// The aliases of a face `family` / `style` with `keys`, by normalized name.
+    pub(super) fn of(family: &str, style: &str, keys: &FaceKeys) -> Vec<(String, Alias)> {
+        #[cfg(test)]
+        ALIAS_LISTS.with(|c| c.set(c.get() + 1));
+        let mut v: Vec<(String, Alias)> =
+            keys.families.iter().map(|k| (k.clone(), Alias { family: family.to_string(), style: None, paired: None })).collect();
+        v.extend(
+            keys.legacy
+                .iter()
+                .map(|(f, s)| (f.clone(), Alias { family: family.to_string(), style: Some(style.to_string()), paired: Some(s.clone()) })),
+        );
+        v.extend(
+            keys.postscript
+                .iter()
+                .chain(&keys.full_names)
+                .map(|k| (k.clone(), Alias { family: family.to_string(), style: Some(style.to_string()), paired: None })),
+        );
+        v
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: counts the faces whose aliases ([`Alias::of`]) were listed on this thread.
+    static ALIAS_LISTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: returns how many faces' aliases were listed on this thread.
+#[cfg(test)]
+pub(crate) fn alias_lists() -> u64 {
+    ALIAS_LISTS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: run on this thread each time it publishes faces to a database, to look the database
+    /// up at exactly that point (as another thread could).
+    static ON_FACES_PUBLISHED: std::cell::RefCell<Option<Box<dyn FnMut()>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Tests: run `hook` each time this thread publishes faces to a database.
+#[cfg(test)]
+pub(crate) fn on_faces_published(hook: Option<Box<dyn FnMut()>>) {
+    ON_FACES_PUBLISHED.with(|h| *h.borrow_mut() = hook);
+}
+
+#[cfg(test)]
+pub(super) fn faces_published() {
+    // Taken out while it runs, so a hook that adds faces itself doesn't run again.
+    if let Some(mut hook) = ON_FACES_PUBLISHED.with(|h| h.borrow_mut().take()) {
+        hook();
+        ON_FACES_PUBLISHED.with(|h| {
+            h.borrow_mut().get_or_insert(hook);
+        });
+    }
+}
+
+/// How a requested family and style resolved ([`FontDb::resolve`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FontMatch {
+    /// The face of that family and style (by any of its names, in any language).
+    Exact,
+    /// The family is there but not the style: its closest style stands in.
+    Style,
+    /// The family is unknown: the fallback family stands in.
+    Missing,
+}
+
+impl FontMatch {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FontMatch::Exact => "exact",
+            FontMatch::Style => "substitute",
+            FontMatch::Missing => "missing",
+        }
+    }
+}
+
+/// The generic font family names that SVG and HTML files name in place of a font and no font file
+/// provides; compared in any ASCII case ([`is_generic_family`]). The names follow CSS Fonts Module
+/// Level 4, except `emoji`, which that module dropped and this list keeps. The list does not match
+/// the functional `generic(...)` forms, and it leaves out `fangsong`, which is also the family name
+/// of a Chinese font (FangSong).
+pub const GENERIC_FAMILIES: &[&str] = &[
+    "serif",
+    "sans-serif",
+    "monospace",
+    "cursive",
+    "fantasy",
+    "system-ui",
+    "ui-serif",
+    "ui-sans-serif",
+    "ui-monospace",
+    "ui-rounded",
+    "math",
+    "emoji",
+];
+
+/// Whether `family` (surrounding spaces ignored) is one of the [`GENERIC_FAMILIES`], in any ASCII case.
+pub fn is_generic_family(family: &str) -> bool {
+    GENERIC_FAMILIES.iter().any(|g| g.eq_ignore_ascii_case(family.trim()))
+}
+
+/// A face's (family, style) names.
+pub(super) fn face_names(f: &skrifa::FontRef<'_>) -> Option<(String, String)> {
+    let family = name(f, &[StringId::TYPOGRAPHIC_FAMILY_NAME, StringId::FAMILY_NAME])?;
+    let style = name(f, &[StringId::TYPOGRAPHIC_SUBFAMILY_NAME, StringId::SUBFAMILY_NAME]).unwrap_or_else(|| "Regular".into());
+    Some((family, style))
+}
+
+/// One style a font file offers: one of its faces, or a named instance of a variable font
+/// (Figtree's `Figtree[wght].ttf` holds Light, the default, and Regular to Black as instances).
+#[derive(Clone, Debug)]
+pub(crate) struct FaceStyle {
+    pub(super) family: String,
+    /// See [`FontFace::native_family`].
+    pub(super) native_family: Option<String>,
+    pub(super) style: String,
+    pub(super) keys: FaceKeys,
+    /// A named instance's axis settings (user units); empty for the face itself.
+    pub(super) variations: Vec<Variation>,
+    /// A named instance's weight (its `wght` setting); `None` for the face itself (its OS/2 table
+    /// says) or an instance of a font without a weight axis.
+    pub(super) weight: Option<f32>,
+    /// A named instance is italic (by its `ital` or `slnt` setting, or its name).
+    pub(super) italic: bool,
+    /// Its kind, for font menus' filters (the face's, shared by its named instances).
+    pub(super) traits: FontTraits,
+}
+
+/// The styles of a face: the face itself, then its named instances when it is a variable font.
+pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
+    let Some((family, style)) = face_names(f) else { return vec![] };
+    let native_family = native_family_name(f, &family);
+    let mut keys = FaceKeys::of(f, &family, &style);
+    let mut traits = FontTraits::of(f, &keys);
+    // A variable font's default face renders at its `wght` default, whatever its name table and
+    // OS/2 table say (Noto Sans Hebrew: named `Light`, weight class 300, default instance Regular
+    // at 400): weigh it so, and name it by its default instance when that is another weight.
+    let weight = f
+        .axes()
+        .iter()
+        .find(|a| a.tag().to_be_bytes() == *b"wght")
+        .map(|a| a.default_value())
+        .filter(|w| w.is_finite())
+        .map(|w| w.clamp(1.0, 1000.0));
+    // Its likeness is likewise taken at its axes' defaults (`wght` and `slnt`).
+    if f.axes().len() <= MAX_AXES {
+        let defaults: Vec<Variation> = f.axes().iter().map(|a| (a.tag().to_be_bytes(), a.default_value())).collect();
+        traits.likeness = FontLikeness::of(f, &defaults, weight, None);
+    }
+    let (mut instances, renamed) = named_instances(f, &family, &style, &mut keys, native_family.clone());
+    // Each named instance shares the face's kind; its likeness is measured at its own axis settings.
+    // Without an `ital` or `slnt` axis, an instance of an italic face is italic too.
+    for i in &mut instances {
+        let slant_axis = i.variations.iter().any(|(tag, _)| tag == b"ital" || tag == b"slnt");
+        let italic = i.italic || (!slant_axis && traits.likeness.italic);
+        i.traits = FontTraits { likeness: FontLikeness::of(f, &i.variations, i.weight, Some(italic)), ..traits };
+    }
+    let style = renamed.unwrap_or(style);
+    let face = FaceStyle { family, native_family, style, keys, variations: vec![], weight, italic: false, traits };
+    std::iter::once(face).chain(instances).collect()
+}

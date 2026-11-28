@@ -4,11 +4,14 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Node, NodeKind, Scaling};
+use vectorcraft_doc::{Node, NodeKind, OrientedBox, Scaling};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::edit::{outermost, selected_roots};
-use super::*;
+use super::{
+    CommandSpec, NodeId, Result, Session, always, bad, bool_or, check_numbers, check_switches, checked_ids_param, cmd, color_value, f64_or, f64_req,
+    find_command, finite_numbers, has_doc, index,
+};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -18,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Free Distort",
             [],
             None,
-            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), ids?} projective warp of anchors and handles",
+            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), angle?: degrees (counter-clockwise; `from`, or the selection bounds, is then a box in the frame turned by it, as a rotated bounding box is; default 0), ids?} projective warp of anchors and handles; an image's four corners go exactly where the warp takes them and its pixels are drawn in perspective between them (an error, and nothing changes, when an image's corners would fold over, fall on one line, cross the warp's horizon or lie too close together for a perspective map); a linked opacity mask's art is warped with its object, an unlinked one stays; each warped object's bounding box (the objects inside groups and the art of linked masks too) turns as the warp turns the art at its center (object.resetBoundingBox squares it again); corners where the box already stands change nothing and add no undo step",
             has_doc,
             distort
         ),
@@ -27,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sample Color",
             [],
             None,
-            "{color, stroke?: bool (default: whichever proxy is active), ids?, stop?: index} sample a colour into the active fill/stroke (and the selection); with `stop`, recolour that stop of the gradient behind the proxy instead (paint.editGradient); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
+            "{color (#rrggbbaa and #rgba are refused), stroke?: bool (default: whichever proxy is active), ids?, defaultsOnly?: bool, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default, and so does a sample without ids while the Live Paint Bucket, or for a fill the Shape Builder, is the active tool or with `defaultsOnly: true` (refused with ids), `stop` included); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); with `stop` and objects in `ids`, whatever tool is active, the stops come from the topmost fill (or stroke) of the first object that paint.editGradient edits for those ids (a compound path for its member); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
             has_doc,
             sample_color
         ),
@@ -45,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Artboard",
             [],
             None,
-            "{index | indices: [index…], dx, dy, moveArt?: bool, copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} move artboards (and the art fully inside them; locked and hidden art, and art also on another locked artboard, only with prefs moveLockedWithArtboard), several in one step (an error when one is locked); `copy` (Alt-drag) leaves them and moves copies, which start unlocked → {index (the first), indices: the artboards moved or the copies, moved: the art moved or the copies}",
+            "{index | indices: [index…], dx, dy, moveArt?: bool, copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard)} move artboards (and the art fully inside them; locked and hidden art, and art also on another locked artboard, only with lockedAndHidden), several in one step (an error when one is locked); `copy` (Alt-drag) leaves them and moves copies, which start unlocked → {index (the first), indices: the artboards moved or the copies, moved: the art moved or the copies}",
             has_doc,
             artboard_move
         ),
@@ -59,11 +62,14 @@ pub fn specs() -> Vec<CommandSpec> {
 pub struct Projective {
     m: [f64; 8],
     src: Rect,
+    /// Page → the frame `src` is measured in.
+    pre: Affine,
 }
 
 impl Projective {
-    /// Map `src`'s corners (TL, TR, BR, BL) onto `q`.
-    pub fn from_rect(src: Rect, q: [Point; 4]) -> Self {
+    /// Map the corners (TL, TR, BR, BL) of `src`, a box that may be turned, onto the page points `q`.
+    pub fn from_box(bx: OrientedBox, q: [Point; 4]) -> Self {
+        let src = bx.rect;
         let [p0, p1, p2, p3] = q;
         let (dx1, dx2, dx3) = (p1.x - p2.x, p3.x - p2.x, p0.x - p1.x + p2.x - p3.x);
         let (dy1, dy2, dy3) = (p1.y - p2.y, p3.y - p2.y, p0.y - p1.y + p2.y - p3.y);
@@ -77,11 +83,21 @@ impl Projective {
         let b = p3.x - p0.x + h * p3.x;
         let d = p1.y - p0.y + g * p1.y;
         let e = p3.y - p0.y + h * p3.y;
-        Self { m: [a, b, p0.x, d, e, p0.y, g, h], src }
+        Self { m: [a, b, p0.x, d, e, p0.y, g, h], src, pre: bx.to_doc().inverse() }
+    }
+
+    /// Whether `p` maps in front of the warp's horizon, on the side the box's own corners are.
+    fn in_front(&self, p: Point) -> bool {
+        let [.., g, h] = self.m;
+        let p = self.pre * p;
+        let u = if self.src.width().abs() > 1e-12 { (p.x - self.src.x0) / self.src.width() } else { 0.0 };
+        let v = if self.src.height().abs() > 1e-12 { (p.y - self.src.y0) / self.src.height() } else { 0.0 };
+        g * u + h * v + 1.0 > 1e-9
     }
 
     pub fn apply(&self, p: Point) -> Point {
         let [a, b, c, d, e, f, g, h] = self.m;
+        let p = self.pre * p;
         let u = if self.src.width().abs() > 1e-12 { (p.x - self.src.x0) / self.src.width() } else { 0.0 };
         let v = if self.src.height().abs() > 1e-12 { (p.y - self.src.y0) / self.src.height() } else { 0.0 };
         let w = g * u + h * v + 1.0;
@@ -101,11 +117,19 @@ impl Projective {
 }
 
 /// Warp `n`'s anchors and handles; gradients (pinned first if unplaced) follow the warp's affine
-/// approximation at their centre.
-fn warp_node(n: &mut Node, pr: &Projective) {
+/// approximation at their center. The art of a linked opacity mask is warped with the object it
+/// masks; an unlinked one stays where it is. Each warped object's bounding-box angle follows the
+/// warp's affine approximation at that object's own center before the warp (as for the objects
+/// with no editable points); an object with no bounds keeps its angle, and a layer has none.
+/// Returns `n`'s geometric bounds before the warp ([`Node::geometric_bounds`]; none for a layer),
+/// gathered from its children's so that each subtree is measured once.
+fn warp_node(n: &mut Node, pr: &Projective) -> Option<Rect> {
     n.pin_gradients();
-    match &mut n.kind {
+    // The children before these are left out of a group's or compound path's bounds.
+    let skip = n.children().map_or(0, Vec::len) - n.editing_children().len();
+    let before = match &mut n.kind {
         NodeKind::Path { path, live, .. } => {
+            let b = path.bounds();
             *live = None;
             for sp in &mut path.subpaths {
                 for a in &mut sp.anchors {
@@ -114,21 +138,135 @@ fn warp_node(n: &mut Node, pr: &Projective) {
                     a.h_out = pr.apply(a.h_out);
                 }
             }
+            b
         }
-        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
-            for c in children.iter_mut() {
-                warp_node(Arc::make_mut(c), pr);
+        NodeKind::Layer { children, .. } => {
+            warp_children(children, pr, |_| false);
+            None
+        }
+        // A clip group is bounded by its clip path.
+        NodeKind::Group { children, clip: true } => warp_children(children, pr, |i| i == 0),
+        NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => warp_children(children, pr, |i| i >= skip),
+        // An image's corners follow the warp exactly ([`Node::set_image_corners`]); [`distort`]
+        // has checked that they stay convex.
+        NodeKind::Image(_) => {
+            let b = n.geometric_bounds();
+            if let Some(q) = n.image_corners() {
+                let _ = n.set_image_corners(q.map(|p| pr.apply(p)));
             }
+            b
         }
         _ => {
             // No editable points: the affine approximation (which maps the gradients too).
-            if let Some(b) = n.geometric_bounds() {
+            let b = n.geometric_bounds();
+            if let Some(b) = b {
                 n.transform(pr.affine_near(b.center()), false);
             }
-            return;
+            return b;
         }
+    };
+    if let Some(b) = before {
+        n.bbox_angle = vectorcraft_doc::orient::transformed_angle(n.bbox_angle, pr.affine_near(b.center()));
+    }
+    if let Some(m) = n.extras_if_any().and_then(|x| x.mask.as_mut()).filter(|m| m.linked) {
+        warp_node(Arc::make_mut(&mut m.art), pr);
     }
     n.appearance.warp_gradients(&|p| pr.affine_near(p));
+    before
+}
+
+/// Whether the warp from `src` to `q` ([`Projective::from_box`]) takes the corners of `src` to `q`,
+/// within a millionth of `q`'s shortest side plus the rounding error of coordinates as far from `q`'s
+/// first corner as the others. The warp is solved and measured with `src` and `q` moved to the
+/// origin, so coordinates far from it do not widen the allowance.
+fn reaches_corners(src: OrientedBox, q: [Point; 4]) -> bool {
+    let origin = q[0].to_vec2();
+    let q = q.map(|p| p - origin);
+    let src = OrientedBox { rect: src.rect - src.rect.origin().to_vec2(), ..src };
+    let pr = Projective::from_box(src, q);
+    let side = (0..4).map(|i| q[i].distance(q[(i + 1) % 4])).fold(f64::INFINITY, f64::min);
+    let far = q.iter().map(|p| p.x.abs().max(p.y.abs())).fold(0.0, f64::max);
+    let tol = side * 1e-6 + far * 1e-12;
+    side.is_finite() && side > 0.0 && src.corners().iter().zip(q).all(|(c, want)| pr.apply(*c).distance(want) <= tol)
+}
+
+/// Warps each of `children` and returns the union of the pre-warp bounds of those `counts` picks
+/// by index.
+fn warp_children(children: &mut [Arc<Node>], pr: &Projective, counts: impl Fn(usize) -> bool) -> Option<Rect> {
+    children.iter_mut().enumerate().fold(None, |acc, (i, c)| {
+        let b = warp_node(Arc::make_mut(c), pr);
+        if counts(i) { vectorcraft_geom::union_opt(acc, b) } else { acc }
+    })
+}
+
+/// The first image in `n` (its children and the art of linked opacity masks, as [`warp_node`]
+/// reaches them) whose corners `pr` would fold, collapse or carry past the warp's horizon, with
+/// why.
+fn unwarpable_image(n: &Node, pr: &Projective) -> Option<(vectorcraft_doc::NodeId, Unwarpable)> {
+    if let (Some(q), NodeKind::Image(im)) = (n.image_corners(), &n.kind) {
+        if !q.iter().all(|p| pr.in_front(*p)) {
+            return Some((n.id, Unwarpable::Horizon));
+        }
+        if let Err(e) = vectorcraft_doc::image_quad::check_for(im, &q.map(|p| pr.apply(p))) {
+            return Some((
+                n.id,
+                match e {
+                    vectorcraft_doc::image_quad::QuadError::NotFinite | vectorcraft_doc::image_quad::QuadError::NotConvex => Unwarpable::NotConvex,
+                    vectorcraft_doc::image_quad::QuadError::TooNarrow => Unwarpable::TooNarrow,
+                },
+            ));
+        }
+    }
+    warped_parts(n).into_iter().find_map(|c| unwarpable_image(c, pr))
+}
+
+/// The first image in `n` that [`warp_node`] reaches (its children and the art of linked opacity
+/// masks).
+fn first_image(n: &Node) -> Option<vectorcraft_doc::NodeId> {
+    if matches!(n.kind, NodeKind::Image(_)) {
+        return Some(n.id);
+    }
+    warped_parts(n).into_iter().find_map(first_image)
+}
+
+/// The objects inside `n` that [`warp_node`] warps point by point: the children of layers, groups
+/// and compound paths, and the art of a linked opacity mask on those, paths and images. Other
+/// objects (blends, envelopes, repeats and the rest) take the warp's affine approximation whole.
+fn warped_parts(n: &Node) -> Vec<&Node> {
+    let inside = matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Compound { .. });
+    let mask_too = inside || matches!(n.kind, NodeKind::Path { .. } | NodeKind::Image(_));
+    let children = n.children().filter(|_| inside).into_iter().flatten().map(|c| &**c);
+    let mask = n.extras().mask.as_deref().filter(|m| mask_too && m.linked).map(|m| &*m.art);
+    children.chain(mask).collect()
+}
+
+/// The error of `command` on image `id`, which is distorted (Perspective Distort or Free Distort)
+/// in a way the command cannot keep.
+pub(crate) fn distorted_image_error(command: &str, id: vectorcraft_doc::NodeId) -> EngineError {
+    bad(command, format!("object {} is an image changed by Perspective Distort or Free Distort, which this command does not work on", id.0))
+}
+
+/// Why an image cannot follow the corners of a distort.
+#[derive(Clone, Copy)]
+enum Unwarpable {
+    /// Its corners would fold over, meet or fall on one line.
+    NotConvex,
+    /// A corner would cross the warp's horizon.
+    Horizon,
+    /// Its corners would be too close together for a perspective map to place them.
+    TooNarrow,
+}
+
+/// The error of `object.distort` when image `id` cannot follow its corners.
+fn unwarpable_error(id: vectorcraft_doc::NodeId, why: Unwarpable) -> EngineError {
+    const C: &str = "object.distort";
+    match why {
+        Unwarpable::NotConvex => bad(C, format!("image {} cannot be distorted this way: its corners would not make a convex shape", id.0)),
+        Unwarpable::Horizon => bad(C, format!("image {} cannot be distorted this way: its corners would cross the warp's horizon", id.0)),
+        Unwarpable::TooNarrow => {
+            bad(C, format!("image {} cannot be distorted this way: its corners would be too close together for a perspective map", id.0))
+        }
+    }
 }
 
 fn distort(s: &mut Session, p: &Value) -> Result<Value> {
@@ -145,17 +283,54 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "nothing to distort"));
     }
+    let angle = p.get("angle").filter(|v| !v.is_null()).map(|_| f64_req(p, "angle", C)).transpose()?.map_or(0.0, vectorcraft_geom::normalize_deg);
     let src = match p.get("from").filter(|v| !v.is_null()) {
-        None => s.doc()?.doc.bounds_of(&ids, false).ok_or_else(|| bad(C, "nothing to distort"))?,
+        None if angle == 0.0 => OrientedBox::aligned(s.doc()?.doc.bounds_of(&ids, false).ok_or_else(|| bad(C, "nothing to distort"))?),
+        None => {
+            // The selection's bounds square to the turned frame.
+            let doc = &s.doc()?.doc;
+            let (symbols, to_local) = (doc.symbol_boxes(), OrientedBox { angle, rect: Rect::ZERO }.to_doc().inverse());
+            let rect = ids
+                .iter()
+                .filter_map(|id| doc.node(*id))
+                .fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.bounds_in(&symbols, to_local, false)));
+            OrientedBox { angle, rect: rect.ok_or_else(|| bad(C, "nothing to distort"))? }
+        }
         Some(v) => {
             let [x0, y0, x1, y1] = finite_numbers(v).ok_or_else(|| bad(C, "from must be [x0, y0, x1, y1]"))?;
-            Rect::new(x0, y0, x1, y1)
+            OrientedBox { angle, rect: Rect::new(x0, y0, x1, y1) }
         }
     };
-    if !src.width().is_finite() || !src.height().is_finite() || src.width().abs() < 1e-9 || src.height().abs() < 1e-9 {
+    let r = src.rect;
+    if !r.width().is_finite() || !r.height().is_finite() || r.width().abs() < 1e-9 || r.height().abs() < 1e-9 {
         return Err(bad(C, "cannot distort a zero-size or non-finite bounding box"));
     }
-    let pr = Projective::from_rect(src, [tl, tr, br, bl]);
+    let ids_json = json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() });
+    // Corners that stay where they are change nothing: no edit and no undo step.
+    if [tl, tr, br, bl] == src.corners() {
+        return Ok(ids_json);
+    }
+    let pr = Projective::from_box(src, [tl, tr, br, bl]);
+    // An image's corners follow the handles exactly, so they must stay a convex shape: nothing
+    // changes when one would not.
+    let doc = &s.doc()?.doc;
+    // Corners that do not make a convex shape give no perspective map (the warp falls back to an
+    // affine one), so an image cannot follow them.
+    if vectorcraft_doc::image_quad::check(&[tl, tr, br, bl]).is_err()
+        && let Some(id) = ids.iter().filter_map(|id| doc.node(*id)).find_map(first_image)
+    {
+        return Err(unwarpable_error(id, Unwarpable::NotConvex));
+    }
+    // Corners so close together that the map falls back to an affine one: the box's corners do
+    // not reach the handles, so an image cannot follow them either.
+    if !reaches_corners(src, [tl, tr, br, bl])
+        && let Some(id) = ids.iter().filter_map(|id| doc.node(*id)).find_map(first_image)
+    {
+        return Err(unwarpable_error(id, Unwarpable::TooNarrow));
+    }
+    if let Some((id, why)) = ids.iter().filter_map(|id| doc.node(*id)).find_map(|n| unwarpable_image(n, &pr)) {
+        return Err(unwarpable_error(id, why));
+    }
     s.edit("Free Distort", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
@@ -164,7 +339,7 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(ids_json)
 }
 
 // ---------- eyedropper ----------
@@ -181,6 +356,7 @@ pub struct FillAttrs {
 
 impl FillAttrs {
     pub const ALL: Self = Self { color: true, transparency: true, overprint: true };
+    pub const NONE: Self = Self { color: false, transparency: false, overprint: false };
 }
 
 impl Default for FillAttrs {
@@ -208,6 +384,8 @@ pub struct StrokeAttrs {
 
 impl StrokeAttrs {
     pub const ALL: Self = Self { color: true, transparency: true, overprint: true, weight: true, cap: true, join: true, miter: true, dash: true };
+    pub const NONE: Self =
+        Self { color: false, transparency: false, overprint: false, weight: false, cap: false, join: false, miter: false, dash: false };
 }
 
 impl Default for StrokeAttrs {
@@ -340,16 +518,32 @@ fn eyedropper_options(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.sampleColor";
-    let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active);
+    let stroke = super::switch_or(p, "stroke", !s.fill_active, C)?;
+    let clear_stroke = super::switch_or(p, "clearStroke", false, C)?;
+    if clear_stroke && (stroke || p.get("stroke") != Some(&Value::Bool(false)) || p.get("ids") != Some(&json!([])) || p.get("stop").is_some()) {
+        return Err(bad(C, "`clearStroke` requires `stroke: false`, `ids: []` and no `stop`"));
+    }
+    let only = super::switch_or(p, "defaultsOnly", false, C)?;
+    if only && p.get("ids").is_some_and(|v| !v.is_null()) {
+        return Err(bad(C, "`defaultsOnly` cannot be combined with `ids`, `id` or `item`"));
+    }
     let c = p.get("color").ok_or_else(|| bad(C, "missing color"))?;
     let (id, mut q) = match p.get("stop") {
         None | Some(Value::Null) => (if stroke { "paint.setStroke" } else { "paint.setFill" }, json!({ "color": c })),
         Some(v) => {
             let i = v.as_u64().map(index).ok_or_else(|| bad(C, "`stop` must be a stop index"))?;
             let color = super::paint::new_color(s, p, color_value(c).ok_or_else(|| bad(C, format!("bad color {c}")))?);
-            let (fill, stroke_paint) = s.proxy_paints();
-            let Paint::Gradient(g) = (if stroke { stroke_paint } else { fill }) else {
-                return Err(bad(C, "the paint behind the proxy is not a gradient"));
+            let (paint, source) = match given_stop_paint(s, p, stroke)? {
+                Some(paint) => (paint, "the paint of the first object in `ids`"),
+                None => {
+                    // The default's gradient with `defaultsOnly`, as the proxies show it while the Live
+                    // Paint Bucket paints.
+                    let (fill, stroke_paint) = if only { (s.paint.fill.clone(), s.paint.stroke.clone()) } else { s.proxy_paints() };
+                    (if stroke { stroke_paint } else { fill }, "the paint behind the proxy")
+                }
+            };
+            let Paint::Gradient(g) = paint else {
+                return Err(bad(C, format!("{source} is not a gradient")));
             };
             let mut stops = g.gradient.stops;
             let n = stops.len();
@@ -360,24 +554,50 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(ids) = p.get("ids") {
         q["ids"] = ids.clone();
     }
+    let q = super::paint::with_defaults_only(q, only);
     let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
-    (spec.run)(s, &q)
+    let result = super::run_checked(s, spec, &q)?;
+    if clear_stroke {
+        s.paint.stroke = Paint::None;
+    }
+    Ok(result)
+}
+
+/// The paint whose gradient `paint.sampleColor` recolors a stop of when `p` gives `stop` and
+/// objects in `ids`: the fill (or stroke, `stroke`) of the first object `paint.editGradient` edits
+/// for those ids (a compound path for its member, a group's painted objects, not the art of a graph
+/// design in a series). None without `stop` or without objects in `ids`: the gradient behind the
+/// proxy is used.
+fn given_stop_paint(s: &Session, p: &Value, stroke: bool) -> Result<Option<Paint>> {
+    const C: &str = "paint.sampleColor";
+    if p.get("stop").is_none_or(Value::is_null) || p.get("ids").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+        return Ok(None);
+    }
+    let q = json!({ "ids": p.get("ids"), "stroke": stroke });
+    let item = super::appearance::item_target(s, &q, C)?.of_kind(s, !stroke);
+    let ids = super::appearance::drop_design_art_rows(s, item.targets_for(s, &q, !stroke)?, item, !stroke, C)?;
+    let d = &s.doc()?.doc;
+    let Some(n) = ids.first().and_then(|id| d.node(*id)) else { return Ok(None) };
+    Ok(Some(super::paint::proxy_paint(n, stroke, None)))
 }
 
 // ---------- artboards ----------
 
 fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
     let indices = super::panelcmds::artboard_indices(&s.doc()?.doc, p, "artboard.move")?;
+    check_numbers(p, &["dx", "dy"], "artboard.move")?;
+    check_switches(p, &["moveArt", "copy", "patterns"], "artboard.move")?;
     let dv = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
     let move_art = bool_or(p, "moveArt", false);
     let copy = bool_or(p, "copy", false);
+    let locked_art = super::panelcmds::locked_and_hidden(s, p, move_art, "artboard.move")?;
     if !copy {
         super::panelcmds::refuse_locked(&s.doc()?.doc, &indices)?;
     }
     // Each artboard's art, an object counted once (artboards can overlap).
     let mut arts: Vec<(usize, Vec<NodeId>)> = vec![];
     for &i in &indices {
-        let art = super::panelcmds::artboard_art(s, i, move_art, !copy)?;
+        let art = super::panelcmds::artboard_art(s, i, move_art, locked_art, !copy)?;
         let art = art.into_iter().filter(|id| !arts.iter().any(|(_, a)| a.contains(id))).collect();
         arts.push((i, art));
     }
@@ -400,6 +620,7 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
             for id in art {
                 if let Some(n) = d.node_mut(*id) {
                     n.transform(Affine::translate(dv), sc);
+                    super::object::keep_pixel_aligned(n, sc);
                 }
             }
             index.push(*i);

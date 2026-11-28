@@ -28,7 +28,8 @@ const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
 const INTERNAL_ERROR: i64 = -32603;
 const RESOURCE_NOT_FOUND: i64 = -32002;
-/// The engine is running a long call and this request was not run (implementation-defined range).
+/// The engine is running a long call or a script and this request was not run
+/// (implementation-defined range).
 pub(crate) const SERVER_BUSY: i64 = -32003;
 
 /// How long a call runs before a request that would have to wait behind it is refused as busy
@@ -49,24 +50,33 @@ const OUTBOX: usize = 256;
 /// Fewest time between two `notifications/progress` of one request, the last one excepted.
 const PROGRESS_EVERY: Duration = Duration::from_millis(200);
 
+/// The time since a fixed start, for the busy limit and the progress throttle.
+pub(crate) type Clock = Arc<dyn Fn() -> Duration + Send + Sync>;
+
+fn system_clock() -> Clock {
+    let origin = Instant::now();
+    Arc::new(move || origin.elapsed())
+}
+
 /// The sink that turns the engine's progress into `notifications/progress` for the request
 /// `msg`, when the client asked for it with `_meta.progressToken`.
 /// <https://modelcontextprotocol.io/specification/2025-06-18/basic/utilities/progress>
-fn progress_sink(out: SyncSender<String>, msg: &Value) -> Option<cancel::ProgressSink> {
+fn progress_sink(out: SyncSender<String>, msg: &Value, clock: Clock) -> Option<cancel::ProgressSink> {
     let token = msg.get("params")?.get("_meta")?.get("progressToken").filter(|t| t.is_string() || t.is_number())?.clone();
     let last = Cell::new(None::<u64>);
-    let at = Cell::new(None::<Instant>);
+    let at = Cell::new(None::<Duration>);
     Some(Rc::new(move |done, total, what| {
         // `progress` must increase with each notification.
         if last.get().is_some_and(|l| done <= l) {
             return;
         }
         let finished = total > 0 && done >= total;
-        if !finished && at.get().is_some_and(|t| t.elapsed() < PROGRESS_EVERY) {
+        let now = clock();
+        if !finished && at.get().is_some_and(|t| now.saturating_sub(t) < PROGRESS_EVERY) {
             return;
         }
         last.set(Some(done));
-        at.set(Some(Instant::now()));
+        at.set(Some(now));
         let mut params = json!({"progressToken": token, "progress": done, "message": what});
         if total > 0 {
             params["total"] = json!(total);
@@ -97,6 +107,7 @@ pub struct Server {
     /// process-wide, so a server whose client didn't ask leaves it to the one that did.
     logging: bool,
     busy_after: Duration,
+    clock: Clock,
 }
 
 pub(crate) fn response(id: Value, result: Value) -> Value {
@@ -189,6 +200,13 @@ pub(crate) fn read_line_capped(reader: &mut impl BufRead, buf: &mut Vec<u8>, max
             upto.min(max.saturating_add(1).saturating_sub(buf.len()))
         };
         if take == 0 {
+            // Exactly `max` content bytes plus the `\r` of a CRLF ending fill the bound; the line
+            // is still within the limit when the `\n` follows.
+            if buf.last() == Some(&b'\r') && reader.fill_buf()?.first() == Some(&b'\n') {
+                reader.consume(1);
+                buf.pop();
+                return Ok(true);
+            }
             // Already past the bound: the caller sees `buf.len() > max`.
             return Ok(true);
         }
@@ -217,7 +235,14 @@ fn write_reply(output: &mut impl Write, line: &str) -> std::io::Result<()> {
 
 impl Server {
     pub fn new(backend: Box<dyn Backend>) -> Self {
-        Self { backend, initialized: false, modern: Arc::new(AtomicBool::new(false)), logging: false, busy_after: DEFAULT_BUSY_AFTER }
+        Self {
+            backend,
+            initialized: false,
+            modern: Arc::new(AtomicBool::new(false)),
+            logging: false,
+            busy_after: DEFAULT_BUSY_AFTER,
+            clock: system_clock(),
+        }
     }
 
     /// How long a call runs before [`Server::serve`] turns away a request that would have to wait
@@ -225,6 +250,13 @@ impl Server {
     /// client pipelining quick calls is answered in order.
     pub fn with_busy_after(mut self, after: Duration) -> Self {
         self.busy_after = after;
+        self
+    }
+
+    /// The clock that [`Server::serve`] measures the busy limit and the progress throttle on.
+    #[cfg(test)]
+    pub(crate) fn with_clock(mut self, clock: Clock) -> Self {
+        self.clock = clock;
         self
     }
 
@@ -267,7 +299,7 @@ impl Server {
     /// (the running call is then cancelled and the queue dropped; the reader thread ends with its
     /// next line, which a client that closed our output closes as well).
     pub fn serve<R: BufRead + Send, W: Write + Send>(&mut self, input: R, mut output: W) -> std::io::Result<()> {
-        let shared = Shared::new(self.modern.clone(), self.busy_after);
+        let shared = Shared::new(self.modern.clone(), self.busy_after, self.clock.clone());
         let shared = &shared;
         let (tx, rx) = sync_channel::<String>(OUTBOX);
         let reader_tx = tx.clone();
@@ -315,7 +347,7 @@ impl Server {
 
     fn run(&mut self, m: Message, out: &SyncSender<String>) {
         let Message { value, key, token, .. } = m;
-        let sink = key.is_some().then(|| progress_sink(out.clone(), &value)).flatten();
+        let sink = key.is_some().then(|| progress_sink(out.clone(), &value, self.clock.clone())).flatten();
         let reply = cancel::scope(&token, sink, || self.handle_parsed(value));
         // A cancelled request gets no reply (MCP: the receiver should not answer it). A call that
         // finished before it noticed is dropped the same way: the client has stopped waiting.
@@ -428,16 +460,20 @@ impl Server {
                 if let Some(arguments) = args.as_object() {
                     crate::tools::check_tool_arguments(name, arguments).map_err(|e| (INVALID_PARAMS, e))?;
                 }
-                Ok(call_tool(self.backend.as_mut(), name, &args).to_value())
+                let result = call_tool(self.backend.as_mut(), name, &args);
+                match result.script_busy() {
+                    Some(message) => Err((SERVER_BUSY, message)),
+                    None => Ok(result.to_value()),
+                }
             }
             "resources/read" => {
                 let uri = params.get("uri").and_then(Value::as_str).ok_or((INVALID_PARAMS, "missing `uri`".to_string()))?;
-                let v = resources::read(self.backend.as_mut(), uri).map_err(|e| match e {
+                let read = resources::read_contents(self.backend.as_mut(), uri).map_err(|e| match e {
                     resources::ReadError::NotFound(uri) => (RESOURCE_NOT_FOUND, format!("resource not found: {uri}")),
                     resources::ReadError::Invalid(why) => (INVALID_PARAMS, why),
                     resources::ReadError::Backend(why) => (INTERNAL_ERROR, why),
                 })?;
-                Ok(json!({"contents": [{"uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&v).unwrap_or_default()}]}))
+                Ok(json!({"contents": [{"uri": uri, "mimeType": read.mime, "text": read.text}]}))
             }
             "completion/complete" => Ok(prompts::complete(self.backend.as_mut(), params)),
             "logging/setLevel" => {
@@ -457,5 +493,31 @@ impl Server {
             }
             other => Err((METHOD_NOT_FOUND, format!("method not found: {other}"))),
         }
+    }
+}
+
+#[cfg(test)]
+mod line_reader_tests {
+    use super::read_line_capped;
+    use std::io::Cursor;
+
+    #[test]
+    fn crlf_line_of_exactly_max_bytes_is_within_the_limit() {
+        for ending in ["\n", "\r\n"] {
+            let mut input = Cursor::new(format!("{}{ending}next\n", "a".repeat(10)).into_bytes());
+            let mut buf = Vec::new();
+            assert!(read_line_capped(&mut input, &mut buf, 10).unwrap());
+            assert_eq!(buf, b"aaaaaaaaaa", "ending {ending:?}");
+            assert!(read_line_capped(&mut input, &mut buf, 10).unwrap());
+            assert_eq!(buf, b"next");
+        }
+    }
+
+    #[test]
+    fn crlf_line_over_max_is_still_overlong() {
+        let mut input = Cursor::new(format!("{}\r\n", "a".repeat(11)).into_bytes());
+        let mut buf = Vec::new();
+        assert!(read_line_capped(&mut input, &mut buf, 10).unwrap());
+        assert!(buf.len() > 10);
     }
 }

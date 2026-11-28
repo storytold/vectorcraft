@@ -2,15 +2,16 @@
 //!
 //! `vectorcraft-cli mcp --automation-read-root <dir> --automation-write-root <dir>`, and
 //! `vectorcraft --control <port>` with the same flags, confine the files an agent's commands
-//! reach. [`AutomationRoots`] holds the two folders. While they are in force, every path a command
-//! reads goes through [`check_read`] and every path it writes through [`check_write`]:
+//! reach; each flag may be given more than once (#3546). [`AutomationRoots`] holds the folders of
+//! each kind. While they are in force, every path a command reads goes through [`check_read`] and
+//! every path it writes through [`check_write`]:
 //!
 //! - The path is made absolute against the working directory, as the file system reads it. Its
 //!   links are followed: for a file that doesn't exist yet, the links of its nearest existing
 //!   folder, the rest of the path being plain names (`..` below a missing folder is refused, and so
 //!   is a link that leads nowhere).
-//! - The result must lie inside the root, compared by whole components (`/work2` isn't inside
-//!   `/work`), without regard to case on Windows.
+//! - The result must lie inside one of the roots of its kind, compared by whole components
+//!   (`/work2` isn't inside `/work`), exactly apart from the case of a Windows drive or share prefix.
 //! - Read and write access are separate: a root given alone grants only its own kind of access.
 //!
 //! Roots are in force on a thread inside [`confine`], and in the whole process after
@@ -22,6 +23,12 @@
 //! A path is checked, then opened: a process that can change the folders in between (swapping in
 //! a link) can still win that race. The roots keep an agent to the files it was given; they don't
 //! guard against other programs on the computer.
+//!
+//! [`ScriptScope`] holds the folders a running script's own files (its includes and `$.evalFile`)
+//! are read from, and the places its `File` and `Folder` objects read and write, inside the roots.
+//! [`ScriptGate`] holds the same places for the commands the script runs with `vc.run`, with the
+//! files of the open documents, and for reading, the files the documents open when the run began
+//! link to, each as the person last left the document.
 
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -35,14 +42,14 @@ pub enum Access {
     Write,
 }
 
-/// The folders automation may read and write; a root left out grants no access of its kind.
+/// The folders automation may read and write; a kind with no root grants no access of its kind.
 #[derive(Debug)]
 pub struct AutomationRoots {
-    read: Option<Root>,
-    write: Option<Root>,
+    read: Vec<Root>,
+    write: Vec<Root>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Root {
     /// The folder made absolute, links followed: what paths are compared with.
     resolved: PathBuf,
@@ -65,47 +72,88 @@ impl Root {
 }
 
 impl AutomationRoots {
-    /// The roots `read` and `write`, which must be existing folders; `None` when neither is given
-    /// (nothing is confined then).
-    pub fn new(read: Option<&Path>, write: Option<&Path>) -> Result<Option<Arc<Self>>, String> {
-        if read.is_none() && write.is_none() {
+    /// The roots `read` and `write`, which must be existing folders (one given twice counts once);
+    /// `None` when neither kind has any (nothing is confined then).
+    pub fn new(read: &[&Path], write: &[&Path]) -> Result<Option<Arc<Self>>, String> {
+        if read.is_empty() && write.is_empty() {
             return Ok(None);
         }
-        let read = read.map(|p| Root::open(p, Access::Read)).transpose()?;
-        let write = write.map(|p| Root::open(p, Access::Write)).transpose()?;
-        Ok(Some(Arc::new(Self { read, write })))
-    }
-
-    /// The read root, absolute with its links followed.
-    pub fn read_root(&self) -> Option<&Path> {
-        self.read.as_ref().map(|r| r.shown.as_path())
-    }
-
-    /// The write root, absolute with its links followed.
-    pub fn write_root(&self) -> Option<&Path> {
-        self.write.as_ref().map(|r| r.shown.as_path())
-    }
-
-    /// May the file or folder at `path` be read (or written)? `Err` says why not.
-    pub fn check(&self, path: &str, access: Access) -> Result<(), String> {
-        let root = match access {
-            Access::Read => self.read.as_ref(),
-            Access::Write => self.write.as_ref(),
+        let open = |paths: &[&Path], access: Access| -> Result<Vec<Root>, String> {
+            let mut roots: Vec<Root> = Vec::with_capacity(paths.len());
+            for path in paths {
+                let root = Root::open(path, access)?;
+                if !roots.iter().any(|r| r.resolved == root.resolved) {
+                    roots.push(root);
+                }
+            }
+            Ok(roots)
         };
-        let Some(Root { resolved: folder, shown }) = root else {
+        Ok(Some(Arc::new(Self { read: open(read, Access::Read)?, write: open(write, Access::Write)? })))
+    }
+
+    /// Roots that grant no access of either kind: inside [`confine`] with them, every path a
+    /// command reads or writes is refused.
+    pub(crate) fn none() -> Arc<Self> {
+        Arc::new(Self { read: Vec::new(), write: Vec::new() })
+    }
+
+    /// May the file or folder at `path` be read (or written)? It must lie inside one of the roots
+    /// of that kind. `Err` says why not.
+    pub fn check(&self, path: &str, access: Access) -> Result<(), String> {
+        let roots = match access {
+            Access::Read => &self.read,
+            Access::Write => &self.write,
+        };
+        // The messages are spelled out whole, as the translation catalogs match them.
+        if roots.is_empty() {
             return match access {
                 Access::Read => Err(format!("automation filesystem access is not granted: read authority is absent: {path}")),
                 Access::Write => Err(format!("automation filesystem access is not granted: write authority is absent: {path}")),
             };
+        }
+        // Resolving a path on another computer connects to it: unless a root is on a network
+        // share, such a path is refused by its name before anything is looked up.
+        let remote = cfg!(windows) && network_path(path) && !roots.iter().any(|r| network_path(&r.resolved.to_string_lossy()));
+        if !remote {
+            let resolved = resolve(path)?;
+            if roots.iter().any(|r| inside(&resolved, &r.resolved)) {
+                return Ok(());
+            }
+        }
+        let shown: Vec<String> = roots.iter().map(|r| r.shown.display().to_string()).collect();
+        match (shown.as_slice(), access) {
+            ([root], Access::Read) => Err(format!("automation path rejected: outside the read root {root}: {path}")),
+            ([root], Access::Write) => Err(format!("automation path rejected: outside the write root {root}: {path}")),
+            (_, Access::Read) => Err(format!("automation path rejected: outside the read roots {roots}: {path}", roots = shown.join(", "))),
+            (_, Access::Write) => Err(format!("automation path rejected: outside the write roots {roots}: {path}", roots = shown.join(", "))),
+        }
+    }
+
+    /// The roots that grant only what both `self` and `other` grant: for each kind, every root of
+    /// one that lies inside a root of the other. A kind left with none grants no access of its kind.
+    pub fn intersect(&self, other: &Self) -> Arc<Self> {
+        let both = |a: &[Root], b: &[Root]| {
+            let mut out: Vec<Root> = Vec::new();
+            for r in a
+                .iter()
+                .filter(|r| b.iter().any(|o| inside(&r.resolved, &o.resolved)))
+                .chain(b.iter().filter(|o| a.iter().any(|r| inside(&o.resolved, &r.resolved))))
+            {
+                if !out.iter().any(|o| o.resolved == r.resolved) {
+                    out.push(r.clone());
+                }
+            }
+            out
         };
-        if inside(&resolve(path)?, folder) {
-            return Ok(());
-        }
-        let root = shown.display();
-        match access {
-            Access::Read => Err(format!("automation path rejected: outside the read root {root}: {path}")),
-            Access::Write => Err(format!("automation path rejected: outside the write root {root}: {path}")),
-        }
+        Arc::new(Self { read: both(&self.read, &other.read), write: both(&self.write, &other.write) })
+    }
+
+    /// The roots for people: `read A, B; write C` (`none` for a kind without any).
+    pub fn describe(&self) -> String {
+        let list = |roots: &[Root]| {
+            if roots.is_empty() { "none".to_string() } else { roots.iter().map(|r| r.shown.display().to_string()).collect::<Vec<_>>().join(", ") }
+        };
+        format!("read {}; write {}", list(&self.read), list(&self.write))
     }
 }
 
@@ -148,7 +196,7 @@ fn with_scope<T>(scope: Option<Scope>, f: impl FnOnce() -> T) -> T {
 /// Run `f` with `roots` in force on this thread (`None`: as things stand).
 pub fn confine<T>(roots: Option<&Arc<AutomationRoots>>, f: impl FnOnce() -> T) -> T {
     match roots {
-        Some(r) => with_scope(Some(Scope::Confined(r.clone())), f),
+        Some(r) => with_gate_reads_exempt(false, || with_scope(Some(Scope::Confined(r.clone())), f)),
         None => f(),
     }
 }
@@ -156,23 +204,223 @@ pub fn confine<T>(roots: Option<&Arc<AutomationRoots>>, f: impl FnOnce() -> T) -
 /// Run `f` with no roots in force on this thread: what the person at the keyboard does, and the
 /// app's own folders.
 pub fn unconfined<T>(f: impl FnOnce() -> T) -> T {
-    with_scope(Some(Scope::Unconfined), f)
+    with_gate_reads_exempt(true, || with_scope(Some(Scope::Unconfined), f))
 }
 
-/// This thread's scope, to carry to work it hands to another thread ([`ScopeHandle::run`]).
+/// Run `f`, a read of a file in one of the app's own folders, with reads exempt from the gate of
+/// the script command this thread runs. Unlike [`unconfined`], the roots in force still apply.
+pub(crate) fn app_folder_read<T>(f: impl FnOnce() -> T) -> T {
+    with_gate_reads_exempt(true, f)
+}
+
+thread_local! {
+    /// Are reads on this thread exempt from the gate of the script command it runs? Only inside an
+    /// [`unconfined`] or an [`app_folder_read`] entered after the gate was put in force
+    /// ([`with_script_gate`]).
+    static GATE_READS_EXEMPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Puts the exemption it replaced back when dropped (also when `f` panics).
+struct RestoreExempt(bool);
+
+impl Drop for RestoreExempt {
+    fn drop(&mut self) {
+        GATE_READS_EXEMPT.with(|e| e.set(self.0));
+    }
+}
+
+fn with_gate_reads_exempt<T>(exempt: bool, f: impl FnOnce() -> T) -> T {
+    let _restore = RestoreExempt(GATE_READS_EXEMPT.with(|e| e.replace(exempt)));
+    f()
+}
+
+/// `scope`, or for a thread without one, the `process` roots in force now (none: unconfined).
+fn resolved(scope: Option<Scope>, process: Option<&Arc<AutomationRoots>>) -> Scope {
+    scope.unwrap_or_else(|| match process {
+        Some(r) => Scope::Confined(r.clone()),
+        None => Scope::Unconfined,
+    })
+}
+
+/// This thread's scope, with the gate of the script command it runs, to carry to work it hands to
+/// another thread ([`ScopeHandle::run`]).
 #[derive(Clone, Debug)]
-pub struct ScopeHandle(Option<Scope>);
+pub struct ScopeHandle(Option<Scope>, Option<Arc<ScriptGate>>, bool);
 
 impl ScopeHandle {
     /// The scope of the calling thread.
     pub fn capture() -> Self {
-        Self(SCOPE.with(|s| s.borrow().clone()))
+        Self(SCOPE.with(|s| s.borrow().clone()), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
+    }
+
+    /// [`ScopeHandle::capture`], except that a thread with no scope of its own takes the process's
+    /// roots as they are now ([`confine_process`]): work captured before the process is confined
+    /// stays unconfined on the thread that runs it, as it would have been had it run on the calling
+    /// thread at once.
+    pub fn capture_now() -> Self {
+        let scope = resolved(SCOPE.with(|s| s.borrow().clone()), PROCESS.get());
+        Self(Some(scope), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
     }
 
     /// Run `f` in the captured scope.
     pub fn run<T>(self, f: impl FnOnce() -> T) -> T {
-        with_scope(self.0, f)
+        let Self(scope, gate, exempt) = self;
+        with_gate(gate, || with_gate_reads_exempt(exempt, || with_scope(scope, f)))
     }
+
+    /// The roots in force in this scope, if any (as [`current`] gives them on its thread).
+    fn roots(&self) -> Option<Arc<AutomationRoots>> {
+        match &self.0 {
+            Some(Scope::Confined(r)) => Some(r.clone()),
+            Some(Scope::Unconfined) => None,
+            None => PROCESS.get().cloned(),
+        }
+    }
+
+    /// The captured scope narrowed to what the calling thread may reach as well: the roots of both
+    /// are in force ([`AutomationRoots::intersect`]), and without roots in either, none are. The
+    /// script gates of both are in force too, and reads are exempt from them only where both are.
+    pub fn within_current(self) -> Self {
+        let here = Self::capture();
+        let gate = match (self.1.clone(), here.1.clone()) {
+            (None, None) => None,
+            (Some(g), None) | (None, Some(g)) => Some(g),
+            (Some(a), Some(b)) if Arc::ptr_eq(&a, &b) => Some(a),
+            (Some(a), Some(b)) => Some(Arc::new(a.followed_by(b))),
+        };
+        let exempt = self.2 && here.2;
+        let scope = match (self.roots(), here.roots()) {
+            (None, None) => self.0,
+            (Some(r), None) | (None, Some(r)) => Some(Scope::Confined(r)),
+            (Some(a), Some(b)) if Arc::ptr_eq(&a, &b) => Some(Scope::Confined(a)),
+            (Some(a), Some(b)) => Some(Scope::Confined(a.intersect(&b))),
+        };
+        Self(scope, gate, exempt)
+    }
+}
+
+/// What a command a running script runs (`vc.run`) may read and write: the places the script's
+/// `File` and `Folder` objects may ([`ScriptScope`]), and the files the documents open in the app
+/// were opened from or saved to by the person ([`crate::DocState::as_person_left`]). Reading, and
+/// only reading, the files the documents link to as the person left them when the run began is
+/// allowed as well ([`ScriptGate::linked`]). The automation roots apply as well. A path refused by
+/// its name alone ([`ScriptScope::refused_by_name`]) is refused here too.
+#[derive(Clone, Debug)]
+pub(crate) struct ScriptGate {
+    pub(crate) read: ScriptScope,
+    pub(crate) write: ScriptScope,
+    /// The paths of the open documents' files, as the documents held them when the person last
+    /// opened or saved them. A document a script's command opened has none here.
+    pub(crate) documents: Vec<String>,
+    /// The files the documents link to as the person left them when the run began: readable, not
+    /// writable.
+    pub(crate) linked: LinkedFiles,
+    /// Another gate a path must pass as well ([`ScopeHandle::within_current`]).
+    pub(crate) also: Option<Arc<ScriptGate>>,
+}
+
+/// The files the commands a script runs may only read because the documents open when the run
+/// began link to them as the person left them ([`ScriptGate::linked`]).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LinkedFiles {
+    /// The real paths of the files, as they were when the run's first command was run, sorted. A
+    /// path that leads to another file now is not one of them.
+    files: Arc<[PathBuf]>,
+}
+
+impl LinkedFiles {
+    /// Is `real`, a real path, one of the files?
+    fn has(&self, real: &Path) -> bool {
+        self.files.binary_search_by(|f| f.as_path().cmp(real)).is_ok()
+    }
+}
+
+impl ScriptGate {
+    /// The real paths of the files at `paths` that are files now, each once, for
+    /// [`ScriptGate::linked`]. A path refused by its name alone, and one that cannot be resolved,
+    /// is left out.
+    pub(crate) fn real_files(paths: impl IntoIterator<Item = String>) -> LinkedFiles {
+        let mut real: Vec<PathBuf> = paths
+            .into_iter()
+            .filter(|p| !ScriptScope::refused_by_name(Path::new(p)))
+            .filter_map(|p| resolve(&p).ok())
+            .filter(|p| p.is_file())
+            .collect();
+        real.sort();
+        real.dedup();
+        LinkedFiles { files: real.into() }
+    }
+
+    /// This gate with `next` at the end of its chain of `also` gates, so a path must pass every
+    /// gate already in the chain as well as `next`.
+    fn followed_by(&self, next: Arc<ScriptGate>) -> ScriptGate {
+        let also = match &self.also {
+            None => next,
+            Some(also) if Arc::ptr_eq(also, &next) => next,
+            Some(also) => Arc::new(also.followed_by(next)),
+        };
+        ScriptGate { also: Some(also), ..self.clone() }
+    }
+
+    /// May `path` be read (or written) through this gate?
+    pub(crate) fn check(&self, path: &str, access: Access) -> Result<(), String> {
+        if let Some(also) = &self.also {
+            also.check(path, access)?;
+        }
+        let real = if ScriptScope::refused_by_name(Path::new(path)) { None } else { resolve(path).ok() };
+        let allowed = real.is_some_and(|real| {
+            let scoped = match access {
+                Access::Read => self.read.allows(&real) || self.write.allows(&real),
+                Access::Write => self.write.allows(&real),
+            };
+            let linked = matches!(access, Access::Read) && self.linked.has(&real) && !self.read.keeps_out(&real);
+            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)) || linked
+        });
+        if allowed { Ok(()) } else { Err(format!("Script file access denied: {path}")) }
+    }
+}
+
+thread_local! {
+    /// The gate of the script command this thread runs ([`with_script_gate`]).
+    static GATE: RefCell<Option<Arc<ScriptGate>>> = const { RefCell::new(None) };
+}
+
+/// Puts the gate it replaced back when dropped (also when `f` panics).
+struct RestoreGate(Option<Arc<ScriptGate>>);
+
+impl Drop for RestoreGate {
+    fn drop(&mut self) {
+        let previous = self.0.take();
+        GATE.with(|g| *g.borrow_mut() = previous);
+    }
+}
+
+fn with_gate<T>(gate: Option<Arc<ScriptGate>>, f: impl FnOnce() -> T) -> T {
+    let _restore = RestoreGate(GATE.with(|g| g.replace(gate)));
+    f()
+}
+
+/// Runs `f`, a command a script runs, with `gate` in force on this thread: every path it reads or
+/// writes must pass the gate as well as the automation roots, also when the run itself is
+/// [`unconfined`] (one the person started). Reads of the app's own folders, inside an
+/// [`unconfined`] the command enters, are not checked; writes there are, so a script's command
+/// does not save into the app's libraries.
+pub(crate) fn with_script_gate<T>(gate: ScriptGate, f: impl FnOnce() -> T) -> T {
+    with_gate(Some(Arc::new(gate)), || with_gate_reads_exempt(false, f))
+}
+
+/// May `path` be read (or written) by the script command this thread runs? Always outside one,
+/// and for a read inside an [`unconfined`] the command entered.
+fn check_gate(path: &str, access: Access) -> Result<(), String> {
+    if matches!(access, Access::Read) && GATE_READS_EXEMPT.with(std::cell::Cell::get) {
+        return Ok(());
+    }
+    GATE.with(|g| g.borrow().clone()).map_or(Ok(()), |g| g.check(path, access))
+}
+
+/// Whether this thread runs a command a script runs ([`with_script_gate`]).
+pub(crate) fn in_script_command() -> bool {
+    GATE.with(|g| g.borrow().is_some())
 }
 
 /// The roots in force on this thread, if any.
@@ -184,14 +432,65 @@ pub fn current() -> Option<Arc<AutomationRoots>> {
     }
 }
 
-/// May `path` be read here? Always, without roots in force.
+/// May `path` be read here? Always, without roots in force and outside a script's command
+/// ([`with_script_gate`]).
 pub fn check_read(path: &str) -> Result<(), String> {
-    current().map_or(Ok(()), |r| r.check(path, Access::Read))
+    current().map_or(Ok(()), |r| r.check(path, Access::Read))?;
+    check_gate(path, Access::Read)
 }
 
-/// May `path` be written here? Always, without roots in force.
+/// Is `path`, under a read root, written as an absolute path of another platform: outside Windows, one
+/// that starts with a drive (`C:`) or a `\`? [`check_read`] reads it as a name in the working folder.
+pub fn written_elsewhere(path: &str) -> bool {
+    let foreign = path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    !cfg!(windows) && foreign && current().is_some()
+}
+
+/// Does a command param named `key` hold a file or folder path in a command that gives it no other
+/// meaning ([`crate::cmd::key_location`]: `path`, `file`, `diffPath`, `destinationFolder` and the
+/// like)? [`crate::cmd::ParamsPlace`] tells what it holds in a given command.
+pub fn is_path_key(key: &str) -> bool {
+    crate::cmd::key_location(key).is_some()
+}
+
+/// May `path` be written here? Always, without roots in force and outside a script's command
+/// ([`with_script_gate`]).
 pub fn check_write(path: &str) -> Result<(), String> {
-    current().map_or(Ok(()), |r| r.check(path, Access::Write))
+    current().map_or(Ok(()), |r| r.check(path, Access::Write))?;
+    check_gate(path, Access::Write)?;
+    WRITES.with(|w| {
+        if let Some(paths) = w.borrow_mut().as_mut()
+            && !paths.iter().any(|(p, _)| p == path)
+        {
+            paths.push((path.to_string(), stamp(path)));
+        }
+    });
+    Ok(())
+}
+
+/// A file's modification time and length; `None` when there is no file at `path`.
+type Stamp = Option<(Option<std::time::SystemTime>, u64)>;
+
+fn stamp(path: &str) -> Stamp {
+    std::fs::metadata(path).ok().filter(std::fs::Metadata::is_file).map(|m| (m.modified().ok(), m.len()))
+}
+
+thread_local! {
+    /// The paths [`check_write`] allowed on this thread while they are being recorded, each with
+    /// its file's stamp at that moment.
+    static WRITES: std::cell::RefCell<Option<Vec<(String, Stamp)>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Starts recording the paths [`check_write`] allows on this thread.
+pub(crate) fn start_recording_writes() {
+    WRITES.with(|w| *w.borrow_mut() = Some(Vec::new()));
+}
+
+/// Ends recording → the recorded paths whose file exists now: after a command that `succeeded`,
+/// all of them; after one that failed, those made or changed since they were allowed.
+pub(crate) fn finish_recording_writes(succeeded: bool) -> Vec<String> {
+    let recorded = WRITES.with(|w| w.borrow_mut().take()).unwrap_or_default();
+    recorded.into_iter().filter(|(path, before)| stamp(path).is_some_and(|now| succeeded || Some(now) != *before)).map(|(path, _)| path).collect()
 }
 
 /// `path` made absolute with its links followed; for a path that doesn't exist (yet), its nearest
@@ -201,8 +500,10 @@ fn resolve(path: &str) -> Result<PathBuf, String> {
         return Err("automation path rejected: path is empty".into());
     }
     // Checked as given: making `…\NUL` absolute gives the device path `\\.\NUL` on Windows.
-    if cfg!(windows) && Path::new(path).components().any(|c| matches!(c, Component::Normal(n) if is_device_name(&n.to_string_lossy()))) {
-        return Err(format!("automation path rejected: reserved device names are not allowed: {path}"));
+    if cfg!(windows)
+        && let Some(why) = windows_name_refusal(path)
+    {
+        return Err(format!("automation path rejected: {why}: {path}"));
     }
     let absolute = std::path::absolute(path).map_err(|e| format!("automation path rejected: cannot resolve {path}: {e}"))?;
     // The names below the nearest existing folder, last first.
@@ -240,18 +541,25 @@ fn resolve(path: &str) -> Result<PathBuf, String> {
     }
 }
 
-/// Is `path` (resolved) `root` or inside it, component by component (without regard to case on
-/// Windows, whose file systems ignore it)?
+/// Is `path` (resolved) `root` or inside it, component by component (without regard to case in a
+/// Windows drive or share prefix only: resolved folder names have their real case, and a folder that differs
+/// in case alone may be another, on a case-sensitive Windows folder)?
 fn inside(path: &Path, root: &Path) -> bool {
     let mut path = path.components();
     root.components().all(|r| path.next().is_some_and(|p| same_component(p, r)))
+}
+
+/// Is `path` `root` or inside it, both with their links followed, compared as [`AutomationRoots`]
+/// compares them?
+pub(crate) fn path_inside(path: &Path, root: &Path) -> bool {
+    inside(path, root)
 }
 
 fn same_component(a: Component, b: Component) -> bool {
     if a == b {
         return true;
     }
-    if !cfg!(windows) {
+    if !cfg!(windows) || !matches!((a, b), (Component::Prefix(_), Component::Prefix(_))) {
         return false;
     }
     match (a.as_os_str().to_str(), b.as_os_str().to_str()) {
@@ -260,11 +568,381 @@ fn same_component(a: Component, b: Component) -> bool {
     }
 }
 
-/// A Windows device name (`CON`, `NUL`, `COM1`… also with an extension), which names no file.
-fn is_device_name(component: &str) -> bool {
+/// A Windows device name (`CON`, `NUL`, `COM1`, `COM¹`… also with an extension), which names no file.
+pub(crate) fn is_device_name(component: &str) -> bool {
     let stem = component.split('.').next().unwrap_or(component).trim_end_matches(' ').to_ascii_uppercase();
-    let numbered = |prefix: &str| stem.strip_prefix(prefix).is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"));
+    let numbered =
+        |prefix: &str| stem.strip_prefix(prefix).is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"));
     matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$" | "CONIN$" | "CONOUT$") || numbered("COM") || numbered("LPT")
+}
+
+/// Is `path` a Windows name of a file on another computer (`\\server\share\…`, `\\?\UNC\…`)?
+/// (Judged by name alone, so it can be tested on any platform; `check` applies it on Windows only.)
+fn network_path(path: &str) -> bool {
+    let p = path.replace('/', "\\");
+    let upper = p.to_ascii_uppercase();
+    upper.starts_with(r"\\?\UNC\") || upper.starts_with(r"\\.\UNC\") || (p.starts_with(r"\\") && !p.starts_with(r"\\?\") && !p.starts_with(r"\\.\"))
+}
+
+/// Why Windows would not take `path` as an ordinary file name, for the first of its components
+/// that is a device name, or holds a `:` (a drive letter's own colon belongs to the prefix, not to
+/// a name, so only a stream such as `x.svg:evil` has one). (Judged by name alone, so it can be
+/// tested on any platform; `resolve` applies it on Windows only.)
+fn windows_name_refusal(path: &str) -> Option<&'static str> {
+    Path::new(path).components().find_map(|c| match c {
+        Component::Normal(n) if is_device_name(&n.to_string_lossy()) => Some("reserved device names are not allowed"),
+        Component::Normal(n) if n.to_string_lossy().contains(':') => Some("alternate data streams are not allowed"),
+        _ => None,
+    })
+}
+
+/// The folders a running script's own files are read from: the files its `#include` lines name and
+/// the files it passes to `$.evalFile` (`Scope::Script`'s reads). VectorCraft's own rules: a script
+/// run from a file may read inside that file's folder and the folders below it, and a script given as
+/// text may read none. A path is refused when it has a `..` component, a Windows device name or
+/// stream, or names a computer on the network, or when it leads (through its links, junctions
+/// included) out of every granted folder. The automation roots ([`check_read`]) apply as well.
+///
+/// The file opened is the path with its links followed, and after reading, the path is followed
+/// again and must still lead to the same place: a process that changes the folders twice in between
+/// can still win that race.
+///
+/// A scope can also be given more folders ([`ScriptScope::add`]) and single files
+/// ([`ScriptScope::add_file`]), and folders it keeps out even inside a granted folder
+/// ([`ScriptScope::fence`]), each but the places inside it that stay open. A granted file grants its
+/// own path only, also when a folder later takes its place.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ScriptScope {
+    /// The granted folders, made absolute with their links followed.
+    roots: Vec<PathBuf>,
+    /// The granted files, made absolute with their links followed.
+    files: Vec<PathBuf>,
+    /// The folders kept out, with their links followed.
+    fenced: Vec<PathBuf>,
+    /// The places inside a fenced folder that are not kept out.
+    open: Vec<PathBuf>,
+}
+
+/// Why a script's file was not read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ScriptRead {
+    /// There is no such file.
+    Missing,
+    /// The scope does not let the script read it.
+    Refused,
+    /// The file has more than the bytes asked for.
+    TooLarge,
+    /// The file system gave this error.
+    Failed(String),
+}
+
+impl ScriptScope {
+    /// The scope of a script run from a file in folder `dir`: that folder.
+    pub(crate) fn of_folder(dir: &Path) -> Self {
+        Self { roots: std::fs::canonicalize(dir).ok().into_iter().collect(), ..Self::default() }
+    }
+
+    /// Grants the folder `real`, a path with its links followed, with everything inside it.
+    pub(crate) fn add(&mut self, real: PathBuf) {
+        if !self.roots.contains(&real) {
+            self.roots.push(real);
+        }
+    }
+
+    /// Grants the file `real`, a path with its links followed: that path and nothing below it.
+    pub(crate) fn add_file(&mut self, real: PathBuf) {
+        if !self.files.contains(&real) {
+            self.files.push(real);
+        }
+    }
+
+    /// Takes back the grant of the folder (`folder`) or file `real` that [`ScriptScope::add`] or
+    /// [`ScriptScope::add_file`] gave.
+    pub(crate) fn remove(&mut self, real: &Path, folder: bool) {
+        if folder { self.roots.retain(|r| r != real) } else { self.files.retain(|r| r != real) }
+    }
+
+    /// Is nothing granted?
+    fn is_empty(&self) -> bool {
+        self.roots.is_empty() && self.files.is_empty()
+    }
+
+    /// Keeps the folder `real` (links followed) and everything in it out, but for `open` and the
+    /// places inside it.
+    pub(crate) fn fence(&mut self, real: PathBuf, open: &[PathBuf]) {
+        self.fenced.push(real);
+        self.open.extend(open.iter().cloned());
+    }
+
+    /// Leaves the place `real` (links followed) and everything in it open inside a fenced folder.
+    pub(crate) fn fence_open(&mut self, real: PathBuf) {
+        self.open.push(real);
+    }
+
+    /// The granted folders, with their links followed.
+    pub(crate) fn roots(&self) -> &[PathBuf] {
+        &self.roots
+    }
+
+    /// Is the real path `real` a granted file or inside a granted folder, and not kept out? A place
+    /// left open counts only inside the fenced folder: one that holds the fenced folder opens none of it.
+    pub(crate) fn allows(&self, real: &Path) -> bool {
+        (self.files.iter().any(|f| inside(real, f) && real.components().count() == f.components().count())
+            || self.roots.iter().any(|r| inside(real, r)))
+            && !self.keeps_out(real)
+    }
+
+    /// Is the real path `real` in a folder kept out ([`ScriptScope::fence`]), and not in a place
+    /// left open there?
+    fn keeps_out(&self, real: &Path) -> bool {
+        self.fenced.iter().any(|f| inside(real, f) && !self.open.iter().any(|o| inside(o, f) && inside(real, o)))
+    }
+
+    /// The scope of a script run from a file in the folder whose real path, with its links already
+    /// followed, is `real`: that folder, which is not looked up again.
+    pub(crate) fn of_real_folder(real: PathBuf) -> Self {
+        Self { roots: vec![real], ..Self::default() }
+    }
+
+    /// Is `path` refused by its name alone: a `..` component, a NUL, a Windows device name or
+    /// stream, or a computer on the network?
+    pub(crate) fn refused_by_name(path: &Path) -> bool {
+        let text = path.to_string_lossy();
+        text.contains('\0')
+            || path.components().any(|c| c == Component::ParentDir)
+            || (cfg!(windows) && (windows_name_refusal(&text).is_some() || network_path(&text)))
+    }
+
+    /// The real path of the file at `path` and its first `max` bytes, at most.
+    pub(crate) fn read(&self, path: &Path, max: usize) -> Result<(PathBuf, Vec<u8>), ScriptRead> {
+        use std::io::Read;
+        if self.is_empty() || Self::refused_by_name(path) || check_read(&path.to_string_lossy()).is_err() {
+            return Err(ScriptRead::Refused);
+        }
+        let real = match std::fs::canonicalize(path) {
+            Ok(real) => real,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // A link whose target is missing is there all the same: it is not followed.
+                return Err(if std::fs::symlink_metadata(path).is_ok() { ScriptRead::Refused } else { ScriptRead::Missing });
+            }
+            Err(e) => return Err(ScriptRead::Failed(e.to_string())),
+        };
+        if !self.allows(&real) {
+            return Err(ScriptRead::Refused);
+        }
+        let file = std::fs::File::open(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        let meta = file.metadata().map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        if !meta.is_file() {
+            return Err(ScriptRead::Missing);
+        }
+        if meta.len() > max as u64 {
+            return Err(ScriptRead::TooLarge);
+        }
+        let mut bytes = Vec::new();
+        // One byte more than asked for shows a file that grew while it was read.
+        file.take(max as u64 + 1).read_to_end(&mut bytes).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        if bytes.len() > max {
+            return Err(ScriptRead::TooLarge);
+        }
+        if std::fs::canonicalize(path).ok().as_ref() != Some(&real) {
+            return Err(ScriptRead::Refused);
+        }
+        Ok((real, bytes))
+    }
+
+    /// The first granted folder, as people read it (`None` for a script given as text).
+    pub(crate) fn folder(&self) -> Option<PathBuf> {
+        self.roots.first().map(|r| crate::cmd::findfiles::plain(r.clone()))
+    }
+
+    /// Does the absolute path `path` name a granted file, a granted folder or a place inside one,
+    /// by its names alone, without regard to case? A path that does not is refused before the file
+    /// system is asked anything about it.
+    fn names_inside(&self, path: &Path) -> bool {
+        let lower = |c: Component| c.as_os_str().to_string_lossy().to_lowercase();
+        let names_under = |r: &PathBuf| {
+            let root = crate::cmd::findfiles::plain(r.clone());
+            let mut names = path.components();
+            root.components().all(|c| names.next().is_some_and(|n| lower(n) == lower(c)))
+        };
+        path.is_absolute() && (self.roots.iter().any(names_under) || self.files.iter().any(names_under))
+    }
+
+    /// The real path of the file or folder at `path`, which must be absolute: refused as
+    /// [`ScriptScope::read`] refuses a path, and also when its names alone place it outside every
+    /// granted folder, in which case the file system is not asked about it.
+    pub(crate) fn locate(&self, path: &Path) -> Result<PathBuf, ScriptRead> {
+        if self.is_empty() || Self::refused_by_name(path) || !self.names_inside(path) {
+            return Err(ScriptRead::Refused);
+        }
+        probed();
+        if check_read(&path.to_string_lossy()).is_err() {
+            return Err(ScriptRead::Refused);
+        }
+        let real = match std::fs::canonicalize(path) {
+            Ok(real) => real,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                if std::fs::symlink_metadata(path).is_ok() || !self.missing_inside(path) {
+                    return Err(ScriptRead::Refused);
+                }
+                return Err(ScriptRead::Missing);
+            }
+            Err(e) => return Err(ScriptRead::Failed(e.to_string())),
+        };
+        if !self.allows(&real) {
+            return Err(ScriptRead::Refused);
+        }
+        Ok(real)
+    }
+
+    /// The real path that writing to `path` writes: `path` with its links followed (the last
+    /// name's too only when `follow`), and for a path that does not exist yet, its nearest existing
+    /// folder's links followed and the rest appended. Refused as [`ScriptScope::locate`] refuses a
+    /// path, also when a link on the way leads nowhere, and when the automation write roots in force
+    /// ([`check_write`]) do not take it.
+    pub(crate) fn target(&self, path: &Path, follow: bool) -> Result<PathBuf, ScriptRead> {
+        if self.is_empty() || Self::refused_by_name(path) || !self.names_inside(path) {
+            return Err(ScriptRead::Refused);
+        }
+        probed();
+        if check_write(&path.to_string_lossy()).is_err() {
+            return Err(ScriptRead::Refused);
+        }
+        let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else { return Err(ScriptRead::Refused) };
+        let real = match std::fs::symlink_metadata(path) {
+            Ok(_) if follow => std::fs::canonicalize(path).map_err(|_| ScriptRead::Refused)?,
+            Ok(m) => {
+                // Where case does not matter, the name given can differ in case from the name the
+                // file system keeps, so a file or folder that is not a link is checked under the
+                // kept name too.
+                if !m.file_type().is_symlink() && !std::fs::canonicalize(path).is_ok_and(|kept| self.allows(&kept)) {
+                    return Err(ScriptRead::Refused);
+                }
+                std::fs::canonicalize(parent).map_err(|_| ScriptRead::Refused)?.join(name)
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let mut missing = vec![name.to_os_string()];
+                let mut at = parent;
+                loop {
+                    match std::fs::symlink_metadata(at) {
+                        Ok(_) => break,
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                            missing.push(at.file_name().ok_or(ScriptRead::Refused)?.to_os_string());
+                            at = at.parent().ok_or(ScriptRead::Refused)?;
+                        }
+                        Err(e) => return Err(ScriptRead::Failed(e.to_string())),
+                    }
+                }
+                let mut real = std::fs::canonicalize(at).map_err(|_| ScriptRead::Refused)?;
+                real.extend(missing.iter().rev());
+                real
+            }
+            Err(e) => return Err(ScriptRead::Failed(e.to_string())),
+        };
+        // The automation write roots take the place written as well as the path named.
+        if !self.allows(&real) || check_write(&crate::cmd::findfiles::plain(real.clone()).to_string_lossy()).is_err() {
+            return Err(ScriptRead::Refused);
+        }
+        Ok(real)
+    }
+
+    /// Is the missing `path` inside a granted place: with the links of the nearest folder above it
+    /// that exists followed, and the rest of its names appended, is it granted? On a file system
+    /// where case matters, `MAIN/x` beside the granted `main` is outside, whether `MAIN` exists or
+    /// not. A link above it that leads to nothing is outside too, so a script cannot tell whether
+    /// the folder a link leads to exists.
+    fn missing_inside(&self, path: &Path) -> bool {
+        let Some(found) = path.ancestors().skip(1).find(|a| std::fs::symlink_metadata(a).is_ok()) else { return false };
+        let (Ok(real), Ok(rest)) = (std::fs::canonicalize(found), path.strip_prefix(found)) else { return false };
+        self.allows(&real.join(rest))
+    }
+
+    /// What the file or folder at `path` is, located as [`ScriptScope::locate`] locates it. Whether
+    /// it is hidden is a link's own, and the rest is what the link leads to.
+    pub(crate) fn stat(&self, path: &Path) -> Result<ScriptEntry, ScriptRead> {
+        let real = self.locate(path)?;
+        let meta = std::fs::metadata(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        let own = std::fs::symlink_metadata(path).ok().filter(|m| m.file_type().is_symlink());
+        let link = own.is_some();
+        #[cfg(windows)]
+        let hidden = std::os::windows::fs::MetadataExt::file_attributes(own.as_ref().unwrap_or(&meta)) & 2 != 0;
+        #[cfg(not(windows))]
+        let hidden = if link { path.file_name() } else { real.file_name() }.is_some_and(|n| n.to_string_lossy().starts_with('.'));
+        Ok(ScriptEntry {
+            dir: meta.is_dir(),
+            file: meta.is_file(),
+            len: meta.len(),
+            created: meta.created().ok(),
+            modified: meta.modified().ok(),
+            hidden,
+            readonly: meta.permissions().readonly(),
+            link,
+        })
+    }
+
+    /// The names in the folder at `path` that `keep` keeps, with whether each is a folder, in the
+    /// order of their names. A name whose links lead out of every granted folder, or out of the
+    /// automation read roots in force, is left out. More
+    /// than `max` names kept, or more than [`MAX_LISTED`] names looked at, is
+    /// [`ScriptRead::TooLarge`].
+    pub(crate) fn list(&self, path: &Path, max: usize, keep: impl Fn(&str) -> bool) -> Result<Vec<(String, bool)>, ScriptRead> {
+        let real = self.locate(path)?;
+        let entries = std::fs::read_dir(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
+        let mut out = Vec::new();
+        for (n, entry) in entries.enumerate() {
+            if n >= MAX_LISTED {
+                return Err(ScriptRead::TooLarge);
+            }
+            let Ok(entry) = entry else { continue };
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !keep(&name) {
+                continue;
+            }
+            let Ok(target) = std::fs::canonicalize(entry.path()) else { continue };
+            if !self.allows(&target) || check_read(&entry.path().to_string_lossy()).is_err() {
+                continue;
+            }
+            if out.len() >= max {
+                return Err(ScriptRead::TooLarge);
+            }
+            out.push((name, target.is_dir()));
+        }
+        out.sort();
+        Ok(out)
+    }
+}
+
+/// The most names [`ScriptScope::list`] looks at in one folder.
+pub(crate) const MAX_LISTED: usize = 65_536;
+
+/// A file or folder as [`ScriptScope::stat`] gives it.
+#[derive(Clone, Debug)]
+pub(crate) struct ScriptEntry {
+    pub dir: bool,
+    /// A regular file.
+    pub file: bool,
+    pub len: u64,
+    pub created: Option<std::time::SystemTime>,
+    pub modified: Option<std::time::SystemTime>,
+    pub hidden: bool,
+    pub readonly: bool,
+    /// The path itself is a symbolic link.
+    pub link: bool,
+}
+
+thread_local! {
+    /// How many paths [`ScriptScope::locate`] has asked the file system about on this thread.
+    static PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn probed() {
+    PROBES.with(|p| p.set(p.get().saturating_add(1)));
+}
+
+/// How many paths [`ScriptScope::locate`] has asked the file system about on this thread.
+#[cfg(test)]
+pub(crate) fn script_probes() -> usize {
+    PROBES.with(std::cell::Cell::get)
 }
 
 #[cfg(test)]
@@ -280,12 +958,209 @@ mod tests {
         }
         std::fs::write(base.join("in/a.svg"), "<svg/>").unwrap();
         std::fs::write(base.join("outside/secret.svg"), "<svg/>").unwrap();
-        let roots = AutomationRoots::new(Some(&base.join("in")), Some(&base.join("out"))).unwrap().unwrap();
+        let roots = AutomationRoots::new(&[&base.join("in")], &[&base.join("out")]).unwrap().unwrap();
         (base, roots)
     }
 
     fn s(p: PathBuf) -> String {
         p.to_string_lossy().into_owned()
+    }
+
+    /// The roots both grant: the deeper of two nested roots, nothing for roots apart, and a kind
+    /// only one grants is not granted.
+    #[test]
+    fn intersected_roots_grant_what_both_grant() {
+        let (base, roots) = folders("intersect");
+        let narrow = AutomationRoots::new(&[&base.join("in/sub"), &base.join("in2")], &[]).unwrap().unwrap();
+        let both = roots.intersect(&narrow);
+        assert_eq!(both.check(&s(base.join("in/sub/x.svg")), Access::Read), Ok(()));
+        assert!(both.check(&s(base.join("in/a.svg")), Access::Read).is_err(), "only the narrow root grants it");
+        assert!(both.check(&s(base.join("in2")), Access::Read).is_err(), "only the narrow roots grant it");
+        assert!(both.check(&s(base.join("out/x.svg")), Access::Write).is_err(), "only the first grants writes");
+        assert_eq!(both.describe(), narrow.intersect(&roots).describe(), "either order");
+        let unconfined = ScopeHandle(Some(Scope::Unconfined), None, false);
+        let within = |saved: ScopeHandle, here: Option<&Arc<AutomationRoots>>| {
+            confine(here, || saved.within_current()).run(|| current().map(|r| r.describe()))
+        };
+        assert_eq!(within(unconfined.clone(), Some(&narrow)), Some(narrow.describe()), "a confined caller keeps its roots");
+        assert_eq!(within(ScopeHandle(Some(Scope::Confined(roots.clone())), None, false), None), Some(roots.describe()), "the saved roots stay");
+        assert_eq!(within(ScopeHandle(Some(Scope::Confined(roots.clone())), None, false), Some(&narrow)), Some(both.describe()));
+        assert!(unconfined.run(|| current().is_none()));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A scope narrowed to the calling thread keeps the script gate of both: a script command that
+    /// carries on work saved without a gate reads only what its gate allows, and with a gate saved
+    /// too, only what both allow; reads are exempt only where both scopes exempt them.
+    #[test]
+    fn a_narrowed_scope_keeps_the_script_gates_of_both() {
+        let (base, _) = folders("narrowed-gate");
+        let gate = |dir: &str| ScriptGate {
+            read: ScriptScope::of_folder(&base.join(dir)),
+            write: ScriptScope::default(),
+            documents: vec![],
+            linked: LinkedFiles::default(),
+            also: None,
+        };
+        let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
+        let reads = |saved: ScopeHandle, gate_here: Option<ScriptGate>| {
+            let narrowed = match gate_here {
+                Some(g) => with_script_gate(g, || saved.within_current()),
+                None => saved.within_current(),
+            };
+            narrowed.run(|| (check_read(&inside).is_ok(), check_read(&other).is_ok()))
+        };
+        let plain = ScopeHandle(None, None, false);
+        assert_eq!(reads(plain.clone(), Some(gate("in"))), (true, false), "the confirming command's gate");
+        assert_eq!(reads(ScopeHandle(None, Some(Arc::new(gate("in"))), false), None), (true, false), "the saved gate");
+        assert_eq!(reads(ScopeHandle(None, Some(Arc::new(gate("in"))), false), Some(gate("outside"))), (false, false), "both gates");
+        assert_eq!(reads(ScopeHandle(None, None, true), Some(gate("in"))), (true, false), "exempt only where both are");
+        assert_eq!(reads(plain, None), (true, true));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A scope narrowed again and again keeps every gate it was narrowed by: a gate an earlier
+    /// narrowing joined to the chain still refuses what it refused before.
+    #[test]
+    fn a_scope_narrowed_several_times_keeps_every_gate() {
+        let (base, _) = folders("narrowed-thrice");
+        let gate = |dir: &Path| ScriptGate {
+            read: ScriptScope::of_folder(dir),
+            write: ScriptScope::default(),
+            documents: vec![],
+            linked: LinkedFiles::default(),
+            also: None,
+        };
+        let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
+        let narrow = |saved: ScopeHandle, g: ScriptGate| with_script_gate(g, || saved.within_current());
+        let reads = |h: &ScopeHandle| h.clone().run(|| (check_read(&inside).is_ok(), check_read(&other).is_ok()));
+        let first = narrow(ScopeHandle(None, None, false), gate(&base));
+        assert_eq!(reads(&first), (true, true));
+        let second = narrow(first, gate(&base.join("in")));
+        assert_eq!(reads(&second), (true, false), "the second gate refuses the outside file");
+        let third = narrow(second, gate(&base));
+        assert_eq!(reads(&third), (true, false), "the second gate is kept after a third narrowing");
+        let fourth = narrow(third, gate(&base));
+        assert_eq!(reads(&fourth), (true, false), "and after a fourth");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A file an open document linked to when the run began is readable through the gate; its path
+    /// written with `..`, writing it, a file next to it and a file that was not there when the gate
+    /// was made are not allowed, and the automation roots still apply.
+    #[test]
+    fn a_gate_reads_only_the_linked_files_it_was_given() {
+        let (base, roots) = folders("linked");
+        let (secret, other) = (base.join("outside/secret.svg"), base.join("outside/other.svg"));
+        std::fs::write(&other, "<svg/>").unwrap();
+        let later = base.join("outside/later.svg");
+        let linked = ScriptGate::real_files([s(secret.clone()), s(later.clone()), s(base.join("outside"))]);
+        assert_eq!(linked.files.len(), 1, "a missing file and a folder are left out: {linked:?}");
+        let gate =
+            ScriptGate { read: ScriptScope::of_folder(&base.join("in")), write: ScriptScope::default(), documents: vec![], linked, also: None };
+        std::fs::write(&later, "<svg/>").unwrap();
+        let (read, write) =
+            (|p: &Path| gate.check(&s(p.to_path_buf()), Access::Read).is_ok(), |p: &Path| gate.check(&s(p.to_path_buf()), Access::Write).is_ok());
+        assert!(read(&secret));
+        assert!(!read(&base.join("outside/../outside/secret.svg")), "a path with `..` is refused by its name");
+        assert!(!write(&secret), "linked files are not written");
+        assert!(!read(&other), "a file next to a linked one");
+        assert!(!read(&later), "a file made after the gate");
+        assert!(!read(&base.join("outside")), "the linked file's folder");
+        let g = gate.clone();
+        assert!(confine(Some(&roots), || with_script_gate(g, || check_read(&s(secret.clone())).is_err())), "the roots apply first");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A linked file in a folder the script's scope keeps out, such as the settings folder, is not
+    /// read through the gate; one in a place left open there is.
+    #[test]
+    fn a_gate_reads_no_linked_file_in_a_folder_kept_out() {
+        let (base, _) = folders("linked-fenced");
+        let (kept, open) = (base.join("outside/kept.svg"), base.join("outside/open/a.svg"));
+        std::fs::create_dir_all(base.join("outside/open")).unwrap();
+        std::fs::write(&kept, "<svg/>").unwrap();
+        std::fs::write(&open, "<svg/>").unwrap();
+        let real = |p: &Path| resolve(&s(p.to_path_buf())).unwrap();
+        let mut read = ScriptScope::of_folder(&base.join("in"));
+        read.fence(real(&base.join("outside")), &[real(&base.join("outside/open"))]);
+        let gate = ScriptGate {
+            read,
+            write: ScriptScope::default(),
+            documents: vec![],
+            linked: ScriptGate::real_files([s(kept.clone()), s(open.clone())]),
+            also: None,
+        };
+        assert!(gate.check(&s(kept), Access::Read).is_err(), "in the folder kept out");
+        assert!(gate.check(&s(open), Access::Read).is_ok(), "in a place left open");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A path read through the linked files gives no access to the file it leads to after it is
+    /// pointed elsewhere by a link in one of its folders.
+    #[test]
+    fn a_path_read_through_a_linked_file_gives_nothing_once_it_leads_elsewhere() {
+        let (base, _) = folders("linked-redirected");
+        #[cfg(unix)]
+        let made = |target: &Path, link: &Path| std::os::unix::fs::symlink(target, link).is_ok();
+        #[cfg(windows)]
+        let made = |target: &Path, link: &Path| std::os::windows::fs::symlink_dir(target, link).is_ok();
+        #[cfg(not(any(unix, windows)))]
+        let made = |_: &Path, _: &Path| false;
+        let (first, second, via) = (base.join("outside/first"), base.join("outside/second"), base.join("outside/via"));
+        for dir in [&first, &second] {
+            std::fs::create_dir_all(dir).unwrap();
+            std::fs::write(dir.join("a.svg"), "<svg/>").unwrap();
+        }
+        // Windows needs Developer Mode or elevation to make links: nothing to test without them.
+        if !made(&first, &via) {
+            eprintln!("skipped: symbolic links can't be made here");
+            let _ = std::fs::remove_dir_all(base);
+            return;
+        }
+        let (doc, elsewhere) = (s(via.join("a.svg")), s(second.join("a.svg")));
+        let gate = ScriptGate {
+            read: ScriptScope::default(),
+            write: ScriptScope::default(),
+            documents: vec![],
+            linked: ScriptGate::real_files([doc.clone()]),
+            also: None,
+        };
+        assert!(gate.check(&doc, Access::Read).is_ok(), "read through the linked file");
+        std::fs::remove_dir(&via).or_else(|_| std::fs::remove_file(&via)).unwrap();
+        assert!(made(&second, &via));
+        for (path, access) in [(&doc, Access::Read), (&doc, Access::Write), (&elsewhere, Access::Read), (&elsewhere, Access::Write)] {
+            assert!(gate.check(path, access).is_err(), "{path} {access:?}");
+        }
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A link to a linked file read through the gate counts only while it leads to that file.
+    #[cfg(unix)]
+    #[test]
+    fn a_gate_refuses_a_link_that_now_leads_elsewhere() {
+        let (base, _) = folders("linked-moved");
+        let (secret, other, link) = (base.join("outside/secret.svg"), base.join("outside/other.svg"), base.join("outside/link.svg"));
+        std::fs::write(&other, "<svg/>").unwrap();
+        std::os::unix::fs::symlink(&secret, &link).unwrap();
+        let linked = ScriptGate::real_files([s(link.clone())]);
+        let gate = ScriptGate { read: ScriptScope::default(), write: ScriptScope::default(), documents: vec![], linked, also: None };
+        assert!(gate.check(&s(link.clone()), Access::Read).is_ok() && gate.check(&s(secret.clone()), Access::Read).is_ok());
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&other, &link).unwrap();
+        assert!(gate.check(&s(link.clone()), Access::Read).is_err(), "the link leads to another file now");
+        assert!(gate.check(&s(other), Access::Read).is_err());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn network_paths_are_told_by_name() {
+        for p in [r"\\server\share\x.svg", "//server/share/x.svg", r"\\?\UNC\server\share\x.svg", r"\\?\unc\server\share"] {
+            assert!(network_path(p), "{p}");
+        }
+        for p in [r"C:\art\x.svg", r"\\?\C:\art\x.svg", r"\\.\C:\x", "/home/me/x.svg", "x.svg"] {
+            assert!(!network_path(p), "{p}");
+        }
     }
 
     #[test]
@@ -340,18 +1215,20 @@ mod tests {
     #[test]
     fn a_missing_root_is_an_error_and_none_is_no_confinement() {
         let (base, _) = folders("missing");
-        let e = AutomationRoots::new(Some(&base.join("nope")), None).unwrap_err();
+        let e = AutomationRoots::new(&[&base.join("nope")], &[]).unwrap_err();
         assert!(e.starts_with("cannot open the automation read root"), "{e}");
-        let e = AutomationRoots::new(None, Some(&base.join("in/a.svg"))).unwrap_err();
+        let e = AutomationRoots::new(&[], &[&base.join("in/a.svg")]).unwrap_err();
         assert!(
             e.starts_with("cannot open the automation write root")
                 && e.ends_with(&std::io::Error::from(std::io::ErrorKind::NotADirectory).to_string()),
             "{e}"
         );
-        assert!(AutomationRoots::new(Some(Path::new("")), None).unwrap_err().starts_with("cannot open the automation read root ``"));
-        assert!(AutomationRoots::new(None, None).unwrap().is_none());
+        assert!(AutomationRoots::new(&[Path::new("")], &[]).unwrap_err().starts_with("cannot open the automation read root ``"));
+        assert!(AutomationRoots::new(&[], &[]).unwrap().is_none());
+        // A missing folder among several is an error too.
+        assert!(AutomationRoots::new(&[&base.join("in"), &base.join("nope")], &[]).unwrap_err().starts_with("cannot open the automation read root"));
         // One root alone grants only its own access.
-        let read_only = AutomationRoots::new(Some(&base.join("in")), None).unwrap().unwrap();
+        let read_only = AutomationRoots::new(&[&base.join("in")], &[]).unwrap().unwrap();
         let e = read_only.check(&s(base.join("in/x.svg")), Access::Write).unwrap_err();
         assert!(e.contains("write authority is absent"), "{e}");
         let _ = std::fs::remove_dir_all(base);
@@ -388,8 +1265,52 @@ mod tests {
         assert_eq!(roots.check(&s(base.join("in/alias/x.svg")), Access::Read), Ok(()));
         // A root given through a link is the folder it leads to.
         assert!(made(&base.join("in"), &base.join("in-link")));
-        let linked = AutomationRoots::new(Some(&base.join("in-link")), None).unwrap().unwrap();
+        let linked = AutomationRoots::new(&[&base.join("in-link")], &[]).unwrap().unwrap();
         assert_eq!(linked.check(&s(base.join("in/a.svg")), Access::Read), Ok(()));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// #3546: several roots of a kind: a path inside any of them passes, one inside none is
+    /// refused naming them all, and read and write stay separate.
+    #[test]
+    fn several_roots_of_a_kind_each_grant_their_access() {
+        let (base, _) = folders("several");
+        std::fs::create_dir_all(base.join("out2")).unwrap();
+        std::fs::write(base.join("in2/b.svg"), "<svg/>").unwrap();
+        let roots = AutomationRoots::new(&[&base.join("in"), &base.join("in2")], &[&base.join("out"), &base.join("out2")]).unwrap().unwrap();
+        assert_eq!(roots.check(&s(base.join("in/a.svg")), Access::Read), Ok(()));
+        assert_eq!(roots.check(&s(base.join("in2/b.svg")), Access::Read), Ok(()));
+        let e = roots.check(&s(base.join("outside/secret.svg")), Access::Read).unwrap_err();
+        assert!(e.starts_with("automation path rejected: outside the read roots ") && e.contains(", "), "{e}");
+        assert_eq!(roots.check(&s(base.join("out/x.png")), Access::Write), Ok(()));
+        assert_eq!(roots.check(&s(base.join("out2/new/x.png")), Access::Write), Ok(()));
+        assert!(roots.check(&s(base.join("outside/x.png")), Access::Write).unwrap_err().contains("outside the write roots"));
+        // Read and write access stay separate with several roots.
+        assert!(roots.check(&s(base.join("in2/b.svg")), Access::Write).is_err());
+        assert!(roots.check(&s(base.join("out2/x.png")), Access::Read).is_err());
+        // `..` out of one root into another root's sibling is still outside.
+        let sep = std::path::MAIN_SEPARATOR;
+        let up = format!("{}{sep}..{sep}outside{sep}secret.svg", s(base.join("in2")));
+        assert!(roots.check(&up, Access::Read).is_err());
+        // A folder given twice (here once through `..`) counts once.
+        let twice = AutomationRoots::new(&[&base.join("in"), &base.join("in/sub/..")], &[]).unwrap().unwrap();
+        assert!(!twice.describe().contains(", "), "{}", twice.describe());
+        assert!(twice.describe().ends_with("; write none"), "{}", twice.describe());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A link inside one root that leads into another root of the same kind stays inside; one that
+    /// leads out of all of them is outside.
+    #[cfg(unix)]
+    #[test]
+    fn links_between_several_roots() {
+        let (base, _) = folders("several-links");
+        std::fs::write(base.join("in2/b.svg"), "<svg/>").unwrap();
+        std::os::unix::fs::symlink(base.join("in2/b.svg"), base.join("in/to-in2.svg")).unwrap();
+        std::os::unix::fs::symlink(base.join("outside/secret.svg"), base.join("in2/leak.svg")).unwrap();
+        let roots = AutomationRoots::new(&[&base.join("in"), &base.join("in2")], &[]).unwrap().unwrap();
+        assert_eq!(roots.check(&s(base.join("in/to-in2.svg")), Access::Read), Ok(()));
+        assert!(roots.check(&s(base.join("in2/leak.svg")), Access::Read).unwrap_err().contains("outside the read roots"));
         let _ = std::fs::remove_dir_all(base);
     }
 
@@ -403,6 +1324,8 @@ mod tests {
         let e = roots.check(&s(base.join("out/NUL")), Access::Write).unwrap_err();
         assert!(e.contains("reserved device names"), "{e}");
         assert!(roots.check(&s(base.join("out/com1.txt")), Access::Write).is_err());
+        let e = roots.check(&s(base.join("out/COM¹.txt")), Access::Write).unwrap_err();
+        assert!(e.contains("reserved device names"), "{e}");
         assert_eq!(roots.check(&s(base.join("out/console.txt")), Access::Write), Ok(()));
         let _ = std::fs::remove_dir_all(base);
     }
@@ -429,13 +1352,56 @@ mod tests {
         let _ = std::fs::remove_dir_all(base);
     }
 
+    /// Work captured with [`ScopeHandle::capture_now`] before the process is confined stays
+    /// unconfined when it runs after; work captured with [`ScopeHandle::capture`] is confined then.
+    #[test]
+    fn a_scope_captured_now_stays_unconfined_after_the_process_is_confined() {
+        if !crate::tests::in_own_process("file_access::tests::a_scope_captured_now_stays_unconfined_after_the_process_is_confined") {
+            return;
+        }
+        let (base, roots) = folders("captured-process");
+        let outside = s(base.join("outside/secret.svg"));
+        let (now, plain) = std::thread::spawn(|| (ScopeHandle::capture_now(), ScopeHandle::capture())).join().unwrap();
+        assert!(confine_process(roots));
+        assert_eq!(now.run(|| check_read(&outside)), Ok(()), "captured now, before the process was confined");
+        assert!(plain.run(|| check_read(&outside)).is_err(), "captured plainly, run after the process was confined");
+        let later = std::thread::spawn(ScopeHandle::capture_now).join().unwrap();
+        assert!(later.run(|| check_read(&outside)).is_err(), "captured now, after the process was confined");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
     #[test]
     fn device_names() {
-        for d in ["CON", "nul", "Com1", "LPT9.txt", "aux.svg", "NUL "] {
+        for d in ["CON", "nul", "Com1", "LPT9.txt", "aux.svg", "NUL ", "COM¹", "Lpt²", "lpt³.txt"] {
             assert!(is_device_name(d), "{d}");
         }
-        for f in ["console", "com10", "COM0", "lpt", "a.svg", "nul-x"] {
+        for f in ["console", "com10", "COM0", "lpt", "a.svg", "nul-x", "COM⁴", "com¹0", "lpt¹x"] {
             assert!(!is_device_name(f), "{f}");
         }
+    }
+
+    /// #3604: on Windows `x.svg:evil` writes a hidden NTFS alternate data stream of `x.svg`, which
+    /// stays inside the root yet shows in no folder listing, so a `:` in any component after the
+    /// drive is refused (a drive letter's own colon is not a component).
+    #[test]
+    fn alternate_data_streams_are_refused() {
+        for p in ["x.svg:evil", "out/x.svg:evil", "out/x.svg:evil:$DATA", "out/sub:evil/x.svg", "out/x.svg::$DATA", "out/:evil"] {
+            assert_eq!(windows_name_refusal(p), Some("alternate data streams are not allowed"), "{p}");
+        }
+        for p in ["x.svg", "out/x.svg", "out/a b.svg", "out/x.svg.evil", "out/NUL"] {
+            assert_ne!(windows_name_refusal(p), Some("alternate data streams are not allowed"), "{p}");
+        }
+        assert_eq!(windows_name_refusal("out/NUL"), Some("reserved device names are not allowed"));
+        assert_eq!(windows_name_refusal("out/x.svg"), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_refuses_a_stream_inside_a_write_root() {
+        let (base, roots) = folders("streams");
+        let e = roots.check(&s(base.join("out").join("x.svg:evil")), Access::Write).unwrap_err();
+        assert!(e.contains("alternate data streams"), "{e}");
+        assert_eq!(roots.check(&s(base.join("out/x.svg")), Access::Write), Ok(()));
+        let _ = std::fs::remove_dir_all(base);
     }
 }

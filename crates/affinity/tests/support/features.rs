@@ -35,7 +35,12 @@ pub fn signature(doc: &Document) -> String {
                     }
                     "texts"
                 }
+                Kind::Table(t) => {
+                    *counts.entry("table_cells").or_default() += t.cells.len();
+                    "tables"
+                }
                 Kind::Image(_) => "images",
+                Kind::MasterInstance { .. } => "master_instances",
                 Kind::Unsupported => "unsupported",
             };
             *counts.entry(key).or_default() += 1;

@@ -48,7 +48,7 @@ fn step(d: u8) -> (i32, i32) {
 }
 
 /// 4-connected component labels (`u32::MAX` outside) and per-component pixel counts.
-fn label(mask: &[bool], w: usize, h: usize) -> (Vec<u32>, Vec<usize>) {
+pub(crate) fn label(mask: &[bool], w: usize, h: usize) -> (Vec<u32>, Vec<usize>) {
     let mut comp = vec![u32::MAX; w * h];
     let mut sizes = Vec::new();
     // (Indices as `u32`: a mask has at most 64 million pixels, and this stack can hold them all.)

@@ -95,6 +95,83 @@ fn raster_effects_are_written_as_images() {
     assert!(kinds.contains(&114), "the shadow is an image with transparency");
 }
 
+/// An export refused for an empty or non-finite artboard among the chosen ones, or for no
+/// artboard, gives the same error as before and turns no raster effect into an image; an export
+/// that goes ahead does so once, and writes what `document.export` writes.
+#[test]
+fn a_refused_export_turns_no_raster_effects_into_images() {
+    use vectorcraft_geom::Rect;
+    use vectorcraft_metafile::Kind;
+    let mut s = two_boards();
+    let id = s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 30, "height": 30})).unwrap()["id"].clone();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id]})).unwrap();
+    let doc = s.doc().unwrap().doc.as_ref().clone();
+    let run = |doc: &vectorcraft_doc::Document, p: Value, kind: Kind| {
+        let mut calls = 0;
+        let r = super::metafile::encode_flattening(doc, &p, Some(true), kind, |d| {
+            calls += 1;
+            crate::flatten_raster_effects(d)
+        });
+        (r.map(|e| e.files).map_err(|e| e.to_string()), calls)
+    };
+    for kind in [Kind::Emf, Kind::Wmf] {
+        let (files, calls) = run(&doc, json!({}), kind);
+        assert_eq!(calls, 1, "{kind:?}");
+        let files = files.unwrap();
+        assert_eq!(files.len(), 2, "{kind:?}");
+        let r = s.execute("document.export", &json!({"format": kind.id(), "useArtboards": true})).unwrap();
+        let written: Vec<Vec<u8>> = r["files"].as_array().unwrap().iter().map(b64).collect();
+        assert_eq!(files.into_iter().map(|(_, b)| b).collect::<Vec<_>>(), written, "{kind:?}");
+        // The first artboard is fine; the second is empty, or has a corner that isn't finite.
+        let x = doc.artboards[0].rect.x1 + 10.0;
+        for empty in [Rect::new(x, 0.0, x, 100.0), Rect::new(0.0, 0.0, f64::NAN, 100.0), Rect::new(0.0, 0.0, 100.0, f64::INFINITY)] {
+            let mut bad_doc = doc.clone();
+            bad_doc.artboards[1].rect = empty;
+            for p in [json!({}), json!({"artboards": [0, 1]}), json!({"artboards": [1]})] {
+                let (files, calls) = run(&bad_doc, p.clone(), kind);
+                let e = files.err().unwrap_or_default();
+                assert!(e.contains("the export region is empty"), "{kind:?} {p}: {e}");
+                assert_eq!(calls, 0, "{kind:?} {p}");
+            }
+        }
+        // Reversed corners are an artboard like any other.
+        let mut flipped = doc.clone();
+        let r1 = flipped.artboards[1].rect;
+        flipped.artboards[1].rect = Rect::new(r1.x1, r1.y1, r1.x0, r1.y0);
+        let (files, calls) = run(&flipped, json!({}), kind);
+        assert_eq!((files.map(|f| f.len()), calls), (Ok(2), 1), "{kind:?}");
+        // No artboard to write.
+        let mut none = doc.clone();
+        none.artboards.clear();
+        let (files, calls) = run(&none, json!({}), kind);
+        let e = files.err().unwrap_or_default();
+        assert!(e.contains("the document has no artboard"), "{kind:?}: {e}");
+        assert_eq!(calls, 0, "{kind:?}");
+    }
+    // Through the command, the refusal reads as it did.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).artboards[1].rect = Rect::new(0.0, 0.0, 0.0, 100.0);
+    let e = s.execute("document.export", &json!({"format": "emf", "useArtboards": true})).unwrap_err().to_string();
+    assert!(e.contains("the export region is empty"), "{e}");
+}
+
+/// Two placed images whose pixel data can't be decoded are left out of an EMF or WMF, and
+/// `warnings` holds the note raster exports give, once, without naming either image's key.
+#[test]
+fn images_that_cant_be_decoded_give_the_raster_note_once() {
+    const NOTE: &str = "an image couldn't be decoded and is missing from the picture";
+    let mut s = session(200.0, 100.0, 1);
+    crate::tests_menucmds::place_undecodable_png(&mut s);
+    crate::tests_menucmds::place_undecodable_png_sized(&mut s, 32, 16);
+    let keys: Vec<String> = s.doc().unwrap().doc.images.keys().cloned().collect();
+    assert_eq!(keys.len(), 2);
+    for format in ["emf", "wmf"] {
+        let r = s.execute("document.export", &json!({"format": format})).unwrap();
+        let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert_eq!(w.iter().filter(|w| **w == NOTE).count(), 1, "{format}: {w:?}");
+        assert!(!w.iter().any(|w| keys.iter().any(|k| w.contains(k.as_str()))), "{format}: {w:?}");
+    }
+}
+
 #[test]
 fn metafiles_open_and_place() {
     let mut s = two_boards();
@@ -122,7 +199,7 @@ fn metafiles_open_and_place() {
     let placed = st.doc.layers[0].children().unwrap().last().unwrap().clone();
     assert_eq!(placed.name.as_deref(), Some("pic.emf"));
     assert!(matches!(placed.kind, NodeKind::Group { clip: true, .. }));
-    let ext = fileio::PLACE_EXTS;
+    let ext = crate::cmd::fileio::PLACE_EXTS;
     assert!(ext.contains(&"emf") && ext.contains(&"wmf") && OPEN_EXTS.contains(&"emf") && OPEN_EXTS.contains(&"wmf"));
 }
 

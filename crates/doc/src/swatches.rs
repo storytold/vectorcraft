@@ -5,8 +5,10 @@
 //! tint (`Paint::Solid.swatch` / `.tint`, `GradientStop.swatch` / `.tint`); a tint swatch is a
 //! swatch whose own paint links to its base that way. [`Document::map_solid_paints`] rewrites
 //! those links (and colours) wherever art and swatches hold them, copying only the nodes that
-//! change.
+//! change; [`Document::map_paints`] replaces whole paints of any kind in the same places.
 
+use std::collections::{HashMap, HashSet};
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use vectorcraft_color::swatch::REGISTRATION;
@@ -85,6 +87,12 @@ impl Document {
     fn numbered_swatch_name(&self, base: &str, from: usize) -> String {
         (from..).map(|i| format!("{base} {i}")).find(|n| !self.swatch_name_taken(n)).unwrap_or_else(|| base.to_string())
     }
+    /// Names for several new swatches: [`FreeSwatchNames::take`] gives what
+    /// [`Document::free_swatch_name`] gives once the swatches named before it are added.
+    pub fn free_swatch_names(&self) -> FreeSwatchNames {
+        let taken = self.swatches_iter().map(|s| s.name.clone()).chain(self.swatch_groups.iter().map(|g| g.name.clone()));
+        FreeSwatchNames { taken: taken.chain([REGISTRATION.to_string()]).collect(), next: HashMap::new() }
+    }
     /// The name a new swatch of `paint` gets by default, unused in the document: a colour's values
     /// ([`color_name`], made free like [`Document::free_swatch_name`]), or "New Gradient Swatch 1",
     /// "New Pattern Swatch 1"…
@@ -108,20 +116,16 @@ impl Document {
         Some(list.remove(i))
     }
 
-    /// Visit every colour that can link to a swatch — solid paints and gradient stops of fills,
-    /// strokes and text runs — in the art (opacity masks included), symbol definitions, pattern
-    /// tiles, graphic styles and the swatches themselves (tint swatches, gradient swatches' stops).
+    /// Visit every color that can link to a swatch (solid paints and gradient stops of fills,
+    /// strokes and text runs) in the art (opacity masks included), symbol definitions, graph
+    /// designs, pattern tiles and the tile that pattern editing's Cancel puts back, graphic styles,
+    /// character styles' fill and stroke and the swatches themselves (tint swatches, gradient
+    /// swatches' stops).
     /// `f(colour, link, tint)` may change them and returns true when it did
     /// ([`Paint::map_links`]). Only nodes holding a changed paint (and the paths to them) are
     /// copied. Returns the number of changed paints.
     pub fn map_solid_paints(&mut self, f: &mut LinkFn) -> usize {
-        let mut n = map_trees(&mut self.layers, f);
-        for s in &mut self.symbols {
-            n += map_tree(&mut s.art, f);
-        }
-        for p in &mut self.patterns {
-            n += map_trees(&mut p.art, f);
-        }
+        let mut n = self.map_art_paints(&mut relink(f));
         for gs in &mut self.graphic_styles {
             for it in &mut gs.appearance.items {
                 n += usize::from(item_paint_mut(it).map_links(f));
@@ -130,18 +134,67 @@ impl Document {
         for w in self.swatches_iter_mut() {
             n += usize::from(w.paint.map_links(f));
         }
+        let mut g = relink(f);
+        for def in &mut self.char_styles {
+            for key in ["fill", "stroke"] {
+                n += usize::from(map_style_paint(&mut def.attrs, key, &mut g));
+            }
+        }
+        n
+    }
+
+    /// Visit every paint in the places [`Document::map_solid_paints`] visits (fills, strokes, text
+    /// runs, image colorize paints, dynamic symbol instances' own paints and graphs' stored series and
+    /// label paints in the art, opacity masks included, symbol definitions, graph designs, pattern tiles and the tile that pattern
+    /// editing's Cancel puts back; graphic styles; the swatches; character styles' fill and
+    /// stroke), whatever its kind. `f(paint)` gives the paint to put in its place, or `None` to keep
+    /// it. Only nodes holding a changed paint (and the paths to them) are copied. Returns the number
+    /// of changed paints.
+    pub fn map_paints(&mut self, f: &mut PaintFn) -> usize {
+        let mut n = self.map_art_paints(f);
+        for gs in &mut self.graphic_styles {
+            for it in &mut gs.appearance.items {
+                n += usize::from(replace_paint(item_paint_mut(it), f));
+            }
+        }
+        for w in self.swatches_iter_mut() {
+            n += usize::from(replace_paint(&mut w.paint, f));
+        }
+        for def in &mut self.char_styles {
+            for key in ["fill", "stroke"] {
+                n += usize::from(map_style_paint(&mut def.attrs, key, f));
+            }
+        }
+        n
+    }
+
+    /// [`Document::map_paints`] limited to the node trees: the art, symbol definitions, graph
+    /// designs, pattern tiles and the tile that pattern editing's Cancel puts back.
+    fn map_art_paints(&mut self, f: &mut PaintFn) -> usize {
+        let mut n = map_trees(&mut self.layers, f);
+        for s in &mut self.symbols {
+            n += map_tree(&mut s.art, f);
+        }
+        for g in &mut self.graph_designs {
+            n += map_tree(&mut g.art, f);
+        }
+        for p in self.patterns.iter_mut().chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut())) {
+            n += map_trees(&mut p.art, f);
+        }
         n
     }
 
     /// [`Document::map_solid_paints`] limited to the art in the subtrees of `ids` (each paint
     /// visited once even when an id is inside another).
     pub fn map_solid_paints_in(&mut self, ids: &[NodeId], f: &mut LinkFn) -> usize {
+        let listed: HashSet<NodeId> = ids.iter().copied().collect();
         let roots: Vec<NodeId> =
-            ids.iter().copied().filter(|id| !self.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| ids.contains(p)))).collect();
+            ids.iter().copied().filter(|id| !self.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| listed.contains(p)))).collect();
         let mut n = 0;
+        let mut g = relink(f);
         for id in roots {
             let Some(node) = self.node(id) else { continue };
-            if let Some((new, count)) = map_node(node, f)
+            if let Some((new, count)) = map_node(node, &mut g)
                 && let Some(slot) = self.node_mut(id)
             {
                 *slot = new;
@@ -155,11 +208,13 @@ impl Document {
 impl Document {
     /// Visit every paint held by the art (opacity masks included), symbol definitions, pattern
     /// tiles and graphic styles (fills, strokes and text runs), and the colour of every
-    /// gradient-mesh point as a solid paint.
+    /// gradient-mesh point as a solid paint. A graph's default black legend fill is left out.
     pub fn visit_paints(&self, f: &mut dyn FnMut(&Paint)) {
         let mut tree = |n: &Node| {
             walk_with_masks(n, &mut |m| {
-                node_paints(m).for_each(&mut *f);
+                node_paints(m).chain(override_paints(m)).for_each(&mut *f);
+                let default_legend = default_legend_fill(m);
+                graph_paints(m).enumerate().filter(|(i, _)| Some(*i) != default_legend).for_each(|(_, p)| f(p));
                 if let NodeKind::Mesh(mesh) = &m.kind {
                     mesh.points.iter().for_each(|p| f(&Paint::solid(p.color)));
                 }
@@ -178,9 +233,10 @@ impl Document {
 /// The default name of a solid swatch: its values in its own colour model ("C=10 M=20 Y=30 K=0",
 /// "R=255 G=128 B=0", "Gray K=40", "L=52 a=70 b=-30").
 pub fn color_name(c: Color) -> String {
-    // Clamped first, so a conversion's tiny negative never reads "-0".
-    let pct = |v: f32| (v.clamp(0.0, 1.0) * 100.0).round();
-    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round();
+    // Clamped first, so a conversion's tiny negative never reads "-0". `clamp` keeps a -0.0, so
+    // `+ 0.0` turns it into 0.
+    let pct = |v: f32| (v.clamp(0.0, 1.0) * 100.0).round() + 0.0;
+    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() + 0.0;
     match c {
         Color::Cmyk { c, m, y, k } => format!("C={} M={} Y={} K={}", pct(c), pct(m), pct(y), pct(k)),
         Color::Rgb { r, g, b } => format!("R={} G={} B={}", byte(r), byte(g), byte(b)),
@@ -190,25 +246,135 @@ pub fn color_name(c: Color) -> String {
     }
 }
 
+/// The swatch and color group names of a document ([`Document::free_swatch_names`]) and the names
+/// handed out since, for naming many new swatches without searching the document for each name.
+#[derive(Clone, Debug)]
+pub struct FreeSwatchNames {
+    taken: HashSet<String>,
+    /// For each base and first number already numbered, the number its next numbered name is
+    /// looked for from: names are only ever added, so the numbers below it stay taken.
+    next: HashMap<(String, usize), usize>,
+}
+
+impl FreeSwatchNames {
+    /// `base`, or the first of "base 2", "base 3"… not taken, as [`Document::free_swatch_name`]
+    /// gives it; the name is taken from then on.
+    pub fn take(&mut self, base: &str) -> String {
+        let name = if self.taken.contains(base) { self.numbered(base, 2) } else { base.to_string() };
+        self.taken.insert(name.clone());
+        name
+    }
+    /// The name [`Document::new_swatch_name`] gives a new swatch of `paint`; the name is taken
+    /// from then on.
+    pub fn take_new(&mut self, paint: &Paint) -> String {
+        let base = match paint {
+            Paint::Solid { swatch: Some(n), tint, .. } if *tint < 1.0 => return self.take(&format!("{n} {}%", tint_percent(*tint))),
+            Paint::Solid { color, .. } => return self.take(&color_name(*color)),
+            Paint::Gradient(_) => "New Gradient Swatch",
+            _ => "New Pattern Swatch",
+        };
+        let name = self.numbered(base, 1);
+        self.taken.insert(name.clone());
+        name
+    }
+    /// Count `name` as taken (a swatch or color group added another way).
+    pub fn insert(&mut self, name: &str) {
+        self.taken.insert(name.to_string());
+    }
+    /// The first of "base `from`", "base `from + 1`"… not taken.
+    fn numbered(&mut self, base: &str, from: usize) -> String {
+        let key = (base.to_string(), from);
+        let start = self.next.get(&key).copied().unwrap_or(from);
+        let (i, name) =
+            (start..).map(|i| (i, format!("{base} {i}"))).find(|(_, n)| !self.taken.contains(n)).unwrap_or_else(|| (start, base.to_string()));
+        self.next.insert(key, i + 1);
+        name
+    }
+}
+
 /// What [`Document::map_solid_paints`] applies to each linkable colour: `(colour, link, tint)`,
 /// true when it changed them.
 pub type LinkFn<'a> = dyn FnMut(&mut Color, &mut Option<String>, &mut f32) -> bool + 'a;
 
+/// What [`Document::map_paints`] applies to each paint: the paint to put in its place, or `None`
+/// to keep it.
+pub type PaintFn<'a> = dyn FnMut(&Paint) -> Option<Paint> + 'a;
+
+/// `f` as a [`PaintFn`]: a solid or gradient paint with `f` applied ([`Paint::map_links`]) when
+/// `f` changed it, `None` for every other paint.
+fn relink<'a>(f: &'a mut LinkFn<'_>) -> impl FnMut(&Paint) -> Option<Paint> + 'a {
+    move |p| match p {
+        Paint::Solid { .. } | Paint::Gradient(_) => {
+            let mut q = p.clone();
+            q.map_links(f).then_some(q)
+        }
+        _ => None,
+    }
+}
+
+/// Put `f(p)` in place of `p` when it gives a paint. True when it did.
+fn replace_paint(p: &mut Paint, f: &mut PaintFn) -> bool {
+    match f(p) {
+        Some(q) => {
+            *p = q;
+            true
+        }
+        None => false,
+    }
+}
+
+/// Apply `f` to the paint a character style's attribute `key` holds and store the result in the
+/// attribute. An attribute that is not a paint stays as it is. True when it changed.
+fn map_style_paint(attrs: &mut serde_json::Map<String, serde_json::Value>, key: &str, f: &mut PaintFn) -> bool {
+    let Some(value) = attrs.get_mut(key) else { return false };
+    let Ok(paint) = serde_json::from_value::<Paint>(value.clone()) else { return false };
+    let Some(paint) = f(&paint) else { return false };
+    match serde_json::to_value(&paint) {
+        Ok(changed) => {
+            *value = changed;
+            true
+        }
+        Err(_) => false,
+    }
+}
+
 /// Every colour in the subtree of `n` with the swatch it links to: solid fills, strokes, text runs
-/// and gradient stops (with their link), then mesh points (unlinked), in paint order.
+/// and gradient stops (with their link), a dynamic symbol instance's own paints
+/// ([`override_paints`]), then mesh points (unlinked), in paint order.
 pub fn node_colors(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>)) {
-    n.walk(&mut |m| {
-        for p in node_paints(m) {
+    let _ = try_node_colors::<()>(n, &mut |c, s| {
+        f(c, s);
+        ControlFlow::Continue(())
+    });
+}
+
+/// Whether the subtree of `n` holds any color [`node_colors`] visits. It stops at the first one.
+pub fn node_has_colors(n: &Node) -> bool {
+    try_node_colors(n, &mut |_, _| ControlFlow::Break(())).is_break()
+}
+
+/// [`node_colors`] that ends at the first color for which `f` returns [`ControlFlow::Break`]: no
+/// paint or node after it is visited.
+fn try_node_colors<B>(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>) -> ControlFlow<B>) -> ControlFlow<B> {
+    n.try_walk(&mut |m| {
+        for p in node_paints(m).chain(override_paints(m)) {
             match p {
-                Paint::Solid { color, swatch, .. } => f(color, swatch.as_deref()),
-                Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| f(&s.color, s.swatch.as_deref())),
+                Paint::Solid { color, swatch, .. } => f(color, swatch.as_deref())?,
+                Paint::Gradient(g) => {
+                    for s in &g.gradient.stops {
+                        f(&s.color, s.swatch.as_deref())?;
+                    }
+                }
                 _ => {}
             }
         }
         if let NodeKind::Mesh(mesh) = &m.kind {
-            mesh.points.iter().for_each(|p| f(&p.color, None));
+            for p in &mesh.points {
+                f(&p.color, None)?;
+            }
         }
-    });
+        ControlFlow::Continue(())
+    })
 }
 
 fn item_paint(it: &AppearanceItem) -> &Paint {
@@ -225,13 +391,55 @@ fn item_paint_mut(it: &mut AppearanceItem) -> &mut Paint {
     }
 }
 
-/// The paints a node holds itself (not its children): appearance items, then text runs.
+/// The paints a node holds itself (not its children): appearance items, then text runs, then an
+/// image's colorize paint.
 pub fn node_paints(n: &Node) -> impl Iterator<Item = &Paint> {
     let runs = match &n.kind {
         NodeKind::Text(t) => t.runs.as_slice(),
         _ => &[],
     };
-    n.appearance.items.iter().map(item_paint).chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke]))
+    n.appearance.items.iter().map(item_paint).chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke])).chain(n.extras().colorize.as_deref())
+}
+
+/// The paints a dynamic symbol instance keeps for objects of its art
+/// ([`crate::symbol_overrides`]), which [`node_paints`] leaves out.
+pub fn override_paints(n: &Node) -> impl Iterator<Item = &Paint> {
+    n.extras().symbol_overrides.iter().flat_map(|o| [o.fill.as_ref(), o.stroke.as_ref()]).flatten()
+}
+
+/// The paints a graph keeps for its series, its labels and its lines ([`crate::graph::GraphSpec`]), which
+/// its marks, labels and lines take each time it is drawn again and which [`node_paints`] leaves out.
+pub fn graph_paints(n: &Node) -> impl Iterator<Item = &Paint> {
+    let g = n.extras().graph.as_deref();
+    let series = g.into_iter().flat_map(|g| &g.series_paints).flat_map(|s| [s.fill.as_ref(), s.stroke.as_ref()]).flatten();
+    let labels = g.into_iter().flat_map(|g| [&g.label_styles.values, &g.label_styles.categories, &g.label_styles.legend]).flatten();
+    let l = g.map(|g| &g.label_styles);
+    let rows = l.into_iter().flat_map(|l| [&l.values_rows, &l.categories_rows, &l.legend_rows, &l.axis_rows, &l.ring_rows]).flatten();
+    series.chain(labels.flat_map(|st| [&st.fill, &st.stroke])).chain(rows.flat_map(|r| [r.paint.fill.as_ref(), r.paint.stroke.as_ref()]).flatten())
+}
+
+/// Mutable [`graph_paints`] of graph `g`, in the same order.
+fn graph_paints_mut(g: &mut crate::graph::GraphSpec) -> impl Iterator<Item = &mut Paint> {
+    let series = g.series_paints.iter_mut().flat_map(|s| [s.fill.as_mut(), s.stroke.as_mut()]).flatten();
+    let l = &mut g.label_styles;
+    let labels = [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten();
+    let rows = [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows, &mut l.axis_rows, &mut l.ring_rows].into_iter().flatten();
+    series
+        .chain(labels.flat_map(|st| [&mut st.fill, &mut st.stroke]))
+        .chain(rows.flat_map(|r| [r.paint.fill.as_mut(), r.paint.stroke.as_mut()]).flatten())
+}
+
+/// The place in [`graph_paints`] of the legend fill graph `n` keeps when it is the default black of a graph that picks
+/// its legend labels' fill ([`crate::graph::GraphSpec::picks_legend_fill`]). Other graphs draw the kept fill as it is,
+/// so it is visited and mapped.
+fn default_legend_fill(n: &Node) -> Option<usize> {
+    let g = n.extras().graph.as_deref()?;
+    let l = &g.label_styles;
+    if l.legend.is_none() || !g.picks_legend_fill() {
+        return None;
+    }
+    let series: usize = g.series_paints.iter().map(|s| usize::from(s.fill.is_some()) + usize::from(s.stroke.is_some())).sum();
+    Some(series + 2 * (usize::from(l.values.is_some()) + usize::from(l.categories.is_some())))
 }
 
 /// Mutable [`node_paints`], in the same order.
@@ -240,23 +448,15 @@ pub fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
         NodeKind::Text(t) => t.runs.as_mut_slice(),
         _ => &mut [],
     };
-    n.appearance.items.iter_mut().map(item_paint_mut).chain(runs.iter_mut().flat_map(|r| [&mut r.style.fill, &mut r.style.stroke]))
+    let colorize = n.extras.0.as_deref_mut().and_then(|e| e.colorize.as_deref_mut());
+    n.appearance.items.iter_mut().map(item_paint_mut).chain(runs.iter_mut().flat_map(|r| [&mut r.style.fill, &mut r.style.stroke])).chain(colorize)
 }
 
-/// `n` with `f` applied to its subtree's linkable colours, or `None` when nothing changed (then
-/// nothing was copied). Also returns the number of changed paints.
-fn map_node(n: &Node, f: &mut LinkFn) -> Option<(Node, usize)> {
-    // Try each own solid or gradient paint on a scratch copy first, so unchanged nodes are never
-    // cloned.
-    let mut changes: Vec<(usize, Paint)> = vec![];
-    for (i, p) in node_paints(n).enumerate() {
-        if matches!(p, Paint::Solid { .. } | Paint::Gradient(_)) {
-            let mut q = p.clone();
-            if q.map_links(f) {
-                changes.push((i, q));
-            }
-        }
-    }
+/// `n` with `f` applied to its subtree's paints, or `None` when nothing changed (then nothing was
+/// copied). Also returns the number of changed paints.
+fn map_node(n: &Node, f: &mut PaintFn) -> Option<(Node, usize)> {
+    // `f` gives each own paint's replacement first, so unchanged nodes are never cloned.
+    let changes: Vec<(usize, Paint)> = node_paints(n).enumerate().filter_map(|(i, p)| f(p).map(|q| (i, q))).collect();
     let mut count = changes.len();
     let mut out: Option<Node> = None;
     if !changes.is_empty() {
@@ -270,6 +470,39 @@ fn map_node(n: &Node, f: &mut LinkFn) -> Option<(Node, usize)> {
             }
         }
         out = Some(m);
+    }
+    // A dynamic symbol instance's own paints for objects of its art (`symbol_overrides`).
+    if !n.extras().symbol_overrides.is_empty() {
+        let mut overrides = n.extras().symbol_overrides.clone();
+        let mut k = 0;
+        for p in overrides.iter_mut().flat_map(|o| [&mut o.fill, &mut o.stroke]).flatten() {
+            k += usize::from(replace_paint(p, f));
+        }
+        if k > 0 {
+            out.get_or_insert_with(|| n.clone()).extras_mut().symbol_overrides = overrides;
+            count += k;
+        }
+    }
+    // A graph's series and label paints, which its marks and labels take when it is drawn again.
+    // The default black legend fill, which is not the legend labels' own, stays black.
+    let default_legend = default_legend_fill(n);
+    let graph: Vec<(usize, Paint)> =
+        graph_paints(n).enumerate().filter(|(i, _)| Some(*i) != default_legend).filter_map(|(i, p)| f(p).map(|q| (i, q))).collect();
+    if !graph.is_empty() {
+        count += graph.len();
+        let m = out.get_or_insert_with(|| n.clone());
+        if let Some(spec) = m.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+            // A legend fill of the labels' own stays theirs when the change makes it black.
+            spec.label_styles.mark_own_legend_fill();
+            let mut graph = graph.into_iter().peekable();
+            for (i, p) in graph_paints_mut(spec).enumerate() {
+                if graph.peek().is_some_and(|c| c.0 == i)
+                    && let Some((_, q)) = graph.next()
+                {
+                    *p = q;
+                }
+            }
+        }
     }
     if let Some(ch) = n.children() {
         for (i, c) in ch.iter().enumerate() {
@@ -307,7 +540,27 @@ pub fn walk_with_masks<'a>(n: &'a Node, f: &mut dyn FnMut(&'a Node)) {
     }
 }
 
-fn map_tree(n: &mut Arc<Node>, f: &mut LinkFn) -> usize {
+/// [`Document::map_solid_paints`] for art a document keeps outside its trees, such as the art of a
+/// brush: `f` applied to the linkable colors of `n` and its subtree (opacity masks included). Only
+/// the nodes holding a changed paint are copied. Returns the number of changed paints.
+pub fn map_node_solid_paints(n: &mut Node, f: &mut LinkFn) -> usize {
+    map_node_paints(n, &mut relink(f))
+}
+
+/// [`Document::map_paints`] for art a document keeps outside its trees, such as the art of a brush:
+/// `f` applied to every paint of `n` and its subtree (opacity masks included). Only the nodes
+/// holding a changed paint are copied. Returns the number of changed paints.
+pub fn map_node_paints(n: &mut Node, f: &mut PaintFn) -> usize {
+    match map_node(n, f) {
+        Some((new, count)) => {
+            *n = new;
+            count
+        }
+        None => 0,
+    }
+}
+
+fn map_tree(n: &mut Arc<Node>, f: &mut PaintFn) -> usize {
     match map_node(n, f) {
         Some((new, count)) => {
             *n = Arc::new(new);
@@ -317,7 +570,7 @@ fn map_tree(n: &mut Arc<Node>, f: &mut LinkFn) -> usize {
     }
 }
 
-fn map_trees(v: &mut [Arc<Node>], f: &mut LinkFn) -> usize {
+fn map_trees(v: &mut [Arc<Node>], f: &mut PaintFn) -> usize {
     v.iter_mut().map(|n| map_tree(n, f)).sum()
 }
 
@@ -378,6 +631,63 @@ mod tests {
     }
 
     #[test]
+    fn default_names_read_negative_zero_as_zero() {
+        assert_eq!(color_name(Color::Rgb { r: -0.0, g: 0.5, b: -0.0 }), "R=0 G=128 B=0");
+        assert_eq!(color_name(Color::Cmyk { c: -0.0, m: 0.2, y: 0.3, k: -0.0 }), "C=0 M=20 Y=30 K=0");
+        assert_eq!(color_name(Color::Gray { k: -0.0 }), "Gray K=0");
+    }
+
+    #[test]
+    fn free_swatch_names_match_naming_each_swatch_as_it_is_added() {
+        let (mut d, _, _) = doc();
+        let mut names = d.free_swatch_names();
+        for base in ["Brand", "Brand", "Mine", "Fresh", "Fresh", "Brand 2", "Brand", REGISTRATION, "Fresh 3", "Fresh", "Mine 2"] {
+            let want = d.free_swatch_name(base);
+            assert_eq!(names.take(base), want, "{base}");
+            d.swatches.push(Swatch { name: want, paint: Paint::solid(Color::BLACK), global: false, spot: false });
+        }
+        let added: Vec<&str> = d.swatches.iter().rev().take(11).rev().map(|w| w.name.as_str()).collect();
+        assert_eq!(
+            added,
+            ["Brand 2", "Brand 3", "Mine 2", "Fresh", "Fresh 2", "Brand 2 2", "Brand 4", "[Registration] 2", "Fresh 3", "Fresh 4", "Mine 2 2"]
+        );
+    }
+
+    #[test]
+    fn free_swatch_names_match_new_swatch_names_as_swatches_are_added() {
+        let (mut d, _, _) = doc();
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        d.swatches.push(Swatch { name: "New Gradient Swatch 2".into(), paint: Paint::solid(red), global: false, spot: false });
+        let mut names = d.free_swatch_names();
+        // A name taken another way (a group made alongside) counts for both.
+        names.insert("R=255 G=0 B=0 3");
+        d.swatch_groups.push(SwatchGroup { name: "R=255 G=0 B=0 3".into(), swatches: vec![] });
+        let tint = Paint::Solid { color: red, swatch: Some("Brand".into()), tint: 0.4 };
+        let gradient = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(Default::default())));
+        let paints = [Paint::solid(red), Paint::solid(red), gradient.clone(), tint.clone(), Paint::solid(red), gradient.clone(), tint, gradient];
+        let mut added = vec![];
+        for paint in paints {
+            let want = d.new_swatch_name(&paint);
+            assert_eq!(names.take_new(&paint), want);
+            d.swatches.push(Swatch { name: want.clone(), paint, global: false, spot: false });
+            added.push(want);
+        }
+        assert_eq!(
+            added,
+            [
+                "R=255 G=0 B=0",
+                "R=255 G=0 B=0 2",
+                "New Gradient Swatch 1",
+                "Brand 40%",
+                "R=255 G=0 B=0 4",
+                "New Gradient Swatch 3",
+                "Brand 40% 2",
+                "New Gradient Swatch 4"
+            ]
+        );
+    }
+
+    #[test]
     fn mapping_copies_only_changed_nodes() {
         let (mut d, a, b) = doc();
         let before = d.clone();
@@ -401,6 +711,125 @@ mod tests {
     }
 
     #[test]
+    fn mapping_reaches_graph_designs_and_the_tile_that_pattern_cancel_puts_back() {
+        let (mut d, a, _) = doc();
+        let art = d.node_arc(a).cloned().unwrap();
+        d.graph_designs.push(crate::GraphDesign { name: "Bar".into(), art: art.clone() });
+        d.pattern_edit =
+            Some(crate::PatternEdit { pattern: "Tile".into(), layer: NodeId(0), original: Some(crate::PatternDef::new("Tile", vec![art])) });
+        let mut loose = d.node(a).unwrap().clone();
+        let blue = Color::rgb(0.0, 0.0, 1.0);
+        let mut to_blue = |c: &mut Color, s: &mut Option<String>, _: &mut f32| s.as_deref() == Some("Brand") && std::mem::replace(c, blue) != blue;
+        assert_eq!(d.map_solid_paints(&mut to_blue), 3, "the layer's rectangle, the design and the Cancel tile");
+        assert_eq!(d.graph_designs[0].art.appearance.fill_paint(), linked(blue, "Brand"));
+        let tile = &d.pattern_edit.as_ref().unwrap().original.as_ref().unwrap().art[0];
+        assert_eq!(tile.appearance.fill_paint(), linked(blue, "Brand"));
+        assert_eq!(map_node_solid_paints(&mut loose, &mut to_blue), 1);
+        assert_eq!(loose.appearance.fill_paint(), linked(blue, "Brand"));
+        assert_eq!(map_node_solid_paints(&mut loose, &mut to_blue), 0, "nothing left to change");
+    }
+
+    #[test]
+    fn mapping_reaches_the_series_and_label_paints_a_graph_keeps() {
+        let (mut d, a, _) = doc();
+        let red = linked(Color::rgb(1.0, 0.0, 0.0), "Brand");
+        let spec = crate::graph::GraphSpec {
+            series_paints: vec![crate::SeriesPaint { fill: Some(red.clone()), stroke: Some(red.clone()), ..Default::default() }],
+            label_styles: crate::graph::LabelStyles {
+                legend: Some(crate::CharStyle { fill: red.clone(), stroke: Paint::None, ..Default::default() }),
+                values_rows: Some(crate::LabelRows {
+                    paint: crate::SeriesPaint { fill: Some(red.clone()), ..Default::default() },
+                    ..Default::default()
+                }),
+                axis_rows: Some(crate::LabelRows {
+                    paint: crate::SeriesPaint { stroke: Some(red.clone()), ..Default::default() },
+                    ..Default::default()
+                }),
+                ring_rows: Some(crate::LabelRows {
+                    paint: crate::SeriesPaint { stroke: Some(red.clone()), ..Default::default() },
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
+        let mut seen = 0;
+        d.visit_paints(&mut |p| seen += usize::from(*p == red));
+        assert_eq!(seen, 7, "the fill and the graph's series fill, series stroke, legend fill, value label fill row and axis and ring stroke rows");
+        let blue = Color::rgb(0.0, 0.0, 1.0);
+        let mut to_blue = |c: &mut Color, s: &mut Option<String>, _: &mut f32| s.as_deref() == Some("Brand") && std::mem::replace(c, blue) != blue;
+        assert_eq!(d.map_solid_paints(&mut to_blue), 7);
+        let g = d.node(a).unwrap().extras().graph.clone().unwrap();
+        assert_eq!(g.series_paints[0].fill, Some(linked(blue, "Brand")));
+        assert_eq!(g.series_paints[0].stroke, Some(linked(blue, "Brand")));
+        let legend = g.label_styles.legend.unwrap();
+        assert_eq!((legend.fill, legend.stroke), (linked(blue, "Brand"), Paint::None));
+        assert_eq!(g.label_styles.values_rows.unwrap().paint.fill, Some(linked(blue, "Brand")));
+        assert_eq!(g.label_styles.axis_rows.unwrap().paint.stroke, Some(linked(blue, "Brand")));
+        assert_eq!(g.label_styles.ring_rows.unwrap().paint.stroke, Some(linked(blue, "Brand")));
+        let mut cleared = |p: &Paint| (*p == linked(blue, "Brand")).then_some(Paint::None);
+        assert_eq!(d.map_paints(&mut cleared), 7, "the fill and the graph's six");
+        assert!(graph_paints(d.node(a).unwrap()).all(Paint::is_none));
+    }
+
+    #[test]
+    fn a_legend_fill_mapped_to_black_stays_the_labels_own() {
+        let (mut d, a, _) = doc();
+        let red = linked(Color::rgb(1.0, 0.0, 0.0), "Brand");
+        let spec = crate::graph::GraphSpec {
+            label_styles: crate::graph::LabelStyles { legend: Some(crate::CharStyle { fill: red, ..Default::default() }), ..Default::default() },
+            ..Default::default()
+        };
+        assert!(spec.label_styles.legend_fill_is_own() && !spec.label_styles.legend_fill_set, "not black, saved without the mark");
+        d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
+        let mut to_black = |c: &mut Color, s: &mut Option<String>, _: &mut f32| {
+            s.as_deref() == Some("Brand") && {
+                *c = Color::BLACK;
+                *s = None;
+                true
+            }
+        };
+        assert_eq!(d.map_solid_paints(&mut to_black), 2, "the rectangle's fill and the legend fill");
+        let styles = d.node(a).unwrap().extras().graph.clone().unwrap().label_styles;
+        assert_eq!(styles.legend.unwrap().fill, Paint::solid(Color::BLACK));
+        assert!(styles.legend_fill_set, "the black fill is still the labels' own");
+    }
+
+    #[test]
+    fn the_default_black_legend_fill_is_left_as_it_is() {
+        use crate::graph::GraphKind;
+        // Only a pie with Legends in Wedges picks its legend labels' fill; the other graphs draw the kept black.
+        for (kind, in_wedges, picks) in [(GraphKind::Pie, true, true), (GraphKind::Pie, false, false), (GraphKind::Column, true, false)] {
+            let (mut d, a, _) = doc();
+            let black = || crate::CharStyle { fill: Paint::solid(Color::BLACK), size: 11.0, ..Default::default() };
+            let spec = crate::graph::GraphSpec {
+                kind,
+                legend: true,
+                pie_legend_in_wedges: in_wedges,
+                series_paints: vec![crate::SeriesPaint { fill: Some(Paint::solid(Color::BLACK)), ..Default::default() }],
+                label_styles: crate::graph::LabelStyles { values: Some(black()), legend: Some(black()), ..Default::default() },
+                ..Default::default()
+            };
+            let blacks = |d: &Document| {
+                let mut seen = 0;
+                d.visit_paints(&mut |p| seen += usize::from(*p == Paint::solid(Color::BLACK)));
+                seen
+            };
+            let before = blacks(&d);
+            d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
+            let want = if picks { 2 } else { 3 };
+            assert_eq!(blacks(&d) - before, want, "{kind:?}, in wedges {in_wedges}: the series, value labels' and legend fills visited");
+            let mut link_black = |c: &mut Color, s: &mut Option<String>, _: &mut f32| *c == Color::BLACK && s.replace("Black".into()).is_none();
+            assert_eq!(d.map_solid_paints_in(&[a], &mut link_black), want, "{kind:?}, in wedges {in_wedges}");
+            let styles = d.node(a).unwrap().extras().graph.clone().unwrap().label_styles;
+            let legend = if picks { Paint::solid(Color::BLACK) } else { linked(Color::BLACK, "Black") };
+            assert_eq!(styles.legend.unwrap().fill, legend, "{kind:?}, in wedges {in_wedges}: linked unless the pie picks the fill");
+            assert_eq!(styles.values.unwrap().fill, linked(Color::BLACK, "Black"));
+        }
+    }
+
+    #[test]
     fn mapping_within_ids_visits_each_paint_once() {
         let (mut d, a, b) = doc();
         let layer = d.layers[0].id;
@@ -414,5 +843,288 @@ mod tests {
         let mut colors = vec![];
         node_colors(d.node(b).unwrap(), &mut |c, s| colors.push((*c, s.map(str::to_string))));
         assert_eq!(colors, [(Color::rgb(1.0, 0.0, 0.0), None)]);
+    }
+
+    /// [`Document::map_solid_paints_in`] with each ancestor searched for in `ids` rather than looked up in a set.
+    fn map_solid_paints_in_by_search(d: &mut Document, ids: &[NodeId], f: &mut LinkFn) -> usize {
+        let roots: Vec<NodeId> =
+            ids.iter().copied().filter(|id| !d.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| ids.contains(p)))).collect();
+        let mut n = 0;
+        let mut g = relink(f);
+        for id in roots {
+            let Some(node) = d.node(id) else { continue };
+            if let Some((new, count)) = map_node(node, &mut g)
+                && let Some(slot) = d.node_mut(id)
+            {
+                *slot = new;
+                n += count;
+            }
+        }
+        n
+    }
+
+    #[test]
+    fn mapping_within_ids_matches_a_search_of_the_ids() {
+        // Two layers: the first holds group `outer` (group `inner` with two rectangles, and a
+        // rectangle) and a rectangle; the second holds a rectangle. Each rectangle has its own color.
+        let mut d = Document::new(100.0, 100.0);
+        let first = d.layers[0].id;
+        let second = d.alloc_id();
+        d.insert(None, usize::MAX, Node::layer(second, "Second", crate::LayerColor::Preset(1))).unwrap();
+        let rect = |d: &mut Document, i: u8| {
+            let id = d.alloc_id();
+            let r = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+            let color = Color::rgb(f32::from(i) / 8.0, 0.0, 0.0);
+            (id, Arc::new(Node::path(id, r, Appearance::basic(Paint::solid(color), Paint::solid(color), 1.0))))
+        };
+        let (r1, n1) = rect(&mut d, 1);
+        let (r2, n2) = rect(&mut d, 2);
+        let (r3, n3) = rect(&mut d, 3);
+        let (r4, n4) = rect(&mut d, 4);
+        let (r5, n5) = rect(&mut d, 5);
+        let (inner, outer) = (d.alloc_id(), d.alloc_id());
+        let outer_node = Node::group(outer, vec![Arc::new(Node::group(inner, vec![n1, n2])), n3]);
+        d.insert(Some(first), usize::MAX, outer_node).unwrap();
+        d.insert(Some(first), usize::MAX, Arc::unwrap_or_clone(n4)).unwrap();
+        d.insert(Some(second), usize::MAX, Arc::unwrap_or_clone(n5)).unwrap();
+        let missing = NodeId(u64::MAX);
+        let all = [first, second, outer, inner, r1, r2, r3, r4, r5, missing];
+        // Every list of up to three of them: nested ids in both orders, duplicates, a missing id and none.
+        let mut lists: Vec<Vec<NodeId>> = vec![vec![]];
+        let mut shorter: Vec<Vec<NodeId>> = vec![vec![]];
+        for _ in 0..3 {
+            shorter = shorter.iter().flat_map(|l| all.map(|id| [l.as_slice(), &[id]].concat())).collect();
+            lists.extend(shorter.iter().cloned());
+        }
+        assert_eq!(lists.len(), 1 + 10 + 100 + 1000);
+        for ids in &lists {
+            // A callback that changes every paint it visits, so a paint visited twice counts twice.
+            let run = |map: &dyn Fn(&mut Document, &[NodeId], &mut LinkFn) -> usize| {
+                let mut d = d.clone();
+                let mut visits = vec![];
+                let n = map(&mut d, ids, &mut |c, s, t| {
+                    visits.push((*c, s.clone(), *t));
+                    *s = Some(format!("{}", visits.len()));
+                    *t *= 0.5;
+                    true
+                });
+                (n, visits, d.layers)
+            };
+            let by_set = run(&|d, ids, f| d.map_solid_paints_in(ids, f));
+            let by_search = run(&|d, ids, f| map_solid_paints_in_by_search(d, ids, f));
+            assert_eq!(by_set, by_search, "{ids:?}");
+        }
+    }
+
+    /// The colors [`node_colors`] visits, in its order, by a [`Node::walk`] that reads the whole subtree.
+    fn full_walk(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>)) {
+        n.walk(&mut |m| {
+            for p in node_paints(m).chain(override_paints(m)) {
+                match p {
+                    Paint::Solid { color, swatch, .. } => f(color, swatch.as_deref()),
+                    Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| f(&s.color, s.swatch.as_deref())),
+                    _ => {}
+                }
+            }
+            if let NodeKind::Mesh(mesh) = &m.kind {
+                mesh.points.iter().for_each(|p| f(&p.color, None));
+            }
+        });
+    }
+
+    /// Whether [`full_walk`] finds a color in `n`.
+    fn full_walk_has_colors(n: &Node) -> bool {
+        let mut found = false;
+        full_walk(n, &mut |_, _| found = true);
+        found
+    }
+
+    /// The colors of `n` by [`full_walk`], in order.
+    fn full_walk_colors(n: &Node) -> Vec<(Color, Option<String>)> {
+        let mut out = vec![];
+        full_walk(n, &mut |c, s| out.push((*c, s.map(str::to_string))));
+        out
+    }
+
+    fn square(id: u64, fill: Paint, stroke: Paint) -> Node {
+        Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, stroke, 1.0))
+    }
+
+    fn holder(id: u64, kind: fn(Vec<Arc<Node>>) -> NodeKind, children: Vec<Node>) -> Node {
+        Node::new(NodeId(id), kind(children.into_iter().map(Arc::new).collect()))
+    }
+
+    /// One node of each kind of paint [`node_colors`] reads or skips, with whether it shows a color.
+    fn color_cases() -> Vec<(&'static str, Node, bool)> {
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let gradient = |stops: usize| {
+            let mut g = vectorcraft_color::Gradient::default();
+            g.stops.truncate(stops);
+            Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(g)))
+        };
+        let pattern = Paint::Pattern { pattern: "Dots".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+        let area = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+        let mesh = crate::GradientMesh::for_path_with(&area, 2, 2, &|_| (Color::BLACK, 1.0)).unwrap();
+        let mut empty_mesh = mesh.clone();
+        empty_mesh.points.clear();
+        let text = |fill: Paint| {
+            let style = crate::CharStyle { fill, stroke: Paint::None, ..Default::default() };
+            let mut n =
+                Node::new(NodeId(20), NodeKind::Text(Box::new(crate::TextObject::point(vectorcraft_geom::Point::new(0.0, 0.0), "Hi", style))));
+            n.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+            n
+        };
+        let image = |colorize: Option<Paint>| {
+            let im = crate::ImageObject {
+                key: "k".into(),
+                width: 2,
+                height: 2,
+                xf: vectorcraft_geom::Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let mut n = Node::new(NodeId(21), NodeKind::Image(Box::new(im)));
+            n.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+            n.extras_mut().colorize = colorize.map(Box::new);
+            n
+        };
+        let overridden = |fill: Option<Paint>| {
+            let mut n = square(22, Paint::None, Paint::None);
+            n.extras_mut().symbol_overrides = vec![crate::SymbolOverride { path: vec![0], fill, ..Default::default() }];
+            n
+        };
+        let masked = {
+            let mut n = square(23, Paint::None, Paint::None);
+            n.extras_mut().mask = Some(Box::new(crate::OpacityMask::new(square(24, red.clone(), Paint::None), true)));
+            n
+        };
+        let group = |children| NodeKind::Group { children, clip: false };
+        let clip = |children| NodeKind::Group { children, clip: true };
+        let compound = |children| NodeKind::Compound { children, rule: Default::default() };
+        let blend = |children| NodeKind::Blend { children, spec: Default::default() };
+        let blank = |id| square(id, Paint::None, Paint::None);
+        vec![
+            ("no paint", blank(1), false),
+            ("solid fill", square(2, red.clone(), Paint::None), true),
+            ("solid stroke", square(3, Paint::None, red.clone()), true),
+            ("pattern only", square(4, pattern.clone(), pattern.clone()), false),
+            ("gradient without stops", square(5, gradient(0), Paint::None), false),
+            ("gradient with stops", square(6, gradient(2), Paint::None), true),
+            ("mesh with points", Node::new(NodeId(7), NodeKind::Mesh(mesh)), true),
+            ("mesh without points", Node::new(NodeId(8), NodeKind::Mesh(empty_mesh)), false),
+            ("text run fill", text(red.clone()), true),
+            ("text without paint", text(Paint::None), false),
+            ("image colorize", image(Some(red.clone())), true),
+            ("image without colorize", image(None), false),
+            ("image with a pattern colorize", image(Some(pattern.clone())), false),
+            ("symbol override fill", overridden(Some(red.clone())), true),
+            ("symbol override without paint", overridden(None), false),
+            ("color only in the opacity mask", masked, false),
+            ("group, color first", holder(30, group, vec![square(31, red.clone(), Paint::None), blank(32), blank(33)]), true),
+            ("group, color last", holder(34, group, vec![blank(35), blank(36), square(37, red.clone(), Paint::None)]), true),
+            ("group without color", holder(38, group, vec![blank(39), blank(40)]), false),
+            ("clip group", holder(41, clip, vec![blank(42), square(43, red.clone(), Paint::None)]), true),
+            ("compound shape", holder(44, compound, vec![blank(45), square(46, gradient(3), Paint::None)]), true),
+            ("blend", holder(47, blend, vec![blank(48), blank(49)]), false),
+            (
+                "nested groups, color deepest",
+                holder(50, group, vec![blank(51), holder(52, group, vec![holder(53, group, vec![blank(54), square(55, red.clone(), Paint::None)])])]),
+                true,
+            ),
+        ]
+    }
+
+    #[test]
+    fn has_colors_matches_the_full_walk() {
+        for (label, n, expected) in color_cases() {
+            let all = full_walk_colors(&n);
+            assert_eq!(node_has_colors(&n), full_walk_has_colors(&n), "{label}");
+            assert_eq!(full_walk_has_colors(&n), !all.is_empty(), "{label}");
+            assert_eq!(node_has_colors(&n), expected, "{label}");
+            let mut listed = vec![];
+            node_colors(&n, &mut |c, s| listed.push((*c, s.map(str::to_string))));
+            assert_eq!(listed, all, "{label}: node_colors lists the same colors in the same order");
+        }
+    }
+
+    #[test]
+    fn has_colors_stops_at_the_first_color() {
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let mut stops = vectorcraft_color::Gradient::default();
+        stops.stops.push(stops.stops[0].clone());
+        let gradient = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(stops)));
+        let mut later = vec![square(2, gradient, red.clone())];
+        later.extend((3..100).map(|id| square(id, red.clone(), red.clone())));
+        let n = holder(1, |children| NodeKind::Group { children, clip: false }, later);
+        let (mut colors, mut nodes) = (0, 0);
+        let flow = try_node_colors(&n, &mut |_, _| {
+            colors += 1;
+            ControlFlow::Break(())
+        });
+        assert!(flow.is_break());
+        assert_eq!(colors, 1, "the first gradient stop ends the walk: no later stop, stroke or object is read");
+        let flow = n.try_walk(&mut |m| {
+            nodes += 1;
+            if node_paints(m).next().is_some() { ControlFlow::Break(()) } else { ControlFlow::Continue(()) }
+        });
+        assert!(flow.is_break());
+        assert_eq!(nodes, 2, "the group, then its first member: none of the 97 after it");
+    }
+
+    /// Times [`node_has_colors`] against the full walk it replaces on one group of 100,000 paths, alternating the two in
+    /// one process: `cargo test --release -p vectorcraft-doc --lib -- --ignored --nocapture has_colors_timing`.
+    #[test]
+    #[ignore = "a timing, not a check"]
+    fn has_colors_timing() {
+        /// This thread's CPU time in nanoseconds on Linux; the elapsed time since `start` elsewhere.
+        fn clock(start: std::time::Instant) -> u128 {
+            let cpu = std::fs::read_to_string("/proc/thread-self/schedstat").ok();
+            cpu.and_then(|s| s.split_whitespace().next()?.parse().ok()).unwrap_or_else(|| start.elapsed().as_nanos())
+        }
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let count = 100_000u64;
+        let group = |colored: &dyn Fn(u64) -> bool| {
+            let children =
+                (0..count).map(|i| if colored(i) { square(i + 1, red.clone(), Paint::None) } else { square(i + 1, Paint::None, Paint::None) });
+            holder(0, |children| NodeKind::Group { children, clip: false }, children.collect())
+        };
+        let cases = [
+            ("every path filled", group(&|_| true)),
+            ("only the last path filled", group(&|i| i == count - 1)),
+            ("no path filled", group(&|_| false)),
+        ];
+        let start = std::time::Instant::now();
+        println!("clock: {}", if std::fs::metadata("/proc/thread-self/schedstat").is_ok() { "thread CPU time" } else { "wall clock" });
+        // The time per call of `f` on `n`: batches of calls double until one takes at least 100 ms.
+        let per_call = |f: fn(&Node) -> bool, n: &Node| {
+            let mut calls = 1u32;
+            loop {
+                let t = clock(start);
+                for _ in 0..calls {
+                    std::hint::black_box(f(std::hint::black_box(n)));
+                }
+                let spent = clock(start) - t;
+                if spent >= 100_000_000 || calls >= 1 << 30 {
+                    return (spent as f64 / f64::from(calls), calls);
+                }
+                calls *= 2;
+            }
+        };
+        for (label, n) in &cases {
+            assert_eq!(full_walk_has_colors(n), node_has_colors(n), "{label}");
+            let (mut old, mut new) = (vec![], vec![]);
+            for _ in 0..7 {
+                old.push(per_call(full_walk_has_colors, n));
+                new.push(per_call(node_has_colors, n));
+            }
+            old.sort_by(|a, b| a.0.total_cmp(&b.0));
+            new.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let (o, nw) = (old[3], new[3]);
+            println!(
+                "{label}: full walk {:.1} ns per call ({} calls), node_has_colors {:.1} ns per call ({} calls), median of 7 runs",
+                o.0, o.1, nw.0, nw.1
+            );
+        }
     }
 }

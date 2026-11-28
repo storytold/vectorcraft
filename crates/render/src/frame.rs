@@ -1,0 +1,279 @@
+use super::options::{AntiAlias, RenderOptions};
+use super::threads::single_threaded_context;
+use super::{
+    Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Pixmap, Rect, RenderContext, StrokeLayer, SymbolBoxes, TextObject, TypeAntiAlias,
+    fx, kurbo, live,
+};
+
+/// Hasher for pointer-keyed caches: a multiply-xorshift (SipHash showed up in frame profiles).
+#[derive(Default, Clone, Copy)]
+pub(crate) struct PtrHasher(pub(crate) u64);
+
+impl std::hash::Hasher for PtrHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        for b in bytes {
+            self.0 = (self.0 ^ *b as u64).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    fn write_u64(&mut self, n: u64) {
+        let x = (self.0 ^ n).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        self.0 = x ^ (x >> 29);
+    }
+    fn write_usize(&mut self, n: usize) {
+        self.write_u64(n as u64);
+    }
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+pub(crate) type PtrMap<K, V> = HashMap<K, V, std::hash::BuildHasherDefault<PtrHasher>>;
+
+/// The key of a cached stroke outline: ([`Renderer::stroke_owner`] of what owns the stroke, the
+/// stroke's place in it, width bits, tolerance level).
+pub(crate) type StrokeKey = (usize, usize, u64, i32);
+
+/// What the [`StrokeKey`] of the latest outline of an object's stroke is found under once the
+/// object has changed: (the object's id, the stroke's place in its appearance items, width bits,
+/// tolerance level).
+pub(crate) type MovedKey = (u64, usize, u64, i32);
+
+/// A stroke expanded to a fill outline: (owning node, outline, last frame used, the region a frame
+/// must lie in to draw the outline, when the outline leaves out the segments far from that region,
+/// `None` when it has every segment, and whether the outline was made along a line of the node's
+/// own path, the one [`Node::stroke_path`] makes, so that the line can be made again from the
+/// node and its stroke).
+pub(crate) struct StrokeEntry {
+    pub(crate) node: Arc<Node>,
+    pub(crate) outline: Arc<BezPath>,
+    pub(crate) stamp: u64,
+    pub(crate) crop: Option<Rect>,
+    pub(crate) own: bool,
+}
+
+/// The slices of a stroke whose gradient runs along or across it, each with its paint and bounds.
+pub(crate) type Slices = Arc<Vec<(BezPath, vectorcraft_color::Paint, Rect)>>;
+
+/// The key of cached [`Slices`]: ([`Renderer::stroke_owner`] of the stroke's object, stroke layer
+/// address, tolerance level).
+pub(crate) type SliceKey = (usize, usize, i32);
+
+/// What the [`SliceKey`] of the latest slices of an object's stroke is found under once the object
+/// has changed: (the object's id, the stroke's place in its appearance items, tolerance level).
+pub(crate) type MovedSliceKey = (u64, usize, i32);
+
+/// [`Slices`] cached for a stroke: (owning node, the node whose path and stroke the slices were
+/// made from, either the owning node or an earlier copy of it that the owning node is moved from,
+/// the slices, the offset they are drawn moved by, the fill rule they were made with, whether they
+/// were made along the path [`Node::stroke_path`] makes from that node, last frame used).
+pub(crate) struct SliceEntry {
+    pub(crate) node: Arc<Node>,
+    pub(crate) made: Arc<Node>,
+    pub(crate) slices: Slices,
+    pub(crate) by: kurbo::Vec2,
+    pub(crate) rule: FillRule,
+    pub(crate) own: bool,
+    pub(crate) stamp: u64,
+}
+
+/// Cached per-node geometry, keyed by `Arc` identity. Structural sharing means an unchanged node
+/// keeps its allocation across edits, so a pointer match (with the Arc kept alive here so the
+/// address can't be reused) is an exact cache hit — no invalidation logic needed.
+pub(crate) struct GeomEntry {
+    pub(crate) node: Arc<Node>,
+    pub(crate) bounds: Option<Rect>,
+    pub(crate) path: Option<Arc<BezPath>>,
+    pub(crate) stamp: u64,
+}
+
+/// A clipping path (kept alive so its address can't be reused) and the region it clips to.
+pub(crate) type ClipEntry = (Arc<Node>, Option<Arc<(BezPath, FillRule)>>);
+
+/// A clipping path (kept alive) and what it paints: its fills and its strokes ([`Node::clip_paint`]).
+pub(crate) type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>>);
+
+/// An object with effects (kept alive), the art drawn for it ([`Renderer::fx_art`]), and, when that
+/// art can be made from evaluated live objects (`fx::evaluates_live`) or from type, symbol art or
+/// colors shaded through the color settings (`fx::reads_outside`), the inputs it was made with
+/// ([`live::Found`]).
+pub(crate) type FxArtEntry = (Arc<Node>, Arc<Node>, Option<live::Found>);
+
+/// What symbol art placed by [`Renderer::placed_art`] or [`Renderer::sliced_art`] is kept under:
+/// the art's address, the bits of the transform's coefficients, whether strokes scale with it, and
+/// the stain ([`stain_bits`]).
+pub(crate) type PlacedKey = (usize, [u64; 6], bool, [u32; 6]);
+
+/// Symbol art placed by [`Renderer::placed_art`] or [`Renderer::sliced_art`].
+pub(crate) struct PlacedEntry {
+    /// The symbol's art, held weakly: the reference keeps the art's allocation, so no other art can
+    /// get its address while the entry exists, and does not keep the art's content.
+    pub(crate) art: std::sync::Weak<Node>,
+    /// The art placed, or `None` for art placed again in every frame ([`depends_on_document`]).
+    pub(crate) placed: Option<Arc<Node>>,
+    /// The layout inputs ([`vectorcraft_text::layout_inputs`]) the art was placed with, when it
+    /// holds type: the art is placed again when the fonts or the hyphenation exceptions change.
+    pub(crate) fonts: Option<u64>,
+    /// The 9-slice map the art was placed through ([`Renderer::sliced_art`]), or `None` for art
+    /// placed by the transform alone ([`Renderer::placed_art`]). An entry is used only by the
+    /// function that made it, with the same map.
+    pub(crate) slice: Option<vectorcraft_doc::NineSliceMap>,
+}
+
+/// Type drawn with an anti-aliasing method other than Sharp, as [`Renderer::draw_type_edges`] drew
+/// it offscreen on the pixels of the output ([`Frame::output`]).
+pub(crate) struct TypeEdgeEntry {
+    /// A copy of the type's object: the kept pixels are used only for an object equal to it.
+    pub(crate) node: Node,
+    /// The output's zoom and rotation ([`fx::linear_key`]).
+    pub(crate) linear: [u64; 4],
+    /// The method, the edge threshold, the frame's edge smoothing, whether the frame composites
+    /// precisely, and the opacity folded into the paints.
+    pub(crate) settings: (TypeAntiAlias, Option<u8>, AntiAlias, bool, u32),
+    /// What the type read from the document and the color settings ([`Renderer::raster_inputs`]).
+    pub(crate) inputs: fx::Inputs,
+    /// The output's offset: in a frame whose offset differs from it by whole pixels, the pixels are
+    /// placed moved by them.
+    pub(crate) shift: kurbo::Vec2,
+    /// The output pixel at the image's top-left corner.
+    pub(crate) origin: (f64, f64),
+    pub(crate) image: Arc<Pixmap>,
+}
+
+/// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
+pub(crate) const MAX_INLINE_DEPTH: u32 = 4;
+
+/// Set once a missing inline symbol has been logged (it would log every frame otherwise).
+pub(crate) static MISSING_INLINE_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FrameStats {
+    pub drawn: usize,
+    pub culled: usize,
+    /// How many times the frame's symbol boxes measured symbol art ([`SymbolBoxes::art_measured`]):
+    /// the art boxes of symbols and how far the effects in their art paint past it. Pattern tiles
+    /// and placed documents measure with symbol boxes of their own, which are not counted.
+    pub symbol_art: usize,
+    /// The drop shadows, outer glows and filtered contents the frame drew from rasters made before
+    /// their object moved, or made over such rasters ([`RenderOptions::interacting`]), and those it
+    /// drew at a drag's lower resolution ([`Self::previewed`]).
+    pub moved: usize,
+    /// The filtered contents, shadows and glows the frame drew at a drag's lower resolution
+    /// ([`RenderOptions::dragging`]). [`Self::moved`] counts them too.
+    pub previewed: usize,
+    /// What the frame drew in a way that depends on the frame's size: effect rasters and filter
+    /// layers cropped to it or made at a lower resolution, blending groups drawn as layers past its
+    /// offscreen budget, gradient meshes drawn quad by quad past the mesh buffer, and every filter
+    /// layer drawn on a single-threaded context: on a single-threaded renderer, or offscreen in a
+    /// group or an effect's raster. A part of the frame rendered on its own can draw that art with
+    /// other pixels than the whole frame does.
+    pub view_sized: usize,
+    bounded_view_sized: usize,
+    view_sized_bounds: Option<Rect>,
+    /// How many threads composed the frame from its two ink planes, in a CMYK document that shows
+    /// transparency; 0 for other frames.
+    pub ink_threads: usize,
+    /// The type objects the frame drew offscreen with an anti-aliasing method other than Sharp
+    /// ([`Renderer::draw_type_edges`]). Type drawn from the pixels an earlier frame kept is not
+    /// counted.
+    pub type_edges: usize,
+    /// The art of 3D effects (Revolve, Extrude & Bevel, Inflate, Rotate) this renderer made for the
+    /// objects it draws or measures itself (`Renderer::bounds_of`) since its last frame
+    /// began: none it found kept, and none made by measures without a renderer (the free bounds
+    /// functions), which this renderer doesn't see. A view that measured what changed through the
+    /// renderer ([`crate::Renderer::changed`]) made the art then, and draws it with none made.
+    pub three_d_built: usize,
+    pub micros: u64,
+}
+
+impl FrameStats {
+    /// A conservative enclosure in the frame's output pixels, when every view-sized operation has
+    /// a known bound. `None` leaves the choice to render the whole frame.
+    pub fn view_sized_bounds(&self) -> Option<Rect> {
+        self.view_sized_bounds.filter(|_| self.bounded_view_sized == self.view_sized)
+    }
+}
+
+impl super::Renderer {
+    /// Records an operation bounded by its own output clip. A nested effect can affect more than
+    /// its own clip once an ancestor filters or composites it, so only bound direct RGB output.
+    pub(crate) fn note_view_sized_clip(&mut self, f: &Frame, clip: Rect) {
+        self.stats.view_sized += 1;
+        if self.nested == 0 && self.offscreen_live == 0 && f.view == f.output && f.doc.color_mode == vectorcraft_doc::ColorMode::Rgb {
+            let bound = f.output.transform_rect_bbox(clip).inflate(1.0, 1.0);
+            if bound.is_finite() {
+                self.stats.bounded_view_sized += 1;
+                self.stats.view_sized_bounds = vectorcraft_geom::union_opt(self.stats.view_sized_bounds, Some(bound));
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Frame<'a> {
+    /// Drawing into a multithreaded context: vello filter layers must be rendered offscreen.
+    pub(crate) mt: bool,
+    /// Set the flag if the incomplete paint would need a full render.
+    pub(crate) patch: Option<&'a std::cell::Cell<bool>>,
+    pub(crate) doc: &'a Document,
+    /// `doc`'s symbol art boxes, which culling measures symbol instances by ([`SymbolBoxes::quick`]).
+    pub(crate) symbols: &'a SymbolBoxes<'a>,
+    pub(crate) view: Affine,
+    /// Visible region in document coordinates (for culling).
+    pub(crate) visible: Rect,
+    /// Size of one of this frame's pixels in document units.
+    pub(crate) px: f64,
+    pub(crate) opts: &'a RenderOptions,
+    /// What colours paint as: screen colours, or one ink plane of a CMYK document (see [`ink`]).
+    pub(crate) ink: Ink,
+    /// Document → pixels of the output being drawn: `view` itself, except while an export draws
+    /// its art at several times its size (the export's own pixels) and in offscreen layers (the
+    /// pixels they are placed back on). Type with an anti-aliasing method other than Sharp is
+    /// drawn on these pixels ([`Renderer::draw_type_edges`]).
+    pub(crate) output: Affine,
+    /// With Separations Preview, the tables placed images show the visible plates through.
+    pub(crate) plates: Option<&'a crate::proof::PlateLut>,
+}
+
+impl Frame<'_> {
+    pub(crate) fn reject_patch(&self) -> bool {
+        self.patch.is_some_and(|hit| {
+            hit.set(true);
+            true
+        })
+    }
+
+    pub(crate) fn patch_rejected(&self) -> bool {
+        self.patch.is_some_and(std::cell::Cell::get)
+    }
+
+    /// Text space → device pixels when type is snapped to the pixel grid (Type anti-aliasing).
+    pub(crate) fn text_snap(&self, t: &TextObject) -> Option<Affine> {
+        (self.opts.anti_alias == AntiAlias::Type).then(|| self.view * t.xf)
+    }
+
+    /// Stroke `st` as this frame draws it: a copy without its dashes when the frame draws dashed
+    /// lines as solid lines ([`RenderOptions::solid_dashes`]), else `st` itself.
+    pub(crate) fn stroke<'s>(&self, st: &'s StrokeLayer) -> std::borrow::Cow<'s, StrokeLayer> {
+        if self.opts.solid_dashes && st.dash.is_some() {
+            std::borrow::Cow::Owned(StrokeLayer { dash: None, ..st.clone() })
+        } else {
+            std::borrow::Cow::Borrowed(st)
+        }
+    }
+
+    /// A render context for drawing this frame's art offscreen (on the calling thread), with its
+    /// edge smoothing: hard edges must not depend on where the art is drawn.
+    pub(crate) fn offscreen_context(&self, w: u16, h: u16) -> RenderContext {
+        #[cfg(test)]
+        OFFSCREEN_PIXELS.with(|n| n.set(n.get() + u64::from(w) * u64::from(h)));
+        let mut ctx = single_threaded_context(w, h);
+        ctx.set_aliasing_threshold(self.opts.anti_alias.threshold());
+        ctx
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The pixels of the offscreen contexts [`Frame::offscreen_context`] has made on this thread.
+    pub(crate) static OFFSCREEN_PIXELS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}

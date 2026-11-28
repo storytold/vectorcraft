@@ -1,327 +1,391 @@
 //! The Actions panel: record commands from the engine journal, play them back as one undo step.
 //! Every recorded step is an ordinary command invocation, so actions are also plain JSON that
 //! agents can author and replay (`command.batch`).
+//!
+//! The panel is the framework's [`ActionsPanel`]. It reports events; this module runs the app's
+//! commands for them and keeps the current set in step with the selection.
 
-use serde::{Deserialize, Serialize};
+use craft::automation::actions::{Action, ActionStep};
+use craft::automation::ui::actions::{
+    ActionMove, ActionPlace, ActionSelection, ActionsEvent, ActionsHost, ActionsPanel, ActionsPanelCommands, ShortcutChoice, StepCells,
+};
+use craft::keymap::CommandRef;
+use craft::ui::contract::SweepStep;
 use serde_json::{Value, json};
 
-use super::{pstate, set_pstate};
-use crate::theme::Tokens;
-use crate::widgets::{self, dim_label};
-use crate::{VectorcraftApp, icons};
+use crate::{UiState, VectorcraftApp};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Action {
-    pub name: String,
-    pub steps: Vec<(String, Value)>,
+pub(crate) mod edits;
+pub(crate) mod files;
+mod keys;
+pub(crate) mod menu;
+pub(crate) mod model;
+pub(crate) mod playback;
+pub(crate) use model::prefs;
+mod recording;
+#[cfg(test)]
+pub(crate) mod tests_support;
+
+#[cfg(test)]
+mod tests_edits;
+#[cfg(test)]
+mod tests_files;
+#[cfg(test)]
+mod tests_keys;
+#[cfg(test)]
+mod tests_limits;
+#[cfg(test)]
+mod tests_menu;
+#[cfg(test)]
+mod tests_playback;
+#[cfg(test)]
+mod tests_recording;
+#[cfg(test)]
+mod tests_stops;
+
+pub(crate) use edits::select_object_params;
+pub use edits::{
+    ACTION_OPTIONS, BUTTON_MODE, CLEAR, DELETE_SETS, DELETE_STEP, DUPLICATE, INCLUDE_STEPS, INSERT_MENU_ITEM, INSERT_SELECT_OBJECT,
+    INSERT_SELECT_PATH, INSERT_STOP, MOVE_STEP, NEW_ACTION, RENAME_ACTION, RESET, SELECT_OBJECT_STEP, SELECT_PATH_STEP, action_options, button_mode,
+    clear, delete_sets, delete_step, duplicate, include_steps, insert_menu_item, insert_select_object, insert_select_path, insert_stop, move_step,
+    new_action, rename_action, reset,
+};
+pub use files::{ACTIONS_EXT, LOAD_SET, REPLACE_SET, SAVE_SET, load_set, replace_set, save_set};
+pub use keys::{FUNCTION_KEYS, FunctionKey, function_keys, key_error};
+pub use model::{automatic_align_to, default_list, default_sets, deserialize_current_set, members, set_automatic_align_to};
+pub use playback::{
+    CONTINUE_PLAYBACK, PAUSE_SECONDS, PLAY_ACTION, PLAY_AT, PLAYBACK_OPTIONS, PlaybackOptions, PlaybackSpeed, Playing, STOP_STEP, continue_playback,
+    deserialize_playback, play, play_action, play_at, playback_drawn, playback_held, playback_options, playback_shown, tick_playback,
+    waiting_at_stop,
+};
+pub(crate) use playback::{KnownCommands, has_stop, is_ui_step, shown_text, step_place, stop_params, unknown_commands};
+pub use recording::{START_RECORDING, STOP_RECORDING, record, stop};
+pub(crate) use recording::{after_journaled_edit, after_recorded_command, before_recorded_command};
+
+/// The error a canceled file dialog reports; it is not worth a status line.
+const CANCELLED: &str = "cancelled";
+
+/// What the framework panel asks of the app while it draws. It holds copies, never `app.ui`, so the
+/// panel can borrow the list and its state for the same pass.
+struct ActionHost {
+    /// The list index of the action being recorded into.
+    recording: Option<usize>,
+    /// The steps the journal holds since that recording started.
+    pending: Vec<ActionStep>,
+    playing: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ActionSet {
-    pub name: String,
-    pub actions: Vec<Action>,
-}
-
-/// Built-in actions (our own, handy defaults).
-pub fn default_sets() -> Vec<ActionSet> {
-    let step = |c: &str, p: Value| (c.to_string(), p);
-    vec![ActionSet {
-        name: "Default Actions".into(),
-        actions: vec![
-            Action { name: "Duplicate and Offset 10 pt".into(), steps: vec![step("object.move", json!({"dx": 10, "dy": 10, "copy": true}))] },
-            Action {
-                name: "Unite and Simplify".into(),
-                steps: vec![step("object.pathfinder.unite", json!({})), step("object.path.simplify", json!({"tolerance": 0.5}))],
-            },
-            Action {
-                name: "Center on Artboard".into(),
-                steps: vec![step("object.align", json!({"horizontal": "center", "vertical": "center", "to": "artboard"}))],
-            },
-            Action { name: "Outline Text".into(), steps: vec![step("type.createOutlines", json!({}))] },
-            Action { name: "Rotate 90° CW".into(), steps: vec![step("object.rotate", json!({"angle": -90}))] },
-            Action { name: "Reflect Horizontal".into(), steps: vec![step("object.reflect", json!({"axis": "vertical"}))] },
-        ],
-    }]
-}
-
-/// Run an action as a single undoable batch.
-pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, String> {
-    let Some(a) = app.ui.action_sets.get(set).and_then(|s| s.actions.get(idx)).cloned() else { return Err("no such action".into()) };
-    let commands: Vec<Value> = a.steps.iter().map(|(c, p)| json!({"command": c, "params": p})).collect();
-    app.run("command.batch", json!({"label": a.name, "commands": commands}))
-}
-
-/// The panel's (≡) menu.
-pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    let selected: Option<(usize, usize)> = pstate(ui.ctx(), "actions-selected");
-    let has = selected.and_then(|(s, a)| app.ui.action_sets.get(s).and_then(|set| set.actions.get(a))).is_some();
-    if widgets::menu_item(ui, tl!("Batch…"), has, false)
-        && let Some((s, a)) = selected
-        && let Err(e) = crate::dialogs::action_batch::open(app, s, a)
-    {
-        app.status(e);
+impl ActionHost {
+    fn of(app: &VectorcraftApp) -> Self {
+        let recording = app.ui.recording_into.as_deref().and_then(|name| app.ui.actions.actions().iter().position(|a| a.name == name));
+        let pending = recording
+            .and_then(|_| recording::recording_start(app))
+            .map(|start| model::steps_from(app.session.journal_for_action(start)))
+            .unwrap_or_default();
+        Self { recording, pending, playing: app.ui.action_playing.is_some() }
     }
-    if widgets::menu_item(ui, tl!("Play Current Selection"), has, false)
-        && let Some((s, a)) = selected
-        && let Err(e) = play(app, s, a)
-    {
-        app.status(e);
+}
+
+impl ActionsHost for ActionHost {
+    fn step_label(&self, step: &ActionStep) -> String {
+        let first_line = |key: &str| step.params.get(key).and_then(Value::as_str).and_then(|m| m.lines().next()).unwrap_or_default();
+        match step.command.as_str() {
+            STOP_STEP => crate::i18n::fmt(tl!("Stop: {message}"), &[("message", first_line("message"))]),
+            SELECT_PATH_STEP => tl!("Select Path").to_string(),
+            SELECT_OBJECT_STEP => crate::i18n::fmt(tl!("Select Object: {note}"), &[("note", first_line("note"))]),
+            id => vectorcraft_engine::find_command(id).map_or_else(|| id.to_string(), |c| crate::i18n::t_id(id, c.label).to_string()),
+        }
+    }
+
+    fn shortcut(&self, action: &Action) -> Option<ShortcutChoice> {
+        model::function_key(action).map(|k| ShortcutChoice::new(k.key, k.shift, k.cmd))
+    }
+
+    fn recording(&self) -> Option<usize> {
+        self.recording
+    }
+
+    fn pending_steps(&self, action: usize) -> &[ActionStep] {
+        if self.recording == Some(action) { &self.pending } else { &[] }
+    }
+
+    fn playing(&self) -> bool {
+        self.playing
     }
 }
 
+/// Draws the panel and runs what the user did in it.
 pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    let t = Tokens::get(ui.ctx());
-    // The selected action as (set, action). Read as the type it is stored as: egui keeps a
-    // value per type, so reading the bare pair never found it and no action stayed selected (#1629).
-    const SELECTED: &str = "actions-selected";
-    let mut selected: Option<(usize, usize)> = pstate(ui.ctx(), SELECTED);
-    let mut play_req = None;
-    egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
-        for (si, set) in app.ui.action_sets.iter().enumerate() {
-            ui.label(egui::RichText::new(format!("▾ {}", set.name)).color(t.text));
-            for (ai, a) in set.actions.iter().enumerate() {
-                let sel = selected == Some((si, ai));
-                let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 22.0), egui::Sense::click());
-                if sel {
-                    ui.painter().rect_filled(r, 0.0, t.row_selected);
-                } else if resp.hovered() {
-                    ui.painter().rect_filled(r, 0.0, t.hover);
-                }
-                ui.painter().text(
-                    r.left_center() + egui::vec2(18.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    &a.name,
-                    egui::FontId::proportional(12.5),
-                    t.text_strong,
-                );
-                ui.painter().text(
-                    r.right_center() - egui::vec2(6.0, 0.0),
-                    egui::Align2::RIGHT_CENTER,
-                    crate::i18n::tn(a.steps.len() as u64, "{n} step", "{n} steps"),
-                    egui::FontId::proportional(11.0),
-                    t.text_dim,
-                );
-                if resp.clicked() {
-                    selected = Some((si, ai));
-                }
-                if resp.double_clicked() {
-                    play_req = Some((si, ai));
-                }
-            }
+    let host = ActionHost::of(app);
+    let enabled = !app.file_dialog_open();
+    let UiState { actions_panel, actions, .. } = &mut app.ui;
+    let output = ActionsPanel::new(actions_panel, actions).host(&host).step_cells(StepCells::Include).enabled(enabled).show(ui);
+    // The current set is where a recording goes and what Set Options renames: the set of the
+    // selected row, and unchanged when nothing is selected.
+    let current = match &app.ui.actions_panel.selected {
+        Some(ActionSelection::Set(name)) => Some(name.clone()),
+        Some(ActionSelection::Action(i) | ActionSelection::Step(i, _)) => app.ui.actions.set_of(*i).map(str::to_string),
+        _ => None,
+    };
+    if current.is_some() {
+        app.ui.action_set = current;
+    }
+    for event in output.events {
+        apply(app, event);
+    }
+}
+
+/// Runs one event of the panel; a refusal shows on the status line.
+fn apply(app: &mut VectorcraftApp, event: ActionsEvent) {
+    let result = match event {
+        ActionsEvent::Play { action, .. } => play_selected(app, action),
+        ActionsEvent::BeginRecording { into, .. } => begin_recording(app, into),
+        ActionsEvent::StopRecording => run(app, STOP_RECORDING, json!({})),
+        ActionsEvent::PlaySet(_) => {
+            app.status(tl!("Select an action to play"));
+            Ok(())
         }
-    });
-    set_pstate(ui.ctx(), SELECTED, selected);
-    widgets::divider(ui);
-    // Bottom bar: stop, record, play, new, delete.
-    ui.horizontal(|ui| {
-        let recording = app.ui.recording.is_some();
-        if widgets::icon_button(ui, "square", tl!("Stop Playing/Recording"), false, 24.0).clicked()
-            && let Some((set, name, start)) = app.ui.recording.take()
-        {
-            // A canceled undo group numbers the steps down when it drops entries made before them.
-            let start = app.session.journal.held().unwrap_or(start);
-            let steps = app.session.journal_for_action(start);
-            app.session.journal.hold(None);
-            if let Some(s) = app.ui.action_sets.get_mut(set) {
-                s.actions.push(Action { name, steps });
-            }
+        ActionsEvent::NewAction => command(app, ActionsPanelCommands::NewAction),
+        ActionsEvent::NewSet => command(app, ActionsPanelCommands::NewSet),
+        ActionsEvent::SetOptions(set) => {
+            app.ui.action_set = Some(set);
+            command(app, ActionsPanelCommands::SetOptions)
         }
-        let (r, resp) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
-        ui.painter().circle_filled(r.center(), 6.0, if recording { egui::Color32::from_rgb(0xe0, 0x30, 0x30) } else { t.icon });
-        if resp.on_hover_text(tl!("Begin Recording")).clicked() && !recording {
-            let n = app.ui.action_sets.first().map(|s| s.actions.len()).unwrap_or(0) + 1;
-            if app.ui.action_sets.is_empty() {
-                app.ui.action_sets.push(ActionSet { name: "Set 1".into(), actions: vec![] });
-            }
-            let set = selected.map(|s| s.0).unwrap_or(0);
-            let start = app.session.journal.len();
-            // Keep every step from here on until recording stops, however long it runs.
-            app.session.journal.hold(Some(start));
-            app.ui.recording = Some((set, format!("Action {n}"), start));
+        ActionsEvent::InsertStop => command(app, ActionsPanelCommands::InsertStop),
+        ActionsEvent::InsertMenuItem => command(app, ActionsPanelCommands::InsertMenuItem),
+        ActionsEvent::InsertPath => command(app, ActionsPanelCommands::InsertPath),
+        ActionsEvent::PlaybackOptions => command(app, ActionsPanelCommands::PlaybackOptions),
+        ActionsEvent::Batch(action) => {
+            app.ui.actions_panel.selected = Some(ActionSelection::Action(action));
+            command(app, ActionsPanelCommands::Batch)
         }
-        if widgets::icon_button(ui, "dc-actions", tl!("Play Current Selection"), false, 24.0).clicked()
-            && let Some(s) = selected
-        {
-            play_req = Some(s);
+        ActionsEvent::Load => command(app, ActionsPanelCommands::Load),
+        ActionsEvent::ClearAll => command(app, ActionsPanelCommands::ClearAll),
+        ActionsEvent::Reset => command(app, ActionsPanelCommands::Reset),
+        ActionsEvent::Replace => command(app, ActionsPanelCommands::Replace),
+        ActionsEvent::Save { set: None, .. } => command(app, ActionsPanelCommands::Save),
+        ActionsEvent::Save { set: Some(name), .. } => run(app, SAVE_SET, json!({ "name": name })),
+        ActionsEvent::Delete(selection) => delete(app, selection),
+        ActionsEvent::DeleteSets(names) => {
+            edits::ask_delete(app, names);
+            Ok(())
         }
-        if widgets::icon_button(ui, "trash-2", tl!("Delete Selection"), false, 24.0).clicked()
-            && let Some((si, ai)) = selected
-            && let Some(s) = app.ui.action_sets.get_mut(si)
-            && ai < s.actions.len()
-        {
-            s.actions.remove(ai);
-            set_pstate::<Option<(usize, usize)>>(ui.ctx(), SELECTED, None);
+        ActionsEvent::Rename { action, text, .. } => action_command(app, RENAME_ACTION, action, json!({ "name": text })),
+        ActionsEvent::SetColor { action, color, .. } => action_command(app, ACTION_OPTIONS, action, json!({ "color": color.name() })),
+        ActionsEvent::AssignShortcut { action, choice, .. } => {
+            let key = choice.map_or_else(|| json!({ "key": 0 }), |c| json!({ "key": c.key, "cmd": c.command, "shift": c.shift }));
+            action_command(app, ACTION_OPTIONS, action, key)
         }
-        if recording {
-            ui.label(egui::RichText::new(tl!("● Recording")).color(egui::Color32::from_rgb(0xe0, 0x30, 0x30)));
-        }
-    });
-    if let Some((si, ai)) = play_req
-        && let Err(e) = play(app, si, ai)
+        ActionsEvent::Duplicate(selection) => duplicate_row(app, selection),
+        ActionsEvent::Reorder(mv) => reorder(app, mv),
+        ActionsEvent::Toggle(step) => toggle(app, step),
+        // Record Again and Allow Tool Recording are not offered by VectorCraft: the panel emits them
+        // only from rows its menu leaves out.
+        _ => Ok(()),
+    };
+    if let Err(e) = result
+        && e != CANCELLED
     {
         app.status(e);
     }
-    let _ = icons::exists;
-    if app.ui.action_sets.is_empty() {
-        dim_label(ui, tl!("No actions. Press ● to record."));
+}
+
+fn run(app: &mut VectorcraftApp, id: &str, params: Value) -> Result<(), String> {
+    app.run(id, params).map(drop)
+}
+
+/// A panel-menu command, which acts on the panel's selection; the menu shows its own refusals.
+fn command(app: &mut VectorcraftApp, command: ActionsPanelCommands) -> Result<(), String> {
+    menu::run(app, &CommandRef::from(command).id, &Value::Null).unwrap_or(Ok(Value::Null)).map(drop)
+}
+
+/// The (set, action) indexes the commands take for the action at list index `action`.
+fn located(list: &craft::automation::actions::ActionList, action: usize) -> Result<(usize, usize), String> {
+    model::place(list, action).ok_or_else(|| "no such action".to_string())
+}
+
+/// Runs `id` for the action at list index `action` with `fields` added to its params.
+fn action_command(app: &mut VectorcraftApp, id: &str, action: usize, fields: Value) -> Result<(), String> {
+    let (set, at) = located(&app.ui.actions, action)?;
+    let mut params = json!({ "set": set, "action": at });
+    if let (Some(params), Value::Object(fields)) = (params.as_object_mut(), fields) {
+        params.extend(fields);
     }
+    run(app, id, params)
+}
+
+/// Play on from a stop the playback waits at, else play the action.
+fn play_selected(app: &mut VectorcraftApp, action: usize) -> Result<(), String> {
+    if waiting_at_stop(app) {
+        return run(app, CONTINUE_PLAYBACK, json!({}));
+    }
+    let (set, at) = located(&app.ui.actions, action)?;
+    run(app, PLAY_AT, json!({ "set": set, "action": at }))
+}
+
+/// Begin Recording records into the selected action, after its selected step; with no action it
+/// records a new one.
+fn begin_recording(app: &mut VectorcraftApp, into: Option<usize>) -> Result<(), String> {
+    let Some(action) = into else { return run(app, START_RECORDING, json!({})) };
+    let (set, at) = located(&app.ui.actions, action)?;
+    let mut params = json!({ "set": set, "action": at });
+    if let Some(ActionSelection::Step(selected, step)) = app.ui.actions_panel.selected
+        && selected == action
+    {
+        params["after"] = json!(step);
+    }
+    run(app, START_RECORDING, params)
+}
+
+fn delete(app: &mut VectorcraftApp, selection: ActionSelection) -> Result<(), String> {
+    match selection {
+        ActionSelection::Set(name) => {
+            edits::ask_delete(app, vec![name]);
+            Ok(())
+        }
+        ActionSelection::Action(action) => {
+            app.ui.actions.delete_action(action).map_err(|e| e.to_string())?;
+            app.ui.actions_panel.selected = None;
+            Ok(())
+        }
+        ActionSelection::Step(action, step) => {
+            let (set, at) = located(&app.ui.actions, action)?;
+            run(app, DELETE_STEP, json!({ "set": set, "action": at, "step": step }))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Delete Selection, from the panel menu: the selected row, else the selected sets, else the
+/// current set.
+pub(crate) fn delete_selection(app: &mut VectorcraftApp) {
+    let panel = &app.ui.actions_panel;
+    let event = match (&panel.selected, panel.selected_sets.as_slice(), &app.ui.action_set) {
+        (Some(selection), ..) => ActionsEvent::Delete(selection.clone()),
+        (None, [], Some(current)) => ActionsEvent::Delete(ActionSelection::Set(current.clone())),
+        (None, sets, _) if !sets.is_empty() => ActionsEvent::DeleteSets(sets.to_vec()),
+        _ => return,
+    };
+    apply(app, event);
+}
+
+/// Duplicate, from the panel menu: the selected row, else the current set.
+pub(crate) fn duplicate_selection(app: &mut VectorcraftApp) {
+    let selection = app.ui.actions_panel.selected.clone().or_else(|| app.ui.action_set.clone().map(ActionSelection::Set));
+    if let Some(selection) = selection {
+        apply(app, ActionsEvent::Duplicate(selection));
+    }
+}
+
+/// Copies the row and selects the copy.
+fn duplicate_row(app: &mut VectorcraftApp, selection: ActionSelection) -> Result<(), String> {
+    let params = match selection {
+        ActionSelection::Action(action) => {
+            let (set, at) = located(&app.ui.actions, action)?;
+            json!({ "set": set, "action": at })
+        }
+        ActionSelection::Set(name) => {
+            let set = app.ui.actions.sets().iter().position(|s| *s == name).ok_or("no such action set")?;
+            json!({ "set": set })
+        }
+        ActionSelection::Step(action, step) => {
+            return app.ui.actions.duplicate_step(action, step).map_err(|e| e.to_string());
+        }
+        _ => return Ok(()),
+    };
+    let copy = app.run(DUPLICATE, params)?;
+    let index = |key: &str| copy[key].as_u64().and_then(|i| usize::try_from(i).ok());
+    let Some(set) = index("set").and_then(|i| model::set_name(&app.ui.actions, i)).map(str::to_string) else { return Ok(()) };
+    app.ui.actions_panel.selected = match index("action") {
+        Some(action) => model::flat(&app.ui.actions, index("set").unwrap_or_default(), action).map(ActionSelection::Action),
+        None => Some(ActionSelection::Set(set.clone())),
+    };
+    app.ui.action_set = Some(set);
+    Ok(())
+}
+
+/// Applies a drag or a key move of a row.
+fn reorder(app: &mut VectorcraftApp, mv: ActionMove) -> Result<(), String> {
+    match (mv.row, mv.place) {
+        (ActionSelection::Action(from), ActionPlace::Action { index, set: Some(set), .. }) => {
+            let moved = app.ui.actions.action(from).cloned().ok_or("no such action")?;
+            let before = model::stored_actions(&app.ui.actions, &set);
+            let mut after = before.clone();
+            if app.ui.actions.set_of(from) != Some(set.as_str()) {
+                after.push(moved);
+            }
+            model::edit_keeps_set_loadable(app, &set, &before, &after)?;
+            app.ui.actions.move_action(from, index).map_err(|e| e.to_string())?;
+            app.ui.actions.assign_set(index, Some(set)).map_err(|e| e.to_string())
+        }
+        (ActionSelection::Step(action, step), ActionPlace::Step { action: into, index, .. }) => {
+            let (set, at) = located(&app.ui.actions, action)?;
+            let (to_set, to_action) = located(&app.ui.actions, into)?;
+            // `index` counts the steps after the step left its place; `before` counts them before.
+            let before = if action == into && index > step { index + 1 } else { index };
+            run(app, MOVE_STEP, json!({ "set": set, "action": at, "step": step, "toSet": to_set, "toAction": to_action, "before": before }))
+        }
+        // Every VectorCraft action lives in a set (the saved shape has no loose actions).
+        _ => Ok(()),
+    }
+}
+
+/// Applies one step of an include-cell press or sweep.
+fn toggle(app: &mut VectorcraftApp, step: SweepStep<ActionSelection>) -> Result<(), String> {
+    // PLAN: an `UndoShowOnly` of a canceled Alt sweep cannot restore the other cells exactly: the
+    // list keeps no snapshot of them, so it reapplies the cell's value to them.
+    let (edit, others) = match step {
+        SweepStep::Flip(edit) | SweepStep::Restore(edit) => (edit, false),
+        SweepStep::ShowOnly(edit) | SweepStep::UndoShowOnly(edit) => (edit, true),
+        _ => return Ok(()),
+    };
+    let list = &app.ui.actions;
+    let params = match &edit.key {
+        ActionSelection::Set(name) => {
+            let set = list.sets().iter().position(|s| *s == name.as_str()).ok_or("no such action set")?;
+            json!({ "set": set, "included": edit.on })
+        }
+        ActionSelection::Action(action) => {
+            let (set, at) = located(list, *action)?;
+            json!({ "set": set, "action": at, "included": edit.on })
+        }
+        ActionSelection::Step(action, step) => {
+            let (set, at) = located(list, *action)?;
+            json!({ "set": set, "action": at, "step": step, "included": edit.on, "others": others })
+        }
+        _ => return Ok(()),
+    };
+    run(app, INCLUDE_STEPS, params)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use serde_json::json;
     use vectorcraft_engine::Session;
 
-    #[test]
-    fn defaults_are_valid_commands() {
-        for set in default_sets() {
-            for a in set.actions {
-                for (c, _) in a.steps {
-                    assert!(vectorcraft_engine::find_command(&c).is_some(), "{c}");
-                }
-            }
-        }
-    }
+    use super::{BUTTON_MODE, START_RECORDING, STOP_RECORDING};
+    use crate::{UiState, VectorcraftApp};
 
-    /// #1629: a clicked action stays selected, so Play Current Selection plays it and Delete
-    /// Selection deletes it.
     #[test]
-    fn a_clicked_action_stays_selected_for_play_and_delete() {
-        use super::super::tests_appearance::{click, frame_events, text_rect};
+    fn button_mode_switches_the_view_and_is_kept_with_the_preferences() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-        let id = vectorcraft_doc::NodeId(id);
-        let ctx = egui::Context::default();
-        let texts = frame_events(&ctx, &mut app, vec![], show);
-        click(&ctx, &mut app, text_rect(&texts, "Reflect Horizontal").center(), show);
-        frame_events(&ctx, &mut app, vec![], show);
-        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((0, 5)), "selected on the frames after the click");
-        // The bottom bar's 24-point buttons, left to right: stop, record, play, delete.
-        let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
-        bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
-        let [_, _, play, delete] = bar[..] else { panic!("the bottom bar: {bar:?}") };
-        click(&ctx, &mut app, text_rect(&texts, "Duplicate and Offset 10 pt").center(), show);
-        click(&ctx, &mut app, play.center(), show);
-        assert_eq!(app.session.active().unwrap().selection.len(), 1);
-        assert_ne!(app.session.active().unwrap().selection.objects, [id], "played: the copy is selected");
-        let names = |app: &VectorcraftApp| app.ui.action_sets[0].actions.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
-        let before = names(&app);
-        click(&ctx, &mut app, delete.center(), show);
-        assert_eq!(names(&app), before[1..], "the selected action is deleted");
-        click(&ctx, &mut app, delete.center(), show);
-        assert_eq!(names(&app), before[1..], "nothing selected after a delete: nothing more goes");
-    }
-
-    /// A recording keeps its steps when a canceled undo group drops journal entries made before the
-    /// recording began.
-    #[test]
-    fn a_recording_keeps_its_steps_when_a_canceled_undo_group_drops_earlier_entries() {
-        use super::super::tests_appearance::{click, frame_events};
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let rect = |x: i32| json!({"x": x, "y": 10, "width": 20, "height": 20});
-        for (id, p) in [
-            ("file.new", json!({"width": 200, "height": 100})),
-            ("file.new", json!({"width": 200, "height": 100})),
-            ("document.activate", json!({"index": 0})),
-            ("edit.undoGroup.begin", json!({})),
-            ("shape.rectangle", rect(10)),
-        ] {
-            app.run(id, p).unwrap();
-        }
-        let ctx = egui::Context::default();
-        frame_events(&ctx, &mut app, vec![], show);
-        // The bottom bar's 24-point buttons, left to right: stop, record, play, delete.
-        let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
-        bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
-        let [stop, record, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
-        click(&ctx, &mut app, record.center(), show);
-        for (id, p) in [("document.activate", json!({"index": 1})), ("shape.rectangle", rect(50)), ("edit.undoGroup.end", json!({"cancel": true}))] {
-            app.run(id, p).unwrap();
-        }
-        click(&ctx, &mut app, stop.center(), show);
-        let steps = app.ui.action_sets[0].actions.last().map(|a| a.steps.iter().map(|(c, _)| c.clone()).collect::<Vec<_>>());
-        assert_eq!(steps, Some(vec!["document.activate".to_string(), "shape.rectangle".into(), "edit.undoGroup.end".into()]));
-    }
-
-    /// Actions recorded with Align to Artboard and Paste in Place, and the default Center on
-    /// Artboard, play on the artboard active when they play, not on the one active when they were
-    /// recorded.
-    #[test]
-    fn actions_play_on_the_artboard_active_when_they_play() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
-        let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
-        let r = app.run("shape.rectangle", json!({"x": boards[1].x0 + 10.0, "y": boards[1].y0 + 15.0, "width": 20, "height": 20})).unwrap();
-        let rect = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
-        let bounds = |app: &VectorcraftApp, ids: &[vectorcraft_doc::NodeId]| app.session.active().unwrap().doc.bounds_of(ids, false).unwrap();
-        // Each recorded as the panel records an action, with artboard 0 active.
-        let record = |app: &mut VectorcraftApp, name: &str, id: &str, params: Value| {
-            let start = app.session.journal.len();
-            app.run(id, params).unwrap();
-            let steps = app.session.journal_for_action(start);
-            app.ui.action_sets[0].actions.push(Action { name: name.into(), steps });
-            app.ui.action_sets[0].actions.len() - 1
-        };
-        app.run("edit.copy", json!({})).unwrap();
-        let align = record(&mut app, "Align Left", "object.align", json!({"horizontal": "left", "to": "artboard"}));
-        assert_eq!(bounds(&app, &[rect]).x0, boards[0].x0, "aligned to artboard 0 while recording");
-        let paste = record(&mut app, "Paste in Place", "edit.pasteInPlace", json!({}));
-        app.view_mut().unwrap().artboard = 2;
-        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
-        play(&mut app, 0, align).unwrap();
-        assert_eq!(bounds(&app, &[rect]).x0, boards[2].x0, "aligned to artboard 2, active when the action plays");
-        let ids: Vec<vectorcraft_doc::NodeId> = play(&mut app, 0, paste).unwrap()["results"][0]["ids"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| vectorcraft_doc::NodeId(v.as_u64().unwrap()))
-            .collect();
-        let b = bounds(&app, &ids);
-        assert_eq!((b.x0, b.y0), (boards[2].x0 + 10.0, boards[2].y0 + 15.0), "pasted onto artboard 2, where it was on artboard 1");
-        app.view_mut().unwrap().artboard = 1;
-        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
-        let center = app.ui.action_sets[0].actions.iter().position(|a| a.name == "Center on Artboard").unwrap();
-        play(&mut app, 0, center).unwrap();
-        assert_eq!(bounds(&app, &[rect]).center(), boards[1].center(), "centered on artboard 1, the active one");
-    }
-
-    /// Actions that record Distribute Objects and Distribute Spacing with Align to Artboard play on
-    /// the artboard active when they play, not on the one active when they were recorded.
-    #[test]
-    fn distribute_actions_play_on_the_artboard_active_when_they_play() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
-        let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
-        // The rectangles are 20, 40 and 20 pt wide, and they are on artboard 1.
-        let ids: Vec<vectorcraft_doc::NodeId> = [(10.0, 20.0), (50.0, 40.0), (120.0, 20.0)]
-            .into_iter()
-            .map(|(x, w)| {
-                let r = app.run("shape.rectangle", json!({"x": boards[1].x0 + x, "y": boards[1].y0 + 15.0, "width": w, "height": 20})).unwrap();
-                vectorcraft_doc::NodeId(r["id"].as_u64().unwrap())
-            })
-            .collect();
-        app.run("select.set", json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
-        let lefts =
-            |app: &VectorcraftApp| ids.iter().map(|id| app.session.active().unwrap().doc.bounds_of(&[*id], false).unwrap().x0).collect::<Vec<_>>();
-        // Each step is recorded as the panel records an action, while artboard 0 is active.
-        let record = |app: &mut VectorcraftApp, name: &str, id: &str, params: Value| {
-            let start = app.session.journal.len();
-            app.run(id, params).unwrap();
-            let steps = app.session.journal_for_action(start);
-            app.ui.action_sets[0].actions.push(Action { name: name.into(), steps });
-            app.ui.action_sets[0].actions.len() - 1
-        };
-        let (x0, x1) = (boards[0].x0, boards[0].x1);
-        let distribute = record(&mut app, "Distribute Left", "object.distribute", json!({"horizontal": "left", "to": "artboard"}));
-        assert_eq!(lefts(&app), [x0, x0 + 90.0, x1 - 20.0], "distributed across artboard 0 while recording");
-        let spacing = record(&mut app, "Distribute Spacing", "object.distributeSpacing", json!({"axis": "horizontal", "to": "artboard"}));
-        assert_eq!(lefts(&app), [x0, x0 + 80.0, x1 - 20.0], "spaced across artboard 0 while recording");
-        app.view_mut().unwrap().artboard = 2;
-        let (x0, x1) = (boards[2].x0, boards[2].x1);
-        play(&mut app, 0, distribute).unwrap();
-        assert_eq!(lefts(&app), [x0, x0 + 90.0, x1 - 20.0], "distributed across artboard 2, active when the action plays");
-        play(&mut app, 0, spacing).unwrap();
-        assert_eq!(lefts(&app), [x0, x0 + 80.0, x1 - 20.0], "spaced across artboard 2, active when the action plays");
+        assert!(!app.ui.actions_panel.settings.button_mode);
+        assert_eq!(app.run(BUTTON_MODE, json!({})).unwrap(), json!({"enabled": true}));
+        assert!(app.ui.actions_panel.settings.button_mode);
+        // The saved key stays a bool, as earlier versions wrote it.
+        let saved = serde_json::to_value(&app.ui).unwrap();
+        assert_eq!(saved["action_button_mode"], json!(true));
+        let read: UiState = serde_json::from_value(saved.clone()).unwrap();
+        assert!(read.actions_panel.settings.button_mode);
+        // Preferences saved before the key existed read as off.
+        let mut older = saved;
+        older.as_object_mut().unwrap().remove("action_button_mode");
+        assert!(!serde_json::from_value::<UiState>(older).unwrap().actions_panel.settings.button_mode);
+        // Turning it on is refused while an action records, and the view stays.
+        app.run(BUTTON_MODE, json!({"enabled": false})).unwrap();
+        app.run(START_RECORDING, json!({})).unwrap();
+        assert!(app.run(BUTTON_MODE, json!({"enabled": true})).is_err());
+        assert!(!app.ui.actions_panel.settings.button_mode);
+        app.run(STOP_RECORDING, json!({})).unwrap();
     }
 }

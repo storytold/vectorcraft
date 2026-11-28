@@ -23,6 +23,13 @@ const CHECK_EVERY: u64 = 1024;
 /// How a search ends when every walker thread stopped on a bug.
 const INTERNAL: &str = "every search thread stopped on an internal error (please report this bug)";
 
+/// Why a search couldn't start, without the folder's path ([`Progress::failure`]).
+const UNREADABLE: &str = "the folder can't be read";
+const NOT_A_FOLDER: &str = "the path isn't a folder";
+const SHARED: &str = "VectorCraft doesn't search the Shared or Public folder in Users";
+const APPS: &str = "VectorCraft doesn't search other apps' or the system's folders";
+const UNLISTED: &str = "the folder can't be listed";
+
 /// What a search looks for.
 pub trait Visitor: Send + Sync {
     /// Whether the regular file named `name` is to be read: asked of the files a folder lists until
@@ -77,8 +84,9 @@ pub enum End {
     /// reached their [`Limits`]. Folders deeper than [`Limits::depth`] are skipped and an item
     /// keeps at most [`Limits::per_item`] files, without ending the search.
     Limit,
-    /// It couldn't start: the folder can't be read, isn't a folder or isn't one to search.
-    Failed(String),
+    /// It couldn't start: the folder can't be read, isn't a folder or isn't one to search. Why,
+    /// and the same without the folder's path.
+    Failed(String, &'static str),
 }
 
 /// Where a search stands ([`Search::progress`]).
@@ -114,7 +122,7 @@ impl Progress {
             None => "searching",
             Some(End::Done | End::Found) => "done",
             Some(End::Stopped | End::Time | End::Limit) => "stopped",
-            Some(End::Failed(_)) => "failed",
+            Some(End::Failed(..)) => "failed",
         }
     }
 
@@ -131,8 +139,36 @@ impl Progress {
     /// Why a failed search failed.
     pub fn error(&self) -> Option<&str> {
         match &self.end {
-            Some(End::Failed(e)) => Some(e),
+            Some(End::Failed(e, _)) => Some(e),
             _ => None,
+        }
+    }
+
+    /// Why a failed search failed, without the folder's path.
+    pub fn failure(&self) -> Option<&'static str> {
+        match &self.end {
+            Some(End::Failed(_, why)) => Some(why),
+            _ => None,
+        }
+    }
+
+    /// Keep what the caller asking now may read under its read roots ([`crate::file_access::current`]),
+    /// for a reply to it: the files found inside them. Returns the folder searched (`given` until a
+    /// walker checked it) and why the search failed, when that folder lies inside them too;
+    /// otherwise no folder and why without its path ([`Self::failure`]). Without read roots in
+    /// force, everything is kept.
+    pub fn keep_readable(&mut self, given: &str) -> (Option<String>, Option<String>) {
+        let folder = if self.folder.as_os_str().is_empty() { given.to_string() } else { self.folder.to_string_lossy().into_owned() };
+        if crate::file_access::current().is_none() {
+            return (Some(folder), self.error().map(str::to_string));
+        }
+        // A path that isn't valid text is never shown: its lossy form names another file.
+        let readable = |p: &Path| p.to_str().is_some_and(|p| crate::file_access::check_read(p).is_ok());
+        self.hits.retain(|(path, _)| readable(path));
+        if readable(Path::new(given)) && (self.folder.as_os_str().is_empty() || readable(&self.folder)) {
+            (Some(folder), self.error().map(str::to_string))
+        } else {
+            (None, self.failure().map(str::to_string))
         }
     }
 }
@@ -259,6 +295,10 @@ pub(crate) fn start_in(
     }
     // The walkers follow no links, so a folder automation may read holds all they read.
     crate::file_access::check_read(&folder.to_string_lossy())?;
+    // The check above reads a lossy string: under roots, a path it would alter names another folder.
+    if folder.to_str().is_none() && crate::file_access::current().is_some() {
+        return Err("automation path rejected: the folder's name isn't valid text".into());
+    }
     let seconds = if limits.seconds.is_finite() { limits.seconds.clamp(0.0, 3600.0) } else { 60.0 };
     let n = pool.reserve(threads.clamp(1, MAX_THREADS));
     if n == 0 {
@@ -279,6 +319,7 @@ pub(crate) fn start_in(
         walk: Mutex::new(Walk { root: Some(folder), alive: n, found: vec![0; items], ..Walk::default() }),
         wake: Condvar::new(),
         pool,
+        scope: crate::file_access::ScopeHandle::capture(),
     });
     let mut spawned = 0;
     for _ in 0..n {
@@ -301,7 +342,7 @@ pub(crate) fn start_in(
             return Err("the search couldn't start: try again in a moment".into());
         }
         if w.alive == 0 && w.end.is_none() {
-            shared.finish(&mut w, End::Failed(INTERNAL.into()));
+            shared.finish(&mut w, End::Failed(INTERNAL.into(), INTERNAL));
         }
     }
     Ok(Search { shared })
@@ -325,6 +366,8 @@ struct Shared {
     /// Woken when folders are queued, a walker finishes a folder, or the search ends.
     wake: Condvar,
     pool: &'static Pool,
+    /// The automation roots in force when the search started, for the folders the walkers add.
+    scope: crate::file_access::ScopeHandle,
 }
 
 /// The state walkers change under the lock.
@@ -394,13 +437,13 @@ impl Shared {
     fn prepare(&self, root: &Path) {
         let rules = self.rules.get_or_init(|| self.given.clone().unwrap_or_else(Rules::system));
         let path = root.display();
-        let checked = match std::fs::canonicalize(root) {
-            Err(e) => Err(format!("{path}: {e}")),
-            Ok(folder) if !folder.is_dir() => Err(format!("{path} is not a folder")),
+        let (checked, brief) = match std::fs::canonicalize(root) {
+            Err(e) => (Err(format!("{path}: {e}")), UNREADABLE),
+            Ok(folder) if !folder.is_dir() => (Err(format!("{path} is not a folder")), NOT_A_FOLDER),
             Ok(folder) => match rules.refusal(&folder) {
-                None => Ok(folder),
-                Some(Refusal::Shared) => Err(format!("VectorCraft doesn't search the Shared or Public folder in Users: {path}")),
-                Some(Refusal::Apps) => Err(format!("VectorCraft doesn't search other apps' or the system's folders: {path}")),
+                None => (Ok(folder), INTERNAL),
+                Some(Refusal::Shared) => (Err(format!("VectorCraft doesn't search the Shared or Public folder in Users: {path}")), SHARED),
+                Some(Refusal::Apps) => (Err(format!("VectorCraft doesn't search other apps' or the system's folders: {path}")), APPS),
             },
         };
         let mut w = self.lock();
@@ -409,7 +452,7 @@ impl Shared {
                 w.folder = folder.clone();
                 w.stack.push((folder, 0));
             }
-            Err(e) => self.finish(&mut w, End::Failed(e)),
+            Err(e) => self.finish(&mut w, End::Failed(e, brief)),
         }
     }
 
@@ -423,7 +466,7 @@ impl Shared {
                 let mut w = self.lock();
                 // The picked folder itself: the search can't run, and says why.
                 if depth == 0 {
-                    self.finish(&mut w, End::Failed(format!("{}: {e}", plain(dir.to_path_buf()).display())));
+                    self.finish(&mut w, End::Failed(format!("{}: {e}", plain(dir.to_path_buf()).display()), UNLISTED));
                 } else {
                     w.unreadable += 1;
                     w.folders += 1;
@@ -490,7 +533,10 @@ impl Shared {
             }
             queue.push((path, depth + 1));
         }
-        let home = rules.home_below(&listed);
+        // The home folder is added by a rule, not picked: it needs the picked folder's authority.
+        let home = rules
+            .home_below(&listed)
+            .filter(|h| !rules.is_refused(h) && self.scope.clone().run(|| crate::file_access::check_read(&h.to_string_lossy())).is_ok());
         {
             let mut w = self.lock();
             w.files += files;
@@ -600,7 +646,7 @@ fn walker(s: &Shared) {
         if done.is_err() {
             let mut w = s.lock();
             match job {
-                Job::Prepare(_) => s.finish(&mut w, End::Failed(INTERNAL.into())),
+                Job::Prepare(_) => s.finish(&mut w, End::Failed(INTERNAL.into(), INTERNAL)),
                 Job::List(..) => w.unreadable += 1,
             }
         }
@@ -630,7 +676,7 @@ impl Drop for Alive {
         let mut w = self.0.lock();
         w.alive = w.alive.saturating_sub(1);
         if w.alive == 0 && w.end.is_none() {
-            self.0.finish(&mut w, End::Failed(INTERNAL.into()));
+            self.0.finish(&mut w, End::Failed(INTERNAL.into(), INTERNAL));
         }
         drop(w);
         self.0.pool.release(1);

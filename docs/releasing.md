@@ -42,6 +42,12 @@ pick that branch for a full run. Run on any other branch, it is a dry run: the L
 FreeBSD and web jobs build and upload their artifacts, the environment refuses the signing jobs,
 and no draft release is created.
 
+Flatpak permission repairs need one update through the existing host-side installation method.
+After that update, Help > Check for Updates can inspect and update standalone bundles.
+Repository-managed installations continue to use their package manager; launcher-pinned
+versions keep their selected version. Both Flatpak manifests must grant network access,
+the host Flatpak interface, and read-only access to the shared version choices.
+
 ## What gets built
 
 | Platform | Artifacts | Built on |
@@ -65,7 +71,7 @@ pinned commit (the `ref:` of its craft-fonts checkout step) and builds with `CRA
 `CRAFT_FONTS_REQUIRED=1`, so releases embed its Japanese fonts and fail rather than ship without
 them (the web build embeds only the UI font, BIZ UDPGothic Regular, to stay small). The packages carry each embedded font's licence as `OFL-<family>.txt`
 (`copy_font_licences` in `packaging/env.sh`). Bump the pins deliberately, in every job at once.
-The rules are in craftrules `standards/fonts.md`, the build option in
+The build option is in
 [`docs/development.md`](development.md) › Fonts.
 
 ### macOS
@@ -128,11 +134,15 @@ to the target triple, so host build scripts aren't affected.
   inside the signed bundle), for an AppImage next to the `.AppImage` file (`$APPIMAGE`; the mounted
   executable's own folder is read-only). Flatpak isn't supported: `/app` is read-only and the
   sandbox has no folder "beside the app", so a Flatpak install always uses its own config folder.
-- `vectorcraft.wxs` (WiX) is a per-machine install into Program Files with a Start Menu shortcut
+- `vectorcraft.wxs` (WiX) is a dual-scope package (per-user by default into
+  `%LOCALAPPDATA%\Programs\ArtCraft\VectorCraft`, per-machine into `Program Files\ArtCraft\VectorCraft` (`Program Files (x86)` for the 32-bit build),
+  see `packaging/windows/INSTALLATION.md`) with a Start Menu shortcut
   and an App Paths entry (Win+R `vectorcraft`). Same-version upgrades are allowed, so release
   candidates replace each other.
-- Double-clicking the MSI opens a setup wizard (WixUI_InstallDir without the licence page):
-  Welcome, install folder (remembered for upgrades in `HKLM\Software\VectorCraft\InstallDir`),
+- Double-clicking the MSI opens a setup wizard (WixUI_InstallDir without the licence page; the scope page appears only for a new full-UI install, not for
+  maintenance, uninstall or reduced and silent runs):
+  a scope page ("Only for me" or "Everyone on this computer"), Welcome, install folder (remembered for
+  upgrades in `HKLM` or `HKCU\Software\VectorCraft\InstallDir` according to scope),
   Shortcuts (a ticked "Create a desktop shortcut" box), Ready, a progress page, and a Finish page
   that says where to find the app, with a ticked "Launch VectorCraft" box. The pages name the full
   version (`vectorcraft.en-us.wxl`). `package.ps1` draws the wizard's banner and side bitmaps from
@@ -160,7 +170,7 @@ to the target triple, so host build scripts aren't affected.
 AppStream metainfo, the MIME type for VectorCraft documents, the icons and the licence files.
 
 **Document types.** The desktop entry's `MimeType` lists every format File › Open reads but PSD,
-PSB, `.ps` PostScript and Targa, so file managers list VectorCraft under Open With for them.
+PSB, `.ps` PostScript, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF and HP-GL, so file managers list VectorCraft under Open With for them.
 `ai.storyteller.vectorcraft.mime.xml` declares the types that shared-mime-info lacks: VectorCraft
 documents and templates, `.ait` templates and Affinity files (`application/x-affinity`). An `.af`
 file gets the Affinity type by its content, and `.afdesign` and `.afpub` files by their extension.
@@ -233,9 +243,16 @@ the job fails and asks for a version bump (`cargo xtask version set`).
 ## Secrets
 
 The jobs that sign (macOS, Windows) and the draft-release job run in the `release` environment,
-which only the `release` branch can use and which holds the signing secrets. The other jobs get no
+which only the `release` branch can use today and which holds the signing secrets. The other jobs get no
 secrets. Every secret is optional: a missing one produces unsigned artifacts and a
 warning, never a failed build.
+
+The supervised nightly signer does not sign from `release`: it runs on `refs/heads/nightly-signer`,
+which only ever fast-forwards to reviewed main commits, and the `release` environment must admit
+`nightly-signer` alongside `release` before the first dispatch. Everything that can reach it is the
+trust closure: all of `.github/` and `packaging/`, including `packaging/env.sh`, which
+`packaging/macos/import-cert.sh` sources with the Apple keys. Stable releases still come only from
+`refs/heads/release`.
 
 | Secret | Used for |
 |---|---|

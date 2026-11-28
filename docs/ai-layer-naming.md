@@ -3,7 +3,11 @@
 Desktop: open the Layers panel menu → **Name Layers with AI…**. Enter the name of an installed
 Ollama vision model and choose the output language, whole document or highlighted rows/selection,
 and group depth (1–16). Use **Play** to start or continue and **Pause** to suspend the queue after the
-current group. Ready names appear as each request completes; the progress bar shows completed/total with moving diagonal stripes inside the completed portion while requests are running, including a small active cap during the first request. Pausing freezes the stripes; completion leaves a solid full bar. Explicit running, paused and complete labels distinguish the job state.
+current group (**Continue** resumes). Ready names appear as each request completes; the counter and
+progress bar show completed/total. While the first answer is awaited the bar shows an unknown extent
+(the framework's moving segment, still and dashed where motion is reduced). Explicit running,
+finishing, paused and complete labels distinguish the job state, so colour and motion are never the
+only signal.
 Review/edit them and choose **Apply Ready Names** to apply the completed portion in one undo step.
 There is no Stop button. **Start Over** discards the current suggestions and checkpoint, without
 undoing names already applied. Settings are retained with UI preferences.
@@ -54,33 +58,23 @@ escaping; this feature does not rewrite arbitrary SVG source in place or convert
 
 Automation:
 
-- `ui.nameLayers {}` opens the settings/review dialog.
+- `ui.nameLayers {}` opens the settings/review dialog (dialog `layerNames`). Its fields `endpoint`,
+  `model`, `language`, `scope` and `depth` can be set while no run is going; `names` edits ready names
+  by id; `action` set to `play`, `pause` or `startOver` presses that button. OK is Apply Ready Names.
 - `layer.namingCandidates {scope: "all" | "selection", depth: 1..16}` returns `{uid, revision, rows}`.
 - `layer.applyNames {uid, revision, names: [{id, name}]}` applies a reviewed mapping in one history step.
 
 Validation covers read-only review/cancellation, atomic rejection, stale revisions, Undo/Redo,
 selection/depth, unchanged rendered pixels, SVG name round trips, malformed model output, a local
-mock Ollama HTTP exchange including real rendered previews, and headless dialog layout. A real
+mock Ollama HTTP exchange including real rendered previews, the dialog driven through the window's
+dialog host (open, pump, Apply, Cancel and close/reopen), and automation fields. A real
 model is required separately to assess semantic naming quality; protocol tests do not measure it.
 
-Initial implementation validation on 2026-10-17: all ten `cargo xtask ci` steps passed (fmt, Clippy, workspace tests,
-no-bundled-fonts, PDF dependencies, assets, brands, cursors, layering and WASM). Settings and review
-screens were rendered and inspected with the egui test harness. Real-model semantic quality remains
-unmeasured.
+The dialog was moved onto the craft UI framework on 2026-11-28 (Form dialog, Select, Number and
+Text fields, the framework's Progress bar); the worker, request format and validation are unchanged.
 
-Play/Pause follow-up (2026-10-17): seven focused UI tests passed, including a controlled HTTP
-request paused in flight, no subsequent request while paused, continuation skipping completed IDs,
-partial apply/reopen, preservation of user edits, close/reopen with the latest completed batch,
-and stale-document recovery. Settings, ready-name review and paused-player screenshots were rendered
-and inspected with the headless egui GPU harness.
-
-Ollama compatibility regression (2026-10-17): ordinary JSON mode allowed responses without `names`,
-and small models copied supplied placeholder names or confused targets in a contact sheet. Strict
-schema decoding, one isolated image per request and omission of existing names address those cases.
-The opt-in `real_ollama_returns_the_required_names_array` test passed with local `qwen2.5vl:3b`
-on four groups from a user-provided SVG (used locally only); the proposals were inspected. This is a
-limited live compatibility check, not a semantic accuracy benchmark. Set `VECTORCRAFT_NAMING_SVG`
-to a local SVG to repeat it, or omit that variable to use synthetic rectangles:
+The opt-in `real_ollama_returns_the_required_names_array` test checks a running local model on four
+synthetic groups. It is a limited live compatibility check, not a semantic accuracy benchmark:
 
 ```sh
 VECTORCRAFT_NAMING_OLLAMA_MODEL=qwen2.5vl:3b cargo test -p vectorcraft-ui-egui real_ollama_returns_the_required_names_array --lib -- --ignored --nocapture

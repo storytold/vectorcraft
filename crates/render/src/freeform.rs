@@ -10,8 +10,9 @@ use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+use vectorcraft_color::cms::Model;
 use vectorcraft_color::freeform::{grid_size, painted_box, spread_scale};
-use vectorcraft_color::{Color, Freeform, GradientPaint};
+use vectorcraft_color::{Freeform, GradientPaint};
 use vectorcraft_geom::{Affine, Rect};
 use vello_cpu::peniko::{Extend, ImageQuality, ImageSampler};
 use vello_cpu::{Pixmap, RenderContext};
@@ -24,14 +25,9 @@ thread_local! {
     static GRIDS: RefCell<FrameCache<u64, Arc<Pixmap>>> = RefCell::new(FrameCache::new(lru::FREEFORM_BUDGET, usize::MAX));
 }
 
-fn hash_color(c: &Color, h: &mut impl Hasher) {
-    match *c {
-        Color::Rgb { r, g, b } => (0u8, r.to_bits(), g.to_bits(), b.to_bits()).hash(h),
-        Color::Cmyk { c, m, y, k } => (1u8, c.to_bits(), m.to_bits(), y.to_bits(), k.to_bits()).hash(h),
-        Color::Gray { k } => (2u8, k.to_bits()).hash(h),
-        Color::Lab { l, a, b } => (3u8, l.to_bits(), a.to_bits(), b.to_bits()).hash(h),
-    }
-}
+/// Most cells along a side of a grid of Lab points on an ink plane, where each cell separates its
+/// color through the profile; the paint smooths the grid.
+const MAX_LAB_PLANE_CELLS: u16 = 64;
 
 /// Cache key of the grid of `f` on box `b` at `cols` × `rows` painted with `ink` (and the active
 /// colour settings, which turn colours into display RGB or inks).
@@ -39,7 +35,7 @@ fn key(f: &Freeform, b: Rect, cols: u16, rows: u16, ink: Ink) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     for p in &f.points {
         (p.at.x.to_bits(), p.at.y.to_bits(), p.opacity.to_bits(), p.spread.to_bits()).hash(&mut h);
-        hash_color(&p.color, &mut h);
+        p.color.key().hash(&mut h);
     }
     f.lines.hash(&mut h);
     (b.x0.to_bits(), b.y0.to_bits(), b.x1.to_bits(), b.y1.to_bits(), cols, rows).hash(&mut h);
@@ -47,18 +43,33 @@ fn key(f: &Freeform, b: Rect, cols: u16, rows: u16, ink: Ink) -> u64 {
     h.finish()
 }
 
+/// The grid size of `f` on box `b` drawn `device` pixels long with `ink`.
+pub(crate) fn cells(f: &Freeform, b: Rect, device: f64, ink: Ink) -> (u16, u16) {
+    let (cols, rows) = grid_size(b, device);
+    if f.shared_model() == Some(Model::Lab) && matches!(ink.base(), Ink::Cmy | Ink::K) {
+        return (cols.min(MAX_LAB_PLANE_CELLS), rows.min(MAX_LAB_PLANE_CELLS));
+    }
+    (cols, rows)
+}
+
 /// Sample `f` at the centres of a `cols` × `rows` grid over `b` (premultiplied, colours as `ink`
-/// paints them).
+/// paints them). Points that share a color model mix in that model ([`Freeform::model_field`]);
+/// points in different models, and points that `ink` paints as RGB black, mix as `ink` paints each
+/// of them.
 pub(crate) fn rasterize(f: &Freeform, b: Rect, cols: u16, rows: u16, ink: Ink) -> Pixmap {
-    let field = f.field_with(spread_scale(b), &|c| ink.rgb(c));
-    let data = field
-        .grid(b, cols, rows)
-        .map(|([r, g, bl], a)| {
-            let a = a.clamp(0.0, 1.0);
-            let q = |v: f32| (v.clamp(0.0, 1.0) * a * 255.0).round() as u8;
-            vello_cpu::color::PremulRgba8 { r: q(r), g: q(g), b: q(bl), a: (a * 255.0).round() as u8 }
-        })
-        .collect();
+    let adjusted = ink.freeform(f);
+    let (f, ink) = adjusted.as_ref().map_or((f, ink), |a| (a, ink.base()));
+    let cell = |[r, g, bl]: [f32; 3], a: f32| {
+        let a = a.clamp(0.0, 1.0);
+        let q = |v: f32| (v.clamp(0.0, 1.0) * a * 255.0).round() as u8;
+        vello_cpu::color::PremulRgba8 { r: q(r), g: q(g), b: q(bl), a: (a * 255.0).round() as u8 }
+    };
+    let scale = spread_scale(b);
+    let data = if f.shared_model().is_some() && !ink.blacks_a_point(f) {
+        f.model_field(scale).grid(b, cols, rows).map(|(c, a)| cell(ink.rgb_sampled(&c), a)).collect()
+    } else {
+        f.field_with(scale, &|c| ink.rgb(c)).grid(b, cols, rows).map(|(rgb, a)| cell(rgb, a)).collect()
+    };
     Pixmap::from_parts(data, cols, rows)
 }
 
@@ -67,8 +78,8 @@ pub(crate) fn rasterize(f: &Freeform, b: Rect, cols: u16, rows: u16, ink: Ink) -
 pub(crate) fn set_freeform_paint(ctx: &mut RenderContext, g: &GradientPaint, bounds: Rect, ink: Ink) -> bool {
     let Some(b) = painted_box(bounds) else { return false };
     let device = b.width().max(b.height()) * ctx.transform().determinant().abs().sqrt();
-    let (cols, rows) = grid_size(b, device);
     let f = g.freeform_on(b);
+    let (cols, rows) = cells(&f, b, device, ink);
     let k = key(&f, b, cols, rows, ink);
     let pm = GRIDS
         .with(|c| {

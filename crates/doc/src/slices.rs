@@ -274,6 +274,10 @@ pub fn auto_slices(region: Rect, cut: &[Rect]) -> Vec<Rect> {
         return vec![];
     }
     let inside: Vec<Rect> = cut.iter().map(|r| region.intersect(*r)).filter(|r| valid_rect(*r)).collect();
+    // Every band scans every cut: past a bound the layout is refused, not truncated.
+    if inside.len() > MAX_AUTO_CUTS {
+        return vec![];
+    }
     let mut ys: Vec<f64> = inside.iter().flat_map(|r| [r.y0, r.y1]).chain([region.y0, region.y1]).collect();
     ys.sort_by(f64::total_cmp);
     ys.dedup_by(|a, b| (*a - *b).abs() <= EPS);
@@ -298,6 +302,9 @@ pub fn auto_slices(region: Rect, cut: &[Rect]) -> Vec<Rect> {
         // Spans continuing an open slice extend it; the others close.
         let mut next = Vec::with_capacity(free.len());
         for (a, b) in free {
+            if done.len() + open.len() + next.len() >= MAX_AUTO_SLICES {
+                break;
+            }
             match open.iter().position(|r: &Rect| (r.x0 - a).abs() <= EPS && (r.x1 - b).abs() <= EPS) {
                 Some(i) => {
                     let mut r = open.swap_remove(i);
@@ -309,7 +316,18 @@ pub fn auto_slices(region: Rect, cut: &[Rect]) -> Vec<Rect> {
         }
         done.append(&mut open);
         open = next;
+        // Crossing strips make a cell of every crossing: the layout stops, short, past a bound.
+        if done.len() + open.len() >= MAX_AUTO_SLICES {
+            break;
+        }
     }
     done.append(&mut open);
+    done.truncate(MAX_AUTO_SLICES);
     done
 }
+
+/// The most slices automatic layout makes.
+const MAX_AUTO_SLICES: usize = 10_000;
+
+/// The most cut rectangles automatic layout works through.
+const MAX_AUTO_CUTS: usize = 2_000;

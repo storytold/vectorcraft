@@ -1,0 +1,499 @@
+//! File I/O through MCP: every readable format opens headless, `export` sends one
+//! `document.export` call whatever the backend, and `save_file` one `app.save` call.
+
+use std::io::{BufRead, BufReader, Write};
+
+use serde_json::{Value, json};
+
+use super::TempFolder;
+use crate::{Backend, Headless, Remote, Server, call_tool, tool_definitions};
+
+/// The path of `name` in `dir`, as a string.
+fn tmp(dir: &TempFolder, name: &str) -> String {
+    dir.file(name).to_string_lossy().to_string()
+}
+
+fn text(r: &crate::ToolResult) -> Value {
+    assert!(!r.is_error, "{r:?}");
+    serde_json::from_str(r.content[0]["text"].as_str().unwrap()).unwrap()
+}
+
+/// A headless session with two artboards of different widths (100 and 40 pt) and a rectangle.
+fn two_boards() -> Headless {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 100, "height": 50, "artboards": 2}})).unwrap();
+    h.call("engine.execute", json!({"command": "artboard.setProps", "params": {"index": 1, "width": 40}})).unwrap();
+    h.call("engine.execute", json!({"command": "shape.rectangle", "params": {"x": 10, "y": 10, "width": 20, "height": 20}})).unwrap();
+    h
+}
+
+#[test]
+fn headless_opens_pdf_ai_and_templates() {
+    let dir = TempFolder::new("fileio-open");
+    let mut h = two_boards();
+    let pdf = h.call("engine.execute", json!({"command": "document.serialize", "params": {"format": "pdf"}})).unwrap();
+    let pdf = vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap();
+    for name in ["x.pdf", "x.ai"] {
+        let path = tmp(&dir, name);
+        std::fs::write(&path, &pdf).unwrap();
+        let r = text(&call_tool(&mut h, "open_file", &json!({"path": path})));
+        assert_eq!(r["title"], name);
+        assert_eq!(h.session.doc().unwrap().doc.artboards.len(), 2, "one artboard per page");
+    }
+    let ait = tmp(&dir, "x.ait");
+    std::fs::write(&ait, &pdf).unwrap();
+    let r = text(&call_tool(&mut h, "open_file", &json!({"path": ait})));
+    assert!(r["title"].as_str().unwrap().starts_with("Untitled-"), "{r}");
+    let saved = h.call("engine.execute", json!({"command": "file.saveAsTemplate", "params": {"path": tmp(&dir, "t.vectorcraft")}})).unwrap();
+    let tpl = tmp(&dir, "t.vctemplate");
+    assert_eq!(saved["path"], tpl.as_str(), "saved with the template's extension: {saved}");
+    let r = text(&call_tool(&mut h, "open_file", &json!({"path": tpl})));
+    assert!(r["title"].as_str().unwrap().starts_with("Untitled-"), "{r}");
+    assert_eq!(h.session.doc().unwrap().path, None, "Save asks for a new name");
+}
+
+#[test]
+fn export_tool_lists_engine_formats_and_options() {
+    let tools = tool_definitions();
+    let export = tools.iter().find(|t| t["name"] == "export").unwrap();
+    let props = &export["inputSchema"]["properties"];
+    assert_eq!(
+        props["format"]["enum"],
+        json!([
+            "vectorcraft",
+            "svg",
+            "svgz",
+            "pdf",
+            "ai",
+            "png",
+            "jpg",
+            "gif",
+            "webp",
+            "tiff",
+            "bmp",
+            "template",
+            "png8",
+            "txt",
+            "dxf",
+            "eps",
+            "emf",
+            "wmf",
+            "hpgl",
+            "tga",
+            "psd",
+            "cmx"
+        ])
+    );
+    for k in ["artboard", "range", "options"] {
+        assert!(props.get(k).is_some(), "export takes {k}");
+    }
+    // The description names every format of the enum.
+    let words: Vec<&str> = export["description"].as_str().unwrap().split(|c: char| !c.is_ascii_alphanumeric()).collect();
+    for f in props["format"]["enum"].as_array().unwrap() {
+        assert!(words.contains(&f.as_str().unwrap()), "{f}");
+    }
+    let open = tools.iter().find(|t| t["name"] == "open_file").unwrap();
+    assert!(open["description"].as_str().unwrap().contains(".ait"));
+    assert!(open["description"].as_str().unwrap().contains(".eps, .epsf, .ps, "), "{open}");
+    assert!(open["description"].as_str().unwrap().contains(".bmp, .dib, .rle, .tga, .vda, .icb, .vst, "), "{open}");
+}
+
+/// A fake app that records `engine.execute` calls and answers each with an empty object.
+fn recording_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let h = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut out = stream.try_clone().unwrap();
+        let mut seen = vec![];
+        for line in BufReader::new(stream).lines() {
+            let msg: Value = serde_json::from_str(&line.unwrap()).unwrap();
+            writeln!(out, "{}", json!({"id": msg["id"], "ok": true, "result": {}})).unwrap();
+            // The connection's token comes first; the calls after it are recorded.
+            if msg["method"] != craft::automation::security::AUTH_METHOD {
+                seen.push(msg);
+            }
+        }
+        seen
+    });
+    (addr, h)
+}
+
+#[test]
+fn export_is_the_same_call_in_the_app_and_headless() {
+    let args = json!({"format": "png", "artboard": 1, "options": {"scale": 2, "artboard": 0, "range": "1-2"}});
+    let (addr, app) = recording_app();
+    let mut remote = Remote::connect(&addr, "test").unwrap();
+    assert!(!call_tool(&mut remote, "export", &args).is_error);
+    drop(remote);
+    let seen = app.join().unwrap();
+    assert_eq!(seen[0]["method"], "engine.execute");
+    assert_eq!(seen[0]["params"], json!({"command": "document.export", "params": {"format": "png", "artboard": 1, "scale": 2}}));
+
+    // Headless runs that very call: artboard 1 (40 pt wide) at scale 2.
+    let mut h = two_boards();
+    let r = text(&call_tool(&mut h, "export", &args));
+    let png = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    assert_eq!(&png[16..20], 80u32.to_be_bytes(), "IHDR width");
+    let direct = h.call("engine.execute", seen[0]["params"].clone()).unwrap();
+    assert_eq!(direct["dataBase64"], r["dataBase64"]);
+}
+
+#[test]
+fn the_raster_scale_leaves_other_formats_alone() {
+    // DXF's own `scale` (drawing units per mm) comes through `options`; the raster one would resize
+    // the drawing and leave its units unset.
+    let mut h = two_boards();
+    let dxf = |h: &mut Headless, args: Value| text(&call_tool(h, "export", &args))["dataBase64"].clone();
+    let plain = dxf(&mut h, json!({"format": "dxf"}));
+    assert!(dxf(&mut h, json!({"format": "dxf", "scale": 2})) == plain, "the raster scale changed the DXF");
+    assert!(dxf(&mut h, json!({"format": "dxf", "options": {"scale": 2}})) != plain, "the DXF scale was dropped");
+}
+
+#[test]
+fn exporting_native_keeps_the_document_path() {
+    let dir = TempFolder::new("fileio-keep-path");
+    let mut h = two_boards();
+    let doc = tmp(&dir, "keep.vectorcraft");
+    h.call("app.save", json!({"path": doc})).unwrap();
+    let copy = tmp(&dir, "copy.vectorcraft");
+    let r = text(&call_tool(&mut h, "export", &json!({"path": copy})));
+    assert_eq!(r["format"], "vectorcraft");
+    assert_eq!(h.session.doc().unwrap().path.as_deref(), Some(doc.as_str()));
+    // PDF range through the tool: one page.
+    let pdf = text(&call_tool(&mut h, "export", &json!({"format": "pdf", "range": "2"})));
+    let pdf = vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap();
+    assert_eq!(pdf_pages(&pdf), 1);
+    // An .ai export holds every artboard by default and one artboard with a range, and the document keeps its path.
+    for (args, pages) in [(json!({"format": "ai"}), 2), (json!({"format": "ai", "range": "2"}), 1)] {
+        let ai = text(&call_tool(&mut h, "export", &args));
+        assert_eq!(ai["format"], "ai");
+        assert_eq!(pdf_pages(&vectorcraft_format::base64_decode(ai["dataBase64"].as_str().unwrap()).unwrap()), pages, "{args}");
+    }
+    assert_eq!(h.session.doc().unwrap().path.as_deref(), Some(doc.as_str()));
+}
+
+/// The bytes `save_file` writes to `name` in `dir` with `args`.
+fn saved_with(h: &mut Headless, dir: &TempFolder, name: &str, mut args: Value) -> Vec<u8> {
+    let path = tmp(dir, name);
+    args["path"] = json!(path);
+    let r = text(&call_tool(h, "save_file", &args));
+    assert_eq!(r["format"], "vectorcraft", "{r}");
+    std::fs::read(&path).unwrap()
+}
+
+#[test]
+fn save_file_takes_the_native_save_options() {
+    let dir = TempFolder::new("fileio-save-options");
+    let mut h = two_boards();
+    let gz = saved_with(&mut h, &dir, "gz.vectorcraft", json!({"compress": true}));
+    assert_eq!(gz[..2], [0x1f, 0x8b], "gzipped");
+    let plain = saved_with(&mut h, &dir, "plain.vectorcraft", json!({"compress": false}));
+    assert_eq!(plain[0], b'{', "plain JSON");
+    let nodes = h.session.doc().unwrap().doc.node_count();
+    for name in ["gz.vectorcraft", "plain.vectorcraft"] {
+        let mut back = Headless::new();
+        text(&call_tool(&mut back, "open_file", &json!({"path": tmp(&dir, name)})));
+        assert_eq!(back.session.doc().unwrap().doc.node_count(), nodes, "{name} reopens");
+    }
+    let opt = saved_with(&mut h, &dir, "opt.vectorcraft", json!({"options": {"compress": true}}));
+    assert_eq!(opt[..2], [0x1f, 0x8b], "`options` carries them too");
+    let v3: Value = serde_json::from_slice(&saved_with(&mut h, &dir, "v3.vectorcraft", json!({"version": 3, "preview": null}))).unwrap();
+    assert_eq!(v3["version"], 3);
+    let shown = saved_with(&mut h, &dir, "preview.vectorcraft", json!({"preview": true}));
+    assert!(vectorcraft_format::preview(&shown).is_some(), "a preview");
+    assert!(vectorcraft_format::preview(&plain).is_none(), "off by default");
+    // `precision` rounds the path coordinates of that save only.
+    let mut p = Headless::new();
+    p.call("engine.execute", json!({"command": "file.new", "params": {"width": 100, "height": 100}})).unwrap();
+    p.call("engine.execute", json!({"command": "path.create", "params": {"anchors": [{"x": 10.123456, "y": 20.654321}, {"x": 30.5, "y": 40.25}]}}))
+        .unwrap();
+    let exact = String::from_utf8(saved_with(&mut p, &dir, "exact.vectorcraft", json!({"compress": false}))).unwrap();
+    assert!(exact.contains("10.123456") && exact.contains("20.654321"), "{exact}");
+    let rounded = String::from_utf8(saved_with(&mut p, &dir, "rounded.vectorcraft", json!({"compress": false, "precision": 1}))).unwrap();
+    assert!(!rounded.contains("10.123456") && !rounded.contains("20.654321") && rounded.contains("20.7"), "{rounded}");
+    // Version 2 files can't be compressed: the engine's error comes back.
+    let r = call_tool(&mut h, "save_file", &json!({"path": tmp(&dir, "v2.vectorcraft"), "version": 2, "compress": true}));
+    assert!(r.is_error && r.content[0]["text"].as_str().unwrap().contains("can't be compressed"), "{r:?}");
+
+    // The options are in the schema; a misspelled one is still refused.
+    let mut s = Server::new(Box::new(Headless::with_document()));
+    let call = |s: &mut Server, args: Value| {
+        s.handle(json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "save_file", "arguments": args}})).unwrap()
+    };
+    let r = call(&mut s, json!({"path": tmp(&dir, "ok.vectorcraft"), "compress": true}));
+    assert_eq!(r["result"]["isError"], false, "{r}");
+    let r = call(&mut s, json!({"path": tmp(&dir, "typo.vectorcraft"), "compresss": true}));
+    assert_eq!(r["error"]["code"], -32602, "{r}");
+    assert!(r["error"]["message"].as_str().unwrap().contains("unknown argument `compresss`"), "{r}");
+}
+
+/// `warnings` name each native save option the written format doesn't read, and a top-level option
+/// that disagrees with the same key in `options` is an error.
+#[test]
+fn save_file_warns_about_options_it_does_not_use() {
+    let dir = TempFolder::new("fileio-unused-options");
+    let mut h = two_boards();
+    let warnings = |r: &Value| -> Vec<String> { r["warnings"].as_array().unwrap().iter().map(|w| w.as_str().unwrap().to_string()).collect() };
+    let ignored = |w: &[String], key: &str| w.iter().any(|w| w.starts_with(&format!("`{key}` was not used")));
+
+    // SVG reads none of them, at the top level or in `options`.
+    let path = tmp(&dir, "ignored.svg");
+    let r = text(&call_tool(&mut h, "save_file", &json!({"path": path, "compress": true, "version": 3, "options": {"preview": true}})));
+    assert_eq!(r["format"], "svg", "{r}");
+    let w = warnings(&r);
+    assert!(ignored(&w, "compress") && ignored(&w, "version") && ignored(&w, "options.preview"), "{w:?}");
+    assert_eq!(w.iter().filter(|w| w.starts_with("`compress`")).count(), 1, "said once: {w:?}");
+    assert!(w.iter().any(|w| w.contains("SVG")), "names the format: {w:?}");
+    assert!(std::fs::read(&path).unwrap().starts_with(b"<"), "plain SVG");
+    // A .ai file reads `compress` but not `version`.
+    let r = text(&call_tool(&mut h, "save_file", &json!({"path": tmp(&dir, "ignored.ai"), "compress": false, "version": 3})));
+    let w = warnings(&r);
+    assert!(ignored(&w, "version") && !ignored(&w, "compress"), "{w:?}");
+    // `precision` is read by native files only.
+    let r = text(&call_tool(&mut h, "save_file", &json!({"path": tmp(&dir, "ignored-precision.svg"), "precision": 2})));
+    assert!(ignored(&warnings(&r), "precision"), "{r}");
+
+    // A top-level value that disagrees with `options` is refused, and nothing is written.
+    let path = tmp(&dir, "both.vectorcraft");
+    let r = call_tool(&mut h, "save_file", &json!({"path": path, "compress": true, "options": {"compress": false}}));
+    let e = r.content[0]["text"].as_str().unwrap();
+    assert!(r.is_error && e.contains("`compress: true` and `options.compress: false` disagree"), "{r:?}");
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written");
+    // Nothing to say when they agree or when every option applies.
+    for mut args in
+        [json!({"compress": true, "options": {"compress": true}}), json!({"compress": false, "version": 3, "preview": true, "precision": 4})]
+    {
+        args["path"] = json!(tmp(&dir, "quiet.vectorcraft"));
+        let r = text(&call_tool(&mut h, "save_file", &args));
+        assert_eq!(r["warnings"], json!([]), "{args}: {r}");
+    }
+
+    // The app's save writes the notes on the top-level options and on `options` itself; the reply
+    // is the app's, with nothing added.
+    struct App;
+    impl Backend for App {
+        fn call(&mut self, _: &str, _: Value) -> Result<Value, String> {
+            Ok(json!({"path": "/out/a.svg", "format": "svg", "warnings": ["the app's own warning"]}))
+        }
+        fn has_ui(&self) -> bool {
+            true
+        }
+        fn describe(&self) -> String {
+            "app".into()
+        }
+    }
+    let r = text(&call_tool(&mut App, "save_file", &json!({"path": "/out/a.svg", "compress": true, "options": {"preview": true}})));
+    assert_eq!(warnings(&r), ["the app's own warning"], "{r}");
+}
+
+/// The notes on `options` name the `.ai` file the save writes, as the note on a top-level option
+/// does: a legacy `.ai` for `aiVersion: "7"` (beside `pdfCompatible: false` too, which it notes), a
+/// non-PDF-compatible `.ai` for `pdfCompatible: false`, and a PDF-compatible `.ai` otherwise, also
+/// when the save reuses the options the document was last saved with.
+#[test]
+fn save_file_notes_name_the_ai_file_it_writes() {
+    let dir = TempFolder::new("fileio-ai-notes");
+    let mut h = Headless::with_document();
+    let notes = |r: &Value| -> Vec<String> {
+        r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|w| w.contains("was not used")).map(str::to_string).collect()
+    };
+    for (name, options, label) in [
+        ("legacy.ai", json!({"aiVersion": "7", "preview": true}), "legacy .ai (version 7)"),
+        ("legacy-no-pdf.ai", json!({"aiVersion": "7", "pdfCompatible": false, "preview": true}), "legacy .ai (version 7)"),
+        ("no-pdf.ai", json!({"pdfCompatible": false, "preview": true}), "non-PDF-compatible .ai"),
+        ("pdf.ai", json!({"pdfCompatible": true, "preview": true}), "PDF-compatible .ai"),
+    ] {
+        let r = text(&call_tool(&mut h, "save_file", &json!({"path": tmp(&dir, name), "version": 3, "options": options})));
+        // A legacy `.ai` doesn't read `pdfCompatible` either.
+        let unread = |k: &str| options.get(k).is_some() && (k != "pdfCompatible" || label.starts_with("legacy"));
+        let expected: Vec<String> = std::iter::once("version".to_string())
+            .chain(["pdfCompatible", "preview"].into_iter().filter(|k| unread(k)).map(|k| format!("options.{k}")))
+            .map(|k| format!("`{k}` was not used: {label} files don't read it"))
+            .collect();
+        assert_eq!(notes(&r), expected, "{name}: {r}");
+    }
+    // A save given no option the file reads writes it as last saved: a legacy `.ai` again.
+    text(&call_tool(&mut h, "save_file", &json!({"path": tmp(&dir, "again.ai"), "options": {"aiVersion": "7"}})));
+    let r = text(&call_tool(&mut h, "save_file", &json!({"path": tmp(&dir, "again.ai"), "options": {"preview": true}})));
+    assert_eq!(notes(&r), ["`options.preview` was not used: legacy .ai (version 7) files don't read it"], "{r}");
+    assert!(std::fs::read(tmp(&dir, "again.ai")).unwrap().starts_with(b"%!PS"), "a legacy .ai is written");
+}
+
+#[test]
+fn save_file_is_the_same_call_in_the_app_and_headless() {
+    let dir = TempFolder::new("fileio-app-save");
+    let path = tmp(&dir, "app.vectorcraft");
+    let (addr, app) = recording_app();
+    let mut remote = Remote::connect(&addr, "test").unwrap();
+    let args = json!({"path": path, "compress": true, "version": 3, "preview": null, "precision": 2, "options": {"preview": true}});
+    assert!(!call_tool(&mut remote, "save_file", &args).is_error);
+    drop(remote);
+    let seen = app.join().unwrap();
+    assert_eq!(seen[0]["method"], "app.save");
+    assert_eq!(seen[0]["params"], json!({"path": path, "compress": true, "version": 3, "precision": 2, "options": {"preview": true}, "wait": true}));
+}
+
+/// The app is asked to write the file before it replies (`wait`), even with Background Save on, so a
+/// save that fails is the call's error; a headless session always does, and is sent no `wait`.
+#[test]
+fn save_file_waits_for_the_file_in_the_app() {
+    struct Recording {
+        ui: bool,
+        seen: Vec<(String, Value)>,
+    }
+    impl Backend for Recording {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            self.seen.push((method.to_string(), params));
+            if self.ui { Err("Saving a.vectorcraft failed: disk full".into()) } else { Ok(json!({})) }
+        }
+        fn has_ui(&self) -> bool {
+            self.ui
+        }
+        fn describe(&self) -> String {
+            "recording".into()
+        }
+    }
+    for ui in [true, false] {
+        let mut b = Recording { ui, seen: vec![] };
+        let r = call_tool(&mut b, "save_file", &json!({"path": "/out/a.vectorcraft"}));
+        assert_eq!(r.is_error, ui, "the app's error is the call's: {r:?}");
+        let [(method, params)] = &b.seen[..] else { panic!("one call: {:?}", b.seen) };
+        assert_eq!(method, "app.save");
+        // The tool sends the app the path made absolute (on Windows, against the current drive), and
+        // a headless session the path as given.
+        let path = if ui { std::path::absolute("/out/a.vectorcraft").unwrap().to_string_lossy().into_owned() } else { "/out/a.vectorcraft".into() };
+        let mut want = json!({"path": path});
+        if ui {
+            want["wait"] = json!(true);
+        }
+        assert_eq!(params, &want, "has_ui: {ui}");
+    }
+}
+
+#[test]
+fn readonly_save_file_keeps_the_stable_error_prefix() {
+    struct Refused(bool);
+    impl Backend for Refused {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            assert_eq!(method, "app.save");
+            assert_eq!(params.get("wait").and_then(Value::as_bool), self.0.then_some(true));
+            Err(vectorcraft_engine::EngineError::ReadOnlyLocation("Poster.svg: injected refusal".into()).to_string())
+        }
+        fn has_ui(&self) -> bool {
+            self.0
+        }
+        fn describe(&self) -> String {
+            "injected save refusal".into()
+        }
+    }
+    for desktop in [false, true] {
+        let r = call_tool(&mut Refused(desktop), "save_file", &json!({}));
+        assert!(r.is_error);
+        assert_eq!(r.content[0]["text"], "save_file: READ_ONLY_LOCATION: Poster.svg: injected refusal");
+    }
+}
+
+fn pdf_pages(pdf: &[u8]) -> usize {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "document.open", "params": {"name": "p.pdf", "dataBase64": vectorcraft_format::base64_encode(pdf)}}))
+        .unwrap();
+    h.session.doc().unwrap().doc.artboards.len()
+}
+
+/// Issue #421 over MCP: RGB greys switched to CMYK with `grays: "black"` print on the black plate
+/// only, in the document and in the exported PDF.
+#[test]
+fn document_color_mode_puts_rgb_greys_on_the_black_plate() {
+    let dir = TempFolder::new("fileio-greys");
+    let svg = tmp(&dir, "greys.svg");
+    std::fs::write(
+        &svg,
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="200pt" height="50pt" viewBox="0 0 200 50">
+<rect x="0" y="0" width="50" height="50" fill="#000000"/><rect x="50" y="0" width="50" height="50" fill="#333333"/>
+<rect x="100" y="0" width="50" height="50" fill="#808080"/><rect x="150" y="0" width="50" height="50" fill="#e6e6e6"/>
+</svg>"##,
+    )
+    .unwrap();
+    let want = [1.0, 0.8, 0.498, 0.098];
+    let k_only = |h: &Headless| -> Vec<f32> {
+        let mut ks = vec![];
+        for l in &h.session.doc().unwrap().doc.layers {
+            l.walk(&mut |n| {
+                if n.children().is_none()
+                    && let Some(c) = n.appearance.fill_paint().color()
+                {
+                    let v = serde_json::to_value(c).unwrap();
+                    assert!(v["model"] == "cmyk" && v["c"] == 0.0 && v["m"] == 0.0 && v["y"] == 0.0, "not K only: {v}");
+                    ks.push(v["k"].as_f64().unwrap() as f32);
+                }
+            });
+        }
+        ks
+    };
+    let close = |ks: &[f32]| ks.len() == want.len() && ks.iter().zip(want).all(|(k, w)| (k - w).abs() < 0.005);
+    let mut h = Headless::new();
+    text(&call_tool(&mut h, "open_file", &json!({"path": svg})));
+    let r = text(&call_tool(&mut h, "run_command", &json!({"command": "file.documentColorMode", "params": {"mode": "cmyk", "grays": "black"}})));
+    assert_eq!(r["changed"], 4);
+    let ks = k_only(&h);
+    assert!(close(&ks), "{ks:?}");
+    // The PDF carries the same inks (DeviceCMYK opens as CMYK).
+    let pdf = text(&call_tool(&mut h, "export", &json!({"format": "pdf"})));
+    let mut back = Headless::new();
+    back.call("engine.execute", json!({"command": "document.open", "params": {"name": "greys.pdf", "dataBase64": pdf["dataBase64"]}})).unwrap();
+    let ks = k_only(&back);
+    assert!(close(&ks), "{ks:?}");
+    // document.open takes the same option.
+    let mut o = Headless::new();
+    let r = call_tool(&mut o, "run_command", &json!({"command": "document.open", "params": {"path": svg, "colorMode": "cmyk", "grays": "black"}}));
+    text(&r);
+    let ks = k_only(&o);
+    assert!(close(&ks), "{ks:?}");
+    let bad = call_tool(&mut o, "run_command", &json!({"command": "file.documentColorMode", "params": {"mode": "rgb", "grays": "rich"}}));
+    assert!(bad.is_error, "{bad:?}");
+}
+
+/// `open_file`'s `importer` reaches `document.open`: an SVG opens with the SVG reader without it,
+/// and naming an importer that isn't installed is an error that names it.
+#[test]
+fn open_file_passes_the_importer_on() {
+    let tools = tool_definitions();
+    let open = tools.iter().find(|t| t["name"] == "open_file").unwrap();
+    assert!(open["inputSchema"]["properties"].get("importer").is_some(), "{open}");
+    let dir = TempFolder::new("fileio-importer");
+    let svg = tmp(&dir, "importer.svg");
+    std::fs::write(&svg, r#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><rect width="5" height="5"/></svg>"#).unwrap();
+    let mut h = Headless::new();
+    assert_eq!(text(&call_tool(&mut h, "open_file", &json!({"path": svg})))["format"], "svg");
+    let r = call_tool(&mut h, "open_file", &json!({"path": svg, "importer": "plugin.test.mcp.absent"}));
+    assert!(r.is_error && r.content[0]["text"].as_str().unwrap().contains("test.mcp.absent"), "{r:?}");
+    assert_eq!(h.session.documents().len(), 1);
+}
+
+/// `open_file` sends `app.open` the importer's `params` with the importer.
+#[test]
+fn open_file_passes_the_importer_s_params_on() {
+    struct Recording(Vec<(String, Value)>);
+    impl Backend for Recording {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            self.0.push((method.to_string(), params));
+            Ok(json!({}))
+        }
+        fn has_ui(&self) -> bool {
+            false
+        }
+        fn describe(&self) -> String {
+            "recording".into()
+        }
+    }
+    let tools = tool_definitions();
+    let open = tools.iter().find(|t| t["name"] == "open_file").unwrap();
+    assert_eq!(open["inputSchema"]["properties"]["params"]["type"], "object", "{open}");
+    let mut b = Recording(vec![]);
+    let args = json!({"path": "/in/a.tup", "importer": "plugin.test.mcp.params", "params": {"density": 7}});
+    assert!(!call_tool(&mut b, "open_file", &args).is_error);
+    let [(method, params)] = &b.0[..] else { panic!("one call: {:?}", b.0) };
+    assert_eq!(method, "app.open");
+    assert_eq!(params, &args);
+}

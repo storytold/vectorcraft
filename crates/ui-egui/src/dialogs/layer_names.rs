@@ -1,241 +1,442 @@
-//! Vision-assisted naming through Ollama, with a read-only review before one atomic edit.
-use super::{DialogSpec, form};
-use crate::{VectorcraftApp, state::Dialog};
-use serde_json::{Value, json};
+//! Name Layers with AI: vision-assisted names for layers and groups through a configurable Ollama
+//! server, reviewed and edited before one atomic edit (`layer.applyNames`, one undo step).
+//!
+//! Play sends one preview per group, one after another, on a worker thread; Pause lets the current
+//! request finish and keeps the names that are ready; Apply Ready Names applies them. Closing the
+//! dialog keeps the ready names for this session: reopening on the same document revision resumes.
+//!
+//! Fields: `endpoint`, `model`, `language`, `scope` (`all` or `selection`), `depth` (1..16), and
+//! while naming `uid`, `revision`, `candidates` (`layer.namingCandidates`'s rows), `names`
+//! (`[{id, name}]`, editable), `done`, `total`, `busy`, `paused`, `inFlight`, `complete` and
+//! `error`. Set field `action` to `play`, `pause` or `startOver` to press that button.
+//!
+//! The dialog keeps those fields as its state and files what needs the app (starting, pausing and
+//! following the worker) as a [`Request`]; [`pump`] does it each frame, since the dialog has no app
+//! to run commands on.
 
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
+use std::time::Duration;
+
+use craft::theme::variant::Tone;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry, Props as _, Scroll, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, StackDialog, dialog_id};
+use craft::ui::display::{Progress, Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::FormDialog;
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::Label;
+use craft::ui::text::{NumberField, TextField};
+use serde_json::{Map, Value, json};
+
+use crate::VectorcraftApp;
+
+/// The dialog kind of Name Layers with AI.
 pub const KIND: &str = "layerNames";
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Name Layers with AI").into(),
-    body,
-    confirm,
-    min_width: 560.0,
-    ok: Some("Apply Ready Names"),
-    ok_enabled: Some(|_, d| d.fields.get("names").and_then(Value::as_array).is_some_and(|a| !a.is_empty()) && (!d.bool("busy") || d.bool("paused"))),
-    ..DialogSpec::FORM
-};
 
-/// Open the naming dialog, restoring the shared Ollama connection and any session checkpoint.
-pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    if app.session.active().is_none() {
-        return Err("No document".into());
-    }
-    close(app);
-    if let Some(mut saved) = app.naming_checkpoint.clone() {
-        let st = app.session.active().ok_or("No document")?;
-        if saved.fields.get("uid").and_then(Value::as_u64) == Some(st.uid)
-            && saved.fields.get("revision").and_then(Value::as_u64) == Some(st.revision)
-        {
-            saved.fields.insert("busy".into(), json!(false));
-            saved.fields.insert("paused".into(), json!(false));
-            saved.fields.insert("inFlight".into(), json!(false));
-            app.ui.dialog = Some(saved);
-            return Ok(Value::Null);
+/// How often the dialog follows a running worker.
+const POLL: Duration = Duration::from_millis(100);
+
+/// The fields that only exist while naming; Start Over drops them.
+const RUN_FIELDS: [&str; 10] = ["names", "candidates", "uid", "revision", "complete", "done", "total", "error", "syncedCount", "inFlight"];
+
+/// The dialog's state: the fields in the module's header.
+type Fields = Map<String, Value>;
+
+fn label(text: &str) -> Label {
+    Label::from(text.to_string())
+}
+
+fn text(d: &Fields, key: &str) -> String {
+    d.get(key).and_then(Value::as_str).unwrap_or_default().to_string()
+}
+
+fn flag(d: &Fields, key: &str) -> bool {
+    d.get(key).and_then(Value::as_bool).unwrap_or(false)
+}
+
+fn count(d: &Fields, key: &str) -> usize {
+    d.get(key).and_then(Value::as_array).map_or(0, Vec::len)
+}
+
+/// What the dialog asks of the app on the next frame ([`pump`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Request {
+    /// Start naming, or continue a paused run.
+    Play,
+    /// Pause after the current group.
+    Pause,
+    /// Drop the names and the run.
+    StartOver,
+}
+
+/// Name Layers with AI: the connection, the player and the names completed so far.
+pub(crate) struct LayerNamesDialog {
+    fields: Fields,
+    request: Option<Request>,
+}
+
+/// Whether a run is going and not paused (or paused while its last request finishes).
+fn naming_active(d: &Fields) -> bool {
+    flag(d, "busy") && !flag(d, "complete") && (!flag(d, "paused") || flag(d, "inFlight"))
+}
+
+/// Whether Apply Ready Names can run: there are names and no request is about to add more.
+fn can_apply(d: &Fields) -> bool {
+    count(d, "names") > 0 && (!flag(d, "busy") || flag(d, "paused"))
+}
+
+impl LayerNamesDialog {
+    /// The settings and the player.
+    fn body(ui: &mut egui::Ui, d: &mut Fields, request: &mut Option<Request>) {
+        let running = flag(d, "busy");
+        let paused = flag(d, "paused");
+        Text::new(label(tl!("Previews are sent to the configured Ollama server."))).shade(Shade::Muted).show(ui);
+        for (name, key) in [(tl!("Server URL:"), "endpoint"), (tl!("Vision model:"), "model"), (tl!("Name language:"), "language")] {
+            let name = label(name);
+            Field::new(name.clone()).id_salt(key).show(ui, |ui, _| {
+                if let Some(v) = TextField::new(name.clone(), Bind::given(text(d, key))).enabled(!running).show(ui).value().cloned() {
+                    d.insert(key.into(), json!(v));
+                }
+            });
         }
-        app.naming_checkpoint = None;
+        let scopes =
+            [Entry::new("all".to_string(), tl!("Whole document")), Entry::new("selection".to_string(), tl!("Highlighted rows or selection"))];
+        let scope_label = label(tl!("Scope:"));
+        Field::new(scope_label.clone()).id_salt("scope").show(ui, |ui, _| {
+            if let Some(v) = Select::new(scope_label.clone(), Bind::given(text(d, "scope")), &scopes).enabled(!running).show(ui).value().cloned() {
+                d.insert("scope".into(), json!(v));
+            }
+        });
+        let depth_label = label(tl!("Group depth:"));
+        let depth = d.get("depth").and_then(Value::as_f64).unwrap_or(3.0);
+        Field::new(depth_label.clone()).id_salt("depth").show(ui, |ui, _| {
+            let field = NumberField::new(depth_label.clone(), Bind::given(Some(depth))).range(1.0..=16.0).commit_decimals(0).enabled(!running);
+            if let Some(v) = field.show(ui).edit.value().copied().flatten() {
+                d.insert("depth".into(), json!(v.round().clamp(1.0, 16.0) as u64));
+            }
+        });
+        let (done, total) = (count(d, "names"), d.get("total").and_then(Value::as_u64).unwrap_or(0) as usize);
+        Row::new().id_salt("player").show(ui, |ui, _| {
+            let play = if paused || done > 0 { tl!("Continue") } else { tl!("Play") };
+            if Button::new(label(play)).enabled(!running || paused).tooltip(tl!("Play or continue naming").to_string()).show(ui).clicked() {
+                *request = Some(Request::Play);
+            }
+            if Button::new(label(tl!("Pause")))
+                .enabled(running && !paused)
+                .tooltip(tl!("Pause after the current group").to_string())
+                .show(ui)
+                .clicked()
+            {
+                *request = Some(Request::Pause);
+            }
+            if Button::new(label(tl!("Start Over"))).enabled(!running || paused).show(ui).clicked() {
+                *request = Some(Request::StartOver);
+            }
+            if total > 0 {
+                Text::new(format!("{done} / {total}")).show(ui);
+            }
+        });
+        if total > 0 {
+            // While the first answer is awaited the extent is unknown: the bar moves on its own.
+            let bar = if naming_active(d) && done == 0 { Progress::indeterminate() } else { Progress::new(done as f32 / total as f32) };
+            bar.show(ui);
+        }
+        let status = if flag(d, "complete") {
+            Some(tl!("Naming complete."))
+        } else if running && paused && flag(d, "inFlight") {
+            Some(tl!("Finishing current group…"))
+        } else if naming_active(d) {
+            Some(tl!("Naming in progress…"))
+        } else if paused || (d.contains_key("candidates") && !d.contains_key("error")) {
+            Some(tl!("Paused; ready names are kept."))
+        } else {
+            None
+        };
+        if let Some(status) = status {
+            Text::new(label(status)).shade(Shade::Muted).show(ui);
+        }
+        if let Some(e) = d.get("error").and_then(Value::as_str) {
+            Text::new(crate::i18n::msg(e)).tone(Tone::Bad).show(ui);
+        }
+        let rows = d.get("candidates").and_then(Value::as_array).cloned().unwrap_or_default();
+        let Some(names) = d.get_mut("names").and_then(Value::as_array_mut) else { return };
+        Text::new(label(tl!("Review and edit names before applying."))).show(ui);
+        Stack::new().scroll(Scroll::vertical()).show(ui, |ui, _| {
+            for row in names.iter_mut().filter(|row| row.is_object()) {
+                let old = rows.iter().find(|r| r["id"] == row["id"]).and_then(|r| r["name"].as_str()).unwrap_or("<Group>");
+                let name = label(&format!("#{} {old}", row["id"]));
+                Field::new(name.clone()).id_salt(("name", row["id"].as_u64())).show(ui, |ui, _| {
+                    let current = row["name"].as_str().unwrap_or_default().to_string();
+                    if let Some(v) = TextField::new(name.clone(), Bind::given(current)).show(ui).value().cloned() {
+                        row["name"] = json!(v);
+                    }
+                });
+            }
+        });
     }
+}
+
+impl StackDialog for LayerNamesDialog {
+    type Result = Fields;
+
+    fn id(&self) -> DialogId {
+        dialog_id(KIND)
+    }
+
+    fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<Fields>> {
+        if self.request.is_some() || naming_active(&self.fields) {
+            ui.ctx().request_repaint_after(POLL);
+        }
+        let ok = can_apply(&self.fields);
+        let mut request = None;
+        let shown = FormDialog::new(label(tl!("Name Layers with AI")), Bind::bound(&mut self.fields))
+            .ok_label(label(tl!("Apply Ready Names")))
+            .ok_enabled(ok)
+            .show(ui, |ui, _, d| {
+                Self::body(ui, d, &mut request);
+                true
+            });
+        if request.is_some() {
+            self.request = request;
+        }
+        match (shown.accepted, shown.closed) {
+            (Some(_), _) if ok => Some(DialogResult::Ok(self.fields.clone())),
+            (None, Some(_)) => Some(DialogResult::Cancel),
+            _ => None,
+        }
+    }
+
+    fn confirm(&mut self, _: &egui::Context) -> Option<Fields> {
+        can_apply(&self.fields).then(|| self.fields.clone())
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        Some(Value::Object(self.fields.clone()))
+    }
+
+    fn set_json_field(&mut self, ctx: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        let busy = flag(&self.fields, "busy");
+        match field {
+            "endpoint" | "model" | "language" if !busy => {
+                let v = value.as_str().ok_or_else(|| format!("field `{field}` takes text, got {value}"))?;
+                self.fields.insert(field.into(), json!(v));
+            }
+            "scope" if !busy => match value.as_str() {
+                Some(v @ ("all" | "selection")) => {
+                    self.fields.insert(field.into(), json!(v));
+                }
+                _ => return Err(format!("field `scope` is all or selection, got {value}")),
+            },
+            "depth" if !busy => {
+                let v = value.as_u64().filter(|n| (1..=16).contains(n)).ok_or_else(|| format!("field `depth` is 1..16, got {value}"))?;
+                self.fields.insert(field.into(), json!(v));
+            }
+            "endpoint" | "model" | "language" | "scope" | "depth" => return Err("pause naming first".into()),
+            "names" => self.set_names(&value)?,
+            "action" => {
+                self.request = Some(match value.as_str() {
+                    Some("play") => Request::Play,
+                    Some("pause") => Request::Pause,
+                    Some("startOver") => Request::StartOver,
+                    _ => return Err(format!("field `action` is play, pause or startOver, got {value}")),
+                })
+            }
+            _ => return Err(format!("unknown field `{field}`")),
+        }
+        ctx.request_repaint();
+        Ok(())
+    }
+}
+
+impl LayerNamesDialog {
+    /// Edits the ready names (`[{id, name}]`): only ids already named can be renamed.
+    fn set_names(&mut self, value: &Value) -> Result<(), String> {
+        let given = value.as_array().ok_or_else(|| format!("field `names` takes a list, got {value}"))?;
+        let Some(names) = self.fields.get_mut("names").and_then(Value::as_array_mut) else {
+            return Err("no names are ready yet".into());
+        };
+        for row in given {
+            let name = row["name"].as_str().ok_or_else(|| format!("each name needs `id` and `name`, got {row}"))?;
+            let slot = names
+                .iter_mut()
+                .find(|n| n["id"] == row["id"] && !row["id"].is_null())
+                .ok_or_else(|| format!("no ready name for id {}", row["id"]))?;
+            slot["name"] = json!(name);
+        }
+        Ok(())
+    }
+}
+
+/// The dialog's fields on opening: the shared Ollama connection and the last scope and depth.
+fn settings(app: &VectorcraftApp) -> Fields {
     let saved = if app.ui.ollama_settings.is_null() { &app.ui.layer_naming_settings } else { &app.ui.ollama_settings };
     let (endpoint, model, language) = crate::ollama::connection(saved);
-    let mut settings = json!({"endpoint": endpoint, "model": model, "language": language, "scope": "all", "depth": 3});
+    let mut fields = Fields::new();
+    fields.insert("endpoint".into(), json!(endpoint));
+    fields.insert("model".into(), json!(model));
+    fields.insert("language".into(), json!(language));
+    fields.insert("scope".into(), json!("all"));
+    fields.insert("depth".into(), json!(3));
     for key in ["scope", "depth"] {
         if let Some(value) = app.ui.layer_naming_settings.get(key) {
-            settings[key] = value.clone();
+            fields.insert(key.into(), value.clone());
         }
     }
-    app.ui.dialog = Some(Dialog::new(KIND, settings));
+    fields
+}
+
+/// `ui.nameLayers`: opens the dialog, on the session checkpoint when it is for the active
+/// document's current revision.
+pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let (uid, revision) = app.session.active().map(|st| (st.uid, st.revision)).ok_or_else(|| tl!("No document").to_owned())?;
+    close(app);
+    let fields = match app.naming_checkpoint.take() {
+        Some(mut saved)
+            if saved.get("uid").and_then(Value::as_u64) == Some(uid) && saved.get("revision").and_then(Value::as_u64) == Some(revision) =>
+        {
+            for key in ["busy", "paused", "inFlight"] {
+                saved.insert(key.into(), json!(false));
+            }
+            app.naming_checkpoint = Some(saved.clone());
+            saved
+        }
+        _ => settings(app),
+    };
+    let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
+    dialogs.with(|h| h.open(LayerNamesDialog { fields, request: None }));
     Ok(Value::Null)
 }
 
-/// Draw the connection form, the player, and the names completed so far.
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    if let Some(job) = &app.naming_job
-        && let Err(e) = sync(d, job)
-    {
-        d.fields.insert("error".into(), json!(e));
+/// Each frame: applies or keeps the answer of the dialog that closed, does what the open dialog
+/// asked (play, pause, start over), and copies the worker's ready names into it.
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    if let Some(result) = dialogs.with(|h| h.take::<LayerNamesDialog>()) {
+        match result.ok() {
+            Some(fields) => {
+                if let Err((mut fields, e)) = apply(app, fields) {
+                    fields.insert("error".into(), json!(e));
+                    dialogs.with(|h| h.open(LayerNamesDialog { fields, request: None }));
+                }
+            }
+            None => close(app),
+        }
+        return;
     }
+    let Some((mut d, request)) = dialogs.with(|h| h.get_mut::<LayerNamesDialog>().map(|dlg| (dlg.fields.clone(), dlg.request.take()))) else {
+        // The dialog is gone some other way (replaced or closed with its window): keep what is ready.
+        close(app);
+        return;
+    };
+    let before = d.clone();
+    if let Some(request) = request {
+        press(app, &mut d, request);
+    }
+    follow(app, &mut d);
+    if d.contains_key("candidates") {
+        app.naming_checkpoint = Some(d.clone());
+    }
+    if naming_active(&d) {
+        ctx.request_repaint_after(POLL);
+    }
+    if d != before {
+        dialogs.with(|h| {
+            if let Some(dlg) = h.get_mut::<LayerNamesDialog>() {
+                dlg.fields = d;
+            }
+        });
+    }
+}
+
+/// Does what a button of the dialog asked.
+fn press(app: &mut VectorcraftApp, d: &mut Fields, request: Request) {
+    match request {
+        Request::Play => {
+            if let Some(job) = &app.naming_job {
+                job.progress.paused.store(false, Ordering::Relaxed);
+                d.insert("paused".into(), json!(false));
+                return;
+            }
+            d.remove("error");
+            crate::ollama::store_connection(&mut app.ui.ollama_settings, &text(d, "endpoint"), &text(d, "model"), &text(d, "language"));
+            app.ui.layer_naming_settings = json!({"scope": text(d, "scope"), "depth": d.get("depth")});
+            if let Err(e) = start(app, d) {
+                d.insert("error".into(), json!(e));
+            }
+        }
+        Request::Pause => {
+            if let Some(job) = &app.naming_job {
+                job.progress.paused.store(true, Ordering::Relaxed);
+                d.insert("paused".into(), json!(true));
+            }
+        }
+        Request::StartOver => {
+            if flag(d, "busy") && !flag(d, "paused") {
+                return;
+            }
+            stop(app, d);
+            for key in RUN_FIELDS {
+                d.remove(key);
+            }
+            app.naming_checkpoint = None;
+        }
+    }
+}
+
+/// Copies the worker's progress into the dialog, and takes its end.
+fn follow(app: &mut VectorcraftApp, d: &mut Fields) {
     if let Some(job) = &app.naming_job {
+        if let Err(e) = sync(d, job) {
+            d.insert("error".into(), json!(e));
+        }
         match job.rx.try_recv() {
             Ok(Ok(names)) => {
                 merge_names(d, names.as_array().map_or(&[], Vec::as_slice));
-                d.fields.insert("complete".into(), json!(true));
-                d.fields.insert("busy".into(), json!(false));
+                d.insert("complete".into(), json!(true));
                 app.naming_job = None;
             }
             Ok(Err(e)) => {
                 fail_job(d, job, e);
                 app.naming_job = None;
             }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+            Err(mpsc::TryRecvError::Disconnected) => {
                 fail_job(d, job, "Naming worker stopped. Try again.".into());
                 app.naming_job = None;
             }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {
-                ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
-            }
+            Err(mpsc::TryRecvError::Empty) => {}
         }
     }
     if app.naming_job.is_none() {
-        d.fields.insert("busy".into(), json!(false));
-        d.fields.insert("paused".into(), json!(false));
-        d.fields.insert("inFlight".into(), json!(false));
-    }
-    ui.label(tl!("Previews are sent to the configured Ollama server."));
-    ui.add_enabled_ui(!d.bool("busy"), |ui| {
-        egui::Grid::new("naming-settings").show(ui, |ui| {
-            for (label, key) in [("Server URL", "endpoint"), ("Vision model", "model"), ("Name language", "language")] {
-                ui.label(crate::i18n::t(label));
-                ui.allocate_ui(egui::vec2(370.0, 22.0), |ui| {
-                    form::text(ui, d, key, 350.0);
-                });
-                ui.end_row();
-            }
-            ui.label(tl!("Scope"));
-            let mut scope = d.str("scope");
-            egui::ComboBox::from_id_salt("naming-scope")
-                .selected_text(crate::i18n::t(if scope == "all" { "Whole document" } else { "Highlighted rows or selection" }))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut scope, "all".into(), tl!("Whole document"));
-                    ui.selectable_value(&mut scope, "selection".into(), tl!("Highlighted rows or selection"));
-                });
-            d.fields.insert("scope".into(), json!(scope));
-            ui.end_row();
-            ui.label(tl!("Group depth"));
-            let mut depth = d.f64("depth", 3.0) as u32;
-            ui.add(egui::DragValue::new(&mut depth).range(1..=16));
-            d.fields.insert("depth".into(), json!(depth));
-            ui.end_row();
-        });
-    });
-    ui.horizontal(|ui| {
-        let running = d.bool("busy");
-        let paused = d.bool("paused");
-        if player_button(ui, tl!("Play or continue naming"), !running || paused, true).clicked() {
-            if let Some(job) = &app.naming_job {
-                job.progress.paused.store(false, std::sync::atomic::Ordering::Relaxed);
-                d.fields.insert("paused".into(), json!(false));
-            } else {
-                d.fields.remove("error");
-                crate::ollama::store_connection(&mut app.ui.ollama_settings, &d.str("endpoint"), &d.str("model"), &d.str("language"));
-                app.ui.layer_naming_settings = json!({"scope": d.str("scope"), "depth": d.fields.get("depth")});
-                if let Err(e) = start(app, d) {
-                    d.fields.insert("error".into(), json!(e));
-                }
-            }
+        for key in ["busy", "paused", "inFlight"] {
+            d.insert(key.into(), json!(false));
         }
-        if player_button(ui, tl!("Pause after the current group"), running && !paused, false).clicked() {
-            if let Some(job) = &app.naming_job {
-                job.progress.paused.store(true, std::sync::atomic::Ordering::Relaxed);
-            }
-            d.fields.insert("paused".into(), json!(true));
-        }
-        if ui.add_enabled(!running || paused, egui::Button::new(tl!("Start Over"))).clicked() {
-            stop(app, d);
-            for key in ["names", "candidates", "uid", "revision", "complete", "done", "total", "error", "syncedCount"] {
-                d.fields.remove(key);
-            }
-            app.naming_checkpoint = None;
-        }
-        let done = d.fields.get("names").and_then(Value::as_array).map_or(0, Vec::len);
-        let total = d.fields.get("total").and_then(Value::as_u64).unwrap_or(0) as usize;
-        if total > 0 {
-            ui.label(format!("{done} / {total}"));
-            crate::widgets::ai_progress(ui, done as f32 / total.max(1) as f32, 300.0, naming_active(d));
-        }
-    });
-    if d.bool("complete") {
-        ui.label(tl!("Naming complete."));
-    } else if d.bool("busy") && d.bool("paused") && d.bool("inFlight") {
-        ui.label(tl!("Finishing current group…"));
-    } else if naming_active(d) {
-        ui.label(tl!("Naming in progress…"));
-    } else if d.bool("paused") || (d.fields.contains_key("candidates") && !d.fields.contains_key("error")) {
-        ui.label(tl!("Paused; ready names are kept."));
     }
-    if naming_active(d) {
-        ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
-    }
-    if let Some(e) = d.fields.get("error").and_then(Value::as_str) {
-        ui.label(crate::i18n::msg(e));
-    }
-    let rows = d.fields.get("candidates").and_then(Value::as_array).cloned().unwrap_or_default();
-    if let Some(names) = d.fields.get_mut("names").and_then(Value::as_array_mut) {
-        ui.label(tl!("Review and edit names before applying."));
-        egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-            for row in names {
-                if !row.is_object() {
-                    continue;
-                }
-                let old = rows.iter().find(|r| r["id"] == row["id"]).and_then(|r| r["name"].as_str()).unwrap_or("<Group>");
-                ui.horizontal(|ui| {
-                    ui.add_sized([210.0, 22.0], egui::Label::new(format!("#{} {old}", row["id"])).truncate());
-                    let mut name = row["name"].as_str().unwrap_or_default().to_string();
-                    ui.text_edit_singleline(&mut name);
-                    row["name"] = json!(name);
-                });
-            }
-        });
-    }
-    if d.fields.contains_key("candidates") {
-        app.naming_checkpoint = Some(d.clone());
-    }
-    false
 }
 
-/// Whether a naming job is running and not paused.
-fn naming_active(d: &Dialog) -> bool {
-    d.bool("busy") && !d.bool("complete") && (!d.bool("paused") || d.bool("inFlight"))
-}
-
-/// Play or pause control for the naming queue.
-fn player_button(ui: &mut egui::Ui, label: &str, enabled: bool, play: bool) -> egui::Response {
-    let response = ui.add_enabled(enabled, egui::Button::new("").min_size(egui::vec2(32.0, 28.0)));
-    let r = response.rect.shrink(8.0);
-    let t = crate::theme::Tokens::get(ui.ctx());
-    let color = if enabled { t.text } else { t.text_disabled };
-    if play {
-        ui.painter().add(egui::Shape::convex_polygon(
-            vec![r.left_top(), egui::pos2(r.right(), r.center().y), r.left_bottom()],
-            color,
-            egui::Stroke::NONE,
-        ));
-    } else {
-        for (x0, x1) in [(r.left(), r.center().x - 2.0), (r.center().x + 2.0, r.right())] {
-            ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(x0, r.top()), egui::pos2(x1, r.bottom())), 0.0, color);
-        }
-    }
-    response.widget_info(|| crate::widgets::icon_button_info(enabled, false, label));
-    response.on_hover_text(label)
-}
-
-/// Apply the ready names, or refuse while a request is still running.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    if d.bool("busy") && !d.bool("paused") {
-        return Err("Wait for generation to finish".into());
-    }
-    let mut d = d.clone();
+/// Apply Ready Names: stops the worker (keeping the names it finished) and applies the names in one
+/// undo step. On failure the fields come back with the reason, for the dialog to reopen on.
+fn apply(app: &mut VectorcraftApp, mut d: Fields) -> Result<Value, (Fields, String)> {
     stop(app, &mut d);
-    let Some(names) = d.fields.get("names").cloned() else {
-        // `stop` already folded the last finished name into this clone. Put it back before the
-        // error, or the next frame saves the dialog from before that name arrived.
-        app.ui.dialog = Some(d);
-        return Err("Generate names first".into());
+    let Some(names) = d.get("names").cloned() else {
+        return Err((d, "Generate names first".into()));
     };
-    let result = match app.run("layer.applyNames", json!({"uid":d.fields.get("uid"),"revision":d.fields.get("revision"),"names":names})) {
+    let result = match app.run("layer.applyNames", json!({"uid": d.get("uid"), "revision": d.get("revision"), "names": names})) {
         Ok(result) => result,
-        Err(error) => {
-            app.ui.dialog = Some(d);
-            return Err(error);
-        }
+        Err(e) => return Err((d, e)),
     };
-    let st = app.session.active().ok_or("No document")?;
-    d.fields.insert("revision".into(), json!(st.revision));
-    app.naming_checkpoint = if d.bool("complete") { None } else { Some(d) };
-    app.ui.dialog = None;
+    let revision = app.session.active().map(|st| st.revision);
+    d.insert("revision".into(), json!(revision));
+    // A complete run has nothing left to resume.
+    app.naming_checkpoint = if flag(&d, "complete") { None } else { Some(d) };
     Ok(result)
 }
 
-/// Keep names the user edited when a new candidate list arrives.
-fn merge_names(d: &mut Dialog, rows: &[Value]) {
-    let field = d.fields.entry("names".to_string()).or_insert_with(|| json!([]));
+/// Keeps names the user edited when names arrive.
+fn merge_names(d: &mut Fields, rows: &[Value]) {
+    let field = d.entry("names".to_string()).or_insert_with(|| json!([]));
     if let Some(names) = field.as_array_mut() {
         for row in rows {
             if !names.iter().any(|n| n["id"] == row["id"]) {
@@ -244,95 +445,102 @@ fn merge_names(d: &mut Dialog, rows: &[Value]) {
         }
     }
 }
-/// Keep names that finished before a failed or disconnected worker is dropped.
-fn fail_job(d: &mut Dialog, job: &Job, error: String) {
+
+/// Keeps names that finished before a failed or disconnected worker is dropped.
+fn fail_job(d: &mut Fields, job: &Job, error: String) {
     let _ = sync(d, job);
-    d.fields.insert("error".into(), json!(error));
-    d.fields.insert("busy".into(), json!(false));
+    d.insert("error".into(), json!(error));
+    d.insert("busy".into(), json!(false));
 }
-/// Copy names the worker has finished into the dialog.
-fn sync(d: &mut Dialog, job: &Job) -> Result<(), String> {
+
+/// Copies the names the worker has finished, and its counters, into the dialog.
+fn sync(d: &mut Fields, job: &Job) -> Result<(), String> {
     let ready = job.progress.names.lock().map_err(|_| "Naming worker stopped. Try again.")?;
-    let from = d.fields.get("syncedCount").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let from = d.get("syncedCount").and_then(Value::as_u64).unwrap_or(0) as usize;
     merge_names(d, ready.get(from.min(ready.len())..).unwrap_or(&[]));
-    d.fields.insert("syncedCount".into(), json!(ready.len()));
-    d.fields.insert("done".into(), json!(job.base + job.progress.done.load(std::sync::atomic::Ordering::Relaxed)));
-    d.fields.insert("total".into(), json!(job.base + job.progress.total.load(std::sync::atomic::Ordering::Relaxed)));
-    d.fields.insert("paused".into(), json!(job.progress.paused.load(std::sync::atomic::Ordering::Relaxed)));
-    d.fields.insert("inFlight".into(), json!(job.progress.in_flight.load(std::sync::atomic::Ordering::Relaxed)));
+    d.insert("syncedCount".into(), json!(ready.len()));
+    d.insert("done".into(), json!(job.base + job.progress.done.load(Ordering::Relaxed)));
+    d.insert("total".into(), json!(job.base + job.progress.total.load(Ordering::Relaxed)));
+    d.insert("paused".into(), json!(job.progress.paused.load(Ordering::Relaxed)));
+    d.insert("inFlight".into(), json!(job.progress.in_flight.load(Ordering::Relaxed)));
     Ok(())
 }
-/// Cancel the worker and drop the job after keeping its finished names.
-fn stop(app: &mut VectorcraftApp, d: &mut Dialog) {
+
+/// Cancels the worker and drops the job after keeping its finished names.
+fn stop(app: &mut VectorcraftApp, d: &mut Fields) {
     if let Some(job) = app.naming_job.take()
         && let Err(e) = sync(d, &job)
     {
-        d.fields.insert("error".into(), json!(e));
+        d.insert("error".into(), json!(e));
     }
-    d.fields.insert("busy".into(), json!(false));
-    d.fields.insert("paused".into(), json!(false));
-    d.fields.insert("inFlight".into(), json!(false));
-    app.naming_checkpoint = Some(d.clone());
+    for key in ["busy", "paused", "inFlight"] {
+        d.insert(key.into(), json!(false));
+    }
+    if d.contains_key("candidates") {
+        app.naming_checkpoint = Some(d.clone());
+    }
 }
-/// Closing the dialog keeps completed work in memory for this document, including the last batch.
+
+/// The dialog is gone: the worker stops, and the names it finished stay for this session.
 pub(crate) fn close(app: &mut VectorcraftApp) {
     if app.naming_job.is_none() {
         return;
     }
-    if let Some(mut d) = app.naming_checkpoint.take() {
-        stop(app, &mut d);
-    } else {
-        app.naming_job = None;
+    match app.naming_checkpoint.take() {
+        Some(mut d) => stop(app, &mut d),
+        None => app.naming_job = None,
     }
 }
 
 #[derive(Default)]
-struct Progress {
-    done: std::sync::atomic::AtomicUsize,
-    total: std::sync::atomic::AtomicUsize,
-    paused: std::sync::atomic::AtomicBool,
-    in_flight: std::sync::atomic::AtomicBool,
-    names: std::sync::Mutex<Vec<Value>>,
+struct WorkerProgress {
+    done: AtomicUsize,
+    total: AtomicUsize,
+    paused: AtomicBool,
+    in_flight: AtomicBool,
+    names: Mutex<Vec<Value>>,
 }
 
+/// A running naming worker.
 pub(crate) struct Job {
+    /// The names ready before this run started.
     base: usize,
-    progress: std::sync::Arc<Progress>,
-    rx: std::sync::mpsc::Receiver<Result<Value, String>>,
-    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    progress: Arc<WorkerProgress>,
+    rx: mpsc::Receiver<Result<Value, String>>,
+    cancel: Arc<AtomicBool>,
 }
+
 impl Drop for Job {
-    /// Cancel the in-flight request when the job is dropped.
+    /// Cancels the in-flight request when the job is dropped.
     fn drop(&mut self) {
-        self.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.cancel.store(true, Ordering::Relaxed);
     }
 }
 
 #[cfg(target_arch = "wasm32")]
-/// Report that naming needs the desktop app.
-fn start(_: &mut VectorcraftApp, _: &mut Dialog) -> Result<(), String> {
+/// Naming needs the desktop app.
+fn start(_: &mut VectorcraftApp, _: &mut Fields) -> Result<(), String> {
     Err("AI layer naming currently requires the desktop app and Ollama".into())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-/// Check the endpoint and start a worker for the groups that still need names.
-fn start(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
-    let endpoint = d.str("endpoint");
+/// Checks the endpoint and starts a worker for the groups that still need names.
+fn start(app: &mut VectorcraftApp, d: &mut Fields) -> Result<(), String> {
+    let endpoint = text(d, "endpoint");
     crate::ollama::endpoint_kind(&endpoint)?;
-    let model = d.str("model");
-    let language = d.str("language");
+    let (model, language) = (text(d, "model"), text(d, "language"));
     if model.trim().is_empty() || language.trim().is_empty() {
         return Err("Enter a vision model and name language".into());
     }
-    let snapshot = app.run("layer.namingCandidates", json!({"scope": d.str("scope"), "depth": d.fields.get("depth")}))?;
+    let snapshot = app.run("layer.namingCandidates", json!({"scope": text(d, "scope"), "depth": d.get("depth")}))?;
     let doc = app.session.active().ok_or("No document")?.doc.clone();
     let mut rows = snapshot["rows"].as_array().cloned().ok_or("No candidates")?;
-    let ready = d.fields.get("names").and_then(Value::as_array).cloned().unwrap_or_default();
+    let ready = d.get("names").and_then(Value::as_array).cloned().unwrap_or_default();
     if !ready.is_empty() {
-        if d.fields.get("uid") != Some(&snapshot["uid"]) || d.fields.get("revision") != Some(&snapshot["revision"]) {
+        if d.get("uid") != Some(&snapshot["uid"]) || d.get("revision") != Some(&snapshot["revision"]) {
             return Err("the document changed; generate names again".into());
         }
-        let old: Vec<_> = d.fields.get("candidates").and_then(Value::as_array).into_iter().flatten().map(|r| r["id"].clone()).collect();
+        let old: Vec<_> = d.get("candidates").and_then(Value::as_array).into_iter().flatten().map(|r| r["id"].clone()).collect();
         if old != rows.iter().map(|r| r["id"].clone()).collect::<Vec<_>>() {
             return Err("Naming scope changed. Start over to use the new scope.".into());
         }
@@ -343,16 +551,16 @@ fn start(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
             && !ready.iter().any(|n| n["id"] == row["id"])
     });
     let base = ready.len();
-    d.fields.insert("total".into(), json!(base + rows.len()));
+    d.insert("total".into(), json!(base + rows.len()));
     if rows.is_empty() && base > 0 {
-        d.fields.insert("complete".into(), json!(true));
+        d.insert("complete".into(), json!(true));
         return Ok(());
     }
-    let (tx, rx) = std::sync::mpsc::channel();
-    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (tx, rx) = mpsc::channel();
+    let cancel = Arc::new(AtomicBool::new(false));
     let flag = cancel.clone();
-    let progress = std::sync::Arc::new(Progress::default());
-    progress.total.store(rows.len(), std::sync::atomic::Ordering::Relaxed);
+    let progress = Arc::new(WorkerProgress::default());
+    progress.total.store(rows.len(), Ordering::Relaxed);
     let report = progress.clone();
     std::thread::Builder::new()
         .name("layer-names".into())
@@ -366,30 +574,30 @@ fn start(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
         .map_err(|e| format!("Cannot start naming worker: {e}"))?;
     app.naming_job = Some(Job { rx, cancel, progress, base });
     for key in ["uid", "revision"] {
-        d.fields.insert(key.into(), snapshot[key].clone());
+        d.insert(key.into(), snapshot[key].clone());
     }
-    d.fields.insert("candidates".into(), snapshot["rows"].clone());
-    d.fields.insert("busy".into(), json!(true));
-    d.fields.insert("complete".into(), json!(false));
-    d.fields.insert("syncedCount".into(), json!(0));
-    d.fields.insert("paused".into(), json!(false));
-    d.fields.insert("inFlight".into(), json!(false));
+    d.insert("candidates".into(), snapshot["rows"].clone());
+    d.insert("busy".into(), json!(true));
+    d.insert("complete".into(), json!(false));
+    d.insert("syncedCount".into(), json!(0));
+    d.insert("paused".into(), json!(false));
+    d.insert("inFlight".into(), json!(false));
     Ok(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-/// Ask Ollama for one name per group and record each answer as it arrives.
+/// Asks Ollama for one name per group and records each answer as it arrives.
 fn generate(
     doc: &vectorcraft_doc::Document,
     rows: &[Value],
     endpoint: &str,
     model: &str,
     language: &str,
-    cancel: &std::sync::atomic::AtomicBool,
-    progress: &Progress,
+    cancel: &AtomicBool,
+    progress: &WorkerProgress,
 ) -> Result<Value, String> {
     use vectorcraft_render::Renderer;
-    // Empty artboard/container layers have no image to name; preserve their existing names.
+    // Empty artboard/container layers have no image to name; their names stay as they are.
     let symbols = doc.symbol_boxes();
     let rows: Vec<Value> = rows
         .iter()
@@ -401,17 +609,17 @@ fn generate(
     if rows.is_empty() {
         return Err("No artwork in the selected groups".into());
     }
-    progress.total.store(rows.len(), std::sync::atomic::Ordering::Relaxed);
+    progress.total.store(rows.len(), Ordering::Relaxed);
     let mut renderer = Renderer::new();
     let mut names: Vec<Value> = Vec::new();
     for row in &rows {
-        while progress.paused.load(std::sync::atomic::Ordering::Relaxed) {
-            if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+        while progress.paused.load(Ordering::Relaxed) {
+            if cancel.load(Ordering::Relaxed) {
                 return Err("Cancelled".into());
             }
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            std::thread::sleep(Duration::from_millis(50));
         }
-        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+        if cancel.load(Ordering::Relaxed) {
             return Err("Cancelled".into());
         }
         let batch = std::slice::from_ref(row);
@@ -434,22 +642,22 @@ fn generate(
             {"role":"user", "content":format!("Name the whole target image in {language}. Target metadata: {target}. Required JSON schema: {schema}"),
              "images":[vectorcraft_svg::base64_encode(&png)]}
         ]});
-        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+        if cancel.load(Ordering::Relaxed) {
             return Err("Cancelled".into());
         }
-        progress.in_flight.store(true, std::sync::atomic::Ordering::Relaxed);
+        progress.in_flight.store(true, Ordering::Relaxed);
         let response = crate::ollama::post(endpoint, &request)?;
         let content = response.pointer("/message/content").and_then(Value::as_str).ok_or("Ollama returned no message content")?;
         let named = validate(content, batch)?;
         progress.names.lock().map_err(|_| "Naming worker stopped. Try again.")?.extend(named.iter().cloned());
         names.extend(named);
-        progress.in_flight.store(false, std::sync::atomic::Ordering::Relaxed);
-        progress.done.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        progress.in_flight.store(false, Ordering::Relaxed);
+        progress.done.fetch_add(1, Ordering::Relaxed);
     }
     Ok(json!(names))
 }
 
-/// Model output is untrusted: require one bounded name for every requested id, no extras.
+/// Model output is untrusted: one bounded name for every requested id, no extras.
 #[cfg(any(not(target_arch = "wasm32"), test))]
 fn validate(content: &str, rows: &[Value]) -> Result<Vec<Value>, String> {
     let value: Value = serde_json::from_str(content).map_err(|e| format!("Model returned invalid JSON: {e}"))?;
@@ -477,416 +685,4 @@ fn validate(content: &str, rows: &[Value]) -> Result<Vec<Value>, String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    /// A failed run keeps the name completed before the error.
-    fn a_failed_run_keeps_the_name_completed_before_the_error() {
-        let progress = std::sync::Arc::new(Progress::default());
-        progress.names.lock().unwrap().push(json!({"id": 7, "name": "Coin Counter"}));
-        let (_tx, rx) = std::sync::mpsc::channel();
-        let job = Job { base: 0, progress, rx, cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)) };
-        let mut d = Dialog::new(KIND, json!({}));
-        fail_job(&mut d, &job, "curl failed".into());
-        assert_eq!(d.fields["names"][0]["name"], "Coin Counter");
-        assert_eq!(d.fields["error"], "curl failed");
-        assert_eq!(d.fields["busy"], false);
-    }
-    #[test]
-    /// Review cancel apply and stale document.
-    fn review_cancel_apply_and_stale_document() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        app.run("file.new", json!({})).unwrap();
-        let before = app.run("layer.namingCandidates", json!({})).unwrap();
-        open(&mut app).unwrap();
-        let mut d = app.ui.dialog.clone().unwrap();
-        d.fields.insert("uid".into(), before["uid"].clone());
-        d.fields.insert("revision".into(), before["revision"].clone());
-        d.fields.insert("names".into(), json!([{"id":before["rows"][0]["id"],"name":"Game UI Kit"}]));
-        app.ui.dialog = Some(d.clone());
-        super::super::cancel(&mut app);
-        assert_eq!(app.run("layer.namingCandidates", json!({})).unwrap(), before);
-        app.ui.dialog = Some(d.clone());
-        confirm(&mut app, &d).unwrap();
-        assert!(app.ui.dialog.is_none());
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(app.run("layer.namingCandidates", json!({})).unwrap()["rows"], before["rows"]);
-        d.fields.insert("busy".into(), json!(true));
-        d.fields.insert("paused".into(), json!(true));
-        let progress = std::sync::Arc::new(Progress::default());
-        progress.names.lock().unwrap().push(json!({"id": 999, "name": "Late Name"}));
-        let (_tx, rx) = std::sync::mpsc::channel();
-        app.naming_job = Some(Job { base: 0, progress, rx, cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)) });
-        app.ui.dialog = Some(d.clone());
-        assert!(confirm(&mut app, &d).is_err());
-        let kept = app.ui.dialog.as_ref().expect("dialog stays open");
-        assert!(
-            kept.fields["names"].as_array().unwrap().iter().any(|n| n["name"] == "Late Name"),
-            "a name finished at apply time survives a rejected apply"
-        );
-        let mut output = egui::Context::default().run_ui(egui::RawInput::default(), |ui| {
-            body(&mut app, ui, &mut d);
-        });
-        assert!(!output.shapes.is_empty());
-        output.textures_delta.clear();
-        assert!(!d.bool("busy"), "a rejected partial apply must allow Start Over");
-    }
-
-    #[test]
-    /// Pause apply partial and reopen keeps checkpoint and edits.
-    fn pause_apply_partial_and_reopen_keeps_checkpoint_and_edits() {
-        use std::sync::{Arc, atomic::Ordering, mpsc};
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        app.run("file.new", json!({})).unwrap();
-        for x in [10, 100] {
-            app.run("shape.rectangle", json!({"x":x,"y":10,"width":40,"height":20})).unwrap();
-            app.run("object.group", json!({})).unwrap();
-        }
-        let snapshot = app.run("layer.namingCandidates", json!({"depth":16})).unwrap();
-        let rows = snapshot["rows"].as_array().unwrap();
-        assert!(rows.len() >= 3);
-        open(&mut app).unwrap();
-        let mut d = app.ui.dialog.clone().unwrap();
-        for key in ["uid", "revision"] {
-            d.fields.insert(key.into(), snapshot[key].clone());
-        }
-        d.fields.insert("candidates".into(), snapshot["rows"].clone());
-        d.fields.insert("names".into(), json!([{"id":rows[0]["id"],"name":"Edited collection name"}]));
-        d.fields.insert("busy".into(), json!(true));
-        let progress = Arc::new(Progress::default());
-        progress.total.store(rows.len() - 1, Ordering::Relaxed);
-        progress.done.store(1, Ordering::Relaxed);
-        progress.paused.store(true, Ordering::Relaxed);
-        progress.in_flight.store(true, Ordering::Relaxed);
-        progress.names.lock().unwrap().push(json!({"id":rows[1]["id"],"name":"Play Button"}));
-        let (_tx, rx) = mpsc::channel();
-        let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        app.naming_job = Some(Job { rx, cancel: cancel.clone(), progress: progress.clone(), base: 1 });
-        sync(&mut d, app.naming_job.as_ref().unwrap()).unwrap();
-        assert_eq!(d.fields["names"].as_array().unwrap().len(), 2);
-        assert_eq!(d.fields["total"], rows.len());
-        assert_eq!(d.fields["names"][0]["name"], "Edited collection name");
-        assert!(SPEC.ok_enabled.unwrap()(&app, &d));
-        confirm(&mut app, &d).unwrap();
-        assert!(cancel.load(Ordering::Relaxed));
-        open(&mut app).unwrap();
-        let saved = app.ui.dialog.as_ref().unwrap();
-        assert_eq!(saved.fields["names"].as_array().unwrap().len(), 2);
-        assert!(!saved.bool("busy"));
-        assert_eq!(saved.fields["revision"], app.session.active().unwrap().revision);
-        let fresh = app.run("layer.namingCandidates", json!({"depth":16})).unwrap();
-        assert_eq!(fresh["rows"][0]["name"], "Edited collection name");
-        app.run("shape.rectangle", json!({"x":200,"y":10,"width":10,"height":10})).unwrap();
-        open(&mut app).unwrap();
-        assert!(app.ui.dialog.as_ref().unwrap().fields.get("names").is_none(), "stale checkpoint must not target changed artwork");
-    }
-    #[test]
-    /// Closing in flight job retains latest completed batch.
-    fn closing_in_flight_job_retains_latest_completed_batch() {
-        use std::sync::{Arc, atomic::Ordering, mpsc};
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        app.run("file.new", json!({})).unwrap();
-        open(&mut app).unwrap();
-        let snapshot = app.run("layer.namingCandidates", json!({})).unwrap();
-        let mut d = app.ui.dialog.clone().unwrap();
-        for key in ["uid", "revision"] {
-            d.fields.insert(key.into(), snapshot[key].clone());
-        }
-        d.fields.insert("candidates".into(), snapshot["rows"].clone());
-        let progress = Arc::new(Progress::default());
-        progress.total.store(1, Ordering::Relaxed);
-        progress.names.lock().unwrap().push(json!({"id":snapshot["rows"][0]["id"],"name":"Ready collection"}));
-        let (_tx, rx) = mpsc::channel();
-        let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        app.naming_checkpoint = Some(d);
-        app.naming_job = Some(Job { rx, cancel: cancel.clone(), progress, base: 0 });
-        super::super::cancel(&mut app);
-        close(&mut app);
-        assert!(cancel.load(Ordering::Relaxed));
-        open(&mut app).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["names"][0]["name"], "Ready collection");
-    }
-
-    #[test]
-    /// Naming dialog draws without changing document.
-    fn naming_dialog_draws_without_changing_document() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        app.run("file.new", json!({})).unwrap();
-        let before = app.session.active().unwrap().doc.clone();
-        open(&mut app).unwrap();
-        let mut d = app.ui.dialog.take().unwrap();
-        let ctx = egui::Context::default();
-        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-            body(&mut app, ui, &mut d);
-        });
-        assert!(!output.shapes.is_empty());
-        output.textures_delta.clear();
-        assert!(std::sync::Arc::ptr_eq(&before, &app.session.active().unwrap().doc));
-        if let Some(dir) = std::env::var_os("CRAFT_NAMING_SHOT") {
-            app.ui.dialog = Some(d);
-            let mut ready = false;
-            let mut harness = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 760.0)).wgpu().build_ui_state(
-                move |ui, app: &mut VectorcraftApp| {
-                    if !ready {
-                        crate::theme::install_fonts(ui.ctx());
-                        crate::theme::apply(ui.ctx(), crate::theme::Brightness::MediumDark);
-                        ready = true;
-                        return;
-                    }
-                    super::super::show(app, ui.ctx());
-                },
-                app,
-            );
-            harness.run_steps(6);
-            harness.render().unwrap().save(std::path::Path::new(&dir).join("layer-naming-settings.png")).unwrap();
-            let fields = &mut harness.state_mut().ui.dialog.as_mut().unwrap().fields;
-            fields.insert("candidates".into(), json!([{"id":1,"name":"<Group>"},{"id":2,"name":"<Group>"}]));
-            fields.insert("names".into(), json!([{"id":1,"name":"Coin Counter"},{"id":2,"name":"Settings Button"}]));
-            harness.run_steps(3);
-            harness.render().unwrap().save(std::path::Path::new(&dir).join("layer-naming-review.png")).unwrap();
-            let (_tx, rx) = std::sync::mpsc::channel();
-            let progress = std::sync::Arc::new(Progress::default());
-            progress.paused.store(true, std::sync::atomic::Ordering::Relaxed);
-            progress.total.store(5, std::sync::atomic::Ordering::Relaxed);
-            let app = harness.state_mut();
-            app.ui.dialog.as_mut().unwrap().fields.insert("busy".into(), json!(true));
-            app.naming_job = Some(Job { base: 0, progress, rx, cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)) });
-            harness.run_steps(12);
-            harness.render().unwrap().save(std::path::Path::new(&dir).join("layer-naming-paused.png")).unwrap();
-            harness.run_steps(12);
-            harness.render().unwrap().save(std::path::Path::new(&dir).join("layer-naming-paused-next.png")).unwrap();
-            assert!(
-                std::fs::read(std::path::Path::new(&dir).join("layer-naming-paused.png")).unwrap()
-                    == std::fs::read(std::path::Path::new(&dir).join("layer-naming-paused-next.png")).unwrap(),
-                "paused stripes must remain stationary"
-            );
-            let app = harness.state_mut();
-            let job = app.naming_job.as_ref().unwrap();
-            job.progress.paused.store(false, std::sync::atomic::Ordering::Relaxed);
-            app.ui.dialog.as_mut().unwrap().fields.insert("names".into(), json!([]));
-            harness.run_steps(3);
-            harness.render().unwrap().save(std::path::Path::new(&dir).join("layer-naming-running.png")).unwrap();
-            harness.run_steps(12);
-            harness.render().unwrap().save(std::path::Path::new(&dir).join("layer-naming-running-next.png")).unwrap();
-            assert!(
-                std::fs::read(std::path::Path::new(&dir).join("layer-naming-running.png")).unwrap()
-                    != std::fs::read(std::path::Path::new(&dir).join("layer-naming-running-next.png")).unwrap(),
-                "the zero-progress bar must visibly animate while waiting for the first response"
-            );
-            harness
-                .state_mut()
-                .ui
-                .dialog
-                .as_mut()
-                .unwrap()
-                .fields
-                .insert("names".into(), json!([{"id":1,"name":"Coin Counter"},{"id":2,"name":"Settings Button"}]));
-            harness.run_steps(3);
-            harness.render().unwrap().save(std::path::Path::new(&dir).join("layer-naming-striped.png")).unwrap();
-            let app = harness.state_mut();
-            app.naming_job = None;
-            let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
-            fields.insert("complete".into(), json!(true));
-            fields.insert("names".into(), json!([{"id":1,"name":"Coin Counter"},{"id":2,"name":"Settings Button"}]));
-            fields.insert("total".into(), json!(2));
-            harness.run_steps(3);
-            harness.render().unwrap().save(std::path::Path::new(&dir).join("layer-naming-complete.png")).unwrap();
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
-    /// Renders previews and uses ollama protocol.
-    fn renders_previews_and_uses_ollama_protocol() {
-        use std::io::{Read, Write};
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let endpoint = format!("http://{}/api/chat", listener.local_addr().unwrap());
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        app.run("file.new", json!({})).unwrap();
-        app.run("shape.rectangle", json!({"x":0,"y":0,"width":20,"height":20})).unwrap();
-        app.run("layer.new", json!({"name":"Empty"})).unwrap();
-        let snapshot = app.run("layer.namingCandidates", json!({})).unwrap();
-        let rows = snapshot["rows"].as_array().unwrap().clone();
-        assert_eq!(rows.len(), 2);
-        let id = rows.iter().find(|r| r["name"] != "Empty").unwrap()["id"].clone();
-        let expected = json!([{"id": id, "name":"Play Button"}]);
-        let reply = json!({"message":{"content":json!({"names":expected}).to_string()}}).to_string();
-        let server = std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            stream.set_read_timeout(Some(std::time::Duration::from_secs(10))).unwrap();
-            let mut header = Vec::new();
-            while !header.ends_with(b"\r\n\r\n") {
-                let mut byte = [0];
-                stream.read_exact(&mut byte).unwrap();
-                header.extend(byte);
-            }
-            let header = String::from_utf8(header).unwrap();
-            assert!(header.starts_with("POST /api/chat "));
-            let len: usize =
-                header.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|n| n.trim().parse().unwrap())).unwrap();
-            let mut body = vec![0; len];
-            stream.read_exact(&mut body).unwrap();
-            let request: Value = serde_json::from_slice(&body).unwrap();
-            assert_eq!(request["model"], "test-vision");
-            assert_eq!(request["stream"], false);
-            assert_eq!(request["format"]["type"], "object");
-            assert_eq!(request["format"]["required"], json!(["names"]));
-            assert_eq!(request["format"]["properties"]["names"]["minItems"], 1);
-            assert_eq!(request["format"]["properties"]["names"]["maxItems"], 1);
-            assert_eq!(request["format"]["properties"]["names"]["items"]["properties"]["id"]["enum"], json!([id]));
-            assert_eq!(request["options"]["temperature"], 0);
-            assert!(!request["messages"][1]["content"].as_str().unwrap().contains("Layer 1"));
-            assert_eq!(request["messages"][1]["images"].as_array().unwrap().len(), 1);
-            write!(
-                stream,
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                reply.len(),
-                reply
-            )
-            .unwrap();
-        });
-        let flag = std::sync::atomic::AtomicBool::new(false);
-        let progress = Progress::default();
-        let result = generate(&app.session.active().unwrap().doc, &rows, &endpoint, "test-vision", "English", &flag, &progress).unwrap();
-        assert_eq!(progress.total.load(std::sync::atomic::Ordering::Relaxed), 1);
-        assert_eq!(progress.done.load(std::sync::atomic::Ordering::Relaxed), 1);
-        server.join().unwrap();
-        assert_eq!(result, expected);
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
-    /// Pause finishes current request and resume skips ready groups.
-    fn pause_finishes_current_request_and_resume_skips_ready_groups() {
-        use std::io::{Read, Write};
-        use std::sync::{atomic::Ordering, mpsc};
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        app.run("file.new", json!({})).unwrap();
-        for x in [10, 100] {
-            app.run("shape.rectangle", json!({"x":x,"y":10,"width":40,"height":20})).unwrap();
-            app.run("object.group", json!({})).unwrap();
-        }
-        let snapshot = app.run("layer.namingCandidates", json!({"depth":16})).unwrap();
-        let rows = snapshot["rows"].as_array().unwrap();
-        assert_eq!(rows.len(), 3);
-        let expected: Vec<_> = rows.iter().skip(1).map(|r| r["id"].clone()).collect();
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let endpoint = format!("http://{}/api/chat", listener.local_addr().unwrap());
-        let (requests, seen) = mpsc::channel();
-        let (release, gate) = mpsc::channel();
-        let server = std::thread::spawn(move || {
-            for _ in 0..2 {
-                let (mut stream, _) = listener.accept().unwrap();
-                stream.set_read_timeout(Some(std::time::Duration::from_secs(30))).unwrap();
-                let mut header = Vec::new();
-                while !header.ends_with(b"\r\n\r\n") {
-                    let mut b = [0];
-                    stream.read_exact(&mut b).unwrap();
-                    header.extend(b);
-                }
-                let header = String::from_utf8(header).unwrap();
-                let len: usize =
-                    header.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|n| n.trim().parse().unwrap())).unwrap();
-                let mut body = vec![0; len];
-                stream.read_exact(&mut body).unwrap();
-                let request: Value = serde_json::from_slice(&body).unwrap();
-                let id = request["format"]["properties"]["names"]["items"]["properties"]["id"]["enum"][0].clone();
-                requests.send(id.clone()).unwrap();
-                gate.recv_timeout(std::time::Duration::from_secs(30)).unwrap();
-                let reply = json!({"message":{"content":json!({"names":[{"id":id,"name":"Ready Button"}]}).to_string()}}).to_string();
-                write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", reply.len(), reply).unwrap();
-            }
-        });
-        open(&mut app).unwrap();
-        let mut d = app.ui.dialog.take().unwrap();
-        for key in ["uid", "revision"] {
-            d.fields.insert(key.into(), snapshot[key].clone());
-        }
-        d.fields.insert("candidates".into(), snapshot["rows"].clone());
-        d.fields.insert("names".into(), json!([{"id":rows[0]["id"],"name":"Already completed"}]));
-        d.fields.insert("endpoint".into(), json!(endpoint));
-        d.fields.insert("model".into(), json!("test-vision"));
-        d.fields.insert("depth".into(), json!(16));
-        start(&mut app, &mut d).unwrap();
-        let job = app.naming_job.as_ref().unwrap();
-        assert_eq!(seen.recv_timeout(std::time::Duration::from_secs(30)).unwrap(), expected[0]);
-        job.progress.paused.store(true, Ordering::Relaxed);
-        release.send(()).unwrap();
-        let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
-        while job.progress.done.load(Ordering::Relaxed) < 1 {
-            assert!(std::time::Instant::now() < until);
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
-        sync(&mut d, job).unwrap();
-        assert_eq!(d.fields["names"].as_array().unwrap().len(), 2);
-        assert!(seen.recv_timeout(std::time::Duration::from_millis(100)).is_err(), "pause must not request the next group");
-        job.progress.paused.store(false, Ordering::Relaxed);
-        assert_eq!(seen.recv_timeout(std::time::Duration::from_secs(30)).unwrap(), expected[1]);
-        release.send(()).unwrap();
-        let result = job.rx.recv_timeout(std::time::Duration::from_secs(30)).unwrap().unwrap();
-        assert_eq!(result.as_array().unwrap().len(), 2);
-        sync(&mut d, job).unwrap();
-        assert_eq!(d.fields["names"].as_array().unwrap().len(), 3);
-        assert_eq!(d.fields["names"][0]["name"], "Already completed");
-        server.join().unwrap();
-    }
-
-    /// Opt-in real-model check; normal CI uses the deterministic local HTTP fixture above.
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
-    #[ignore = "requires a running local Ollama vision model"]
-    fn real_ollama_returns_the_required_names_array() {
-        let model = std::env::var("VECTORCRAFT_NAMING_OLLAMA_MODEL").unwrap_or_else(|_| "qwen2.5vl:3b".into());
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        if let Ok(path) = std::env::var("VECTORCRAFT_NAMING_SVG") {
-            let doc = vectorcraft_svg::import(&std::fs::read_to_string(path).unwrap()).unwrap();
-            app.session.add_document(doc, None);
-        } else {
-            app.run("file.new", json!({})).unwrap();
-            for i in 0..12 {
-                if i != 0 {
-                    app.run("layer.new", json!({})).unwrap();
-                }
-                app.run("shape.rectangle", json!({"x":i*30,"y":0,"width":20,"height":20})).unwrap();
-            }
-        }
-        let snapshot = app.run("layer.namingCandidates", json!({"depth":16})).unwrap();
-        let doc = &app.session.active().unwrap().doc;
-        let symbols = doc.symbol_boxes();
-        let rows: Vec<_> = snapshot["rows"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|row| doc.node(vectorcraft_doc::NodeId(row["id"].as_u64().unwrap())).unwrap().visual_bounds_with(&symbols).is_some())
-            .take(4)
-            .cloned()
-            .collect();
-        assert_eq!(rows.len(), 4);
-        let flag = std::sync::atomic::AtomicBool::new(false);
-        let result =
-            generate(&app.session.active().unwrap().doc, &rows, "http://localhost:11434/api/chat", &model, "English", &flag, &Progress::default())
-                .unwrap();
-        assert_eq!(result.as_array().unwrap().len(), rows.len());
-        for (name, row) in result.as_array().unwrap().iter().zip(rows) {
-            assert_eq!(name["id"], row["id"]);
-            assert!(!matches!(name["name"].as_str().unwrap(), "<Group>" | "<Clip Group>" | "objects"));
-        }
-        eprintln!("Validated real Ollama response: {result}");
-    }
-
-    #[test]
-    /// Model cannot inject targets or invalid names.
-    fn model_cannot_inject_targets_or_invalid_names() {
-        let rows = vec![json!({"id": 4}), json!({"id": 7})];
-        for content in [
-            r#"{"names":[{"id":4,"name":"X"},{"id":4,"name":"Y"}]}"#,
-            r#"{"names":[{"id":4,"name":"X"},{"id":99,"name":"Y"}]}"#,
-            r#"{"names":[{"id":4,"name":"X"},{"id":7,"name":"  "}]}"#,
-            "not json",
-        ] {
-            assert!(validate(content, &rows).is_err());
-        }
-        let names = validate(r#"{"names":[{"id":7,"name":" Settings "},{"id":4,"name":"Play"}]}"#, &rows).unwrap();
-        assert_eq!(names, vec![json!({"id":4,"name":"Play"}), json!({"id":7,"name":"Settings"})]);
-    }
-}
+mod tests;

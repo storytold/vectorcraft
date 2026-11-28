@@ -25,6 +25,9 @@ pub fn stops_json(stops: &[GradientStop]) -> Value {
                 if let Some(n) = &s.swatch {
                     v["swatch"] = json!(n);
                     v["tint"] = json!(s.tint * 100.0);
+                    if let Some(p) = s.plates {
+                        v["plates"] = json!(p);
+                    }
                 }
                 v
             })
@@ -68,6 +71,20 @@ pub fn gradient_params(g: &GradientPaint) -> Value {
     }
     if let Some(f) = &g.freeform {
         v["freeform"] = freeform_json(f);
+    }
+    if g.gradient.dither {
+        v["dither"] = json!(true);
+    }
+    if !g.gradient.method.is_classic() {
+        v["method"] = json!(g.gradient.method.id());
+    }
+    // A freeform gradient has no ends to spread past (`paint.setFill` refuses a spread for one).
+    if g.gradient.is_spread() {
+        v["spread"] = json!(g.gradient.spread.label().to_lowercase());
+    }
+    // A gradient that pads keeps its count for later.
+    if g.gradient.repeat_count() != 1 {
+        v["repeats"] = json!(g.gradient.repeat_count());
     }
     v
 }

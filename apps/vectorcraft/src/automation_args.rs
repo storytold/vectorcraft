@@ -1,34 +1,35 @@
-//! Parse the control port and automation roots before starting any desktop services. A malformed
+//! Parse the control flags and automation roots before starting any desktop services. A malformed
 //! flag must not silently remove a root and leave the control channel unconfined, or leave the app
 //! running without the control channel that was asked for.
 
-use std::ffi::OsString;
 use std::path::PathBuf;
 
+use craft::automation::args::{ControlOptions, OptionsError, Source, control_port};
+
 pub struct AutomationArgs {
-    pub read_root: Option<PathBuf>,
-    pub write_root: Option<PathBuf>,
+    pub read_roots: Vec<PathBuf>,
+    pub write_roots: Vec<PathBuf>,
     read_given: bool,
     write_given: bool,
 }
 
 impl AutomationArgs {
+    /// The roots the environment gives (`VECTORCRAFT_AUTOMATION_READ_ROOT` / `_WRITE_ROOT`), until
+    /// the command line gives its own.
     pub fn new(read_root: Option<PathBuf>, write_root: Option<PathBuf>) -> Self {
-        Self { read_root, write_root, read_given: false, write_given: false }
+        Self { read_roots: read_root.into_iter().collect(), write_roots: write_root.into_iter().collect(), read_given: false, write_given: false }
     }
 
-    /// Returns whether this argument is a root flag. CLI values override environment defaults
-    /// once; a second occurrence is an error, including when the two spellings are mixed.
+    /// Returns whether this argument is a root flag. Each flag may be given more than once (#3546),
+    /// in either spelling: the first replaces the environment's root of its kind, the others add
+    /// folders.
     pub fn consume(&mut self, arg: &str, args: &mut impl Iterator<Item = String>) -> Result<bool, String> {
         let (flag, inline) = arg.split_once('=').map_or((arg, None), |(flag, value)| (flag, Some(value)));
-        let (root, given) = match flag {
-            "--automation-read-root" => (&mut self.read_root, &mut self.read_given),
-            "--automation-write-root" => (&mut self.write_root, &mut self.write_given),
+        let (roots, given) = match flag {
+            "--automation-read-root" => (&mut self.read_roots, &mut self.read_given),
+            "--automation-write-root" => (&mut self.write_roots, &mut self.write_given),
             _ => return Ok(false),
         };
-        if *given {
-            return Err(format!("{flag} given twice"));
-        }
         let value = match inline {
             Some(value) => value.to_owned(),
             None => {
@@ -42,53 +43,66 @@ impl AutomationArgs {
         if value.is_empty() {
             return Err(format!("{flag} needs a non-empty folder"));
         }
-        *root = Some(value.into());
-        *given = true;
+        if !std::mem::replace(given, true) {
+            roots.clear();
+        }
+        roots.push(value.into());
         Ok(true)
     }
 }
 
-/// `--control <port>` or `--control=<port>`, given at most once.
+/// `--control <port>`, `--control-token <token>` and `--control-token-file <file>`, each in either
+/// spelling (`--control=<port>`) and given at most once.
 #[derive(Default)]
 pub struct ControlArg {
-    pub port: Option<u16>,
+    options: ControlOptions,
 }
 
 impl ControlArg {
-    /// Returns whether this argument is `--control`. The next argument is its port whatever it
-    /// is, so `--control --automation-read-root` reports the flag rather than reading it as a root.
+    /// What the command line gave, each value marked as a flag's, for
+    /// [`ControlOptions::resolve`] to put over the environment.
+    pub fn options(&self) -> ControlOptions {
+        self.options.clone()
+    }
+
+    /// Returns whether this argument is one of the control flags. The next argument is the value
+    /// whatever it is, so `--control --automation-read-root` reports the flag rather than reading
+    /// it as a root.
     pub fn consume(&mut self, arg: &str, args: &mut impl Iterator<Item = String>) -> Result<bool, String> {
-        let value = match arg.strip_prefix("--control") {
-            Some("") => args.next(),
-            Some(rest) => match rest.strip_prefix('=') {
-                Some(value) => Some(value.to_owned()),
-                None => return Ok(false),
-            },
-            None => return Ok(false),
+        let (flag, inline) = arg.split_once('=').map_or((arg, None), |(flag, value)| (flag, Some(value)));
+        let given = match flag {
+            "--control" => self.options.port.is_some(),
+            "--control-token" => self.options.token.is_some(),
+            "--control-token-file" => self.options.token_file.is_some(),
+            _ => return Ok(false),
         };
-        if self.port.is_some() {
-            return Err("--control given twice".into());
+        let value = match inline {
+            Some(value) => value.to_owned(),
+            None => args.next().ok_or_else(|| format!("a value is required for '{flag}' but none was supplied"))?,
+        };
+        if given {
+            return Err(format!("the argument '{flag}' cannot be used multiple times"));
         }
-        self.port = Some(port("--control", value.as_deref())?);
+        let options = &mut self.options;
+        let from_flag = Some(Source::Flag);
+        match flag {
+            "--control" => {
+                let not_a_port = || OptionsError::NotAPort { value: value.clone(), shown: "--control <PORT>".into() }.to_string();
+                options.port = Some(control_port(&value).map_err(|_| not_a_port())?);
+                options.sources.port = from_flag;
+            }
+            // A blank token or path would leave the channel open to anyone or name no file.
+            _ if value.trim().is_empty() => return Err(format!("a value is required for '{flag}' but none was supplied")),
+            "--control-token" => {
+                options.token = Some(value);
+                options.sources.token = from_flag;
+            }
+            _ => {
+                options.token_file = Some(PathBuf::from(value));
+                options.sources.token_file = from_flag;
+            }
+        }
         Ok(true)
-    }
-}
-
-/// `VECTORCRAFT_CONTROL_PORT`, for when `--control` isn't given: unset or empty is no control
-/// channel, anything else must be a port.
-pub fn env_control_port(value: Option<OsString>) -> Result<Option<u16>, String> {
-    match value {
-        Some(v) if !v.is_empty() => port("VECTORCRAFT_CONTROL_PORT", Some(&v.to_string_lossy())).map(Some),
-        _ => Ok(None),
-    }
-}
-
-/// A port from 1 to 65535 (the server would listen on 0's random port without saying which).
-fn port(name: &str, value: Option<&str>) -> Result<u16, String> {
-    let need = format!("{name} needs a port number from 1 to 65535");
-    match value {
-        None => Err(need),
-        Some(v) => v.parse().ok().filter(|&p| p != 0).ok_or(format!("{need}, not `{v}`")),
     }
 }
 
@@ -97,17 +111,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn roots_override_environment_once_and_leave_other_arguments() {
-        let mut roots = AutomationArgs::new(Some("environment".into()), None);
+    fn roots_override_environment_and_add_up() {
+        let mut roots = AutomationArgs::new(Some("environment".into()), Some("environment out".into()));
         let mut args = ["a folder".to_owned(), "drawing.svg".to_owned()].into_iter();
         assert!(roots.consume("--automation-read-root", &mut args).unwrap());
         assert!(roots.consume("--automation-write-root=out", &mut args).unwrap());
         assert!(!roots.consume("--in-window-menus", &mut args).unwrap());
-        assert_eq!(roots.read_root, Some("a folder".into()));
-        assert_eq!(roots.write_root, Some("out".into()));
+        assert_eq!(roots.read_roots, [PathBuf::from("a folder")]);
+        assert_eq!(roots.write_roots, [PathBuf::from("out")]);
         assert_eq!(args.next().as_deref(), Some("drawing.svg"));
-        assert!(roots.consume("--automation-read-root=other", &mut args).is_err());
-        assert_eq!(roots.read_root, Some("a folder".into()));
+        // #3546: a flag given again adds a folder, in either spelling.
+        assert!(roots.consume("--automation-read-root=other", &mut args).unwrap());
+        assert!(roots.consume("--automation-write-root", &mut ["out2".to_owned()].into_iter()).unwrap());
+        assert_eq!(roots.read_roots, [PathBuf::from("a folder"), PathBuf::from("other")]);
+        assert_eq!(roots.write_roots, [PathBuf::from("out"), PathBuf::from("out2")]);
+        // A kind the command line leaves alone keeps the environment's root.
+        let mut roots = AutomationArgs::new(Some("environment".into()), Some("environment out".into()));
+        assert!(roots.consume("--automation-read-root=a", &mut std::iter::empty()).unwrap());
+        assert_eq!(roots.write_roots, [PathBuf::from("environment out")]);
     }
 
     #[test]
@@ -117,11 +138,15 @@ mod tests {
                 let mut roots = AutomationArgs::new(Some("read".into()), Some("write".into()));
                 let mut args = operand.map(str::to_owned).into_iter();
                 assert!(roots.consume(flag, &mut args).is_err(), "{flag} {operand:?}");
-                assert_eq!(roots.read_root, Some("read".into()));
-                assert_eq!(roots.write_root, Some("write".into()));
+                assert_eq!(roots.read_roots, [PathBuf::from("read")]);
+                assert_eq!(roots.write_roots, [PathBuf::from("write")]);
             }
             let mut roots = AutomationArgs::new(None, None);
             assert!(roots.consume(&format!("{flag}="), &mut std::iter::empty()).is_err());
+            // A bad second folder is an error too, and keeps the first.
+            assert!(roots.consume(&format!("{flag}=first"), &mut std::iter::empty()).unwrap());
+            assert!(roots.consume(flag, &mut std::iter::empty()).is_err());
+            assert_eq!([roots.read_roots.len(), roots.write_roots.len()].iter().sum::<usize>(), 1);
         }
     }
 
@@ -130,31 +155,42 @@ mod tests {
         let mut roots = AutomationArgs::new(None, None);
         assert!(roots.consume("--automation-read-root=-folder", &mut std::iter::empty()).unwrap());
         assert!(roots.consume("--automation-write-root", &mut ["./-folder".to_owned()].into_iter()).unwrap());
-        assert_eq!(roots.read_root, Some("-folder".into()));
-        assert_eq!(roots.write_root, Some("./-folder".into()));
+        assert_eq!(roots.read_roots, [PathBuf::from("-folder")]);
+        assert_eq!(roots.write_roots, [PathBuf::from("./-folder")]);
     }
 
-    fn control(args: &[&str]) -> Result<Option<u16>, String> {
+    fn control(args: &[&str]) -> Result<ControlOptions, String> {
         let mut control = ControlArg::default();
         let mut args = args.iter().map(|a| a.to_string());
         while let Some(a) = args.next() {
             assert!(control.consume(&a, &mut args)?, "{a}");
         }
-        Ok(control.port)
+        Ok(control.options())
     }
 
     #[test]
-    fn control_needs_a_port_from_1_to_65535() {
-        let need = "--control needs a port number from 1 to 65535";
-        assert_eq!(control(&["--control"]), Err(need.into()));
-        assert_eq!(control(&["--control", "--automation-read-root"]), Err(format!("{need}, not `--automation-read-root`")));
-        for bad in ["abc", "0", "70000", "-1", ""] {
-            assert_eq!(control(&["--control", bad]), Err(format!("{need}, not `{bad}`")));
-            assert_eq!(control(&[&format!("--control={bad}")]), Err(format!("{need}, not `{bad}`")));
+    fn a_control_flag_takes_the_next_argument_whatever_it_is() {
+        assert!(control(&["--control"]).is_err(), "a flag with no value");
+        let err = control(&["--control", "--automation-read-root"]).unwrap_err();
+        assert!(err.contains("--automation-read-root"), "the next argument is the port, not a root flag: {err}");
+        for bad in ["abc", "70000", "-1", ""] {
+            assert!(control(&["--control", bad]).is_err(), "{bad}");
+            assert!(control(&[&format!("--control={bad}")]).is_err(), "{bad}");
         }
-        assert_eq!(control(&["--control", "7979"]), Ok(Some(7979)));
-        assert_eq!(control(&["--control=65535"]), Ok(Some(65535)));
-        assert_eq!(control(&["--control", "7979", "--control=7980"]), Err("--control given twice".into()));
+        for twice in [
+            ["--control", "7979", "--control=7980"],
+            ["--control-token", "a", "--control-token=b"],
+            ["--control-token-file", "a", "--control-token-file=b"],
+        ] {
+            assert!(control(&twice).is_err(), "{twice:?}");
+        }
+        assert!(control(&["--control-token="]).is_err(), "an empty token");
+        let port = control(&["--control", "7979"]).unwrap();
+        assert_eq!(port, control(&["--control=7979"]).unwrap(), "both spellings agree");
+        assert_eq!((port.port, port.sources.port), (Some(7979), Some(Source::Flag)));
+        assert_eq!(control(&["--control=0"]).unwrap().port, Some(0), "port 0 picks a free port");
+        let secret = control(&["--control-token", "--odd", "--control-token-file=key.txt"]).unwrap();
+        assert_eq!((secret.token.as_deref(), secret.token_file), (Some("--odd"), Some(PathBuf::from("key.txt"))));
     }
 
     #[test]
@@ -165,21 +201,9 @@ mod tests {
             assert!(!control.consume(other, &mut args).unwrap(), "{other}");
         }
         assert_eq!(args.next().as_deref(), Some("7979"));
-        assert_eq!(control.port, None);
-    }
-
-    #[test]
-    fn control_port_variable_is_a_port_or_unset() {
-        assert_eq!(env_control_port(None), Ok(None));
-        assert_eq!(env_control_port(Some("".into())), Ok(None));
-        assert_eq!(env_control_port(Some("7979".into())), Ok(Some(7979)));
-        let need = "VECTORCRAFT_CONTROL_PORT needs a port number from 1 to 65535";
-        assert_eq!(env_control_port(Some("abc".into())), Err(format!("{need}, not `abc`")));
-        assert_eq!(env_control_port(Some("0".into())), Err(format!("{need}, not `0`")));
-        #[cfg(unix)]
-        {
-            use std::os::unix::ffi::OsStringExt;
-            assert_eq!(env_control_port(Some(OsString::from_vec(vec![0x39, 0xff]))), Err(format!("{need}, not `9\u{fffd}`")));
+        assert_eq!(control.options(), ControlOptions::default());
+        for token_flag in ["--control-token", "--control-token-file"] {
+            assert!(ControlArg::default().consume(token_flag, &mut ["x".to_owned()].into_iter()).unwrap(), "{token_flag}");
         }
     }
 }

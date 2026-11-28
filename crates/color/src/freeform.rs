@@ -162,8 +162,9 @@ impl Freeform {
     /// ([`Color::lerp_keep_model`]).
     pub fn recolor(&mut self, g: &Gradient) {
         let n = self.points.len();
-        for (k, p) in self.points.iter_mut().enumerate() {
-            (p.color, p.opacity) = g.sample_with(k as f32 / (n - 1).max(1) as f32, Color::lerp_keep_model);
+        let at = (0..n).map(|k| k as f32 / (n - 1).max(1) as f32);
+        for (p, (color, opacity)) in self.points.iter_mut().zip(g.sample_increasing_with(at, Color::lerp_keep_model)) {
+            (p.color, p.opacity) = (color, opacity);
         }
     }
 
@@ -394,6 +395,15 @@ impl Source {
     }
 }
 
+/// The centers of a `cols` × `rows` grid of cells over `b`, row by row.
+fn cell_centers(b: Rect, cols: u16, rows: u16) -> impl Iterator<Item = Point> {
+    let (cw, ch) = (b.width() / cols as f64, b.height() / rows as f64);
+    (0..rows as usize * cols as usize).map(move |k| {
+        let (i, j) = (k % cols as usize, k / cols as usize);
+        Point::new(b.x0 + (i as f64 + 0.5) * cw, b.y0 + (j as f64 + 0.5) * ch)
+    })
+}
+
 /// A freeform gradient ready to sample ([`Freeform::field`]).
 #[derive(Clone, Debug)]
 pub struct Field {
@@ -428,11 +438,7 @@ impl Field {
     /// Samples at the centres of a `cols` × `rows` grid of cells over `b`, row by row: RGB and
     /// opacity (as [`Self::sample`]).
     pub fn grid(&self, b: Rect, cols: u16, rows: u16) -> impl Iterator<Item = ([f32; 3], f32)> + '_ {
-        let (cw, ch) = (b.width() / cols as f64, b.height() / rows as f64);
-        (0..rows as usize * cols as usize).map(move |k| {
-            let (i, j) = (k % cols as usize, k / cols as usize);
-            self.sample(Point::new(b.x0 + (i as f64 + 0.5) * cw, b.y0 + (j as f64 + 0.5) * ch))
-        })
+        cell_centers(b, cols, rows).map(move |p| self.sample(p))
     }
 
     /// Display RGB and opacity at `p`.
@@ -502,6 +508,27 @@ impl ModelField {
         };
         (c, a)
     }
+
+    /// [`Self::sample`] at the centers of a `cols` × `rows` grid of cells over `b`, row by row.
+    pub fn grid(&self, b: Rect, cols: u16, rows: u16) -> impl Iterator<Item = (Color, f32)> + '_ {
+        cell_centers(b, cols, rows).map(move |p| self.sample(p))
+    }
+
+    /// Display RGB and opacity at `p`: the display color of [`Self::sample`], or the display RGB
+    /// the points mix in when their models differ.
+    pub fn display_sample(&self, p: Point) -> ([f32; 3], f32) {
+        if self.model.is_none() {
+            return self.first.sample(p);
+        }
+        let (c, a) = self.sample(p);
+        (c.to_rgb(), a)
+    }
+
+    /// [`Self::display_sample`] at the centers of a `cols` × `rows` grid of cells over `b`, row by
+    /// row.
+    pub fn display_grid(&self, b: Rect, cols: u16, rows: u16) -> impl Iterator<Item = ([f32; 3], f32)> + '_ {
+        cell_centers(b, cols, rows).map(move |p| self.display_sample(p))
+    }
 }
 
 #[cfg(test)]
@@ -527,6 +554,22 @@ mod tests {
 
     fn close(a: [f32; 3], b: [f32; 3]) -> bool {
         a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-4)
+    }
+
+    #[test]
+    fn the_model_field_grid_and_display_samples_match_its_sample() {
+        let mut f = two(0.0);
+        (f.points[0].color, f.points[1].color) = (Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+        let field = f.model_field(50.0);
+        let b = Rect::new(0.0, 0.0, 100.0, 20.0);
+        let (cells, shown): (Vec<_>, Vec<_>) = (field.grid(b, 5, 1).collect(), field.display_grid(b, 5, 1).collect());
+        let (mid, a) = field.sample(Point::new(50.0, 10.0));
+        assert_eq!(cells[2], (mid, a));
+        assert_eq!(shown[2], (mid.to_rgb(), a));
+        // Points in different models give their display mix.
+        (f.points[0].color, f.points[1].color) = (red(), Color::gray(0.5));
+        let (rgb, _) = f.model_field(50.0).display_sample(Point::new(50.0, 0.0));
+        assert!(close(rgb, [0.75, 0.25, 0.25]), "{rgb:?}");
     }
 
     #[test]

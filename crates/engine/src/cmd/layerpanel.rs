@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::layer::{NewLayers, row_roots, rows_param};
-use super::*;
+use super::{CommandSpec, Result, Session, bad, checked_id, cmd, has_doc, object_param, ok, switch_or};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -132,7 +132,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Locate Object",
             ["Window", "Layers"],
             None,
-            "{id?} (default: the last selected object) highlight the object's row; the Layers panel opens the layers around it and scrolls to it → {id, ancestry: [layer…, id]}",
+            "{id?, layersOnly?} (default: the frontmost selected object in the stacking order) highlight the object's row; the Layers panel opens the layers around it, and scrolls to its row when the row is in the list, also when the row was already highlighted (Show Layers Only, a search, the filter, or editing an opacity mask on another layer can leave the row out) → {id, ancestry: [layer…, id]}. layersOnly (default false; the panel sends true while Show Layers Only is on, as Locate Layer) highlights the innermost layer or sublayer holding the object instead, or a layer id itself → {id: layer, objectId, ancestry: [layer…]}",
             has_doc,
             locate
         ),
@@ -225,7 +225,7 @@ fn template(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let ids: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(Node::is_layer)).collect();
     let Some(first) = ids.first().and_then(|id| d.node(*id)) else { return Err(bad("layer.template", "select a layer")) };
-    let on = bool_or(p, "on", !first.is_template());
+    let on = switch_or(p, "on", !first.is_template(), "layer.template")?;
     s.execute("layer.setProps", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "template": on}))?;
     Ok(json!({ "on": on }))
 }
@@ -255,9 +255,9 @@ fn merge_into(d: &mut Document, into: NodeId, others: &[NodeId]) -> Result<()> {
     let mut all = std::mem::take(ch);
     all.extend(taken);
     all.sort_by(|a, b| keys.get(&a.id).cmp(&keys.get(&b.id)));
+    // Ruler guides (the merged layers' among them) stay above the art, each kind in that order.
+    all.sort_by_key(|c| c.is_ruler_guide());
     *ch = all;
-    // The merged layers' guides go to it too.
-    d.rehome_guides(into);
     Ok(())
 }
 
@@ -318,9 +318,8 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
     let others: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && l.visible && !l.is_template()).map(|l| l.id).collect();
     let hidden: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && !l.visible && !l.is_template()).map(|l| l.id).collect();
     s.edit("Flatten Artwork", |d, sel| {
-        d.remove_many(&hidden)?;
         // Hidden layers are discarded with their guides.
-        d.drop_guides_of_deleted_layers(sel);
+        d.remove_many(&hidden)?;
         merge_into(d, into, &others)?;
         sel.prune(d);
         sel.deselect_uneditable(d);
@@ -334,9 +333,9 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn release(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.releaseToLayers";
-    let build = bool_or(p, "build", false);
+    let build = switch_or(p, "build", false, C)?;
     let st = s.doc()?;
-    let id = match id_param(p, "id") {
+    let id = match object_param(p, "id", C)? {
         Some(id) => id,
         None => match st.highlighted_rows().as_slice() {
             [id] => *id,
@@ -349,8 +348,8 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         NodeKind::Group { .. } => true,
         _ => return Err(bad(C, "release a layer or a group")),
     };
-    // Its objects, bottom first (sublayers stay as they are).
-    let objects: Vec<NodeId> = n.children().into_iter().flatten().filter(|c| !c.is_layer()).map(|c| c.id).collect();
+    // Its objects, bottom first (sublayers and ruler guides stay as they are).
+    let objects: Vec<NodeId> = n.children().into_iter().flatten().filter(|c| !c.is_layer() && !c.is_ruler_guide()).map(|c| c.id).collect();
     if objects.is_empty() {
         return Err(EngineError::Other("there are no objects to release".into()));
     }
@@ -386,8 +385,13 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let new: Vec<NodeId> = layers.iter().map(|l| l.id).collect();
         let ch = d.children_mut(Some(parent))?;
-        let at = index.min(ch.len());
+        // Below the parent's ruler guides.
+        let at = index.min(Node::guide_run_start(ch));
         ch.splice(at..at, layers);
+        // Copied type whose layout caches `reid` dropped has them again.
+        if build {
+            super::typecmd::refresh_bounds_of(d, &new);
+        }
         sel.prune(d);
         Ok(new)
     })?;
@@ -430,10 +434,21 @@ fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn locate(s: &mut Session, p: &Value) -> Result<Value> {
+    let id = object_param(p, "id", "layer.locate")?;
+    let layers_only = switch_or(p, "layersOnly", false, "layer.locate")?;
     let st = s.doc_mut()?;
-    let id = id_param(p, "id").or_else(|| st.selection.objects.last().copied()).ok_or_else(|| bad("layer.locate", "nothing selected"))?;
-    let ancestry = st.doc.ancestry(id).ok_or(EngineError::NoNode(id))?;
-    st.layer_rows = vec![id];
+    // With no id, the frontmost selected object in the stacking order, whatever order it was selected in.
+    let id = id.or_else(|| st.selection.in_paint_order(&st.doc).last().copied()).ok_or_else(|| bad("layer.locate", "nothing selected"))?;
+    let mut ancestry = st.doc.ancestry(id).ok_or(EngineError::NoNode(id))?;
+    if layers_only {
+        // Locate Layer: the innermost layer or sublayer holding the object (a layer locates itself).
+        let at = ancestry.iter().rposition(|a| st.doc.node(*a).is_some_and(Node::is_layer)).ok_or(EngineError::NoNode(id))?;
+        ancestry.truncate(at + 1);
+    }
+    let row = ancestry.last().copied().ok_or(EngineError::NoNode(id))?;
+    st.layer_rows = vec![row];
+    st.layers_reveal = Some(crate::LayersReveal::Row(row));
     st.revision += 1;
-    Ok(json!({ "id": id.0, "ancestry": ancestry.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    let ancestry: Vec<u64> = ancestry.iter().map(|i| i.0).collect();
+    Ok(if layers_only { json!({ "id": row.0, "objectId": id.0, "ancestry": ancestry }) } else { json!({ "id": id.0, "ancestry": ancestry }) })
 }

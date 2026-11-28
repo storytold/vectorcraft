@@ -8,7 +8,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
@@ -69,9 +68,8 @@ fn an_exporter_adds_a_write_only_format_while_it_is_installed() {
     assert!(e.to_string().contains("unknown format"), "{e}");
 }
 
-/// The exporter is given the document as a native file's JSON: what `document.save` writes before
-/// the data of large images, which stays behind (compact, where a save of a small document is
-/// indented).
+/// The exporter receives the native document JSON without optional save renditions or preference
+/// metadata. Large image bytes stay in the saved file's tail; plug-in input stays compact.
 #[test]
 fn the_exporter_is_given_the_native_file_s_json() {
     let mut s = session();
@@ -84,7 +82,41 @@ fn the_exporter_is_given_the_native_file_s_json() {
         image::Rgba([r, g, b, 255])
     });
     let mut png = vec![];
-    noise.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = noise.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     assert!(png.len() >= vectorcraft_format::INLINE_MAX, "{} bytes", png.len());
     s.execute("file.place", &json!({"name": "noise.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
 
@@ -94,14 +126,37 @@ fn the_exporter_is_given_the_native_file_s_json() {
     let saved = exported(&s.execute("document.save", &json!({})).unwrap());
     assert!(saved.len() > given.len() + png.len(), "the image data follows the JSON in the saved file");
     let doc: Value = serde_json::from_slice(&given).unwrap();
-    let saved_json: Value = serde_json::from_slice(vectorcraft_format::json_part(&saved)).unwrap();
-    assert_eq!(doc, saved_json, "the saved file's JSON");
+    let mut saved_json: Value = serde_json::from_slice(vectorcraft_format::json_part(&saved)).unwrap();
+    assert!(saved_json.get("pdf").is_some(), "a default application save carries a PDF");
+    assert_eq!(saved_json["pdfCompatible"], true);
+    assert!(doc.get("pdf").is_none() && doc.get("pdfCompatible").is_none(), "the plug-in input omits optional save members");
+    let saved_members = saved_json.as_object_mut().unwrap();
+    saved_members.remove("pdf");
+    saved_members.remove("pdfCompatible");
+    assert_eq!(doc, saved_json, "the native document JSON without optional save members");
     assert!(!given.contains(&b'\n'), "without indentation");
     assert_eq!((&doc["format"], &doc["version"]), (&json!("vectorcraft"), &json!(vectorcraft_format::VERSION)));
     let images = doc["images"].as_object().unwrap();
     let image = images.values().next().unwrap();
     assert_eq!(images.len(), 1);
     assert!(image.get("blob").is_some() && image.get("data").is_none(), "{image}");
+}
+
+/// What filter plug-ins keep with the document reaches an exporter with the rest of the document:
+/// a plotter's exporter finds the pens a setup filter kept (`document.unknown.pluginData`, by
+/// plug-in id).
+#[test]
+fn an_exporter_finds_what_filters_keep_with_the_document() {
+    let mut s = session();
+    s.execute("select.none", &json!({})).unwrap();
+    let pens = json!({"pens": [{"slot": 1, "width": 0.3}, {"slot": 2, "width": 0.5}]});
+    let setup = json!({"objects": [], "documentData": pens});
+    install(&mut s, &tpl::returning(&tpl::manifest("test.setup", "filter", "{}"), &setup.to_string()));
+    s.execute("plugin.run", &json!({"id": "test.setup"})).unwrap();
+    install(&mut s, &tpl::echo_exporter(&tpl::exporter("test.pens", r#"["tsd"]"#, "{}"), Echo::Input));
+    let r = s.execute("document.export", &json!({"format": "plugin.test.pens"})).unwrap();
+    let doc: Value = serde_json::from_slice(&exported(&r)).unwrap();
+    assert_eq!(doc["document"]["unknown"][vectorcraft_doc::plugin_data::PLUGIN_DATA], json!({"test.setup": pens}));
 }
 
 #[test]
@@ -133,6 +188,22 @@ fn the_exporter_is_given_its_parameters_and_the_file_it_writes() {
     assert!(matches!(e, EngineError::BadParams { .. }), "{e}");
     assert!(!bad.exists());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Export for Screens writes an exporter's format from a row, with the row's `params`, and takes
+/// settings for that format.
+#[test]
+fn export_for_screens_takes_an_exporter_s_format_and_params() {
+    let mut s = session();
+    let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
+    install(&mut s, &tpl::echo_exporter(&tpl::exporter("test.screens", r#"["tss"]"#, params), Echo::Params));
+    let r = s.execute("document.exportForScreens", &json!({"formats": [{"format": "plugin.test.screens", "params": {"density": 7}}]})).unwrap();
+    let file = &r["files"][0];
+    assert!(file["name"].as_str().unwrap().ends_with(".tss"), "{r}");
+    let got: Value = serde_json::from_slice(&vectorcraft_format::base64_decode(file["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    assert_eq!(got["density"], json!(7.0));
+    let settings = json!({"formats": [{"format": "plugin.test.screens"}], "settings": {"plugin.test.screens": {"params": {"density": 2}}}});
+    s.execute("document.exportForScreens", &settings).unwrap();
 }
 
 /// Only the selected objects, with `selectedOnly`, as for the built-in formats.
@@ -196,22 +267,133 @@ fn declines_and_bad_output_write_nothing_and_warnings_come_back() {
 }
 
 /// Background Export's Cancel stops an exporter between two slices of its budget: here one that
-/// never returns, cancelled from another thread once it is running.
+/// never returns after it reports its first step, cancelled when that report arrives, so the cancel
+/// lands while it is running.
 #[test]
 fn a_cancelled_export_stops_the_exporter() {
     let mut s = session();
-    install(&mut s, &tpl::module(&tpl::exporter("test.spins", r#"["tss"]"#, "{}"), "(loop $l (br $l)) (i64.const 0)", "", 1));
+    let manifest = r#"{"id":"test.spins","name":"Test test.spins","version":"1","kind":"exporter","api":2,"extensions":["tss"],"params":{},"permissions":["doc.read","export.write","progress"]}"#;
+    let spins = "(call $vc_progress (i64.const 1) (i64.const 7)) (loop $l (br $l))";
+    let wasm = wat::parse_str(tpl::reporting(manifest, spins, r#"{"dataBase64":""}"#)).unwrap();
+    let grant = json!(["doc.read", "export.write", "progress"]);
+    s.allow_plugin_grants_from_requests();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant})).unwrap();
     let token = vectorcraft_doc::cancel::CancelToken::new();
-    let cancel = token.clone();
-    let wait = Duration::from_millis(300);
-    let canceller = std::thread::spawn(move || {
-        std::thread::sleep(wait);
-        cancel.cancel();
-    });
-    let t = Instant::now();
-    let r = vectorcraft_doc::cancel::scope(&token, None, || s.execute("document.export", &json!({"format": "plugin.test.spins"})));
-    let took = t.elapsed();
-    canceller.join().unwrap();
+    let reports = std::rc::Rc::new(std::cell::Cell::new(0));
+    let sink: vectorcraft_doc::cancel::ProgressSink = {
+        let (token, reports) = (token.clone(), reports.clone());
+        std::rc::Rc::new(move |done, total, _| {
+            if (done, total) == (1, 7) {
+                reports.set(reports.get() + 1);
+                token.cancel();
+            }
+        })
+    };
+    let r = vectorcraft_doc::cancel::scope(&token, Some(sink), || s.execute("document.export", &json!({"format": "plugin.test.spins"})));
     assert!(matches!(r, Err(EngineError::Cancelled)), "{r:?}");
-    assert!(took >= wait && took < Duration::from_secs(10), "stopped while running, not before: {took:?}");
+    assert_eq!(reports.get(), 1, "cancelled once the exporter was running, not before");
+}
+
+/// Every string in `v`, at any depth.
+fn strings_in(v: &Value, out: &mut Vec<String>) {
+    match v {
+        Value::String(s) => out.push(s.clone()),
+        Value::Array(items) => items.iter().for_each(|v| strings_in(v, out)),
+        Value::Object(map) => map.values().for_each(|v| strings_in(v, out)),
+        _ => {}
+    }
+}
+
+/// A confined caller: an exporter, given the native document's JSON, is not run for a document
+/// that links a JavaScript file, a data set's image or a placed file outside the read roots. Every
+/// command that writes its format refuses, before any file or folder is written, with an error
+/// that names no file or folder, and the document keeps its links. A data set's image inside the
+/// roots is given to it, the JSON it is given leaves out an Export for Screens folder outside them,
+/// and the person's export gives it every path as stored.
+#[test]
+fn a_confined_exporter_is_refused_stored_paths_outside_the_read_roots() {
+    use vectorcraft_engine::file_access::{AutomationRoots, confine};
+
+    let away = tmp_dir("confined-away");
+    let home = tmp_dir("confined-home");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    s.execute("assets.add", &json!({"ids": [r["id"]]})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    install(&mut s, &tpl::echo_exporter(&tpl::exporter("test.confined", r#"["tsc"]"#, "{}"), Echo::Input));
+    let format = "plugin.test.confined";
+    let roots = AutomationRoots::new(&[home.as_path()], &[home.as_path()]).unwrap();
+    let out = path_of(&home.join("out"));
+    let outputs = [
+        ("document.serialize", json!({"format": format})),
+        ("document.export", json!({"format": format})),
+        ("document.export", json!({"format": format, "path": path_of(&home.join("export.tsc"))})),
+        ("document.exportSelection", json!({"format": format})),
+        ("document.exportForScreens", json!({"folder": out, "formats": [{"format": format}]})),
+        ("assets.export", json!({"folder": out, "formats": [{"format": format}]})),
+    ];
+    let hidden = [path_of(&away), path_of(&home)];
+    // `assets`: an asset's file is checked too (its document holds the asset's art and the
+    // document's data sets, not other art).
+    let refused = |s: &mut Session, why: &str, assets: bool| {
+        for (cmd, p) in outputs.iter().filter(|(cmd, _)| assets || *cmd != "assets.export") {
+            let e = confine(roots.as_ref(), || s.execute(cmd, p)).expect_err(&format!("{cmd} {p}: {why}"));
+            assert!(matches!(e, EngineError::BadParams { .. }), "{cmd} {p}: {e:?}");
+            let e = e.to_string();
+            assert!(e.contains(why), "{cmd} {p}: {e}");
+            for h in &hidden {
+                assert!(!e.contains(h.as_str()), "{cmd} {p} names {h}: {e}");
+            }
+        }
+        assert_eq!(std::fs::read_dir(&home).unwrap().count(), 0, "nothing is written");
+    };
+    // The strings of the JSON the exporter is given.
+    let given = |s: &mut Session, confined: bool| {
+        let p = json!({"format": format});
+        let r = if confined { confine(roots.as_ref(), || s.execute("document.export", &p)) } else { s.execute("document.export", &p) };
+        let mut found = vec![];
+        strings_in(&serde_json::from_slice(&exported(&r.unwrap())).unwrap(), &mut found);
+        found
+    };
+
+    let script = path_of(&away.join("menu.js"));
+    s.execute("svgInteractivity.addFile", &json!({"file": script})).unwrap();
+    refused(&mut s, "a linked JavaScript file is outside the read roots", true);
+    assert!(given(&mut s, false).contains(&script), "the person's export");
+    s.execute("svgInteractivity.removeFile", &json!({"file": script})).unwrap();
+
+    let set_image = |s: &mut Session, path: &str| {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let values = [("Photo".to_string(), vectorcraft_doc::DataValue::Image(path.into()))].into_iter().collect();
+        doc.variables.datasets = vec![vectorcraft_doc::DataSet { name: "Row 1".into(), values }];
+    };
+    let photo = path_of(&away.join("photo.png"));
+    set_image(&mut s, &photo);
+    refused(&mut s, "a linked image file is outside the read roots", true);
+    assert!(given(&mut s, false).contains(&photo), "the person's export");
+    let inside = path_of(&home.join("photo.png"));
+    set_image(&mut s, &inside);
+    assert!(given(&mut s, true).contains(&inside), "an image inside the read roots");
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).variables.datasets.clear();
+
+    let folder = path_of(&away.join("screens"));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).export_settings = serde_json::from_value(json!({"folder": folder})).unwrap();
+    assert!(!given(&mut s, true).contains(&folder), "the export folder is left out");
+    assert!(given(&mut s, false).contains(&folder), "the person's export");
+    assert_eq!(s.doc().unwrap().doc.export_settings.get("folder"), Some(&json!(folder)), "the document keeps it");
+
+    let mut part = Session::new();
+    part.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let placed = path_of(&away.join("part.vectorcraft"));
+    part.execute("file.saveAs", &json!({"path": placed})).unwrap();
+    s.execute("file.place", &json!({"path": placed, "link": true})).unwrap();
+    refused(&mut s, "a linked image file is outside the read roots", false);
+    // The asset's file holds the rectangle alone, without the placed file.
+    let r = confine(roots.as_ref(), || s.execute("assets.export", &outputs[5].1)).unwrap();
+    let mut found = vec![];
+    strings_in(&serde_json::from_slice(&std::fs::read(r["files"][0].as_str().unwrap()).unwrap()).unwrap(), &mut found);
+    assert!(!found.contains(&placed), "{found:?}");
+    let _ = std::fs::remove_dir_all(&away);
+    let _ = std::fs::remove_dir_all(&home);
 }

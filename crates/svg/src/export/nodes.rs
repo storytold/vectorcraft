@@ -1,0 +1,1211 @@
+use super::output::{sanitize_id, valid_xml_value, xml_attr_escape};
+use super::paint::{StrokePlan, has_raster, pixel_gradient};
+use super::text::OUTLINE_TOLERANCE;
+use super::{
+    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, HashMap, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer,
+    Writer, Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
+};
+
+/// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
+pub(super) struct SymbolDef {
+    /// The def's id, once written.
+    id: Option<String>,
+    reuse: Reuse,
+    /// The objects in the placed art of the 9-slice instances in the def (see
+    /// [`Writer::symbol_nodes`]), charged again for each `<use>` of it.
+    nodes: u64,
+}
+
+/// Which instance transforms paint a symbol's art exactly as the def under that transform (the
+/// canvas transforms the art's geometry alone: stroke weights, effects, patterns and unlinked
+/// masks stay put).
+#[derive(Clone, Copy)]
+pub(crate) struct Reuse {
+    /// Translations (no pattern paints or unlinked masks).
+    moves: bool,
+    /// Rotations and reflections (nor effects or brushes).
+    turns: bool,
+    /// Any other transform (nor strokes or live objects).
+    scales: bool,
+}
+
+/// How deep symbols may sit in one another's art (deeper instances are left out).
+const MAX_SYMBOL_NEST: u32 = 8;
+
+/// Gradient placement and outside-aligned stroke masks need the shape's geometric box.
+/// Solid colours and patterns do not, so avoid walking their path geometry for a box.
+fn export_shape_bounds(n: &Node) -> Option<Rect> {
+    n.appearance
+        .items
+        .iter()
+        .any(|item| match item {
+            AppearanceItem::Fill(f) => f.visible && matches!(f.paint, Paint::Gradient(_)),
+            AppearanceItem::Stroke(s) => {
+                s.visible && s.width > 0.0 && !s.paint.is_none() && (matches!(s.paint, Paint::Gradient(_)) || s.align == StrokeAlign::Outside)
+            }
+        })
+        .then(|| n.geometric_bounds())
+        .flatten()
+}
+
+impl Reuse {
+    const NONE: Self = Self { moves: false, turns: false, scales: false };
+
+    /// What a def of symbol art `art` stands for, in `doc`. `find` finds the symbol of each
+    /// instance in it by name.
+    pub(crate) fn of<'d>(doc: &'d Document, find: &dyn Fn(&str) -> Option<&'d vectorcraft_doc::Symbol>, art: &Node) -> Self {
+        let mut r = Self { moves: true, turns: true, scales: true };
+        r.scan(doc, find, art, 0);
+        r
+    }
+
+    /// Narrow down to what `n` (inside symbols nested `depth` deep) allows.
+    fn scan<'d>(&mut self, doc: &'d Document, find: &dyn Fn(&str) -> Option<&'d vectorcraft_doc::Symbol>, n: &Node, depth: u32) {
+        let pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
+        let text_patterns = matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| pattern(&r.style.fill) || pattern(&r.style.stroke)));
+        let unlinked_mask = n.extras().mask.as_ref().is_some_and(|m| !m.linked);
+        if depth > MAX_SYMBOL_NEST || text_patterns || unlinked_mask || vectorcraft_doc::pattern::uses_pattern(n, None) {
+            *self = Self::NONE;
+            return;
+        }
+        let effects = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible);
+        if effects(&n.appearance.effects) || n.appearance.items.iter().any(|i| effects(i.effects())) {
+            (self.turns, self.scales) = (false, false);
+        }
+        for i in &n.appearance.items {
+            if let AppearanceItem::Stroke(s) = i
+                && s.visible
+                && !s.paint.is_none()
+                && s.width > 0.0
+            {
+                // Stroke weights don't scale; brushes can orient their art to the page.
+                self.scales = false;
+                self.turns &= s.brush.is_none();
+            }
+        }
+        match &n.kind {
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. } => (self.turns, self.scales) = (false, false),
+            NodeKind::Image(_) if n.is_distorted_image() => (self.turns, self.scales) = (false, false),
+            NodeKind::SymbolInstance { symbol, .. } => {
+                // A scale reaching an instance of a symbol with 9-slice guides changes how its
+                // cells are sized.
+                if doc.symbol_nine_slice(symbol).is_some() {
+                    self.scales = false;
+                }
+                if let Some(s) = find(symbol) {
+                    self.scan(doc, find, &s.art, depth + 1);
+                }
+            }
+            _ => {}
+        }
+        if let Some(m) = &n.extras().mask {
+            self.scan(doc, find, &m.art, depth);
+        }
+        for c in n.children().into_iter().flatten() {
+            self.scan(doc, find, c, depth);
+        }
+    }
+
+    /// Can the def stand for an instance with transform `xf`?
+    pub(crate) fn allows(self, xf: Affine) -> bool {
+        const EPS: f64 = 1e-9;
+        let [a, b, c, d, _, _] = xf.as_coeffs();
+        if (a - 1.0).abs() < EPS && b.abs() < EPS && c.abs() < EPS && (d - 1.0).abs() < EPS {
+            return self.moves;
+        }
+        let rigid = (a * a + b * b - 1.0).abs() < EPS && (c * c + d * d - 1.0).abs() < EPS && (a * c + b * d).abs() < EPS;
+        if rigid { self.turns } else { self.scales }
+    }
+}
+
+/// Are `children` the pieces of a raster mesh warp ([`vectorcraft_doc::live::mesh_warp_image`]):
+/// more than one, each a clip group of a triangle and one and the same image, or that image masked
+/// by a triangle (Preserve Shape Using Transparency)?
+fn image_pieces(children: &[std::sync::Arc<Node>]) -> bool {
+    let mut first: Option<(&str, u32, u32)> = None;
+    children.len() > 1
+        && children.iter().all(|c| {
+            let (shape, im) = match (&c.kind, c.extras().mask.as_deref()) {
+                (NodeKind::Group { children, clip: true }, _) => match children.as_slice() {
+                    [clip, im] => (&**clip, &**im),
+                    _ => return false,
+                },
+                (NodeKind::Image(_), Some(m)) => (&*m.art, &**c),
+                _ => return false,
+            };
+            let (NodeKind::Path { path, .. }, NodeKind::Image(im)) = (&shape.kind, &im.kind) else { return false };
+            let triangle = path.subpaths.len() == 1 && path.anchor_count() == 3;
+            let image = (im.key.as_str(), im.width, im.height);
+            triangle && *first.get_or_insert(image) == image
+        })
+}
+
+/// Art about to be written moved by `m.inverse()` (a symbol instance's): map what the canvas
+/// leaves on the page by `m` first, so it stays there. That is every pattern paint's placement
+/// and the art of unlinked opacity masks.
+fn pin_to_page(n: &mut Node, m: Affine) {
+    vectorcraft_doc::pattern::transform_pattern_paints(n, m);
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
+        let linked = mask.linked;
+        let art = std::sync::Arc::make_mut(&mut mask.art);
+        if !linked {
+            art.transform(m, false);
+        }
+        pin_to_page(art, m);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        pin_to_page(std::sync::Arc::make_mut(c), m);
+    }
+}
+
+/// What SVG Tiny 1.2 does without masks.
+const TINY_MASKS: &str = "SVG Tiny 1.2 has no masks: opacity masks are left out and knockout groups written as plain groups";
+
+/// What a knockout group too large to mask is written as.
+const KNOCKOUT_SIZE: &str = "knockout groups with too many overlapping elements to mask are written as plain groups";
+
+/// The most knockout shapes the masks of one knockout group's elements use between them: each
+/// mask uses the shapes of the elements above its own element that overlap it.
+const MAX_KNOCKOUT_MASK_SHAPES: usize = 1 << 16;
+
+/// The most elements of one knockout group drawn through masks: finding the elements that
+/// overlap compares every pair.
+const MAX_MASKED_ELEMENTS: usize = 2048;
+
+pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
+
+/// The region of a mask or filter over art that has no box to measure: one covering any artwork.
+const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\"";
+
+/// How deep [`Writer::paint_reach`] looks into members and symbol art.
+const MAX_REACH_DEPTH: u32 = 64;
+
+/// Attributes of every `<mask>`: user-space units, and luminance taken from the sRGB values (as the
+/// canvas and PDF take it) rather than from linearised ones.
+pub(super) const MASK: &str = "maskUnits=\"userSpaceOnUse\" color-interpolation=\"sRGB\"";
+
+/// Attribute of an exported opacity mask listing its options that differ from the defaults
+/// (clipping, not inverted): `noclip`, `invert`.
+pub(crate) const MASK_FLAGS: &str = "data-vectorcraft-mask";
+
+impl Writer<'_> {
+    /// Paint a shape (`d`) with a node's appearance stack. `paths` is the same shape in document
+    /// space, for strokes that aren't plain (it may be empty when all are). `basic` is the shape
+    /// as an SVG basic shape element ([`Writer::basic_shape`]) to paint instead of `<path>`.
+    pub(super) fn shape(&mut self, n: &Node, d: &str, basic: Option<(&str, String)>, paths: &[&PathData], rule: FillRule, bounds: Option<Rect>) {
+        let (tag, geom) = basic.unwrap_or_else(|| ("path", format!(" d=\"{d}\"")));
+        let id = self.id_attr(n);
+        let items: Vec<&AppearanceItem> = n
+            .appearance
+            .items
+            .iter()
+            .filter(|i| match i {
+                AppearanceItem::Fill(f) => f.visible && !f.paint.is_none(),
+                AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0,
+            })
+            .collect();
+        let mut bp = None;
+        let plans: Vec<Option<StrokePlan>> = items
+            .iter()
+            .map(|i| match i {
+                AppearanceItem::Stroke(s) => Some(self.stroke_plan(s, &mut bp, paths)),
+                AppearanceItem::Fill(_) => None,
+            })
+            .collect();
+        let fills = items.iter().filter(|i| matches!(i, AppearanceItem::Fill(_))).count();
+        let strokes = items.len() - fills;
+        // A stroke's paint box is the bounds grown by half its weight, as on the canvas.
+        let paint_bounds = |s: &StrokeLayer| bounds.map(|b| s.paint_bounds(b));
+        let simple = fills <= 1
+            && strokes <= 1
+            && !items.iter().any(|i| has_raster(i.effects()))
+            && items.iter().all(|i| i.blend() == BlendMode::Normal)
+            && !items.iter().any(|i| pixel_gradient(i.paint(), matches!(i, AppearanceItem::Fill(_))).is_some())
+            && plans.iter().flatten().all(|p| matches!(p, StrokePlan::Written(Written { shape: WrittenShape::Stroke { .. }, side: None })));
+        if simple {
+            let mut p = Props::new();
+            match items.iter().find_map(|i| if let AppearanceItem::Fill(f) = i { Some(f) } else { None }) {
+                Some(f) => self.fill_props(f, rule, bounds, &mut p),
+                None => {
+                    p.push(("fill", "none".into()));
+                    if rule == FillRule::EvenOdd {
+                        p.push(("fill-rule", "evenodd".into()));
+                    }
+                }
+            }
+            if let Some(s) = items.iter().find_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s) } else { None }) {
+                self.stroke_props(s, s.width, paint_bounds(s), &mut p);
+                if matches!(items.first(), Some(AppearanceItem::Stroke(_))) && fills == 1 {
+                    p.push(("paint-order", "stroke".into()));
+                }
+            }
+            p.extend(css::transparency(n));
+            let a = self.attrs(&p);
+            self.line(&format!("<{tag}{id}{geom}{a}/>"));
+            return;
+        }
+        let a = self.attrs(&css::transparency(n));
+        self.line(&format!("<g{id}{a}>"));
+        self.depth += 1;
+        for (it, plan) in items.into_iter().zip(plans) {
+            // The item's own raster effects filter that item alone.
+            let filters = self.open_filters(n, it.effects());
+            let mut p = Props::new();
+            match (it, plan) {
+                (AppearanceItem::Fill(f), _) => {
+                    let blend = (f.blend != BlendMode::Normal).then(|| ("mix-blend-mode", blend_css(f.blend).to_string()));
+                    if let (Some(g), Some(b)) = (pixel_gradient(&f.paint, true), bounds) {
+                        p.extend((f.opacity < 1.0).then(|| ("opacity", fmt_num(f.opacity as f64, 3))));
+                        p.extend(blend);
+                        self.raster_paint(g, b, b, &[d.to_string()], rule, &p, "", true);
+                    } else {
+                        self.fill_props(f, rule, bounds, &mut p);
+                        p.extend(blend);
+                        let a = self.attrs(&p);
+                        self.line(&format!("<{tag}{geom}{a}/>"));
+                    }
+                }
+                (AppearanceItem::Stroke(s), Some(StrokePlan::Brush(art))) => {
+                    // The brush art takes the stroke's opacity and blend mode as a group.
+                    if s.opacity < 1.0 {
+                        p.push(("opacity", fmt_num(s.opacity as f64, 3)));
+                    }
+                    if s.blend != BlendMode::Normal {
+                        p.push(("mix-blend-mode", blend_css(s.blend).into()));
+                    }
+                    let a = self.attrs(&p);
+                    self.line(&format!("<g{a}>"));
+                    self.depth += 1;
+                    for piece in &art {
+                        self.node(piece);
+                    }
+                    self.depth -= 1;
+                    self.line("</g>");
+                }
+                (AppearanceItem::Stroke(s), Some(StrokePlan::Written(w))) => {
+                    let side = self.side_attr(w.side, d, rule, w.reach(s, bounds.unwrap_or_default()));
+                    let blend = (s.blend != BlendMode::Normal).then(|| ("mix-blend-mode", blend_css(s.blend).to_string()));
+                    let opacity = (s.opacity < 1.0).then(|| ("opacity", fmt_num(s.opacity as f64, 3)));
+                    match (&w.shape, pixel_gradient(&s.paint, false).zip(paint_bounds(s))) {
+                        (WrittenShape::Stroke { width }, Some((g, b))) => {
+                            // The stroke's outline clips the gradient's image.
+                            let bp = bp.get_or_insert_with(|| doc_path(paths));
+                            let outline = stroke::line_outline(bp, s, *width, OUTLINE_TOLERANCE);
+                            let clip = self.path_d(&PathData::from_bezpath(&outline), self.xf);
+                            p.extend(opacity);
+                            p.extend(blend);
+                            let reach =
+                                if outline.elements().is_empty() { b } else { b.union(vectorcraft_geom::kurbo::Shape::bounding_box(&outline)) };
+                            self.raster_paint(g, b, reach, &[clip], FillRule::NonZero, &p, &side, false);
+                        }
+                        (WrittenShape::Fill(outlines), Some((g, b))) if s.path_gradient().is_none() => {
+                            let clip: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
+                            p.extend(opacity);
+                            p.extend(blend);
+                            let reach = outlines
+                                .iter()
+                                .filter(|o| !o.elements().is_empty())
+                                .fold(b, |r, o| r.union(vectorcraft_geom::kurbo::Shape::bounding_box(o)));
+                            self.raster_paint(g, b, reach, &clip, FillRule::NonZero, &p, &side, false);
+                        }
+                        (WrittenShape::Stroke { width }, _) => {
+                            p.push(("fill", "none".into()));
+                            self.stroke_props(s, *width, paint_bounds(s), &mut p);
+                            p.extend(blend);
+                            let a = self.attrs(&p);
+                            self.line(&format!("<{tag}{geom}{a}{side}/>"));
+                        }
+                        (WrittenShape::Fill(outlines), _) if s.path_gradient().is_some() => {
+                            // A gradient along or across the stroke: slices clipped to its outlines.
+                            if let Some(ws) = bp.as_ref().and_then(|bp| stroke::written_slices(bp, rule, s, outlines)) {
+                                p.extend(opacity);
+                                p.extend(blend);
+                                self.sliced(&ws, &p, &side);
+                            }
+                        }
+                        (WrittenShape::Fill(outlines), _) => {
+                            let paint = self.paint(&s.paint, paint_bounds(s));
+                            let ds: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
+                            let opacity = (s.opacity < 1.0).then(|| fmt_num(s.opacity as f64, 3));
+                            if let [one] = &ds[..] {
+                                p.push(("fill", paint));
+                                p.extend(opacity.map(|o| ("fill-opacity", o)));
+                                p.extend(blend);
+                                let a = self.attrs(&p);
+                                self.line(&format!("<path d=\"{one}\"{a}{side}/>"));
+                            } else if !ds.is_empty() {
+                                // The line and its arrowheads overlap: one group takes the opacity.
+                                p.extend(opacity.map(|o| ("opacity", o)));
+                                p.extend(blend);
+                                let a = self.attrs(&p);
+                                self.line(&format!("<g{a}{side}>"));
+                                self.depth += 1;
+                                let fill = self.attrs(&vec![("fill", paint)]);
+                                for one in &ds {
+                                    self.line(&format!("<path d=\"{one}\"{fill}/>"));
+                                }
+                                self.depth -= 1;
+                                self.line("</g>");
+                            }
+                        }
+                    }
+                }
+                (AppearanceItem::Stroke(_), None) => {}
+            }
+            self.close_filters(filters);
+        }
+        self.depth -= 1;
+        self.line("</g>");
+    }
+
+    /// A stroke whose gradient runs along or across it ([`stroke::written_slices`]): a group (with
+    /// `props` and the `side` attribute) of its slices, clipped to its outlines.
+    fn sliced(&mut self, ws: &stroke::WrittenSlices, props: &Props, side: &str) {
+        self.warn("gradients along or across strokes are written as slices of linear gradients");
+        let cid = self.fresh_id("clip-path");
+        let clip = self.path_d(&PathData::from_bezpath(&ws.clip), self.xf);
+        self.def(1, &format!("<clipPath id=\"{cid}\">"));
+        self.def(2, &format!("<path d=\"{clip}\"/>"));
+        self.def(1, "</clipPath>");
+        let a = self.attrs(props);
+        self.line(&format!("<g{a}{side}>"));
+        self.depth += 1;
+        self.line(&format!("<g clip-path=\"url(#{cid})\">"));
+        self.depth += 1;
+        for (shape, paint) in &ws.slices {
+            let fill = self.paint(paint, None);
+            let fill = self.attrs(&vec![("fill", fill)]);
+            let d = self.path_d(&PathData::from_bezpath(shape), self.xf);
+            self.line(&format!("<path d=\"{d}\"{fill}/>"));
+        }
+        self.depth -= 1;
+        self.line("</g>");
+        self.depth -= 1;
+        self.line("</g>");
+    }
+
+    /// An object with an opacity mask: `<g mask="url(#…)">` around the unmasked object. The mask
+    /// art goes in `<defs>`; no-clip adds a white backdrop and invert a colour-inverting filter.
+    fn masked(&mut self, n: &Node, m: &vectorcraft_doc::OpacityMask) {
+        if self.tiny() {
+            self.warn(TINY_MASKS);
+            let mut bare = n.clone();
+            bare.extras_mut().mask = None;
+            return self.node_body(&bare);
+        }
+        let mid = self.fresh_id("mask");
+        let mut bare = n.clone();
+        bare.extras_mut().mask = None;
+        // The region covers what the object and the mask art paint: readers draw the mask into an
+        // image of the region's size.
+        let region = self.region_attrs(&[&bare, &m.art]);
+        // Mask art is a picture of its own: it takes no part in a knockout group around the object.
+        let knockout = std::mem::take(&mut self.knockout);
+        let art = self.detached(2, |w| w.node(&m.art));
+        self.knockout = knockout;
+        let inv = m.invert.then(|| {
+            let fid = self.fresh_id("invert");
+            self.def(1, &format!("<filter id=\"{fid}\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\" {region}>"));
+            self.def(2, "<feColorMatrix type=\"matrix\" values=\"-1 0 0 0 1 0 -1 0 0 1 0 0 -1 0 1 0 0 0 1 0\"/>");
+            self.def(1, "</filter>");
+            fid
+        });
+        // The mask's options, so import restores them (and its art without backdrop and filter).
+        let flags: Vec<&str> = [(!m.clip).then_some("noclip"), m.invert.then_some("invert")].into_iter().flatten().collect();
+        let data = if flags.is_empty() { String::new() } else { format!(" {MASK_FLAGS}=\"{}\"", flags.join(" ")) };
+        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {region}{data}>"));
+        if let Some(fid) = &inv {
+            self.def(1, &format!("<g filter=\"url(#{fid})\">"));
+        }
+        if !m.clip || m.invert {
+            let c = if m.clip { "black" } else { "white" };
+            self.def(1, &format!("<rect {region} fill=\"{c}\"/>"));
+        }
+        self.defs.push_str(&art);
+        if inv.is_some() {
+            self.def(1, "</g>");
+        }
+        self.def(1, "</mask>");
+        self.line(&format!("<g mask=\"url(#{mid})\">"));
+        self.depth += 1;
+        self.spanning_rect(&bare, &region);
+        self.node_body(&bare);
+        self.depth -= 1;
+        self.line("</g>");
+    }
+
+    /// Some readers draw a masked group only inside the bounding box of its shapes, which leaves
+    /// out a drop shadow, blur, glow or feather that paints past them. When `n`, written inside a
+    /// `<g mask>`, holds one ([`Self::holds_raster`]), a hidden, unpainted rectangle over the
+    /// mask's `region` makes that box cover what it paints.
+    fn spanning_rect(&mut self, n: &Node, region: &str) {
+        if self.holds_raster(n) {
+            self.line(&format!("<rect {region} fill=\"none\" visibility=\"hidden\"/>"));
+        }
+    }
+
+    /// Do `n`, its fills and strokes, its members at any depth, its symbols' art or the art its
+    /// live objects are written as have a visible raster effect (shadow, glow, blur, feather)?
+    /// Objects that aren't written (hidden ones, unless the options keep them) are skipped, and so
+    /// are fills and strokes that [`Self::shape`] doesn't write (hidden, unpainted or zero-width).
+    /// An instance with overrides is looked at in the art it is written as
+    /// ([`vectorcraft_brush::instance_art`]). The walk keeps its own stack, and looks at each
+    /// symbol's art once, and at each instance's overridden art once.
+    fn holds_raster(&self, n: &Node) -> bool {
+        let mut stack: Vec<std::sync::Arc<Node>> = vec![];
+        let mut symbols: std::collections::HashSet<(String, Option<vectorcraft_doc::NodeId>)> = std::collections::HashSet::new();
+        let paints = |i: &AppearanceItem| match i {
+            AppearanceItem::Fill(f) => f.visible && !f.paint.is_none(),
+            AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0,
+        };
+        // Whether `n` itself has one; else its members, symbol art or expanded art go on the stack.
+        let mut visit = |n: &Node, stack: &mut Vec<std::sync::Arc<Node>>| {
+            if !(n.visible || self.opts.hidden_layers) {
+                return false;
+            }
+            if has_raster(&n.appearance.effects) || n.appearance.items.iter().any(|i| paints(i) && has_raster(i.effects())) {
+                return true;
+            }
+            // A live object is written as its expanded art ([`Self::node_body`]), which holds no
+            // live objects.
+            if vectorcraft_doc::live::is_live(n) {
+                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                if !vectorcraft_doc::live::is_live(&g) {
+                    stack.push(std::sync::Arc::new(g));
+                    return false;
+                }
+            }
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                let custom = !n.extras().symbol_overrides.is_empty();
+                if symbols.insert((symbol.clone(), custom.then_some(n.id)))
+                    && let Some(s) = self.symbol_lookup.symbol(symbol)
+                {
+                    stack.push(if custom { std::sync::Arc::new(vectorcraft_brush::instance_art(&s.art, n)) } else { s.art.clone() });
+                }
+            }
+            stack.extend(n.children().into_iter().flatten().cloned());
+            false
+        };
+        if visit(n, &mut stack) {
+            return true;
+        }
+        while let Some(c) = stack.pop() {
+            if visit(&c, &mut stack) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// What `write` writes to the body, taken out of it (written at `depth`, for `<defs>`).
+    fn detached(&mut self, depth: usize, write: impl FnOnce(&mut Self)) -> String {
+        let (body, saved) = (std::mem::take(&mut self.body), self.depth);
+        self.depth = depth;
+        write(self);
+        self.depth = saved;
+        std::mem::replace(&mut self.body, body)
+    }
+
+    /// The `x`, `y`, `width` and `height` of a mask or filter region over `nodes`, in the current
+    /// user space: the box of everything they paint ([`Self::paint_reach`]), 2 larger on each
+    /// side for antialiasing. [`BIG`] when none of them has a box, when one holds type (a reader
+    /// sets live type in its own font, which can be wider, and type on a path is measured by its
+    /// path), or when one nests deeper than [`MAX_REACH_DEPTH`]. The art of a symbol instance
+    /// written in place keeps its strokes and effects at their own size while the instance scales
+    /// its geometry, so the region also covers the geometry's box, placed, grown by the strokes'
+    /// and effects' reach unscaled.
+    fn region_attrs(&mut self, nodes: &[&Node]) -> String {
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.symbol_lookup.unmeasured());
+        let mut art_reach = std::mem::take(&mut self.art_reach);
+        let region = self.region_of(&symbols, &mut art_reach, nodes);
+        self.region_boxes = Some(symbols);
+        self.art_reach = art_reach;
+        region
+    }
+
+    /// The box of what each of `nodes` paints, as [`Self::paint_box`] measures it.
+    fn paint_boxes(&mut self, nodes: &[&Node]) -> Vec<Option<Option<Rect>>> {
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.symbol_lookup.unmeasured());
+        let mut art_reach = std::mem::take(&mut self.art_reach);
+        let boxes = nodes.iter().map(|n| self.paint_box(&symbols, &mut art_reach, n)).collect();
+        self.region_boxes = Some(symbols);
+        self.art_reach = art_reach;
+        boxes
+    }
+
+    /// The box of what `n` paints in the current user space, as [`Self::region_attrs`] measures
+    /// it: `Some(None)` when it has no box, `None` when the box can't be told (type, or nesting
+    /// deeper than [`MAX_REACH_DEPTH`]).
+    fn paint_box(&self, symbols: &vectorcraft_doc::SymbolBoxes, art_reach: &mut HashMap<String, f64>, n: &Node) -> Option<Option<Rect>> {
+        let Some(v) = n.visual_bounds_with(symbols) else { return Some(None) };
+        let r = self.paint_reach(symbols, art_reach, n, v, 0)?;
+        let g = n.geometric_bounds_with(symbols).unwrap_or(v);
+        let stroke = [g.x0 - v.x0, g.y0 - v.y0, v.x1 - g.x1, v.y1 - g.y1].into_iter().fold(0.0, f64::max);
+        let scaled = self.xf.transform_rect_bbox(v.inflate(r, r));
+        let unscaled = self.xf.transform_rect_bbox(g).inflate(stroke + r, stroke + r);
+        Some(Some(scaled.union(unscaled)))
+    }
+
+    /// [`Self::region_attrs`] with the document's symbol boxes and the symbols' art reach so far.
+    fn region_of(&self, symbols: &vectorcraft_doc::SymbolBoxes, art_reach: &mut HashMap<String, f64>, nodes: &[&Node]) -> String {
+        let mut painted: Option<Rect> = None;
+        for n in nodes {
+            let Some(b) = self.paint_box(symbols, art_reach, n) else {
+                return BIG.to_string();
+            };
+            if let Some(both) = b {
+                painted = Some(painted.map_or(both, |p| p.union(both)));
+            }
+        }
+        let Some(b) = painted.map(|b| b.inflate(2.0, 2.0)).filter(|b| b.is_finite()) else {
+            return BIG.to_string();
+        };
+        format!("x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"", self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()))
+    }
+
+    /// How far what `n` paints reaches past its visual box `b`: the reach of its own raster effects
+    /// and of those of its fills and strokes (measured as [`Self::open_filters`] measures them),
+    /// how far brush art can paint past its brushed strokes (`16 × w + 8` for the widest brushed
+    /// stroke `w`, as the canvas allows for it), and the most that one of its members or its
+    /// symbol's art reaches past its own box, spread by its own effects. `art_reach` keeps each
+    /// symbol's art reach by name once measured, so art used many times is measured once. A live
+    /// object is measured as the art it is written as: expanded on its own, as [`Self::node`]
+    /// expands it, so with the same limits. `None` when `n`, its members or its symbol's art hold
+    /// type, or nest deeper than [`MAX_REACH_DEPTH`].
+    fn paint_reach(
+        &self,
+        symbols: &vectorcraft_doc::SymbolBoxes,
+        art_reach: &mut HashMap<String, f64>,
+        n: &Node,
+        b: Rect,
+        depth: u32,
+    ) -> Option<f64> {
+        use vectorcraft_effects::RasterFx;
+        // Type draws past its measured box in a reader's own font.
+        if matches!(n.kind, NodeKind::Text(_)) {
+            return None;
+        }
+        // An Outer Glow's silhouette grows by a quarter of a pixel of the document's raster grid first.
+        let grow = 18.0 / self.doc.raster_ppi();
+        let reach = |effects: &[vectorcraft_doc::Effect]| -> f64 {
+            vectorcraft_effects::raster_effects(effects)
+                .iter()
+                .map(|f| f.outset(b) + if matches!(f, RasterFx::OuterGlow { .. }) { grow } else { 0.0 })
+                .sum()
+        };
+        let items = n.appearance.items.iter().map(|i| reach(i.effects())).fold(0.0, f64::max);
+        let brush = if vectorcraft_brush::has_brush(n) {
+            let w =
+                n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.width) } else { None }).fold(1.0, f64::max);
+            16.0 * w + 8.0
+        } else {
+            0.0
+        };
+        let own = reach(&n.appearance.effects) + items + brush;
+        if vectorcraft_doc::live::is_live(n) {
+            if depth >= MAX_REACH_DEPTH {
+                return None;
+            }
+            let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+            let Some(gb) = g.visual_bounds_with(symbols) else { return Some(own) };
+            let past = [b.x0 - gb.x0, b.y0 - gb.y0, gb.x1 - b.x1, gb.y1 - b.y1].into_iter().fold(0.0, f64::max);
+            return Some(own + past + self.paint_reach(symbols, art_reach, &g, gb, depth + 1)?);
+        }
+        let symbol = match &n.kind {
+            NodeKind::SymbolInstance { symbol, xf } => self.symbol_lookup.symbol(symbol).map(|s| (s, xf)),
+            _ => None,
+        };
+        if n.children().is_none_or(|c| c.is_empty()) && symbol.is_none() {
+            return Some(own);
+        }
+        if depth >= MAX_REACH_DEPTH {
+            return None;
+        }
+        let mut inner: f64 = 0.0;
+        for c in n.children().into_iter().flatten() {
+            if let Some(cb) = c.visual_bounds_with(symbols) {
+                inner = inner.max(self.paint_reach(symbols, art_reach, c, cb, depth + 1)?);
+            }
+        }
+        if let Some((s, xf)) = symbol {
+            let art = match art_reach.get(&s.name) {
+                Some(r) => *r,
+                None => {
+                    let r = match s.art.visual_bounds_with(symbols) {
+                        Some(ab) => self.paint_reach(symbols, art_reach, &s.art, ab, depth + 1)?,
+                        None => 0.0,
+                    };
+                    art_reach.insert(s.name.clone(), r);
+                    r
+                }
+            };
+            // The art's reach, measured in symbol space, as far as the instance can stretch it.
+            let [xx, xy, yx, yy, _, _] = xf.as_coeffs();
+            inner = inner.max(art * xx.hypot(xy).max(yx.hypot(yy)).max(1.0));
+        }
+        Some(own + inner)
+    }
+
+    /// Props of a group (or layer): a knockout group is isolated, a hidden one not displayed.
+    fn group_props(&self, n: &Node) -> Props {
+        let mut p = css::transparency(n);
+        if !n.isolate && n.knocks_out(self.knockout) {
+            p.push(("isolation", "isolate".into()));
+        }
+        p
+    }
+
+    /// The children of group `n`, as the elements of a knockout group when it is one.
+    fn group_children(&mut self, n: &Node, children: &[std::sync::Arc<Node>]) {
+        let knockout = n.knocks_out(self.knockout);
+        let enclosing = std::mem::replace(&mut self.knockout, knockout);
+        self.children(children);
+        self.knockout = enclosing;
+    }
+
+    /// Children of the group being written. SVG has no knockout groups: in one, each element is
+    /// drawn through one mask of where the elements above it that overlap it don't paint (the
+    /// same look for Normal blending). The masks share one copy of each element's knockout shape,
+    /// and the elements stay siblings however many there are. A group whose masks would hold more
+    /// than [`MAX_KNOCKOUT_MASK_SHAPES`] shapes is written as a plain group, with a warning.
+    pub(super) fn children(&mut self, children: &[std::sync::Arc<Node>]) {
+        if self.knockout && self.tiny() {
+            self.warn(TINY_MASKS);
+        }
+        if !self.knockout || self.tiny() {
+            for c in children {
+                self.node(c);
+            }
+            return;
+        }
+        let elements = Node::knockout_elements(children);
+        if !elements.is_empty() && elements.iter().all(|c| c.knockout_outline().is_some()) {
+            let pieces: Vec<&Node> = elements.iter().map(|c| &***c).collect();
+            if vectorcraft_effects::warp_pieces_translucent(self.doc, &pieces) {
+                return self.warp_pieces(&elements);
+            }
+            for c in elements {
+                self.node(c);
+            }
+            return;
+        }
+        // Where every element over another covers it fully, drawing them in order knocks out as
+        // much: the masks would only add seams along the shapes' antialiased edges.
+        if elements.iter().skip(1).all(|c| paints_opaque(c)) {
+            for c in elements {
+                self.node(c);
+            }
+            return;
+        }
+        let all: Vec<&Node> = elements.iter().map(|c| &***c).collect();
+        let Some(above) = self.knockout_masks(&all) else {
+            self.warn(KNOCKOUT_SIZE);
+            for c in elements {
+                self.node(c);
+            }
+            return;
+        };
+        // The elements are written first, in paint order, so that each shape copies an element
+        // with the symbol art count the element itself was written with
+        // (`Self::symbol_nodes`): an instance left out of an element is left out of its shape.
+        let depth = self.depth;
+        let mut written = Vec::with_capacity(elements.len());
+        for (c, above) in elements.iter().zip(&above) {
+            let before = self.symbol_nodes;
+            written.push((before, self.detached(depth + usize::from(!above.is_empty()), |w| w.node(c))));
+        }
+        let after = self.symbol_nodes;
+        // Each mask covers what the group's elements paint.
+        let region = self.region_attrs(&all);
+        let mut shapes: Vec<Option<String>> = vec![None; elements.len()];
+        for &j in above.iter().flatten() {
+            if shapes[j].is_none() {
+                self.symbol_nodes = written[j].0;
+                shapes[j] = Some(self.knockout_shape(elements[j]));
+            }
+        }
+        self.symbol_nodes = after;
+        for ((c, above), (_, body)) in elements.iter().zip(&above).zip(written) {
+            if above.is_empty() {
+                self.body.push_str(&body);
+                continue;
+            }
+            let ids: Vec<&str> = above.iter().filter_map(|&j| shapes[j].as_deref()).collect();
+            let mid = self.knockout_mask(&ids, &region);
+            self.line(&format!("<g mask=\"url(#{mid})\">"));
+            // An element that paints past its shapes starts its mask group with a spanning
+            // rectangle (`Self::spanning_rect`).
+            self.depth += 1;
+            self.spanning_rect(c, &region);
+            self.depth -= 1;
+            self.body.push_str(&body);
+            self.line("</g>");
+        }
+    }
+
+    /// For each element of a knockout group, the indices of the elements above it whose painted
+    /// boxes overlap its own (every one above it when a box can't be told). `None` when there are
+    /// more than [`MAX_MASKED_ELEMENTS`] elements or the masks would hold more than
+    /// [`MAX_KNOCKOUT_MASK_SHAPES`] shapes.
+    fn knockout_masks(&mut self, elements: &[&Node]) -> Option<Vec<Vec<usize>>> {
+        if elements.len() > MAX_MASKED_ELEMENTS {
+            return None;
+        }
+        let boxes = self.paint_boxes(elements);
+        let overlap = |a: Option<Option<Rect>>, b: Option<Option<Rect>>| match (a, b) {
+            (Some(None), _) | (_, Some(None)) => false,
+            (Some(Some(a)), Some(Some(b))) => a.x0 <= b.x1 + 2.0 && b.x0 <= a.x1 + 2.0 && a.y0 <= b.y1 + 2.0 && b.y0 <= a.y1 + 2.0,
+            _ => true,
+        };
+        let mut shapes = 0usize;
+        let mut out = Vec::with_capacity(elements.len());
+        for (i, &below) in boxes.iter().enumerate() {
+            let mut above = vec![];
+            for (j, &over) in boxes.iter().enumerate().skip(i + 1) {
+                if overlap(below, over) {
+                    shapes = shapes.checked_add(1).filter(|&s| s <= MAX_KNOCKOUT_MASK_SHAPES)?;
+                    above.push(j);
+                }
+            }
+            out.push(above);
+        }
+        Some(out)
+    }
+
+    /// One copy of the knockout shape of `c` in the definitions: `c` at full object opacity
+    /// without its own mask, unless those define its shape. Returns its id.
+    fn knockout_shape(&mut self, c: &Node) -> String {
+        let shape = if c.knockout_shape {
+            c.clone()
+        } else {
+            let mut s = c.clone().with_mask(None);
+            s.opacity = 1.0;
+            s
+        };
+        let anonymous = std::mem::replace(&mut self.anonymous, true);
+        let art = self.detached(2, |w| w.node(&shape));
+        self.anonymous = anonymous;
+        let id = self.fresh_id("knockout-art");
+        self.def(1, &format!("<g id=\"{id}\">"));
+        self.defs.push_str(&art);
+        self.def(1, "</g>");
+        id
+    }
+
+    /// A mask that is 1 − the knockout shapes `ids` ([`Self::knockout_shape`]): white, then the
+    /// shapes painted black. `region` is the attributes of the mask's region
+    /// ([`Self::region_attrs`]), which the filter that paints the shapes black shares. Returns
+    /// the mask id.
+    fn knockout_mask(&mut self, ids: &[&str], region: &str) -> String {
+        let filter = match self.knockout_filters.get(region) {
+            Some(f) => f.clone(),
+            None => {
+                let f = self.fresh_id("knockout-shape");
+                self.def(1, &format!("<filter id=\"{f}\" filterUnits=\"userSpaceOnUse\" {region}>"));
+                self.def(2, "<feColorMatrix type=\"matrix\" values=\"0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0\"/>");
+                self.def(1, "</filter>");
+                self.knockout_filters.insert(region.to_string(), f.clone());
+                f
+            }
+        };
+        let mid = self.fresh_id("knockout");
+        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {region}>"));
+        self.def(2, &format!("<rect {region} fill=\"white\"/>"));
+        self.def(2, &format!("<g filter=\"url(#{filter})\">"));
+        for id in ids {
+            self.def(3, &format!("<use xlink:href=\"#{id}\"/>"));
+        }
+        self.def(2, "</g>");
+        self.def(1, "</mask>");
+        mid
+    }
+
+    /// The pieces of a partly transparent mesh-warped image (`elements`) as the elements of a
+    /// knockout group ([`vectorcraft_effects::warp_pieces_translucent`]). Each piece is drawn
+    /// through one mask of where the pieces above it that reach it don't cover
+    /// (their triangles, [`vectorcraft_effects::knockout_silhouette`], black over white):
+    /// only neighbors overlap, so each mask holds a few triangles and no mask nests in another.
+    /// A piece above that overlaps it only over opaque pixels ([`vectorcraft_effects::WarpSeams`])
+    /// is left out of its mask.
+    fn warp_pieces(&mut self, elements: &[&std::sync::Arc<Node>]) {
+        // Each piece's triangle and its box: a piece paints inside its triangle only.
+        let silhouette = |c: &Node| {
+            let b = c.knockout_outline()?.geometric_bounds()?;
+            Some((vectorcraft_effects::knockout_silhouette(c, vectorcraft_doc::color::Color::BLACK)?, b))
+        };
+        let silhouettes: Vec<Option<(Node, Rect)>> = elements.iter().map(|c| silhouette(c)).collect();
+        let pieces: Vec<&Node> = elements.iter().map(|c| &***c).collect();
+        let seams = vectorcraft_effects::WarpSeams::new(self.doc, &pieces);
+        for (i, c) in elements.iter().enumerate() {
+            let Some((own, reach)) = &silhouettes[i] else { continue };
+            let reach = reach.inflate(1.0, 1.0);
+            let overlaps = |b: &Rect| b.x0 <= reach.x1 && reach.x0 <= b.x1 && b.y0 <= reach.y1 && reach.y0 <= b.y1;
+            let above: Vec<&Node> = silhouettes
+                .iter()
+                .enumerate()
+                .skip(i + 1)
+                .filter_map(|(j, s)| s.as_ref().filter(|(_, b)| overlaps(b) && seams.shows_through(i, j)))
+                .map(|(n, _)| n)
+                .collect();
+            if above.is_empty() {
+                self.node(c);
+                continue;
+            }
+            let region = self.region_attrs(&[own]);
+            let anonymous = std::mem::replace(&mut self.anonymous, true);
+            let art: Vec<String> = above.iter().map(|a| self.detached(2, |w| w.node(a))).collect();
+            self.anonymous = anonymous;
+            let mid = self.fresh_id("knockout");
+            self.def(1, &format!("<mask id=\"{mid}\" {MASK} {region}>"));
+            self.def(2, &format!("<rect {region} fill=\"white\"/>"));
+            for a in art {
+                self.defs.push_str(&a);
+            }
+            self.def(1, "</mask>");
+            self.line(&format!("<g mask=\"url(#{mid})\">"));
+            self.depth += 1;
+            self.node(c);
+            self.depth -= 1;
+            self.line("</g>");
+        }
+    }
+
+    /// An object, inside `<a>` when it links to a URL (Attributes panel).
+    pub(super) fn node(&mut self, n: &Node) {
+        // Ruler guides are not written, not even as a link.
+        if n.is_ruler_guide() {
+            return;
+        }
+        let layer = usize::from(n.is_layer());
+        self.layer_nest += layer;
+        match n.url().filter(|_| n.visible && !self.anonymous) {
+            Some(url) => {
+                if !valid_xml_value(url) {
+                    self.warn("Link URLs containing invalid XML characters had those characters removed");
+                }
+                self.line(&format!("<a xlink:href=\"{}\">", xml_attr_escape(url)));
+                self.depth += 1;
+                self.node_body(n);
+                self.depth -= 1;
+                self.line("</a>");
+            }
+            None => self.node_body(n),
+        }
+        self.layer_nest -= layer;
+    }
+
+    pub(super) fn node_body(&mut self, n: &Node) {
+        // Hidden layers and objects are left out, unless the options keep them (hidden). Template
+        // layers never print.
+        if !(n.visible || self.opts.hidden_layers) {
+            return;
+        }
+        if has_raster(&n.appearance.effects) {
+            return self.filtered(n);
+        }
+        if let Some(m) = n.extras().mask.as_deref()
+            && !m.disabled
+        {
+            return self.masked(n, m);
+        }
+        match &n.kind {
+            NodeKind::Layer { template: true, .. } => {}
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
+                // The pieces a Warp effect cuts an image into share its pixels, as an envelope's do.
+                if image_pieces(children) {
+                    self.share_images(n);
+                }
+                let id = self.id_attr(n);
+                let a = self.attrs(&self.group_props(n));
+                self.line(&format!("<g{id}{a}>"));
+                self.depth += 1;
+                self.group_children(n, children);
+                self.depth -= 1;
+                self.line("</g>");
+            }
+            NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
+                let Some((clip, rest)) = children.split_first() else { return };
+                let cid = self.fresh_id("clip-path");
+                self.def(1, &format!("<clipPath id=\"{cid}\">"));
+                // The region every output clips to; with nothing to clip by, an empty clip path
+                // hides the clipped art.
+                if let Some((bp, rule)) = vectorcraft_effects::clip_outline(clip) {
+                    let d = self.path_d(&PathData::from_bezpath(&bp), self.xf);
+                    let r = if rule == FillRule::EvenOdd { " clip-rule=\"evenodd\"" } else { "" };
+                    self.def(2, &format!("<path d=\"{d}\"{r}/>"));
+                }
+                self.def(1, "</clipPath>");
+                let id = self.id_attr(n);
+                let a = self.attrs(&self.group_props(n));
+                // The clipping path's fill paints behind the clipped art and its stroke over it,
+                // outside the clip (the group then wraps both).
+                let paint = clip.clip_paint();
+                if paint.stroke.is_some() {
+                    self.line(&format!("<g{id}{a}>"));
+                    self.depth += 1;
+                    self.line(&format!("<g clip-path=\"url(#{cid})\">"));
+                } else {
+                    self.line(&format!("<g{id} clip-path=\"url(#{cid})\"{a}>"));
+                }
+                self.depth += 1;
+                if let Some(fill) = &paint.fill {
+                    self.node(fill);
+                }
+                self.group_children(n, rest);
+                self.depth -= 1;
+                self.line("</g>");
+                if let Some(stroke) = &paint.stroke {
+                    // One element keeps the clipping path's id.
+                    let anonymous = self.anonymous;
+                    self.anonymous |= paint.fill.is_some();
+                    self.node(stroke);
+                    self.anonymous = anonymous;
+                    self.depth -= 1;
+                    self.line("</g>");
+                }
+            }
+            NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => {}
+            NodeKind::Path { path, rule, .. } => {
+                if path.is_empty() {
+                    return;
+                }
+                let d = self.path_d(path, self.xf);
+                let dashed =
+                    n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.dash.as_ref().is_some_and(|d| d.is_dashed())));
+                let basic = self.basic_shape(path, self.xf, dashed);
+                self.shape(n, &d, basic, &[path], *rule, export_shape_bounds(n));
+            }
+            NodeKind::Compound { children, rule } => {
+                let paths: Vec<&PathData> = children.iter().filter(|c| c.visible).filter_map(|c| c.path_data()).filter(|p| !p.is_empty()).collect();
+                if paths.is_empty() {
+                    return;
+                }
+                let d: Vec<String> = paths.iter().map(|p| self.path_d(p, self.xf)).collect();
+                self.shape(n, &d.join(" "), None, &paths, *rule, export_shape_bounds(n));
+            }
+            NodeKind::Text(t) => self.text_node(n, t),
+            NodeKind::Image(im) if !n.is_distorted_image() => {
+                let shown = self.doc.shown_image(n, im);
+                let im = &*shown;
+                if let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref()
+                    && let Some(blob) = self.doc.image_blob(im)
+                    && blob.gray_source().is_some()
+                {
+                    self.colorized_image(n, im, *color, blob);
+                    return;
+                }
+                if matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. })) && self.doc.image_blob(im).is_none_or(|b| b.bytes.is_empty()) {
+                    // Missing pixels cannot show the original file in place of a colorized image.
+                    self.warn(UNDECODED);
+                    return;
+                }
+                let id = self.id_attr(n);
+                let m = self.matrix(self.xf * im.xf);
+                let mut props = css::transparency(n);
+                if n.extras().pixelated {
+                    props.push(("image-rendering", "pixelated".into()));
+                }
+                let a = self.attrs(&props);
+                if let Some(shared) = self.shared_images.get(&(im.key.clone(), im.width, im.height)) {
+                    let shared = shared.clone();
+                    self.line(&format!("<use{id} transform=\"{m}\"{a} xlink:href=\"#{shared}\"/>"));
+                    return;
+                }
+                let Some(href) = self.image_href(im) else { return };
+                self.line(&format!(
+                    "<image{id} width=\"{}\" height=\"{}\" transform=\"{m}\" preserveAspectRatio=\"none\"{a} xlink:href=\"{}\"/>",
+                    im.width,
+                    im.height,
+                    xml_escape(&href)
+                ));
+            }
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let doc = self.doc;
+                // The instances nested in an inline graphic's art are ordinary instances again.
+                let inline = std::mem::take(&mut self.inline_graphic);
+                let Some(sym) = self.symbol_lookup.symbol(symbol) else { return };
+                if self.symbol_nest > MAX_SYMBOL_NEST {
+                    return;
+                }
+                let id = self.id_attr(n);
+                let a = self.attrs(&css::transparency(n));
+                // A scaled instance of a symbol with 9-slice guides is written as its placed art,
+                // as the canvas draws it, instead of one `<use>` transform. The scale counts the
+                // transforms of the instances it sits in. The placed art of all such instances in
+                // the export holds at most `MAX_SYMBOL_NODES` objects: an instance that would take
+                // it past that is left out, as the canvas leaves it out.
+                if let Some(map) = doc.symbol_slice_map(symbol, self.xf * *xf).filter(|_| !inline) {
+                    let art = vectorcraft_brush::instance_art(&sym.art, n);
+                    let most = map.most_placed(&art, doc);
+                    let Some(art) = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                        let a = map.place(&art, doc);
+                        let c = a.count_with_masks() as u64;
+                        (a, c)
+                    }) else {
+                        return;
+                    };
+                    let saved = (self.xf, self.instance_xf);
+                    (self.xf, self.instance_xf) = (Affine::IDENTITY, Affine::IDENTITY);
+                    self.line(&format!("<g{id}{a}>"));
+                    self.depth += 1;
+                    let knockout = std::mem::take(&mut self.knockout);
+                    self.symbol_nest += 1;
+                    self.node(&art);
+                    self.symbol_nest -= 1;
+                    self.knockout = knockout;
+                    self.depth -= 1;
+                    self.line("</g>");
+                    (self.xf, self.instance_xf) = saved;
+                    return;
+                }
+                let m = self.xf * *xf;
+                if let Some(def) = self.symbol_use(sym, n, m) {
+                    let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
+                    self.line(&format!("<use{id} xlink:href=\"#{def}\"{tr}{a}/>"));
+                    return;
+                }
+                // An instance of its own: the (stained) art moved by the instance, its pattern
+                // paints and unlinked masks left in place as on the canvas.
+                let mut art = vectorcraft_brush::instance_art(&sym.art, n);
+                let moved = self.instance_xf * *xf;
+                if moved.determinant().abs() > 1e-12 {
+                    pin_to_page(&mut art, moved.inverse());
+                }
+                let saved = (self.xf, self.instance_xf);
+                self.xf = saved.0 * *xf;
+                self.instance_xf = moved;
+                self.line(&format!("<g{id}{a}>"));
+                self.depth += 1;
+                // The symbol's art is the instance's own picture, outside any knockout around it.
+                let knockout = std::mem::take(&mut self.knockout);
+                self.symbol_nest += 1;
+                self.node(&art);
+                self.symbol_nest -= 1;
+                self.knockout = knockout;
+                self.depth -= 1;
+                self.line("</g>");
+                (self.xf, self.instance_xf) = saved;
+            }
+            // Live blends/envelopes/meshes (and distorted images) export their evaluated
+            // (expanded) form.
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
+                let mut g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                // A distorted image inside instances that scale it is cut as finely on the page as
+                // one placed directly.
+                let stretch = vectorcraft_doc::image_quad::max_stretch(self.instance_xf);
+                if n.is_distorted_image()
+                    && (stretch - 1.0).abs() > 1e-9
+                    && let Some(art) = vectorcraft_doc::image_quad::distorted_art_at(n, vectorcraft_doc::image_quad::Density::page_at(stretch))
+                    && let NodeKind::Group { children, .. } = &mut g.kind
+                    && let [only] = &mut children[..]
+                    && only.id == n.id
+                {
+                    *only = std::sync::Arc::new(art);
+                }
+                self.share_images(&g);
+                self.node_body(&g);
+            }
+        }
+    }
+
+    /// The id of the `<symbol>` def instance `inst` can `<use>` with transform `xf` (the `<use>`'s
+    /// own: the instance's transform after those of the instances it sits in), written on first
+    /// use. `None` when the instance needs its own copy of the art: stained by its fill, or moved
+    /// by a transform under which the def would not look as the canvas paints it ([`Reuse`]).
+    fn symbol_use(&mut self, sym: &vectorcraft_doc::Symbol, inst: &Node, xf: Affine) -> Option<String> {
+        // SVG Tiny has no `<symbol>`.
+        if self.tiny() || vectorcraft_brush::stain(inst).is_some() || !inst.extras().symbol_overrides.is_empty() {
+            return None;
+        }
+        if !self.symbols.contains_key(&sym.name) {
+            let lookup = &self.symbol_lookup;
+            let reuse = Reuse::of(self.doc, &|name| lookup.symbol(name), &sym.art);
+            self.symbols.insert(sym.name.clone(), SymbolDef { id: None, reuse, nodes: 0 });
+        }
+        let def = self.symbols.get(&sym.name)?;
+        if !def.reuse.allows(xf) {
+            return None;
+        }
+        // A `<use>` that would take the placed 9-slice art past `MAX_SYMBOL_NODES` gives way to
+        // the instance's own art, which leaves out the instances that don't fit.
+        if let Some(id) = def.id.clone() {
+            let nodes = def.nodes;
+            if nodes > 0 && vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, nodes, || ((), nodes)).is_none() {
+                return None;
+            }
+            return Some(id);
+        }
+        // The art in symbol space, as its own picture: no knockout around it, and no object ids
+        // (every instance shows it).
+        let id = self.unique_id(&sanitize_id(&sym.name));
+        let saved = (self.xf, self.instance_xf, std::mem::take(&mut self.knockout), std::mem::take(&mut self.names), self.anonymous);
+        (self.xf, self.instance_xf, self.anonymous) = (Affine::IDENTITY, Affine::IDENTITY, false);
+        self.symbol_nest += 1;
+        let before = self.symbol_nodes;
+        let art = self.detached(3, |w| w.node(&sym.art));
+        let nodes = self.symbol_nodes.saturating_sub(before);
+        self.symbol_nest -= 1;
+        (self.xf, self.instance_xf, self.knockout, self.names, self.anonymous) = saved;
+        // The symbol's name, when the id had to differ from it, comes back on import.
+        let name = if id == sym.name {
+            String::new()
+        } else if valid_xml_value(&sym.name) {
+            format!(" data-name=\"{}\"", xml_attr_escape(&sym.name))
+        } else {
+            self.warn("Symbol names containing invalid XML characters were left out of SVG name attributes");
+            String::new()
+        };
+        self.def(1, &format!("<symbol id=\"{id}\"{name} overflow=\"visible\">"));
+        self.defs.push_str(&art);
+        self.def(1, "</symbol>");
+        if let Some(def) = self.symbols.get_mut(&sym.name) {
+            (def.id, def.nodes) = (Some(id.clone()), nodes);
+        }
+        Some(id)
+    }
+}
+
+/// A shape's paths as one path (document space).
+pub(super) fn doc_path(paths: &[&PathData]) -> BezPath {
+    let mut bp = BezPath::new();
+    for p in paths {
+        bp.extend(p.to_bezpath());
+    }
+    bp
+}
+
+/// Does `n` paint opaquely wherever it paints (no transparency, blending, masks or effects in
+/// it)? Anything this can't tell is taken as not.
+fn paints_opaque(n: &Node) -> bool {
+    use vectorcraft_doc::{AppearanceItem, NodeKind};
+    let paint = |p: &Paint| match p {
+        Paint::None | Paint::Solid { .. } => true,
+        Paint::Gradient(g) => g.gradient.stops.iter().all(|s| s.opacity >= 1.0),
+        _ => false,
+    };
+    let items = n.appearance.items.iter().all(|i| match i {
+        AppearanceItem::Fill(f) => !f.visible || (f.opacity >= 1.0 && f.blend == BlendMode::Normal && f.effects.is_empty() && paint(&f.paint)),
+        // Brush art draws as pieces with opacities of their own (bristles vary theirs).
+        AppearanceItem::Stroke(s) => {
+            !s.visible || (s.opacity >= 1.0 && s.blend == BlendMode::Normal && s.effects.is_empty() && s.brush.is_none() && paint(&s.paint))
+        }
+    });
+    let own = n.opacity >= 1.0 && n.blend == BlendMode::Normal && n.extras().mask.is_none() && n.appearance.effects.is_empty() && items;
+    own && match &n.kind {
+        NodeKind::Path { .. } => true,
+        NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => children.iter().all(|c| paints_opaque(c)),
+        NodeKind::Mesh(m) => m.points.iter().all(|p| p.opacity >= 1.0),
+        _ => false,
+    }
+}

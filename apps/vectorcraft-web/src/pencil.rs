@@ -5,6 +5,9 @@
 //! - A pen drives egui's pointer and is a touch contact with the pen's pressure as its force (the
 //!   canvas reads it), so holding it still opens the context menu (egui's long touch). It hovers
 //!   where the pen can (Apple Pencil hover).
+//! - A press of the pen's eraser end (the eraser button, `button` 5 in Pointer Events) presses
+//!   like the tip, and the pen's samples go into a [`PenSource`] with that end, so the canvas
+//!   selects the Eraser tool for the press. A press of the tip turns the pen back.
 //! - Fingers are touch contacts: two pinch and pan the canvas, and tap to undo or redo. The first
 //!   finger also drives the pointer, so it taps the panels and menus; on the canvas it navigates
 //!   only once a pen has been seen ([`touch::set_source`]), for this page session only.
@@ -19,6 +22,8 @@ use std::cell::RefCell;
 #[cfg(target_arch = "wasm32")]
 use std::rc::Rc;
 
+use craft::behavior::PointerSample;
+use craft::ui::runtime::pen::PenSource;
 use egui::{Event, PointerButton, Pos2, TouchDeviceId, TouchId, TouchPhase};
 use vectorcraft_ui_egui::touch::{self, Source};
 #[cfg(target_arch = "wasm32")]
@@ -27,6 +32,10 @@ use wasm_bindgen::JsCast as _;
 /// The pen's touch device (fingers use another, so egui doesn't pinch a pen with a finger).
 const PEN_DEVICE: TouchDeviceId = TouchDeviceId(1);
 const FINGER_DEVICE: TouchDeviceId = TouchDeviceId(2);
+
+/// The Pointer Events `button` of a pen's eraser button, which is how a pen's eraser end presses
+/// (<https://www.w3.org/TR/pointerevents3/#the-button-property>).
+const ERASER_BUTTON: i16 = 5;
 
 /// The pen and finger contacts followed, and the egui events they made since the last frame.
 #[derive(Default)]
@@ -39,6 +48,25 @@ pub struct Pointers {
     /// The contact driving egui's pointer.
     primary: Option<i32>,
     button: Option<PointerButton>,
+    /// The pen last pressed with its eraser end.
+    eraser: bool,
+    /// The pen's pressure and end for the canvas, the source the install reads.
+    // PLAN: named `source`, not `pen`: `pen` is the pressing pen's pointer id above.
+    source: PenSource,
+    /// The pen whose finger wheel is read ([`Pointers::wheel`]).
+    wheel: Option<Wheel>,
+    /// Every reading written into the source, in order.
+    #[cfg(test)]
+    readings: Vec<PointerSample>,
+}
+
+/// A pen, by pointer id and the end it is turned to, and whether it has reported a tangential
+/// pressure other than 0 since it came near.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Wheel {
+    id: i32,
+    eraser: bool,
+    reads: bool,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -50,6 +78,11 @@ struct Input<'a> {
     id: i32,
     button: i16,
     pressure: f32,
+    /// Pointer Events' `tangentialPressure`, −1..1: an airbrush pen's finger wheel.
+    tangential: f32,
+    /// Whether the event names an element the pointer moved onto (`relatedTarget`): a pen leaving
+    /// one element for another is still in its hover range.
+    entered: bool,
     modifiers: egui::Modifiers,
 }
 
@@ -69,6 +102,36 @@ impl Pointers {
     /// The events since the last frame, for the frame's raw input.
     pub fn take(&mut self) -> Vec<Event> {
         std::mem::take(&mut self.events)
+    }
+
+    /// The source the pen's samples go into, for the runtime install.
+    pub fn pen(&self) -> PenSource {
+        self.source.clone()
+    }
+
+    /// A pen pressed, moved or lifted with `pressure` and `wheel`, with the end it last pressed
+    /// with. The source queues each reading, and the runtime pairs the readings with the frame's
+    /// pointer moves, so each move written after its own reading keeps that reading's wheel.
+    fn pen_sample(&mut self, pressure: f32, wheel: Option<f32>) {
+        let mut sample = PointerSample::new(pressure);
+        sample.eraser = self.eraser;
+        sample.wheel = wheel;
+        self.source.set(Some(sample));
+        #[cfg(test)]
+        self.readings.push(sample);
+    }
+
+    /// The finger wheel of pen `id`, turned to the end it last pressed with, for a sample with
+    /// Pointer Events' `tangentialPressure` (−1..1,
+    /// <https://www.w3.org/TR/pointerevents3/#dom-pointerevent-tangentialpressure>): a wheel of
+    /// 0..1, −1 at 0 and 1 at 1, a value past either end clamped. Pointer Events give 0 for a pen
+    /// without a wheel, so 0 reads as none until that pen, with that end, has reported a value
+    /// other than 0 since it came near. A value that is not a number is none.
+    fn wheel(&mut self, id: i32, tangential: f32) -> Option<f32> {
+        let known = self.wheel.is_some_and(|w| w.id == id && w.eraser == self.eraser && w.reads);
+        let reads = known || (tangential.is_finite() && tangential != 0.0);
+        self.wheel = Some(Wheel { id, eraser: self.eraser, reads });
+        (reads && tangential.is_finite()).then(|| (tangential.clamp(-1.0, 1.0) + 1.0) / 2.0)
     }
 
     fn touch(&mut self, device: TouchDeviceId, id: i32, phase: TouchPhase, pos: Pos2, force: Option<f32>) {
@@ -108,8 +171,16 @@ impl Pointers {
     }
 
     /// Follow one pointer event; `true` if it was the pen's or a finger's (taken from eframe).
-    fn feed(&mut self, kind: &str, e: &Input<'_>, pos: Pos2, coalesced: &[(Pos2, f32)], on_canvas: bool) -> bool {
+    ///
+    /// `coalesced` holds the positions the pen reported since the last event, each with its
+    /// pressure and tangential pressure, the last one at `pos`.
+    fn feed(&mut self, kind: &str, e: &Input<'_>, pos: Pos2, coalesced: &[(Pos2, f32, f32)], on_canvas: bool) -> bool {
         let id = e.id;
+        if e.pointer_type != "pen" && self.pen.is_none() && matches!(kind, "pointerdown" | "pointermove") {
+            // Another pointer moved while no pen presses (a palm under a pen pressing is
+            // rejected): the canvas takes no pen pressure or pen end for it.
+            self.source.set(None);
+        }
         match e.pointer_type {
             "pen" => {
                 let force = Some(e.pressure.clamp(0.0, 1.0));
@@ -118,20 +189,38 @@ impl Pointers {
                         if !on_canvas && self.pen.is_none() {
                             return false;
                         }
-                        let Some(button) = button(e.button) else { return false };
+                        // The eraser end presses like the tip; the tip and the eraser end each
+                        // set the end the pen is turned to.
+                        let (button, end) = match e.button {
+                            ERASER_BUTTON => (PointerButton::Primary, Some(true)),
+                            number => match button(number) {
+                                Some(button) => (button, (number == 0).then_some(false)),
+                                None => return false,
+                            },
+                        };
                         touch::set_source(Source::Pen);
                         self.cancel_fingers(pos, e.modifiers);
+                        if let Some(end) = end {
+                            self.eraser = end;
+                        }
+                        let wheel = self.wheel(id, e.tangential);
+                        self.pen_sample(e.pressure, wheel);
                         self.pen = Some(id);
                         self.touch(PEN_DEVICE, id, TouchPhase::Start, pos, force);
                         self.press(id, pos, button, e.modifiers);
                     }
                     "pointermove" if self.pen == Some(id) => {
                         // The positions the pen reported between two events (up to 240 a second
-                        // on an iPad), each with its pressure, so fast strokes keep their curve.
-                        for c in coalesced.iter().take(coalesced.len().saturating_sub(1)) {
-                            self.touch(PEN_DEVICE, id, TouchPhase::Move, c.0, Some(c.1));
-                            self.events.push(Event::PointerMoved(c.0));
+                        // on an iPad), each with its pressure and wheel, so fast strokes keep
+                        // their curve.
+                        for &(at, pressure, tangential) in coalesced.iter().take(coalesced.len().saturating_sub(1)) {
+                            let wheel = self.wheel(id, tangential);
+                            self.pen_sample(pressure, wheel);
+                            self.touch(PEN_DEVICE, id, TouchPhase::Move, at, Some(pressure));
+                            self.events.push(Event::PointerMoved(at));
                         }
+                        let wheel = self.wheel(id, e.tangential);
+                        self.pen_sample(e.pressure, wheel);
                         self.touch(PEN_DEVICE, id, TouchPhase::Move, pos, force);
                         self.events.push(Event::PointerMoved(pos));
                     }
@@ -143,10 +232,21 @@ impl Pointers {
                         if !on_canvas {
                             return false;
                         }
+                        // Pointer Events report no end while a pen hovers: it keeps the end it
+                        // last pressed with.
+                        let wheel = self.wheel(id, e.tangential);
+                        self.pen_sample(e.pressure, wheel);
                         self.events.push(Event::PointerMoved(pos));
                     }
                     "pointerup" | "pointercancel" if self.pen == Some(id) => {
-                        let phase = if kind == "pointerup" { TouchPhase::End } else { TouchPhase::Cancel };
+                        let (phase, wheel) = if kind == "pointerup" {
+                            // Lifted, the pen hovers on and keeps what it read of its wheel.
+                            (TouchPhase::End, self.wheel(id, e.tangential))
+                        } else {
+                            self.wheel = None;
+                            (TouchPhase::Cancel, None)
+                        };
+                        self.pen_sample(0.0, wheel);
                         self.pen = None;
                         self.touch(PEN_DEVICE, id, phase, pos, None);
                         self.release(pos, e.modifiers);
@@ -155,6 +255,13 @@ impl Pointers {
                     _ => {
                         if kind == "pointerleave" && self.primary.is_none() && on_canvas {
                             self.events.push(Event::PointerGone);
+                        }
+                        // Left the hover range (a leave onto no element, on the canvas or off it)
+                        // or canceled: the pen reads its wheel afresh. Moving onto another element
+                        // keeps what it read.
+                        let gone = (kind == "pointerleave" && !e.entered && self.pen.is_none()) || kind == "pointercancel";
+                        if gone && self.wheel.is_some_and(|w| w.id == id) {
+                            self.wheel = None;
                         }
                         return self.pen.is_some();
                     }
@@ -228,7 +335,7 @@ pub fn install(runner: &eframe::WebRunner, canvas: &web_sys::HtmlCanvasElement, 
             let z = runner.egui_ctx().zoom_factor();
             let pos = egui::pos2((e.client_x() as f32 - rect.left() as f32) / z, (e.client_y() as f32 - rect.top() as f32) / z);
             let at = |x: i32, y: i32| egui::pos2((x as f32 - rect.left() as f32) / z, (y as f32 - rect.top() as f32) / z);
-            let coalesced: Vec<(Pos2, f32)> = if kind == "pointermove"
+            let coalesced: Vec<(Pos2, f32, f32)> = if kind == "pointermove"
                 && e.pointer_type() == "pen"
                 // Safari before 17 hasn't it, and calling a missing method would abort the app.
                 && js_sys::Reflect::has(&e, &"getCoalescedEvents".into()).unwrap_or(false)
@@ -236,7 +343,7 @@ pub fn install(runner: &eframe::WebRunner, canvas: &web_sys::HtmlCanvasElement, 
                 e.get_coalesced_events()
                     .iter()
                     .filter_map(|c| c.dyn_into::<web_sys::PointerEvent>().ok())
-                    .map(|c| (at(c.client_x(), c.client_y()), c.pressure().clamp(0.0, 1.0)))
+                    .map(|c| (at(c.client_x(), c.client_y()), c.pressure().clamp(0.0, 1.0), c.tangential_pressure()))
                     .collect()
             } else {
                 vec![]
@@ -247,6 +354,8 @@ pub fn install(runner: &eframe::WebRunner, canvas: &web_sys::HtmlCanvasElement, 
                 id: e.pointer_id(),
                 button: e.button(),
                 pressure: e.pressure(),
+                tangential: e.tangential_pressure(),
+                entered: e.related_target().is_some(),
                 // Same semantics as eframe's modifiers_from_mouse_event.
                 modifiers: egui::Modifiers {
                     alt: e.alt_key(),
@@ -295,7 +404,7 @@ mod tests {
     use super::*;
 
     fn input(pointer_type: &str, button: i16) -> Input<'_> {
-        Input { pointer_type, id: 7, button, pressure: 0.6, modifiers: egui::Modifiers::default() }
+        Input { pointer_type, id: 7, button, pressure: 0.6, tangential: 0.0, entered: false, modifiers: egui::Modifiers::default() }
     }
 
     fn reset() {
@@ -388,8 +497,212 @@ mod tests {
     fn unknown_pen_buttons_are_not_reinterpreted_as_primary() {
         reset();
         let mut p = Pointers::default();
-        assert!(!p.feed("pointerdown", &input("pen", 5), Pos2::ZERO, &[], true));
+        assert!(!p.feed("pointerdown", &input("pen", 6), Pos2::ZERO, &[], true));
         assert!(p.take().is_empty());
         assert!(!touch::pen_seen());
+        assert_eq!(p.pen().current(), None);
+    }
+
+    /// The end of the pen the source holds, `None` without a pen.
+    fn end(pen: &PenSource) -> Option<bool> {
+        pen.current().map(|s| s.eraser)
+    }
+
+    fn presses(p: &mut Pointers) -> Vec<(PointerButton, bool)> {
+        p.take()
+            .into_iter()
+            .filter_map(|e| match e {
+                Event::PointerButton { button, pressed, .. } => Some((button, pressed)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The eraser end presses as Pointer Events' eraser button (`button` 5): a primary press whose
+    /// samples carry the eraser end, kept while the pen hovers, until the tip presses.
+    #[test]
+    fn the_eraser_button_presses_with_the_eraser_end() {
+        reset();
+        let mut p = Pointers::default();
+        let feed = p.pen();
+        let pos = Pos2::new(30.0, 40.0);
+        let eraser = input("pen", ERASER_BUTTON);
+        assert!(p.feed("pointerdown", &eraser, pos, &[], true));
+        assert_eq!(presses(&mut p), [(PointerButton::Primary, true)]);
+        assert!(touch::pen_seen());
+        assert_eq!((end(&feed), feed.current().map(|s| s.pressure)), (Some(true), Some(0.6)));
+        assert!(p.feed("pointermove", &input("pen", -1), pos, &[], true));
+        assert_eq!(end(&feed), Some(true));
+        assert!(p.feed("pointerup", &eraser, pos, &[], true));
+        assert_eq!(presses(&mut p), [(PointerButton::Primary, false)]);
+        let mut hover = input("pen", -1);
+        hover.pressure = 0.0;
+        assert!(p.feed("pointermove", &hover, pos, &[], true));
+        assert_eq!(end(&feed), Some(true), "a hovering pen keeps the end it pressed with");
+        // The barrel button leaves the end as it was.
+        assert!(p.feed("pointerdown", &input("pen", 2), pos, &[], true));
+        assert!(p.feed("pointerup", &input("pen", 2), pos, &[], true));
+        assert_eq!(end(&feed), Some(true));
+        assert!(p.feed("pointerdown", &input("pen", 0), pos, &[], true));
+        assert_eq!(end(&feed), Some(false), "the tip");
+        reset();
+    }
+
+    /// A mouse or a finger that moves takes the pen out of the feed, so the canvas gives it no
+    /// pen pressure and does not switch tools for it.
+    #[test]
+    fn other_pointers_clear_the_pen_feed() {
+        for (pointer_type, kind) in [("mouse", "pointermove"), ("mouse", "pointerdown"), ("touch", "pointerdown"), ("touch", "pointermove")] {
+            reset();
+            let mut p = Pointers::default();
+            let feed = p.pen();
+            assert!(p.feed("pointerdown", &input("pen", ERASER_BUTTON), Pos2::ZERO, &[], true));
+            assert!(p.feed("pointerup", &input("pen", ERASER_BUTTON), Pos2::ZERO, &[], true));
+            let mut other = input(pointer_type, 0);
+            other.id = 10;
+            p.feed(kind, &other, Pos2::ZERO, &[], true);
+            assert_eq!(feed.current(), None, "{pointer_type} {kind}");
+        }
+        reset();
+    }
+
+    fn pen_at(button: i16, tangential: f32) -> Input<'static> {
+        Input { pointer_type: "pen", id: 7, button, pressure: 0.6, tangential, entered: false, modifiers: egui::Modifiers::default() }
+    }
+
+    /// The wheels of the readings written since the last call, in order.
+    fn wheels(p: &mut Pointers) -> Vec<Option<f32>> {
+        p.readings.drain(..).map(|s| s.wheel).collect()
+    }
+
+    /// The wheel of the source's latest reading.
+    fn current_wheel(p: &Pointers) -> Option<f32> {
+        p.pen().current().and_then(|s| s.wheel)
+    }
+
+    /// An airbrush pen's finger wheel (Pointer Events' `tangentialPressure`, −1..1) reaches the
+    /// source as 0..1 with each move, once the pen has reported a value other than 0.
+    #[test]
+    fn an_airbrush_wheel_goes_into_the_feed() {
+        reset();
+        let mut p = Pointers::default();
+        assert!(p.feed("pointerdown", &pen_at(0, 0.0), Pos2::ZERO, &[], true));
+        for t in [0.0, -1.0, 0.5, 0.0, 3.0, f32::NAN, -0.5] {
+            assert!(p.feed("pointermove", &pen_at(-1, t), Pos2::ZERO, &[], true));
+        }
+        assert_eq!(
+            wheels(&mut p),
+            [None, None, Some(0.0), Some(0.75), Some(0.5), Some(1.0), None, Some(0.25)],
+            "none until reported; then 0 is half way, past the ends is clamped and not a number is none"
+        );
+        assert!(p.feed("pointerup", &pen_at(0, 0.0), Pos2::ZERO, &[], true));
+        assert_eq!(current_wheel(&p), Some(0.5), "the lift keeps the wheel");
+        reset();
+    }
+
+    /// The positions a fast stroke's event coalesced each get a reading with their own wheel and
+    /// pressure, in order, before their move, and the event's own position comes last with its own.
+    #[test]
+    fn coalesced_moves_keep_their_wheel() {
+        reset();
+        let mut p = Pointers::default();
+        let (a, b, c) = (Pos2::new(1.0, 2.0), Pos2::new(3.0, 4.0), Pos2::new(5.0, 6.0));
+        assert!(p.feed("pointerdown", &pen_at(0, -1.0), Pos2::ZERO, &[], true));
+        let coalesced = [(a, 0.3, -0.5), (b, 0.4, 0.5), (c, 0.5, 0.75)];
+        assert!(p.feed("pointermove", &pen_at(-1, 1.0), c, &coalesced, true));
+        let moved: Vec<Pos2> = p.take().into_iter().filter_map(|e| if let Event::PointerMoved(at) = e { Some(at) } else { None }).collect();
+        let kept = std::mem::take(&mut p.readings);
+        assert_eq!(moved, [Pos2::ZERO, a, b, c]);
+        assert_eq!(kept.iter().map(|s| s.wheel).collect::<Vec<_>>(), [Some(0.0), Some(0.25), Some(0.75), Some(1.0)]);
+        assert_eq!(kept.iter().map(|s| s.pressure).collect::<Vec<_>>(), [0.6, 0.3, 0.4, 0.6], "each move keeps its pressure too");
+        reset();
+    }
+
+    /// A pen that leaves the hover range, a canceled press, another pen and the other end each
+    /// read the wheel afresh; a lift into hover does not. A mouse or a finger reads no wheel.
+    #[test]
+    fn the_wheel_is_read_afresh_for_each_pen_and_end() {
+        reset();
+        let mut p = Pointers::default();
+        let feed = p.pen();
+        let learn = |p: &mut Pointers, button: i16| {
+            assert!(p.feed("pointerdown", &pen_at(button, 0.5), Pos2::ZERO, &[], true));
+            assert!(p.feed("pointerup", &pen_at(button, 0.5), Pos2::ZERO, &[], true));
+        };
+        let hover = |p: &mut Pointers, id: i32| {
+            let mut e = pen_at(-1, 0.0);
+            e.id = id;
+            e.pressure = 0.0;
+            assert!(p.feed("pointermove", &e, Pos2::ZERO, &[], true));
+        };
+        learn(&mut p, 0);
+        hover(&mut p, 7);
+        assert_eq!(current_wheel(&p), Some(0.5), "a lift into hover keeps it");
+        p.feed("pointerleave", &pen_at(-1, 0.0), Pos2::ZERO, &[], true);
+        hover(&mut p, 7);
+        assert_eq!(current_wheel(&p), None, "left the hover range");
+        learn(&mut p, 0);
+        assert!(p.feed("pointerdown", &pen_at(0, 0.5), Pos2::ZERO, &[], true));
+        assert!(p.feed("pointercancel", &pen_at(0, 0.5), Pos2::ZERO, &[], true));
+        assert_eq!(current_wheel(&p), None, "a canceled press");
+        hover(&mut p, 7);
+        assert_eq!(current_wheel(&p), None, "after a canceled press");
+        learn(&mut p, 0);
+        hover(&mut p, 8);
+        assert_eq!(current_wheel(&p), None, "another pen");
+        learn(&mut p, 0);
+        assert!(p.feed("pointerdown", &pen_at(ERASER_BUTTON, 0.0), Pos2::ZERO, &[], true));
+        assert_eq!(current_wheel(&p), None, "the other end");
+        assert!(p.feed("pointerup", &pen_at(ERASER_BUTTON, 0.0), Pos2::ZERO, &[], true));
+        p.readings.clear();
+        for (pointer_type, kind) in [("mouse", "pointermove"), ("touch", "pointerdown"), ("touch", "pointermove")] {
+            let mut other = pen_at(0, 0.5);
+            (other.pointer_type, other.id) = (pointer_type, 10);
+            p.feed(kind, &other, Pos2::ZERO, &[], true);
+            assert_eq!(feed.current(), None, "{pointer_type} {kind}");
+            assert!(p.readings.is_empty(), "{pointer_type} {kind}");
+        }
+        reset();
+    }
+
+    /// A hovering pen that moves off the canvas onto another element and back keeps what it read
+    /// of its wheel; one that leaves the hover range off the canvas reads it afresh.
+    #[test]
+    fn the_wheel_survives_crossing_the_canvas_edge() {
+        reset();
+        let mut p = Pointers::default();
+        assert!(p.feed("pointerdown", &pen_at(0, 0.5), Pos2::ZERO, &[], true));
+        assert!(p.feed("pointerup", &pen_at(0, 0.5), Pos2::ZERO, &[], true));
+        let mut hover = pen_at(-1, 0.0);
+        hover.pressure = 0.0;
+        let mut onto = pen_at(-1, 0.0);
+        (onto.pressure, onto.entered) = (0.0, true);
+        p.feed("pointerleave", &onto, Pos2::ZERO, &[], true);
+        assert!(!p.feed("pointermove", &hover, Pos2::ZERO, &[], false));
+        assert!(p.feed("pointermove", &hover, Pos2::ZERO, &[], true));
+        assert_eq!(current_wheel(&p), Some(0.5), "moved onto another element and back");
+        p.feed("pointerleave", &onto, Pos2::ZERO, &[], true);
+        p.feed("pointerleave", &hover, Pos2::ZERO, &[], false);
+        assert!(p.feed("pointermove", &hover, Pos2::ZERO, &[], true));
+        assert_eq!(current_wheel(&p), None, "left the hover range off the canvas");
+        reset();
+    }
+
+    /// A palm that lands or moves while the eraser end presses is rejected, and the feed keeps the
+    /// eraser end for the canvas's next frame.
+    #[test]
+    fn a_rejected_palm_keeps_the_pen_end() {
+        reset();
+        let mut p = Pointers::default();
+        let feed = p.pen();
+        assert!(p.feed("pointerdown", &input("pen", ERASER_BUTTON), Pos2::ZERO, &[], true));
+        let mut palm = input("touch", 0);
+        palm.id = 10;
+        for (pointer_type, kind) in [("touch", "pointerdown"), ("touch", "pointermove"), ("mouse", "pointermove")] {
+            palm.pointer_type = pointer_type;
+            p.feed(kind, &palm, Pos2::ZERO, &[], true);
+            assert_eq!(end(&feed), Some(true), "{pointer_type} {kind}");
+        }
+        reset();
     }
 }

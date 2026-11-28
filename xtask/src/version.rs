@@ -49,7 +49,12 @@ pub fn validate(v: &str) -> Result<(), String> {
         return bad();
     }
     if let Some(p) = pre
-        && (p.is_empty() || p.split('.').any(|id| id.is_empty() || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')))
+        && (p.is_empty()
+            || p.split('.').any(|id| {
+                id.is_empty()
+                    || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+                    || (id.len() > 1 && id.starts_with('0') && id.bytes().all(|b| b.is_ascii_digit()))
+            }))
     {
         return bad();
     }
@@ -135,13 +140,14 @@ mod tests {
 
     #[test]
     fn validates_versions() {
-        for ok in ["0.1.0", "1.20.300", "1.0.0-rc.1", "1.0.0-alpha", "1.0.0-x-y.2"] {
+        for ok in ["0.1.0", "1.20.300", "1.0.0-rc.1", "1.0.0-alpha", "1.0.0-x-y.2", "1.0.0-0", "1.0.0-rc.0", "1.0.0-01a", "1.0.0-01-2"] {
             assert!(validate(ok).is_ok(), "{ok}");
         }
-        for bad in ["1.0", "1.0.0.0", "v1.0.0", "01.0.0", "1.0.0-", "1.0.0-a..b", "1.0.0+meta", "1.a.0", ""] {
+        for bad in ["1.0", "1.0.0.0", "v1.0.0", "01.0.0", "1.0.0-", "1.0.0-a..b", "1.0.0+meta", "1.a.0", "", "1.0.0-00", "1.0.0-rc.01"] {
             assert!(validate(bad).is_err(), "{bad}");
         }
         assert!(replace(MANIFEST, "nope").is_err());
+        assert!(replace(MANIFEST, "1.0.0-rc.01").is_err());
     }
 
     #[test]

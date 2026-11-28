@@ -7,12 +7,26 @@ const OUTPUT_AT: usize = 0x1_0000;
 /// `s` as the body of a WAT string literal (every byte that isn't a letter, digit or space
 /// escaped).
 pub fn string(s: &str) -> String {
-    s.bytes().map(|b| if b.is_ascii_alphanumeric() || b == b' ' { char::from(b).to_string() } else { format!("\\{b:02x}") }).collect()
+    bytes(s.as_bytes())
 }
 
+/// `data` as the body of a WAT string literal, every byte that isn't an ASCII letter, digit or
+/// space escaped (so it may hold any bytes, UTF-8 or not).
+pub fn bytes(data: &[u8]) -> String {
+    data.iter().map(|&b| if b.is_ascii_alphanumeric() || b == b' ' { char::from(b).to_string() } else { format!("\\{b:02x}") }).collect()
+}
+
+/// `vc_alloc`, which grows memory by whole pages, so its blocks never overlap data segments.
+const ALLOC: &str = r#"(func (export "vc_alloc") (param $n i32) (result i32) (local $old i32)
+    (local.set $old (memory.grow (i32.shr_u (i32.add (local.get $n) (i32.const 65535)) (i32.const 16))))
+    (if (result i32) (i32.eq (local.get $old) (i32.const -1)) (then (i32.const 0)) (else (i32.mul (local.get $old) (i32.const 65536)))))"#;
+
 /// A plug-in module: `manifest` (JSON), a `vc_run` whose body is `run` (parameters `$in $il $pp
-/// $pl`, result i64), extra module fields `extra` and `pages` of initial memory. `vc_alloc` grows
-/// memory by whole pages, so its blocks never overlap data segments.
+/// $pl`, result i64), extra module fields `extra` and `pages` of initial memory (at least 1: with
+/// none, the first `vc_alloc` block would start at 0, which the host refuses). `vc_alloc` grows
+/// memory by whole pages, so its blocks never overlap data segments. The manifest comes from the
+/// `vc_manifest` export, which the host calls when it loads the module ([`sectioned`] carries it in
+/// a custom section instead).
 pub fn module(manifest: &str, run: &str, extra: &str, pages: u32) -> String {
     format!(
         r#"(module
@@ -21,14 +35,48 @@ pub fn module(manifest: &str, run: &str, extra: &str, pages: u32) -> String {
   (data (i32.const 16) "{data}")
   (func (export "vc_abi_version") (result i32) (i32.const 1))
   (func (export "vc_manifest") (result i64) (i64.or (i64.shl (i64.const {len}) (i64.const 32)) (i64.const 16)))
-  (func (export "vc_alloc") (param $n i32) (result i32) (local $old i32)
-    (local.set $old (memory.grow (i32.shr_u (i32.add (local.get $n) (i32.const 65535)) (i32.const 16))))
-    (if (result i32) (i32.eq (local.get $old) (i32.const -1)) (then (i32.const 0)) (else (i32.mul (local.get $old) (i32.const 65536)))))
+  {ALLOC}
   (func (export "vc_run") (param $in i32) (param $il i32) (param $pp i32) (param $pl i32) (result i64)
     {run}))"#,
+        pages = pages.max(1),
         data = string(manifest),
         len = manifest.len(),
     )
+}
+
+/// A custom section named `name` holding `data`, as a module field.
+pub fn custom_section(name: &str, data: &[u8]) -> String {
+    format!(r#"(@custom "{}" "{}")"#, string(name), bytes(data))
+}
+
+/// A plug-in module like [`module`] that carries `manifest` in its `vc_manifest` custom section
+/// ([`crate::manifest::MANIFEST_SECTION`]) and exports only `memory`, `vc_alloc` and `vc_run`: the
+/// host reads the manifest without running any of its code. The host loads it only when `manifest`
+/// gives `"abi": 1`. It has `pages` of initial memory, at least 1, as [`module`] has.
+pub fn sectioned(manifest: &str, run: &str, extra: &str, pages: u32) -> String {
+    format!(
+        r#"(module
+  {section}
+  {extra}
+  (memory (export "memory") {pages})
+  {ALLOC}
+  (func (export "vc_run") (param $in i32) (param $il i32) (param $pp i32) (param $pl i32) (result i64)
+    {run}))"#,
+        section = custom_section(crate::manifest::MANIFEST_SECTION, manifest.as_bytes()),
+        pages = pages.max(1),
+    )
+}
+
+/// `module` (a module in WebAssembly text that starts with `(module`, after any white space) with
+/// the module field `field` added first, after the module's `$name` when it has one, such as a
+/// [`custom_section`]; `None` when `module` does not start with `(module`.
+pub fn with_field(module: &str, field: &str) -> Option<String> {
+    let rest = module.trim_start().strip_prefix("(module")?;
+    let Some(id) = rest.trim_start().strip_prefix('$') else {
+        return Some(format!("(module\n  {field}{rest}"));
+    };
+    let (name, rest) = id.split_at(id.find(|c: char| c.is_whitespace() || c == '(' || c == ')').unwrap_or(id.len()));
+    Some(format!("(module ${name}\n  {field}{rest}"))
 }
 
 /// A `vc_run` body returning the input unchanged.
@@ -36,9 +84,79 @@ pub const ECHO: &str = "(i64.or (i64.shl (i64.extend_i32_u (local.get $il)) (i64
 
 /// A plug-in that always returns `output` (whatever it is given).
 pub fn returning(manifest: &str, output: &str) -> String {
-    let run = format!("(i64.or (i64.shl (i64.const {}) (i64.const 32)) (i64.const {OUTPUT_AT}))", output.len());
-    let extra = format!(r#"(data (i32.const {OUTPUT_AT}) "{}")"#, string(output));
+    then_returning(manifest, "", output)
+}
+
+/// A plug-in whose `vc_run` runs `first` (instructions, with the locals it declares first), then
+/// returns `output`.
+fn then_returning(manifest: &str, first: &str, output: &str) -> String {
+    with_imports(manifest, "", first, output)
+}
+
+/// A plug-in with the module fields `imports` before the others, whose `vc_run` runs `first`, then
+/// returns `output`.
+pub fn with_imports(manifest: &str, imports: &str, first: &str, output: &str) -> String {
+    let run = format!("{first} (i64.or (i64.shl (i64.const {}) (i64.const 32)) (i64.const {OUTPUT_AT}))", output.len());
+    let extra = format!(r#"{imports} (data (i32.const {OUTPUT_AT}) "{}")"#, string(output));
     module(manifest, &run, &extra, (OUTPUT_AT + output.len()).div_ceil(0x1_0000) as u32 + 1)
+}
+
+/// The host imports of plug-in API level 2 ([`crate::host::IMPORTS`]), as `$vc_progress`,
+/// `$vc_cancelled` and `$vc_log`.
+pub const HOST_IMPORTS: &str = r#"(import "env" "vc_progress" (func $vc_progress (param i64 i64)))
+  (import "env" "vc_cancelled" (func $vc_cancelled (result i32)))
+  (import "env" "vc_log" (func $vc_log (param i32 i32 i32) (result i32)))"#;
+
+/// The storage imports of plug-in API level 2 ([`crate::host::IMPORTS`]), as `$vc_settings_get`,
+/// `$vc_settings_set`, `$vc_settings_delete`, `$vc_cache_read`, `$vc_cache_write` and
+/// `$vc_cache_clear`; a manifest that uses them lists `settings` and `cache`.
+pub const STORAGE_IMPORTS: &str = r#"(import "env" "vc_settings_get" (func $vc_settings_get (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_settings_set" (func $vc_settings_set (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_settings_delete" (func $vc_settings_delete (param i32 i32) (result i32)))
+  (import "env" "vc_cache_read" (func $vc_cache_read (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_cache_write" (func $vc_cache_write (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_cache_clear" (func $vc_cache_clear (param i32 i32) (result i32)))"#;
+
+/// A plug-in of API level 2 (its manifest gives `api` 2 and lists `progress`) that imports the
+/// host functions ([`HOST_IMPORTS`]) and whose `vc_run` runs `first`, which may call them, then
+/// returns `output`.
+pub fn reporting(manifest: &str, first: &str, output: &str) -> String {
+    with_imports(manifest, HOST_IMPORTS, first, output)
+}
+
+/// A plug-in of API level 2 that counts `steps` down, reporting each step's progress and checking
+/// `vc_cancelled` before it: when that says the run was cancelled it returns `stopped`, else
+/// `output` once the steps are done.
+pub fn cooperating(manifest: &str, steps: u64, stopped: &str, output: &str) -> String {
+    let first = format!(
+        r#"(local $n i64) (local.set $n (i64.const {steps}))
+    (block $done (loop $step
+      (br_if $done (i64.le_s (local.get $n) (i64.const 0)))
+      (call $vc_progress (i64.sub (i64.const {steps}) (local.get $n)) (i64.const {steps}))
+      (if (call $vc_cancelled) (then (return (i64.or (i64.shl (i64.const {len}) (i64.const 32)) (i64.const {STOPPED_AT})))))
+      (local.set $n (i64.sub (local.get $n) (i64.const 1)))
+      (br $step)))"#,
+        len = stopped.len(),
+    );
+    let imports = format!(r#"{HOST_IMPORTS} (data (i32.const {STOPPED_AT}) "{}")"#, string(stopped));
+    with_imports(manifest, &imports, &first, output)
+}
+
+/// Where [`cooperating`] keeps what it returns when it is cancelled.
+const STOPPED_AT: usize = 0x8000;
+
+/// A plug-in that counts `steps` down before it returns `output`. Each step costs a few
+/// instructions, so a test picks work that a light budget can't finish and a heavy one can, or
+/// that runs until it is cancelled.
+pub fn spinning(manifest: &str, steps: u64, output: &str) -> String {
+    let spin = format!(
+        "(local $n i64) (local.set $n (i64.const {steps}))
+    (block $done (loop $step
+      (br_if $done (i64.le_s (local.get $n) (i64.const 0)))
+      (local.set $n (i64.sub (local.get $n) (i64.const 1)))
+      (br $step)))"
+    );
+    then_returning(manifest, &spin, output)
 }
 
 /// What [`when_given`] looks through.
@@ -57,11 +175,31 @@ const NEEDLE_AT: usize = 0x8000;
 /// its input unchanged otherwise. A live effect made from it draws one shape or the other, so a
 /// test sees from the geometry whether the host handed the plug-in something.
 pub fn when_given(manifest: &str, given: Given, needle: &str, output: &str) -> String {
+    given_or(manifest, given, needle, output, None)
+}
+
+/// A plug-in that returns `output` when what it is given (`given`) holds the text `needle`, and
+/// `otherwise` when it does not.
+pub fn when_given_else(manifest: &str, given: Given, needle: &str, output: &str, otherwise: &str) -> String {
+    given_or(manifest, given, needle, output, Some(otherwise))
+}
+
+/// [`when_given`], returning `otherwise` in place of the input when it is given.
+fn given_or(manifest: &str, given: Given, needle: &str, output: &str, otherwise: Option<&str>) -> String {
     let (src, len) = match given {
         Given::Input => ("$in", "$il"),
         Given::Params => ("$pp", "$pl"),
     };
     let n = needle.len();
+    // `otherwise` sits right after `output`.
+    let other_at = OUTPUT_AT + output.len();
+    let (none, other) = match otherwise {
+        Some(o) => (
+            format!("(i64.or (i64.shl (i64.const {}) (i64.const 32)) (i64.const {other_at}))", o.len()),
+            format!(r#" (data (i32.const {other_at}) "{}")"#, string(o)),
+        ),
+        None => (ECHO.to_string(), String::new()),
+    };
     // For each place `$i` the needle fits, compare it byte by byte (`$j`).
     let run = format!(
         r#"(local $i i32) (local $j i32)
@@ -79,12 +217,13 @@ pub fn when_given(manifest: &str, given: Given, needle: &str, output: &str) -> S
               (br $cmp)))
           (local.set $i (i32.add (local.get $i) (i32.const 1)))
           (br $at)))
-      (return {ECHO}))
+      (return {none}))
     (i64.or (i64.shl (i64.const {out}) (i64.const 32)) (i64.const {OUTPUT_AT}))"#,
         out = output.len(),
     );
-    let extra = format!(r#"(data (i32.const {NEEDLE_AT}) "{}") (data (i32.const {OUTPUT_AT}) "{}")"#, string(needle), string(output));
-    module(manifest, &run, &extra, (OUTPUT_AT + output.len()).div_ceil(0x1_0000) as u32 + 1)
+    let extra = format!(r#"(data (i32.const {NEEDLE_AT}) "{}") (data (i32.const {OUTPUT_AT}) "{}"){other}"#, string(needle), string(output));
+    let end = other_at + otherwise.map_or(0, str::len);
+    module(manifest, &run, &extra, end.div_ceil(0x1_0000) as u32 + 1)
 }
 
 /// The manifest of a test plug-in `id` of `kind` with `params` (a JSON object of specs).
@@ -95,6 +234,11 @@ pub fn manifest(id: &str, kind: &str, params: &str) -> String {
 /// The manifest of a test exporter `id` writing `extensions` (a JSON list) with `params`.
 pub fn exporter(id: &str, extensions: &str, params: &str) -> String {
     format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"exporter","extensions":{extensions},"params":{params}}}"#)
+}
+
+/// The manifest of a test importer `id` reading `extensions` (a JSON list) with `params`.
+pub fn importer(id: &str, extensions: &str, params: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"importer","extensions":{extensions},"params":{params}}}"#)
 }
 
 /// What [`echo_exporter`] writes as its file.

@@ -1,0 +1,469 @@
+//! EPS and PostScript import: a small clean-room PostScript interpreter that turns what a file
+//! draws into document objects.
+//!
+//! - `lex`: the scanner; `obj`: objects, operators and errors; `interp`: the stacks, running
+//!   procedures, and the operators that don't draw.
+//! - `graphics`: the graphics state, coordinates, paths, colours (grey, RGB, CMYK, spot inks as
+//!   spot swatches at a tint, indexed, patterns), painting, clipping, axial and radial shadings as
+//!   gradients and tiling patterns as pattern swatches.
+//! - `shading`: function-based and mesh shadings as gradient meshes, sampled functions.
+//! - `data`: data the program reads from itself through decoding filters, and images.
+//! - `text`: fonts by name and type as point type; Type 3 fonts' glyphs drawn by their procedures.
+//! - `preview`: the previews a file carries, for when its PostScript can't be read.
+//! - `native`: the layers of an Illustrator file, from the editing copy of its art that it carries.
+//!
+//! Clipped art comes in as clipping groups. In a file in the legacy Illustrator format (versions
+//! 3–8, with the prolog that defines its operators), the group operators `u` … `U` (nested) come in
+//! as groups. The format's published specification documents its header comments (`%AI…`,
+//! `%%Creator`) and these operators: Adobe Illustrator File Format Specification, version 7.0
+//! (1998), listed by PRONOM at https://www.nationalarchives.gov.uk/PRONOM/fmt/423. A file in that
+//! format whose program has its layers (`%AI5_BeginLayer`) comes in through them, as `native` reads
+//! an Illustrator EPS's editing copy (#1027), and one without layers (Illustrator 3) comes in
+//! through its art put on one layer, as its page when that can't be read. One VectorCraft wrote (its prolog the procedure set
+//! [`crate::legacy_ai::PROCSET`], which prints its gradients flat and leaves its type out) comes in
+//! from those layers alone, without its page.
+//!
+//! The page is the file's `%%BoundingBox` (`%%HiResBoundingBox` when it has one), the first page
+//! of a PostScript file without one. A `.ai` in the legacy format ([`import_ai`]) that comes in
+//! through its layers keeps the artboard its header gives, with its art outside it; an EPS comes in
+//! on its page. A file whose program can't be read (an operator the
+//! interpreter doesn't know, an error, a limit reached) or that draws nothing comes in from its
+//! layers when its program has them (a `.ai` in PostScript form whose prolog is named but not
+//! included, as other apps write it), or with its art on one layer when it is in the legacy format
+//! without layers (Illustrator 3, as image editors still export their paths), else as its preview
+//! (a TIFF image, a Windows metafile or an EPSI bitmap), with a warning that names the error, the
+//! operator and the procedures it ran in; without a preview, what was drawn before the error is
+//! kept (with that warning), else the file is refused.
+
+mod ai;
+mod ate;
+mod cid;
+mod data;
+mod file_fonts;
+mod graphics;
+mod interp;
+mod lex;
+mod native;
+mod obj;
+mod predefined_cmap;
+mod preview;
+mod shading;
+mod text;
+mod type1;
+mod type42;
+
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod tests_cid;
+#[cfg(test)]
+mod tests_composite;
+#[cfg(test)]
+mod tests_fontnames;
+#[cfg(test)]
+mod tests_generators;
+#[cfg(test)]
+mod tests_illustrator;
+#[cfg(test)]
+mod tests_images;
+#[cfg(test)]
+mod tests_native;
+#[cfg(test)]
+mod tests_reads;
+#[cfg(test)]
+mod tests_strings;
+#[cfg(test)]
+mod tests_type1;
+#[cfg(test)]
+mod tests_type42;
+
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use vectorcraft_color::Paint;
+use vectorcraft_color::swatch::{REGISTRATION, Swatch};
+use vectorcraft_doc::{ColorMode, Document, LayerColor, Node, NodeKind};
+use vectorcraft_geom::{Affine, Rect};
+
+use graphics::{GState, Out};
+use interp::{Fault, Interp};
+use obj::PsError;
+
+pub use ai::NameEncoding;
+#[cfg(any(test, feature = "work-count"))]
+pub use ai::blend_work;
+#[cfg(test)]
+pub(crate) use ai::objects_read;
+#[cfg(test)]
+pub(crate) use ai::{ART_STYLE_PARSES, ENVELOPE_DRAWN, ENVELOPE_TYPE_DRAWN};
+pub(crate) use ai::{
+    BLEND_BUDGET, BLEND_PLUGIN, BRUSH_MANAGER, BrushesRead, DEFORM_PLUGIN, EnvelopeGridPoint, MAX_BLEND_KEYS, MAX_BLEND_OBJECTS,
+    MAX_CHECKED as ENVELOPE_CHECKS, MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_MESH_SIDE, MAX_SYMBOLS, ParsedStyle,
+    blend_reads, brush_plugin_name, brushes_kept, envelope_outline, envelope_upright, mesh_reads, parse_art_style, parsed_moves_with,
+    parsed_type_color, read_brush_object, read_parsed_style, read_style_list, symbol_art_member, turn_brush_art_over, warp_number,
+};
+pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES, record_version};
+pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
+pub(crate) use native::{MAX_TEXT, MAX_WRAP_WORK, scale_document, scale_symbols};
+pub use text::family_style;
+pub(crate) use text::{document_font, postscript_face};
+
+/// The page of a PostScript file without a bounding box (US Letter).
+const LETTER: [f64; 4] = [0.0, 0.0, 612.0, 792.0];
+/// Largest page side read (points).
+const MAX_SIDE: f64 = 1e5;
+
+/// The start of the warning that type was set in fonts that aren't available, before ": " and
+/// their families: PDF import's words, as type in those fonts comes in the same way.
+pub(crate) const MISSING_FONTS_NOTE: &str = "fonts that aren't available show in the fallback font until they are";
+/// The start of the warning that type in fonts that aren't available is drawn in the fonts the
+/// file carries (see `file_fonts`), before ": " and their families: PDF import's words.
+pub(crate) const CARRIED_FONTS_NOTE: &str =
+    "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font)";
+/// Most families named in that warning.
+const MAX_MISSING_FONTS: usize = 64;
+
+/// A read file.
+#[derive(Debug)]
+pub struct Imported {
+    pub document: Document,
+    pub warnings: Vec<String>,
+    /// The document shows the file's preview: its PostScript couldn't be read.
+    pub preview: bool,
+}
+
+/// The DSC comments the reader uses.
+#[derive(Debug, Default, PartialEq)]
+struct Dsc {
+    /// `llx lly urx ury` in PostScript's default space.
+    bbox: Option<[f64; 4]>,
+    pages: Option<u32>,
+    /// In the legacy Illustrator format: its header has `%AI…` comments or names the app as the
+    /// creator (see the module docs for the specification).
+    illustrator: bool,
+    /// Its prolog is the one VectorCraft's legacy `.ai` writer includes
+    /// ([`crate::legacy_ai::PROCSET`] in `%%DocumentSuppliedResources`).
+    own_legacy: bool,
+}
+
+/// The four numbers of a bounding box comment's value, when it has them and they make a box
+/// within [`MAX_SIDE`].
+fn box_of(v: &str) -> Option<[f64; 4]> {
+    let n: Vec<f64> = v.split_whitespace().map_while(|w| w.parse::<f64>().ok()).collect();
+    let [x0, y0, x1, y1] = n.as_slice() else { return None };
+    let b = [*x0, *y0, *x1, *y1];
+    (b.iter().all(|v| v.is_finite() && v.abs() <= MAX_SIDE) && x1 > x0 && y1 > y0).then_some(b)
+}
+
+impl Dsc {
+    /// The comments of `ps`: from the header, or (`(atend)`) the last ones in the file, bounded by
+    /// `craft_eps::MAX_EXTENDED_HEADER` / `craft_eps::MAX_TRAILER`. Preserves the last in-range
+    /// header box within [`MAX_SIDE`].
+    fn read(ps: &[u8]) -> Self {
+        let shared = craft_eps::Comments::read_with_header_limit(ps, craft_eps::MAX_EXTENDED_HEADER);
+        let head = &ps[..ps.len().min(craft_eps::MAX_EXTENDED_HEADER)];
+        let (mut bbox, mut hires, mut atend, mut own_legacy) = (None, None, false, false);
+        for raw in head.split(|b| matches!(b, b'\n' | b'\r')).filter(|l| !l.is_empty()) {
+            let line = String::from_utf8_lossy(raw);
+            let line = line.trim_end();
+            if line.starts_with("%%EndComments") || !line.starts_with('%') {
+                break;
+            }
+            let value = |key: &str| line.strip_prefix(key).map(str::trim);
+            if value("%%DocumentSuppliedResources:").is_some_and(|v| v.strip_prefix("procset ") == Some(crate::legacy_ai::PROCSET)) {
+                own_legacy = true;
+            }
+            if let Some(v) = value("%%HiResBoundingBox:") {
+                if v.starts_with("(atend)") {
+                    atend = true;
+                } else {
+                    hires = box_of(v).or(hires);
+                }
+            } else if let Some(v) = value("%%BoundingBox:") {
+                if v.starts_with("(atend)") {
+                    atend = true;
+                } else {
+                    bbox = box_of(v).or(bbox);
+                }
+            }
+        }
+        if atend {
+            let tail = &ps[ps.len().saturating_sub(craft_eps::MAX_TRAILER)..];
+            for raw in tail.split(|b| matches!(b, b'\n' | b'\r')).filter(|l| !l.is_empty()) {
+                if !raw.starts_with(b"%%") {
+                    continue;
+                }
+                let line = String::from_utf8_lossy(raw);
+                let line = line.trim_end();
+                if let Some(v) = line.strip_prefix("%%HiResBoundingBox:").map(str::trim) {
+                    hires = box_of(v).or(hires);
+                } else if let Some(v) = line.strip_prefix("%%BoundingBox:").map(str::trim) {
+                    bbox = box_of(v).or(bbox);
+                }
+            }
+        }
+        Self { bbox: hires.or(bbox), pages: shared.pages, illustrator: shared.illustrator, own_legacy }
+    }
+}
+
+/// The PostScript errors the reader raises and what each means, which import warnings and errors
+/// show after the error's name. `undefined` is not listed: its message names the undefined name
+/// and leaves the error's name out.
+pub const POSTSCRIPT_ERRORS: &[(&str, &str)] = &[
+    ("dictstackunderflow", "the program ends a dictionary it didn't begin"),
+    ("invalidfileaccess", "the program opens a file, which the reader can't do"),
+    ("invalidrestore", "the program restores a saved state that was already restored"),
+    ("ioerror", "data the program reads is damaged or cut short, or the program asks for a position in a file that has none"),
+    ("limitcheck", "the program goes past one of the reader's limits"),
+    ("nocurrentpoint", "the path has no point to continue from"),
+    ("rangecheck", "a value is outside the range the operator takes"),
+    ("stackunderflow", "the operator needs more values than the stack holds"),
+    ("syntaxerror", "part of the program isn't valid PostScript text"),
+    ("typecheck", "a value has the wrong type for the operator"),
+    ("undefinedfilename", "the program runs, deletes or renames a file, which the reader can't do"),
+    ("undefinedresource", "the program asks for a resource that isn't defined"),
+    ("undefinedresult", "a calculation has no result, as in a division by zero"),
+    ("unmatchedmark", "the operator looks for a mark on the stack and finds none"),
+];
+
+/// What went wrong, for the user (and for us, reading a report): the PostScript error with what
+/// it means ([`POSTSCRIPT_ERRORS`]), the operator that raised it and the procedure it ran in
+/// (`fault`).
+fn reason(e: &PsError, fault: Option<&Fault>) -> String {
+    let what = match e {
+        PsError::Ps("undefined", at) => format!("it uses `{at}`, which VectorCraft's PostScript reader doesn't know"),
+        PsError::Ps(name, at) => {
+            let detail = match fault.and_then(|f| f.op) {
+                Some(op) if at.is_empty() || at == op => format!("{name} in `{op}`"),
+                Some(op) => format!("{name} in `{op}`: {at}"),
+                None if at.is_empty() => name.to_string(),
+                None => format!("{name} in `{at}`"),
+            };
+            match POSTSCRIPT_ERRORS.iter().find(|(n, _)| n == name) {
+                Some((_, meaning)) => format!("a PostScript error ({detail}; {meaning})"),
+                None => format!("a PostScript error ({detail})"),
+            }
+        }
+        PsError::Limit(what) => return what.to_string(),
+        PsError::Exit | PsError::Stop => return "the program stopped with an error".into(),
+        PsError::Quit => return "the program ended early".into(),
+    };
+    match fault.map(|f| f.procs.as_slice()).unwrap_or_default() {
+        [] => what,
+        procs => {
+            let names: Vec<String> = procs.iter().map(|p| format!("`{p}`")).collect();
+            format!("{what}, in {}", names.join(" in "))
+        }
+    }
+}
+
+/// Read an EPS or PostScript file (its first page), an Illustrator EPS through the editing copy of
+/// its art when it carries one (see `native`).
+pub fn import(bytes: &[u8]) -> Result<Imported, String> {
+    import_with(bytes, true)
+}
+
+/// The PostScript of an EPS or PostScript file (behind its binary header, if it has one).
+fn program(bytes: &[u8]) -> Result<&[u8], String> {
+    let (ps, _) = crate::sections(bytes).ok_or("the file's preview header points outside the file")?;
+    if !ps.starts_with(b"%!") {
+        return Err("this is not a PostScript file".into());
+    }
+    Ok(ps)
+}
+
+/// An EPS or PostScript file's page at the origin, read from its comments without running its
+/// program: its bounding box (`%%HiResBoundingBox` when it has one), a US Letter page without
+/// one. [`import_with`] runs the program on the same page when it reads what the page prints.
+pub fn page(bytes: &[u8]) -> Result<Rect, String> {
+    let [llx, lly, urx, ury] = Dsc::read(program(bytes)?).bbox.unwrap_or(LETTER);
+    Ok(Rect::new(0.0, 0.0, urx - llx, ury - lly))
+}
+
+/// An EPS or PostScript file's bounding box (`%%HiResBoundingBox` when it has one) in its own
+/// space, as `[llx, lly, urx, ury]`, read from its comments; `None` without one.
+pub(crate) fn bounding_box(bytes: &[u8]) -> Option<[f64; 4]> {
+    Dsc::read(program(bytes).ok()?).bbox
+}
+
+/// [`import`], an Illustrator EPS through the editing copy of its art only when `editing_data`
+/// (else what its page prints, as any EPS).
+pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String> {
+    import_trusting(bytes, editing_data, false)
+}
+
+/// [`import_with`]; `trust`: an Illustrator EPS's layers are used even where they draw differently
+/// from its page, with a note (`editingData: "always"`, as for a `.ai`).
+pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<Imported, String> {
+    import_names(bytes, editing_data, trust, NameEncoding::default())
+}
+
+/// [`import_trusting`], with the names in the editing copy that aren't UTF-8 (layers, objects,
+/// artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables
+/// and data sets) read in `names`. The type of the document it gives that is set in families that
+/// aren't available shows in the fallback font, and a warning names them.
+pub fn import_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
+    read_checked(bytes, editing_data, trust, names, false)
+}
+
+/// [`import_names`] for a `.ai` (or `.ait`) in PostScript form: a program in the legacy format
+/// that comes in through its layers keeps the artboard its header gives, with its art outside it,
+/// where an EPS comes in on its page, its art's box. A `.ai` of versions 3 and 4, which doesn't
+/// give its artboard's size, has a US Letter artboard around its template box's center.
+pub fn import_ai(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding) -> Result<Imported, String> {
+    read_checked(bytes, editing_data, trust, names, true)
+}
+
+/// [`import_names`] (a `.ai` when `ai_file`, see [`import_ai`]).
+fn read_checked(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding, ai_file: bool) -> Result<Imported, String> {
+    let mut r = read_names(bytes, editing_data, trust, names, ai_file)?;
+    r.warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut r.document));
+    let (carried, missing) = missing_fonts(&r.document);
+    for (note, families) in [(CARRIED_FONTS_NOTE, carried), (MISSING_FONTS_NOTE, missing)] {
+        if !families.is_empty() {
+            r.warnings.push(format!("{note}: {}", families.join(", ")));
+        }
+    }
+    Ok(r)
+}
+
+/// The families of the type in `d` (its layers and its symbols) that aren't available, each once
+/// in the order the type comes, at most [`MAX_MISSING_FONTS`] a list: the document's, whether its
+/// type came from the page or from an editing copy, and none for type only measured or outlined.
+/// The first list holds those of type drawn in fonts the file carries (bound to that type), the
+/// second those of type in the fallback font; a family both happen to is in both.
+fn missing_fonts(d: &Document) -> (Vec<String>, Vec<String>) {
+    let db = vectorcraft_text::FontDb::global();
+    let (mut carried, mut missing): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    let mut add = |n: &Node| {
+        let NodeKind::Text(t) = &n.kind else { return };
+        // The families and styles this type is drawn in from fonts the file carries.
+        let bound: Vec<(&str, &str)> = t
+            .file_fonts_in_use()
+            .iter()
+            .filter(|font| t.file_fonts.as_ref().and_then(|fonts| fonts.face(&font.key)).is_some())
+            .map(|font| (font.family.as_str(), font.style.as_str()))
+            .collect();
+        for run in &t.runs {
+            let (family, style) = (run.style.font_family.as_str(), run.style.font_style.as_str());
+            if family.is_empty() {
+                continue;
+            }
+            let list = if bound.contains(&(family, style)) { &mut carried } else { &mut missing };
+            if list.len() < MAX_MISSING_FONTS && !list.iter().any(|f| f == family) && db.find_family(family).is_none() {
+                list.push(family.to_string());
+            }
+        }
+    };
+    d.walk(&mut add);
+    for s in &d.symbols {
+        s.art.walk(&mut add);
+    }
+    (carried, missing)
+}
+
+/// [`import_names`] before the type's fonts are checked (a `.ai` when `ai_file`, see [`import_ai`]).
+fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding, ai_file: bool) -> Result<Imported, String> {
+    let ps = program(bytes)?;
+    let dsc = Dsc::read(ps);
+    // A legacy `.ai` VectorCraft wrote: its prolog prints the art plainly (gradients flat, no
+    // type), and its program has all of it, which is read as the format (as before the file
+    // printed).
+    if editing_data
+        && dsc.own_legacy
+        && let Some(Ok((document, warnings))) = native::program_alone(ps, dsc.illustrator, ai_file, names)
+    {
+        return Ok(Imported { document, warnings, preview: false });
+    }
+    let [llx, lly, urx, ury] = dsc.bbox.unwrap_or(LETTER);
+    let frame = Rect::new(0.0, 0.0, urx - llx, ury - lly);
+    let mut doc = Document::new(frame.width(), frame.height());
+    doc.layers.clear();
+    let page = Affine::new([1.0, 0.0, 0.0, -1.0, -llx, ury]);
+    let mut it = Interp::new(ps, GState::default(), Out::new(doc, page, frame));
+    it.illustrator = dsc.illustrator;
+    let result = it.run();
+    it.release();
+    let fault = it.fault.take();
+    let mut out = it.out;
+    if let Some(n) = dsc.pages.filter(|n| *n > 1) {
+        out.warn(&format!("only the first of the file's {n} pages was read"));
+    }
+    let drew = !out.drawn.is_empty();
+    let why = match (&result, drew) {
+        (Ok(()), true) if editing_data => return Ok(native::layered(ps, finish(out), trust, dsc.illustrator, ai_file, names)),
+        (Ok(()), true) => return Ok(finish(out)),
+        (Ok(()), false) => "it draws nothing VectorCraft's PostScript reader can show".to_string(),
+        (Err(e), _) => reason(e, fault.as_ref()),
+    };
+    // A file in the legacy Illustrator format whose program can't be run (a `.ai` that names the
+    // prolog defining its operators without including it): its layers, which the program has, or
+    // its art on one layer when it has none (Illustrator 3).
+    let why = match editing_data.then(|| native::program_alone(ps, dsc.illustrator, ai_file, names)).flatten() {
+        Some(Ok((document, warnings))) => return Ok(Imported { document, warnings, preview: false }),
+        Some(Err(e)) => format!("{why}; its layers couldn't be read either ({e})"),
+        None => why,
+    };
+    if let Some(p) = preview::preview(bytes, ps, frame) {
+        let warnings = vec![format!("this file's PostScript couldn't be read ({why}): {}", p.what)];
+        return Ok(Imported { document: p.document, warnings, preview: true });
+    }
+    if drew {
+        out.warnings.insert(0, format!("the file was read up to an error ({why}): what follows it was left out"));
+        return Ok(finish(out));
+    }
+    match result {
+        Ok(()) => {
+            out.warn("the file draws nothing");
+            Ok(finish(out))
+        }
+        Err(_) => Err(format!("this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it")),
+    }
+}
+
+/// The document of what `out` drew: one layer, clipped art in clipping groups (grouped art in
+/// groups), the spot inks as spot swatches, in CMYK when most process colours were.
+fn finish(mut out: Out) -> Imported {
+    let mut drawn = std::mem::take(&mut out.drawn);
+    graphics::merge_strips(&mut drawn, &mut out.shadings);
+    let mut children = vectorcraft_doc::clipnest::nest(&mut out.doc, drawn);
+    if !out.shadings.is_empty() {
+        graphics::collapse(&mut children, &out.shadings);
+    }
+    // The fonts made of the glyphs of fonts the file carries, for their type.
+    let kept = std::mem::take(&mut out.file_glyphs).keep(&mut out.doc.images);
+    file_fonts::keep_file_fonts(&mut children, &kept, &out.doc.images);
+    let mut layer = Node::layer(out.doc.alloc_id(), "Layer 1", LayerColor::Preset(0));
+    if let Some(c) = layer.children_mut() {
+        *c = children;
+    }
+    finish_with(out, vec![Arc::new(layer)])
+}
+
+/// The document of what `out` drew, as `layers`: the spot inks as spot swatches, in CMYK when
+/// most process colours were.
+fn finish_with(out: Out, layers: Vec<Arc<Node>>) -> Imported {
+    let mut doc = out.doc;
+    if out.cmyk > out.rgb {
+        doc.color_mode = ColorMode::Cmyk;
+        let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+        (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
+    }
+    // `taken` holds the names `Document::swatch` finds: each swatch's name, and Registration.
+    let mut taken: HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).chain([REGISTRATION.to_string()]).collect();
+    for (name, color) in out.spots {
+        if taken.insert(name.clone()) {
+            doc.swatches.push(Swatch { name, paint: Paint::solid(color), global: true, spot: true });
+        }
+    }
+    // Tiling patterns are pattern swatches.
+    for name in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
+        if taken.insert(name.clone()) {
+            doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
+        }
+    }
+    doc.layers = layers;
+    let mut warnings = out.warnings;
+    doc.limit_depth_noting(&mut warnings);
+    Imported { document: doc, warnings, preview: false }
+}

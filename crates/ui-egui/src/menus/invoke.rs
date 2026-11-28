@@ -1,0 +1,391 @@
+use super::state::{SUBJECT_COMMANDS, enabled, has_subject, waits_for_ime};
+use super::{Value, VectorcraftApp, json};
+
+/// What a menu click runs: items whose label ends with "…" and that carry default params open a
+/// generic parameter dialog (fields = the defaults) instead of running immediately. A script of the
+/// Scripts folder runs, whatever its name ends with, and so does a proof setup saved in the Proof
+/// Setups folder.
+pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
+    let dialog = label.ends_with('…')
+        && p.as_object().is_some_and(|o| !o.is_empty())
+        && !matches!(
+            id,
+            "effect.dialog"
+                | "window.panel"
+                | "window.brightness"
+                | "view.screenMode"
+                | "plugin.dialog"
+                | crate::scripts_menu::COMMAND
+                | crate::dialogs::proof_setup::LOAD
+        );
+    if dialog {
+        return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
+    }
+    (id.to_string(), if p.is_null() { json!({}) } else { p.clone() })
+}
+
+/// The dialog of command `id` that shows the selection's current values (its query): its heading
+/// and the queried values it doesn't show. Type on a Path Options leaves the brackets where they
+/// are. Color Mask opens on the selected image's mask settings (the defaults without one).
+fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
+    Some(match id {
+        // Whether the text overflows, and Shrink Text's factor, are read-only facts.
+        "text.areaOptions" => ("Area Type Options", &["overflow", "fitScale"]),
+        "type.pathOptions" => ("Type on a Path Options", &["start", "end"]),
+        crate::addons::image::COLOR_MASK => ("Color Mask", &["masked"]),
+        _ => return None,
+    })
+}
+
+/// Opens the dialog the menu item of command `id` opens, as the reference app's does; `None` when `id`'s
+/// item opens none.
+pub(super) fn open_menu_dialog(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, String>> {
+    if crate::dialogs::object_dialogs::open_from_menu(app, id) {
+        return Some(Ok(Value::Null));
+    }
+    if let Some(opened) = crate::addons::dialogs::open_from_menu(app, id) {
+        return Some(opened);
+    }
+    if crate::dialogs::variables::opens(id) {
+        crate::dialogs::variables::open(app, id, None);
+        return Some(Ok(Value::Null));
+    }
+    Some(match id {
+        crate::dialogs::halftone::CMD => crate::dialogs::halftone::open(app),
+        crate::dialogs::rearrange_artboards::CMD => crate::dialogs::rearrange_artboards::open(app),
+        crate::dialogs::rename_artboards::CMD => crate::dialogs::rename_artboards::open(app),
+        crate::dialogs::smart_punctuation::COMMAND => crate::dialogs::smart_punctuation::open(app),
+        // Set Fold Angle… opens on the angle the selected fold lines fold at, and says why while it can change none.
+        crate::addons::packaging::SET_FOLD_ANGLE => crate::addons::packaging::open_dialog(app),
+        _ => return None,
+    })
+}
+
+/// Invoke a menu/command id with UI side effects (dialogs for "…" commands that need input).
+/// Object › Graph › Type… or Data… (`id`): its dialog, with the selected graph's current values
+/// (the command's query).
+pub(crate) fn graph_dialog(app: &mut VectorcraftApp, id: &str) -> Result<Value, String> {
+    // Graph Data: the worksheet.
+    if id == "graph.setData" {
+        return crate::dialogs::graph_data::open(app);
+    }
+    crate::dialogs::graph_type::open(app)
+}
+
+pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
+    if waits_for_ime(app, id) {
+        return;
+    }
+    // A command chosen while the tool computes an edit on another thread (a Shape Builder merge)
+    // comes after it: the edit is applied first, so the command's dialog, or the app's own dialog
+    // (Recolor Artwork), opens on the art as the gesture left it.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
+    // So do the plug-ins the launch is still loading, for a command chosen meanwhile that the
+    // engine holds until they install (a plug-in's own command, one that may edit); view commands
+    // and queries go ahead.
+    if vectorcraft_engine::waits_for_plugin_loads(id) {
+        app.session.finish_plugin_loads();
+    }
+    // A shortcut or a palette pick on a filter plug-in does nothing while its menu item is dimmed.
+    if id == "plugin.dialog" && !enabled(app, id) {
+        return;
+    }
+    if SUBJECT_COMMANDS.contains(&id)
+        && p.get("ids").is_none_or(|ids| ids.as_array().is_some_and(Vec::is_empty))
+        && p.get("id").is_none()
+        && !has_subject(app)
+    {
+        return;
+    }
+    // The Artboard tool's Rearrange (its canvas menu) opens Rearrange for the artboards it lists,
+    // whose OK waits for a click on the canvas.
+    if id == "artboard.rearrange"
+        && let Some(indices) = crate::dialogs::rearrange_artboards::menu_indices(&p)
+    {
+        crate::dialogs::rearrange_artboards::open_selected(app, &indices);
+        return;
+    }
+    // Params first: some dialogs' fields take a look through the session (Move's last move).
+    if p.as_object().is_none_or(|o| o.is_empty())
+        && let Some(opened) = open_menu_dialog(app, id)
+    {
+        if let Err(e) = opened {
+            app.status(e);
+        }
+        return;
+    }
+    // A plug-in command with parameters asks for them, from its menu item or its shortcut.
+    if p.as_object().is_none_or(|o| o.is_empty()) && crate::dialogs::plugin::open_command(app, id) {
+        return;
+    }
+    if open_view_dialog(app, id, &p) || open_object_dialog(app, id, &p) {
+        return;
+    }
+    // Help links: the command returns the URL; a menu click opens it (agents just get the URL).
+    if matches!(id, "help.discord" | "help.website" | "help.appPage" | "help.github") {
+        app.open_link(id);
+        return;
+    }
+    // Object → Align aligns to what the align buttons align to, unless the call names `to`. With
+    // anchors selected (Direct Selection) it sends its params unchanged, and the points align to
+    // their own bounds.
+    let p = if id == "object.align" { crate::panels::align::menu_align_params(app, p) } else { p };
+    // Image Trace traces off the UI thread, with its progress (#3098).
+    if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
+        if let Err(e) = crate::trace_runs::start(app, id, p, false) {
+            app.status(e);
+        }
+        return;
+    }
+    // Retype and Find Matching Fonts read the installed fonts off the UI thread, with their
+    // progress; Find more font matches lists what the last search found at once, and before any
+    // search it is a new one.
+    let new_search = match p.get("more") {
+        None | Some(serde_json::Value::Null | serde_json::Value::Bool(false)) => true,
+        Some(serde_json::Value::Bool(true)) => !app.ui.retype.searched,
+        Some(_) => false,
+    };
+    if id == "type.retype" || (id == "retype.find" && new_search) {
+        let r = if id == "type.retype" { crate::retype_runs::start(app, id, p, false) } else { crate::panels::retype::find_in_background(app, &p) };
+        if let Err(e) = r {
+            app.status(e);
+        }
+        return;
+    }
+    if let Some(r) = crate::panels::artboards::run_menu_item(app, id, &p) {
+        if let Err(e) = r {
+            app.status(e);
+        }
+        return;
+    }
+    // Check Fold Lines shows its summary and lists its issues in the Fold Lines panel.
+    if id == crate::addons::packaging::CHECK {
+        crate::addons::packaging::check(app, p);
+        return;
+    }
+    // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).
+    app.placing.for_user = id.starts_with("edit.paste");
+    let r = app.run(id, p);
+    app.placing.for_user = false;
+    if let Err(e) = r {
+        app.status(e);
+    } else if matches!(id, "object.pattern.make" | "object.pattern.edit") {
+        app.ui.open_panel = Some("patternOptions".into());
+    }
+}
+
+/// The dialogs the Envelope, Variables, Pathfinder, Pixel Snapping, Repeat, type, graph and View commands open when called without
+/// params; whether `id` was one of them.
+fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
+    // Envelope Distort: Warp Options, Envelope Mesh and Envelope Options, from the selection.
+    if crate::dialogs::envelope::opens(id) && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::envelope::open(app, id) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Variables (data merge): a name and a kind, a name and a row of values.
+    if crate::dialogs::variables::opens(id) && p.as_object().is_none_or(|o| o.is_empty()) {
+        crate::dialogs::variables::open(app, id, None);
+        return true;
+    }
+    // Pathfinder Options: a dialog with the current options.
+    if id == "object.pathfinder.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        crate::dialogs::pathfinder_options::open(app);
+        return true;
+    }
+    // Pixel Snapping Options: a dialog with the current options.
+    if id == "view.snapToPixel.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        crate::dialogs::pixel_snap_options::open(app);
+        return true;
+    }
+    // Repeat Options: a dialog with the selected repeat's current values.
+    if id == "object.repeat.options"
+        && p.as_object().is_none_or(|o| o.is_empty())
+        && let Some(fields) = crate::panels::pattern_options::repeat_fields(app)
+    {
+        let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Repeat Options", "params": fields}));
+        return true;
+    }
+    // Area Type Options and Type on a Path Options: dialogs with the selected type's current
+    // values (the command's query), less those the dialog leaves alone.
+    if let Some((label, hidden)) = queried_dialog(id)
+        && p.as_object().is_none_or(|o| o.is_empty())
+    {
+        match app.session.execute(id, &json!({})) {
+            Ok(mut fields) => {
+                if let Some(o) = fields.as_object_mut() {
+                    o.retain(|k, _| !hidden.contains(&k.as_str()));
+                    // Area type whose rows have no gutter of their own: its Row Gutter follows the
+                    // Gutter unless it is changed (see `dialogs::command`).
+                    if id == "text.areaOptions"
+                        && let Some(g) = o.get("rowGutter").filter(|g| Some(*g) == o.get("gutter")).cloned()
+                    {
+                        o.insert("__rowGutterLinked".into(), g);
+                    }
+                }
+                let _ = app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields}));
+            }
+            Err(e) => app.status(e.to_string()),
+        }
+        return true;
+    }
+    // Object → Graph → Type… / Data…: dialogs with the selected graph's current values.
+    if matches!(id, "graph.setType" | "graph.setData") && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = graph_dialog(app, id) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Object → Graph → Design… / Column… / Marker…: the document's graph designs.
+    if matches!(id, "graph.design" | "graph.column" | "graph.marker") && p.as_object().is_none_or(|o| o.is_empty()) {
+        let r = match id {
+            "graph.design" => crate::dialogs::graph_design::open_design(app),
+            "graph.column" => crate::dialogs::graph_design::open_column(app),
+            _ => crate::dialogs::graph_design::open_marker(app),
+        };
+        if let Err(e) = r {
+            app.status(e);
+        }
+        return true;
+    }
+    // New View…: a name dialog, starting from the first free "View N".
+    if id == "view.saved.new" && p.as_object().is_none_or(|o| o.is_empty()) {
+        let name = app.session.active().map(|d| vectorcraft_engine::doc::SavedView::default_name(&d.doc.views)).unwrap_or_default();
+        let _ = app.run("ui.paramDialog", json!({"command": id, "label": "New View", "params": {"name": name}}));
+        return true;
+    }
+    // Composite Fonts…: the document's composite fonts, to edit before OK sets them.
+    if id == crate::dialogs::composite_fonts::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::composite_fonts::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Kinsoku Shori Settings…: the document's custom Kinsoku sets, to edit before OK sets them.
+    if id == crate::dialogs::kinsoku_sets::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::kinsoku_sets::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
+    if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Find Next with no text to find, as its menu item runs it: the next match of the last Find
+    // and Replace search, or the dialog when there has been none.
+    if id == crate::dialogs::find_replace::NEXT
+        && p.get("find").is_none_or(|f| f.as_str() == Some(""))
+        && p.as_object().is_none_or(|o| o.len() <= 1)
+        && app.session.active().is_some()
+    {
+        if let Err(e) = crate::dialogs::find_replace::find_next(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Check Spelling…: dialog to walk through unknown words.
+    if id == crate::dialogs::check_spelling::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::check_spelling::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Edit Views…: the saved views in a list, to rename or delete.
+    if id == "view.saved.edit" && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::edit_views::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Rotate View with no angle, as the command palette runs it, opens a dialog for the angle, with
+    // the view's angle filled in.
+    if id == "view.rotate" && p.as_object().is_none_or(|o| o.is_empty()) {
+        match app.view_mut().map(|v| v.rotation) {
+            Some(angle) => {
+                let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Rotate View", "params": {"angle": angle}}));
+            }
+            None => app.status("no document"),
+        }
+        return true;
+    }
+    false
+}
+
+/// The dialogs the selection, raster, wrap, blend and Expand commands open, and the panel the Asset Export commands
+/// open, when called without params; whether `id` was one of them.
+fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
+    // Save Selection…: a name dialog, starting from the first free "Selection N".
+    if id == "select.save" && p.as_object().is_none_or(|o| o.is_empty()) {
+        let name = app.session.active().map(|d| vectorcraft_engine::doc::SavedSelection::default_name(&d.doc.saved_selections)).unwrap_or_default();
+        let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Save Selection", "params": {"name": name}}));
+        return true;
+    }
+    // Edit Selection…: the saved selections in a list, to rename or delete.
+    if id == "select.editSaved" && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::edit_selection::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Document Raster Effects Settings and File Info: their dialogs.
+    if matches!(id, "document.rasterEffectsSettings" | "file.info") && p.as_object().is_none_or(|o| o.is_empty()) {
+        let r = if id == "file.info" { crate::dialogs::file_info::open(app) } else { crate::dialogs::raster_effects::open(app) };
+        if let Err(e) = r {
+            app.status(e);
+        }
+        return true;
+    }
+    // Rasterize…: its options, starting from the document's raster effects settings.
+    if id == "object.rasterize" && p.as_object().is_none_or(|o| o.is_empty()) {
+        match app.session.execute("document.rasterEffectsSettings", &json!({})) {
+            Ok(v) => {
+                let params = json!({"ppi": v["resolution"], "colorModel": v["colorModel"], "background": v["background"], "antiAlias": if v["antiAlias"] == true { "art" } else { "none" }, "clippingMask": v["clippingMask"], "addAround": v["addAround"]});
+                let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Rasterize", "params": params}));
+            }
+            Err(e) => app.status(e.to_string()),
+        }
+        return true;
+    }
+    // Text Wrap Options: a dialog with the selected wrap object's current values.
+    if id == "object.textWrap.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        match app.session.execute(id, &json!({})) {
+            Ok(fields) => {
+                let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Text Wrap Options", "params": fields}));
+            }
+            Err(e) => app.status(e.to_string()),
+        }
+        return true;
+    }
+    // Blend Options…: its dialog, on the selected blend's options.
+    if id == "object.blend.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::blend_options::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Expand…: its dialog.
+    if id == "object.expand" && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::expand::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Export Assets, Remove, Rename, Asset Export Settings, Export 3D Assets and 3D Export Format
+    // with no params, as the command palette runs them (#4864): the Asset Export panel, where each
+    // one is done. A panel that already shows stays open.
+    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set" | "assets.export3D" | "assets.set3DFormat")
+        && p.as_object().is_none_or(|o| o.is_empty())
+    {
+        if let Err(e) = crate::panel_docking::reveal_panel(app, crate::panels::asset_export::ID) {
+            app.status(e);
+        }
+        return true;
+    }
+    false
+}

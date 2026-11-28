@@ -5,8 +5,11 @@
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::path::{Path, PathBuf};
+mod common;
 
+use std::path::Path;
+
+use common::TempFolder;
 use serde_json::{Value, json};
 use vectorcraft_engine::file_access::AutomationRoots;
 use vectorcraft_mcp::{Headless, Server};
@@ -14,9 +17,10 @@ use vectorcraft_mcp::{Headless, Server};
 const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="20" height="10" fill="red"/></svg>"#;
 
 /// A folder holding `in` (the read root, with `a.svg`), `out` (the write root), `outside` (with
-/// `b.svg`) and `in2`, and a server confined to `in` and `out` (either may be left out).
-fn confined(tag: &str, read: bool, write: bool) -> (Server, PathBuf) {
-    let base = vectorcraft_testkit::temp_dir(&format!("roots-{tag}"));
+/// `b.svg`) and `in2`, and a server confined to `in` and `out` (either may be left out). The
+/// folder is removed when the returned [`TempFolder`] is dropped.
+fn confined(tag: &str, read: bool, write: bool) -> (Server, TempFolder) {
+    let base = TempFolder::new(&format!("roots-{tag}"));
     for d in ["in", "out", "outside", "in2"] {
         std::fs::create_dir_all(base.join(d)).unwrap();
     }
@@ -25,7 +29,9 @@ fn confined(tag: &str, read: bool, write: bool) -> (Server, PathBuf) {
     std::fs::write(base.join("in2/c.svg"), SVG).unwrap();
     let in_dir = base.join("in");
     let out_dir = base.join("out");
-    let roots = AutomationRoots::new(read.then_some(in_dir.as_path()), write.then_some(out_dir.as_path())).unwrap();
+    let (read, write): (Vec<&Path>, Vec<&Path>) =
+        (read.then_some(in_dir.as_path()).into_iter().collect(), write.then_some(out_dir.as_path()).into_iter().collect());
+    let roots = AutomationRoots::new(&read, &write).unwrap();
     (Server::new(Box::new(Headless::with_document().with_automation_roots(roots))), base)
 }
 
@@ -51,6 +57,29 @@ fn ok(server: &mut Server, name: &str, args: Value) -> String {
 fn refused(server: &mut Server, name: &str, args: Value, why: &str) {
     let (error, text) = call(server, name, args.clone());
     assert!(error && text.contains(why), "{name} {args} should be refused ({why}): {text}");
+}
+
+/// A `TempFolder` is removed with the files and folders in it when dropped, also when the test
+/// that holds it panics.
+#[test]
+fn temp_folders_are_removed_when_dropped() {
+    let dir = TempFolder::new("roots-drop-check");
+    std::fs::create_dir(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("sub/a.svg"), SVG).unwrap();
+    let path = dir.to_path_buf();
+    drop(dir);
+    assert!(!path.exists(), "{} is removed", path.display());
+
+    let mut held = None;
+    let panicked = vectorcraft_testkit::catch_quiet(|| {
+        let dir = TempFolder::new("roots-panic-check");
+        std::fs::write(dir.join("a.svg"), SVG).unwrap();
+        held = Some(dir.to_path_buf());
+        panic!("the test fails with {} in use", dir.display());
+    });
+    assert!(panicked.is_err());
+    let path = held.unwrap();
+    assert!(!path.exists(), "{} is removed after a panic", path.display());
 }
 
 #[test]
@@ -112,7 +141,13 @@ fn saves_exports_and_captures_go_only_into_the_write_root() {
         json!({"command": "prefs.set", "params": {"key": "recoveryFolder", "value": s(&base.join("outside"))}}),
         "outside the write root",
     );
-    ok(&mut server, "run_command", json!({"command": "prefs.set", "params": {"key": "recoveryFolder", "value": s(&base.join("out"))}}));
+    // Data Recovery lists and restores what is in its folder too: write access alone isn't enough.
+    refused(
+        &mut server,
+        "run_command",
+        json!({"command": "prefs.set", "params": {"key": "recoveryFolder", "value": s(&base.join("out"))}}),
+        "outside the read root",
+    );
     refused(&mut server, "run_command", json!({"command": "plugin.reload", "params": {"path": s(&base.join("outside"))}}), "outside the read root");
 
     // The document saved inside the write root saves again in place.
@@ -152,4 +187,13 @@ fn links_out_of_a_root_are_refused() {
     }
     refused(&mut server, "export", json!({"path": s(&base.join("out/away/art.png"))}), "outside the write root");
     assert!(!base.join("outside/art.png").exists());
+}
+
+/// The Place tool keeps its queue until a click, which no scope confines: a queued file outside the
+/// read root is refused when the queue is set (whichever tool is active when it is).
+#[test]
+fn a_place_queue_names_only_files_inside_the_read_root() {
+    let (mut server, base) = confined("place-queue", true, true);
+    let queue = |file: &str| json!({"key": "queue", "value": {"entries": [{"params": {"path": s(&base.join(file))}, "name": "x", "width": 10, "height": 10}]}});
+    refused(&mut server, "run_command", json!({"command": "tool.setOption", "params": queue("outside/b.svg")}), "outside the read root");
 }

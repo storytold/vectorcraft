@@ -1,14 +1,9 @@
 //! Desktop printer transport. VectorCraft composes every page and copy before submission;
-//! craft-print owns discovery and spooling. Windows 7 keeps its viewer-based transport because
-//! Windows.Data.Pdf is unavailable there.
-#[cfg(not(all(windows, any(feature = "windows7", target_vendor = "win7"))))]
+//! craft-print owns discovery and spooling.
 use std::process::Command;
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
 
-#[cfg(all(windows, any(feature = "windows7", target_vendor = "win7")))]
-mod windows7;
-#[cfg(all(windows, any(feature = "windows7", target_vendor = "win7")))]
-use windows7 as system;
+mod direct_pdf;
 
 pub struct SystemPrint;
 impl PrintService for SystemPrint {
@@ -16,12 +11,16 @@ impl PrintService for SystemPrint {
         system::printers()
     }
     fn print(&mut self, job: &PrintJob) -> Result<String, String> {
-        let result = system::print(job);
-        let to = job.printer.unwrap_or("the default printer");
-        result.map(|note| format!("Sent “{}” to {to}{note}", job.title))
+        let note = system::print(job)?;
+        Ok(sent(job.title, job.printer, &note))
     }
     fn shared_print(&self) -> Option<vectorcraft_ui_egui::print::SharedPrintFn> {
         Some(std::sync::Arc::new(|job| SystemPrint.print(job)))
+    }
+    fn turns_landscape(&self) -> bool {
+        // macOS's `lp` doesn't turn a landscape page to the paper: it cuts it off on upright
+        // paper. craft-print turns each sheet to its own orientation on Windows.
+        !cfg!(target_os = "macos")
     }
     fn has_setup(&self) -> bool {
         true
@@ -31,17 +30,28 @@ impl PrintService for SystemPrint {
     }
 }
 
-#[cfg(not(all(windows, any(feature = "windows7", target_vendor = "win7"))))]
+/// The status after the job `title` went to `printer` (the default one without a name), with the
+/// spooler's `note` when it gave one. Each message has text between its values, so a catalog can
+/// match it and translate it. The note follows as its own sentence: a printer name can end in
+/// parentheses ("HP LaserJet (Copy 1)"), and a note in parentheses would match that name.
+fn sent(title: &str, printer: Option<&str>, note: &str) -> String {
+    let to = printer.unwrap_or("the default printer");
+    if note.is_empty() { format!("Sent “{title}” to {to}") } else { format!("Sent “{title}” to {to}. The spooler replied: {note}") }
+}
+
 mod system {
-    use super::*;
+    use super::{Command, PrintJob, Printer};
     pub fn printers() -> Vec<Printer> {
-        craft_print::printers().into_iter().map(|p| Printer { name: p.name, default: p.default }).collect()
+        craft::print::printers().into_iter().map(Printer::from).collect()
     }
     pub fn print(job: &PrintJob) -> Result<String, String> {
+        if job.direct_pdf {
+            return super::direct_pdf::print(job);
+        }
         // Copies, layout, marks and colour management are already in the PDF. Preserve its
         // physical sheet size and the queue's duplex default without printing copies twice.
-        let settings = craft_print::Job { printer: job.printer.map(str::to_string), title: job.title.into(), ..Default::default() };
-        craft_print::submit(job.pdf, &settings).map(|note| if note.is_empty() { note } else { format!(" ({note})") }).map_err(|e| e.to_string())
+        let settings = craft::print::Job { printer: job.printer.map(str::to_string), title: job.title.into(), ..Default::default() };
+        craft::print::submit(job.pdf, &settings).map_err(|e| e.to_string())
     }
     #[cfg(windows)]
     pub(crate) fn setup_command(printer: Option<&str>, default_printer: Option<&str>) -> Command {
@@ -90,7 +100,7 @@ mod system {
     }
 }
 
-#[cfg(all(test, windows, not(any(feature = "windows7", target_vendor = "win7"))))]
+#[cfg(all(test, windows))]
 mod tests {
     use super::system::setup_command;
     use std::ffi::OsStr;
@@ -101,14 +111,6 @@ mod tests {
         assert_eq!(cmd.get_program(), "rundll32.exe");
         let args: Vec<&OsStr> = cmd.get_args().collect();
         assert_eq!(args, ["printui.dll,PrintUIEntry", "/e", "/n", "Office Laser"]);
-    }
-
-    #[test]
-    fn setup_command_falls_back_to_default_printer() {
-        let cmd = setup_command(None, Some("Default Proofer"));
-        assert_eq!(cmd.get_program(), "rundll32.exe");
-        let args: Vec<&OsStr> = cmd.get_args().collect();
-        assert_eq!(args, ["printui.dll,PrintUIEntry", "/e", "/n", "Default Proofer"]);
     }
 
     #[test]
@@ -125,5 +127,22 @@ mod tests {
         assert_eq!(cmd.get_program(), "explorer");
         let args: Vec<&OsStr> = cmd.get_args().collect();
         assert_eq!(args, ["ms-settings:printers"]);
+    }
+}
+
+#[cfg(test)]
+mod turn_tests {
+    use super::sent;
+
+    #[test]
+    fn a_printer_name_ending_in_parentheses_stays_whole_in_a_translation() {
+        use vectorcraft_ui_egui::i18n::{Lang, LangExt, message};
+        let Some(de) = Lang::from_code("de") else { panic!("no German catalog") };
+        let printer = Some("HP LaserJet (Copy 1)");
+        assert_eq!(message(de, &sent("Poster", printer, "")), "“Poster” an HP LaserJet (Copy 1) gesendet");
+        assert_eq!(
+            message(de, &sent("Poster", printer, "job 12")),
+            "“Poster” an HP LaserJet (Copy 1) gesendet. Antwort der Druckwarteschlange: job 12"
+        );
     }
 }

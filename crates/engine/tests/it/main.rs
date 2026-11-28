@@ -1,0 +1,40 @@
+//! Integration tests: one test binary for the crate, one module per area.
+// Unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+#[path = "../support/affinity_docs.rs"]
+mod affinity_docs;
+#[path = "../../../affinity/tests/support/text_fixture.rs"]
+mod text_fixture;
+
+mod affinity_features;
+mod affinity_local;
+mod align_automatic_reference;
+mod artboard_click;
+mod beyond_canvas;
+mod clear_commands;
+mod compound_attributes;
+mod copy_direct_selection;
+mod delete_path_pieces;
+mod dimensions;
+mod eyedropper_sources;
+mod find_replace_paras;
+mod inline_text;
+mod js_lexer_vs_scriptcheck;
+mod known_bugs;
+mod lossy_overwrite;
+mod model_based;
+mod param_keys;
+mod paste_many;
+mod pasted_clipping_path;
+mod pen_click_after_smooth;
+mod pen_endpoint_picking;
+mod pen_rubber_band;
+mod ruler_guide_nodes;
+mod ruler_guide_perf;
+mod ruler_origin;
+mod script_host_vs_scriptcheck;
+mod selection_commands;
+mod stroke_visibility;
+mod text_stroke_scale;
+mod three_d_light_color;

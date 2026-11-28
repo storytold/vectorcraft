@@ -2,6 +2,7 @@
 
 use proptest::prelude::*;
 
+use crate::catalog::FeatureId;
 use crate::lex::{Lexer, T};
 use crate::*;
 
@@ -34,6 +35,7 @@ const FEATURE_CASES: &[(&str, &str, &str)] = &[
     ("directive.target", "  //@target acme", "x(); //@target acme"),
     ("directive.targetengine", "#targetengine session", "var targetengine = 'session';"),
     ("dollar", "$.writeln('hi');", "log.writeln('hi');"),
+    ("dollar", "$.localize = true;", "obj.localize = true;"),
     ("dollar.env", "var home = $.getenv('HOME');", "var home = env.getenv('HOME');"),
     ("dollar.evalFile", "$.evalFile(f);", "loader.evalFile(f);"),
     ("dynamicCode", "eval(code);", "safe.eval(code);"),
@@ -67,7 +69,6 @@ const FEATURE_CASES: &[(&str, &str, &str)] = &[
     ("file.write", "Folder.temp.remove();", "cache.temp.remove();"),
     ("hostCheck", "if (parseInt(app.version) < 20) {}", "if (parseInt(appVersion) < 20) {}"),
     ("localize", "var s = localize(text);", "var s = text.localize;"),
-    ("localize", "var s = $.localize(text);", "var s = obj.localize(text);"),
     ("menuCommand", "app.executeMenuCommand('acmecopyall');", "executeMenuCommand('acmecopyall');"),
     ("notify", "alert('done');", "panel.alert('done');"),
     ("notify", "if (confirm('Go?')) {}", "function confirm(m) {}"),
@@ -95,7 +96,7 @@ fn each_feature_is_found_where_it_is_and_nowhere_else() {
         assert_eq!(r.kind, Kind::Script, "{with}");
         let f = feature(&r, id).unwrap_or_else(|| panic!("{id} not found in {with:?}: {:?}", r.features));
         assert_eq!(f.lines, [1], "{with}");
-        let need = catalog::need(id).unwrap_or_else(|| panic!("{id} sets no need"));
+        let need = FeatureId::ALL.iter().find(|f| f.id() == *id).map(|f| f.need()).unwrap_or_else(|| panic!("{id} sets no need"));
         assert!(r.needs.contains(&need), "{with}: {:?}", r.needs);
         let r = report(without);
         assert!(feature(&r, id).is_none(), "{id} found in {without:?}");
@@ -103,14 +104,29 @@ fn each_feature_is_found_where_it_is_and_nowhere_else() {
 }
 
 #[test]
-fn every_feature_id_has_a_need_and_a_case() {
-    assert!(FEATURES.windows(2).all(|w| w[0] < w[1]), "FEATURES is sorted, as the report lists them");
-    for id in FEATURES {
-        assert!(catalog::need(id).is_some(), "{id}");
-        assert!(FEATURE_CASES.iter().any(|(case, ..)| case == id), "{id} has no case");
+fn the_dollar_objects_localize_property_is_not_the_global_localize_function() {
+    for src in ["$.localize = true;", "if ($.localize) {}", "var s = $.localize(text);"] {
+        let r = report(src);
+        assert!(feature(&r, "dollar").is_some(), "{src}: {:?}", r.features);
+        assert!(feature(&r, "localize").is_none(), "{src}: {:?}", r.features);
+    }
+}
+
+#[test]
+fn features_are_listed_in_alphabetical_order_of_their_ids() {
+    let ids: Vec<&str> = FeatureId::ALL.iter().map(|f| f.id()).collect();
+    assert!(ids.windows(2).all(|w| w[0] < w[1]), "{ids:?}");
+    assert!(FeatureId::ALL.windows(2).all(|w| w[0] < w[1]), "the enum is declared in the order of its ids");
+}
+
+#[test]
+fn every_feature_id_has_a_case() {
+    for f in FeatureId::ALL {
+        let id = f.id();
+        assert!(FEATURE_CASES.iter().any(|(case, ..)| *case == id), "{id} has no case");
     }
     for (id, ..) in FEATURE_CASES {
-        assert!(FEATURES.contains(id), "{id} isn't in FEATURES");
+        assert!(FeatureId::ALL.iter().any(|f| f.id() == *id), "{id} isn't a FeatureId");
     }
     let unique = |ids: &[&str]| ids.iter().collect::<std::collections::BTreeSet<_>>().len() == ids.len();
     assert!(unique(PROBLEMS) && unique(OUTSIDE));
@@ -193,7 +209,14 @@ fn directives_are_read_at_the_start_of_a_line_in_both_forms() {
     let includes: Vec<_> = r.includes.iter().map(|i| (i.value.as_str(), i.line, i.status)).collect();
     assert_eq!(includes, [("lib/a.jsxinc", 3, IncludeStatus::NotRead)]);
     assert_eq!(problems(&r), [("unknownDirective", Some(8), Some("#pragma")), ("unknownDirective", Some(9), Some("#!"))]);
-    assert_eq!(r.needs, [Need::Language, Need::HostOnly]);
+    assert_eq!(r.needs, [Need::Language], "VectorCraft runs #targetengine");
+}
+
+#[test]
+fn reflection_needs_only_the_language() {
+    let r = report("var p = obj.reflect.properties;\nvar m = $.reflect.find('write');\n");
+    assert_eq!(feature(&r, "reflection").map(|f| f.lines.clone()), Some(vec![1, 2]));
+    assert_eq!(r.needs, [Need::Language], "VectorCraft runs reflect");
 }
 
 #[test]
@@ -252,6 +275,253 @@ fn names_written_with_escapes_are_read_as_the_names_they_spell() {
     assert_eq!(r.lines, 3);
 }
 
+/// `src` with the escapes in its names written as the characters they stand for.
+fn unescaped(src: &str) -> String {
+    let limits = Limits::default();
+    crate::analyze::unescaped(std::borrow::Cow::Borrowed(src), &mut crate::report::Acc::new(&limits)).0.into_owned()
+}
+
+#[test]
+fn names_are_made_of_the_unicode_identifier_characters() {
+    // U+2118 (Other_ID_Start) starts a name, and U+203F (connector punctuation), U+00B7
+    // (Other_ID_Continue) and the zero width non-joiner and joiner continue one.
+    // Unicode 17.0 assigned the letter U+088F and the combining mark U+1ACF.
+    for name in ["\u{2118}a", "a\u{203F}b", "a\u{B7}b", "a\u{200C}b", "a\u{200D}b", "_\u{2118}", "$_a1", "\u{E9}t\u{E9}", "\u{88F}", "_\u{1ACF}"] {
+        assert_eq!(tokens(name), [(T::Ident, name)], "{name:?}");
+    }
+    for (src, want) in [
+        // Characters that only continue a name, and digits, don't start one.
+        ("\u{203F}a", [(T::Other, "\u{203F}"), (T::Ident, "a")]),
+        ("\u{1ACF}a", [(T::Other, "\u{1ACF}"), (T::Ident, "a")]),
+        ("\u{B7}a", [(T::Other, "\u{B7}"), (T::Ident, "a")]),
+        ("\u{200C}a", [(T::Other, "\u{200C}"), (T::Ident, "a")]),
+        ("0a", [(T::Number, "0"), (T::Ident, "a")]),
+        // A superscript digit (category No) and a letter that is Pattern_Syntax are in no name.
+        ("a\u{B2}", [(T::Ident, "a"), (T::Other, "\u{B2}")]),
+        ("a\u{2E2F}", [(T::Ident, "a"), (T::Other, "\u{2E2F}")]),
+        ("\u{2E2F}a", [(T::Other, "\u{2E2F}"), (T::Ident, "a")]),
+        // `#` and a name away from the start of a line, and a regular expression's flags.
+        ("a #\u{2118}b", [(T::Ident, "a"), (T::Other, "#\u{2118}b")]),
+        ("=/a/g\u{B2}", [(T::RegExp, "/a/g"), (T::Other, "\u{B2}")]),
+    ] {
+        let mut got = tokens(src);
+        if src.starts_with('=') {
+            got.remove(0);
+        }
+        assert_eq!(got, want, "{src:?}");
+    }
+    assert_eq!(tokens("a #\u{B2}"), [(T::Ident, "a"), (T::Other, "#"), (T::Other, "\u{B2}")]);
+    assert_eq!(tokens("=/a/g\u{200D}"), [(T::Punct, "="), (T::RegExp, "/a/g\u{200D}")]);
+    // The code in an XML literal's braces reads names by the same rule.
+    assert!(tokens("var x = <a>{\u{2118}b + c\u{203F}d}</a>;").iter().filter(|t| t.0 == T::Ident).any(|t| t.1 == "c\u{203F}d"));
+    assert!(tokens("var x = <a>{\u{2118}b}</a>;").contains(&(T::Ident, "\u{2118}b")));
+}
+
+#[test]
+fn an_escape_stands_for_a_character_only_where_a_name_may_hold_it() {
+    for (src, want) in [
+        ("\\u2118a", "\u{2118}a"),
+        ("a\\u203Fb", "a\u{203F}b"),
+        ("a\\u00B7b", "a\u{B7}b"),
+        ("a\\u200Cb", "a\u{200C}b"),
+        ("a\\u200Db", "a\u{200D}b"),
+        ("a\\u0030", "a0"),
+        ("\\u0024\\u005F", "$_"),
+        ("\\u088F", "\u{88F}"),
+        ("_\\u1ACF", "_\u{1ACF}"),
+        // Not at the start of a name.
+        ("\\u0030abc", "\\u0030abc"),
+        ("\\u1ACFa", "\\u1ACFa"),
+        ("\\u203Fa", "\\u203Fa"),
+        ("\\u00B7a", "\\u00B7a"),
+        // In no name.
+        ("a\\u00B2", "a\\u00B2"),
+        ("a\\u2E2F", "a\\u2E2F"),
+        ("\\u2E2F", "\\u2E2F"),
+        // Malformed escapes and a lone surrogate.
+        ("\\u", "\\u"),
+        ("a\\u12;", "a\\u12;"),
+        ("a\\uZZZZ", "a\\uZZZZ"),
+        ("a\\uD800", "a\\uD800"),
+        ("", ""),
+    ] {
+        assert_eq!(unescaped(src), want, "{src:?}");
+    }
+    let r = report("\\u0061pp.a\\u203Fb;\napp.\\u2118c;\n");
+    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(members, ["app.a\u{203F}b", "app.\u{2118}c"]);
+    // An escape a name may not hold where it stands, or a malformed one, is not part of a name.
+    for (src, want) in [
+        ("\\u0030a", [(T::Other, "\\"), (T::Ident, "u0030a")]),
+        ("a\\u00B2", [(T::Ident, "a"), (T::Other, "\\")]),
+        ("a\\u12", [(T::Ident, "a"), (T::Other, "\\")]),
+        ("a\\uD800", [(T::Ident, "a"), (T::Other, "\\")]),
+    ] {
+        assert_eq!(tokens(src).get(..2), Some(&want[..]), "{src:?}");
+    }
+    assert_eq!(tokens("a\\u0030\\u200C"), [(T::Ident, "a\\u0030\\u200C")]);
+    let r = report("app.\\u0030abc;\napp.a\\u00B2;\n");
+    assert!(r.members.iter().all(|m| !m.name.contains('\\') && !m.name.contains("0abc")), "{:?}", r.members);
+}
+
+#[test]
+fn malformed_escapes_in_bulk_are_read_once_through() {
+    let src = format!("{}\n{}\nalert(1);\n", "\\u\\uD800\\u12\\u0030\\u2118".repeat(20_000), "a\u{203F}".repeat(20_000));
+    let r = report(&src);
+    assert_eq!(r.lines, 3);
+    assert_eq!(feature(&r, "notify").map(|f| f.lines.as_slice()), Some(&[3][..]));
+    assert!(r.steps <= 5 * src.len() + 16, "{} steps for {} bytes", r.steps, src.len());
+    // Braced escapes: long runs of digits, closed and not, and ones that end at once.
+    let zeros = "0".repeat(100_000);
+    let src = format!(
+        "a\\u{{{zeros}62}};\n\\u{{{}\n{}\n{}\nalert(1);\n",
+        "f".repeat(100_000),
+        "\\u{".repeat(20_000),
+        "\\u{0000000061}\\u{110000}\\u{}\\u{D800}#\\u{61}".repeat(10_000)
+    );
+    let r = report(&src);
+    assert_eq!(r.lines, 5);
+    assert_eq!(feature(&r, "notify").map(|f| f.lines.as_slice()), Some(&[5][..]));
+    assert!(r.steps <= 5 * src.len() + 16, "{} steps for {} bytes", r.steps, src.len());
+}
+
+#[test]
+fn braced_escapes_in_names_are_read_by_their_value() {
+    for (src, want) in [
+        ("\\u{61}pp", "app"),
+        ("a\\u{62}c", "abc"),
+        ("\\u{0000000061}", "a"),
+        ("\\u{2118}\\u{203F}", "\u{2118}\u{203F}"),
+        ("a\\u{1D7CE}", "a\u{1D7CE}"),
+        ("\\u{1D49C}", "\u{1D49C}"),
+        // Not at the start of a name, in no name, out of range, empty, a surrogate and not closed.
+        ("\\u{30}a", "\\u{30}a"),
+        ("a\\u{1F600}", "a\\u{1F600}"),
+        ("a\\u{110000}", "a\\u{110000}"),
+        ("a\\u{FFFFFFFFFFFFFFFFFFFF}b", "a\\u{FFFFFFFFFFFFFFFFFFFF}b"),
+        ("a\\u{}b", "a\\u{}b"),
+        ("a\\u{D800}", "a\\u{D800}"),
+        ("a\\u{61", "a\\u{61"),
+        ("a\\u{6 1}", "a\\u{6 1}"),
+    ] {
+        assert_eq!(unescaped(src), want, "{src:?}");
+    }
+    assert_eq!(tokens("\\u{61}pp.x"), [(T::Ident, "\\u{61}pp"), (T::Punct, "."), (T::Ident, "x")]);
+    assert_eq!(tokens("a\\u{0000000062}"), [(T::Ident, "a\\u{0000000062}")]);
+    assert_eq!(tokens("a\\u{1F600}").get(..2), Some(&[(T::Ident, "a"), (T::Other, "\\")][..]));
+}
+
+#[test]
+fn braced_name_escape_reports_later_syntax_and_member() {
+    let r = report("\\u{61}pp.activeDocument.acmeName;\nvar a\\u{62}c = 1, \\u{0000000061}pp2 = 2;\n\\u{61}pp.x + \\u{61}pp.y;\n");
+    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(members, ["app.activeDocument.acmeName", "app.x", "app.y"]);
+    assert_eq!(
+        problems(&r),
+        [
+            ("newerSyntax", Some(1), Some("\\u{61}")),
+            ("newerSyntax", Some(2), Some("\\u{62}")),
+            ("newerSyntax", Some(2), Some("\\u{0000000061}")),
+            ("newerSyntax", Some(3), Some("\\u{61}")),
+        ]
+    );
+    // An escape that isn't a name's character, or isn't closed, makes no name and no report of one.
+    for src in [
+        "\\u{1F600}pp.activeDocument;",
+        "\\u{110000}pp.activeDocument;",
+        "\\u{}pp.activeDocument;",
+        "\\u{D800}pp.activeDocument;",
+        "\\u{61pp.activeDocument;",
+    ] {
+        let r = report(src);
+        assert!(r.members.iter().all(|m| !m.name.starts_with("app")), "{src:?}: {:?}", r.members);
+        assert!(r.problems.iter().all(|p| p.detail.as_deref().is_none_or(|d| !d.starts_with("\\u{"))), "{src:?}: {:?}", r.problems);
+    }
+    // In an included file, the report names the file.
+    let mut m = mem(&[("lib.jsxinc", "\\u{61}pp.name;\n")]);
+    let r = check("main.jsx", b"#include 'lib.jsxinc'\n", Some(&mut m), &Limits::default());
+    let found: Vec<_> = r.problems.iter().map(|p| (p.code, p.line, p.file.as_deref(), p.detail.as_deref())).collect();
+    assert_eq!(found, [("newerSyntax", Some(1), Some("lib.jsxinc"), Some("\\u{61}"))]);
+}
+
+#[test]
+fn private_names_with_escaped_starts_are_single_tokens() {
+    assert_eq!(tokens("a #\\u0061b"), [(T::Ident, "a"), (T::Other, "#\\u0061b")]);
+    assert_eq!(tokens("this.#\\u0061pp"), [(T::Ident, "this"), (T::Punct, "."), (T::Other, "#\\u0061pp")]);
+    assert_eq!(tokens("o.#\\u{61}b"), [(T::Ident, "o"), (T::Punct, "."), (T::Other, "#\\u{61}b")]);
+    // An escape for a character no name starts with leaves `#` on its own.
+    assert_eq!(tokens("a #\\u0030b").get(..3), Some(&[(T::Ident, "a"), (T::Other, "#"), (T::Other, "\\")][..]));
+    let r = report("var q = this.#\\u0061pp;\nvar r = o.#\\u{61}b;\n");
+    assert!(r.members.is_empty(), "{:?}", r.members);
+    assert_eq!(
+        problems(&r),
+        [("newerSyntax", Some(1), Some("#app")), ("newerSyntax", Some(2), Some("\\u{61}")), ("newerSyntax", Some(2), Some("#ab"))]
+    );
+}
+
+#[test]
+fn private_name_reports_decoded_construct() {
+    let r = report("var q = this.#hid\\u0064en;\nvar r = this.#\\u0061\\u0062;\n");
+    assert_eq!(problems(&r), [("newerSyntax", Some(1), Some("#hidden")), ("newerSyntax", Some(2), Some("#ab"))]);
+}
+
+#[test]
+fn private_name_at_line_start_is_not_a_directive() {
+    let r = report(concat!(
+        "class Box {\n",
+        "  #size = 1;\n",
+        "  #\\u0061rea = 2;\n",
+        "  #include 'a.jsxinc'\n",
+        "  #\\u0069nclude = 4;\n",
+        "  #\\u{69}nclude = 5;\n",
+        "}\n",
+        "#\\u0062ox = 3;\n",
+        "#pragma once\n",
+        "#target acme\n",
+    ));
+    let directives: Vec<_> = r.directives.iter().map(|d| (d.name, d.line)).collect();
+    assert_eq!(directives, [("include", 4), ("target", 10)]);
+    // Where the name a private name's escapes spell would start a preprocessor line, the report
+    // gives the name as written.
+    assert_eq!(
+        problems(&r),
+        [
+            ("newerSyntax", Some(1), Some("class")),
+            ("newerSyntax", Some(2), Some("#size")),
+            ("newerSyntax", Some(3), Some("#area")),
+            ("newerSyntax", Some(5), Some("#\\u0069nclude")),
+            ("newerSyntax", Some(6), Some("\\u{69}")),
+            ("newerSyntax", Some(6), Some("#\\u{69}nclude")),
+            ("newerSyntax", Some(8), Some("#\\u0062ox")),
+            ("unknownDirective", Some(9), Some("#pragma")),
+        ]
+    );
+}
+
+#[test]
+fn private_name_that_starts_with_a_directive_name_is_not_a_directive() {
+    let r = report(concat!(
+        "class Box {\n",
+        "  #include$size = 1;\n",
+        "  #include\u{e9} = 2;\n",
+        "  #include\\u0041 = 3;\n",
+        "  #include\\u{41} = 4;\n",
+        "  #INCLUDE 'a.jsxinc'\n",
+        "}\n",
+    ));
+    let directives: Vec<_> = r.directives.iter().map(|d| (d.name, d.line)).collect();
+    assert_eq!(directives, [("include", 6)]);
+}
+
+#[test]
+fn xml_code_uses_escaped_names() {
+    let r = report("var x = <a>{\\u{61}pp.activeDocument}</a>;\nvar y = <b>\\u0061pp.z \\u{61}</b>;\n");
+    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(members, ["app.activeDocument"]);
+    assert_eq!(problems(&r), [("newerSyntax", Some(1), Some("\\u{61}"))]);
+    assert!(tokens("var x = <a>{this.#\\u0061b}</a>;").contains(&(T::Other, "#\\u0061b")));
+}
+
 #[test]
 fn the_scripts_own_platform_names_are_not_the_platforms() {
     let r = report(concat!(
@@ -265,6 +535,345 @@ fn the_scripts_own_platform_names_are_not_the_platforms() {
     assert!(feature(&r, "notify").is_none());
     assert_eq!(feature(&r, "file.objects").map(|f| f.lines.as_slice()), Some(&[5][..]));
     assert_eq!(r.outside.iter().map(|o| o.id).collect::<Vec<_>>(), ["filesWritten"]);
+}
+
+/// A document's `exportVariables` writes the file it is given; `importVariables` only reads one.
+#[test]
+fn export_variables_writes_a_file() {
+    let r = report("var f = new File(p);\napp.activeDocument.importVariables(f);\napp.activeDocument.exportVariables(f);\n");
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3][..])]);
+}
+
+/// `exportVariables` called with its name as a string literal in brackets writes the file too;
+/// reading the method without calling it does not.
+#[test]
+fn export_variables_in_brackets_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument['importVariables'](f);\n",
+        "app.activeDocument[\"exportVariables\"](f);\n",
+        "var d = app.activeDocument; d['exportVariables'] (f);\n",
+        "var n = d['exportVariables'];\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
+/// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
+/// them and setting them on another object does not.
+#[test]
+fn setting_a_files_length_or_flags_writes_it() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "f.length = 0;\n",
+        "f.readonly = true;\n",
+        "f.hidden |= 1;\n",
+        "f.length++;\n",
+        "new File(q).length = 4;\n",
+        "if (x) --f.length;\n",
+        "f['readonly'] = false;\n",
+        "++\n",
+        "f.length;\n",
+        "var k = ++\n",
+        "f['length'];\n",
+        "++f.length.x; var z = new File(i++).length;\n",
+        "var n = f.length;\n",
+        "if (f.readonly == true) {}\n",
+        "o.length = 0;\n",
+        "o.f.length = 0;\n",
+        "var s = [1]; s.length = 0;\n",
+        "var m = f['length'];\n",
+        "i++\n",
+        "f.length;\n",
+        "f.length\n",
+        "++i;\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[2, 3, 4, 5, 6, 7, 8, 10, 12][..])]);
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[2, 3, 4, 5, 6, 7, 8, 10, 12][..]));
+}
+
+/// `new Folder(…)` and the `Folder` places always give a Folder object, which has no `length`,
+/// `hidden` or `readonly` setter. `Folder(…)` gives a File object when the path names a file,
+/// `Folder.selectDialog()` gives a File or Folder object, and a variable assigned another variable
+/// may hold either, so setting those writes. Removing a folder still writes.
+#[test]
+fn setting_a_folders_length_or_flags_does_not_write() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "d.length = 0;\n",
+        "d.hidden = true;\n",
+        "Folder.temp.length = 0;\n",
+        "(new Folder(q)).length = 0;\n",
+        "(Folder.desktop)['readonly'] = true;\n",
+        "Folder(p).readonly = true;\n",
+        "var e = Folder.selectDialog();\n",
+        "e.length = 0;\n",
+        "var g = (d);\n",
+        "g['length'] = 0;\n",
+        "var h = Folder(p);\n",
+        "h.hidden = true;\n",
+        "(Folder(p)).length = 0;\n",
+        "d.remove();\n",
+        "Folder.current.hidden = true;\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[7, 9, 11, 13, 14, 15, 16][..])]);
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[7, 9, 11, 13, 14, 15, 16][..]));
+}
+
+/// A Folder object has none of the File object's `open`, `read`, `readch`, `readln`, `write`,
+/// `writeln`, `copy`, `createAlias`, `openDlg` and `saveDlg`, so calling them on `new Folder(…)`, a
+/// `Folder` place or a variable holding one reads, writes and asks nothing. On `Folder(…)`, which
+/// gives a File object when the path names a file, and on `Folder.current` they still count, and the
+/// Folder object's own `create`, `remove`, `getFiles` and `selectDlg` count on any of them.
+#[test]
+fn file_only_calls_on_a_folder_do_nothing() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "d.write(s); d.writeln(s); d.copy(q); d.createAlias(q);\n",
+        "d.open('w'); d.read(); d.readch(); d.readln();\n",
+        "Folder.temp.write(s); (new Folder(q)).copy(q);\n",
+        "d.openDlg(); Folder.desktop.saveDlg();\n",
+        "Folder(p).write(s);\n",
+        "Folder.current.copy(q);\n",
+        "d.create(); d.getFiles(); d.selectDlg();\n",
+        "var g = Folder(p); g.open('r');\n",
+    ));
+    let lines = |id: &str| feature(&r, id).map(|f| f.lines.clone()).unwrap_or_default();
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[6, 7, 8][..])]);
+    assert_eq!(lines("file.write"), [6, 7, 8]);
+    assert_eq!(lines("file.read"), [8, 9]);
+    assert_eq!(lines("file.dialog"), [8]);
+}
+
+/// A variable holding a Folder object is the same object in grouping parentheses, so `(d).write(s)`
+/// and `(d).length = 0` do nothing, as `d.write(s)` and `d.length = 0` do. A variable that may hold
+/// a File object still counts in them.
+#[test]
+fn a_folder_in_parentheses_is_still_a_folder() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "(d).write(s); ((d)).copy(q); (d).open('r'); (d).length = 0;\n",
+        "var f = new File(p);\n",
+        "(f).write(s);\n",
+        "var g = Folder(p); (g).open('r');\n",
+    ));
+    let lines = |id: &str| feature(&r, id).map(|f| f.lines.clone()).unwrap_or_default();
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[4][..])]);
+    assert_eq!(lines("file.write"), [4]);
+    assert_eq!(lines("file.read"), [5]);
+}
+
+/// A File object assigned to a function's own variable, its parameter or a `catch` block's
+/// parameter ends with them; one assigned to an outer variable stays. Such a variable or parameter
+/// starts without what the outer variable of the same name was assigned.
+#[test]
+fn a_file_in_a_local_variable_leaves_an_outer_folder_alone() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "function f(e) { var d = new File(q); e = new File(q); d.length = 0; }\n",
+        "var e = new Folder(p);\n",
+        "try { x(); } catch (d) { d = new File(q); }\n",
+        "d.length = 0; e.hidden = true;\n",
+        "var g = new Folder(p);\n",
+        "function h() { g = y(); g = new File(q); }\n",
+        "g.length = 0;\n",
+        "var k = new File(q);\n",
+        "function m(n) { var k = new Folder(p); k.length = 0; n = new Folder(p); n.hidden = true; }\n",
+        "try { x(); } catch (k) { k = new Folder(p); k.readonly = true; }\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[2, 8][..])]);
+}
+
+/// The check reads branches and function bodies in order, so a variable that any assignment gives an
+/// object that may be a File object keeps counting as one, in the same file, in a function the code
+/// after it assigns, and across included files.
+#[test]
+fn a_variable_that_may_hold_a_file_counts_as_one() {
+    let r = report(concat!(
+        "var d;\n",
+        "if (c) { d = new File(p); } else { d = new Folder(p); }\n",
+        "d.length = 0;\n",
+        "function w() { h.hidden = true; }\n",
+        "var h = new Folder(q);\n",
+        "if (c) h = File(p);\n",
+        "var k = new Folder(q);\n",
+        "k.length = 0;\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[3, 4][..])]);
+    for lib in ["d = new File(q);\n", "d = Folder.selectDialog();\n", "var x = new File(q); d = x;\n"] {
+        let mut m = mem(&[("lib.jsxinc", lib)]);
+        let r = check("main.jsx", b"#include 'lib.jsxinc'\nvar d = new Folder(p);\nd.length = 0;\n", Some(&mut m), &Limits::default());
+        let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+        assert_eq!(outside, [("filesWritten", &[3][..])], "{lib}");
+    }
+    // The function that may give `d` a File object only does so once `e` holds one, which the
+    // second scan learns.
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "function write() { d.length = 0; }\n",
+        "function assign() { d = e; }\n",
+        "var e = new File(q);\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[2][..])]);
+    let mut m = mem(&[("lib.jsxinc", "d = Folder.temp;\n")]);
+    let r = check("main.jsx", b"#include 'lib.jsxinc'\nvar d = new Folder(p);\nd.length = 0;\n", Some(&mut m), &Limits::default());
+    assert!(r.outside.is_empty(), "{:?}", r.outside);
+}
+
+/// A `with` statement, `eval`, `Function`, `$.evalFile`, a member assignment that may write the
+/// global object's property of a variable's name, and a script's own `Folder` may give a name a
+/// File object the check doesn't see, before or after the setter in the text, so the setter counts.
+#[test]
+fn a_folder_that_other_code_may_rebind_counts_as_a_file() {
+    let scripts: [(&str, usize); 11] = [
+        ("var d = new Folder(p);\nwith (o) { d.length = 0; }\n", 2),
+        ("var d = new Folder(p);\nfunction w() { d.hidden = true; }\n$.global.d = new File(q);\n", 2),
+        ("var d = new Folder(p);\nfunction w() { d.hidden = true; }\nthis.d = new File(q);\n", 2),
+        ("var d = new Folder(p);\nfunction w() { d.hidden = true; }\nthis['d'] = new File(q);\n", 2),
+        ("var d = new Folder(p);\nfunction w() { d.hidden = true; }\n$.global[k] = new File(q);\n", 2),
+        ("eval(s);\nnew Folder(p).length = 0;\n", 2),
+        ("var d = new Folder(p);\nd.readonly = true;\n$.evalFile(f);\n", 2),
+        ("var d = new Folder(p);\nd.readonly = true;\nvar g = new Function(s);\n", 2),
+        ("$.global.Folder = File;\nnew Folder(p).length = 0;\n", 2),
+        ("function w() { new Folder(p).hidden = true; }\nFolder = File;\n", 1),
+        ("function w() { Folder.temp.hidden = true; }\nvar Folder = File;\n", 1),
+    ];
+    let written = |r: &Report| r.outside.iter().find(|o| o.id == "filesWritten").map(|o| o.lines.clone());
+    for (script, line) in scripts {
+        assert_eq!(written(&report(script)), Some(vec![line]), "{script}");
+    }
+    // Another variable's name, or a number as the index, leaves the Folder alone.
+    let r = report("var d = new Folder(p);\no.e = new File(q);\na[0] = new File(q);\nd.length = 0;\n");
+    assert_eq!(written(&r), None);
+    // A computed index may name the variable on any object that may be the global object.
+    let r = report("var d = new Folder(p);\na[k] = new File(q);\nd.length = 0;\n");
+    assert_eq!(written(&r), Some(vec![3]));
+    // A `with` statement in an included file counts in the script too.
+    let mut m = mem(&[("lib.jsxinc", "with (o) { x = 1; }\n")]);
+    let r = check("main.jsx", b"#include 'lib.jsxinc'\nvar d = new Folder(p);\nd.length = 0;\n", Some(&mut m), &Limits::default());
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[3][..])]);
+}
+
+/// An assignment to a computed property of any object, a string literal in brackets that names
+/// `eval`, `Function` or `$.evalFile`, and any `constructor` property may give a name a File object
+/// the check doesn't see, so no object counts as a Folder object.
+#[test]
+fn a_folder_that_unnamed_code_may_rebind_counts_as_a_file() {
+    let scripts: [(&str, usize); 13] = [
+        ("var d = new Folder(p);\nvar g = this;\ng[k] = new File(q);\nd.length = 0;\n", 4),
+        ("var d = new Folder(p);\nvar g = $.global;\ng[k] = File;\nd.length = 0;\n", 4),
+        ("var d = new Folder(p);\n$['global'][k] = new File(q);\nd.length = 0;\n", 3),
+        ("var d = new Folder(p);\n$[\"global\"][k] = new File(q);\nd.length = 0;\n", 3),
+        ("var d = new Folder(p);\no[f(k)] = new File(q);\nd.length = 0;\n", 3),
+        ("var d = new Folder(p);\nd.length = 0;\n$['evalFile'](f);\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\nthis['eval'](s);\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\nthis['\\u0065val'](s);\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\nvar g = $.global['Function'];\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\n(function () {}).constructor(s)();\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\nvar c = o['constructor'];\n", 2),
+        ("new Folder(p).hidden = true;\nvar c = o.constructor;\n", 1),
+        ("var d = new Folder(p);\nd.length = 0;\nvar c = constructor;\n", 2),
+    ];
+    let written = |r: &Report| r.outside.iter().find(|o| o.id == "filesWritten").map(|o| o.lines.clone());
+    for (script, line) in scripts {
+        assert_eq!(written(&report(script)), Some(vec![line]), "{script}");
+    }
+}
+
+/// A string literal in brackets names the property its value spells, escapes undone, as a name
+/// written with escapes is read as the name it spells. A literal longer than the check reads may
+/// name any variable, so no object counts as a Folder object.
+#[test]
+fn a_bracketed_name_is_read_whole_or_counts_as_any_name() {
+    let long = "a".repeat(300);
+    let scripts = [
+        format!("var {long} = new Folder(p);\nfunction w() {{ {long}.length = 0; }}\nthis['{long}'] = new File(q);\n"),
+        format!("var d = new Folder(p);\nfunction w() {{ d.length = 0; }}\nthis['{long}'] = new File(q);\n"),
+        "var d = new Folder(p);\nfunction w() { d.hidden = true; }\nthis['\\u0064'] = new File(q);\n".to_string(),
+        "var \\u0064 = new Folder(p);\nfunction w() { d.hidden = true; }\nthis['d'] = new File(q);\n".to_string(),
+        "var d = new Folder(p);\nfunction w() { \\u0064.hidden = true; }\nthis['\\x64'] = new File(q);\n".to_string(),
+    ];
+    let written = |r: &Report| r.outside.iter().find(|o| o.id == "filesWritten").map(|o| o.lines.clone());
+    for script in &scripts {
+        assert_eq!(written(&report(script)), Some(vec![2]), "{script}");
+    }
+    // A short literal that names another variable leaves the Folder alone.
+    let r = report(&format!("var d = new Folder(p);\nfunction w() {{ d.length = 0; }}\nthis['{}'] = new File(q);\n", "a".repeat(200)));
+    assert_eq!(written(&r), None);
+}
+
+/// The lines of `filesWritten` in the report on `script`.
+fn files_written(script: &str) -> Option<Vec<usize>> {
+    report(script).outside.iter().find(|o| o.id == "filesWritten").map(|o| o.lines.clone())
+}
+
+/// A name in brackets held in a variable may be `eval`, so no object counts as a Folder object.
+#[test]
+fn a_bracketed_variable_read_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nvar k = 'eval';\nthis[k]('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A name in brackets joined from strings may be `eval`, so no object counts as a Folder object.
+#[test]
+fn a_bracketed_joined_name_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nthis['ev' + 'al']('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A string literal in grouping parentheses inside brackets is read as a computed name.
+#[test]
+fn a_bracketed_name_in_parentheses_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nthis[('eval')]('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A comma expression in brackets names its last operand's value, which may be `eval`.
+#[test]
+fn a_bracketed_comma_expression_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nthis[0, 'eval']('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A name in brackets held in a variable may be `evalFile`, called on `$`.
+#[test]
+fn a_bracketed_variable_call_on_dollar_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nvar k = 'evalFile';\n$[k](f);\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A name in brackets held in a variable may be `constructor`, which reaches `Function`.
+#[test]
+fn a_bracketed_variable_constructor_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nvar k = 'constructor';\n(function () {})[k](s)();\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// One string or number literal in brackets names one property, and an array literal names none,
+/// also with brackets inside brackets, so the Folder is left alone. A computed name inside another
+/// name in brackets still counts as any name.
+#[test]
+fn a_literal_name_in_brackets_leaves_the_folder_alone() {
+    let script = "var d = new Folder(p);\nvar x = o['plain'];\nvar y = a[0][1];\na[0] = 1;\nvar z = [k, o['x'], a[0]];\nd.length = 0;\n";
+    assert_eq!(files_written(script), None);
+    assert_eq!(files_written("var d = new Folder(p);\nd.length = 0;\nvar x = o[a[0]];\n"), Some(vec![2]));
+}
+
+/// A preprocessor line inside a name in brackets hides the `[` before the name, so the name may be
+/// `eval` and no object counts as a Folder object.
+#[test]
+fn a_directive_in_a_bracketed_name_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nthis[\n#target illustrator\n'eval']('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
 }
 
 #[test]
@@ -481,21 +1090,131 @@ fn compound_assignments_and_increments_empty_a_name() {
     );
 }
 
+/// The lines of the `filesWritten` use in `r`, empty when it has none, and the member names, for a
+/// script whose other uses are not under test.
+fn written_lines_and_members(r: &Report) -> (Vec<usize>, Vec<&str>) {
+    let lines = r.outside.iter().flat_map(|o| {
+        assert_eq!(o.id, "filesWritten");
+        o.lines.iter().copied()
+    });
+    (lines.collect(), r.members.iter().map(|m| m.name.as_str()).collect())
+}
+
+/// `(name, script, lines of the files written, members)`: what a name holds after a value that goes
+/// on past its parentheses or past a call, or that is a comma expression or a grouped value.
+const HELD_VALUE_CASES: &[(&str, &str, &[usize], &[&str])] = &[
+    (
+        "a_value_that_goes_on_on_the_next_line_is_not_what_the_name_holds",
+        concat!(
+            "var a = new File(p);\n",
+            "var b = a\n  .name;\n",
+            "b.remove();\n",
+            "var d = app.activeDocument\n  + 'x';\n",
+            "d.acmeName;\n",
+            "var c = a\nc.remove();\n",
+            "var e = app.activeDocument\ne.acmeLayers;\n",
+        ),
+        &[9],
+        &["app.activeDocument", "app.activeDocument.acmeLayers"],
+    ),
+    // A comma expression in parentheses is the value of its last operand (ECMA-262 3rd edition,
+    // section 11.14).
+    (
+        "a_comma_expression_in_parentheses_is_its_last_operand",
+        concat!(
+            "var d = (0, app.activeDocument);\n",
+            "d.acmeName;\n",
+            "var f = (x, (new File(p)));\n",
+            "f.remove();\n",
+            "var g = (new File(p), 0);\n",
+            "g.remove();\n",
+            "var e = ((app.activeDocument), 0);\n",
+            "e.acmeLayers;\n",
+            "var k = (a = 1, f);\n",
+            "k.remove();\n",
+        ),
+        &[4, 10],
+        &["app.activeDocument", "app.activeDocument.acmeName"],
+    ),
+    // Parentheses that hold only the start of the value, or a value that goes on after them, leave the
+    // name holding nothing the check follows, as a call's argument list does.
+    (
+        "a_value_that_only_begins_in_parentheses_is_not_what_the_name_holds",
+        concat!(
+            "var f = new File(p);\n",
+            "var x = (app.activeDocument).name;\n",
+            "x.acmeLayers;\n",
+            "var y = (f).name;\n",
+            "y.remove();\n",
+            "var doc = ((app.activeDocument) + 1);\n",
+            "doc.acmeName;\n",
+            "var g = (new File(p).name);\n",
+            "g.remove();\n",
+            "var h = (new File(p))\n  .name;\n",
+            "h.remove();\n",
+            "var k = (File.name);\nnew File(p);\n",
+            "k.remove();\n",
+            "var flag = (File === File(p));\n",
+            "flag.remove();\n",
+            "var c = (f)(1), z = foo(new File(p));\n",
+            "c.remove(); z.remove();\n",
+            "var u = (x;\ny, new File(p));\n",
+            "u.remove();\n",
+        ),
+        &[],
+        &["app.activeDocument"],
+    ),
+    // The name holds a grouped value from the token after its last `)`: the next statement reads it, a
+    // function's own variable holds it only inside the function, and grouped values inside a function in
+    // parentheses don't change what the outer name holds.
+    (
+        "a_grouped_value_is_held_from_the_token_after_its_parentheses",
+        concat!(
+            "var doc = (app.activeDocument)\n",
+            "doc.acmeName;\n",
+            "function test() { var d2 = (app.activeDocument) }\n",
+            "d2.acmeLayers;\n",
+            "var f = (new File(File(p).fsName));\n",
+            "f.remove();\n",
+            "var lib = (function () { var sel = (selection); return sel.length; })();\n",
+            "var w = new File(p);\n",
+            "w = (function () { var inner = (q); return inner; });\n",
+            "w.remove();\n",
+        ),
+        &[6],
+        &["app.activeDocument", "app.activeDocument.acmeName", "selection", "selection.length"],
+    ),
+    // A value without parentheses that starts with `File` or `Folder` is what the name holds only when
+    // nothing follows the call, the dialog or the place, as in parentheses.
+    (
+        "a_file_value_that_goes_on_is_not_what_the_name_holds",
+        concat!(
+            "var a = File(p) && {remove: function () {}};\n",
+            "a.remove();\n",
+            "var b = new File(p).name;\n",
+            "b.remove();\n",
+            "var c = new File(p)\n  .parent;\n",
+            "c.remove();\n",
+            "var d = Folder.temp + '/x', e = File.openDialog('Pick') || other;\n",
+            "d.remove(); e.remove();\n",
+            "var g = File(p) == null, h = File, k = File.saveDialog;\n",
+            "g.remove(); h.remove(); k.remove();\n",
+        ),
+        &[],
+        &[],
+    ),
+];
+
+const HELD_VALUE_CASE_COUNT: usize = 5;
+
 #[test]
-fn a_value_that_goes_on_on_the_next_line_is_not_what_the_name_holds() {
-    let r = report(concat!(
-        "var a = new File(p);\n",
-        "var b = a\n  .name;\n",
-        "b.remove();\n",
-        "var d = app.activeDocument\n  + 'x';\n",
-        "d.acmeName;\n",
-        "var c = a\nc.remove();\n",
-        "var e = app.activeDocument\ne.acmeLayers;\n",
-    ));
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[9][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(members, ["app.activeDocument", "app.activeDocument.acmeLayers"]);
+fn a_name_holds_what_the_value_it_was_given_ends_as() {
+    assert_eq!(HELD_VALUE_CASES.len(), HELD_VALUE_CASE_COUNT);
+    for &(name, src, lines, members) in HELD_VALUE_CASES {
+        let r = report(src);
+        let (got_lines, got_members) = written_lines_and_members(&r);
+        assert_eq!((got_lines.as_slice(), got_members.as_slice()), (lines, members), "{name}");
+    }
 }
 
 /// A value in grouping parentheses, nested to any depth, is what the name holds (ECMA-262 3rd
@@ -522,9 +1241,8 @@ fn a_value_in_grouping_parentheses_is_what_the_name_holds() {
     )
     .to_string();
     let r = report(&(src + &deep));
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[2, 4, 8, 9, 11, 12, 13, 17][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
+    let (lines, members) = written_lines_and_members(&r);
+    assert_eq!(lines, [2, 4, 8, 9, 11, 12, 13, 17]);
     assert_eq!(members, ["app.activeDocument", "app.activeDocument.acmeLayers", "selection", "selection.length"]);
 }
 
@@ -588,100 +1306,6 @@ fn a_call_on_a_file_in_grouping_parentheses_is_followed() {
     assert_eq!(feature(&r, "file.read").map(|f| f.lines.as_slice()), Some(&[11][..]));
 }
 
-/// A comma expression in parentheses is the value of its last operand (ECMA-262 3rd edition,
-/// section 11.14).
-#[test]
-fn a_comma_expression_in_parentheses_is_its_last_operand() {
-    let r = report(concat!(
-        "var d = (0, app.activeDocument);\n",
-        "d.acmeName;\n",
-        "var f = (x, (new File(p)));\n",
-        "f.remove();\n",
-        "var g = (new File(p), 0);\n",
-        "g.remove();\n",
-        "var e = ((app.activeDocument), 0);\n",
-        "e.acmeLayers;\n",
-        "var k = (a = 1, f);\n",
-        "k.remove();\n",
-    ));
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[4, 10][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(members, ["app.activeDocument", "app.activeDocument.acmeName"]);
-}
-
-/// Parentheses that hold only the start of the value, or a value that goes on after them, leave the
-/// name holding nothing the check follows, as a call's argument list does.
-#[test]
-fn a_value_that_only_begins_in_parentheses_is_not_what_the_name_holds() {
-    let r = report(concat!(
-        "var f = new File(p);\n",
-        "var x = (app.activeDocument).name;\n",
-        "x.acmeLayers;\n",
-        "var y = (f).name;\n",
-        "y.remove();\n",
-        "var doc = ((app.activeDocument) + 1);\n",
-        "doc.acmeName;\n",
-        "var g = (new File(p).name);\n",
-        "g.remove();\n",
-        "var h = (new File(p))\n  .name;\n",
-        "h.remove();\n",
-        "var k = (File.name);\nnew File(p);\n",
-        "k.remove();\n",
-        "var flag = (File === File(p));\n",
-        "flag.remove();\n",
-        "var c = (f)(1), z = foo(new File(p));\n",
-        "c.remove(); z.remove();\n",
-        "var u = (x;\ny, new File(p));\n",
-        "u.remove();\n",
-    ));
-    assert!(r.outside.is_empty(), "{:?}", r.outside);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(members, ["app.activeDocument"]);
-}
-
-/// The name holds a grouped value from the token after its last `)`: the next statement reads it, a
-/// function's own variable holds it only inside the function, and grouped values inside a function in
-/// parentheses don't change what the outer name holds.
-#[test]
-fn a_grouped_value_is_held_from_the_token_after_its_parentheses() {
-    let r = report(concat!(
-        "var doc = (app.activeDocument)\n",
-        "doc.acmeName;\n",
-        "function test() { var d2 = (app.activeDocument) }\n",
-        "d2.acmeLayers;\n",
-        "var f = (new File(File(p).fsName));\n",
-        "f.remove();\n",
-        "var lib = (function () { var sel = (selection); return sel.length; })();\n",
-        "var w = new File(p);\n",
-        "w = (function () { var inner = (q); return inner; });\n",
-        "w.remove();\n",
-    ));
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[6][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
-    assert_eq!(members, ["app.activeDocument", "app.activeDocument.acmeName", "selection", "selection.length"]);
-}
-
-/// A value without parentheses that starts with `File` or `Folder` is what the name holds only when
-/// nothing follows the call, the dialog or the place, as in parentheses.
-#[test]
-fn a_file_value_that_goes_on_is_not_what_the_name_holds() {
-    let r = report(concat!(
-        "var a = File(p) && {remove: function () {}};\n",
-        "a.remove();\n",
-        "var b = new File(p).name;\n",
-        "b.remove();\n",
-        "var c = new File(p)\n  .parent;\n",
-        "c.remove();\n",
-        "var d = Folder.temp + '/x', e = File.openDialog('Pick') || other;\n",
-        "d.remove(); e.remove();\n",
-        "var g = File(p) == null, h = File, k = File.saveDialog;\n",
-        "g.remove(); h.remove(); k.remove();\n",
-    ));
-    assert!(r.outside.is_empty(), "{:?}", r.outside);
-}
-
 /// The name holds a value without parentheses from the token that ends it: the next statement reads
 /// it, the value itself reads what the name held before, a function's own variable holds it only
 /// inside the function, a preprocessor line or the end of a file ends it, and a line break after a
@@ -707,9 +1331,8 @@ fn a_file_value_is_held_from_the_token_that_ends_it() {
         "s.remove();\n",
     );
     let r = check("main.jsx", src.as_bytes(), Some(&mut m), &Limits::default());
-    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
-    assert_eq!(outside, [("filesWritten", &[2, 5, 11, 13, 16][..])]);
-    let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
+    let (lines, members) = written_lines_and_members(&r);
+    assert_eq!(lines, [2, 5, 11, 13, 16]);
     assert_eq!(members, ["app.activeDocument", "app.activeDocument.fullName"]);
 }
 
@@ -977,6 +1600,13 @@ fn application_methods_are_features_not_members() {
 }
 
 #[test]
+fn e4x_and_the_xml_object_need_only_the_language() {
+    let r = report("var x = <a><b/></a>;\nvar y = new XML(s);\nfor each (var v in x.b) {}\n");
+    assert!(feature(&r, "e4x").is_some() && feature(&r, "xml").is_some());
+    assert_eq!(r.needs, [Need::Language]);
+}
+
+#[test]
 fn type_names_compared_or_created_are_listed() {
     let r = report(concat!(
         "if (item.typename == 'AcmeShape') {}\n",
@@ -993,6 +1623,17 @@ fn type_names_compared_or_created_are_listed() {
 }
 
 #[test]
+fn collections_and_typed_arrays_are_not_type_names() {
+    let r = report(concat!(
+        "var m = new Map(), s = new Set(), wm = new WeakMap(), ws = new WeakSet();\n",
+        "var b = new ArrayBuffer(8), v = new DataView(b), u = new Uint8Array(b), c = new Uint8ClampedArray(2);\n",
+        "var i = [new Int8Array(1), new Int16Array(1), new Uint16Array(1), new Int32Array(1), new Uint32Array(1)];\n",
+        "var f = [new Float32Array(1), new Float64Array(1)];\n",
+    ));
+    assert!(r.types.is_empty(), "{:?}", r.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>());
+}
+
+#[test]
 fn menu_commands_are_counted_with_their_lines() {
     let r = report(concat!(
         "app.executeMenuCommand('acmecopyall');\n",
@@ -1006,6 +1647,18 @@ fn menu_commands_are_counted_with_their_lines() {
     assert_eq!(strings, [("acmecopyall", 3, &[1, 2, 6][..]), ("acmeA", 1, &[3][..])]);
     assert_eq!(r.menu_dynamic, 2);
     assert_eq!(feature(&r, "menuCommand").map(|f| f.count), Some(6));
+}
+
+#[test]
+fn a_menu_command_string_with_a_trailing_comma_is_listed() {
+    let r = report(concat!(
+        "app.executeMenuCommand('acmecopyall',);\n",
+        "app.executeMenuCommand('acmecopyall', n);\n",
+        "app.executeMenuCommand('acmecopyall',\n",
+    ));
+    let strings: Vec<(&str, usize, &[usize])> = r.menu_strings.iter().map(|s| (s.value.as_str(), s.count, s.lines.as_slice())).collect();
+    assert_eq!(strings, [("acmecopyall", 1, &[1][..])]);
+    assert_eq!(r.menu_dynamic, 2);
 }
 
 #[test]
@@ -1461,7 +2114,8 @@ fn include_lines_share_the_folders_of_the_include_path_before_them() {
     }
     let limits = Limits::default();
     let mut acc = report::Acc::new(&limits);
-    let scan = analyze::scan(&src, None, std::rc::Rc::from([]), &analyze::Known::default(), &mut acc);
+    let declared = analyze::declarations(&src, &mut acc);
+    let scan = analyze::scan(&src, &declared, &[], None, std::rc::Rc::from([]), &analyze::Known::default(), &mut acc);
     let (first, rest) = scan.includes.split_first().unwrap();
     assert_eq!((first.paths.len(), rest.len()), (64, 999));
     assert!(rest.iter().all(|i| std::rc::Rc::ptr_eq(&i.paths, &first.paths)), "one list of folders, not a copy for each line");
@@ -1734,4 +2388,64 @@ proptest! {
         prop_assert!(m.asked.len() <= lookups, "{} paths looked up: {:?}", m.asked.len(), m.asked);
         prop_assert!(r.includes.iter().all(|i| i.status != IncludeStatus::NotRead));
     }
+}
+
+/// A function that writes to a variable the global code assigns a File object after it: the
+/// variable declaration is hoisted, so the function writes a file, with a loader and without one.
+#[test]
+fn a_variable_assigned_after_the_function_using_it_holds_its_value() {
+    let src = "function g(){ f.write('x'); }  var f = new File('a');";
+    let without = report(src);
+    let with = check("test.jsx", src.as_bytes(), Some(&mut mem(&[])), &Limits::default());
+    assert!(feature(&without, "file.write").is_some(), "{:?}", without.features);
+    assert!(feature(&with, "file.write").is_some(), "{:?}", with.features);
+}
+
+/// Script-like text with functions that use variables the code after them assigns, a chain of them
+/// taking more than one scan to settle.
+fn hoisting_text() -> impl Strategy<Value = String> {
+    let pieces = prop::sample::select(vec![
+        "function g(){ ",
+        "function h(){ ",
+        "}",
+        "f.write('x'); ",
+        "b.remove(); ",
+        "e.acmeItems.add(); ",
+        "b = a; ",
+        "var a = f; ",
+        "var f = new File('a'); ",
+        "var d = app.activeDocument; ",
+        "var e = d; ",
+        "e = d.acmeLayers; ",
+        "f = d; ",
+    ]);
+    (prop::collection::vec(pieces, 0..30), script_text()).prop_map(|(v, tail)| v.concat() + &tail)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// A script that includes nothing gets the same report with a loader and without one.
+    #[test]
+    fn a_script_without_includes_reports_the_same_with_and_without_a_loader(text in hoisting_text()) {
+        let mut without = report(&text);
+        prop_assume!(without.includes.is_empty());
+        let mut with = check("test.jsx", text.as_bytes(), Some(&mut mem(&[])), &Limits::default());
+        without.steps = 0;
+        with.steps = 0;
+        prop_assert_eq!(without, with);
+    }
+}
+
+/// Chains of variables a function assigns before the code after it assigns their source take a
+/// scan each to settle: the script is read at most seven times.
+#[test]
+fn variables_that_settle_over_several_scans_stay_linear() {
+    let mut src = String::new();
+    for i in 0..150 {
+        src += &format!("function a{i}(){{ e{i} = d{i}; }} function b{i}(){{ d{i} = c{i}; }} function c{i}(){{ c{i} = b{i}; }} ");
+        src += &format!("function d{i}(){{ b{i} = a{i}; }} var a{i} = new File('x');\n");
+    }
+    let r = report(&src);
+    assert!(r.steps <= 9 * src.len() + 16, "{} steps for {} bytes", r.steps, src.len());
 }

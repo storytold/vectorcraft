@@ -25,17 +25,26 @@ use crate::PtrHasher;
 
 /// Glyph outlines per text object (`Renderer::text_geom_of`).
 pub(crate) const TEXT_BUDGET: usize = 128 << 20;
+/// Expanded character strokes per run of the glyph outlines kept in `texts`
+/// (`Renderer::cached_stroke`).
+pub(crate) const CHAR_STROKE_BUDGET: usize = 128 << 20;
 /// Clip regions per clipping path (`Renderer::clip_of`), and separately what clipping paths
 /// paint (`Renderer::clip_paint_of`).
 pub(crate) const CLIP_BUDGET: usize = 32 << 20;
 /// The art drawn for objects with effects that apply through it (`Renderer::fx_art`).
 pub(crate) const FX_ART_BUDGET: usize = 64 << 20;
+/// Art made to measure objects and held until the frame ends, for the objects drawn to keep
+/// (`Renderer::measured`): as much as the art kept for the objects drawn (`FX_ART_BUDGET`), which
+/// a frame measures before it draws them. Past it, an object is made again to draw it.
+pub(crate) const MEASURED_BUDGET: usize = FX_ART_BUDGET;
 /// Symbol art placed for instances and inline graphics (`Renderer::placed_art`).
 pub(crate) const PLACED_ART_BUDGET: usize = 64 << 20;
 /// Brush art per brushed stroke (`Renderer::draw_brush`).
 pub(crate) const BRUSH_BUDGET: usize = 64 << 20;
 /// Evaluated blends, envelopes and repeats (`Renderer::live_expanded`).
 pub(crate) const LIVE_BUDGET: usize = 64 << 20;
+/// What the walks of live objects and effect art found (`Renderer::live_found`).
+pub(crate) const WALK_BUDGET: usize = 16 << 20;
 /// Tessellated gradient meshes (`Renderer::mesh_quads`).
 pub(crate) const MESH_BUDGET: usize = 32 << 20;
 /// Pattern tile rasters, per thread and ink plane (`pattern::set_pattern_paint`): a tile is at
@@ -43,6 +52,11 @@ pub(crate) const MESH_BUDGET: usize = 32 << 20;
 pub(crate) const PATTERN_BUDGET: usize = 128 << 20;
 /// Freeform gradient grids, per thread (`freeform::set_freeform_paint`).
 pub(crate) const FREEFORM_BUDGET: usize = 32 << 20;
+/// Dithered gradient grids, per thread (`dither::set_dithered_paint`): a grid is at most 4096²
+/// pixels, 64 MiB.
+pub(crate) const DITHER_BUDGET: usize = 64 << 20;
+/// Type drawn with an anti-aliasing method other than Sharp, as pixels (`Renderer::draw_type_edges`).
+pub(crate) const TYPE_EDGE_BUDGET: usize = 128 << 20;
 
 /// Frames an entry may go unused before [`FrameCache::sweep`] drops it.
 const AGE: u64 = 3;
@@ -91,6 +105,33 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher + Default> FrameCache<K, V, S> {
         let s = self.map.get_mut(k)?;
         (s.stamp, s.used) = (stamp, self.clock);
         Some(&s.value)
+    }
+
+    /// Read an entry only when it matches `accept`; rejected entries keep their previous age so
+    /// another document's object with the same id cannot prevent their eviction.
+    pub(crate) fn get_if<Q>(&mut self, k: &Q, stamp: u64, accept: impl FnOnce(&V) -> bool) -> Option<&V>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        let s = self.map.get_mut(k)?;
+        if !accept(&s.value) {
+            return None;
+        }
+        self.clock += 1;
+        (s.stamp, s.used) = (stamp, self.clock);
+        Some(&s.value)
+    }
+
+    /// Drop the entry for `k`.
+    pub(crate) fn remove<Q>(&mut self, k: &Q)
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        if let Some(s) = self.map.remove(k) {
+            self.bytes -= s.bytes;
+        }
     }
 
     /// Keep `value` (about `bytes` bytes) as `k`, used in frame `stamp`, replacing any entry for
@@ -171,6 +212,12 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher + Default> FrameCache<K, V, S> {
         self.map.len()
     }
 
+    /// The values of the entries frame `stamp` made or used.
+    #[cfg(test)]
+    pub(crate) fn used_in(&self, stamp: u64) -> impl Iterator<Item = &V> {
+        self.map.values().filter(move |s| s.stamp == stamp).map(|s| &s.value)
+    }
+
     #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.map.is_empty()
@@ -182,7 +229,6 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher + Default> FrameCache<K, V, S> {
         self.bytes
     }
 
-    #[cfg(test)]
     pub(crate) fn contains_key<Q>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,
@@ -197,10 +243,14 @@ pub(crate) fn path_bytes(p: &BezPath) -> usize {
     size_of_val(p.elements())
 }
 
-/// Approximate bytes of node `n` and its members: the nodes and their path anchors.
+/// Approximate bytes of node `n` and its members: the nodes and their path anchors. Ruler guides
+/// are not drawn art and are not counted.
 pub(crate) fn node_bytes(n: &Node) -> usize {
     let mut b = 0;
     n.walk(&mut |c| {
+        if c.is_ruler_guide() {
+            return;
+        }
         b += size_of::<Node>() + NODE_OVERHEAD;
         if let Some(p) = c.path_data() {
             b += p.subpaths.iter().map(|s| size_of::<SubPath>() + s.anchors.len() * size_of::<Anchor>()).sum::<usize>();

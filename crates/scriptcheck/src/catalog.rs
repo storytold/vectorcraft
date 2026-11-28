@@ -16,6 +16,8 @@ pub(crate) const DOLLAR_EVAL_FILE: &str = "evalFile";
 // https://extendscript.docsforadobe.dev/extendscript-tools-features/user-notification-dialogs/
 pub(crate) const NOTIFY: &[&str] = &["alert", "confirm", "prompt"];
 
+// The global function. `$.localize` is a property of `$` (the Dollar object page above), so it is
+// a `$` member:
 // https://extendscript.docsforadobe.dev/extendscript-tools-features/localizing-extendscript-strings/
 pub(crate) const LOCALIZE: &str = "localize";
 
@@ -30,11 +32,18 @@ pub(crate) const FOLDER: &str = "Folder";
 pub(crate) const FILE_READS: &[&str] = &["read", "readch", "readln"];
 pub(crate) const FOLDER_READS: &[&str] = &["getFiles"];
 pub(crate) const FILE_WRITES: &[&str] = &["write", "writeln", "remove", "rename", "copy", "createAlias", "create"];
+/// The properties of a File object whose setting changes the file: its length, and its hidden and
+/// read-only flags.
+pub(crate) const FILE_SETTERS: &[&str] = &["length", "hidden", "readonly"];
 pub(crate) const FILE_DIALOGS: &[&str] = &["openDialog", "saveDialog"];
 pub(crate) const FOLDER_DIALOGS: &[&str] = &["selectDialog"];
 pub(crate) const INSTANCE_DIALOGS: &[&str] = &["openDlg", "saveDlg", "selectDlg"];
+/// The functions of a File object that a Folder object does not have.
+pub(crate) const FILE_ONLY: &[&str] = &["open", "read", "readch", "readln", "write", "writeln", "copy", "createAlias", "openDlg", "saveDlg"];
 pub(crate) const FOLDER_PLACES: &[&str] =
     &["appData", "appPackage", "commonFiles", "current", "desktop", "myDocuments", "startup", "system", "temp", "trash", "userData"];
+/// The `Folder` place a script can assign.
+pub(crate) const FOLDER_CURRENT: &str = "current";
 pub(crate) const EXECUTE: &str = "execute";
 pub(crate) const OPEN: &str = "open";
 /// The open modes that write: write, append and edit.
@@ -67,6 +76,9 @@ pub(crate) const REFLECT: &str = "reflect";
 // The roots of the document model: https://ai-scripting.docsforadobe.dev/jsobjref/Application/
 pub(crate) const DOM_ROOTS: [&str; 4] = ["app", "activeDocument", "documents", "selection"];
 
+// Document methods that write the file they are given: https://ai-scripting.docsforadobe.dev/jsobjref/Document/
+pub(crate) const DOM_FILE_WRITES: &[&str] = &["exportVariables"];
+
 // Application methods that page doesn't list, named in public forum posts:
 // https://community.adobe.com/t5/illustrator-discussions/changes-in-cs6/td-p/4173362 (executeMenuCommand,
 // doScript, loadAction, unloadAction) and
@@ -80,8 +92,9 @@ pub(crate) const APP_METHODS: &[&str] = &["executeMenuCommand", "doScript", "loa
 /// Text an action set written out at run time holds.
 pub(crate) const ACTION_TEXT: &str = "/actionCount";
 
-/// Constructors of the language (ECMA-262 3rd edition, section 15) and of E4X (ECMA-357 2nd edition,
-/// section 13), and the platform's own: `new` of these is no document-model type.
+/// Constructors of the language (ECMA-262 3rd edition, section 15, and the collections and binary
+/// data of the 6th edition, sections 22.2 to 24.2) and of E4X (ECMA-357 2nd edition, section 13), and
+/// the platform's own: `new` of these is no document-model type.
 pub(crate) const CONSTRUCTORS: &[&str] = &[
     "Object",
     "Function",
@@ -98,6 +111,21 @@ pub(crate) const CONSTRUCTORS: &[&str] = &[
     "SyntaxError",
     "TypeError",
     "URIError",
+    "Map",
+    "Set",
+    "WeakMap",
+    "WeakSet",
+    "ArrayBuffer",
+    "DataView",
+    "Int8Array",
+    "Uint8Array",
+    "Uint8ClampedArray",
+    "Int16Array",
+    "Uint16Array",
+    "Int32Array",
+    "Uint32Array",
+    "Float32Array",
+    "Float64Array",
     "Namespace",
     "QName",
     "XML",
@@ -114,66 +142,69 @@ pub(crate) const CONSTRUCTORS: &[&str] = &[
     "XMPDateTime",
 ];
 
-/// Every feature id a report can list, in the order the report lists them.
-pub const FEATURES: &[&str] = &[
-    "actions",
-    "bridgeTalk",
-    "directive.include",
-    "directive.other",
-    "directive.target",
-    "directive.targetengine",
-    "dollar",
-    "dollar.env",
-    "dollar.evalFile",
-    "dynamicCode",
-    "e4x",
-    "externalObject",
-    "file.dialog",
-    "file.execute",
-    "file.objects",
-    "file.places",
-    "file.read",
-    "file.write",
-    "hostCheck",
-    "localize",
-    "menuCommand",
-    "notify",
-    "operatorOverloading",
-    "preferences",
-    "reflection",
-    "scriptui.dialog",
-    "scriptui.drawing",
-    "scriptui.palette",
-    "scriptui.window",
-    "selectTool",
-    "socket",
-    "unitValue",
-    "xml",
-    "xmp",
-];
-
-/// The need feature `id` sets.
-pub(crate) fn need(id: &str) -> Option<Need> {
-    Some(match id {
-        "directive.target" | "directive.include" | "directive.other" | "dollar" | "dynamicCode" | "notify" | "localize" | "unitValue"
-        | "preferences" | "hostCheck" => Need::Language,
-        "dollar.env" | "dollar.evalFile" | "file.objects" | "file.read" | "file.write" | "file.dialog" | "file.places" | "file.execute" => {
-            Need::Files
+/// Declares [`FeatureId`] from its table: each platform feature a report can list, with its id and
+/// the need it sets. The table is sorted by id, which is the order the report lists them in.
+macro_rules! features {
+    ($($variant:ident $id:literal $need:ident,)*) => {
+        /// A platform feature a report can list ([`crate::Feature::id`] is its [`FeatureId::id`]).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+        pub(crate) enum FeatureId {
+            $($variant),*
         }
-        "menuCommand" => Need::MenuCommands,
-        "scriptui.dialog" | "scriptui.window" | "scriptui.drawing" => Need::Dialogs,
-        "directive.targetengine"
-        | "scriptui.palette"
-        | "bridgeTalk"
-        | "socket"
-        | "externalObject"
-        | "xmp"
-        | "xml"
-        | "e4x"
-        | "operatorOverloading"
-        | "reflection"
-        | "actions"
-        | "selectTool" => Need::HostOnly,
-        _ => return None,
-    })
+
+        impl FeatureId {
+            #[cfg(test)]
+            pub(crate) const ALL: &[FeatureId] = &[$(FeatureId::$variant),*];
+
+            pub(crate) fn id(self) -> &'static str {
+                match self {
+                    $(FeatureId::$variant => $id),*
+                }
+            }
+
+            /// The need the feature sets.
+            pub(crate) fn need(self) -> Need {
+                match self {
+                    $(FeatureId::$variant => Need::$need),*
+                }
+            }
+        }
+    };
+}
+
+features! {
+    Actions "actions" HostOnly,
+    BridgeTalk "bridgeTalk" HostOnly,
+    DirectiveInclude "directive.include" Language,
+    DirectiveOther "directive.other" Language,
+    DirectiveTarget "directive.target" Language,
+    DirectiveTargetengine "directive.targetengine" Language,
+    Dollar "dollar" Language,
+    DollarEnv "dollar.env" Files,
+    DollarEvalFile "dollar.evalFile" Files,
+    DynamicCode "dynamicCode" Language,
+    E4x "e4x" Language,
+    ExternalObject "externalObject" HostOnly,
+    FileDialog "file.dialog" Files,
+    FileExecute "file.execute" Files,
+    FileObjects "file.objects" Files,
+    FilePlaces "file.places" Files,
+    FileRead "file.read" Files,
+    FileWrite "file.write" Files,
+    HostCheck "hostCheck" Language,
+    Localize "localize" Language,
+    MenuCommand "menuCommand" MenuCommands,
+    Notify "notify" Language,
+    OperatorOverloading "operatorOverloading" HostOnly,
+    Preferences "preferences" Language,
+    Reflection "reflection" Language,
+    ScriptuiDialog "scriptui.dialog" Dialogs,
+    ScriptuiDrawing "scriptui.drawing" Dialogs,
+    ScriptuiPalette "scriptui.palette" HostOnly,
+    ScriptuiWindow "scriptui.window" Dialogs,
+    SelectTool "selectTool" HostOnly,
+    Socket "socket" HostOnly,
+    UnitValue "unitValue" Language,
+    Xml "xml" Language,
+    Xmp "xmp" HostOnly,
 }

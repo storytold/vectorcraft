@@ -4,24 +4,35 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject,
+};
 use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
-use super::pathops::{len_param, num_param, shape_node};
-use super::*;
+use super::pathops::{length_given, number_given, shape_node};
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, index_opt, number_or,
+    object_param, ok, switch_or, targets, text_param,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("type.orientation.vertical", "Vertical", ["Type", "Orientation"], None, "{ids?|id?} set vertical writing", has_selection, |s, p| {
-            orientation(s, p, true)
-        }),
+        cmd!(
+            "type.orientation.vertical",
+            "Vertical",
+            ["Type", "Orientation"],
+            None,
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads; no undo step when every object is already vertical → {vertical, ids}",
+            has_selection,
+            |s, p| orientation(s, p, true)
+        ),
         cmd!(
             "type.orientation.horizontal",
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads; no undo step when every object is already horizontal → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -30,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph) → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); on type scaled unevenly, sheared or flattened, each glyph's stroke becomes a filled path over it, shaped as the canvas strokes it; the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; the group keeps the object's transparency, opacity mask and effects, once; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -48,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Optical Margin Alignment",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered → {on, ids}",
+            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered; no undo step when every object already has the setting → {on, ids}",
             has_selection,
             optical_margin_alignment
         ),
@@ -57,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "System Layout",
             [],
             None,
-            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting → {on}",
+            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting. No undo step when the document and every text object already have the setting → {on}",
             has_doc,
             system_layout
         ),
@@ -66,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fractional Widths",
             [],
             None,
-            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters → {on, ids}",
+            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters. No undo step when every object already has the setting → {on, ids}",
             has_selection,
             fractional_widths
         ),
@@ -75,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Text",
             [],
             None,
-            "{id?|ids?, text} replace the contents of text objects (keeps the first run's style) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
+            "{id?|ids?, text} replace the contents of text objects (keeps the first run's style); no undo step when no object changes (each already has the text in one style, every paragraph with the first one's attributes, and no ruby) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
             has_doc,
             set_text
         ),
@@ -84,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt, inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify, fit?: none|autoHeight|shrinkText, fitMinPercent?: 10..100, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options; width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit (none given: query) → the first object's options, plus overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
+            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|emBoxHeight|fixed (emBoxHeight: the top of the first line's ideographic em box, the largest on the line, touches the top of the type area inside the inset), firstBaselineMin?: pt (the least distance from that top to the first baseline; with fixed, the distance), verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error; a leading change on the text also sets lineGap, as type.dynamicText says) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
             has_selection,
             area_options
         ),
@@ -93,16 +104,34 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reshape Type Area",
             [],
             None,
-            "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of area type's frame (the type area) by dx, dy points, with their handles; the text reflows at its size, through its thread too (what Direct Selection does dragging a frame corner or edge)",
+            "{id, anchors: [[subpath, anchor]…], dx, dy} or {items: [{id, anchors}…], dx, dy} move anchors of area type's frame (the type area) by dx, dy points, with their handles; the text reflows at its size, through its thread too (what Direct Selection does dragging a frame corner or edge, or the frame anchors its marquee selected, and the arrow keys nudging those); with items, every listed frame moves in one step; no undo step when no frame changes (dx and dy both 0)",
             has_doc,
             reshape_area
+        ),
+        cmd!(
+            "text.reshapePath",
+            "Reshape Type Path",
+            [],
+            None,
+            "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of type on a path's path by dx, dy points, with their handles; the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging an anchor of the path); no undo step when the path does not change (dx and dy both 0)",
+            has_doc,
+            reshape_path
+        ),
+        cmd!(
+            "text.setPathHandle",
+            "Move Type Path Handle",
+            [],
+            None,
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner; symmetric: mirror the other handle about the anchor without changing its kind, except at an open end of the path; independent and symmetric cannot both be true; both default false); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path); no undo step when the handle is already there and the path does not change",
+            has_doc,
+            set_path_handle
         ),
         cmd!(
             "text.fitHeadline",
             "Fit Headline",
             ["Type"],
             None,
-            "{ids?|id?} track the first line of area type so it fills the frame width → {tracking}",
+            "{ids?|id?} track the first line of area type so it fills the frame width; no undo step when the first line already has that tracking → {tracking}",
             has_selection,
             fit_headline
         ),
@@ -111,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style?, size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, keepModel?: bool (as paint.setFill), features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", keepLineGap?: bool = false (true: Dynamic Text (Block) keeps the frame's line gap, as Reset Panel does), tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; \"hkna\" is H or V Style, kana in the font's forms for the writing direction, shaped as `vkna` in vertical type, and \"ital\" is Roman Italics, half-width alphanumerics in the font's italic forms, both on or off only), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; on area type with Dynamic Text (Block) on, a leading change sets the frame's line gap (text.areaOptions lineGap) to the new leading less the size of the first character changed, within -1296..1296 pt, so every line spreads or tightens by the change, unless keepLineGap is true; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text; no undo step when no character, paragraph or graph label style changes) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -120,60 +149,77 @@ pub fn specs() -> Vec<CommandSpec> {
             "Ruby…",
             [],
             None,
-            "{ids?|id?, start?: byte, end?: byte, text?: reading, position?: above|below (vertical type: right|left), align?: start|center|end, size?: 1–100 (percent of the base text's size, default 50), overhang?: bool (default true), remove?: bool} set the ruby (furigana) over the selected text's bytes in `start..end` (without them: all its text): the reading over the base characters, above them in horizontal type and right of them in vertical type; `remove` takes the ruby off the range instead → {ids, ruby: [{start, end, text, position, align, sizePercent, overhang}…] (the first object's ruby)}",
+            "{ids?|id?, start?: byte, end?: byte, text?: reading, position?: above|below (vertical type: right|left), align?: start|center|end, size?: 1–100 (percent of the base text's size, default 50), overhang?: bool (default true), remove?: bool} set the ruby (furigana) over the selected text's bytes in `start..end` (without them: all its text): the reading over the base characters, above them in horizontal type and right of them in vertical type; `remove` takes the ruby off the range instead; no undo step when the ruby does not change (the same reading and options again, or `remove` where there is none) → {ids, ruby: [{start, end, text, position, align, sizePercent, overhang}…] (the first object's ruby)}",
             has_selection,
             ruby
         ),
     ]
 }
 
+/// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
+/// every frame of their threads, in one undo step (none when nothing changes).
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
-    let ids = text_targets(s, p, "Text Orientation")?;
-    s.edit("Text Orientation", |d, _| {
+    let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
+    // When every object already has the orientation, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Text Orientation", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.vertical = vertical;
-            refresh_bounds(t);
+            if t.vertical != vertical {
+                t.vertical = vertical;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"vertical": vertical, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Type › Optical Margin Alignment: set `on` (without it, the opposite of the first object's
-/// setting) on every selected text object and every frame of their threads, in one undo step.
+/// setting) on every selected text object and every frame of their threads, in one undo step
+/// (none when nothing changes).
 fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Optical Margin Alignment")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => Some(t.optical_margin),
         _ => None,
     });
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!first.unwrap_or(false));
-    s.edit("Optical Margin Alignment", |d, _| {
+    let on = switch_or(p, "on", !first.unwrap_or(false), "type.opticalMarginAlignment")?;
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Optical Margin Alignment", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.optical_margin = on;
-            refresh_bounds(t);
+            if t.optical_margin != on {
+                t.optical_margin = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Character panel menu › System Layout: set `on` (without it, the opposite of the document's
-/// setting) on the document and every text object, in one undo step. Off is the default.
+/// setting) on the document and every text object, in one undo step (none when nothing changes).
+/// Off is the default.
 fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
     let current = s.doc()?.doc.setup.system_layout;
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!current);
-    s.edit("System Layout", |d, _| {
+    let on = switch_or(p, "on", !current, "type.systemLayout")?;
+    // When the document and every text object already have the setting, the document and its undo
+    // history stay as they are.
+    super::colorcmds::edit_if_changed(s, "System Layout", |_, d| {
+        let mut changed = d.setup.system_layout != on;
         d.setup.system_layout = on;
         let mut ids = vec![];
         d.walk(|n| {
-            if matches!(n.kind, NodeKind::Text(_)) {
+            if matches!(&n.kind, NodeKind::Text(t) if t.system_layout != on) {
                 ids.push(n.id);
             }
         });
@@ -183,65 +229,72 @@ fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
             };
             t.system_layout = on;
             refresh_bounds(t);
+            changed = true;
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({ "on": on }))
 }
 
 /// Character panel menu › Fractional Widths: set `on` (without it, the opposite of the first
 /// object's setting) on every selected text object and every frame of their threads, in one undo
-/// step. On is the default.
+/// step (none when nothing changes). On is the default.
 fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Fractional Widths")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => Some(t.fractional_widths),
         _ => None,
     });
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!first.unwrap_or(true));
-    s.edit("Fractional Widths", |d, _| {
+    let on = switch_or(p, "on", !first.unwrap_or(true), "type.fractionalWidths")?;
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Fractional Widths", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.fractional_widths = on;
-            refresh_bounds(t);
+            if t.fractional_widths != on {
+                t.fractional_widths = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Type › Ruby: set or remove the ruby (furigana) over a byte range of the selected type in one
-/// undo step. Without `start`/`end` the range is all the text; a new reading replaces the ruby
-/// over the range. The reply lists the first object's ruby (start/end in bytes of its plain text).
+/// undo step (none when nothing changes). Without `start`/`end` the range is all the text; a new
+/// reading replaces the ruby over the range. The reply lists the first object's ruby (start/end in bytes of its plain text).
 fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.ruby";
     let ids = text_targets(s, p, C)?;
     let range = TextRange::parse(p, C)?;
-    let remove = p.get("remove").and_then(Value::as_bool).unwrap_or(false);
-    let reading = str_param(p, "text").map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
+    let remove = switch_or(p, "remove", false, C)?;
+    let reading = text_param(p, "text", C)?.map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
     if !remove && reading.is_none() {
         return Err(bad(C, "give `text` (the reading) or `remove`"));
     }
-    let position = match str_param(p, "position").map(str::to_ascii_lowercase).as_deref() {
+    let position = match text_param(p, "position", C)?.map(str::to_ascii_lowercase).as_deref() {
         None | Some("above") | Some("right") => RubyPosition::Above,
         Some("below") | Some("left") => RubyPosition::Below,
         Some(_) => return Err(bad(C, "`position` is above or below")),
     };
-    let align = match str_param(p, "align").map(str::to_ascii_lowercase).as_deref() {
+    let align = match text_param(p, "align", C)?.map(str::to_ascii_lowercase).as_deref() {
         None | Some("center") | Some("centre") => RubyAlign::Center,
         Some("start") | Some("left") | Some("top") => RubyAlign::Start,
         Some("end") | Some("right") | Some("bottom") => RubyAlign::End,
         Some(_) => return Err(bad(C, "`align` is start, center or end")),
     };
-    let size = p.get("size").and_then(Value::as_f64).unwrap_or(50.0);
+    let size = number_or(p, "size", 50.0, C)?;
     if !size.is_finite() || !(1.0..=100.0).contains(&size) {
         return Err(bad(C, "`size` is a percentage of the base text's size, 1 to 100"));
     }
-    let overhang = p.get("overhang").and_then(Value::as_bool).unwrap_or(true);
+    let overhang = switch_or(p, "overhang", true, C)?;
     let mut first: Option<Value> = None;
-    s.edit("Ruby", |d, _| {
+    // The same reading again, or a removal where there is no ruby, is no undo step.
+    edit_if_nodes_changed(s, "Ruby", &ids, |d| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
@@ -268,22 +321,74 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
                 first = Some(serde_json::to_value(&t.ruby).unwrap_or(Value::Null));
             }
         }
-        Ok(())
+        Ok(((), false))
     })?;
     Ok(json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>(), "ruby": first.unwrap_or(Value::Null)}))
 }
 
 /// Recompute the layout caches (bounds and baselines) after a text edit. Every engine text edit ends here (typing
 /// through `text.editRange` too), inside its `Session::edit`, so this is where Auto Size area type
-/// ([`vectorcraft_doc::AreaFit::AutoHeight`]) fits its frame to the text: part of the same undo
-/// step as the edit.
+/// ([`vectorcraft_doc::AreaFit::AutoHeight`]) fits its frame to the text, and Dynamic Text's Block
+/// (`dynamic_text` on area type, [`block::block_fit`]) sizes each line to the frame: part of the
+/// same undo step as the edit.
 pub(crate) fn refresh_bounds(t: &mut TextObject) {
     // Edits that changed the paragraph count keep one paragraph style per paragraph.
     t.normalize_paras();
+    block::block_fit(t);
+    refresh_fitted(t);
+}
+
+/// The part of [`refresh_bounds`] after Block has fitted the lines.
+fn refresh_fitted(t: &mut TextObject) {
     auto_height(t);
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
     t.cached_baselines = lay.baselines();
+    t.cached_ink = Some((lay.bounds, vectorcraft_render::effects::preview::laid_out_ink(&lay, t)));
+}
+
+/// [`refresh_bounds`] after a change that set the leading of the character at `at` to `leading`
+/// (in text space; None: Auto): on area type with Block on the change goes to the frame's line gap
+/// ([`block::leading_to_line_gap`]), and the lines are fitted again only when the gap changed.
+pub(crate) fn refresh_with_leading(t: &mut TextObject, at: usize, leading: Option<f64>) {
+    if block::leading_to_line_gap(t, at, leading) {
+        refresh_fitted(t);
+    } else {
+        refresh_bounds(t);
+    }
+}
+
+/// The first character a style change over `a..b` of `t` reaches, with both ends on character
+/// boundaries as [`vectorcraft_text::edit::style_range`] sets them; None when the range styles no
+/// character (empty, or inside one character, in text that is not empty).
+pub(crate) fn styled_start(t: &TextObject, a: usize, b: usize) -> Option<usize> {
+    let plain = t.plain_text();
+    let (a, b) = (vectorcraft_text::edit::floor_char(&plain, a), vectorcraft_text::edit::floor_char(&plain, b));
+    (a != b || plain.is_empty()).then_some(a.min(b))
+}
+
+/// [`refresh_with_leading`] with the leading the character at `at` was just given (a character
+/// style, Text Tweaker).
+pub(crate) fn refresh_with_given_leading(t: &mut TextObject, at: usize) {
+    if block::given_leading_to_line_gap(t, at) {
+        refresh_fitted(t);
+    } else {
+        refresh_bounds(t);
+    }
+}
+
+/// [`refresh_bounds`] for a document that is opening: the first frame takes the layout
+/// ([`vectorcraft_text::take_kept_layout`]) instead of laying the object out again.
+pub(crate) fn refresh_bounds_for_first_frame(t: &mut TextObject) {
+    t.normalize_paras();
+    block::block_fit(t);
+    auto_height(t);
+    let stamp = vectorcraft_text::LayoutStamp::now();
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    t.cached_bounds = Some(lay.bounds);
+    t.cached_baselines = lay.baselines();
+    t.cached_ink = Some((lay.bounds, vectorcraft_render::effects::preview::laid_out_ink(&lay, t)));
+    vectorcraft_text::keep_layout(t, stamp, lay);
 }
 
 /// The text-space bounds of area type's frame, when Auto Size can fit it: a rectangle (one
@@ -420,7 +525,7 @@ fn columns_hold(lines: &[vectorcraft_text::LineInfo], cols: usize, y0: f64, inse
 /// Transform panel and hit testing would fall back to [`TextObject::estimate_bounds`] (a rough
 /// 0.55 em per character) until the text is edited — the box comes up short and alignment looks off.
 pub(crate) fn refresh_bounds_of(d: &mut Document, ids: &[NodeId]) {
-    for id in text_ids(d, ids) {
+    for id in text_ids_where(d, ids, |t| t.cached_bounds.is_none()) {
         if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind)
             && t.cached_bounds.is_none()
         {
@@ -486,11 +591,22 @@ fn overflow_note(ids: &[NodeId], left_out: &str) -> Option<String> {
 
 /// Text objects among `ids` and their descendants.
 fn text_ids(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    text_ids_where(d, ids, |_| true)
+}
+
+/// The text objects among `ids` and their descendants that `keep` accepts, each once, in the order
+/// they are found. All of `ids` are looked up in one walk of the tree.
+fn text_ids_where(d: &Document, ids: &[NodeId], keep: impl Fn(&TextObject) -> bool) -> Vec<NodeId> {
+    let paths = d.index_paths(ids.iter().copied());
+    let mut seen = std::collections::HashSet::new();
     let mut out = vec![];
     for id in ids {
-        if let Some(n) = d.node(*id) {
+        if let Some(n) = paths.get(id).and_then(|p| d.node_at(p)) {
             n.walk(&mut |c| {
-                if matches!(c.kind, NodeKind::Text(_)) && !out.contains(&c.id) {
+                if let NodeKind::Text(t) = &c.kind
+                    && keep(t)
+                    && seen.insert(c.id)
+                {
                     out.push(c.id);
                 }
             });
@@ -535,6 +651,30 @@ fn scale_text_attributes(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "changed": changed }))
 }
 
+/// A path (or compound path) of `outline`, a piece of type `t`'s outline in text space, painted as
+/// run `run` and placed in the document as the canvas paints it ([`paint_type_piece`]: unplaced
+/// gradients fitted to `bounds`, the layout's bounds, stroke weights scaled by the type's
+/// transform), followed by a path (or compound path) filled with the run's stroke when the type's
+/// transform is not a similarity; empty when the piece has no path.
+fn type_piece(d: &mut Document, t: &TextObject, bounds: kurbo::Rect, run: usize, outline: &kurbo::BezPath) -> Vec<Node> {
+    let path = PathData::from_bezpath(outline);
+    if path.is_empty() {
+        return vec![];
+    }
+    let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
+    let mut node = shape_node(d, path, None);
+    let stroke = vectorcraft_render::effects::paint_type_piece(&mut node, &st, bounds, t.xf);
+    let mut out = vec![node];
+    if let Some(s) = stroke
+        && let Some(path) = s.path_data()
+    {
+        let mut filled = shape_node(d, path.clone(), None);
+        filled.appearance = s.appearance.clone();
+        out.push(filled);
+    }
+    out
+}
+
 fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Create Outlines", |d, sel| {
@@ -542,59 +682,138 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         if texts.is_empty() {
             return Err(EngineError::Other("Create Outlines: select text objects".into()));
         }
+        // Outlining a graph's labels does not move or scale its plot at the next redraw.
+        let graphs = super::graph::graphs_holding(d, &texts);
+        let before = (!super::dimension::reached(d, &roots).is_empty()).then(|| d.clone());
+        let ended = super::dimension::end_links(d, &roots);
         let mut new_sel: Vec<NodeId> = roots.iter().copied().filter(|r| !texts.contains(r)).collect();
         let mut out = vec![];
+        let threaded = super::threads::frames(d);
         for tid in texts {
             let Some(n) = d.node(tid).cloned() else { continue };
             let NodeKind::Text(t) = &n.kind else { continue };
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
             let mut children = vec![];
+            // Where each run's glyphs end among `children`: the canvas paints a run's ruby with the
+            // run, before the runs after it, so its outlines go there too.
+            let mut run_end: std::collections::BTreeMap<usize, usize> = Default::default();
             for (gi, g) in lay.glyphs.iter().enumerate() {
-                // Inline graphics become instances of their symbols, in place.
-                if let Some(ig) = lay.inlines.iter().find(|i| i.glyph == gi)
-                    && let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref())
-                {
-                    let id = d.alloc_id();
-                    let xf = t.xf * ig.xf * d.symbol_natural_xf(&art.symbol);
-                    children.push(Arc::new(Node::new(id, NodeKind::SymbolInstance { symbol: art.symbol.clone(), xf })));
-                    continue;
+                'glyph: {
+                    // Inline graphics become instances of their symbols, in place.
+                    if let Some(ig) = lay.inlines.iter().find(|i| i.glyph == gi)
+                        && let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref())
+                    {
+                        let id = d.alloc_id();
+                        let xf = t.xf * ig.xf * d.symbol_natural_xf(&art.symbol);
+                        children.push(Arc::new(Node::new(id, NodeKind::SymbolInstance { symbol: art.symbol.clone(), xf })));
+                        break 'glyph;
+                    }
+                    // Colour bitmap glyphs (emoji) become embedded images, in place, their pixels
+                    // taken into the document: glyphs that show the same image share them.
+                    if let Some(image) = g.placed_image_node(t.xf) {
+                        children.push(Arc::new(d.reid(&image)));
+                        break 'glyph;
+                    }
+                    // COLR glyphs become groups of their layers, in place, with ids of the document's.
+                    if let Some(art) = g.placed_colour(t.xf) {
+                        children.push(Arc::new(d.reid(&art)));
+                        break 'glyph;
+                    }
+                    children.extend(type_piece(d, t, lay.bounds, g.run, &g.outline).into_iter().map(Arc::new));
                 }
-                let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
-                if path.is_empty() {
-                    continue;
+                run_end.insert(g.run, children.len());
+            }
+            // Ruby (furigana) glyphs, where the layout put them, in their base text's run's paint,
+            // right after that run's glyphs, as the canvas draws them (colour glyphs in ruby draw
+            // nothing there either).
+            let mut ruby: Vec<(usize, Arc<Node>)> = vec![];
+            for g in &lay.ruby {
+                // After the glyphs of its run and of the runs before it.
+                let at = run_end.range(..=g.run).map(|(_, end)| *end).max().unwrap_or(0);
+                ruby.extend(type_piece(d, t, lay.bounds, g.run, &g.outline).into_iter().map(|node| (at, Arc::new(node))));
+            }
+            ruby.sort_by_key(|(at, _)| *at);
+            let mut ruby = ruby.into_iter().peekable();
+            let mut placed = Vec::with_capacity(children.len() + ruby.len());
+            for (i, c) in children.into_iter().enumerate() {
+                while let Some((_, r)) = ruby.next_if(|(at, _)| *at == i) {
+                    placed.push(r);
                 }
-                let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                let mut node = shape_node(d, path, None);
-                node.appearance = st.appearance().into();
-                children.push(Arc::new(node));
+                placed.push(c);
+            }
+            placed.extend(ruby.map(|(_, r)| r));
+            let mut children = placed;
+            // The whole outline the object's own fills and strokes paint: every glyph, ruby glyph
+            // and bar, as the canvas paints them.
+            let mut all = kurbo::BezPath::new();
+            for g in lay.glyphs.iter().chain(&lay.ruby) {
+                all.extend(g.outline.iter());
             }
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
-                let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                let mut node = shape_node(d, PathData::from_bezpath(&bar).transformed(t.xf), None);
-                node.appearance = st.appearance().into();
-                children.push(Arc::new(node));
+                all.extend(bar.iter());
+                children.extend(type_piece(d, t, lay.bounds, run, &bar).into_iter().map(Arc::new));
+            }
+            // The object's own fills and strokes (not its characters') paint the whole outline:
+            // those below the Characters row under the characters, the others over them, with
+            // their unplaced gradients fixed to the layout's bounds in the document.
+            let all = PathData::from_bezpath(&all).transformed(t.xf);
+            if !n.appearance.items.is_empty() && !all.is_empty() {
+                let (below, above) = n.appearance.split_contents();
+                let tb = t.xf.transform_rect_bbox(lay.bounds);
+                let mut whole = |items: &[AppearanceItem]| {
+                    let mut ap = Appearance { items: items.to_vec(), ..Default::default() };
+                    ap.pin_gradients(tb);
+                    Arc::new(Node::path(d.alloc_id(), all.clone(), ap))
+                };
+                if !below.is_empty() {
+                    children.insert(0, whole(below));
+                }
+                if !above.is_empty() {
+                    children.push(whole(above));
+                }
             }
             let (par, idx, _) = d.position(tid).ok_or(EngineError::NoNode(tid))?;
             d.remove(tid)?;
             if children.is_empty() {
                 continue;
             }
+            // The group takes the object's name, transparency, opacity mask and effects, which
+            // apply to the type as a whole: once, not to each glyph. It is marked as type's
+            // outlines, so geometry effects move its placed gradients with the whole outline, as
+            // they do on the type.
             let gid = d.alloc_id();
-            let mut g = Node::group(gid, children);
-            g.opacity = n.opacity;
-            g.blend = n.blend;
-            g.name = n.name.clone();
+            let mut g = super::flatten::carry(&n, Node::group(gid, children));
+            g.extras_mut().type_outlines = true;
             d.insert(par, idx, g)?;
             out.push(gid);
             if roots.contains(&tid) {
                 new_sel.push(gid);
             }
         }
+        if let Some(before) = &before {
+            super::dimension::restore_unchanged(before, d, ended);
+        }
+        // Outlined frames of threaded text leave their threads with the text they show.
+        super::threads::leave_threads(d, &threaded);
+        super::graph::keep_placed(d, &graphs);
         sel.set(new_sel);
         Ok(out)
     })?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// [`Session::edit`] for a type command that may set what the type already has: `f` runs on a
+/// copy of the document, and it becomes an undo step only when one of the objects `ids` differs
+/// afterwards or `f` returns true for a change of its own elsewhere (a graph's kept label styles).
+/// When nothing changed, the document, its undo and redo steps and its saved state stay as they
+/// were. Only the objects are compared, not the whole document, whose embedded images can be large.
+fn edit_if_nodes_changed<T>(s: &mut Session, label: &str, ids: &[NodeId], f: impl FnOnce(&mut Document) -> Result<(T, bool)>) -> Result<T> {
+    super::colorcmds::edit_if_changed(s, label, |before, d| {
+        let (v, other) = f(d)?;
+        let changed = other || ids.iter().any(|id| before.node(*id) != d.node(*id));
+        Ok((v, changed))
+    })
 }
 
 pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
@@ -604,6 +823,20 @@ pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<Node
         return Err(bad(cmd, "no text objects selected"));
     }
     Ok(t)
+}
+
+/// The type sizes a command takes, in points.
+pub(crate) const TYPE_SIZES: (f64, f64) = (0.1, 1296.0);
+
+/// A type size `size` that a command was given: an error naming the range when it is outside
+/// [`TYPE_SIZES`].
+pub(crate) fn given_type_size(size: f64, cmd: &str) -> Result<f64> {
+    let (lo, hi) = TYPE_SIZES;
+    if !(lo..=hi).contains(&size) {
+        let key = "size";
+        return Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}")));
+    }
+    Ok(size)
 }
 
 /// Clamp in the units shown to the user, then compensate the text's affine. Clamping
@@ -675,9 +908,10 @@ pub(crate) fn style_chars(t: &mut TextObject, range: Option<TextRange>, mut f: i
 }
 
 fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
-    let text = str_param(p, "text").ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
+    let text = text_param(p, "text", "text.setText")?.ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
     let ids = text_targets(s, p, "text.setText")?;
-    s.edit("Typing", |d, _| {
+    // The text the type already has is no undo step.
+    edit_if_nodes_changed(s, "Typing", &ids, |d| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let style = t.first_style();
@@ -688,7 +922,7 @@ fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
             t.ruby.clear();
             refresh_bounds(t);
         }
-        Ok(())
+        Ok(((), false))
     })?;
     Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
 }
@@ -709,29 +943,39 @@ pub(crate) fn justify_param(v: &str) -> Option<Justify> {
 
 fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setStyle";
-    let font = str_param(p, "font").map(str::to_string);
-    let style = str_param(p, "style").map(str::to_string);
-    let size = len_param(p, "size");
-    if size.is_some_and(|v| v <= 0.0) {
-        return Err(bad(C, "size must be positive"));
-    }
+    let font = text_param(p, "font", C)?.map(str::to_string);
+    let style = text_param(p, "style", C)?.map(str::to_string);
+    let size = length_given(p, "size", C)?.map(|v| given_type_size(v, C)).transpose()?;
     let leading = match p.get("leading") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
-        Some(_) => Some(Some(len_param(p, "leading").ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0))),
+        Some(_) => {
+            Some(Some(length_given(p, "leading", C).ok().flatten().ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0)))
+        }
     };
-    let tracking = num_param(p, "tracking");
-    let justify = match str_param(p, "justify") {
+    let tracking = number_given(p, "tracking", C)?;
+    let justify = match text_param(p, "justify", C)? {
         Some(j) => Some(justify_param(j).ok_or_else(|| bad(C, "justify must be auto|left|center|right|justifyAll"))?),
         None => None,
     };
     super::paint::check_keep_model(p, C)?;
-    let fill = match p.get("fill") {
-        None | Some(Value::Null) => None,
-        Some(Value::String(n)) if n.eq_ignore_ascii_case("none") => Some(vectorcraft_color::Paint::None),
-        Some(v) => Some(vectorcraft_color::Paint::solid(super::paint::new_color(s, p, color_value(v).ok_or_else(|| bad(C, "bad fill colour"))?))),
+    let paint = |k: &str| -> Result<Option<vectorcraft_color::Paint>> {
+        Ok(match p.get(k) {
+            None | Some(Value::Null) => None,
+            Some(Value::String(n)) if n.eq_ignore_ascii_case("none") => Some(vectorcraft_color::Paint::None),
+            Some(v) => {
+                Some(vectorcraft_color::Paint::solid(super::paint::new_color(s, p, color_value(v).ok_or_else(|| bad(C, format!("bad {k} colour")))?)))
+            }
+        })
     };
+    let fill = paint("fill")?;
+    let stroke = paint("stroke")?;
+    check_numbers(p, &["strokeWidth"], C)?;
+    // The weight of the character stroke.
+    let mut stroke_weight = super::stroke::StrokeChange::default();
+    stroke_weight.weight = p.get("strokeWidth").and_then(Value::as_f64).map(|w| w.clamp(0.0, 1000.0));
     let features = super::textedit::features_param(p, C)?;
+    let feature_changes = super::textedit::feature_changes_param(p, C)?;
     if font.is_none()
         && style.is_none()
         && size.is_none()
@@ -739,22 +983,35 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         && tracking.is_none()
         && justify.is_none()
         && fill.is_none()
+        && stroke.is_none()
+        && stroke_weight.is_empty()
         && features.is_none()
+        && feature_changes.is_none()
     {
         return Err(bad(C, "nothing to change"));
     }
+    let keep_line_gap = switch_or(p, "keepLineGap", false, C)?;
     let range = TextRange::parse(p, C)?;
     let ids = text_targets(s, p, C)?;
     let protect = s.prefs.missing_glyph_protection && (font.is_some() || style.is_some());
-    s.edit("Character", |d, _| {
+    // The fonts the styled characters are set in, for the warning.
+    let mut set = std::collections::BTreeSet::new();
+    // Attributes the characters already have are no undo step.
+    edit_if_nodes_changed(s, "Character", &ids, |d| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let size = size.map(|v| local_type_value(t, v, (0.1, 1296.0), false, C)).transpose()?;
             let leading = leading.map(|v| v.map(|v| local_type_value(t, v, (0.1, 5000.0), false, C)).transpose()).transpose()?;
+            // The stroke weight is in document points, as stroke.set gives it; the character stroke is drawn in text space.
+            let k = vectorcraft_doc::Scaling::factor(t.xf).filter(|k| k.is_finite() && *k > 1e-12).unwrap_or(1.0);
             let before = protect.then(|| t.runs.clone());
             style_chars(t, range, |st| {
                 if let Some(f) = &font {
                     st.font_family = f.clone();
+                    // Keep the style when the new family has it, else its closest match (#4128).
+                    if style.is_none() {
+                        super::textedit::fit_font_style(st);
+                    }
                 }
                 if let Some(f) = &style {
                     st.font_style = f.clone();
@@ -776,27 +1033,72 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(f) = &fill {
                     st.fill = f.clone();
                 }
+                if let Some(f) = &stroke {
+                    // A painted stroke on a run without a weight gets 1 pt, as with paint.setStroke.
+                    if !f.is_none() {
+                        super::gradient::run_stroke_weight(st);
+                    }
+                    st.stroke = f.clone();
+                }
+                if !stroke_weight.is_empty() {
+                    stroke_weight.apply_char_scaled(st, k);
+                }
                 if let Some(f) = &features {
                     st.features = f.clone();
                 }
+                if let Some(c) = &feature_changes {
+                    st.features = super::textedit::change_features(&st.features, c);
+                }
             });
-            if let Some(before) = before {
-                super::textedit::protect_missing_glyphs(&before, &mut t.runs);
+            let kept = before.map(|before| super::textedit::protect_missing_glyphs(&before, &mut t.runs)).unwrap_or_default();
+            if font.is_some() || style.is_some() {
+                // All the text: every run, the one run of empty text included. Characters that kept their font aren't the
+                // command's.
+                let styled = match range {
+                    None if kept.is_empty() => t.runs.clone(),
+                    None => super::textedit::unprotected_runs(&t.runs, 0, vectorcraft_text::edit::runs_len(&t.runs), &kept),
+                    Some(r) => {
+                        let (a, b) = r.bytes(t);
+                        super::textedit::unprotected_runs(&t.runs, a, b, &kept)
+                    }
+                };
+                set.extend(styled.iter().flat_map(super::fonts::run_fonts));
             }
             if let Some(j) = justify {
                 let span = para_span(range, t);
                 t.edit_paras(span, |pa| pa.justify = j);
             }
-            refresh_bounds(t);
+            // With Block on, the leading goes to the frame's line gap; an empty range styles nothing.
+            let changed = leading.filter(|_| !keep_line_gap).and_then(|l| {
+                range.map_or(Some(0), |r| Some(r.bytes(t)).filter(|(a, b)| a < b).and_then(|(a, b)| styled_start(t, a, b))).map(|at| (at, l))
+            });
+            match changed {
+                Some((at, l)) => refresh_with_leading(t, at, l),
+                None => refresh_bounds(t),
+            }
         }
         // Graph labels keep a change made to all of their text through the graph being drawn again (sizes as given,
         // not in a scaled label's own units).
+        let mut labels_changed = false;
         if range.is_none() {
-            super::graph::capture_label_styles(d, &ids, &|st| {
+            let gives_character = font.is_some()
+                || style.is_some()
+                || size.is_some()
+                || leading.is_some()
+                || tracking.is_some()
+                || fill.is_some()
+                || stroke.is_some()
+                || !stroke_weight.is_empty()
+                || features.is_some()
+                || feature_changes.as_ref().is_some_and(|c| !c.is_empty());
+            let change = |st: &mut vectorcraft_doc::CharStyle| {
                 if let Some(f) = &font {
                     st.font_family = f.clone();
                     st.font_version = None;
                     st.font_axes.clear();
+                    if style.is_none() {
+                        super::textedit::fit_font_style(st);
+                    }
                 }
                 if let Some(f) = &style {
                     st.font_style = f.clone();
@@ -815,14 +1117,36 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(f) = &fill {
                     st.fill = f.clone();
                 }
+                if let Some(f) = &stroke {
+                    if !f.is_none() {
+                        super::gradient::run_stroke_weight(st);
+                    }
+                    st.stroke = f.clone();
+                }
+                if !stroke_weight.is_empty() {
+                    stroke_weight.apply_char(st);
+                }
                 if let Some(f) = &features {
                     st.features = f.clone();
                 }
-            });
+                if let Some(c) = &feature_changes {
+                    st.features = super::textedit::change_features(&st.features, c);
+                }
+            };
+            // A command that gives character attributes keeps the style even when they equal the labels' own.
+            labels_changed = if gives_character {
+                super::graph::capture_label_styles_given(d, &ids, &change)
+            } else {
+                super::graph::capture_label_styles(d, &ids, &change)
+            };
         }
-        Ok(())
+        Ok(((), labels_changed))
     })?;
-    Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
+    let mut out = with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
+    if let Some(w) = super::fonts::set_font_warning(set) {
+        out["warning"] = json!(w);
+    }
+    Ok(out)
 }
 
 /// Reshape area type's frame with `f` ([`TextObject::transform_area`],
@@ -853,7 +1177,7 @@ pub(crate) fn reshape_area_with(t: &mut TextObject, f: impl FnOnce(&mut TextObje
 }
 
 /// Area type's text, if `n` is area type.
-fn area_text(n: Option<&Node>) -> Option<&TextObject> {
+pub(crate) fn area_text(n: Option<&Node>) -> Option<&TextObject> {
     match n.map(|n| &n.kind) {
         Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) => Some(t),
         _ => None,
@@ -886,10 +1210,16 @@ fn size_area(t: &mut TextObject, w: Option<f64>, h: Option<f64>) -> bool {
     reshape_area_with(t, |t| t.transform_area(a))
 }
 
-/// The fit `p` asks for (`fit`: none|autoHeight|shrinkText or `{"shrinkText": {"minPercent"}}`,
-/// `fitMinPercent`), starting from `cur`. None when `p` sets neither (or only `fitMinPercent`
-/// while the fit isn't Shrink Text).
-pub(crate) fn fit_param(p: &Value, cur: AreaFit, c: &str) -> Result<Option<AreaFit>> {
+/// A fit `p` asks for: the Area Type Options fit, and whether Dynamic Text's Block
+/// ([`TextObject::dynamic_text`]) is on. Block's fit is [`AreaFit::None`]: it replaces Auto Size
+/// and Shrink Text to Fit.
+pub(crate) type FitChoice = (AreaFit, bool);
+
+/// The fit `p` asks for (`fit`: none|autoHeight|shrinkText|block or `{"shrinkText": {"minPercent"}}`,
+/// `fitMinPercent`), starting from `cur` (`block`: Block is on). None when `p` sets neither (or only
+/// `fitMinPercent` while the fit isn't Shrink Text).
+pub(crate) fn fit_param(p: &Value, cur: AreaFit, block: bool, c: &str) -> Result<Option<FitChoice>> {
+    check_numbers(p, &["fitMinPercent"], c)?;
     let min = p.get("fitMinPercent").and_then(Value::as_f64);
     let cur_min = match cur {
         AreaFit::ShrinkText { min_percent } => Some(min_percent),
@@ -897,21 +1227,48 @@ pub(crate) fn fit_param(p: &Value, cur: AreaFit, c: &str) -> Result<Option<AreaF
     };
     let fit = match p.get("fit") {
         None | Some(Value::Null) => match (cur, min) {
-            (AreaFit::ShrinkText { .. }, Some(m)) => AreaFit::ShrinkText { min_percent: m },
+            (AreaFit::ShrinkText { .. }, Some(m)) if !block => AreaFit::ShrinkText { min_percent: m },
             _ => return Ok(None),
         },
+        Some(Value::String(id)) if is_block_id(id) => return Ok(Some((AreaFit::None, true))),
         Some(Value::String(id)) => {
-            AreaFit::parse(id, min.or(cur_min)).ok_or_else(|| bad(c, format!("fit must be none|autoHeight|shrinkText, got {id}")))?
+            AreaFit::parse(id, min.or(cur_min)).ok_or_else(|| bad(c, format!("fit must be none|autoHeight|shrinkText|block, got {id}")))?
         }
         Some(v) => match serde_json::from_value::<AreaFit>(v.clone()).map_err(|e| bad(c, format!("bad fit: {e}")))? {
             AreaFit::ShrinkText { min_percent } => AreaFit::ShrinkText { min_percent: min.unwrap_or(min_percent) },
             f => f,
         },
     };
-    Ok(Some(match fit {
-        AreaFit::ShrinkText { min_percent } => AreaFit::ShrinkText { min_percent: AreaFit::clamp_percent(min_percent) },
-        f => f,
-    }))
+    Ok(Some((
+        match fit {
+            AreaFit::ShrinkText { min_percent } => AreaFit::ShrinkText { min_percent: AreaFit::clamp_percent(min_percent) },
+            f => f,
+        },
+        false,
+    )))
+}
+
+/// Whether a `fit` id names Dynamic Text's Block (case, spaces, dashes and underscores ignored).
+fn is_block_id(id: &str) -> bool {
+    matches!(id.to_ascii_lowercase().replace([' ', '-', '_'], "").as_str(), "block" | "dynamictext")
+}
+
+/// The `fit` id area type reports: `block` while Dynamic Text's Block is on, else its fit's.
+pub(crate) fn fit_id(t: &TextObject) -> &'static str {
+    if t.dynamic_text { "block" } else { t.area.fit.id() }
+}
+
+/// Dynamic Text's Block gaps `p` gives: `wordGap` (% of a word space, 0..1000) and `lineGap` (pt,
+/// -1296..1296). A value that is not a number, or is outside its range, is an error.
+pub(crate) fn block_gaps(p: &Value, c: &str) -> Result<(Option<f64>, Option<f64>)> {
+    let gap = |key: &str, (lo, hi): (f64, f64)| -> Result<Option<f64>> {
+        match number_given(p, key, c)? {
+            Some(v) if !(v.is_finite() && (lo..=hi).contains(&v)) => Err(bad(c, format!("`{key}` must be from {lo} to {hi}, not {v}"))),
+            v => Ok(v),
+        }
+    };
+    use vectorcraft_doc::AreaOptions as O;
+    Ok((gap("wordGap", O::WORD_GAP)?, gap("lineGap", O::LINE_GAP)?))
 }
 
 /// Area type's options as `text.areaOptions` reports them: the Area Type Options with `fit` as
@@ -921,12 +1278,18 @@ pub(crate) fn area_options_json(t: &TextObject) -> Result<Value> {
     let mut v = serde_json::to_value(&t.area).map_err(|e| EngineError::Other(e.to_string()))?;
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     if let Some(o) = v.as_object_mut() {
-        o.insert("fit".into(), json!(t.area.fit.id()));
+        o.insert("fit".into(), json!(fit_id(t)));
+        o.insert("flow".into(), json!(t.area.flow));
+        // The gutter between rows, the gutter's when the rows have none of their own.
+        o.insert("rowGutter".into(), json!(t.area.row_gutter.unwrap_or(t.area.gutter)));
         let min = match t.area.fit {
             AreaFit::ShrinkText { min_percent } => min_percent,
             _ => AreaFit::DEFAULT_MIN_PERCENT,
         };
         o.insert("fitMinPercent".into(), json!(min));
+        let (word_gap, line_gap) = t.area.block_gaps();
+        o.insert("wordGap".into(), json!(word_gap));
+        o.insert("lineGap".into(), json!(line_gap));
         if let Some((w, h, _)) = area_size(t) {
             o.insert("width".into(), json!(w));
             o.insert("height".into(), json!(h));
@@ -938,10 +1301,11 @@ pub(crate) fn area_options_json(t: &TextObject) -> Result<Value> {
 }
 
 /// The [`vectorcraft_doc::AreaOptions`] keys `text.areaOptions` merges as they are.
-const AREA_KEYS: [&str; 7] = ["rows", "columns", "gutter", "inset", "firstBaseline", "firstBaselineMin", "verticalAlign"];
+const AREA_KEYS: [&str; 9] = ["rows", "columns", "gutter", "rowGutter", "inset", "firstBaseline", "firstBaselineMin", "verticalAlign", "flow"];
 
 fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.areaOptions";
+    check_numbers(p, &["width", "height"], C)?;
     let ids: Vec<NodeId> = {
         let d = &s.doc()?.doc;
         text_targets(s, p, C)?.into_iter().filter(|i| area_text(d.node(*i)).is_some()).collect()
@@ -951,41 +1315,87 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         let t = area_text(s.doc()?.doc.node(first)).ok_or_else(|| bad(C, "select area type (text in a frame)"))?;
         area_options_json(t)
     };
+    // Checked once up front (its errors don't depend on the frame); each frame resolves `fit`
+    // against its own setting below.
     let cur = area_text(s.doc()?.doc.node(first)).map(|t| t.area.clone()).unwrap_or_default();
-    let fit = fit_param(p, cur.fit, C)?;
-    let mut v = serde_json::to_value(&cur).map_err(|e| EngineError::Other(e.to_string()))?;
+    fit_param(p, cur.fit, false, C)?;
+    let (word_gap, line_gap) = block_gaps(p, C)?;
+    let fit_given = ["fit", "fitMinPercent", "wordGap", "lineGap"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
     let size = |k: &str| p.get(k).and_then(Value::as_f64).filter(|x| x.is_finite()).map(|x| x.clamp(1.0, 100_000.0));
-    let (w, mut h) = (size("width"), size("height"));
-    let mut changed = w.is_some() || h.is_some() || fit.is_some();
-    if let (Some(o), Some(src)) = (v.as_object_mut(), p.as_object()) {
-        for (k, val) in src.iter().filter(|(k, _)| AREA_KEYS.contains(&k.as_str())) {
-            o.insert(k.clone(), val.clone());
-            changed = true;
-        }
-    }
-    if !changed {
+    let (w, h) = (size("width"), size("height"));
+    let given: Vec<(&String, &Value)> = p.as_object().into_iter().flatten().filter(|(k, _)| AREA_KEYS.contains(&k.as_str())).collect();
+    if w.is_none() && h.is_none() && !fit_given && given.is_empty() {
         return options(s);
     }
-    let mut opts: vectorcraft_doc::AreaOptions = serde_json::from_value(v).map_err(|e| bad(C, e.to_string()))?;
-    opts.rows = opts.rows.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
-    opts.columns = opts.columns.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
-    let finite = |x: f64| if x.is_finite() { x } else { 0.0 };
-    opts.gutter = finite(opts.gutter).clamp(0.0, 10_000.0);
-    opts.inset = finite(opts.inset).clamp(0.0, 10_000.0);
-    opts.first_baseline_min = finite(opts.first_baseline_min).clamp(0.0, 10_000.0);
-    opts.fit = fit.unwrap_or(cur.fit);
-    if opts.fit == AreaFit::AutoHeight {
+    // Each area type takes the options given over its own (#3759): setting one option on several
+    // frames leaves their other options as they were.
+    let merged = |own: &vectorcraft_doc::AreaOptions, block: bool| -> Result<(vectorcraft_doc::AreaOptions, bool)> {
+        let mut v = serde_json::to_value(own).map_err(|e| EngineError::Other(e.to_string()))?;
+        if let Some(o) = v.as_object_mut() {
+            for (k, val) in &given {
+                o.insert((*k).clone(), (*val).clone());
+            }
+        }
+        let mut opts: vectorcraft_doc::AreaOptions = serde_json::from_value(v).map_err(|e| bad(C, e.to_string()))?;
+        opts.rows = opts.rows.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
+        opts.columns = opts.columns.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
+        let finite = |x: f64| if x.is_finite() { x } else { 0.0 };
+        opts.gutter = finite(opts.gutter).clamp(0.0, 10_000.0);
+        // A gutter given alone is the rows' and the columns'.
+        if p.get("gutter").is_some() && p.get("rowGutter").is_none() {
+            opts.row_gutter = None;
+        }
+        opts.row_gutter = opts.row_gutter.map(|g| finite(g).clamp(0.0, 10_000.0)).filter(|g| *g != opts.gutter);
+        opts.inset = finite(opts.inset).clamp(0.0, 10_000.0);
+        opts.first_baseline_min = finite(opts.first_baseline_min).clamp(0.0, 10_000.0);
+        // Each frame's fit from its own (`fitMinPercent` alone changes only Shrink Text frames).
+        let (fit, block) = fit_param(p, own.fit, block, C)?.unwrap_or((own.fit, block));
+        opts.fit = fit;
+        opts.word_gap = word_gap.unwrap_or(own.word_gap);
+        opts.line_gap = line_gap.unwrap_or(own.line_gap);
+        Ok((opts, block))
+    };
+    let d = &s.doc()?.doc;
+    let planned: Vec<(NodeId, (vectorcraft_doc::AreaOptions, bool))> = ids
+        .iter()
+        .filter_map(|id| area_text(d.node(*id)).map(|t| (*id, t)))
+        .map(|(id, t)| merged(&t.area, t.dynamic_text).map(|o| (id, o)))
+        .collect::<Result<_>>()?;
+    // Dynamic Text's Block is refused for threaded frames, as `type.dynamicText` refuses it.
+    let threads = super::threads::ThreadIndex::of(d);
+    let frames: Vec<String> = planned.iter().filter(|(id, (_, block))| *block && threads.threaded(*id)).map(|(id, _)| id.0.to_string()).collect();
+    if !frames.is_empty() {
+        let frames = frames.join(", ");
+        return Err(bad(C, format!("area type in a thread cannot use Dynamic Text: {frames}")));
+    }
+    let apply = |t: &mut TextObject, (opts, block): &(vectorcraft_doc::AreaOptions, bool)| {
+        t.area = opts.clone();
+        // Block off keeps the sizes it wrote into the characters.
+        t.dynamic_text = *block;
         // Auto Size sets the height (Illustrator's dialog turns the Height field off).
-        h = None;
+        let h = if opts.fit == AreaFit::AutoHeight { None } else { h };
+        // A resized frame has laid its text out again; otherwise the new options do here.
+        if !size_area(t, w, h) {
+            refresh_bounds(t);
+        }
+    };
+    // Options that change nothing (the vertical alignment already set, `fitMinPercent` on frames
+    // without Shrink Text) add no undo step and keep redo, frame sizes and Auto Size included.
+    let unchanged = planned.iter().all(|(id, opts)| match d.node(*id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => {
+            let mut after = t.clone();
+            apply(&mut after, opts);
+            after == *t
+        }
+        _ => true,
+    });
+    if unchanged {
+        return options(s);
     }
     s.edit("Area Type Options", |d, _| {
-        for id in &ids {
+        for (id, opts) in &planned {
             if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
-                t.area = opts.clone();
-                // A resized frame has laid its text out again; otherwise the new options do here.
-                if !size_area(t, w, h) {
-                    refresh_bounds(t);
-                }
+                apply(t, opts);
             }
         }
         Ok(())
@@ -995,7 +1405,56 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.reshapeArea";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    // One area type (`id`, `anchors`), or several (`items`: [{id, anchors}…]).
+    let raw: Vec<&Value> = match p.get("items") {
+        Some(items) => {
+            if p.get("id").is_some() || p.get("anchors").is_some() {
+                return Err(bad(C, "give `id` and `anchors`, or `items`, not both"));
+            }
+            let items = items.as_array().ok_or_else(|| bad(C, "`items` must be an array of {id, anchors}"))?;
+            if items.is_empty() {
+                return Err(bad(C, "`items` is empty"));
+            }
+            items.iter().collect()
+        }
+        None => vec![p],
+    };
+    let mut items = Vec::with_capacity(raw.len());
+    for it in raw {
+        let id = object_param(it, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+        let mut refs = super::select::checked_refs(it.get("anchors"), C)?;
+        refs.sort_unstable();
+        refs.dedup();
+        if refs.is_empty() {
+            return Err(bad(C, "missing anchors [[subpath, anchor]…]"));
+        }
+        if items.iter().any(|(other, _)| *other == id) {
+            return Err(bad(C, format!("area type {} is named twice", id.0)));
+        }
+        let node = s.doc()?.doc.node(id);
+        if area_text(node).is_none() || node.is_some_and(|n| n.extras().perspective.is_some()) {
+            return Err(bad(C, "not area type (text in a frame) outside perspective"));
+        }
+        items.push((id, refs));
+    }
+    let d = Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
+    // Anchors moved by no distance are no undo step.
+    let ids: Vec<NodeId> = items.iter().map(|(id, _)| *id).collect();
+    edit_if_nodes_changed(s, "Reshape Type Area", &ids, |doc| {
+        for (id, refs) in &items {
+            let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(*id)) };
+            if !reshape_area_with(t, |t| t.move_area_anchors(refs, d)) {
+                return Err(bad(C, "no such frame anchor, or the frame would reach past the canvas"));
+            }
+        }
+        Ok(((), false))
+    })?;
+    ok()
+}
+
+fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.reshapePath";
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let mut refs = super::select::checked_refs(p.get("anchors"), C)?;
     refs.sort_unstable();
     refs.dedup();
@@ -1004,865 +1463,71 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let d = Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
     let node = s.doc()?.doc.node(id);
-    if area_text(node).is_none() || node.is_some_and(|n| n.extras().perspective.is_some()) {
-        return Err(bad(C, "not area type (text in a frame) outside perspective"));
+    let on_path = matches!(node.map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }));
+    if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
+        return Err(bad(C, "not type on a path outside perspective"));
     }
-    s.edit("Reshape Type Area", |doc, _| {
+    // Anchors moved by no distance are no undo step.
+    edit_if_nodes_changed(s, "Reshape Type Path", &[id], |doc| {
         let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
-        if !reshape_area_with(t, |t| t.move_area_anchors(&refs, d)) {
-            return Err(bad(C, "no such frame anchor, or the frame would reach past the canvas"));
+        let before = t.kind.clone();
+        let within = |t: &TextObject| {
+            t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
+        };
+        if !(t.move_path_anchors(&refs, d) && within(t)) {
+            t.kind = before;
+            return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
         }
-        Ok(())
+        refresh_bounds(t);
+        Ok(((), false))
+    })?;
+    ok()
+}
+
+fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.setPathHandle";
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+    let si = super::draw2::usize_opt(p, "subpath", C)?.unwrap_or(0);
+    let ai = index_opt(p, "anchor", C)?.ok_or_else(|| bad(C, "missing anchor"))?;
+    let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
+    let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
+    let independent = switch_or(p, "independent", false, C)?;
+    let symmetric = switch_or(p, "symmetric", false, C)?;
+    if symmetric && independent {
+        return Err(bad(C, "`independent` and `symmetric` cannot both be true"));
+    }
+    let node = s.doc()?.doc.node(id);
+    let on_path = matches!(node.map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }));
+    if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
+        return Err(bad(C, "not type on a path outside perspective"));
+    }
+    // A handle moved to where it is is no undo step.
+    edit_if_nodes_changed(s, "Reshape Type Path", &[id], |doc| {
+        let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+        let before = t.kind.clone();
+        let within = |t: &TextObject| {
+            t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
+        };
+        if !(t.set_path_handle_with_symmetry((si, ai), out, pos, independent, symmetric) && within(t)) {
+            t.kind = before;
+            return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
+        }
+        refresh_bounds(t);
+        Ok(((), false))
     })?;
     ok()
 }
 
 #[cfg(test)]
-mod area_tests {
-    use super::*;
-
-    /// #2413: `text.create` and `text.createInPath` return the new type's `bounds`, the box
-    /// `document.inspect` reports for it, so a script can place it without a helper object.
-    #[test]
-    fn text_create_returns_the_inspect_bounds() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
-        let inspected = |s: &mut Session, id: &Value| {
-            let doc = s.execute("document.inspect", &json!({})).unwrap();
-            fn find(v: &Value, id: &Value) -> Option<Value> {
-                if &v["id"] == id {
-                    return Some(v["bounds"].clone());
-                }
-                v.get("children").or_else(|| v.get("layers"))?.as_array()?.iter().find_map(|c| find(c, id))
-            }
-            find(&doc, id).unwrap()
-        };
-        let made = s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Hello", "size": 24, "justify": "center"})).unwrap();
-        assert!(made["bounds"]["width"].as_f64().unwrap() > 10.0, "{made}");
-        assert_eq!(made["bounds"], inspected(&mut s, &made["id"]));
-        let rect = s.execute("shape.rectangle", &json!({"x": 10, "y": 200, "width": 100, "height": 50})).unwrap();
-        let area = s.execute("text.createInPath", &json!({"path": rect["id"], "mode": "area", "text": "Boxed"})).unwrap();
-        assert_eq!(area["bounds"], inspected(&mut s, &area["id"]));
-    }
-
-    /// #1748: `text.create` takes `justify`; point type then lines up on its point (centred on
-    /// it, or ending there), and `text.setStyle` moves it the same way afterwards.
-    #[test]
-    fn text_create_justify_anchors_point_type_on_its_point() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
-        let bounds = |s: &Session, id: &Value| {
-            let id = NodeId(id.as_u64().unwrap());
-            let st = s.doc().unwrap();
-            st.doc.bounds_of(&[id], false).unwrap()
-        };
-        let make = |s: &mut Session, extra: Value| {
-            let mut p = json!({"x": 300, "y": 100, "text": "Centred title", "size": 24});
-            for (k, v) in extra.as_object().unwrap() {
-                p[k] = v.clone();
-            }
-            s.execute("text.create", &p).unwrap()["id"].clone()
-        };
-        let id = make(&mut s, json!({}));
-        let left = bounds(&s, &id);
-        assert!(left.width() > 10.0, "{left:?}");
-        assert!((left.x0 - 300.0).abs() < 1.0, "left (the default) starts at x: {left:?}");
-        let id = make(&mut s, json!({"justify": "center"}));
-        let centre = bounds(&s, &id);
-        assert!((centre.center().x - 300.0).abs() < 0.5, "centred on x: {centre:?}");
-        assert!((centre.width() - left.width()).abs() < 0.5);
-        let right = make(&mut s, json!({"justify": "right"}));
-        let r = bounds(&s, &right);
-        assert!((r.x1 - 300.0).abs() < 1.0, "ends at x: {r:?}");
-        let got = |s: &Session, id: &Value| match &s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
-            NodeKind::Text(t) => t.para.justify,
-            _ => panic!("not text"),
-        };
-        assert_eq!(got(&s, &right), Justify::Right);
-        // Changed afterwards, it moves to the same place as made centred.
-        s.execute("text.setStyle", &json!({"id": right, "justify": "center"})).unwrap();
-        let moved = bounds(&s, &right);
-        assert!((moved.center().x - 300.0).abs() < 0.5, "{moved:?}");
-        assert!(s.execute("text.create", &json!({"x": 0, "y": 0, "text": "a", "justify": "middle"})).is_err());
-        // Type in or on a path takes it too.
-        let path = s.execute("path.create", &json!({"d": "M50 300 L550 300"})).unwrap()["id"].clone();
-        let on = s.execute("text.createInPath", &json!({"path": path, "mode": "onPath", "text": "On a path", "justify": "center"})).unwrap();
-        assert_eq!(got(&s, &on["id"]), Justify::Center);
-    }
-
-    #[test]
-    fn kinsoku_set_is_set_per_paragraph_and_saved_only_when_not_hard() {
-        use vectorcraft_doc::Kinsoku;
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "あカッ", "area": {"width": 40, "height": 100}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => t.para.clone(),
-            _ => panic!("text"),
-        };
-        // New type: Hard, today's set.
-        assert_eq!(para(&s).kinsoku, Kinsoku::Hard);
-        assert!(serde_json::to_value(para(&s)).unwrap().get("kinsoku").is_none());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        assert!(s.execute("text.setFormat", &json!({"kinsoku": "strict"})).is_err());
-        s.execute("text.setFormat", &json!({"kinsoku": "soft"})).unwrap();
-        assert_eq!(para(&s).kinsoku, Kinsoku::Soft);
-        assert_eq!(serde_json::to_value(para(&s)).unwrap()["kinsoku"], "soft");
-        s.execute("text.setFormat", &json!({"kinsoku": "none"})).unwrap();
-        assert_eq!(para(&s).kinsoku, Kinsoku::None);
-        s.execute("edit.undo", &json!({})).unwrap();
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(para(&s).kinsoku, Kinsoku::Hard);
-        // Documents from before it read as Hard.
-        let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
-        assert_eq!(old.kinsoku, Kinsoku::Hard);
-    }
-
-    #[test]
-    fn burasagari_is_set_per_paragraph_and_saved_only_when_on() {
-        use vectorcraft_doc::Burasagari;
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "雅楽、笙。", "area": {"width": 200, "height": 100}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => t.para.clone(),
-            _ => panic!("text"),
-        };
-        // New type: Standard.
-        assert_eq!(para(&s).burasagari, Burasagari::Standard);
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        assert!(s.execute("text.setFormat", &json!({"burasagari": "strong"})).is_err());
-        s.execute("text.setFormat", &json!({"burasagari": "forced"})).unwrap();
-        assert_eq!(para(&s).burasagari, Burasagari::Forced);
-        assert_eq!(serde_json::to_value(para(&s)).unwrap()["burasagari"], "forced");
-        s.execute("text.setFormat", &json!({"burasagari": "none"})).unwrap();
-        assert_eq!(para(&s).burasagari, Burasagari::None);
-        // Saved only when on; documents from before it read as None.
-        assert!(serde_json::to_value(para(&s)).unwrap().get("burasagari").is_none());
-        s.execute("edit.undo", &json!({})).unwrap();
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(para(&s).burasagari, Burasagari::Standard);
-        let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
-        assert_eq!(old.burasagari, Burasagari::None);
-    }
-
-    /// Type › Optical Margin Alignment: `type.opticalMarginAlignment` sets or toggles the flag on
-    /// the selected type in one undo step, the opening quotation mark then hangs left of the
-    /// frame, and the flag is saved only when on and survives a native save.
-    #[test]
-    fn optical_margin_alignment_is_set_per_object_and_saved_only_when_on() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s
-            .execute("text.create", &json!({"x": 10, "y": 10, "size": 40, "text": "“Quoted” words", "area": {"width": 300, "height": 100}}))
-            .unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => (**t).clone(),
-            _ => panic!("text"),
-        };
-        // The left edge of the glyphs in text space, where the frame's left edge is at 0.
-        let left = |s: &Session| text(s).cached_bounds.unwrap().x0;
-        // New type: off, and not saved.
-        assert!(!text(&s).optical_margin);
-        assert!(serde_json::to_value(text(&s)).unwrap().get("opticalMarginAlignment").is_none());
-        let inside = left(&s);
-        assert!(inside >= 0.0, "{inside}");
-        // Nothing but a rectangle selected: an error.
-        let rect = s.execute("shape.rectangle", &json!({"x": 0, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-        s.execute("select.set", &json!({"ids": [rect]})).unwrap();
-        assert!(s.execute("type.opticalMarginAlignment", &json!({})).is_err());
-        // Toggled on: the quotation mark hangs outside the frame.
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        assert_eq!(s.execute("type.opticalMarginAlignment", &json!({})).unwrap()["on"], true);
-        assert!(text(&s).optical_margin);
-        assert!(left(&s) < inside - 5.0, "{} {inside}", left(&s));
-        assert_eq!(serde_json::to_value(text(&s)).unwrap()["opticalMarginAlignment"], true);
-        // `on` sets it; without `on` it toggles.
-        assert_eq!(s.execute("type.opticalMarginAlignment", &json!({"on": true})).unwrap()["on"], true);
-        assert!(text(&s).optical_margin);
-        assert_eq!(s.execute("type.opticalMarginAlignment", &json!({})).unwrap()["on"], false);
-        assert!(!text(&s).optical_margin);
-        assert_eq!(left(&s), inside);
-        // One undo step each.
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert!(text(&s).optical_margin);
-        // Saved and reopened as it was; a document from before it reads as off.
-        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
-        let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
-        assert!(t.optical_margin);
-        let mut old = serde_json::to_value(text(&s)).unwrap();
-        old.as_object_mut().unwrap().remove("opticalMarginAlignment");
-        assert!(!serde_json::from_value::<TextObject>(old).unwrap().optical_margin);
-    }
-
-    /// Character panel menu › System Layout: `type.systemLayout` sets the document and every text
-    /// object in one undo step. New type inherits it. Off by default and in a document from before
-    /// the flag, and saved only when on. On, each positive advance is a whole number of points.
-    #[test]
-    fn system_layout_sets_the_document_and_every_text_object() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 40, "size": 13, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
-        s.execute("text.setStyle", &json!({"id": id, "tracking": 50})).unwrap();
-        let other = s.execute("text.create", &json!({"x": 10, "y": 80, "text": "Yo"})).unwrap()["id"].as_u64().unwrap();
-        let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => (**t).clone(),
-            _ => panic!("text"),
-        };
-        let setup = |s: &Session| s.doc().unwrap().doc.setup.clone();
-        let advances = |s: &Session| {
-            vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>()
-        };
-        assert!(!setup(&s).system_layout);
-        assert!(!text(&s, id).system_layout && !text(&s, other).system_layout);
-        assert!(serde_json::to_value(setup(&s)).unwrap().get("systemLayout").is_none());
-        assert!(serde_json::to_value(text(&s, id)).unwrap().get("systemLayout").is_none());
-        let fractional = advances(&s);
-        assert!(fractional.iter().any(|a| (a - a.round()).abs() > 1e-6), "{fractional:?}");
-        assert_eq!(s.execute("type.systemLayout", &json!({})).unwrap()["on"], true);
-        assert!(setup(&s).system_layout);
-        assert!(text(&s, id).system_layout && text(&s, other).system_layout);
-        let whole = advances(&s);
-        assert!(whole.iter().all(|a| *a >= 1.0 && (a - a.round()).abs() < 1e-9), "{whole:?}");
-        assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
-        assert_eq!(serde_json::to_value(setup(&s)).unwrap()["systemLayout"], true);
-        assert_eq!(serde_json::to_value(text(&s, id)).unwrap()["systemLayout"], true);
-        // New type inherits the document's setting.
-        let made = s.execute("text.create", &json!({"x": 10, "y": 120, "text": "Z"})).unwrap()["id"].as_u64().unwrap();
-        assert!(text(&s, made).system_layout);
-        // A boolean given as text is ignored, so the setting toggles off.
-        assert_eq!(s.execute("type.systemLayout", &json!({"on": "no"})).unwrap()["on"], false);
-        assert!(!setup(&s).system_layout && !text(&s, id).system_layout && !text(&s, made).system_layout);
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert!(setup(&s).system_layout && text(&s, id).system_layout);
-        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
-        assert!(back.setup.system_layout);
-        let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
-        assert!(t.system_layout);
-        let mut old = serde_json::to_value(setup(&s)).unwrap();
-        old.as_object_mut().unwrap().remove("systemLayout");
-        assert!(!serde_json::from_value::<vectorcraft_doc::DocSetup>(old).unwrap().system_layout);
-    }
-
-    /// Character panel menu › Fractional Widths: `type.fractionalWidths` sets or toggles the flag
-    /// on the selected type in one undo step. New type and a document from before the flag are on,
-    /// and the flag is saved only when off. Off, each positive advance is a whole number of points.
-    #[test]
-    fn fractional_widths_is_set_per_object_and_saved_only_when_off() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 40, "size": 13, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
-        s.execute("text.setStyle", &json!({"id": id, "tracking": 50})).unwrap();
-        let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => (**t).clone(),
-            _ => panic!("text"),
-        };
-        let advances =
-            |s: &Session| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
-        // New type: on, and not saved.
-        assert!(text(&s).fractional_widths);
-        assert!(serde_json::to_value(text(&s)).unwrap().get("fractionalWidths").is_none());
-        let fractional = advances(&s);
-        assert!(fractional.iter().any(|a| (a - a.round()).abs() > 1e-6), "{fractional:?}");
-        // Nothing but a rectangle selected: an error.
-        let rect = s.execute("shape.rectangle", &json!({"x": 0, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-        s.execute("select.set", &json!({"ids": [rect]})).unwrap();
-        assert!(s.execute("type.fractionalWidths", &json!({})).is_err());
-        // Toggled off: whole-point advances, and the key is written.
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        assert_eq!(s.execute("type.fractionalWidths", &json!({})).unwrap()["on"], false);
-        assert!(!text(&s).fractional_widths);
-        let whole = advances(&s);
-        assert!(whole.iter().all(|a| *a >= 1.0 && (a - a.round()).abs() < 1e-9), "{whole:?}");
-        assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
-        assert_eq!(serde_json::to_value(text(&s)).unwrap()["fractionalWidths"], false);
-        // A boolean given as text is ignored, so the flag toggles back on.
-        assert_eq!(s.execute("type.fractionalWidths", &json!({"on": "no"})).unwrap()["on"], true);
-        assert!(text(&s).fractional_widths);
-        assert_eq!(s.execute("type.fractionalWidths", &json!({"on": false})).unwrap()["on"], false);
-        assert!(!text(&s).fractional_widths);
-        // One undo step.
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert!(text(&s).fractional_widths);
-        // Saved and reopened as it was; a document from before it reads as on.
-        s.execute("type.fractionalWidths", &json!({"on": false})).unwrap();
-        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
-        let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
-        assert!(!t.fractional_widths);
-        let mut old = serde_json::to_value(text(&s)).unwrap();
-        old.as_object_mut().unwrap().remove("fractionalWidths");
-        assert!(serde_json::from_value::<TextObject>(old).unwrap().fractional_widths);
-    }
-
-    /// Paragraph panel menu › Hyphenation…: `text.setFormat` sets each paragraph's hyphenation
-    /// options, rounded and clamped, in one undo step; they are saved only when not the defaults,
-    /// and paragraph styles carry them.
-    #[test]
-    fn hyphenation_options_are_set_per_paragraph_and_saved_only_when_not_default() {
-        use vectorcraft_doc::HyphenationOptions;
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo", "area": {"width": 200, "height": 100}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        let paras = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => (t.para_at(0).clone(), t.para_at(1).clone()),
-            _ => panic!("text"),
-        };
-        assert_eq!(paras(&s).0.hyphenation, HyphenationOptions::default());
-        assert!(serde_json::to_value(paras(&s).0).unwrap().get("hyphenation").is_none());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        s.execute(
-            "text.setFormat",
-            &json!({"wordsLongerThan": 7.6, "afterFirst": 0, "beforeLast": 40, "hyphenLimit": 2, "hyphenationZone": 18, "hyphenateCapitalized": false, "start": 5, "end": 5}),
-        )
-        .unwrap();
-        let want = HyphenationOptions { words_longer_than: 8, after_first: 1, before_last: 15, hyphen_limit: 2, zone: 18.0, capitalized: false };
-        let (first, second) = paras(&s);
-        assert_eq!((first.hyphenation, &second.hyphenation), (HyphenationOptions::default(), &want), "only the paragraph the caret is in");
-        assert_eq!(serde_json::to_value(&second).unwrap()["hyphenation"]["hyphen_limit"], 2);
-        let back: vectorcraft_doc::ParaStyle = serde_json::from_value(serde_json::to_value(&second).unwrap()).unwrap();
-        assert_eq!(back.hyphenation, want);
-        s.execute("text.setFormat", &json!({"hyphenLimit": -3, "hyphenationZone": 5000})).unwrap();
-        assert_eq!((paras(&s).0.hyphenation.hyphen_limit, paras(&s).1.hyphenation.zone), (0, 1296.0));
-        s.execute("edit.undo", &json!({})).unwrap();
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(paras(&s).1.hyphenation, HyphenationOptions::default());
-        // A paragraph style carries them; an older file's paragraph reads the defaults.
-        s.execute("paraStyle.new", &json!({"name": "Loose", "attrs": {"hyphenation": {"words_longer_than": 9}}})).unwrap();
-        s.execute("paraStyle.apply", &json!({"name": "Loose", "id": id})).unwrap();
-        assert_eq!(paras(&s).0.hyphenation, HyphenationOptions { words_longer_than: 9, ..HyphenationOptions::default() });
-        let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left", "hyphenate": true})).unwrap();
-        assert_eq!(old.hyphenation, HyphenationOptions::default());
-    }
-
-    /// Paragraph panel menu › Roman Hanging Punctuation: `text.setFormat {romanHangingPunctuation}`
-    /// sets it per paragraph in one undo step, the opening quotation mark then hangs left of the
-    /// frame, it is saved only when on, and paragraph styles carry it.
-    #[test]
-    fn roman_hanging_punctuation_is_set_per_paragraph_and_saved_only_when_on() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s
-            .execute("text.create", &json!({"x": 10, "y": 10, "size": 40, "text": "“Quoted”\n“Two”", "area": {"width": 300, "height": 200}}))
-            .unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => (**t).clone(),
-            _ => panic!("text"),
-        };
-        let left = |s: &Session| text(s).cached_bounds.unwrap().x0;
-        assert!(!text(&s).para_at(0).roman_hanging);
-        assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("roman_hanging").is_none());
-        let inside = left(&s);
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        // Only the first paragraph (the caret's range).
-        s.execute("text.setFormat", &json!({"romanHangingPunctuation": true, "start": 0, "end": 0})).unwrap();
-        assert!(text(&s).para_at(0).roman_hanging && !text(&s).para_at(1).roman_hanging);
-        assert!(left(&s) < inside - 5.0, "{} {inside}", left(&s));
-        assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["roman_hanging"], true);
-        let back: vectorcraft_doc::ParaStyle = serde_json::from_value(serde_json::to_value(text(&s).para_at(0)).unwrap()).unwrap();
-        assert!(back.roman_hanging);
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert!(!text(&s).para_at(0).roman_hanging);
-        assert!((left(&s) - inside).abs() < 1e-9);
-        // A paragraph style carries it.
-        s.execute("paraStyle.new", &json!({"name": "Hung", "attrs": {"roman_hanging": true}})).unwrap();
-        s.execute("paraStyle.apply", &json!({"name": "Hung", "id": id})).unwrap();
-        assert!(text(&s).para_at(1).roman_hanging);
-    }
-
-    /// Paragraph panel › Insert Kashidas: `text.setFormat {kashida}` sets it per paragraph in one
-    /// undo step, the paragraph is saved with it only when it is not None and opens with it, an
-    /// unknown value changes nothing, and paragraph styles carry it.
-    #[test]
-    fn insert_kashidas_is_set_per_paragraph_and_saved_only_when_set() {
-        use vectorcraft_doc::text::Kashida;
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s
-            .execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "كتب محمد\nعلي", "area": {"width": 300, "height": 200}}))
-            .unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => (**t).clone(),
-            _ => panic!("text"),
-        };
-        assert_eq!(text(&s).para_at(0).kashida, Kashida::None);
-        assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("kashida").is_none());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        // Only the first paragraph (the caret's range).
-        s.execute("text.setFormat", &json!({"kashida": "medium", "start": 0, "end": 0})).unwrap();
-        assert_eq!((text(&s).para_at(0).kashida, text(&s).para_at(1).kashida), (Kashida::Medium, Kashida::None));
-        assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["kashida"], "medium");
-        let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
-        let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
-        assert_eq!((back.para_at(0).kashida, back.para_at(1).kashida), (Kashida::Medium, Kashida::None));
-        assert!(s.execute("text.setFormat", &json!({"kashida": "wide"})).is_err());
-        assert_eq!(text(&s).para_at(0).kashida, Kashida::Medium, "an unknown value changes nothing");
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(text(&s).para_at(0).kashida, Kashida::None);
-        // A paragraph style carries it.
-        s.execute("paraStyle.new", &json!({"name": "Stretched", "attrs": {"kashida": "stylistic"}})).unwrap();
-        s.execute("paraStyle.apply", &json!({"name": "Stretched", "id": id})).unwrap();
-        assert_eq!(text(&s).para_at(1).kashida, Kashida::Stylistic);
-    }
-
-    /// Paragraph panel menu › Justification…: `text.setFormat` sets each paragraph's word and
-    /// letter spacing, glyph scaling, Auto Leading and Single Word Justification, clamped to their
-    /// ranges, in one undo step; Minimum ≤ Desired ≤ Maximum must hold or nothing changes. They
-    /// are saved only when not the defaults, and paragraph styles carry them.
-    #[test]
-    fn justification_options_are_set_per_paragraph_and_saved_only_when_not_default() {
-        use vectorcraft_doc::{JustificationOptions, SingleWordJustify};
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo", "area": {"width": 200, "height": 100}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        let paras = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => (t.para_at(0).clone(), t.para_at(1).clone()),
-            _ => panic!("text"),
-        };
-        assert_eq!(paras(&s).0.justification, JustificationOptions::default());
-        assert!(serde_json::to_value(paras(&s).0).unwrap().get("justification").is_none());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        s.execute(
-            "text.setFormat",
-            &json!({
-                "wordSpacing": [60, 90, 2000], "letterSpacing": {"max": 10}, "glyphScaling": [95, 100, 105],
-                "autoLeading": 150, "singleWordJustification": "alignCenter", "start": 5, "end": 5
-            }),
-        )
-        .unwrap();
-        let want = JustificationOptions {
-            word_spacing: [60.0, 90.0, 1000.0],
-            letter_spacing: [0.0, 0.0, 10.0],
-            glyph_scaling: [95.0, 100.0, 105.0],
-            auto_leading: 150.0,
-            single_word: SingleWordJustify::AlignCenter,
-        };
-        let (first, second) = paras(&s);
-        assert_eq!((first.justification, &second.justification), (JustificationOptions::default(), &want), "only the paragraph the caret is in");
-        assert_eq!(serde_json::to_value(&second).unwrap()["justification"]["single_word"], "alignCenter");
-        let back: vectorcraft_doc::ParaStyle = serde_json::from_value(serde_json::to_value(&second).unwrap()).unwrap();
-        assert_eq!(back.justification, want);
-        // Out of order: nothing changes, and the error names the setting.
-        let e = s.execute("text.setFormat", &json!({"wordSpacing": {"desired": 85}, "letterSpacing": {"min": 5}})).unwrap_err().to_string();
-        assert!(e.contains("letterSpacing"), "{e}");
-        assert_eq!(paras(&s).1.justification, want);
-        assert!(s.execute("text.setFormat", &json!({"glyphScaling": [100, 100]})).is_err());
-        assert!(s.execute("text.setFormat", &json!({"singleWordJustification": "spread"})).is_err());
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(paras(&s).1.justification, JustificationOptions::default());
-        // A paragraph style carries them; an older file's paragraph reads the defaults.
-        s.execute("paraStyle.new", &json!({"name": "Airy", "attrs": {"justification": {"auto_leading": 200.0}}})).unwrap();
-        s.execute("paraStyle.apply", &json!({"name": "Airy", "id": id})).unwrap();
-        assert_eq!(paras(&s).0.justification, JustificationOptions { auto_leading: 200.0, ..JustificationOptions::default() });
-        let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left", "hyphenate": true})).unwrap();
-        assert_eq!(old.justification, JustificationOptions::default());
-    }
-
-    /// #432: while the interface is in Japanese, new type (text.create, text.createInPath) starts
-    /// with em box top-to-top leading and em box centre alignment, and new styles made from nothing
-    /// carry them; params override; the values are journaled; imported text keeps the Roman
-    /// baseline.
-    #[test]
-    fn new_type_takes_the_japanese_defaults_while_the_interface_is_japanese() {
-        use vectorcraft_doc::{CharAlign, LeadingModel};
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let made = |s: &mut Session, cmd: &str, p: Value| -> (LeadingModel, CharAlign) {
-            let id = s.execute(cmd, &p).unwrap()["id"].as_u64().unwrap();
-            match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-                NodeKind::Text(t) => (t.para.leading_model, t.runs[0].style.char_align),
-                _ => panic!("text"),
-            }
-        };
-        let roman = (LeadingModel::RomanBaseline, CharAlign::RomanBaseline);
-        let japanese = (LeadingModel::EmBoxTop, CharAlign::EmBoxCenter);
-        let point = json!({"x": 10, "y": 50, "text": "雅楽"});
-        assert!(!s.japanese_interface());
-        assert_eq!(made(&mut s, "text.create", point.clone()), roman, "headless, `auto`: the Roman defaults");
-        s.ui_language = Some("ja".into());
-        assert_eq!(made(&mut s, "text.create", point.clone()), japanese);
-        assert_eq!(made(&mut s, "text.create", json!({"x": 10, "y": 90, "text": "笙", "area": {"width": 100, "height": 50}})), japanese);
-        // Journaled: a replay in another language does the same.
-        let (_, logged) = s.journal.last().unwrap().clone();
-        assert_eq!((logged["leadingModel"].as_str(), logged["charAlign"].as_str()), (Some("emBoxTop"), Some("emBoxCenter")));
-        // Params override.
-        assert_eq!(
-            made(&mut s, "text.create", json!({"x": 10, "y": 120, "text": "a", "leadingModel": "romanBaseline", "charAlign": "romanBaseline"})),
-            roman
-        );
-        assert!(s.execute("text.create", &json!({"x": 0, "y": 0, "text": "a", "leadingModel": "middle"})).is_err());
-        // Area type in a path.
-        let path = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 100, "height": 80})).unwrap()["id"].clone();
-        assert_eq!(made(&mut s, "text.createInPath", json!({"path": path, "mode": "area", "text": "篳篥"})), japanese);
-        // A preference set to Japanese counts without a UI; another language doesn't.
-        s.ui_language = None;
-        s.prefs.interface_language = "ja".into();
-        assert_eq!(made(&mut s, "text.create", point.clone()), japanese);
-        s.ui_language = Some("en".into());
-        assert_eq!(made(&mut s, "text.create", point.clone()), roman);
-        // New styles made from nothing.
-        s.execute("select.set", &json!({"ids": []})).unwrap();
-        s.ui_language = Some("ja".into());
-        let style = |s: &mut Session, kind: &str| {
-            let name = s.execute(&format!("{kind}.new"), &json!({})).unwrap()["name"].as_str().unwrap().to_string();
-            let list = s.execute(&format!("{kind}.list"), &json!({})).unwrap();
-            list["styles"].as_array().unwrap().iter().find(|st| st["name"] == name.as_str()).unwrap()["attrs"].clone()
-        };
-        assert_eq!(style(&mut s, "paraStyle"), json!({"leading_model": "emBoxTop"}));
-        assert_eq!(style(&mut s, "charStyle"), json!({"charAlign": "emBoxCenter"}));
-        s.ui_language = Some("en".into());
-        assert_eq!(style(&mut s, "paraStyle"), json!({}));
-        // Imported text keeps the Roman baseline.
-        s.ui_language = Some("ja".into());
-        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><text x="10" y="50">雅楽</text></svg>"#;
-        s.execute("document.open", &json!({"name": "t.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
-        let mut found = vec![];
-        s.doc().unwrap().doc.walk(|n| {
-            if let NodeKind::Text(t) = &n.kind {
-                found.push((t.para.leading_model, t.runs[0].style.char_align));
-            }
-        });
-        assert_eq!(found, [roman]);
-    }
-
-    #[test]
-    fn leading_model_is_set_per_paragraph_and_saved_only_when_top_to_top() {
-        use vectorcraft_doc::LeadingModel;
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        // Exercise ink bounds with bundled glyphs; Japanese outlines require optional craft-fonts.
-        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "A\nB", "area": {"width": 200, "height": 100}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => (**t).clone(),
-            _ => panic!("text"),
-        };
-        assert_eq!(text(&s).para.leading_model, LeadingModel::RomanBaseline);
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        assert!(s.execute("text.setFormat", &json!({"leadingModel": "middle"})).is_err());
-        let before = text(&s).cached_bounds;
-        s.execute("text.setFormat", &json!({"leadingModel": "emBoxTop"})).unwrap();
-        let t = text(&s);
-        assert_eq!(t.para.leading_model, LeadingModel::EmBoxTop);
-        // The fallback used without craft-fonts has no glyph metrics to move the first line.
-        if !vectorcraft_text::CRAFT_FONTS.is_empty() {
-            assert_ne!(t.cached_bounds, before, "the first line moves up to the frame's top");
-        }
-        assert_eq!(serde_json::to_value(&t.para).unwrap()["leading_model"], "emBoxTop");
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert!(serde_json::to_value(&text(&s).para).unwrap().get("leading_model").is_none());
-    }
-
-    #[test]
-    fn character_alignment_is_a_character_attribute_saved_only_when_set() {
-        use vectorcraft_doc::CharAlign;
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "雅楽"})).unwrap()["id"].as_u64().unwrap();
-        let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => t.runs.clone(),
-            _ => panic!("text"),
-        };
-        assert_eq!(runs(&s)[0].style.char_align, CharAlign::RomanBaseline);
-        assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("charAlign").is_none());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        assert!(s.execute("text.setFormat", &json!({"charAlign": "middle"})).is_err());
-        s.execute("text.setFormat", &json!({"charAlign": "emBoxCenter"})).unwrap();
-        assert!(runs(&s).iter().all(|r| r.style.char_align == CharAlign::EmBoxCenter));
-        assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["charAlign"], "emBoxCenter");
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(runs(&s)[0].style.char_align, CharAlign::RomanBaseline);
-        // Characters selected with the Type tool: only the range takes it (雅 is 3 bytes).
-        assert!(s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "charAlign": "top"})).is_err());
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "charAlign": "emBoxTop"})).unwrap();
-        let aligns: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.char_align)).collect();
-        assert_eq!(aligns, [("雅".to_string(), CharAlign::RomanBaseline), ("楽".to_string(), CharAlign::EmBoxTop)]);
-        // The ideographic character face's top and bottom.
-        for (key, want) in [("icfTop", CharAlign::IcfTop), ("icfBottom", CharAlign::IcfBottom)] {
-            s.execute("text.setFormat", &json!({"charAlign": key})).unwrap();
-            assert!(runs(&s).iter().all(|r| r.style.char_align == want));
-            assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["charAlign"], key);
-        }
-    }
-
-    /// Proportional Metrics (#966): a character attribute, saved only when on.
-    #[test]
-    fn proportional_metrics_is_a_character_attribute_saved_only_when_on() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "雅楽"})).unwrap()["id"].as_u64().unwrap();
-        let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => t.runs.clone(),
-            _ => panic!("text"),
-        };
-        assert!(!runs(&s)[0].style.proportional_metrics);
-        assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("proportionalMetrics").is_none());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        s.execute("text.setFormat", &json!({"proportionalMetrics": true})).unwrap();
-        assert!(runs(&s).iter().all(|r| r.style.proportional_metrics));
-        assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["proportionalMetrics"], true);
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert!(!runs(&s)[0].style.proportional_metrics);
-        // Characters selected with the Type tool: only the range takes it (雅 is 3 bytes).
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "proportionalMetrics": true})).unwrap();
-        let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.proportional_metrics)).collect();
-        assert_eq!(on, [("雅".to_string(), false), ("楽".to_string(), true)]);
-        // Styles written without it (documents from before it) read as off.
-        let old = serde_json::to_value(&runs(&s)[0].style).unwrap();
-        assert!(old.get("proportionalMetrics").is_none());
-        assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().proportional_metrics);
-    }
-
-    /// Tate-chu-yoko (Character panel menu, East Asian options): a character attribute, saved only
-    /// when on. Documents written before it read as off.
-    #[test]
-    fn tate_chu_yoko_is_a_character_attribute_saved_only_when_on() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "2026年"})).unwrap()["id"].as_u64().unwrap();
-        let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => t.runs.clone(),
-            _ => panic!("text"),
-        };
-        assert!(!runs(&s)[0].style.tate_chu_yoko);
-        assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("tateChuYoko").is_none());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        s.execute("text.setFormat", &json!({"tateChuYoko": true})).unwrap();
-        assert!(runs(&s).iter().all(|r| r.style.tate_chu_yoko));
-        assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["tateChuYoko"], true);
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert!(!runs(&s)[0].style.tate_chu_yoko);
-        // The year only (2026 is 4 bytes); 年 stays unmarked.
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 4, "tateChuYoko": true})).unwrap();
-        let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.tate_chu_yoko)).collect();
-        assert_eq!(on, [("2026".to_string(), true), ("年".to_string(), false)]);
-        let old = serde_json::to_value(&runs(&s)[1].style).unwrap();
-        assert!(old.get("tateChuYoko").is_none());
-        assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().tate_chu_yoko);
-        s.execute("text.setFormat", &json!({"tateChuYoko": false})).unwrap();
-        assert!(runs(&s).iter().all(|r| !r.style.tate_chu_yoko));
-    }
-
-    /// No Break is a character attribute, saved only when on.
-    #[test]
-    fn no_break_is_a_character_attribute_saved_only_when_on() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab"})).unwrap()["id"].as_u64().unwrap();
-        let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => t.runs.clone(),
-            _ => panic!("text"),
-        };
-        assert!(!runs(&s)[0].style.no_break);
-        assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("noBreak").is_none());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        s.execute("text.setFormat", &json!({"noBreak": true})).unwrap();
-        assert!(runs(&s).iter().all(|r| r.style.no_break));
-        assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["noBreak"], true);
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert!(!runs(&s)[0].style.no_break);
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 1, "noBreak": true})).unwrap();
-        let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.no_break)).collect();
-        assert_eq!(on, [("A".to_string(), true), ("b".to_string(), false)]);
-        let old = serde_json::to_value(&runs(&s)[1].style).unwrap();
-        assert!(old.get("noBreak").is_none());
-        assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().no_break);
-        s.execute("text.setFormat", &json!({"noBreak": false})).unwrap();
-        assert!(runs(&s).iter().all(|r| !r.style.no_break));
-    }
-
-    /// Digits (Character panel menu, Middle Eastern options): a character attribute, saved only
-    /// when set; the text keeps the digits that were typed.
-    #[test]
-    fn digits_are_a_character_attribute_saved_only_when_set() {
-        use vectorcraft_doc::Digits;
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "صفحة 12"})).unwrap()["id"].as_u64().unwrap();
-        let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => t.runs.clone(),
-            _ => panic!("text"),
-        };
-        assert_eq!(runs(&s)[0].style.digits, Digits::Default);
-        assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("digits").is_none());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        for (key, want) in [("hindi", Digits::Hindi), ("farsi", Digits::Farsi), ("arabic", Digits::Arabic), ("default", Digits::Default)] {
-            s.execute("text.setFormat", &json!({"digits": key})).unwrap();
-            assert!(runs(&s).iter().all(|r| r.style.digits == want));
-            let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
-            assert_eq!(saved.get("digits").and_then(|v| v.as_str()), (want != Digits::Default).then_some(key));
-            // The text is as typed: only the glyphs change.
-            assert_eq!(runs(&s).iter().map(|r| r.text.as_str()).collect::<String>(), "صفحة 12");
-        }
-        s.execute("text.setFormat", &json!({"digits": "hindi"})).unwrap();
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(runs(&s)[0].style.digits, Digits::Default);
-        let err = s.execute("text.setFormat", &json!({"digits": "roman"})).unwrap_err().to_string();
-        assert!(err.contains("`digits` must be"), "{err}");
-        // Characters selected with the Type tool: only the range takes it (صفحة is 8 bytes).
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 9, "end": 11, "digits": "farsi"})).unwrap();
-        let set: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.digits)).collect();
-        assert_eq!(set, [("صفحة ".to_string(), Digits::Default), ("12".to_string(), Digits::Farsi)]);
-    }
-
-    /// Variable Font settings (Character panel › Variable Font): a character attribute, saved only
-    /// when set, each value clamped to its axis's range, and cleared by another font or style.
-    #[test]
-    fn variable_font_settings_are_a_character_attribute_saved_only_when_set() {
-        use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY as FAMILY, two_axis_font};
-        vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "lIn lIn", "font": FAMILY, "size": 40})).unwrap()["id"].as_u64().unwrap();
-        let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => t.runs.clone(),
-            _ => panic!("text"),
-        };
-        let saved = |s: &Session| serde_json::to_value(&runs(s)[0].style).unwrap().get("fontAxes").cloned();
-        let width = |s: &Session| s.doc().unwrap().doc.bounds_of(&[NodeId(id)], false).unwrap().width();
-        assert_eq!(saved(&s), None);
-        let regular = width(&s);
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        s.execute("text.setFormat", &json!({"fontAxes": {"wght": 650}})).unwrap();
-        assert_eq!(saved(&s), Some(json!({"wght": 650.0})));
-        assert!(width(&s) > regular * 1.1, "the type is set heavier and wider: {regular} -> {}", width(&s));
-        // Past the axis's range: its maximum; an axis the font hasn't: left out; others kept.
-        s.execute("text.setFormat", &json!({"fontAxes": {"wght": 2000, "opsz": 12, "wdth": 80}})).unwrap();
-        assert_eq!(saved(&s), Some(json!({"wdth": 80.0, "wght": 700.0})));
-        // Null goes back to the style's own setting, and so does a value equal to it.
-        s.execute("text.setFormat", &json!({"fontAxes": {"wght": null}})).unwrap();
-        assert_eq!(saved(&s), Some(json!({"wdth": 80.0})));
-        s.execute("text.setFormat", &json!({"fontAxes": {"wdth": 100}})).unwrap();
-        assert_eq!(saved(&s), None);
-        assert!((width(&s) - regular).abs() < 1e-6);
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(saved(&s), Some(json!({"wdth": 80.0})));
-        // Characters selected with the Type tool: only the range takes it.
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 7, "fontAxes": {"wght": 550}})).unwrap();
-        let set: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.font_axes.clone())).collect();
-        let axes = |v: &[(&str, f64)]| v.iter().map(|(t, v)| (t.to_string(), *v)).collect::<std::collections::BTreeMap<_, _>>();
-        assert_eq!(set, [("lIn ".to_string(), axes(&[("wdth", 80.0)])), ("lIn".to_string(), axes(&[("wdth", 80.0), ("wght", 550.0)]))]);
-        // A saved file keeps them.
-        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
-        let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
-        assert_eq!(t.runs, runs(&s));
-        // Another style or font clears them: their settings were the old face's.
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 7, "style": "Bold"})).unwrap();
-        assert_eq!(runs(&s).last().map(|r| (r.style.font_style.as_str(), r.style.font_axes.is_empty())), Some(("Bold", true)));
-        s.execute("text.setStyle", &json!({"style": "Bold"})).unwrap();
-        assert!(runs(&s).iter().all(|r| r.style.font_axes.is_empty()));
-        s.execute("text.setFormat", &json!({"fontAxes": {"wdth": 75}})).unwrap();
-        s.execute("text.replaceFont", &json!({"from": {"family": FAMILY}, "to": {"family": "Inter"}})).unwrap();
-        assert!(runs(&s).iter().all(|r| r.style.font_axes.is_empty()));
-        // A static font has no axes to set.
-        s.execute("text.setFormat", &json!({"fontAxes": {"wght": 650}})).unwrap();
-        assert_eq!(saved(&s), None);
-        // A missing font keeps them as given, for when it is installed.
-        s.execute("text.setStyle", &json!({"font": "No Such Variable Sans"})).unwrap();
-        s.execute("text.setFormat", &json!({"fontAxes": {"wght": 2000}})).unwrap();
-        assert_eq!(saved(&s), Some(json!({"wght": 2000.0})));
-        for (bad, says) in
-            [(json!({"weight": 650}), "not an axis tag"), (json!({"wght": "heavy"}), "must be a number"), (json!(650), "must be an object")]
-        {
-            let err = s.execute("text.setFormat", &json!({"fontAxes": bad})).unwrap_err().to_string();
-            assert!(err.contains(says), "{err}");
-        }
-        // The axes and the setting of a style, as the sliders show them.
-        let list = s.execute("text.fontList", &json!({"family": FAMILY, "style": "Bold"})).unwrap();
-        assert_eq!(
-            list["axes"],
-            json!([
-                {"tag": "wght", "name": "Weight", "min": 400.0, "default": 400.0, "max": 700.0, "value": 700.0, "hidden": false},
-                {"tag": "wdth", "name": "Width", "min": 75.0, "default": 100.0, "max": 100.0, "value": 100.0, "hidden": false},
-            ])
-        );
-        assert_eq!(s.execute("text.fontList", &json!({"family": "Inter"})).unwrap()["axes"], json!([]));
-    }
-
-    #[test]
-    fn new_type_is_composed_with_line_end_half_width_punctuation() {
-        use vectorcraft_doc::Mojikumi;
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "雅楽。"})).unwrap()["id"].as_u64().unwrap();
-        let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => t.para.clone(),
-            _ => panic!("text"),
-        };
-        assert_eq!(para(&s).mojikumi, Mojikumi::LineEndHalf);
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        assert!(s.execute("text.setFormat", &json!({"mojikumi": "everything"})).is_err());
-        s.execute("text.setFormat", &json!({"mojikumi": "none"})).unwrap();
-        assert_eq!(para(&s).mojikumi, Mojikumi::None);
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(para(&s).mojikumi, Mojikumi::LineEndHalf);
-        // Saved only when set; documents from before it read as None.
-        let json = serde_json::to_value(para(&s)).unwrap();
-        assert_eq!(json["mojikumi"], "lineEndHalf");
-        let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
-        assert_eq!(old.mojikumi, Mojikumi::None);
-        assert!(serde_json::to_value(&old).unwrap().get("mojikumi").is_none());
-    }
-
-    #[test]
-    fn vertical_point_type_keeps_its_anchor_on_the_column_centre_line() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 100, "y": 50, "text": "§§§§ abc"})).unwrap()["id"].as_u64().unwrap();
-        let bounds = |s: &Session| s.doc().unwrap().doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap();
-        let wide = bounds(&s);
-        assert!(wide.width() > wide.height());
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        s.execute("type.orientation.vertical", &json!({})).unwrap();
-        let tall = bounds(&s);
-        assert!(tall.height() > tall.width(), "{tall:?}");
-        assert!((tall.center().x - 100.0).abs() < 6.0, "the anchor stays on the column's centre line: {tall:?}");
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(bounds(&s), wide);
-    }
-
-    #[test]
-    fn area_options_columns_change_layout() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
-        let text = "word ".repeat(80);
-        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": text, "area": {"width": 300, "height": 120}})).unwrap()["id"]
-            .as_u64()
-            .unwrap();
-        s.execute("select.set", &json!({"ids": [id]})).unwrap();
-        let q = s.execute("text.areaOptions", &json!({})).unwrap();
-        assert_eq!((q["rows"].as_u64(), q["columns"].as_u64()), (Some(1), Some(1)));
-        let lay = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
-            NodeKind::Text(t) => vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t),
-            _ => panic!(),
-        };
-        assert_eq!(lay(&s).frames.len(), 1);
-        let r = s.execute("text.areaOptions", &json!({"columns": 3, "gutter": 12, "inset": 4, "firstBaseline": "capHeight"})).unwrap();
-        assert_eq!(r["firstBaseline"], "capHeight");
-        let l = lay(&s);
-        assert_eq!(l.frames.len(), 3, "three column cells");
-        // Glyphs land in more than one column.
-        let xs: Vec<f64> = l.glyphs.iter().map(|g| g.origin.x).collect();
-        assert!(xs.iter().any(|x| *x > 110.0 + 10.0) && xs.iter().any(|x| *x < 100.0));
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(lay(&s).frames.len(), 1);
-        assert!(s.execute("text.areaOptions", &json!({"firstBaseline": "nope"})).is_err());
-    }
-}
+mod area_tests;
+mod block;
+pub(super) use block::SIZES as BLOCK_SIZES;
+pub(super) use block::fit_metrics as block_fit_metrics;
+pub(crate) use block::needed_room;
+#[cfg(test)]
+mod block_tests;
+#[cfg(test)]
+mod noop_tests;
 
 /// Width of the first line and of the space it can fill, with `tracking` on the first paragraph.
 /// The third value is where the first line ends in the plain text.
@@ -1874,7 +1539,7 @@ fn headline_fit(t: &TextObject, tracking: f64) -> Option<(f64, f64, usize)> {
     let cell = lay.frames.first()?;
     let line = lay.lines.first()?;
     let para = t.para_at(0);
-    let avail = cell.width() - 2.0 * t.area.inset - para.left_indent - para.right_indent;
+    let avail = cell.width() - 2.0 * t.area.inset - para.laid_out_left_indent() - para.right_indent;
     Some((line.x1 - line.x0, avail, line.end))
 }
 
@@ -1904,7 +1569,9 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
         plans.push((*id, (lo * 10.0).floor() / 10.0));
     }
     let first = plans.first().map(|p| p.1).ok_or_else(|| bad(C, "select area type whose first line can fit its frame"))?;
-    s.edit("Fit Headline", |d, _| {
+    // A headline that already has its fitted tracking is no undo step.
+    let fitted: Vec<NodeId> = plans.iter().map(|(id, _)| *id).collect();
+    edit_if_nodes_changed(s, "Fit Headline", &fitted, |d| {
         for (id, tr) in &plans {
             if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
                 let end = t.plain_text().find('\n').unwrap_or(usize::MAX).min(vectorcraft_text::edit::runs_len(&t.runs));
@@ -1912,7 +1579,7 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
                 refresh_bounds(t);
             }
         }
-        Ok(())
+        Ok(((), false))
     })?;
     Ok(json!({ "tracking": first }))
 }
@@ -2029,6 +1696,72 @@ mod ruby_tests {
         // Setting all the text drops the old ruby (it isn't the same text any more).
         s.execute("text.setText", &json!({"id": id, "text": "新しい"})).unwrap();
         assert!(text_of(&s, id).ruby.is_empty());
+    }
+
+    /// Create Outlines keeps the ruby: one path per inked glyph of the base text and of the
+    /// reading, each where the layout (and so the canvas) puts it.
+    #[test]
+    fn create_outlines_keeps_the_ruby_where_it_is_laid_out() {
+        use kurbo::Shape;
+        let (mut s, id) = session_with_text();
+        s.execute("type.ruby", &json!({"text": "かんじ", "start": 0, "end": 6})).unwrap();
+        let t = text_of(&s, id).clone();
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        let inked = |gs: &[vectorcraft_text::PositionedGlyph]| -> Vec<kurbo::Rect> {
+            gs.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| t.xf.transform_rect_bbox(g.outline.bounding_box())).collect()
+        };
+        let (base, ruby) = (inked(&lay.glyphs), inked(&lay.ruby));
+        assert_eq!(ruby.len(), 3, "the reading's three kana have ink");
+        let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        let d = &s.doc().unwrap().doc;
+        let paths: Vec<kurbo::Rect> = d.node(NodeId(g)).unwrap().children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
+        assert_eq!(paths.len(), base.len() + ruby.len(), "a path per glyph, the reading's included: {paths:?}");
+        let near = |a: &kurbo::Rect, b: &kurbo::Rect| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|v| v.abs() < 0.05);
+        for r in &ruby {
+            assert!(paths.iter().any(|p| near(p, r)), "the kana at {r:?} among {paths:?}");
+        }
+        // Undo brings the type back with its ruby.
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(text_of(&s, id).ruby.len(), 1);
+    }
+
+    /// The outlines stack as the canvas paints type, run by run (`render`'s `TextGeom::run`): a
+    /// run's reading goes right after its base glyphs, below the glyphs of the runs after it. Here
+    /// the red 漢's wide reading hangs over the big blue 字.
+    #[test]
+    fn create_outlines_stacks_each_reading_with_its_run() {
+        use kurbo::Shape;
+        let (mut s, id) = session_with_text();
+        s.execute("text.setText", &json!({"id": id, "text": "漢字"})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "fill": "#ff0000"})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "size": 60, "fill": "#0000ff"})).unwrap();
+        s.execute("type.ruby", &json!({"text": "かんじかんじ", "start": 0, "end": 3, "size": 100})).unwrap();
+        let t = text_of(&s, id).clone();
+        assert_eq!(t.runs.len(), 2, "{:?}", t.runs);
+        let (red, blue) = (t.runs[0].style.fill.clone(), t.runs[1].style.fill.clone());
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        let ink = |gs: &mut dyn Iterator<Item = &vectorcraft_text::PositionedGlyph>| {
+            gs.filter(|g| !g.outline.elements().is_empty()).map(|g| g.outline.bounding_box()).reduce(|a, b| a.union(b)).unwrap()
+        };
+        let (reading, big) = (ink(&mut lay.ruby.iter()), ink(&mut lay.glyphs.iter().filter(|g| g.run == 1)));
+        assert!(reading.intersect(big).area() > 0.0, "the reading {reading:?} hangs over 字 {big:?}");
+        let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        let d = &s.doc().unwrap().doc;
+        let paints: Vec<String> = d
+            .node(NodeId(g))
+            .unwrap()
+            .children()
+            .unwrap()
+            .iter()
+            .map(|c| match c.appearance.fill().map(|f| &f.paint) {
+                Some(p) if *p == red => "red".into(),
+                Some(p) if *p == blue => "blue".into(),
+                p => format!("{p:?}"),
+            })
+            .collect();
+        // 漢 and its six kana, then 字 over them.
+        let want: Vec<String> = ["red"; 7].into_iter().chain(["blue"]).map(String::from).collect();
+        assert_eq!(paints, want);
     }
 
     /// Ruby is written to SVG and PDF with its text: SVG outlines the type where ruby is present

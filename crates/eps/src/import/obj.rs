@@ -21,6 +21,11 @@ impl DictRef {
         note(Made::Dict(Rc::downgrade(&d)));
         Self(d)
     }
+
+    /// Is `o` this very dictionary?
+    pub fn same(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &o.0)
+    }
 }
 
 /// An array or a dictionary a program made.
@@ -44,6 +49,8 @@ thread_local! {
     /// Tests: the arrays of the list last released on this thread that were still alive after it
     /// (the ones the interpreter itself still held).
     pub(crate) static ARRAYS_LEFT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many values [`Shared::to_vec`] has copied on this thread.
+    pub(crate) static VALUES_COPIED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 thread_local! {
@@ -231,11 +238,11 @@ impl Obj {
         Self::Dict(DictRef::new(d))
     }
 
-    /// The number this is (integers and reals).
+    /// The number this is (integers and finite reals: a NaN or infinite real is not a number).
     pub fn as_num(&self) -> Option<f64> {
         match *self {
             Self::Int(i) => Some(i as f64),
-            Self::Real(r) => Some(r),
+            Self::Real(r) if r.is_finite() => Some(r),
             _ => None,
         }
     }
@@ -286,6 +293,11 @@ impl Obj {
             Self::GState(_) => "gstatetype",
         }
     }
+
+    /// A composite object, whose value lives in VM; the others are simple (PLRM 3rd ed., §3.3.1).
+    pub fn is_composite(&self) -> bool {
+        matches!(self, Self::Str(_) | Self::ExecStr(_) | Self::Array { .. } | Self::Dict(_) | Self::File { .. } | Self::Save(_) | Self::GState(_))
+    }
 }
 
 /// The values of a string or an array: a run of storage that other strings or arrays may share
@@ -330,7 +342,10 @@ impl<T: Clone + Held> Shared<T> {
     }
 
     pub fn to_vec(&self) -> Vec<T> {
-        self.borrow().to_vec()
+        let v = self.borrow().to_vec();
+        #[cfg(test)]
+        VALUES_COPIED.with(|n| n.set(n.get() + v.len()));
+        v
     }
 
     /// `n` values from `at`, sharing the storage (`getinterval`); `None` past the end.
@@ -364,6 +379,16 @@ impl<T: Clone + Held> Shared<T> {
         Rc::ptr_eq(&self.buf, &o.buf)
     }
 }
+
+/// Equal when [`Shared::same`]: the same storage and run of it (the identity of a PostScript
+/// composite object, not its contents).
+impl<T: Held> PartialEq for Shared<T> {
+    fn eq(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.buf, &o.buf) && self.at == o.at && self.len == o.len
+    }
+}
+
+impl<T: Held> Eq for Shared<T> {}
 
 /// Hashes what [`Shared::same`] compares: the storage and the run of it.
 impl<T: Held> Hash for Shared<T> {
@@ -406,6 +431,13 @@ pub(crate) enum PsError {
 
 pub(crate) type Res<T = ()> = Result<T, PsError>;
 
+/// `v` limited to the range between `a` and `b` (in either order). Unlike `f64::clamp` this never
+/// panics: when one bound is NaN the range collapses to the other bound (both NaN gives `v`), and a
+/// NaN `v` gives the lower bound.
+pub(crate) fn clamp_between(v: f64, a: f64, b: f64) -> f64 {
+    v.max(a.min(b)).min(a.max(b))
+}
+
 /// A PostScript error raised at `at`.
 pub(crate) fn ps_err<T>(name: &'static str, at: &str) -> Res<T> {
     Err(PsError::Ps(name, at.to_string()))
@@ -420,6 +452,16 @@ macro_rules! ops {
         impl Op {
             /// Every operator with its name (`systemdict`).
             pub const ALL: &'static [(Op, &'static str)] = &[$((Op::$v, $n)),*];
+
+            /// The operators of the CIDInit procedure set (PLRM 3rd ed., §5.11.4), found through
+            /// it rather than systemdict.
+            pub const PROCSET: &'static [Op] = &[
+                Op::BeginCMap, Op::EndCMap, Op::UseCMap, Op::BeginCodeSpaceRange, Op::EndCodeSpaceRange, Op::UseFont,
+                Op::BeginBfChar, Op::EndBfChar, Op::BeginBfRange, Op::EndBfRange, Op::BeginCidChar, Op::EndCidChar,
+                Op::BeginCidRange, Op::EndCidRange, Op::BeginNotDefChar, Op::EndNotDefChar, Op::BeginNotDefRange,
+                Op::EndNotDefRange, Op::BeginRearrangedFont, Op::EndRearrangedFont, Op::BeginUseMatrix, Op::EndUseMatrix,
+                Op::StartData,
+            ];
 
             pub fn name(self) -> &'static str {
                 match self { $(Op::$v => $n),* }
@@ -520,6 +562,15 @@ ops! {
     SetVmThreshold = "setvmthreshold", VmReclaim = "vmreclaim", StartJob = "startjob", CurrentObjectFormat = "currentobjectformat",
     Revision = "revision", SerialNumber = "serialnumber", Read = "read", FilePosition = "fileposition",
     SetFilePosition = "setfileposition", DeleteFile = "deletefile", RenameFile = "renamefile", Run = "run",
+    // CID-keyed fonts: `composefont`, and the operators of the CIDInit procedure set (CMaps and
+    // `StartData`, which FontSetInit has too), which aren't in systemdict (see `Op::PROCSET`).
+    ComposeFont = "composefont", BeginCMap = "begincmap", EndCMap = "endcmap", UseCMap = "usecmap",
+    BeginCodeSpaceRange = "begincodespacerange", EndCodeSpaceRange = "endcodespacerange", UseFont = "usefont",
+    BeginBfChar = "beginbfchar", EndBfChar = "endbfchar", BeginBfRange = "beginbfrange", EndBfRange = "endbfrange",
+    BeginCidChar = "begincidchar", EndCidChar = "endcidchar", BeginCidRange = "begincidrange", EndCidRange = "endcidrange",
+    BeginNotDefChar = "beginnotdefchar", EndNotDefChar = "endnotdefchar", BeginNotDefRange = "beginnotdefrange",
+    EndNotDefRange = "endnotdefrange", BeginRearrangedFont = "beginrearrangedfont", EndRearrangedFont = "endrearrangedfont",
+    BeginUseMatrix = "beginusematrix", EndUseMatrix = "endusematrix", StartData = "StartData",
     // User paths.
     UFill = "ufill", UEoFill = "ueofill", UStroke = "ustroke", UAppend = "uappend", UPath = "upath", SetBBox = "setbbox",
 }

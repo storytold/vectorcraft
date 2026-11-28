@@ -1,122 +1,52 @@
-//! Import Shortcut Set: shortcut sets another app saved as text, reviewed and applied to Keyboard
-//! Shortcuts' working set. Every set here is written for the test, with invented names and codes.
+//! Import Shortcut Set: the entry points that hand a shortcut set another app saved as text to
+//! Keyboard Shortcuts' review. Every set here is written for the test, with invented names and codes.
 
 use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::shortcut_import::{Code, KIND, Review, Row, Status, report};
-use super::*;
-use crate::{io, shortcut_editor, theme};
+use super::shortcut_import::{foreign_set, remember};
+use crate::{VectorcraftApp, io, shortcut_editor};
 
 fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Default::default())
 }
 
-/// One headless frame of the dialog layer, with `events`.
-fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) {
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+/// One frame of a window, which builds its keymap, then a pass of Keyboard Shortcuts in it, which
+/// takes up a pending review.
+fn frame(app: &mut VectorcraftApp) {
+    let ctx = crate::testing::ui_context();
+    crate::tests::synthetic::key_frame(app, &ctx, vec![]);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| shortcut_editor::show(app, ui));
     out.textures_delta.clear();
 }
 
-fn press(key: egui::Key) -> egui::Event {
-    egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }
+/// Keyboard Shortcuts' keymap, once a frame has given it one.
+fn dialog_keymap(app: &mut VectorcraftApp) -> &mut craft::keymap::Keymap {
+    frame(app);
+    app.shortcuts_dialog.as_mut().and_then(|d| d.keymap.as_mut()).expect("the dialog's keymap")
 }
 
-fn dialog(app: &VectorcraftApp) -> &Dialog {
-    app.ui.dialog.as_ref().unwrap()
+/// A set's name and each entry's item, line and target.
+type Review = (String, Vec<(String, Option<usize>, Option<craft::keymap::CommandRef>)>);
+
+/// The review the dialog shows.
+fn review(app: &VectorcraftApp) -> Option<Review> {
+    let d = app.shortcuts_dialog.as_ref()?;
+    let r = d.state.snapshot(d.keymap.as_ref()?)?.review?;
+    Some((r.name, r.entries.into_iter().map(|e| (e.item, e.line, e.target)).collect()))
 }
 
-fn set(app: &mut VectorcraftApp, key: &str, v: Value) {
-    app.ui.dialog.as_mut().unwrap().fields.insert(key.into(), v);
-}
-
-fn remember(app: &mut VectorcraftApp, matches: Value) {
+fn remember_matches(app: &mut VectorcraftApp, matches: Value) {
     app.run("importMatches.set", json!({ "matches": matches })).unwrap();
-}
-
-fn row(name: &str, target: &str, key: i64, modifiers: Option<i64>) -> Row {
-    Row { name: name.into(), target: Some(target.into()), from: "matched".into(), key: Some(key), modifiers, on: true, ..Default::default() }
-}
-
-/// A review of `rows` with every code unknown, decoded.
-fn decoded(rows: Vec<Row>) -> Review {
-    let mut r = Review { rows: rows.clone(), ..Default::default() };
-    for row in rows {
-        r.keys.insert(row.key.unwrap(), Code::default());
-        if let Some(m) = row.modifiers {
-            r.mods.insert(m, Code::default());
-        }
-    }
-    r.decode();
-    r
-}
-
-fn text(codes: &BTreeMap<i64, Code>, code: i64) -> Option<&str> {
-    codes[&code].text.as_deref()
-}
-
-#[test]
-fn agreement_decodes_codes_that_defaults_share() {
-    for (id, default) in [("edit.undo", "Cmd+Z"), ("edit.redo", "Cmd+Shift+Z"), ("edit.copy", "Cmd+C"), ("edit.cut", "Cmd+X"), ("tool:pen", "P")] {
-        assert_eq!(shortcut_editor::default_of(id), Some(default), "{id}");
-    }
-    let r = decoded(vec![
-        row("Acme Undo", "edit.undo", 901, Some(11)),
-        row("Acme Redo", "edit.redo", 901, Some(12)),
-        row("Acme Copy", "edit.copy", 902, Some(11)),
-        row("Acme Cut", "edit.cut", 903, Some(11)),
-        row("Acme Pen", "tool:pen", 904, Some(10)),
-    ]);
-    assert_eq!(text(&r.keys, 901), Some("Z"), "two entries agree");
-    assert_eq!((r.keys[&901].from.as_str(), r.keys[&901].votes), ("agreement", 2));
-    assert_eq!(text(&r.keys, 902), None, "one vote isn't enough");
-    assert_eq!(text(&r.mods, 11), Some("Cmd"));
-    assert_eq!((text(&r.mods, 12), text(&r.mods, 10)), (None, None));
-    let statuses = r.statuses();
-    assert_eq!(statuses[0], (Status::Ready, Some("Cmd+Z".into())));
-    assert_eq!(statuses[1].0, Status::NeedsKey, "its modifiers aren't known");
-    assert_eq!(statuses[2].0, Status::NeedsKey);
-}
-
-#[test]
-fn disagreement_leaves_codes_undecided() {
-    // Three different keys for one code: nothing is proposed.
-    let r = decoded(vec![row("A", "edit.undo", 905, None), row("B", "edit.copy", 905, None), row("C", "edit.cut", 905, None)]);
-    assert_eq!(text(&r.keys, 905), None);
-    // Four in five agree: proposed. Three in four: not.
-    let five = ["edit.undo", "edit.redo", "edit.undo", "edit.redo", "edit.copy"];
-    let r = decoded(five.iter().enumerate().map(|(i, t)| row(&format!("E{i}"), t, 906, None)).collect());
-    assert_eq!((text(&r.keys, 906), r.keys[&906].votes), (Some("Z"), 4));
-    let four = ["edit.undo", "edit.redo", "edit.undo", "edit.copy"];
-    let r = decoded(four.iter().enumerate().map(|(i, t)| row(&format!("E{i}"), t, 907, None)).collect());
-    assert_eq!(text(&r.keys, 907), None);
-    // Rows without a target, or with no equivalent, don't vote; an answer that isn't agreement stays.
-    let mut r = decoded(vec![row("A", "edit.undo", 908, None), row("B", "", 908, None)]);
-    assert_eq!(text(&r.keys, 908), None);
-    r.keys.insert(908, Code { text: Some("Q".into()), from: "you".into(), ..Default::default() });
-    r.rows.push(row("C", "edit.redo", 908, None));
-    r.decode();
-    assert_eq!(text(&r.keys, 908), Some("Q"));
-}
-
-#[test]
-fn a_key_with_no_equivalent_needs_no_modifiers() {
-    let mut r = decoded(vec![row("A", "edit.undo", 940, Some(41))]);
-    assert_eq!((text(&r.keys, 940), text(&r.mods, 41)), (None, None));
-    r.keys.insert(940, Code { text: Some(String::new()), from: "you".into(), ..Default::default() });
-    assert_eq!(r.statuses()[0], (Status::NoEquivalent, None), "the unknown modifiers don't matter");
 }
 
 const SET: &str = "/Menus {\n /Edit {\n  /Acme\\ Undo { /Context 0 /Modifiers 11 /Represent 0 /Key 902 }\n  /Acme\\ Copy { /Modifiers 11 /Key 902 }\n }\n /Acme\\ Pen { /Modifiers 11 /Key 901 }\n /Acme\\ Gadget { /Modifiers 0 /Key 48 }\n}\n";
 
 /// The answers an earlier import left for [`SET`].
 fn earlier_answers(app: &mut VectorcraftApp) {
-    remember(
+    remember_matches(
         app,
         json!([
             {"kind": "name", "name": "Acme Undo", "target": "edit.undo"},
@@ -130,126 +60,36 @@ fn earlier_answers(app: &mut VectorcraftApp) {
     );
 }
 
+/// What `shortcutSet.read` makes of `text`.
+fn read(app: &mut VectorcraftApp, text: &str) -> Value {
+    app.run("shortcutSet.read", json!({ "name": "Set.kys", "data": text })).unwrap()
+}
+
 #[test]
 fn kys_files_open_the_review() {
     let mut app = app();
     earlier_answers(&mut app);
     io::open_bytes(&mut app, "Acme Keys.kys", SET.as_bytes(), None).unwrap();
-    let d = dialog(&app);
-    assert_eq!((d.kind.as_str(), d.str("name"), d.str("start"), d.bool("remember")), (KIND, "Acme Keys".into(), "defaults".into(), true));
-    let r = Review::of(d);
-    let names: Vec<(&str, &str, Option<&str>)> = r.rows.iter().map(|r| (r.name.as_str(), r.section.as_str(), r.target.as_deref())).collect();
-    assert_eq!(
-        names,
-        [
-            ("Acme Undo", "Menus › Edit", Some("edit.undo")),
-            ("Acme Copy", "Menus › Edit", Some("edit.copy")),
-            ("Acme Pen", "Menus", Some("tool:pen")),
-            ("Acme Gadget", "Menus", Some(""))
-        ]
-    );
-    assert!(r.rows.iter().all(|r| r.from == "saved"));
-    assert_eq!((text(&r.keys, 48), r.keys[&48].from.as_str()), (Some("0"), "described"), "the format's description");
-    assert_eq!((text(&r.mods, 0), r.mods[&0].from.as_str()), (Some(""), "described"));
-    let statuses: Vec<Status> = r.statuses().into_iter().map(|s| s.0).collect();
-    assert_eq!(statuses, [Status::SameShortcut, Status::Ready, Status::ToolKey, Status::NoEquivalent]);
-    frame(&mut app, vec![]);
-    assert_eq!(dialog(&app).kind, KIND);
+    frame(&mut app);
+    let (name, entries) = review(&app).expect("a review is open");
+    assert_eq!(name, "Acme Keys");
+    let places: Vec<(&str, Option<usize>)> = entries.iter().map(|(item, line, _)| (item.as_str(), *line)).collect();
+    let lines = [("Menus > Edit > Acme Undo", 3), ("Menus > Edit > Acme Copy", 4), ("Menus > Acme Pen", 6), ("Menus > Acme Gadget", 7)];
+    assert_eq!(places, lines.map(|(item, line)| (item, Some(line))));
+    let targets: Vec<Option<String>> = entries.iter().map(|(.., t)| t.as_ref().map(crate::keymap::entry_key)).collect();
+    assert_eq!(targets, [Some("edit.undo".into()), Some("edit.copy".into()), Some("tool:pen".into()), None], "saved targets come first");
+
+    // The format's two described codes are decided; a code nobody answered is left out.
+    let (_, options) = foreign_set(&read(&mut app, "/Menus { /Acme\\ Odd { /Modifiers 77 /Key 48 } /Acme\\ Even { /Modifiers 0 /Key 78 } }"));
+    assert_eq!((options.codes.get("key:48"), options.codes.get("mods:0")), (Some(&Some("0".to_string())), Some(&Some(String::new()))));
+    assert!(!options.codes.contains_key("key:78") && !options.codes.contains_key("mods:77"));
+
     // A file in another form says so, and opens nothing.
-    app.ui.dialog = None;
-    let e = io::open_bytes(&mut app, "Other.kys", b"<?xml version=\"1.0\"?><shortcuts/>", None).unwrap_err();
+    let mut fresh = self::app();
+    let e = io::open_bytes(&mut fresh, "Other.kys", b"<?xml version=\"1.0\"?><shortcuts/>", None).unwrap_err();
     assert_eq!(e, vectorcraft_engine::cmd::shortcutset::NOT_READABLE);
-    assert!(app.ui.dialog.is_none());
-}
-
-#[test]
-fn kys_rows_go_through_assign() {
-    let mut app = app();
-    earlier_answers(&mut app);
-    io::open_bytes(&mut app, "Acme Keys.kys", SET.as_bytes(), None).unwrap();
-    let d = dialog(&app).clone();
-    assert_eq!(confirm(&mut app).unwrap(), json!({"applied": 1, "rows": 4}));
-    // Keyboard Shortcuts shows the set: the later row took ⌘J from Join's default, and the tool kept P.
-    assert_eq!(shortcut_editor::default_of("path.join"), Some("Cmd+J"));
-    let k = dialog(&app);
-    assert_eq!((k.kind.as_str(), k.str("set")), ("shortcuts", "Acme Keys".into()));
-    let ov: BTreeMap<String, String> = serde_json::from_value(k.fields["overrides"].clone()).unwrap();
-    assert_eq!(ov, BTreeMap::from([("edit.copy".to_string(), "Cmd+J".to_string()), ("path.join".to_string(), String::new())]));
-    assert_eq!(k.str("__message"), "Imported. Press OK to keep the imported set.");
-    assert!(app.ui.shortcut_overrides.is_empty(), "nothing is kept before OK");
-    // The rows left out are reported, with their line.
-    let r = Review::of(&d);
-    let text = report(&d, &r, &r.statuses());
-    assert!(text.starts_with("Acme Keys\nLine 3: Acme Undo: A later row takes this shortcut\n"), "{text}");
-    assert!(text.contains("Line 6: Acme Pen: Tools take a single key (optionally with Shift)\n") && !text.contains("Acme Copy"), "{text}");
-}
-
-#[test]
-fn rows_for_the_same_item_leave_the_earlier_out() {
-    let mut app = app();
-    earlier_answers(&mut app);
-    remember(&mut app, json!([{"kind": "name", "name": "Acme Copy Again", "target": "edit.copy"}]));
-    let kys = "/Menus {\n /Acme\\ Copy { /Modifiers 11 /Key 902 }\n /Acme\\ Copy\\ Again { /Modifiers 11 /Key 901 }\n}\n";
-    io::open_bytes(&mut app, "Twice.kys", kys.as_bytes(), None).unwrap();
-    let r = Review::of(dialog(&app));
-    assert_eq!(r.statuses().iter().map(|s| s.0).collect::<Vec<_>>(), [Status::SameTarget, Status::Ready]);
-    assert_eq!(confirm(&mut app).unwrap()["applied"], 1);
-    let ov = &dialog(&app).fields["overrides"];
-    assert_eq!(ov["edit.copy"], "Cmd+K");
-    assert!(ov.get("path.join").is_none(), "Join keeps ⌘J: the earlier row isn't applied");
-}
-
-#[test]
-fn cancel_and_apply_go_back_to_keyboard_shortcuts() {
-    let mut app = app();
-    earlier_answers(&mut app);
-    shortcut_editor::open(&mut app);
-    set(&mut app, "overrides", json!({"edit.preferences": "Cmd+Alt+Shift+9"}));
-    super::shortcut_import::open(&mut app, "/sets/Acme Keys.kys", SET.as_bytes()).unwrap();
-    assert_eq!(dialog(&app).kind, KIND);
-    cancel(&mut app);
-    assert_eq!((dialog(&app).kind.as_str(), dialog(&app).fields["overrides"].clone()), ("shortcuts", json!({"edit.preferences": "Cmd+Alt+Shift+9"})));
-    // Escape goes back the same way, and closes Keyboard Shortcuts after that.
-    super::shortcut_import::open(&mut app, "/sets/Acme Keys.kys", SET.as_bytes()).unwrap();
-    let escape = |app: &mut VectorcraftApp| {
-        let ctx = egui::Context::default();
-        let mut out =
-            ctx.run_ui(egui::RawInput { events: vec![press(egui::Key::Escape)], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
-        out.textures_delta.clear();
-    };
-    escape(&mut app);
-    assert_eq!((dialog(&app).kind.as_str(), dialog(&app).fields["overrides"].clone()), ("shortcuts", json!({"edit.preferences": "Cmd+Alt+Shift+9"})));
-    escape(&mut app);
-    assert!(app.ui.dialog.is_none());
-    shortcut_editor::open(&mut app);
-    set(&mut app, "overrides", json!({"edit.preferences": "Cmd+Alt+Shift+9"}));
-    // Added to the current shortcuts: the working set keeps its own change.
-    super::shortcut_import::open(&mut app, "/sets/Acme Keys.kys", SET.as_bytes()).unwrap();
-    set(&mut app, "start", json!("current"));
-    confirm(&mut app).unwrap();
-    assert_eq!(dialog(&app).fields["overrides"], json!({"edit.copy": "Cmd+J", "edit.preferences": "Cmd+Alt+Shift+9", "path.join": ""}));
-    // OK keeps it.
-    confirm(&mut app).unwrap();
-    assert_eq!((app.ui.shortcut_set.as_str(), app.ui.shortcut_overrides.len()), ("Acme Keys", 3));
-}
-
-/// A document's Missing Fonts dialog that Keyboard Shortcuts replaced waits while Cancel goes back
-/// from Import Shortcut Set to Keyboard Shortcuts, and opens again once Keyboard Shortcuts closes.
-#[test]
-fn cancel_goes_back_to_keyboard_shortcuts_before_a_waiting_missing_fonts_dialog() {
-    let mut app = app();
-    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    app.run("text.create", json!({"x": 10, "y": 40, "text": "Type", "font": "No Such Font Family"})).unwrap();
-    app.run("ui.missingFontsDialog", json!({})).unwrap();
-    assert_eq!(dialog(&app).kind, missing_fonts::KIND);
-    shortcut_editor::open(&mut app);
-    set(&mut app, "overrides", json!({"edit.preferences": "Cmd+Alt+Shift+9"}));
-    super::shortcut_import::open(&mut app, "/sets/Acme Keys.kys", SET.as_bytes()).unwrap();
-    cancel(&mut app);
-    assert_eq!((dialog(&app).kind.as_str(), dialog(&app).fields["overrides"].clone()), ("shortcuts", json!({"edit.preferences": "Cmd+Alt+Shift+9"})));
-    cancel(&mut app);
-    assert_eq!(dialog(&app).kind, missing_fonts::KIND);
-    assert_eq!(dialog(&app).fields["fonts"][0]["family"], "No Such Font Family");
+    frame(&mut fresh);
+    assert!(review(&fresh).is_none());
 }
 
 /// A set dropped on the window opens the review when no document is open, from its path (desktop)
@@ -261,93 +101,42 @@ fn a_set_dropped_with_no_document_open_opens_the_review() {
     let kys = dir.join("Dropped.kys");
     std::fs::write(&kys, SET).unwrap();
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
-    let target = app.drop_target("Dropped.kys", None, false);
+    let target = app.drop_target("Dropped.kys", crate::place::DropSpot::Unknown, false);
     assert_eq!(target, crate::place::DropTarget::Open);
     crate::place::drop_files(&mut app, vec![(target, ("Dropped.kys".into(), Some(kys.to_string_lossy().into_owned()), vec![]))]);
-    assert_eq!((dialog(&app).kind.as_str(), dialog(&app).str("name"), Review::of(dialog(&app)).rows.len()), (KIND, "Dropped".into(), 4));
-    app.ui.dialog = None;
+    frame(&mut app);
+    let (name, entries) = review(&app).expect("a review is open");
+    assert_eq!((name.as_str(), entries.len()), ("Dropped", 4));
+    app.shortcuts_dialog = None;
     app.services.read = None;
     crate::place::drop_files(&mut app, vec![(target, ("Sent.kys".into(), None, SET.as_bytes().to_vec()))]);
-    assert_eq!((dialog(&app).kind.as_str(), dialog(&app).str("name")), (KIND, "Sent".into()));
+    frame(&mut app);
+    let (name, entries) = review(&app).expect("a review is open");
+    assert_eq!((name.as_str(), entries.len()), ("Sent", 4));
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// What the review reports the user answered is kept and answers the next import.
 #[test]
 fn remembered_choices_answer_the_next_import() {
     let mut app = app();
     let kys = "/Menus {\n /Acme\\ Undo { /Modifiers 21 /Key 931 }\n /Acme\\ Thing { /Modifiers 21 /Key 932 }\n}\n";
-    io::open_bytes(&mut app, "Fresh.kys", kys.as_bytes(), None).unwrap();
-    let r = Review::of(dialog(&app));
-    assert_eq!(r.rows[0].target.as_deref(), Some("edit.undo"), "proposed from the name");
-    assert_eq!(r.rows[0].from, "matched");
-    assert_eq!(r.statuses().iter().map(|s| s.0).collect::<Vec<_>>(), [Status::NeedsKey, Status::NeedsChoice]);
-    assert!(dialog(&app).bool("__keysOpen"), "codes to answer open the Keys section");
-    // The user answers the codes and picks the second row's target.
-    let mut r = r;
-    r.keys.insert(931, Code { text: Some("Z".into()), from: "you".into(), ..r.keys[&931].clone() });
-    r.mods.insert(21, Code { text: Some("Cmd+Alt".into()), from: "you".into(), ..r.mods[&21].clone() });
-    r.rows[1].target = Some(String::new());
-    r.rows[1].from = "you".into();
-    set(&mut app, "rows", serde_json::to_value(&r.rows).unwrap());
-    set(&mut app, "keys", serde_json::to_value(&r.keys).unwrap());
-    set(&mut app, "mods", serde_json::to_value(&r.mods).unwrap());
-    confirm(&mut app).unwrap();
+    let (set, options) = foreign_set(&read(&mut app, kys));
+    assert!(options.remembered.is_empty() && !options.codes.contains_key("key:931"));
+    let [undo, thing] = [&set.entries[0], &set.entries[1]];
+    let targets = BTreeMap::from([(undo.remember_key(), Some(crate::keymap::command_of("edit.undo"))), (thing.remember_key(), None)]);
+    let codes = BTreeMap::from([("key:931".to_string(), Some("Z".to_string())), ("mods:21".to_string(), Some("Cmd+Alt".to_string()))]);
+    shortcut_editor::open(&mut app);
+    remember(&mut app, &set, &targets, &codes);
     let kept = app.run("importMatches.list", json!({})).unwrap();
     let kept: Vec<(&str, &str, &str)> =
         kept.as_array().unwrap().iter().map(|m| (m["kind"].as_str().unwrap(), m["name"].as_str().unwrap(), m["target"].as_str().unwrap())).collect();
     assert_eq!(kept, [("name", "Acme Undo", "edit.undo"), ("name", "Acme Thing", ""), ("key", "931", "Z"), ("modifiers", "21", "Cmd+Alt")]);
-    assert_eq!(app.run("importMatches.list", json!({"kind": "name"})).unwrap()[0]["label"], "Undo");
-    // The next import asks nothing.
-    app.ui.dialog = None;
-    io::open_bytes(&mut app, "Fresh.kys", kys.as_bytes(), None).unwrap();
-    let r = Review::of(dialog(&app));
-    assert!(r.rows.iter().all(|r| r.from == "saved"));
-    assert_eq!(r.statuses().iter().map(|s| s.0).collect::<Vec<_>>(), [Status::Ready, Status::NoEquivalent]);
-    assert_eq!(r.statuses()[0].1.as_deref(), Some("Cmd+Alt+Z"));
-    // The saved codes stay listed, in a Keys section that starts closed, and can be answered again.
-    assert!(!dialog(&app).bool("__keysOpen"));
-    set(&mut app, "__keysOpen", json!(true));
-    frame(&mut app, vec![]);
-    let mut r = r;
-    r.keys.insert(931, Code { text: Some("Y".into()), from: "you".into(), ..r.keys[&931].clone() });
-    set(&mut app, "keys", serde_json::to_value(&r.keys).unwrap());
-    confirm(&mut app).unwrap();
-    assert_eq!(importmatches_target(&app, "key", "931"), Some("Y".to_string()));
-    // Without Remember My Choices nothing more is kept.
-    app.ui.dialog = None;
-    io::open_bytes(&mut app, "Fresh.kys", kys.as_bytes(), None).unwrap();
-    set(&mut app, "remember", json!(false));
-    let before = app.session.prefs.import_matches.clone();
-    let mut r = Review::of(dialog(&app));
-    r.keys.insert(931, Code { text: Some("W".into()), from: "you".into(), ..r.keys[&931].clone() });
-    set(&mut app, "keys", serde_json::to_value(&r.keys).unwrap());
-    confirm(&mut app).unwrap();
-    assert_eq!(app.session.prefs.import_matches, before);
-}
-
-/// What the import matches say `name` of `kind` stands for.
-fn importmatches_target(app: &VectorcraftApp, kind: &str, name: &str) -> Option<String> {
-    vectorcraft_engine::cmd::importmatches::targets(&app.session.prefs).get(&(kind, name)).map(|t| t.to_string())
-}
-
-#[test]
-fn a_key_press_answers_the_code_being_recorded() {
-    let mut app = app();
-    let kys = "/Menus {\n /Acme\\ Undo { /Modifiers 21 /Key 931 }\n /Acme\\ Redo { /Modifiers 21 /Key 931 }\n}\n";
-    io::open_bytes(&mut app, "Keys.kys", kys.as_bytes(), None).unwrap();
-    frame(&mut app, vec![]);
-    set(&mut app, "__recording", json!("931"));
-    assert!(shortcut_editor::is_recording(&app), "Escape stops the recording, not the dialog");
-    // A modifier's own key press waits for the key.
-    frame(&mut app, vec![press(egui::Key::ShiftLeft)]);
-    assert_eq!(dialog(&app).str("__recording"), "931");
-    frame(&mut app, vec![press(egui::Key::K)]);
-    let r = Review::of(dialog(&app));
-    assert_eq!((text(&r.keys, 931), r.keys[&931].from.as_str(), dialog(&app).str("__recording")), (Some("K"), "you", String::new()));
-    // Escape stops recording and keeps the answer.
-    set(&mut app, "__recording", json!("931"));
-    frame(&mut app, vec![press(egui::Key::Escape)]);
-    assert_eq!((text(&Review::of(dialog(&app)).keys, 931), dialog(&app).str("__recording")), (Some("K"), String::new()));
+    // The next import of the file has every answer.
+    let (set, options) = foreign_set(&read(&mut app, kys));
+    assert_eq!(options.remembered.len(), 2);
+    assert_eq!(options.remembered.get(&set.entries[1].remember_key()), Some(&None), "No equivalent is kept as an answer");
+    assert_eq!((options.codes.get("key:931"), options.codes.get("mods:21")), (Some(&Some("Z".to_string())), Some(&Some("Cmd+Alt".to_string()))));
 }
 
 #[test]
@@ -360,7 +149,8 @@ fn keyboard_shortcuts_import_reads_both_kinds_of_set() {
     let files: BTreeMap<&str, Vec<u8>> = BTreeMap::from([
         (
             "/sets/Mine.json",
-            serde_json::to_vec(&shortcut_editor::export_json("Mine", &BTreeMap::from([("tool:pen".into(), "Shift+9".into())]))).unwrap(),
+            serde_json::to_vec(&json!({"format": "vectorcraft-shortcuts", "version": 1, "set": "Mine", "overrides": {"tool:pen": "Shift+9"}}))
+                .unwrap(),
         ),
         ("/sets/Text.json", b"\xEF\xBB\xBF  /Menus { /Acme\\ Undo { /Key 1 } }".to_vec()),
     ]);
@@ -371,97 +161,105 @@ fn keyboard_shortcuts_import_reads_both_kinds_of_set() {
         files.get(p).cloned().ok_or_else(|| format!("no file {p}"))
     }));
     app.run("shortcuts.import", json!({"path": "/sets/Mine.json"})).unwrap();
-    assert_eq!(app.ui.shortcut_set, "Mine");
+    assert_eq!(app.ui.shortcut_sets.active(), "Mine");
     // A `.kys` file is read by `shortcutSet.read`, up to its cap, and not through the app's file reader.
     let before = reads.get();
     app.run("shortcuts.import", json!({ "path": kys })).unwrap();
-    assert_eq!((dialog(&app).kind.as_str(), dialog(&app).str("name"), reads.get()), (KIND, "On Disk".into(), before));
+    frame(&mut app);
+    assert_eq!((review(&app).map(|r| (r.0, r.1.len())), reads.get()), (Some(("On Disk".into(), 4)), before));
+    // The import waits while Keyboard Shortcuts is open.
+    assert!(app.run("shortcuts.import", json!({"path": "/sets/Text.json"})).is_err());
+    app.shortcuts_dialog = None;
     app.run("shortcuts.import", json!({"path": "/sets/Text.json"})).unwrap();
-    assert_eq!(dialog(&app).str("name"), "Text", "text that starts with a slash name is a text set");
+    frame(&mut app);
+    assert_eq!(review(&app).map(|r| r.0).as_deref(), Some("Text"), "text that starts with a slash name is a text set");
     // File › Open and the command open it from a path, the command also from its bytes.
-    app.ui.dialog = None;
+    app.shortcuts_dialog = None;
     let before = reads.get();
     app.run("file.open", json!({ "path": kys })).unwrap();
-    assert_eq!((Review::of(dialog(&app)).rows.len(), reads.get()), (4, before));
+    frame(&mut app);
+    assert_eq!((review(&app).map(|r| r.1.len()), reads.get()), (Some(4), before));
     assert_eq!(app.ui.recent_files.first(), Some(&kys), "File › Open lists it in Open Recent Files");
-    app.ui.dialog = None;
+    app.shortcuts_dialog = None;
     app.run("ui.shortcutImportDialog", json!({ "path": kys })).unwrap();
-    assert_eq!((Review::of(dialog(&app)).rows.len(), dialog(&app).str("name")), (4, "On Disk".into()));
+    frame(&mut app);
+    assert_eq!(review(&app).map(|r| (r.0, r.1.len())), Some(("On Disk".into(), 4)));
+    app.shortcuts_dialog = None;
     let b64 = vectorcraft_format::base64_encode(SET.as_bytes());
     let r = app.run("ui.shortcutImportDialog", json!({"dataBase64": b64, "name": "Sent.kys"})).unwrap();
-    assert_eq!((r["entries"].as_u64(), dialog(&app).str("name")), (Some(4), "Sent".into()));
+    frame(&mut app);
+    assert_eq!((r["entries"].as_u64(), review(&app).map(|r| r.0)), (Some(4), Some("Sent".into())));
     // A file past the reader's cap opens with what fits, marked truncated.
+    app.shortcuts_dialog = None;
     let big = format!("/Menus {{ /Acme\\ Undo {{ /Key 1 }} {} }}", " ".repeat(5 << 20));
     io::open_bytes(&mut app, "Big.kys", big.as_bytes(), None).unwrap();
-    assert_eq!((Review::of(dialog(&app)).rows.len(), dialog(&app).bool("truncated")), (1, true));
+    let pending = app.shortcuts_dialog.as_ref().and_then(|d| d.pending_review.as_ref()).expect("the review waits for its first frame");
+    assert_eq!((pending.0.entries.len(), pending.0.truncated), (1, 1));
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Importing F2 onto another command takes the key from the command that had it.
 #[test]
-fn many_rows_draw_and_filter() {
+fn an_imported_function_key_goes_to_its_target() {
+    if crate::keymap::platform().is_mac() {
+        return;
+    }
     let mut app = app();
-    let body: String = (0..2000).map(|i| format!(" /Acme\\ Entry\\ {i} {{ /Modifiers {} /Key {} }}\n", i % 7, 1000 + i % 90)).collect();
-    io::open_bytes(&mut app, "Big.kys", format!("/Menus {{\n{body}}}\n").as_bytes(), None).unwrap();
-    frame(&mut app, vec![]);
-    set(&mut app, "__attention", json!(true));
-    set(&mut app, "__query", json!("entry 19"));
-    frame(&mut app, vec![]);
-    assert_eq!(Review::of(dialog(&app)).rows.len(), 2000);
-    // Notes on the parts not read are kept for the report.
-    app.ui.dialog = None;
-    io::open_bytes(&mut app, "Odd.kys", b"/Menus { /Acme\\ Undo { /Key 1 /Bogus 2 } junk }", None).unwrap();
-    let d = dialog(&app).clone();
-    let r = Review::of(&d);
-    let text = report(&d, &r, &r.statuses());
-    assert!(text.contains("Line 1: /Bogus 2: Not read\n") && text.contains("Line 1: junk: Not read\n"), "{text}");
-    frame(&mut app, vec![]);
+    shortcut_editor::open(&mut app);
+    let kys = json!({
+        "entries": [{"name": "Acme Duplicate", "section": ["Menus"], "line": 2, "key": 1000, "modifiers": 0, "target": "edit.duplicate"}],
+        "codes": {"keys": [{"value": 1000, "key": "F2"}], "modifiers": []},
+    });
+    let (set, options) = foreign_set(&kys);
+    let keymap = dialog_keymap(&mut app);
+    let planned = craft::keymap::plan(&set, keymap, &options);
+    planned.apply(keymap);
+    let f2 = crate::keymap::stored::parse_vc("F2").unwrap();
+    assert_eq!(keymap.holder(&f2), Some(crate::keymap::command_of("edit.duplicate")));
 }
 
-/// The texts the sixth frame of the dialog layer painted on `screen`, each with its rectangle and
-/// the rectangle it was clipped to.
-fn painted_on(app: &mut VectorcraftApp, screen: egui::Rect) -> Vec<(String, egui::Rect, egui::Rect)> {
-    fn collect(s: &egui::Shape, clip: egui::Rect, v: &mut Vec<(String, egui::Rect, egui::Rect)>) {
-        match s {
-            egui::Shape::Text(t) => v.push((t.galley.text().to_string(), t.visual_bounding_rect(), clip)),
-            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, clip, v)),
-            _ => {}
-        }
-    }
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    let mut texts = vec![];
-    for _ in 0..6 {
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui.ctx()));
-        out.textures_delta.clear();
-        texts.clear();
-        for c in &out.shapes {
-            collect(&c.shape, c.clip_rect, &mut texts);
-        }
-    }
-    texts
+/// A name of 1,500 characters and 14 repeats of a label stay within what `plan` reads.
+#[test]
+fn long_names_stay_within_what_plan_reads() {
+    use craft::keymap::import::{MAX_IMPORT_TEXT, MAX_PATH_SEGMENTS};
+    let mut app = app();
+    shortcut_editor::open(&mut app);
+    let name = "Acme Copy ".repeat(150);
+    let section: Vec<String> = (0..40).map(|i| format!("Block {i}")).collect();
+    let read = json!({"entries": [{"name": name, "section": section, "line": 2, "key": 901}]});
+    let (set, options) = foreign_set(&read);
+    let path = &set.entries[0].path;
+    assert!(path.len() <= MAX_PATH_SEGMENTS && path.iter().all(|s| s.chars().count() <= MAX_IMPORT_TEXT));
+    let _ = craft::keymap::plan(&set, dialog_keymap(&mut app), &options);
 }
 
-/// On the app's smallest window (800 × 500 points), a large set shows the heading, Copy Report,
-/// Cancel and Apply, with the Keys section open or closed: its lists get shorter.
+/// A plug-in row picked as a target stores under its `plugin.dialog {id}` key and reads back under
+/// the filter's id; a removed plug-in is no target.
 #[test]
-fn a_large_set_keeps_its_buttons_on_a_small_window() {
+fn an_imported_shortcut_reaches_a_filter_plugin_picked_as_its_target() {
+    use vectorcraft_plugins::wat as tpl;
+    let id = "test.UI.import_filter-one";
+    let key = format!("plugin:{id}");
+    let manifest = format!(r#"{{"id":"{id}","name":"Acme Import Filter","version":"1","kind":"filter","params":{{}}}}"#);
+    vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+
     let mut app = app();
-    let body: String = (0..400).map(|i| format!(" /Acme\\ Entry\\ {i} {{ /Modifiers {} /Key {} }}\n", i % 7, 1000 + i % 90)).collect();
-    io::open_bytes(&mut app, "Big.kys", format!("/Menus {{\n{body}}}\n").as_bytes(), None).unwrap();
-    // Every row has a target, so the Keys section lists the set's 97 codes.
-    let mut r = Review::of(dialog(&app));
-    for row in &mut r.rows {
-        row.target = Some("edit.undo".into());
-    }
-    set(&mut app, "rows", serde_json::to_value(&r.rows).unwrap());
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
-    for open in [true, false] {
-        set(&mut app, "__keysOpen", json!(open));
-        let texts = painted_on(&mut app, screen);
-        for label in ["Import Shortcut Set", "Copy Report", "Cancel", "Apply"] {
-            let (_, rect, clip) = texts.iter().find(|(t, ..)| t == label).unwrap_or_else(|| panic!("Keys open: {open}: no {label}"));
-            assert!(screen.contains_rect(*rect) && clip.contains_rect(*rect), "Keys open: {open}: {label} at {rect:?}, clipped to {clip:?}");
-        }
-    }
+    shortcut_editor::open(&mut app);
+    let kys = json!({
+        "entries": [{"name": "Anything", "section": ["Menus"], "line": 2, "key": 1000, "modifiers": 1000, "target": key}],
+        "codes": {"keys": [{"value": 1000, "key": "F11"}], "modifiers": [{"value": 1000, "mods": "Cmd+Alt+Shift"}]},
+    });
+    let (set, options) = foreign_set(&kys);
+    let keymap = dialog_keymap(&mut app);
+    let planned = craft::keymap::plan(&set, keymap, &options);
+    planned.apply(keymap);
+    let stored = crate::keymap::stored_key(&key);
+    let saved = keymap.overrides().get(&stored).map(<[String]>::to_vec).expect("a binding of the filter's item");
+    assert!(keymap.overrides().get("plugin.dialog").is_none(), "not a binding of plugin.dialog without its id");
+    assert_eq!(crate::keymap::entry_of_stored(&stored), key);
+    let reloaded = crate::keymap::stored::from_value(json!({ key.as_str(): saved[0] }));
+    assert_eq!(reloaded.get(&stored).map(<[String]>::len), Some(1), "read back under the filter's id");
+
+    vectorcraft_plugins::registry::remove(id);
+    assert!(shortcut_editor::entries().iter().all(|e| e.key != key), "a removed filter is no target");
 }

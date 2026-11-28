@@ -1,0 +1,1335 @@
+use super::encoding::{
+    Ink, average, direct_fill, direct_stroke, finite, font_of, holds_as_text, invertible, latin_string, lost_attributes, rotated, segment_point,
+    unit, writable,
+};
+use super::{
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, DYNAMIC_TEXT, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
+    Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
+    LAYER_NAME, LIVE, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection, ParaStyle, PathData,
+    ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
+    TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
+};
+use super::{CONIC, CONIC_WEDGES, DEEP_DISTORTED, DIAMOND, GRAPHS, HUE_STOPS, PERCEPTUAL_STOPS, SPREAD, SPREAD_CAPPED};
+use crate::gradient_key::gradient_key;
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Writer::coverage`] has worked out an image's coverage on this thread.
+    pub(super) static COVERAGE_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether [`Numbered::take`] numbers names on this thread by searching the names given so
+    /// far, one number at a time, for each number it tries.
+    pub(super) static SCANNED_NAMES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether [`Writer::defined`] finds a gradient's definition on this thread by comparing the
+    /// gradient with each definition in turn.
+    pub(super) static SCANNED_DEFINITIONS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// How many times [`Writer::defined`] has compared two gradients on this thread.
+    pub(super) static GRADIENT_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Are gradients `a` and `b` the same?
+fn same_gradient(a: &Gradient, b: &Gradient) -> bool {
+    #[cfg(test)]
+    GRADIENT_COMPARISONS.with(|c| c.set(c.get() + 1));
+    a == b
+}
+
+/// An image's coverage ([`ImageBlob::coverage`]): its width, its height and one byte a pixel.
+type Coverage = (u32, u32, Arc<Vec<u8>>);
+
+pub(super) struct Writer<'a> {
+    doc: &'a Document,
+    /// The document → art space.
+    to_art: Affine,
+    cms: Arc<Cms>,
+    pub(super) body: String,
+    /// Gradient definitions, by the name objects use.
+    pub(super) gradients: Vec<(String, Gradient)>,
+    /// Spot colors used: the name written and full CMYK equivalent.
+    pub(super) spots: Vec<(String, [f32; 4])>,
+    /// The name each spot color (by its swatch's name) is written with ([`Self::spot`]).
+    spot_names: std::collections::HashMap<String, String>,
+    pub(super) warnings: Vec<String>,
+    /// Notes on what the options asked for ([`crate::LegacyAiOutput::setting_notes`]).
+    pub(super) setting_notes: Vec<String>,
+    /// The lock state the last `A` set.
+    locked: bool,
+    /// Symbols and live objects being written inside one another.
+    nest: u32,
+    /// What to do with hidden objects.
+    hidden: HiddenObjects,
+    /// Type as outlines.
+    outline_text: bool,
+    /// The layer being written's hidden objects for its hidden layer, and whether each is locked.
+    hidden_art: Vec<(Node, bool)>,
+    /// Writing a layer that is hidden (or the hidden layer of one's hidden objects): hidden objects
+    /// are written where they are.
+    in_hidden: bool,
+    /// The fonts type is set in: PostScript name, and whether it's TrueType.
+    pub(super) fonts: Vec<(String, bool)>,
+    /// The Standard Vertical Roman Alignment the last `Tv` set (it lasts into later text objects).
+    roman: bool,
+    /// Inside a Kumi block `1 TY` began (Tate-chu-yoko in horizontal type).
+    kumi: bool,
+    /// The outlines of the clipping groups the art being written is in, in the document.
+    clips: Vec<BezPath>,
+    /// The image decoded last (`None` when it can't be): the pieces of a warped image, which follow
+    /// one another, decode it once.
+    last_image: Option<(ImageBlob, Option<Arc<image::DynamicImage>>)>,
+    /// The coverage of [`Self::last_image`] once a colorized piece of it asked for it (`Some(None)`
+    /// when it can't be worked out), so the pieces of a colorized warped image work it out once.
+    last_coverage: Option<Option<Coverage>>,
+    /// The images written whole so far, by the address of their data (which each entry keeps).
+    whole_images: std::collections::HashMap<usize, Arc<Vec<u8>>>,
+    /// Writing a graph's art with its records: a graph inside it is written as its art.
+    in_graph: bool,
+    /// The names of [`Self::gradients`].
+    gradient_names: Numbered,
+    /// The names spot colors are written with ([`Self::spot`]).
+    spot_written: Numbered,
+    /// The names of [`Self::spots`].
+    spot_set: std::collections::HashSet<String>,
+    /// The PostScript names of [`Self::fonts`].
+    font_set: std::collections::HashSet<String>,
+    /// The places in [`Self::gradients`] of the definitions, in order, by their gradient's key
+    /// ([`gradient_key`]).
+    gradient_index: std::collections::HashMap<u64, Vec<usize>>,
+}
+
+impl<'a> Writer<'a> {
+    pub(super) fn new(doc: &'a Document, to_art: Affine, o: &LegacyAiOptions) -> Self {
+        Self {
+            doc,
+            to_art,
+            cms: vectorcraft_color::cms::active(),
+            body: String::new(),
+            gradients: vec![],
+            spots: vec![],
+            spot_names: std::collections::HashMap::new(),
+            warnings: vec![],
+            setting_notes: vec![],
+            locked: false,
+            nest: 0,
+            hidden: o.hidden,
+            outline_text: o.outline_text,
+            hidden_art: vec![],
+            in_hidden: false,
+            fonts: vec![],
+            roman: false,
+            kumi: false,
+            clips: vec![],
+            last_image: None,
+            last_coverage: None,
+            whole_images: std::collections::HashMap::new(),
+            in_graph: false,
+            gradient_names: Numbered::default(),
+            spot_written: Numbered::default(),
+            spot_set: std::collections::HashSet::new(),
+            font_set: std::collections::HashSet::new(),
+            gradient_index: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Note `w`, once, about something of the document that the file leaves out or that reaches
+    /// it changed. A note about an option goes to [`Self::note_setting`].
+    fn warn(&mut self, w: &str) {
+        if !self.warnings.iter().any(|x| x == w) {
+            self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about hidden objects left out or written visible as an option asks.
+    fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
+        }
+    }
+
+    fn line(&mut self, s: &str) {
+        self.body.push_str(s);
+        self.body.push('\n');
+    }
+
+    // ---------- layers and objects ----------
+
+    /// `name` with each character outside Windows-1252 (the encoding type and names are written
+    /// in) replaced by `?`; adds the warning `warning` when it replaces one.
+    pub(super) fn latin_name(&mut self, name: &str, warning: &str) -> String {
+        let mut lost = false;
+        let kept = name
+            .chars()
+            .map(|c| {
+                if latin::encode(c).is_some() {
+                    c
+                } else {
+                    lost = true;
+                    '?'
+                }
+            })
+            .collect();
+        if lost {
+            self.warn(warning);
+        }
+        kept
+    }
+
+    /// A layer's name as a PostScript string in Windows-1252, like the type; a character outside it
+    /// is written as `?`, with a warning.
+    fn layer_name(&mut self, name: &str) -> String {
+        latin_string(&self.latin_name(name, LAYER_NAME))
+    }
+
+    /// Note spot color `name` (its swatch's name), of full CMYK equivalent `cmyk`, as a custom
+    /// color of the document, and give the name it is written with. Its characters outside
+    /// Windows-1252 are written as `?` (with a warning), and it is numbered when another spot color
+    /// is already written with that name; the name is the same each time.
+    fn spot(&mut self, name: &str, cmyk: [f32; 4]) -> String {
+        let written = match self.spot_names.get(name) {
+            Some(w) => w.clone(),
+            None => {
+                let base = self.latin_name(name, TITLE_AND_COLOR_NAMES);
+                let written = self.spot_written.take(base);
+                self.spot_names.insert(name.to_string(), written.clone());
+                written
+            }
+        };
+        if !self.spot_set.contains(&written) {
+            self.spot_set.insert(written.clone());
+            self.spots.push((written.clone(), cmyk));
+        }
+        written
+    }
+
+    /// The name spot color `name` (its swatch's name) is written with, once [`Self::spot`] has
+    /// noted it.
+    pub(super) fn spot_name<'n>(&'n self, name: &'n str) -> &'n str {
+        self.spot_names.get(name).map_or(name, String::as_str)
+    }
+
+    /// A top-level layer. False when it isn't a layer.
+    pub(super) fn layer(&mut self, n: &Node) -> bool {
+        let NodeKind::Layer { color, template, printable, children, clip, preview, dim_images } = &n.kind else { return false };
+        let (index, [r, g, b]) = ai_ops::layer_color(*color);
+        let flag = |b: bool| u8::from(b);
+        let name = self.layer_name(n.name.as_deref().unwrap_or("Layer"));
+        // A template layer doesn't print and shows dimmed.
+        let _ = writeln!(
+            self.body,
+            "%AI5_BeginLayer\n{} {} {} {} {} 0 {index} {r} {g} {b} Lb\n{} Ln",
+            flag(n.visible),
+            flag(*preview),
+            flag(!n.locked),
+            flag(*printable && !*template),
+            flag(dim_images.is_some() || *template),
+            name,
+        );
+        self.locked = false;
+        self.line("0 A");
+        self.in_hidden = !n.visible;
+        // Ruler guides are kept in the document's native copy only.
+        let art: Vec<Arc<Node>> = children.iter().filter(|c| !c.is_ruler_guide()).cloned().collect();
+        self.contents(&art, *clip, false);
+        self.in_hidden = false;
+        self.line("LB\n%AI5_EndLayer--");
+        true
+    }
+
+    /// The hidden layer of top-level layer `n`'s hidden objects, just above it (named after it,
+    /// with its colour, lock and printing). False when it has none.
+    pub(super) fn hidden_layer(&mut self, n: &Node) -> bool {
+        if self.hidden_art.is_empty() {
+            return false;
+        }
+        let art = std::mem::take(&mut self.hidden_art);
+        let NodeKind::Layer { color, template, printable, .. } = &n.kind else { return false };
+        let (index, [r, g, b]) = ai_ops::layer_color(*color);
+        let name = format!("{} (hidden)", n.name.as_deref().unwrap_or("Layer"));
+        let name = self.layer_name(&name);
+        let _ = writeln!(
+            self.body,
+            "%AI5_BeginLayer\n0 1 {} {} {} 0 {index} {r} {g} {b} Lb\n{} Ln",
+            u8::from(!n.locked),
+            u8::from(*printable && !*template),
+            u8::from(*template),
+            name,
+        );
+        self.locked = false;
+        self.line("0 A");
+        self.in_hidden = true;
+        for (node, locked) in &art {
+            self.node(node, *locked);
+        }
+        self.in_hidden = false;
+        self.line("LB\n%AI5_EndLayer--");
+        true
+    }
+
+    /// A container's members, the first clipping the others when `clip`; `locked`: the container is.
+    fn contents(&mut self, children: &[Arc<Node>], clip: bool, locked: bool) {
+        if clip {
+            self.clip_group(children, locked);
+        } else {
+            for c in children {
+                self.node(c, locked);
+            }
+        }
+    }
+
+    /// Set the lock state of the objects that follow.
+    fn lock(&mut self, locked: bool) {
+        if locked != self.locked {
+            self.locked = locked;
+            self.line(if locked { "1 A" } else { "0 A" });
+        }
+    }
+
+    /// One object (inside a container locked when `locked`).
+    fn node(&mut self, n: &Node, locked: bool) {
+        // Ruler guides are kept in the document's native copy only.
+        if n.is_ruler_guide() {
+            return;
+        }
+        if !n.visible && !self.in_hidden {
+            match self.hidden {
+                HiddenObjects::Omit => {
+                    self.note_setting(HIDDEN);
+                    return;
+                }
+                HiddenObjects::Layer => {
+                    self.warn(HIDDEN_LAYER);
+                    self.hidden_art.push((n.clone(), locked || n.locked));
+                    return;
+                }
+                HiddenObjects::Visible => self.note_setting(HIDDEN_SHOWN),
+            }
+        }
+        if n.opacity < 1.0 || n.blend != BlendMode::Normal || n.extras().mask.as_ref().is_some_and(|m| !m.disabled) {
+            self.warn(TRANSPARENCY);
+        }
+        if n.name.as_deref().is_some_and(|s| !s.is_empty()) && !n.is_layer() {
+            self.warn(NAMES);
+        }
+        // A graph on the layers keeps its data and settings when its records read back whole.
+        let graph = match n.extras().graph.is_some() {
+            true if self.nest == 0 && !self.in_graph => crate::ai_graph::records(n, self.to_art),
+            _ => None,
+        };
+        if n.extras().graph.is_some() && graph.is_none() {
+            self.warn(GRAPHS);
+        }
+        let locked = locked || n.locked;
+        match &n.kind {
+            NodeKind::Layer { children, clip, .. } => {
+                self.warn(SUBLAYERS);
+                self.group(children, *clip, locked);
+            }
+            NodeKind::Group { children, clip } => match &graph {
+                Some(records) => self.graph(children, locked, records),
+                None => self.group(children, *clip, locked),
+            },
+            NodeKind::Path { path, rule, guide, .. } => {
+                self.lock(locked);
+                if *guide {
+                    self.guide(path);
+                } else {
+                    self.shape(n, path, *rule);
+                }
+            }
+            NodeKind::Compound { children, rule } => {
+                self.lock(locked);
+                let mut subpaths = vec![];
+                for p in children.iter().filter_map(|c| c.path_data()) {
+                    subpaths.extend(p.subpaths.iter().cloned());
+                }
+                self.shape(n, &PathData::new(subpaths), *rule);
+            }
+            NodeKind::Text(t) => {
+                self.lock(locked);
+                self.text(t);
+            }
+            // A distorted image too deep for its pieces is written at the placement nearest its
+            // corners.
+            NodeKind::Image(im) if !n.is_distorted_image() || self.nest >= MAX_NEST => {
+                self.lock(locked);
+                let shown = self.doc.shown_image(n, im);
+                let blob = self.doc.image_blob(&shown);
+                // A colorize color the renderer draws the image in.
+                let colorize =
+                    n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));
+                let xf = match vectorcraft_doc::image_quad::nearest_affine(n) {
+                    Some(near) => {
+                        self.warn(DEEP_DISTORTED);
+                        near
+                    }
+                    None => im.xf,
+                };
+                self.image(blob, im.width, im.height, xf, colorize.map(|p| (p, n.colorize_overprints())));
+            }
+            NodeKind::SymbolInstance { symbol, xf } => {
+                self.warn(LIVE);
+                if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
+                    && self.nest < MAX_NEST
+                    && let Some(mut art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n), *xf)
+                {
+                    art.visible = true;
+                    self.nest += 1;
+                    self.node(&art, locked);
+                    self.nest -= 1;
+                }
+            }
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
+                self.warn(LIVE);
+                if self.nest < MAX_NEST {
+                    let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                    self.nest += 1;
+                    if let Some(children) = g.children() {
+                        self.group(children, false, locked);
+                    }
+                    self.nest -= 1;
+                }
+            }
+            // Ruler guides are kept in the document's native copy only.
+            NodeKind::RulerGuide { .. } => {}
+        }
+    }
+
+    /// A group (`u` … `U`), or a clipping group (`q` … `Q`).
+    fn group(&mut self, children: &[Arc<Node>], clip: bool, locked: bool) {
+        if children.is_empty() {
+            return;
+        }
+        self.lock(locked);
+        if clip {
+            self.clip_group(children, locked);
+        } else {
+            self.line("u");
+            self.contents(children, false, locked);
+            self.lock(locked);
+            self.line("U");
+        }
+    }
+
+    /// A graph's group (`u` … `U`) between its records (§17): `%_Gs` and its functional records
+    /// before it, `%_GS` after it, and each series' group followed by its `Go` tag.
+    fn graph(&mut self, children: &[Arc<Node>], locked: bool, records: &crate::ai_graph::Records) {
+        self.lock(locked);
+        self.body.push_str(&records.head);
+        self.line("u");
+        self.in_graph = true;
+        for c in children {
+            self.node(c, locked);
+            if let Some(tag) = records.tags.get(&c.id) {
+                self.line(tag);
+            }
+        }
+        self.in_graph = false;
+        self.lock(locked);
+        self.line("U");
+        self.line(crate::ai_graph::END);
+    }
+
+    /// A clipping group: its first member's outline clips the others (`h W n`). That member's fills
+    /// paint behind the art, inside the clip, and its strokes over it, outside.
+    fn clip_group(&mut self, children: &[Arc<Node>], locked: bool) {
+        let Some((clip, rest)) = children.split_first() else { return };
+        // Nothing to clip by hides the clipped art.
+        let Some((outline, rule)) = vectorcraft_effects::clip_outline(clip) else { return };
+        let paint = clip.clip_paint();
+        self.lock(locked);
+        self.line("q");
+        let path = PathData::from_bezpath(&outline);
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        self.clips.push(outline);
+        if let Some(fill) = &paint.fill {
+            self.node(fill, locked);
+        }
+        for c in rest {
+            self.node(c, locked);
+        }
+        self.clips.pop();
+        self.lock(locked);
+        self.line("Q");
+        if let Some(stroke) = &paint.stroke {
+            self.node(stroke, locked);
+        }
+    }
+
+    // ---------- paths ----------
+
+    /// A clipping path (§5.6.2): its points, `h` (closed) or `H`, `W`, then painted with nothing.
+    fn mask(&mut self, sp: &SubPath) {
+        self.subpath(sp);
+        self.line(if sp.closed { "h\nW\nn" } else { "H\nW\nN" });
+    }
+
+    /// A guide ([`ai_ops::guide`]).
+    fn guide(&mut self, path: &PathData) {
+        ai_ops::guide(&mut self.body, self.to_art, path, false);
+    }
+
+    /// A path's fills and strokes: one object with one fill and a plain stroke over it where it
+    /// can be, else a group of an object for each (in paint order).
+    fn shape(&mut self, n: &Node, path: &PathData, rule: FillRule) {
+        if path.is_empty() {
+            return;
+        }
+        let items: Vec<&AppearanceItem> = n
+            .appearance
+            .items
+            .iter()
+            .filter(|i| match i {
+                AppearanceItem::Fill(f) => f.visible && !f.paint.is_none(),
+                AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0 && s.width.is_finite(),
+            })
+            .collect();
+        for i in &items {
+            if i.opacity() < 1.0 || i.blend() != BlendMode::Normal {
+                self.warn(TRANSPARENCY);
+            }
+        }
+        match items.as_slice() {
+            [] => self.path_object(path, rule, None, None),
+            [AppearanceItem::Fill(f)] if direct_fill(&f.paint) => self.path_object(path, rule, Some(f), None),
+            [AppearanceItem::Stroke(s)] if direct_stroke(s) => self.path_object(path, rule, None, Some(s)),
+            [AppearanceItem::Fill(f), AppearanceItem::Stroke(s)] if direct_fill(&f.paint) && direct_stroke(s) => {
+                self.path_object(path, rule, Some(f), Some(s))
+            }
+            [one] => self.item(path, rule, one),
+            items => {
+                self.line("u");
+                for i in items {
+                    self.item(path, rule, i);
+                }
+                self.line("U");
+            }
+        }
+    }
+
+    /// One fill or stroke of a path as an object of its own.
+    fn item(&mut self, path: &PathData, rule: FillRule, item: &AppearanceItem) {
+        match item {
+            AppearanceItem::Fill(f) => self.fill_object(path, rule, f),
+            AppearanceItem::Stroke(s) if direct_stroke(s) => self.path_object(path, rule, None, Some(s)),
+            AppearanceItem::Stroke(s) => {
+                self.warn(STROKES);
+                let outline = stroke::outline_region(path, rule, s);
+                let fill = FillLayer { overprint: s.overprint, ..FillLayer::new(s.paint.clone()) };
+                self.fill_object(&outline, FillRule::NonZero, &fill);
+            }
+        }
+    }
+
+    /// A fill as an object of its own: patterns as their tiles clipped to the path.
+    fn fill_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer) {
+        if direct_fill(&f.paint) {
+            return self.path_object(path, rule, Some(f), None);
+        }
+        if let Paint::Gradient(g) = &f.paint
+            && g.gradient.kind == GradientKind::Conic
+        {
+            return self.conic_object(path, rule, f, g);
+        }
+        if let Paint::Gradient(g) = &f.paint
+            && g.gradient.kind == GradientKind::Diamond
+        {
+            return self.diamond_object(path, rule, f, g);
+        }
+        let Paint::Pattern { pattern, xf } = &f.paint else {
+            // A freeform gradient: its average colour.
+            self.warn(FREEFORM);
+            let color = match &f.paint {
+                Paint::Gradient(g) => average(&g.gradient),
+                _ => Color::gray(0.5),
+            };
+            let flat = FillLayer { paint: Paint::solid(color), ..f.clone() };
+            return self.path_object(path, rule, Some(&flat), None);
+        };
+        self.warn(PATTERNS);
+        let doc = self.doc;
+        let Some(def) = doc.pattern(pattern) else {
+            let flat = FillLayer { paint: Paint::solid(Color::gray(0.5)), ..f.clone() };
+            return self.path_object(path, rule, Some(&flat), None);
+        };
+        let area = path.to_bezpath().bounding_box();
+        let tiles = def.instances_in(*xf, area);
+        self.line("q");
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        let locked = self.locked;
+        for t in &tiles {
+            self.node(t, locked);
+        }
+        self.lock(locked);
+        self.line("Q");
+    }
+
+    /// A conic gradient fill (the format has no conic gradient) as [`CONIC_WEDGES`] solid wedges
+    /// about its center clipped to `path` (filled by `rule`), each running on to the seam under
+    /// the next ([`vectorcraft_color::GradientGeom::conic_wedges`]).
+    fn conic_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, g: &GradientPaint) {
+        self.warn(CONIC);
+        if g.gradient.stops.iter().any(|s| s.opacity < 1.0) {
+            self.warn(TRANSPARENCY);
+        }
+        let area = path.to_bezpath().bounding_box();
+        let wedges = g.resolve(area).conic_wedges(area, g.gradient.conic_wedge_count(CONIC_WEDGES), true);
+        let spread = g.gradient.spreader();
+        self.line("q");
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        for (pts, t) in wedges {
+            let (color, _) = g.gradient.sample_keep_model(spread(t) as f32);
+            let wedge = FillLayer { paint: Paint::solid(color), ..f.clone() };
+            self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&wedge), None);
+        }
+        self.line("Q");
+    }
+
+    /// A diamond gradient fill (the format has no diamond gradient) as four linear gradients
+    /// clipped to `path` (filled by `rule`), one for each quadrant of its frame and equal to the
+    /// diamond there, each running on under the next
+    /// ([`vectorcraft_color::GradientGeom::diamond_quadrants`]). A diamond without an extent is its
+    /// last stop.
+    fn diamond_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, g: &GradientPaint) {
+        let area = path.to_bezpath().bounding_box();
+        let Some(quadrants) = g.resolve(area).diamond_quadrants(area) else {
+            let color = g.gradient.stops.last().map_or(Color::gray(0.5), |s| s.color);
+            let flat = FillLayer { paint: Paint::solid(color), ..f.clone() };
+            return self.path_object(path, rule, Some(&flat), None);
+        };
+        self.warn(DIAMOND);
+        self.line("q");
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        let gradient = Gradient { kind: GradientKind::Linear, ..g.gradient.clone() };
+        for (pts, geom) in quadrants {
+            // Not named after the swatch: the definition is a linear gradient, not the swatch's.
+            let linear = GradientPaint { gradient: gradient.clone(), geom: Some(geom), swatch: None, ..g.clone() };
+            let quadrant = FillLayer { paint: Paint::Gradient(Box::new(linear)), ..f.clone() };
+            self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&quadrant), None);
+        }
+        self.line("Q");
+    }
+
+    /// A path object painted with `fill` (a colour or a linear or radial gradient) and `stroke`
+    /// (a plain line of a colour) over it; several subpaths make a compound path.
+    fn path_object(&mut self, path: &PathData, rule: FillRule, fill: Option<&FillLayer>, stroke: Option<&StrokeLayer>) {
+        let subpaths: Vec<&SubPath> = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).collect();
+        if subpaths.is_empty() {
+            return;
+        }
+        let gradient = match fill.map(|f| &f.paint) {
+            Some(Paint::Gradient(g)) => Some(self.gradient(g, path.to_bezpath().bounding_box())),
+            _ => None,
+        };
+        if let Some(f) = fill {
+            let paint = match &f.paint {
+                // The colour under the gradient: its first stop's.
+                Paint::Gradient(g) => g.gradient.stops.first().map_or(Paint::None, |s| Paint::solid(s.color)),
+                p => p.clone(),
+            };
+            self.color(&paint, false);
+            self.line(if f.overprint { "1 O" } else { "0 O" });
+        }
+        if let Some(s) = stroke {
+            self.color(&s.paint, true);
+            self.line(if s.overprint { "1 R" } else { "0 R" });
+            self.line_style(s);
+        }
+        self.fill_rule(rule);
+        let op = match (fill.is_some(), stroke.is_some()) {
+            (true, true) => 'b',
+            (true, false) => 'f',
+            (false, true) => 's',
+            (false, false) => 'n',
+        };
+        let several = subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in subpaths {
+            self.subpath(sp);
+            if let Some(g) = &gradient {
+                // The gradient fills between `Bb` and `BB`, whose flag strokes the path too (§3.5.3).
+                self.body.push_str(g);
+                self.line(if sp.closed { "f" } else { "F" });
+                self.line(match (stroke.is_some(), sp.closed) {
+                    (false, _) => "0 BB",
+                    (true, false) => "1 BB",
+                    (true, true) => "2 BB",
+                });
+            } else {
+                self.line(&if sp.closed { op.to_string() } else { op.to_ascii_uppercase().to_string() });
+            }
+        }
+        if several {
+            self.line("*U");
+        }
+    }
+
+    /// `rule` as `XR` (1: even-odd).
+    fn fill_rule(&mut self, rule: FillRule) {
+        self.line(if rule == FillRule::EvenOdd { "1 XR" } else { "0 XR" });
+    }
+
+    /// One subpath's points, in art space ([`ai_ops::subpath`]).
+    fn subpath(&mut self, sp: &SubPath) {
+        ai_ops::subpath(&mut self.body, self.to_art, sp);
+    }
+
+    /// The stroke's width, cap, join, miter limit and dashes ([`ai_ops::line_style`]).
+    fn line_style(&mut self, st: &StrokeLayer) {
+        ai_ops::line_style(&mut self.body, st);
+    }
+
+    // ---------- colour ----------
+
+    /// How `p` (a solid paint) is written.
+    pub(super) fn ink(&self, p: &Paint) -> Ink {
+        let Paint::Solid { color, swatch, tint } = p else { return Ink::Gray(0.0) };
+        let doc = self.doc;
+        let intent = self.cms.settings().intent;
+        if let Some(name) = swatch
+            && let Some(sw) = doc.swatch(name).filter(|s| s.spot)
+            && let Some(full) = sw.paint.color()
+        {
+            let full = doc.linked_color(full, true);
+            return Ink::Spot { cmyk: self.cms.to_cmyk(&full, intent).map(unit), name: name.clone(), tint: unit(*tint) };
+        }
+        match *color {
+            // Grey is ink coverage; the format's grey is lightness.
+            Color::Gray { k } => Ink::Gray(unit(1.0 - k)),
+            Color::Cmyk { c, m, y, k } => Ink::Cmyk([c, m, y, k].map(unit)),
+            // The CMYK equivalent of the RGB values as written.
+            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(&ai_ops::as_written(*color), intent).map(unit), [r, g, b].map(unit)),
+            Color::Lab { .. } => Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), ai_ops::rgb_values(*color)),
+        }
+    }
+
+    /// Set the fill (or with `stroke`, the stroke) colour to solid paint `p`.
+    fn color(&mut self, p: &Paint, stroke: bool) {
+        let ink = match self.ink(p) {
+            Ink::Spot { cmyk, name, tint } => Ink::Spot { name: self.spot(&name, cmyk), cmyk, tint },
+            ink => ink,
+        };
+        let op = |fill: &'static str, line: &'static str| if stroke { line } else { fill };
+        let s = &mut self.body;
+        match ink {
+            Ink::Gray(v) => {
+                ps::push_num(s, f64::from(v));
+                let _ = writeln!(s, " {}", op("g", "G"));
+            }
+            Ink::Cmyk(c) => {
+                ps::push_nums(s, &c.map(f64::from));
+                let _ = writeln!(s, "{}", op("k", "K"));
+            }
+            Ink::Rgb(_, rgb) => {
+                ps::push_nums(s, &rgb.map(f64::from));
+                let _ = writeln!(s, "{}", op("Xa", "XA"));
+            }
+            Ink::Spot { cmyk, name, tint } => {
+                ps::push_nums(s, &cmyk.map(f64::from));
+                let _ = write!(s, "{} ", latin_string(&name));
+                // The format's tint is how much lighter than the full colour (0: full).
+                ps::push_num(s, f64::from(1.0 - tint));
+                let _ = writeln!(s, " {}", op("x", "X"));
+            }
+        }
+    }
+
+    // ---------- gradients ----------
+
+    /// The definition gradient `g` uses (defined once for each distinct gradient), and its
+    /// instance on a path of bounds `bounds`: `Bb`, a radial's highlight `x y angle fraction Bh`
+    /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
+    /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
+    fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        // A gradient mixed by the Perceptual method or around the hue wheel (the format's
+        // gradients mix their stops' colors directly): the stops on its curve, in process colors,
+        // no more than the reader reads, in a definition of its own.
+        if !g.gradient.method.is_classic() {
+            self.warn(if g.gradient.method.is_hue() { HUE_STOPS } else { PERCEPTUAL_STOPS });
+            let curve = g.gradient.as_classic_curve();
+            let gradient = if curve.is_spread() { curve } else { curve.fitted(crate::import::MAX_GRADIENT_STOPS).into_owned() };
+            let p = GradientPaint { gradient, swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        // A gradient that repeats or reflects (the format's gradients pad past their ends): its
+        // stops repeated as many times as `bounds` needs, in a definition of its own, no more
+        // stops than the reader reads.
+        if let Some(padded) = g.gradient.padded_within(&g.resolve(bounds), bounds, crate::import::MAX_GRADIENT_STOPS) {
+            self.warn(if padded.capped { SPREAD_CAPPED } else { SPREAD });
+            let geom = padded.geom;
+            let p = GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        // One whose levels over `bounds` are not finite (a vector of no length): its stops
+        // repeated along the vector, padding past it.
+        if g.gradient.is_spread() {
+            self.warn(SPREAD_CAPPED);
+            let p = GradientPaint { gradient: g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS).into_owned(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        let name = self.define(&g.gradient, g.swatch.as_deref());
+        for stop in &g.gradient.stops {
+            if stop.opacity < 1.0 {
+                self.warn(TRANSPARENCY);
+            }
+            if let Some(sw) = &stop.swatch {
+                // Spot colours in stops are custom colours too.
+                let p = Paint::Solid { color: stop.color, swatch: Some(sw.clone()), tint: stop.tint };
+                if let Ink::Spot { cmyk, name, .. } = self.ink(&p) {
+                    self.spot(&name, cmyk);
+                }
+            }
+        }
+        let geom = g.resolve(bounds);
+        let (start, end) = (self.to_art * geom.start, self.to_art * geom.end);
+        let d = end - start;
+        let (angle, length) = (d.y.atan2(d.x).to_degrees(), d.hypot());
+        // The matrix is relative to the origin of a canvas whose size the specification doesn't
+        // give (§3.5.4), so it stays the identity: an elliptical radial is written circular.
+        if g.gradient.kind == GradientKind::Radial && (geom.aspect - 1.0).abs() > 1e-6 {
+            self.warn(ELLIPTICAL);
+        }
+        let mut s = String::from("Bb\n");
+        if g.gradient.kind == GradientKind::Radial {
+            // Every radial instance has a highlight (§3.5.5), `0 0 0 0 Bh` at the center (§3.5.6).
+            // It lies within the gradient's circle: one past the radius is written on it.
+            let off: Vec2 = geom.focal.map_or(Vec2::ZERO, |f| self.to_art * f - start);
+            let fraction = if off.hypot() > 1e-9 && length > 1e-9 { off.hypot() / length } else { 0.0 };
+            let (off, angle) = if fraction > 0.0 { (off / fraction.max(1.0), off.y.atan2(off.x).to_degrees()) } else { (Vec2::ZERO, 0.0) };
+            ps::push_nums(&mut s, &[off.x, off.y, angle, fraction.min(1.0)]);
+            s.push_str("Bh\n");
+        }
+        s.push_str("1 ");
+        s.push_str(&latin_string(&name));
+        s.push(' ');
+        ps::push_nums(&mut s, &[start.x, start.y, angle, length]);
+        s.push_str("1 0 0 1 0 0 Bg\n");
+        s
+    }
+
+    /// The name of the definition of `g` (its swatch's name when it has one, with each character
+    /// outside Windows-1252 written as `?` and a warning), defined the first time.
+    fn define(&mut self, g: &Gradient, swatch: Option<&str>) -> String {
+        let key = gradient_key(g);
+        if let Some((name, _)) = self.defined(g, key).and_then(|i| self.gradients.get(i)) {
+            return name.clone();
+        }
+        let base = self.latin_name(swatch.filter(|s| !s.is_empty()).unwrap_or("Gradient"), TITLE_AND_COLOR_NAMES);
+        let name = self.gradient_names.take(base);
+        self.gradient_index.entry(key).or_default().push(self.gradients.len());
+        self.gradients.push((name.clone(), g.clone()));
+        name
+    }
+
+    /// The place in [`Self::gradients`] of the first definition of `g`, whose key is `key`.
+    fn defined(&self, g: &Gradient, key: u64) -> Option<usize> {
+        #[cfg(test)]
+        if SCANNED_DEFINITIONS.with(std::cell::Cell::get) {
+            return self.gradients.iter().position(|(_, d)| same_gradient(d, g));
+        }
+        self.gradient_index.get(&key)?.iter().copied().find(|i| self.gradients.get(*i).is_some_and(|(_, d)| same_gradient(d, g)))
+    }
+
+    // ---------- type ----------
+
+    /// Type: a text object when the format can hold it as text, else its outlines (type with
+    /// rotated characters among them, which keeps their rotation).
+    fn text(&mut self, t: &TextObject) {
+        if !invertible(t.xf) {
+            return;
+        }
+        // Written as text or as outlines, the type keeps its drawn sizes but not the setting.
+        if t.dynamic_text && matches!(t.kind, TextKind::OnPath { .. }) {
+            self.warn(DYNAMIC_TEXT);
+        }
+        if !self.outline_text {
+            if writable(self.doc, t) {
+                return self.text_object(t);
+            }
+            if !holds_as_text(t) {
+                self.warn(TYPE);
+            }
+            if rotated(t) {
+                self.warn(ROTATED_TYPE);
+            }
+        }
+        self.outlines(t);
+    }
+
+    /// A text object (§15): `type To`, the text path (`a b c d tx ty startPt Tp`, an area's frame
+    /// or the path type runs along, `TP`), then each run's style and characters, `TO`. The matrix
+    /// takes text space (y up, the first baseline's start for point type) to art space; the frame
+    /// and path are in art space, as the specification's examples have them (§15.5). Type that
+    /// Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in, fitted at
+    /// the sizes the Character panel shows; then a run whose font size measures a height other
+    /// than the em box is written at the em size it is drawn at
+    /// ([`vectorcraft_text::FontDb::font_heights_resolved`]).
+    fn text_object(&mut self, t: &TextObject) {
+        if lost_attributes(t) {
+            self.warn(TYPE_ATTRIBUTES);
+        }
+        let fitted = vectorcraft_text::drawn(t);
+        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(&fitted);
+        let t = &*resolved;
+        let m = self.to_art * t.xf * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
+        let (kind, path, start) = match &t.kind {
+            TextKind::Point => (0, None, 0.0),
+            TextKind::Area { frame } => (1, frame.subpaths.iter().find(|sp| !sp.anchors.is_empty()).cloned(), 0.0),
+            TextKind::OnPath { path, .. } => {
+                let sp = path.subpaths.iter().find(|sp| !sp.anchors.is_empty()).cloned();
+                let fraction = t.kind.path_span().map_or(0.0, |(s, _)| s);
+                let start = sp
+                    .as_ref()
+                    .map_or(0.0, |sp| segment_point(&PathData::new(vec![sp.clone()]).transformed(self.to_art * t.xf).to_bezpath(), fraction));
+                (2, sp, start)
+            }
+        };
+        let _ = writeln!(self.body, "{kind} To");
+        let [a, b, c, d, e, f] = m.as_coeffs();
+        ps::push_nums(&mut self.body, &[a, b, c, d, e, f, start]);
+        self.line("Tp");
+        if let Some(sp) = path {
+            let placed = SubPath::new(sp.anchors.iter().map(|a| a.transform(t.xf)).collect(), sp.closed);
+            self.subpath(&placed);
+            self.line(if sp.closed { "n" } else { "N" });
+        }
+        self.line("TP");
+        let mut para = 0usize;
+        let mut para_start = true;
+        // No character of the current paragraph has been written.
+        let mut line_start = true;
+        for run in &t.runs {
+            let text = if run.style.all_caps { run.text.to_uppercase() } else { run.text.clone() };
+            let mut pieces = text.split('\n').peekable();
+            while let Some(piece) = pieces.next() {
+                let ends_paragraph = pieces.peek().is_some();
+                if piece.is_empty() && !ends_paragraph {
+                    continue;
+                }
+                if para_start {
+                    self.paragraph(t.para_at(para));
+                    para_start = false;
+                }
+                self.char_style(&run.style, t.para_at(para));
+                // The space before a line's first character, kerning before it (§15.4.6.1).
+                if line_start && !piece.is_empty() && run.style.kerning_before != 0.0 {
+                    self.kern(run.style.kerning_before);
+                }
+                line_start = false;
+                // Manual kerning after each character (0 included, which differs from automatic
+                // kerning), a soft hyphen as a discretionary hyphen (§15.4.10.1).
+                let kerning = run.style.kerning;
+                let mut bytes = vec![];
+                for c in piece.chars() {
+                    if c == '\u{ad}' {
+                        self.text_string(&mut bytes);
+                        self.line("T+");
+                        if let Some(k) = kerning {
+                            self.kern(k);
+                        }
+                        continue;
+                    }
+                    let Some(b) = latin::encode(c) else { continue };
+                    bytes.push(b);
+                    if let Some(k) = kerning {
+                        self.text_string(&mut bytes);
+                        self.kern(k);
+                    }
+                }
+                if ends_paragraph {
+                    bytes.push(b'\r');
+                    para += 1;
+                    para_start = true;
+                    line_start = true;
+                }
+                self.text_string(&mut bytes);
+            }
+        }
+        if self.kumi {
+            self.line("0 TY");
+            self.kumi = false;
+        }
+        self.line("TO");
+    }
+
+    /// `bytes` as a string of characters, `(…) Tx`, when there are any; `bytes` is left empty.
+    fn text_string(&mut self, bytes: &mut Vec<u8>) {
+        if !bytes.is_empty() {
+            self.body.push_str(&ps::bytes(bytes));
+            self.line(" Tx");
+            bytes.clear();
+        }
+    }
+
+    /// Manual kerning of `k` 1/1000 em between the characters before and after it: `0 k Tk`.
+    fn kern(&mut self, k: f64) {
+        self.body.push_str("0 ");
+        ps::push_num(&mut self.body, finite(k, 0.0));
+        self.line(" Tk");
+    }
+
+    /// A paragraph's attributes: alignment `Ta` and indents `Ti` (first line's, left, right).
+    fn paragraph(&mut self, p: &ParaStyle) {
+        let align = match p.justify {
+            Justify::Auto if p.direction == Some(ParaDirection::RightToLeft) => 2,
+            Justify::Auto | Justify::Left => 0,
+            Justify::Center => 1,
+            Justify::Right => 2,
+            Justify::JustifyLeft | Justify::JustifyCenter | Justify::JustifyRight => 3,
+            Justify::JustifyAll => 4,
+        };
+        let _ = writeln!(self.body, "{align} Ta");
+        ps::push_nums(&mut self.body, &[p.first_line_indent, p.left_indent, p.right_indent]);
+        self.line("Ti");
+    }
+
+    /// A run's character attributes and paint style: `Tr`, its fill and stroke, `Tf`, `Ts`, `Tz`,
+    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`; then `Tv` and `TY`
+    /// where Standard Vertical Roman Alignment or Tate-chu-yoko changes.
+    fn char_style(&mut self, st: &CharStyle, p: &ParaStyle) {
+        let fill = !st.fill.is_none();
+        let stroke = st.has_stroke();
+        let render = match (fill, stroke) {
+            (true, false) => 0,
+            (false, true) => 1,
+            (true, true) => 2,
+            (false, false) => 3,
+        };
+        let _ = writeln!(self.body, "{render} Tr");
+        if fill {
+            self.color(&st.fill, false);
+            self.line(if st.overprint_fill { "1 O" } else { "0 O" });
+        }
+        if stroke {
+            self.color(&st.stroke, true);
+            self.line(if st.overprint_stroke { "1 R" } else { "0 R" });
+            self.line_style(&st.stroke_layer());
+        }
+        let (name, truetype, ascent, descent) = font_of(st);
+        if !self.font_set.contains(&name) {
+            self.font_set.insert(name.clone());
+            self.fonts.push((name.clone(), truetype));
+        }
+        let size = finite(st.size, 12.0);
+        let _ = write!(self.body, "/_{name} ");
+        ps::push_nums(&mut self.body, &[size, ascent * size, descent * size]);
+        self.line("Tf");
+        ps::push_num(&mut self.body, finite(st.baseline_shift, 0.0));
+        self.line(" Ts");
+        ps::push_nums(&mut self.body, &[finite(st.h_scale, 100.0), finite(st.v_scale, 100.0)]);
+        self.line("Tz");
+        ps::push_num(&mut self.body, finite(st.tracking, 0.0));
+        self.line(" Tt");
+        self.line(if st.kerning.is_none() { "1 TA" } else { "0 TA" });
+        let leading = st.leading.unwrap_or_else(|| p.justification.auto_leading_for(st.size));
+        ps::push_nums(&mut self.body, &[finite(leading, size * 1.2), finite(p.space_before, 0.0)]);
+        self.line("Tl");
+        if st.standard_vertical_roman != self.roman {
+            self.roman = st.standard_vertical_roman;
+            self.line(if self.roman { "1 Tv" } else { "0 Tv" });
+        }
+        if st.tate_chu_yoko != self.kumi {
+            self.kumi = st.tate_chu_yoko;
+            self.line(if self.kumi { "1 TY" } else { "0 TY" });
+        }
+    }
+
+    /// Type as its glyphs' outlines: a group of a compound path for each run, with the run's fill
+    /// and stroke.
+    fn outlines(&mut self, t: &TextObject) {
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let scale = t.xf.determinant().abs().sqrt();
+        self.line("u");
+        for (i, run) in t.runs.iter().enumerate() {
+            let mut bp = BezPath::new();
+            // Ruby (furigana) glyphs in their base text's run's paint, as the canvas draws them.
+            for g in layout.glyphs.iter().chain(&layout.ruby).filter(|g| g.run == i) {
+                bp.extend(g.outline.iter());
+            }
+            if bp.elements().is_empty() {
+                continue;
+            }
+            bp.apply_affine(t.xf);
+            let path = PathData::from_bezpath(&bp);
+            let fill =
+                (!run.style.fill.is_none()).then(|| FillLayer { overprint: run.style.overprint_fill, ..FillLayer::new(run.style.fill.clone()) });
+            let stroke = run.style.has_stroke().then(|| {
+                let mut s = run.style.stroke_layer();
+                s.width *= scale;
+                s
+            });
+            let items: Vec<AppearanceItem> = fill.map(AppearanceItem::Fill).into_iter().chain(stroke.map(AppearanceItem::Stroke)).collect();
+            let mut n = Node::path(vectorcraft_doc::NodeId(0), path.clone(), vectorcraft_doc::Appearance::default());
+            n.appearance = vectorcraft_doc::Appearance { items, ..vectorcraft_doc::Appearance::default() }.into();
+            self.shape(&n, &path, FillRule::NonZero);
+        }
+        // Colour bitmap glyphs (emoji): their images, which the runs' paint doesn't paint.
+        for g in &layout.glyphs {
+            if let Some((image, to_text)) = g.placed_image() {
+                self.image(Some(&image.blob), image.width, image.height, t.xf * to_text, None);
+            }
+            // COLR glyphs: their layers, as art.
+            if let Some(art) = g.placed_colour(t.xf) {
+                self.node(&art, false);
+            }
+        }
+        self.line("U");
+    }
+
+    // ---------- images ----------
+
+    /// An image (§8): `%AI5_File:`, `%AI5_BeginRaster`, its matrix (an art-space matrix applied to
+    /// the pixels with their rows running downwards, `(u, -v)`) as `[ a b c d tx ty ]` and its
+    /// operands with `XI`, its RGB samples in hex on comment lines of [`HEX_LINE`] digits,
+    /// `%AI5_EndRaster`, then `F`. §8.4's examples have no `F`; without it, an app reading the file
+    /// can leave out an image in a clipping group and the art after it. No path is open there, so
+    /// the `F` paints nothing. `blob` holds the pixels, placed as a grid of `width` × `height`
+    /// by `xf`, and `colorize` is the solid color the image is colorized with and whether it
+    /// overprints. A colorized image whose pixels are all black or white is written as an image
+    /// mask (ImageMask 1, §8.1): its color as the fill with its fill overprint, then 1-bit
+    /// samples, a 0 bit for each black pixel, which takes the color, and a 1 bit for each white
+    /// pixel, which is clear. Another colorized image is written with
+    /// its color in its pixels. In a clipping group, an image whose pixels were written whole
+    /// already is written as the part of them the group shows ([`ai_ops::image_window`]).
+    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, colorize: Option<(&Paint, bool)>) {
+        let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
+        let m = self.to_art * xf * flip;
+        if !invertible(m) {
+            return;
+        }
+        if blob.is_some_and(|b| b.bytes.is_empty()) {
+            self.warn(LARGE_IMAGE);
+            return;
+        }
+        let Some((blob, img)) = blob.and_then(|b| Some((b, self.decoded(b)?))) else {
+            self.warn(UNDECODED);
+            return;
+        };
+        let (w, h) = (img.width(), img.height());
+        if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS {
+            self.warn(LARGE_IMAGE);
+            return;
+        }
+        // The object places the image's own pixel grid (its width × height) wherever the file's is.
+        let fit = Affine::scale_non_uniform(f64::from(width.max(1)) / f64::from(w), f64::from(height.max(1)) / f64::from(h));
+        let coverage = match colorize {
+            Some((paint, overprint)) => {
+                let Some((_, _, coverage)) = self.coverage(blob).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
+                    self.warn(UNDECODED);
+                    return;
+                };
+                Some((paint, overprint, coverage))
+            }
+            None => None,
+        };
+        // An image written whole already, cut to a clipping group: the part the group shows, placed
+        // where it is in the image (the pieces of a warped image each show a small part of the same one).
+        let key = Arc::as_ptr(&blob.bytes) as usize;
+        let window = if self.whole_images.contains_key(&key) { ai_ops::image_window(&self.clips, xf * fit, (w, h)) } else { None };
+        if window.is_none() {
+            self.whole_images.insert(key, blob.bytes.clone());
+        }
+        let window = window.unwrap_or([0, 0, w, h]);
+        let [x0, y0, x1, y1] = window;
+        let m = self.to_art * xf * fit * Affine::translate((f64::from(x0), f64::from(y0))) * flip;
+        let (w, h) = (x1 - x0, y1 - y0);
+        // Over white.
+        let over = |c: u8, a: u8| ((u32::from(c) * u32::from(a) + 255 * (255 - u32::from(a)) + 127) / 255) as u8;
+        if let Some((paint, overprint, coverage)) = coverage {
+            let coverage = ai_ops::window_samples(&coverage, img.width(), 1, window);
+            if coverage.iter().all(|&v| v == 0 || v == 255) {
+                let stride = (w as usize).div_ceil(8);
+                let mut bits = vec![0xFF; stride.saturating_mul(h as usize)];
+                for (i, _) in coverage.iter().enumerate().filter(|(_, v)| **v == 255) {
+                    let (x, y) = (i % w as usize, i / w as usize);
+                    if let Some(byte) = bits.get_mut(y * stride + x / 8) {
+                        *byte &= !(0x80 >> (x % 8));
+                    }
+                }
+                self.color(paint, false);
+                self.line(if overprint { "1 O" } else { "0 O" });
+                self.raster(m, &format!("0 0 {w} {h} {w} {h} 1 1 0 0 0 1"), &bits);
+                return;
+            }
+            let rgb = paint.color().map_or([0; 3], |c| c.to_rgb().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8));
+            let samples: Vec<u8> = coverage.iter().flat_map(|&a| rgb.map(|c| over(c, a))).collect();
+            self.warn(IMAGE_ALPHA);
+            self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
+            return;
+        }
+        let rgba = img.crop_imm(x0, y0, w, h).to_rgba8();
+        let mut samples = Vec::with_capacity(rgba.len() / 4 * 3);
+        let mut see_through = false;
+        for px in rgba.pixels() {
+            let [r, g, b, a] = px.0;
+            if a < 255 {
+                see_through = true;
+            }
+            samples.extend([over(r, a), over(g, a), over(b, a)]);
+        }
+        if see_through {
+            self.warn(IMAGE_ALPHA);
+        }
+        self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
+    }
+
+    /// The pixels of `blob`, decoded once for images that follow one another with the same data.
+    fn decoded(&mut self, blob: &ImageBlob) -> Option<Arc<image::DynamicImage>> {
+        if let Some((last, img)) = &self.last_image
+            && Arc::ptr_eq(&last.bytes, &blob.bytes)
+            && last.mime == blob.mime
+        {
+            return img.clone();
+        }
+        let too_large = |w: u32, h: u32| w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS;
+        let img = if vectorcraft_doc::header_size(&blob.bytes).is_some_and(|(w, h)| too_large(w, h)) {
+            None
+        } else {
+            vectorcraft_doc::decode::decode_within(&blob.bytes, MAX_IMAGE_PIXELS.saturating_mul(8))
+                .ok()
+                .flatten()
+                .map(|(img, _)| img)
+                .filter(|img| !too_large(img.width(), img.height()))
+        }
+        .map(Arc::new);
+        self.last_image = Some((blob.clone(), img.clone()));
+        self.last_coverage = None;
+        img
+    }
+
+    /// The coverage of `blob` ([`ImageBlob::coverage`]), worked out once for images that follow one
+    /// another with the same data, as [`Self::decoded`] decodes them.
+    fn coverage(&mut self, blob: &ImageBlob) -> Option<Coverage> {
+        let last = self.last_image.as_ref().is_some_and(|(last, _)| Arc::ptr_eq(&last.bytes, &blob.bytes) && last.mime == blob.mime);
+        if last && let Some(coverage) = &self.last_coverage {
+            return coverage.clone();
+        }
+        #[cfg(test)]
+        COVERAGE_RUNS.with(|n| n.set(n.get() + 1));
+        let coverage = ImageBlob::coverage(blob).map(|(w, h, c)| (w, h, Arc::new(c)));
+        if last {
+            self.last_coverage = Some(coverage.clone());
+        }
+        coverage
+    }
+
+    /// Appends `samples` to `s` as upper-case hex digits on comment lines: each line starts with `%`,
+    /// holds [`HEX_LINE`] digits (the last line may hold fewer) and ends with a newline. An empty
+    /// `samples` appends no line.
+    pub(super) fn push_hex(s: &mut String, samples: &[u8]) {
+        const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
+        const PER_LINE: usize = HEX_LINE / 2;
+        const _: () = assert!(HEX_LINE > 0 && HEX_LINE.is_multiple_of(2));
+        let lines = samples.len().div_ceil(PER_LINE);
+        s.reserve(samples.len().saturating_mul(2).saturating_add(lines.saturating_mul(2)));
+        for line in samples.chunks(PER_LINE) {
+            s.push('%');
+            for &c in line {
+                s.push(char::from(DIGITS[usize::from(c >> 4)]));
+                s.push(char::from(DIGITS[usize::from(c & 0x0F)]));
+            }
+            s.push('\n');
+        }
+    }
+
+    /// An image's lines (§8.4): `%AI5_File:`, `%AI5_BeginRaster`, matrix `m` as `[ a b c d tx ty ]`
+    /// and the numbers `operands` with `XI`, `samples` in hex on comment lines of [`HEX_LINE`]
+    /// digits, `%AI5_EndRaster`, then `F`.
+    fn raster(&mut self, m: Affine, operands: &str, samples: &[u8]) {
+        let [a, b, c, d, e, f] = m.as_coeffs();
+        let s = &mut self.body;
+        s.push_str("%AI5_File:\n%AI5_BeginRaster\n[ ");
+        ps::push_nums(s, &[a, b, c, d, e, f]);
+        let _ = writeln!(s, "] {operands} XI");
+        Self::push_hex(s, samples);
+        s.push_str("%AI5_EndRaster\nF\n");
+    }
+}
+
+/// Names kept apart: a name already given is numbered, as the first free `name 2`, `name 3`…
+#[derive(Default)]
+pub(super) struct Numbered {
+    taken: std::collections::HashSet<String>,
+    /// The number to try first for each name already given, after the numbers it was given.
+    next: std::collections::HashMap<String, usize>,
+    /// The names given, in order, for [`SCANNED_NAMES`].
+    #[cfg(test)]
+    given: Vec<String>,
+}
+
+impl Numbered {
+    /// `base`, or the first free `base 2`, `base 3`… when `base` is taken; it is then taken.
+    pub(super) fn take(&mut self, base: String) -> String {
+        #[cfg(test)]
+        if SCANNED_NAMES.with(std::cell::Cell::get) {
+            let mut name = base.clone();
+            let mut i = 1;
+            while self.given.contains(&name) {
+                i += 1;
+                name = format!("{base} {i}");
+            }
+            self.given.push(name.clone());
+            return name;
+        }
+        let name = if self.taken.contains(&base) {
+            // Names are never given back, so every number below `from` is still taken. Of the
+            // numbers `from..=tries`, at least one is free.
+            let from = self.next.get(&base).copied().unwrap_or(2);
+            let tries = from.saturating_add(self.taken.len());
+            let i = (from..tries).find(|i| !self.taken.contains(&format!("{base} {i}"))).unwrap_or(tries);
+            self.next.insert(base.clone(), i.saturating_add(1));
+            format!("{base} {i}")
+        } else {
+            base
+        };
+        self.taken.insert(name.clone());
+        #[cfg(test)]
+        self.given.push(name.clone());
+        name
+    }
+}

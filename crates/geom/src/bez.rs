@@ -39,6 +39,15 @@ pub fn segments(els: &[PathEl]) -> Vec<PathSeg> {
     kurbo::segments(els.iter().copied()).collect()
 }
 
+/// Whether `s` has length: a segment all of whose points coincide has none, and no direction.
+pub fn has_length(s: &PathSeg) -> bool {
+    match s {
+        PathSeg::Line(l) => l.p1 != l.p0,
+        PathSeg::Quad(q) => q.p1 != q.p0 || q.p2 != q.p0,
+        PathSeg::Cubic(c) => c.p1 != c.p0 || c.p2 != c.p0 || c.p3 != c.p0,
+    }
+}
+
 /// Unit tangent of `s` at `t`, robust at ends where control points coincide with the end point.
 pub fn tangent(s: &PathSeg, t: f64) -> Vec2 {
     let d = match s {

@@ -4,13 +4,13 @@
 
 /// A single-line text value (TEXT, ATTRIB) as plain text.
 pub(crate) fn plain(s: &str) -> String {
-    percent_codes(&escapes(s))
+    percent_codes(&escapes(s, false))
 }
 
 /// A multiline text value (MTEXT) as plain text with `\n` between paragraphs, and the font family
 /// its first font change names.
 pub(crate) fn mtext(s: &str) -> (String, Option<String>) {
-    let s = escapes(s);
+    let s = escapes(s, true);
     let mut out = String::with_capacity(s.len());
     let mut family = None;
     let mut chars = s.chars().peekable();
@@ -25,7 +25,7 @@ pub(crate) fn mtext(s: &str) -> (String, Option<String>) {
                 Some('S') => {
                     // A stacked fraction `\Snum^den;` (or / or #): written as num/den.
                     let arg = until_semicolon(&mut chars);
-                    out.push_str(&arg.replace(['^', '#'], "/"));
+                    out.push_str(&arg.replace("^ ", "^").replace(['^', '#'], "/"));
                 }
                 Some(f @ ('f' | 'F')) => {
                     let arg = until_semicolon(&mut chars);
@@ -62,19 +62,62 @@ fn until_semicolon(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Stri
     arg
 }
 
+/// The character a `\U+XXXX` escape writes (`after` is the text just after its backslash), with
+/// the escape's length; a UTF-16 surrogate pair written as two escapes is one character.
+fn unicode_escape(after: &str) -> Option<(char, usize)> {
+    let hex = after.strip_prefix("U+").or_else(|| after.strip_prefix("u+"))?.get(..4)?;
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let value = u32::from_str_radix(hex, 16).ok()?;
+    if (0xD800..=0xDBFF).contains(&value) {
+        let next = after.get(6..)?;
+        let low = next.strip_prefix("\\U+").or_else(|| next.strip_prefix("\\u+"))?.get(..4)?;
+        if !low.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let low = u32::from_str_radix(low, 16).ok()?;
+        if !(0xDC00..=0xDFFF).contains(&low) {
+            return None;
+        }
+        let scalar = 0x1_0000 + ((value - 0xD800) << 10) + (low - 0xDC00);
+        return char::from_u32(scalar).map(|ch| (ch, 13));
+    }
+    if (0xDC00..=0xDFFF).contains(&value) {
+        return None;
+    }
+    char::from_u32(value).map(|ch| (ch, 6))
+}
+
 /// `\U+XXXX` Unicode escapes (how files before DXF 2007 hold characters outside their code page)
-/// and caret escapes: `^ ` is a caret, `^I` a tab; other control characters are dropped.
-fn escapes(s: &str) -> String {
+/// and caret escapes: `^ ` is a caret, `^I` a tab; other control characters are dropped. In
+/// multiline text (`mtext`) `\\` is an escaped backslash and is kept as is, so that a `U+` after
+/// it stays literal, and the `^` in a stacked fraction `\Snum^den;` is left for the caller.
+fn escapes(s: &str, mtext: bool) -> String {
     let mut out = String::with_capacity(s.len());
     let mut rest = s;
     while let Some(c) = rest.chars().next() {
         let after = rest.get(c.len_utf8()..).unwrap_or("");
+        if mtext && c == '\\' && after.starts_with('\\') {
+            out.push_str("\\\\");
+            rest = after.get(1..).unwrap_or("");
+            continue;
+        }
         if c == '\\'
-            && let Some(hex) = after.strip_prefix("U+").or_else(|| after.strip_prefix("u+")).and_then(|h| h.get(..4))
-            && let Some(ch) = u32::from_str_radix(hex, 16).ok().and_then(char::from_u32)
+            && let Some((ch, consumed)) = unicode_escape(after)
         {
             out.push(ch);
-            rest = after.get(6..).unwrap_or("");
+            rest = after.get(consumed..).unwrap_or("");
+            continue;
+        }
+        if mtext
+            && c == '\\'
+            && let Some(tail) = after.strip_prefix('S')
+        {
+            let end = tail.find(';').map_or(tail.len(), |i| i + 1);
+            out.push_str("\\S");
+            out.push_str(tail.get(..end).unwrap_or(""));
+            rest = tail.get(end..).unwrap_or("");
             continue;
         }
         if c == '^'
@@ -136,6 +179,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn unicode_escape_requires_four_hex_digits() {
+        assert_eq!(plain("\\U++041"), "\\U++041");
+        assert_eq!(plain("\\U+00G1"), "\\U+00G1");
+        assert_eq!(plain("\\U+ 041"), "\\U+ 041");
+        assert_eq!(plain("\\U+00C9"), "É");
+    }
+
+    #[test]
+    fn unicode_escape_decodes_surrogate_pairs() {
+        assert_eq!(plain("\\U+D83D\\U+DE00"), "😀");
+        assert_eq!(plain("\\U+D83D"), "\\U+D83D");
+        assert_eq!(plain("\\U+DE00"), "\\U+DE00");
+        assert_eq!(plain("\\U+D83D\\U+0041"), "\\U+D83DA");
+    }
+
+    #[test]
     fn control_codes_and_escapes() {
         assert_eq!(plain("45%%d %%p0.1 %%c20 100%%% %%uunder%%u"), "45° ±0.1 ⌀20 100% under");
         assert_eq!(plain("caf\\U+00E9 ^ x^I^Jy"), "café ^x\ty", "`^ ` is a caret");
@@ -152,6 +211,10 @@ mod tests {
         // Carets are written "^ " (a caret before another character is a control character).
         assert_eq!(mtext("x\\S3^ 4;").0, "x3/4");
         assert_eq!(mtext("x\\S3#4;").0, "x3/4");
+        assert_eq!(mtext("\\S1^2;").0, "1/2");
+        assert_eq!(mtext("\\S+1^-2;^I").0, "+1/-2\t");
         assert_eq!(mtext("trailing\\").0, "trailing\\");
+        assert_eq!(mtext("a\\\\U+0041b").0, "a\\U+0041b", "an escaped backslash is not a Unicode escape");
+        assert_eq!(mtext("a\\U+0041b").0, "aAb");
     }
 }

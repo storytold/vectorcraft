@@ -19,13 +19,22 @@
 //! operand read so far at its depth, and a call on a File or Folder object in them (`(f).remove()`)
 //! is a call on the object. Nothing recurses.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::catalog;
+use crate::catalog::{self, FeatureId};
 use crate::directives;
 use crate::lex::{Lexer, T, Token, expr_after};
-use crate::report::{self, Acc};
+use crate::report::{self, Acc, OutsideId};
+use sig::{COMPOUND, LineBreaks, NEWER, Read, Sig, ends_value, for_in, goes_on_after, goes_on_with, is, member_mark, newer_number, unquote, word};
+
+mod declared;
+mod features;
+mod sig;
+
+pub(crate) use declared::{Declared, declarations};
+use features::platform_name;
 
 /// An `#include` line: what it names, its line, and the folders `#includepath` named at that point
 /// (one list, shared by every line it applies to).
@@ -37,29 +46,44 @@ pub(crate) struct IncludeRef {
 }
 
 /// What variables hold, as a check learns it: the member chains assigned to them, and the ones
-/// holding a File or Folder object.
+/// holding a File or Folder object, with the ones of those that every assignment the check read gave
+/// a Folder object ([`Analyzer::folders`]).
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Known {
     pub bound: HashMap<String, String>,
     pub files: HashSet<String>,
+    pub folders: HashSet<String>,
+    /// A file gives names values the analysis doesn't read ([`Declared::unsure`]): no object counts
+    /// as a Folder object whatever the path names.
+    pub unsure: bool,
 }
 
 impl Known {
-    /// The names known.
+    /// The names known, a name that may hold a File object counting twice: a Folder that becomes a
+    /// possible File object ([`Known::add`]) changes it too.
     pub fn len(&self) -> usize {
-        self.bound.len() + self.files.len()
+        self.bound.len() + self.files.len().saturating_mul(2).saturating_sub(self.folders.len()) + usize::from(self.unsure)
     }
 
     /// What `other` adds, up to [`crate::Limits::entries`] names of each kind: a name already
-    /// bound keeps its chain.
+    /// bound keeps its chain. A name that holds a File or Folder object on both sides holds a Folder
+    /// object only when both sides say so; otherwise it may hold a File object.
     pub fn add(&mut self, other: Known, entries: usize) {
+        self.unsure |= other.unsure;
         for (name, chain) in other.bound {
             if self.bound.len() < entries || self.bound.contains_key(&name) {
                 self.bound.entry(name).or_insert(chain);
             }
         }
         for name in other.files {
-            if self.files.len() < entries {
+            if self.files.contains(&name) {
+                if !other.folders.contains(&name) {
+                    self.folders.remove(&name);
+                }
+            } else if self.files.len() < entries {
+                if other.folders.contains(&name) {
+                    self.folders.insert(name.clone());
+                }
                 self.files.insert(name);
             }
         }
@@ -76,35 +100,39 @@ pub(crate) struct Scan {
     pub known: Known,
 }
 
-/// Scan `src`: the script itself (`file` none) or a file it includes (`file`: its path inside the
-/// script's folder), with the `#includepath` folders `paths` in force at its start and its variables
-/// holding what `known` says.
-pub(crate) fn scan(src: &str, file: Option<&str>, paths: Rc<[String]>, known: &Known, acc: &mut Acc) -> Scan {
-    // A name written with `\u` escapes is read as the name it spells.
-    let unescaped = unescape_names(src, acc);
-    let src = unescaped.as_deref().unwrap_or(src);
-    let declared = declarations(src, acc);
+/// Scan `src` (already through [`unescaped`]): the script itself (`file` none) or a file it includes
+/// (`file`: its path inside the script's folder), with the names it declares (`declared`, from
+/// [`declarations`] on the same `src`), the `#includepath` folders `paths` in force at its start and
+/// its variables holding what `known` says. Each of the `\u{…}` escapes `braced` that [`unescaped`]
+/// read is syntax later than ECMAScript 3, reported when the scan reaches the escape's line.
+pub(crate) fn scan<'s>(
+    src: &'s str,
+    declared: &Declared<'s>,
+    braced: &[Braced],
+    file: Option<&str>,
+    paths: Rc<[String]>,
+    known: &Known,
+    acc: &mut Acc,
+) -> Scan {
     let mut lexer = Lexer::new(src, acc.limits.nesting);
     let mut a = Analyzer::new(acc, file, paths, known, declared);
-    let mut nl = false;
+    let mut breaks = LineBreaks::default();
+    let mut braced = braced.iter().peekable();
     for t in lexer.by_ref() {
+        while let Some((line, escape)) = braced.next_if(|(line, _)| *line <= t.line) {
+            a.acc.problem(report::NEWER_SYNTAX, Some(*line), file, Some(escape));
+        }
         if let Some(code) = t.problem {
             a.problem(code, t.line);
         }
-        match t.kind {
-            T::Space => {}
-            // A comment with a line break in it ends a line, as a line break does.
-            T::Comment => nl |= t.text.contains(['\n', '\r', '\u{2028}', '\u{2029}']),
-            T::Newline => nl = true,
-            T::Directive => {
-                a.directive(&t);
-                nl = true;
-            }
-            _ => {
-                a.token(Sig::of(&t, nl));
-                nl = false;
-            }
+        match breaks.read(&t) {
+            Read::Skip => {}
+            Read::Directive => a.directive(&t),
+            Read::Token(sig) => a.token(sig),
         }
+    }
+    for (line, escape) in braced {
+        a.acc.problem(report::NEWER_SYNTAX, Some(*line), file, Some(escape));
     }
     if let Some(line) = lexer.unclosed_xml {
         a.problem(report::UNTERMINATED_XML, line);
@@ -118,21 +146,61 @@ pub(crate) fn scan(src: &str, file: Option<&str>, paths: Rc<[String]>, known: &K
     Scan { includes, module, lines: lexer.lines(), known }
 }
 
-/// `src` with the `\uXXXX` escapes in its names written as the characters they stand for (ECMA-262
-/// 3rd edition, section 7.6), or none when no name has one. An escape for a character no name may
-/// hold stays as written. Line breaks don't change, so every line keeps its number.
-fn unescape_names(src: &str, acc: &mut Acc) -> Option<String> {
+/// A `\u{…}` escape in a name, which ECMAScript 3 does not have: its line and its text.
+pub(crate) type Braced = (usize, String);
+
+/// `src` with the `\uXXXX` and `\u{…}` escapes in its names and private names written as the
+/// characters they stand for (ECMA-262, Names and Keywords), and `src` itself when no name has one,
+/// with the `\u{…}` escapes read, each listed once per line in a row. An escape for a character a
+/// name may not hold where the escape stands stays as written, and so does a private name that
+/// starts a line where the name it spells would start a preprocessor line. Line breaks don't
+/// change, so every line keeps its number.
+pub(crate) fn unescaped<'a>(src: Cow<'a, str>, acc: &mut Acc) -> (Cow<'a, str>, Vec<Braced>) {
+    let mut braced = vec![];
+    match unescape_names(&src, acc, &mut braced) {
+        Some(out) => (Cow::Owned(out), braced),
+        None => (src, braced),
+    }
+}
+
+fn unescape_names(src: &str, acc: &mut Acc, braced: &mut Vec<Braced>) -> Option<String> {
     if !src.contains("\\u") {
         return None;
     }
     let mut out = String::with_capacity(src.len());
     let mut changed = false;
     let mut lexer = Lexer::new(src, acc.limits.nesting);
-    for t in lexer.by_ref() {
-        if t.kind == T::Ident && t.text.contains("\\u") {
-            let name = unescape_name(t.text);
-            changed |= name != t.text;
-            out.push_str(&name);
+    // One more than the report keeps, so that the report is marked truncated.
+    let room = acc.limits.entries.saturating_add(1);
+    // Only blanks since the last line break (or the start).
+    let mut line_start = true;
+    let mut found = vec![];
+    while let Some(t) = lexer.next() {
+        // A private name is `#` and a name.
+        let (mark, name) = match t.kind {
+            T::Ident => ("", t.text),
+            T::Other => t.text.strip_prefix('#').map_or(("", ""), |name| ("#", name)),
+            _ => ("", ""),
+        };
+        let starts_line = line_start;
+        line_start = t.kind == T::Newline || (line_start && t.kind == T::Space);
+        if name.contains("\\u") {
+            found.clear();
+            let written = unescape_name(name, t.line, &mut found, room);
+            for escape in found.drain(..) {
+                if braced.last() != Some(&escape) && braced.len() < room {
+                    braced.push(escape);
+                }
+            }
+            // A private name that starts a line stays as written where the name it spells would
+            // start a preprocessor line.
+            if mark == "#" && starts_line && !lexer.private_line(&written) {
+                out.push_str(t.text);
+                continue;
+            }
+            changed |= written != name;
+            out.push_str(mark);
+            out.push_str(&written);
         } else {
             out.push_str(t.text);
         }
@@ -141,230 +209,36 @@ fn unescape_names(src: &str, acc: &mut Acc) -> Option<String> {
     changed.then_some(out)
 }
 
-/// The name `text` with each `\uXXXX` escape for a character a name may hold written as that
-/// character.
-fn unescape_name(text: &str) -> String {
+/// The name `text`, on `line`, with each escape for a character a name may hold where it stands
+/// written as that character: a character a name may start with first, and one a name may hold
+/// after that. Each `\u{…}` escape read goes into `braced`, unless the last one there is the same
+/// escape on the same line or `braced` holds `room` of them.
+fn unescape_name(text: &str, line: usize, braced: &mut Vec<Braced>, room: usize) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(i) = rest.find("\\u") {
         out.push_str(rest.get(..i).unwrap_or_default());
-        let after = rest.get(i + 2..).unwrap_or_default();
-        let c = after
-            .get(..4)
-            .filter(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()))
-            .and_then(|hex| u32::from_str_radix(hex, 16).ok())
-            .and_then(char::from_u32)
-            .filter(|&c| crate::lex::ident_part(c));
+        let at = rest.get(i..).unwrap_or_default();
+        let first = out.is_empty();
+        let c = crate::lex::escape(at).filter(|&(c, _)| if first { crate::lex::ident_start(c) } else { crate::lex::ident_part(c) });
         match c {
-            Some(c) => {
+            Some((c, len)) => {
                 out.push(c);
-                rest = after.get(4..).unwrap_or_default();
+                let source = at.get(..len).unwrap_or_default();
+                let repeated = braced.last().is_some_and(|(l, s)| *l == line && s == source);
+                if source.starts_with("\\u{") && !repeated && braced.len() < room {
+                    braced.push((line, source.to_string()));
+                }
+                rest = at.get(len..).unwrap_or_default();
             }
             None => {
                 out.push_str("\\u");
-                rest = after;
+                rest = at.get(2..).unwrap_or_default();
             }
         }
     }
     out.push_str(rest);
     out
-}
-
-/// A significant token: what it is, its text, its line, and whether a line break comes before it.
-#[derive(Clone, Copy, Debug)]
-struct Sig<'s> {
-    kind: T,
-    text: &'s str,
-    line: usize,
-    nl: bool,
-    /// The token ends a File or Folder object: the `)` that ends a call of `File` or `Folder` (with
-    /// or without `new`) or of `File.openDialog`, `File.saveDialog` or `Folder.selectDialog`, the
-    /// name in `Folder.temp` and the other places of [`catalog::FOLDER_PLACES`], or the `)` of
-    /// grouping parentheses that hold only such an object or a variable holding one (`(f)`).
-    file: bool,
-    /// A statement may start at the token ([`crate::lex::Token::stmt`]).
-    stmt: bool,
-    /// An expression may start at the token ([`crate::lex::Token::expr`]).
-    expr: bool,
-    /// The byte offset in the text where the token starts.
-    start: usize,
-}
-
-impl<'s> Sig<'s> {
-    /// The significant token `t`, after a line break when `nl` is set.
-    fn of(t: &Token<'s>, nl: bool) -> Self {
-        Sig { kind: t.kind, text: t.text, line: t.line, nl, file: false, stmt: t.stmt, expr: t.expr, start: t.start }
-    }
-
-    fn is(&self, punct: &str) -> bool {
-        self.kind == T::Punct && self.text == punct
-    }
-
-    fn word(&self, word: &str) -> bool {
-        self.kind == T::Ident && self.text == word
-    }
-}
-
-fn is(s: Option<Sig>, punct: &str) -> bool {
-    s.is_some_and(|s| s.is(punct))
-}
-
-fn word(s: Option<Sig>, w: &str) -> bool {
-    s.is_some_and(|s| s.word(w))
-}
-
-/// A token after which a name is a member, not a variable: `.`, `.@`, `..` and `::`.
-fn member_mark(s: Option<Sig>) -> bool {
-    s.is_some_and(|s| s.kind == T::Punct && matches!(s.text, "." | ".@" | ".." | "::"))
-}
-
-/// A token after which an expression goes on, also past a line break: a punctuator other than `)`,
-/// `]`, `}`, `++`, `--` and `;`, or `in`, `instanceof`, `typeof`, `new`, `delete` or `void`.
-fn goes_on_after(s: Option<Sig>) -> bool {
-    s.is_some_and(|s| match s.kind {
-        T::Punct => !matches!(s.text, ")" | "]" | "}" | "++" | "--" | ";"),
-        T::Ident => matches!(s.text, "in" | "instanceof" | "typeof" | "new" | "delete" | "void"),
-        _ => false,
-    })
-}
-
-/// A token that goes on with the expression on the line before when it starts a line: a
-/// punctuator other than `{`, `}`, `;`, `++`, `--`, `!` and `~`, or `in` or `instanceof`.
-fn goes_on_with(t: &Sig) -> bool {
-    match t.kind {
-        T::Punct => !matches!(t.text, "{" | "}" | ";" | "++" | "--" | "!" | "~"),
-        T::Ident => matches!(t.text, "in" | "instanceof"),
-        _ => false,
-    }
-}
-
-/// `t` is the `in` of `for (var name in …)`, which ends the `var` statement's declarations: it comes
-/// right after a name the statement declares (ECMA-262 3rd edition, section 12.6.4). Outside a `for`
-/// statement's parentheses, `in` can't stand there.
-fn for_in(t: &Sig, h0: Option<Sig>, h1: Option<Sig>) -> bool {
-    t.word("in") && h0.is_some_and(|s| s.kind == T::Ident) && (word(h1, "var") || is(h1, ","))
-}
-
-/// A token after which the value before it is complete: `;`, `,`, `:` (a conditional expression's
-/// colon, ECMA-262 3rd edition, section 11.12), `)`, `]` or `}`, or a token on a new line that
-/// doesn't go on with the expression.
-fn ends_value(t: &Sig) -> bool {
-    (t.nl && !goes_on_with(t)) || (t.kind == T::Punct && matches!(t.text, ";" | "," | ":" | ")" | "]" | "}"))
-}
-
-/// Punctuators of later syntax.
-const NEWER: &[&str] = &["=>", "...", "?.", "??", "**", "**=", "??=", "&&=", "||="];
-
-/// The compound assignment operators (ECMA-262 3rd edition, section 11.13.2): each gives the name a
-/// number or a string worked out from its old value.
-const COMPOUND: &[&str] = &["*=", "/=", "%=", "+=", "-=", "<<=", ">>=", ">>>=", "&=", "^=", "|="];
-
-/// A number in a later form: binary, octal (`0b1`, `0o7`), with separators (`1_000`) or big (`1n`).
-fn newer_number(text: &str) -> bool {
-    let b = text.as_bytes();
-    text.contains('_') || (b.len() > 1 && b.last() == Some(&b'n')) || matches!((b.first(), b.get(1)), (Some(b'0'), Some(b'b' | b'B' | b'o' | b'O')))
-}
-
-/// A string literal's value, its quotes removed and its escapes undone (`\n`, `\xHH`, `\uHHHH`,
-/// octal escapes, a backslash before a line break), up to `max` characters.
-fn unquote(text: &str, max: usize) -> String {
-    let mut chars = text.chars();
-    let body = match chars.next() {
-        Some(q @ ('"' | '\'')) => chars.as_str().strip_suffix(q).unwrap_or(chars.as_str()),
-        _ => text,
-    };
-    let mut out = String::new();
-    let mut n = 0;
-    let mut it = body.chars().peekable();
-    while n < max
-        && let Some(c) = it.next()
-    {
-        let c = if c == '\\' {
-            match it.next() {
-                None => break,
-                Some('n') => '\n',
-                Some('t') => '\t',
-                Some('r') => '\r',
-                Some('b') => '\u{8}',
-                Some('f') => '\u{c}',
-                Some('v') => '\u{b}',
-                // A legacy octal escape (ECMA-262 3rd edition, annex B.1.2): up to three digits
-                // after `\0` to `\3`, two after `\4` to `\7`.
-                Some(d @ '0'..='7') => {
-                    let mut v = d.to_digit(8).unwrap_or_default();
-                    for _ in 0..if v <= 3 { 2 } else { 1 } {
-                        match it.peek().and_then(|o| o.to_digit(8)) {
-                            Some(o) => {
-                                v = v * 8 + o;
-                                it.next();
-                            }
-                            None => break,
-                        }
-                    }
-                    char::from_u32(v).unwrap_or('\u{fffd}')
-                }
-                Some(x @ ('x' | 'u')) => {
-                    let digits = if x == 'x' { 2 } else { 4 };
-                    let mut v = 0u32;
-                    for _ in 0..digits {
-                        match it.peek().and_then(|d| d.to_digit(16)) {
-                            Some(d) => {
-                                v = v * 16 + d;
-                                it.next();
-                            }
-                            None => break,
-                        }
-                    }
-                    char::from_u32(v).unwrap_or('\u{fffd}')
-                }
-                Some('\r') => {
-                    if it.peek() == Some(&'\n') {
-                        it.next();
-                    }
-                    continue;
-                }
-                Some('\n' | '\u{2028}' | '\u{2029}') => continue,
-                Some(c) => c,
-            }
-        } else {
-            c
-        };
-        out.push(c);
-        n += 1;
-    }
-    out
-}
-
-/// A global name of the platform the report looks for (`$`, `File`, `Socket`, `alert`, `eval`…).
-fn platform_name(n: &str) -> bool {
-    matches!(
-        n,
-        catalog::DOLLAR
-            | catalog::LOCALIZE
-            | catalog::UNIT_VALUE
-            | catalog::FILE
-            | catalog::FOLDER
-            | catalog::WINDOW
-            | catalog::BRIDGE_TALK
-            | catalog::SOCKET
-            | catalog::EXTERNAL_OBJECT
-            | "eval"
-            | "Function"
-    ) || catalog::NOTIFY.contains(&n)
-        || catalog::XMP.contains(&n)
-        || catalog::XML.contains(&n)
-}
-
-/// The feature of a window of type `value` (`"dialog"`, or a resource string that starts with it).
-fn window_type(value: &str) -> &'static str {
-    let word = value.trim_start().split(|c: char| c.is_whitespace() || c == '{').next().unwrap_or_default();
-    if word.eq_ignore_ascii_case("dialog") {
-        "scriptui.dialog"
-    } else if word.eq_ignore_ascii_case("palette") {
-        "scriptui.palette"
-    } else {
-        "scriptui.window"
-    }
 }
 
 /// What the token after a few others decides.
@@ -375,11 +249,17 @@ enum Pending<'s> {
     /// `Window`: `(` and a string literal with the window's type may follow.
     Window(Option<usize>),
     WindowType(Option<usize>),
-    /// `.executeMenuCommand(`: a string literal and `)` may follow.
+    /// `.executeMenuCommand(`: a string literal and `)` may follow, with a trailing comma
+    /// between them.
     Menu(Option<usize>),
     MenuString(Option<usize>, &'s str),
+    MenuStringComma(Option<usize>, &'s str),
     /// `.open(`: a string literal with the open mode may follow.
     Open(Option<usize>),
+    /// A File object's `length`, `hidden` or `readonly` (`f.length`, `f['length']`): an assignment
+    /// or an update (`++`, `--`) that sets it may follow. With `true`, a prefix update came before
+    /// the receiver, and it sets the property unless a member or a call follows it.
+    Setter(Option<usize>, bool),
     /// A platform name where a property key or a label may stand (first, or after `{`, `,`, `;` or
     /// `}`): it is a key or a label when `:` follows.
     Name(&'s str, Option<usize>),
@@ -392,10 +272,11 @@ struct Assign {
     after_new: bool,
 }
 
-/// What a value the check follows holds: a member chain, or a File or Folder object.
+/// What a value the check follows holds: a member chain, or a File or Folder object (`folder` when it
+/// is a Folder object whatever the path names: [`Operand::file_step`]).
 enum Held {
     Chain(String),
-    File,
+    File { folder: bool },
 }
 
 /// `name = (`: a value in grouping parentheses. Its value is the last operand in each pair (ECMA-262
@@ -439,8 +320,9 @@ enum Operand {
     FileMember { folder: bool },
     /// `File.openDialog`, `File.saveDialog` or `Folder.selectDialog` came first: its `(` is next.
     FileDialog,
-    /// A call of `File`, `Folder` or one of their dialogs came first, and its `)` is still to come.
-    FileCall,
+    /// A call of `File`, `Folder` or one of their dialogs came first, and its `)` is still to come
+    /// (`folder` for `new Folder(…)`).
+    FileCall { folder: bool },
     /// Grouping parentheses came first, and their `)` is still to come ([`Paren`] only).
     Pair,
     /// A member chain came first and is still being read.
@@ -456,16 +338,25 @@ impl Operand {
     /// object: `[new] File|Folder(…)`, `new File|Folder`, `File.openDialog(…)`, `File.saveDialog(…)`,
     /// `Folder.selectDialog(…)`, `Folder.<place>` ([`catalog::FOLDER_PLACES`]) or a variable holding
     /// one. `file`: `t` is the platform's `File` or `Folder`; `alias`: `t` names a variable holding a
-    /// File or Folder object.
-    fn file_step(self, t: &Sig, file: bool, alias: bool) -> Operand {
+    /// File or Folder object, `Some(true)` when it counts as a Folder object whatever the path names.
+    ///
+    /// Only `new Folder(…)`, `new Folder`, `Folder.<place>` and such a variable are Folder objects
+    /// whatever the path names. `Folder(…)` gives a File object when the path names a file,
+    /// `Folder.selectDialog(…)` gives a File or Folder object for what the user picks, and
+    /// `Folder.current` is the one place a script can assign. A variable another variable is assigned
+    /// may hold a File object, so a grouped value passes `Some(false)` for any variable.
+    fn file_step(self, t: &Sig, file: bool, alias: Option<bool>) -> Operand {
         match self {
             Operand::Start if t.word("new") => Operand::New,
             Operand::Start if file => Operand::FileName { new: false, folder: t.text == catalog::FOLDER },
             Operand::New if file => Operand::FileName { new: true, folder: t.text == catalog::FOLDER },
-            Operand::Start if alias => Operand::Done(Held::File),
-            Operand::FileName { .. } | Operand::FileDialog if t.is("(") => Operand::FileCall,
+            Operand::Start if alias.is_some() => Operand::Done(Held::File { folder: alias == Some(true) }),
+            Operand::FileName { new, folder } if t.is("(") => Operand::FileCall { folder: new && folder },
+            Operand::FileDialog if t.is("(") => Operand::FileCall { folder: false },
             Operand::FileName { new: false, folder } if t.is(".") => Operand::FileMember { folder },
-            Operand::FileMember { folder: true } if catalog::FOLDER_PLACES.contains(&t.text) => Operand::Done(Held::File),
+            Operand::FileMember { folder: true } if catalog::FOLDER_PLACES.contains(&t.text) => {
+                Operand::Done(Held::File { folder: t.text != catalog::FOLDER_CURRENT })
+            }
             Operand::FileMember { folder } if (if folder { catalog::FOLDER_DIALOGS } else { catalog::FILE_DIALOGS }).contains(&t.text) => {
                 Operand::FileDialog
             }
@@ -474,9 +365,13 @@ impl Operand {
     }
 
     /// The operand is a File or Folder object when the `)` of its parentheses comes next: a complete
-    /// one, or `new File` or `new Folder` without arguments.
-    fn holds_file(&self) -> bool {
-        matches!(self, Operand::Done(Held::File) | Operand::FileName { new: true, .. })
+    /// one, or `new File` or `new Folder` without arguments. `Some(true)` for a Folder object whatever
+    /// the path names.
+    fn held_file(&self) -> Option<bool> {
+        match self {
+            Operand::Done(Held::File { folder }) | Operand::FileName { new: true, folder } => Some(*folder),
+            _ => None,
+        }
     }
 }
 
@@ -595,6 +490,14 @@ struct Saved {
     chain: Option<String>,
     /// It held a File or Folder object.
     file: bool,
+    /// It held a Folder object.
+    folder: bool,
+    /// It was in [`Analyzer::maybe_files`].
+    maybe_file: bool,
+    /// The function body or `catch` block declares it, so whether an assignment in it gave the name
+    /// a value that may be a File object is put back too. For an outer name an assignment emptied,
+    /// that stays.
+    local: bool,
     /// For a root of the document model: whether the script's own variable hid the root.
     shadowed: Option<bool>,
     /// It was a platform name the script had a meaning of its own for.
@@ -643,202 +546,6 @@ impl Brackets {
     }
 }
 
-// ---------- the names declared, read before the analysis ----------
-
-/// The names a file's function bodies and its global code declare, read before the analysis. A
-/// function's `var` statements and the function declarations directly in its body make the names
-/// they declare the function's own before any statement in it runs, and the function declarations
-/// directly in the global code do the same for the whole file (ECMA-262 3rd edition, section
-/// 10.1.3). A `var` statement in the global code does not change a property the global object
-/// already has, such as the host's `alert` (sections 10.1.3, 10.1.5 and 10.2.1). The global code's
-/// `var` statements are not read here. A function declaration inside a block, which ECMAScript 3
-/// does not allow (sections 12.1 and 14), makes its name the script's own from where it stands.
-#[derive(Default)]
-struct Declared<'s> {
-    /// For each function body, by the offset of its `{` in the text, the names it declares, in the
-    /// order the bodies start.
-    bodies: Vec<(usize, Vec<&'s str>)>,
-    /// The names the function declarations directly in the global code declare.
-    global: HashSet<&'s str>,
-}
-
-/// A function body [`Declarations`] is reading: the bracket depth inside it, its entry in
-/// [`Declared::bodies`], the names it declares so far, and the bracket depth of the `var` statement
-/// the body is in, which goes on when the body closes.
-struct Body<'s> {
-    depth: usize,
-    index: usize,
-    names: HashSet<&'s str>,
-    var_depth: Option<usize>,
-}
-
-/// The pass that finds [`Declared`]. It follows brackets, function bodies and `var` statements by
-/// the rules [`Analyzer`] follows them by, so that both passes find the same function bodies.
-struct Declarations<'s, 'a, 'l> {
-    acc: &'a mut Acc<'l>,
-    brackets: Brackets,
-    /// The two significant tokens before this one, the latest first.
-    h: [Option<Sig<'s>>; 2],
-    /// `function` was read at this bracket depth, and its body's `{` is still to come.
-    function: Option<usize>,
-    /// The bracket depth of the `var` statement being read.
-    var_depth: Option<usize>,
-    /// `name =` was read, and the first token of the value is next (`true`: after `new`). As in
-    /// [`Analyzer::assignment`], that token doesn't start or end a `var` statement.
-    assign: Option<bool>,
-    /// The function bodies being read, the innermost last, up to [`crate::Limits::nesting`].
-    bodies: Vec<Body<'s>>,
-    /// The bracket depth inside the outermost function body past that limit being read. The names
-    /// declared inside it are not kept.
-    untracked: Option<usize>,
-    out: Declared<'s>,
-}
-
-/// What `src` declares ([`Declared`]), read in one pass over its tokens.
-fn declarations<'s>(src: &'s str, acc: &mut Acc) -> Declared<'s> {
-    let mut lexer = Lexer::new(src, acc.limits.nesting);
-    let mut d = Declarations {
-        acc,
-        brackets: Brackets::default(),
-        h: [None; 2],
-        function: None,
-        var_depth: None,
-        assign: None,
-        bodies: vec![],
-        untracked: None,
-        out: Declared::default(),
-    };
-    let mut nl = false;
-    for t in lexer.by_ref() {
-        match t.kind {
-            T::Space => {}
-            T::Comment => nl |= t.text.contains(['\n', '\r', '\u{2028}', '\u{2029}']),
-            T::Newline => nl = true,
-            T::Directive => {
-                d.directive();
-                nl = true;
-            }
-            _ => {
-                d.token(Sig::of(&t, nl));
-                nl = false;
-            }
-        }
-    }
-    let out = d.out;
-    acc.steps = acc.steps.saturating_add(lexer.steps);
-    out
-}
-
-impl<'s> Declarations<'s, '_, '_> {
-    fn depth(&self) -> usize {
-        self.brackets.depth()
-    }
-
-    fn token(&mut self, t: Sig<'s>) {
-        let [h0, h1] = self.h;
-        // As in [`Analyzer::token`], a line break ends a `var` statement when it is outside the
-        // statement's brackets, and the tokens on either side of it don't go on with the expression.
-        if t.nl && self.var_depth == Some(self.depth()) && !goes_on_after(h0) && !goes_on_with(&t) {
-            self.var_depth = None;
-        }
-        if t.kind == T::Punct {
-            self.bracket(&t);
-        } else if t.kind == T::Ident {
-            self.declaration(&t);
-        }
-        let depth = self.depth();
-        if let Some(after_new) = self.assign.take() {
-            if t.word("new") && !after_new {
-                self.assign = Some(true);
-            }
-        } else {
-            if t.word("var") {
-                self.var_depth = Some(depth);
-            }
-            if (t.is(";") || for_in(&t, h0, h1)) && self.var_depth == Some(depth) {
-                self.var_depth = None;
-            }
-            if t.is("=") && h0.is_some_and(|s| s.kind == T::Ident) && !member_mark(h1) && !is(h1, "@") {
-                self.assign = Some(false);
-            }
-        }
-        // `function` that isn't a property's name: its body's `{` comes after its name and
-        // parameters.
-        if t.word("function") && !member_mark(h0) && !word(h0, "function") {
-            self.function = Some(depth);
-        }
-        self.h = [Some(t), h0];
-    }
-
-    /// An open or close bracket, by the rules of [`Analyzer::bracket`]: the first `{` after
-    /// `function` at the depth of `function` opens the function's body.
-    fn bracket(&mut self, t: &Sig<'s>) {
-        match t.text {
-            "(" | "[" | "{" => {
-                let body = t.text == "{" && self.function.take() == Some(self.depth());
-                self.brackets.open(t, self.acc.limits.nesting);
-                if !body {
-                    return;
-                }
-                if self.bodies.len() < self.acc.limits.nesting {
-                    let index = self.out.bodies.len();
-                    self.out.bodies.push((t.start, vec![]));
-                    self.bodies.push(Body { depth: self.depth(), index, names: HashSet::new(), var_depth: self.var_depth.take() });
-                } else if self.untracked.is_none() {
-                    self.untracked = Some(self.depth());
-                }
-            }
-            ")" | "]" | "}" => {
-                if !self.brackets.close(t) {
-                    return;
-                }
-                let depth = self.depth();
-                if self.var_depth.is_some_and(|d| depth < d) {
-                    self.var_depth = None;
-                }
-                while let Some(body) = self.bodies.pop_if(|b| depth < b.depth) {
-                    self.var_depth = body.var_depth;
-                }
-                if self.untracked.is_some_and(|d| depth < d) {
-                    self.untracked = None;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    /// The name `t`, when a `var` statement or a function declaration declares it: kept for the
-    /// innermost function body when the `var` statement is in that body or the declaration is
-    /// directly in it, and for the global code when the declaration is directly in the global code.
-    /// Each body keeps up to [`crate::Limits::entries`] names, and so does the global code.
-    fn declaration(&mut self, t: &Sig<'s>) {
-        let [h0, _] = self.h;
-        let depth = self.depth();
-        let var = word(h0, "var") || (is(h0, ",") && self.var_depth == Some(depth));
-        let function = word(h0, "function") && h0.is_some_and(|f| f.stmt);
-        if !(var || function) || self.untracked.is_some() {
-            return;
-        }
-        if let Some(body) = self.bodies.last_mut() {
-            if (var || body.depth == depth) && !body.names.contains(t.text) && self.acc.room(body.names.len()) {
-                body.names.insert(t.text);
-                if let Some((_, names)) = self.out.bodies.get_mut(body.index) {
-                    names.push(t.text);
-                }
-            }
-        } else if function && depth == 0 && !self.out.global.contains(t.text) && self.acc.room(self.out.global.len()) {
-            self.out.global.insert(t.text);
-        }
-    }
-
-    /// A preprocessor line ends the statement before it, as in [`Analyzer::directive`].
-    fn directive(&mut self) {
-        self.h = [None; 2];
-        self.var_depth = None;
-        self.assign = None;
-    }
-}
-
 struct Analyzer<'s, 'a, 'l> {
     acc: &'a mut Acc<'l>,
     file: Option<&'a str>,
@@ -858,13 +565,24 @@ struct Analyzer<'s, 'a, 'l> {
     bound: HashMap<String, String>,
     /// Variables holding a File or Folder object.
     files: HashSet<String>,
+    /// The variables in `files` holding a Folder object whatever the path names ([`Held::File`]).
+    folders: HashSet<String>,
+    /// The variables that an assignment in this scan or in what the scan started with gave a value
+    /// that may be a File object. Assignments in a branch or a function body are read in order, so
+    /// such a variable never counts as holding a Folder object ([`Analyzer::folder`]).
+    maybe_files: HashSet<String>,
+    /// `maybe_files` ran out of room: no variable counts as holding a Folder object.
+    maybe_files_full: bool,
+    /// This file or what the scan started with gives names values the analysis doesn't read
+    /// ([`Declared::unsure`]): no object counts as a Folder object whatever the path names.
+    unsure: bool,
     /// The platform names ([`platform_name`]) the script declares or assigns a meaning of its own
     /// for: they no longer stand for the platform's objects.
     own_names: HashSet<String>,
     /// The function bodies being read, the innermost last, up to [`crate::Limits::nesting`].
     scopes: Vec<Scope>,
     /// The names each function body and the global code declare, read before the analysis.
-    declared: Declared<'s>,
+    declared: &'a Declared<'s>,
     /// The first entry of `declared.bodies` whose body's `{` hasn't been read yet.
     next_body: usize,
     /// `function` was read at this bracket depth, and its body's `{` is still to come.
@@ -884,8 +602,8 @@ struct Analyzer<'s, 'a, 'l> {
     /// block it names.
     catch_names: HashMap<String, usize>,
     /// The calls of `File`, `Folder` and their dialogs still open, by the bracket depth outside their
-    /// `(`, up to [`crate::Limits::nesting`] of them.
-    file_calls: Vec<usize>,
+    /// `(`, up to [`crate::Limits::nesting`] of them, each true for a call that gives a Folder object.
+    file_calls: Vec<(usize, bool)>,
     /// The values in grouping parentheses, the values without them that may hold a File, and the
     /// values of compound assignments, being read, the innermost last, up to
     /// [`crate::Limits::nesting`] of them.
@@ -912,7 +630,7 @@ struct Analyzer<'s, 'a, 'l> {
 }
 
 impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
-    fn new(acc: &'a mut Acc<'l>, file: Option<&'a str>, paths: Rc<[String]>, known: &Known, declared: Declared<'s>) -> Self {
+    fn new(acc: &'a mut Acc<'l>, file: Option<&'a str>, paths: Rc<[String]>, known: &Known, declared: &'a Declared<'s>) -> Self {
         let global: Vec<&'s str> = declared.global.iter().copied().collect();
         let mut a = Analyzer {
             acc,
@@ -926,6 +644,12 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             shadowed: [false; 4],
             bound: known.bound.clone(),
             files: known.files.clone(),
+            folders: known.folders.clone(),
+            // A variable of the same name as a property a member assignment writes may be that
+            // property of the global object.
+            maybe_files: known.files.difference(&known.folders).chain(declared.rebound.iter()).cloned().collect(),
+            maybe_files_full: false,
+            unsure: known.unsure || declared.unsure,
             own_names: HashSet::new(),
             scopes: vec![],
             declared,
@@ -1018,9 +742,12 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         let consumed = self.continue_chain(&t);
         let before = self.depth();
         if t.kind == T::Punct {
-            t.file = self.bracket(&t);
+            let held = self.bracket(&t);
+            t.file = held.is_some();
+            t.folder = held == Some(true);
         } else {
             t.file = self.folder_place(&t);
+            t.folder = t.file && t.text != catalog::FOLDER_CURRENT;
         }
         self.conditional(&t);
         self.add_parameter(&t);
@@ -1096,13 +823,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.member(&c.path);
             }
             if c.path.strip_prefix("app.preferences").is_some_and(then) {
-                self.acc.feature("preferences", line);
+                self.acc.feature(FeatureId::Preferences, line);
                 if c.change_call || ending.is_some_and(|t| t.is("=")) {
-                    self.acc.outside("preferences", line, None);
+                    self.acc.outside(OutsideId::Preferences, line, None);
                 }
             }
             if ["app.name", "app.version"].iter().any(|p| c.path.strip_prefix(p).is_some_and(then)) {
-                self.acc.feature("hostCheck", line);
+                self.acc.feature(FeatureId::HostCheck, line);
             }
         }
         // A chain that an operand in a grouped value's parentheses starts with is complete: the
@@ -1126,17 +853,35 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
 
     fn bind(&mut self, name: String, path: String) {
         self.files.remove(&name);
+        self.folders.remove(&name);
         if self.bound.contains_key(&name) || self.acc.room(self.bound.len()) {
             self.bound.insert(name, path);
         }
     }
 
-    /// `name` holds a File or Folder object.
-    fn hold_file(&mut self, name: String) {
+    /// `name` holds a File or Folder object (`folder` for a Folder object whatever the path names).
+    fn hold_file(&mut self, name: String, folder: bool) {
         self.bound.remove(&name);
+        self.folders.remove(&name);
+        if !folder && !self.maybe_files.contains(&name) {
+            if self.acc.room(self.maybe_files.len()) {
+                self.maybe_files.insert(name.clone());
+            } else {
+                self.maybe_files_full = true;
+            }
+        }
         if self.files.contains(&name) || self.acc.room(self.files.len()) {
+            if folder {
+                self.folders.insert(name.clone());
+            }
             self.files.insert(name);
         }
+    }
+
+    /// `name` holds a Folder object whatever the path names, no assignment the check read gave it a
+    /// value that may be a File object, and the file gives no name a value the analysis doesn't read.
+    fn folder(&self, name: &str) -> bool {
+        !self.maybe_files_full && !self.unsure && self.files.contains(name) && self.folders.contains(name) && !self.maybe_files.contains(name)
     }
 
     /// `t`, when it names a parameter of the function whose body's `{` is still to come: kept, up to
@@ -1181,15 +926,27 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    /// The names [`Declared`] has for the function body whose `{` starts at `start`, taken once.
-    fn declared_in(&mut self, start: usize) -> Vec<&'s str> {
-        let bodies = &mut self.declared.bodies;
+    /// `name` is declared in the innermost function body (`var name`, `function name`, a
+    /// parameter): what it held outside is kept ([`Analyzer::keep_outer`]) as the body's own, and
+    /// the body's variable starts with no assignment read.
+    fn keep_own(&mut self, name: &str) {
+        self.keep_outer(name);
+        if let Some(saved) = self.scopes.last_mut().and_then(|s| s.saved.get_mut(name)) {
+            saved.local = true;
+            self.maybe_files.remove(name);
+        }
+    }
+
+    /// The names [`Declared`] has for the function body whose `{` starts at `start`.
+    fn declared_in(&mut self, start: usize) -> &'a [&'s str] {
+        let declared = self.declared;
+        let bodies = &declared.bodies;
         while bodies.get(self.next_body).is_some_and(|(at, _)| *at < start) {
             self.next_body += 1;
         }
-        match bodies.get_mut(self.next_body) {
-            Some((at, names)) if *at == start => std::mem::take(names),
-            _ => vec![],
+        match bodies.get(self.next_body) {
+            Some((at, names)) if *at == start => names,
+            _ => &[],
         }
     }
 
@@ -1197,7 +954,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// outside is kept to put back when the body closes. A name the body's table has no room for
     /// stays as it is.
     fn hoist(&mut self, name: &str) {
-        self.keep_outer(name);
+        self.keep_own(name);
         if self.scopes.last().is_some_and(|s| s.saved.contains_key(name)) {
             self.empty(name);
         }
@@ -1221,7 +978,15 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// What `name` holds now.
     fn saved(&self, name: &str) -> Saved {
         let shadowed = catalog::DOM_ROOTS.iter().position(|r| *r == name).and_then(|i| self.shadowed.get(i).copied());
-        Saved { chain: self.bound.get(name).cloned(), file: self.files.contains(name), shadowed, own: self.own_names.contains(name) }
+        Saved {
+            chain: self.bound.get(name).cloned(),
+            file: self.files.contains(name),
+            folder: self.folders.contains(name),
+            maybe_file: self.maybe_files.contains(name),
+            local: false,
+            shadowed,
+            own: self.own_names.contains(name),
+        }
     }
 
     /// `name` holds `saved` again.
@@ -1239,6 +1004,16 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             self.files.insert(name.clone());
         } else {
             self.files.remove(&name);
+        }
+        if saved.folder {
+            self.folders.insert(name.clone());
+        } else {
+            self.folders.remove(&name);
+        }
+        if saved.local && saved.maybe_file {
+            self.maybe_files.insert(name.clone());
+        } else if saved.local {
+            self.maybe_files.remove(&name);
         }
         if saved.own {
             self.own_names.insert(name.clone());
@@ -1293,6 +1068,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.make_own(name);
         self.bound.remove(name);
         self.files.remove(name);
+        self.folders.remove(name);
         self.hide_root(name);
     }
 
@@ -1307,9 +1083,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
 
     // ---------- brackets ----------
 
-    /// An open or close bracket: true for the `)` that ends a call of `File` or `Folder`, or grouping
-    /// parentheses that hold a File or Folder object ([`Analyzer::close_parens`]).
-    fn bracket(&mut self, t: &Sig<'s>) -> bool {
+    /// An open or close bracket: `Some` for the `)` that ends a call of `File` or `Folder`, or grouping
+    /// parentheses that hold a File or Folder object ([`Analyzer::close_parens`]), `Some(true)` when
+    /// the object is a Folder object.
+    fn bracket(&mut self, t: &Sig<'s>) -> Option<bool> {
         match t.text {
             "(" | "[" | "{" => {
                 if std::mem::take(&mut self.suspend)
@@ -1329,17 +1106,20 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 // The first `{` after `catch` and its parentheses at this depth opens its block.
                 let depth = self.depth();
                 let catch = if t.text == "{" { self.catch.take().filter(|(d, _)| *d == depth).and_then(|(_, name)| name) } else { None };
-                let file_call = t.text == "(" && self.calls_for_file();
-                if file_call && self.file_calls.len() < self.acc.limits.nesting {
-                    self.file_calls.push(self.depth());
+                let file_call = if t.text == "(" { self.calls_for_file() } else { None };
+                if let Some(folder) = file_call
+                    && self.file_calls.len() < self.acc.limits.nesting
+                {
+                    self.file_calls.push((self.depth(), folder));
                 }
                 self.open(t);
                 if let Some(name) = catch
                     && self.catches.len() < self.acc.limits.nesting
                 {
-                    let saved = self.saved(&name);
+                    let saved = Saved { local: true, ..self.saved(&name) };
                     let outer = self.catch_names.insert(name.clone(), self.depth());
                     self.empty(&name);
+                    self.maybe_files.remove(&name);
                     self.catches.push(Catch { depth: self.depth(), name, saved, outer });
                 }
                 if params {
@@ -1353,10 +1133,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                         // The parameters are the body's own names, and so are the names it declares.
                         for name in params {
                             self.acc.steps = self.acc.steps.saturating_add(1);
-                            self.keep_outer(&name);
+                            self.keep_own(&name);
                             self.unbind(&name);
                         }
-                        for name in self.declared_in(t.start) {
+                        for &name in self.declared_in(t.start) {
                             self.acc.steps = self.acc.steps.saturating_add(1);
                             self.hoist(name);
                         }
@@ -1374,16 +1154,18 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                     }
                     self.close_scopes();
                     let grouped = self.close_parens(t);
-                    if t.text == ")" && self.file_calls.last() == Some(&self.depth()) {
-                        self.file_calls.pop();
-                        return true;
+                    let depth = self.depth();
+                    if t.text == ")"
+                        && let Some((_, folder)) = self.file_calls.pop_if(|(d, _)| *d == depth)
+                    {
+                        return Some(folder);
                     }
                     return grouped;
                 }
             }
             _ => {}
         }
-        false
+        None
     }
 
     fn open(&mut self, t: &Sig<'s>) {
@@ -1403,18 +1185,18 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
 
     /// A `(` here calls something that gives a File or Folder object: `File` or `Folder` (with or
     /// without `new`), or `File.openDialog`, `File.saveDialog` or `Folder.selectDialog`, each the
-    /// platform's.
-    fn calls_for_file(&self) -> bool {
+    /// platform's. `Some(true)` when it gives a Folder object whatever the path names: only
+    /// `new Folder(…)` ([`Operand::file_step`]).
+    fn calls_for_file(&self) -> Option<bool> {
         let [h0, h1, h2, h3] = self.h;
         let platform = |s: Option<Sig>, name: &str| word(s, name) && !self.own_names.contains(name);
-        let constructor = (platform(h0, catalog::FILE) || platform(h0, catalog::FOLDER)) && !member_mark(h1);
-        let dialog = h0.filter(|s| s.kind == T::Ident).is_some_and(|m| {
-            is(h1, ".")
-                && !member_mark(h3)
-                && ((platform(h2, catalog::FILE) && catalog::FILE_DIALOGS.contains(&m.text))
-                    || (platform(h2, catalog::FOLDER) && catalog::FOLDER_DIALOGS.contains(&m.text)))
-        });
-        constructor || dialog
+        if (platform(h0, catalog::FILE) || platform(h0, catalog::FOLDER)) && !member_mark(h1) {
+            return Some(word(h0, catalog::FOLDER) && word(h1, "new"));
+        }
+        let m = h0.filter(|s| s.kind == T::Ident && is(h1, ".") && !member_mark(h3))?;
+        ((platform(h2, catalog::FILE) && catalog::FILE_DIALOGS.contains(&m.text))
+            || (platform(h2, catalog::FOLDER) && catalog::FOLDER_DIALOGS.contains(&m.text)))
+        .then_some(false)
     }
 
     /// `t` names one of the platform's `Folder` places after `Folder.` (`Folder.temp`): a Folder
@@ -1445,7 +1227,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         if self.in_catch(name.text) {
             self.declare_in_catch(name.text);
         } else if self.scopes.last().is_some_and(|s| !s.saved.contains_key(name.text)) {
-            self.keep_outer(name.text);
+            self.keep_own(name.text);
             self.unbind(name.text);
         }
     }
@@ -1472,7 +1254,15 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             }
         };
         let Some(c) = self.catches.get_mut(i) else { return };
-        let empty = Saved { chain: None, file: false, shadowed: catalog::DOM_ROOTS.contains(&name).then_some(true), own: platform_name(name) };
+        let empty = Saved {
+            chain: None,
+            file: false,
+            folder: false,
+            maybe_file: false,
+            local: false,
+            shadowed: catalog::DOM_ROOTS.contains(&name).then_some(true),
+            own: platform_name(name),
+        };
         let outside = std::mem::replace(&mut c.saved, empty);
         if let Some(scope) = self.scopes.last_mut() {
             scope.saved.insert(name.to_string(), outside);
@@ -1491,8 +1281,8 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.assign = Some(a);
             } else if (t.word(catalog::FILE) || t.word(catalog::FOLDER)) && !self.own_names.contains(t.text) {
                 self.start_value(a.name, Operand::FileName { new: a.after_new, folder: t.text == catalog::FOLDER });
-            } else if !a.after_new && t.kind == T::Ident && self.files.contains(t.text) {
-                self.start_value(a.name, Operand::Done(Held::File));
+            } else if !a.after_new && self.alias(t) {
+                self.start_value(a.name, Operand::Done(Held::File { folder: false }));
             } else if !a.after_new && t.is("(") {
                 self.start_group(a.name);
             } else {
@@ -1589,14 +1379,14 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn group_step(&mut self, t: &Sig<'s>, started: bool, before: usize) {
         let after = self.depth();
         let file = (t.word(catalog::FILE) || t.word(catalog::FOLDER)) && !self.own_names.contains(t.text);
-        let alias = t.kind == T::Ident && self.files.contains(t.text);
+        let alias = self.alias(t).then_some(false);
         let Some(g) = self.groups.last_mut().filter(|g| !g.closed) else { return };
         if after < g.level {
             // The `)` of the innermost pair: the operand, when complete, is the pair's value and the
             // operand of the pair around it.
             let held = match std::mem::replace(&mut g.operand, Operand::Other) {
                 Operand::Done(held) => Some(held),
-                Operand::FileName { new: true, .. } => Some(Held::File),
+                Operand::FileName { new: true, folder } => Some(Held::File { folder }),
                 _ => None,
             };
             g.operand = held.map_or(Operand::Other, Operand::Done);
@@ -1607,8 +1397,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         if before > g.level {
             // Inside a bracket of the operand: the `)` back at the pair's depth ends a call of `File`,
             // `Folder` or one of their dialogs.
-            if after == g.level && matches!(g.operand, Operand::FileCall) {
-                g.operand = Operand::Done(Held::File);
+            if after == g.level
+                && let Operand::FileCall { folder } = g.operand
+            {
+                g.operand = Operand::Done(Held::File { folder });
             }
             return;
         }
@@ -1645,7 +1437,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn paren_step(&mut self, t: &Sig<'s>, before: usize) {
         let after = self.depth();
         let file = (t.word(catalog::FILE) || t.word(catalog::FOLDER)) && !self.own_names.contains(t.text);
-        let alias = t.kind == T::Ident && self.files.contains(t.text);
+        // A variable in grouping parentheses is the object it holds now, as it is outside them
+        // ([`Analyzer::held_file`]).
+        let alias = self.alias(t).then(|| self.folder(t.text));
         if let Some(p) = self.parens.last_mut() {
             if before == p.level {
                 p.operand = match std::mem::replace(&mut p.operand, Operand::Other) {
@@ -1657,7 +1451,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 // The `)` of a call of `File`, `Folder` or a dialog, or of grouping parentheses, ends a
                 // File or Folder object when [`Analyzer::bracket`] set its [`Sig::file`].
                 p.operand = match p.operand {
-                    Operand::FileCall | Operand::Pair if t.file => Operand::Done(Held::File),
+                    Operand::FileCall { .. } | Operand::Pair if t.file => Operand::Done(Held::File { folder: t.folder }),
                     _ => Operand::Other,
                 };
             }
@@ -1667,11 +1461,17 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    /// The grouping parentheses that the bracket `t` closed, if any (a bracket closes one level): true
-    /// when `t` is their `)` and their operand is a File or Folder object.
-    fn close_parens(&mut self, t: &Sig<'s>) -> bool {
+    /// The grouping parentheses that the bracket `t` closed, if any (a bracket closes one level): `Some`
+    /// when `t` is their `)` and their operand is a File or Folder object, `Some(true)` for a Folder
+    /// object.
+    fn close_parens(&mut self, t: &Sig<'s>) -> Option<bool> {
         let depth = self.depth();
-        self.parens.pop_if(|p| depth < p.level).is_some_and(|p| t.is(")") && p.operand.holds_file())
+        self.parens.pop_if(|p| depth < p.level).filter(|_| t.is(")")).and_then(|p| p.operand.held_file())
+    }
+
+    /// `t` names a variable holding a File or Folder object.
+    fn alias(&self, t: &Sig<'s>) -> bool {
+        t.kind == T::Ident && self.files.contains(t.text)
     }
 
     /// `t` follows the last `)` of a grouped value, or ends a value without parentheses at the depth
@@ -1697,7 +1497,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         let complete = (g.closed || g.bare) && ends;
         match g.operand {
             Operand::Done(Held::Chain(path)) if complete => self.bind(g.name, path),
-            Operand::Done(Held::File) | Operand::FileName { new: true, .. } if complete => self.hold_file(g.name),
+            Operand::Done(Held::File { folder }) | Operand::FileName { new: true, folder } if complete => self.hold_file(g.name, folder),
             _ => self.unbind(&g.name),
         }
     }
@@ -1726,310 +1526,6 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    // ---------- features ----------
-
-    fn features(&mut self, t: &Sig<'s>) {
-        let line = self.agg(t.line);
-        let mut pending = std::mem::take(&mut self.pending);
-        // A platform name that no `:` follows stands for the platform's object.
-        if let Pending::Name(n, l) = pending {
-            pending = Pending::None;
-            if !t.is(":") {
-                self.platform(n, l);
-                pending = std::mem::take(&mut self.pending);
-            }
-        }
-        match pending {
-            Pending::None | Pending::Name(..) => {}
-            Pending::Window(l) => {
-                if t.is("(") {
-                    self.pending = Pending::WindowType(l);
-                } else {
-                    self.acc.feature("scriptui.window", l);
-                }
-            }
-            Pending::WindowType(l) => {
-                let feature = if t.kind == T::Str { window_type(&unquote(t.text, 64)) } else { "scriptui.window" };
-                self.acc.feature(feature, l);
-            }
-            Pending::Menu(l) => {
-                if t.kind == T::Str {
-                    self.pending = Pending::MenuString(l, t.text);
-                } else {
-                    self.menu(None, l);
-                }
-            }
-            Pending::MenuString(l, s) => self.menu(t.is(")").then_some(s), l),
-            Pending::Open(l) => {
-                if t.kind == T::Str {
-                    self.open_mode(&unquote(t.text, 2), l);
-                }
-            }
-        }
-        match t.kind {
-            T::Ident => self.name(t, line),
-            T::Punct => self.punct(t, line),
-            T::Str => self.string(t, line),
-            T::Xml => self.acc.feature("e4x", line),
-            _ => {}
-        }
-    }
-
-    /// A menu command run with the string literal `literal`, or with another value.
-    fn menu(&mut self, literal: Option<&str>, line: Option<usize>) {
-        match literal {
-            Some(s) => {
-                let value = unquote(s, self.acc.limits.echo.saturating_add(1));
-                self.acc.menu_string(&value, line);
-            }
-            None => self.acc.menu_dynamic(),
-        }
-        self.acc.feature("menuCommand", line);
-    }
-
-    fn open_mode(&mut self, mode: &str, line: Option<usize>) {
-        if mode.eq_ignore_ascii_case("r") {
-            self.acc.feature("file.read", line);
-        } else if let Some(m) = catalog::WRITE_MODES.iter().copied().find(|m| m.eq_ignore_ascii_case(mode)) {
-            self.acc.feature("file.write", line);
-            self.acc.outside("filesWritten", line, Some(m));
-        }
-    }
-
-    /// What a pending feature waits for that never came.
-    fn settle_pending(&mut self) {
-        let mut pending = std::mem::take(&mut self.pending);
-        if let Pending::Name(n, l) = pending {
-            self.platform(n, l);
-            pending = std::mem::take(&mut self.pending);
-        }
-        match pending {
-            Pending::Window(l) | Pending::WindowType(l) => self.acc.feature("scriptui.window", l),
-            Pending::Menu(l) | Pending::MenuString(l, _) => self.menu(None, l),
-            Pending::Open(_) | Pending::Name(..) | Pending::None => {}
-        }
-    }
-
-    /// The platform name `n`, used at `line` (a tally's line): the feature it is, and what it does
-    /// outside the document.
-    fn platform(&mut self, n: &'s str, line: Option<usize>) {
-        match n {
-            catalog::UNIT_VALUE => self.acc.feature("unitValue", line),
-            catalog::FILE | catalog::FOLDER => self.acc.feature("file.objects", line),
-            catalog::BRIDGE_TALK => {
-                self.acc.feature("bridgeTalk", line);
-                self.acc.outside("otherApps", line, None);
-            }
-            catalog::SOCKET => {
-                self.acc.feature("socket", line);
-                self.acc.outside("network", line, None);
-            }
-            catalog::EXTERNAL_OBJECT => {
-                self.acc.feature("externalObject", line);
-                self.acc.outside("nativeCode", line, None);
-            }
-            catalog::WINDOW => self.pending = Pending::Window(line),
-            _ if catalog::XMP.contains(&n) => self.acc.feature("xmp", line),
-            _ if catalog::XML.contains(&n) => self.acc.feature("xml", line),
-            _ => {}
-        }
-    }
-
-    fn name(&mut self, t: &Sig<'s>, line: Option<usize>) {
-        let [h0, h1, h2, _] = self.h;
-        let n = t.text;
-        if is(h0, ".") {
-            // A member: of `$`, `File` or `Folder` when they come first and are the platform's.
-            let own = &self.own_names;
-            let of = |name: &str| word(h1, name) && !member_mark(h2) && !own.contains(name);
-            if of(catalog::DOLLAR) {
-                if catalog::DOLLAR_ENV.contains(&n) {
-                    self.acc.feature("dollar.env", line);
-                    self.acc.outside("environment", line, None);
-                } else if n == catalog::DOLLAR_EVAL_FILE {
-                    self.acc.feature("dollar.evalFile", line);
-                    self.acc.outside("unseenCode", line, None);
-                } else if n == catalog::LOCALIZE {
-                    self.acc.feature("localize", line);
-                } else {
-                    self.acc.feature("dollar", line);
-                }
-            } else if (of(catalog::FILE) && catalog::FILE_DIALOGS.contains(&n)) || (of(catalog::FOLDER) && catalog::FOLDER_DIALOGS.contains(&n)) {
-                self.acc.feature("file.dialog", line);
-            } else if of(catalog::FOLDER) && catalog::FOLDER_PLACES.contains(&n) {
-                self.acc.feature("file.places", line);
-            }
-            if n == catalog::ON_DRAW {
-                self.acc.feature("scriptui.drawing", line);
-            }
-            if n == catalog::REFLECT {
-                self.acc.feature("reflection", line);
-            }
-            return;
-        }
-        if member_mark(h0) {
-            return;
-        }
-        if word(h0, "function") {
-            self.acc.declared(n);
-            if h0.is_some_and(|f| f.stmt) {
-                // A function declaration's name is a variable where the function is declared. A
-                // declaration directly in a function body or in the global code makes it one from the
-                // body's `{` or from the start of the file ([`Declared`]), and any other declaration
-                // makes it one from here.
-                if !self.hoisted(n) {
-                    self.keep_outer(n);
-                    self.unbind(n);
-                }
-            } else {
-                // A function expression's name is a variable inside the function only.
-                self.expression_name = Some(n.to_string());
-            }
-            return;
-        }
-        if n == "catch" {
-            // Its block's `{` comes after its parameter's parentheses.
-            self.catch = Some((self.depth(), None));
-        }
-        if n == "function" {
-            // Its body's `{` comes after its name and parameters.
-            self.function = Some(self.depth());
-            self.expression_name = None;
-            // `name = function`: the script's own function too.
-            if is(h0, "=")
-                && let Some(f) = h1.filter(|s| s.kind == T::Ident)
-            {
-                self.acc.declared(f.text);
-            }
-        }
-        if word(h0, "new") && n.starts_with(|c: char| c.is_ascii_uppercase()) && !catalog::CONSTRUCTORS.contains(&n) {
-            self.acc.type_name(n);
-        }
-        // A platform name stands for the platform's object, except where the script declares a
-        // variable, function or parameter of that name, and where it has a meaning of its own.
-        // Where a property key or a label may stand, the token after it decides.
-        if platform_name(n) && !self.declaring() && !self.own_names.contains(n) {
-            if h0.is_none() || [",", "{", ";", "}"].iter().any(|p| is(h0, p)) {
-                self.pending = Pending::Name(n, line);
-            } else {
-                self.platform(n, line);
-            }
-        }
-        match n {
-            // E4X: `default xml namespace = …` and `for each (…)`.
-            "namespace" if word(h0, "xml") && word(h1, "default") => self.acc.feature("e4x", line),
-            "each" if word(h0, "for") => self.acc.feature("e4x", line),
-            _ => {}
-        }
-    }
-
-    fn punct(&mut self, t: &Sig<'s>, line: Option<usize>) {
-        let [h0, h1, h2, h3] = self.h;
-        match t.text {
-            "(" => self.call(line),
-            // `Name.prototype["+"] = …` defines an operator.
-            "=" => {
-                let operator = h1.filter(|s| s.kind == T::Str).is_some_and(|s| catalog::OPERATORS.contains(&unquote(s.text, 4).as_str()));
-                if is(h0, "]") && operator && is(h2, "[") && word(h3, "prototype") {
-                    self.acc.feature("operatorOverloading", line);
-                }
-            }
-            // E4X: attributes (`x.@id`, `@*`), descendants (`x..item`) and qualified names (`ns::x`).
-            ".@" | ".." | "::" | "@" => self.acc.feature("e4x", line),
-            _ => {}
-        }
-    }
-
-    /// `(` after a name: a call.
-    fn call(&mut self, line: Option<usize>) {
-        let [h0, h1, h2, h3] = self.h;
-        let Some(callee) = h0.filter(|s| s.kind == T::Ident) else { return };
-        let n = callee.text;
-        if is(h1, ".") {
-            // The receiver is a variable holding a File or Folder object (not a property of the same
-            // name), or a File or Folder object made in place or held in grouping parentheses
-            // ([`Sig::file`]).
-            let file = h2.is_some_and(|r| r.file || (r.kind == T::Ident && !member_mark(h3) && self.files.contains(r.text)));
-            if n == catalog::MENU_COMMAND {
-                self.pending = Pending::Menu(line);
-            } else if n == catalog::OPEN && file {
-                self.pending = Pending::Open(line);
-            } else if catalog::DRAWING.contains(&n) {
-                self.acc.feature("scriptui.drawing", line);
-            } else if catalog::INSTANCE_DIALOGS.contains(&n) {
-                self.acc.feature("file.dialog", line);
-            } else if catalog::FOLDER_READS.contains(&n) || (file && catalog::FILE_READS.contains(&n)) {
-                self.acc.feature("file.read", line);
-            } else if file && catalog::FILE_WRITES.contains(&n) {
-                self.acc.feature("file.write", line);
-                self.acc.outside("filesWritten", line, None);
-            } else if n == catalog::EXECUTE {
-                self.acc.feature("file.execute", line);
-                self.acc.outside("filesOpened", line, None);
-            } else if catalog::ACTIONS.contains(&n) {
-                self.acc.feature("actions", line);
-            } else if n == catalog::SELECT_TOOL {
-                self.acc.feature("selectTool", line);
-            }
-        } else if !member_mark(h1) && !word(h1, "function") && !self.own_names.contains(n) {
-            if catalog::NOTIFY.contains(&n) {
-                self.acc.feature("notify", line);
-            } else if n == catalog::LOCALIZE {
-                self.acc.feature("localize", line);
-            } else if matches!(n, "eval" | "Function") {
-                self.acc.feature("dynamicCode", line);
-                self.acc.outside("unseenCode", line, None);
-            }
-        }
-    }
-
-    fn string(&mut self, t: &Sig<'s>, line: Option<usize>) {
-        let [h0, h1, h2, _] = self.h;
-        if t.text.contains(catalog::ACTION_TEXT) {
-            self.acc.feature("actions", line);
-        }
-        let compares = h0.is_some_and(|s| s.kind == T::Punct && matches!(s.text, "==" | "===" | "!=" | "!=="));
-        if compares && word(h1, "typename") && is(h2, ".") {
-            let name = unquote(t.text, self.acc.limits.echo.saturating_add(1));
-            self.acc.type_name(&name);
-        }
-    }
-
-    /// Syntax later than ECMAScript 3: reported once per construct and line.
-    fn newer(&mut self, t: &Sig<'s>) {
-        let [h0, h1, ..] = self.h;
-        let construct: Option<&'s str> = match t.kind {
-            T::Template => Some("`"),
-            T::Punct if NEWER.contains(&t.text) => Some(t.text),
-            T::Number if newer_number(t.text) => Some(t.text),
-            T::Other if t.text.len() > 1 && t.text.starts_with('#') => Some(t.text),
-            T::Ident if word(h0, "class") && !member_mark(h1) => Some("class"),
-            // `let name` declares a variable. ES3 reads `let` as a variable's name in `let = 1`,
-            // `let.x` and `let in o`.
-            T::Ident if word(h0, "let") && !t.nl && !member_mark(h1) && !matches!(t.text, "in" | "instanceof") => Some("let"),
-            T::Ident if t.text == "function" && word(h0, "async") && !t.nl => Some("async"),
-            _ => None,
-        };
-        if let Some(c) = construct
-            && self.last_newer != Some((t.line, c))
-        {
-            self.last_newer = Some((t.line, c));
-            self.acc.problem(report::NEWER_SYNTAX, Some(t.line), self.file, Some(c));
-        }
-    }
-
-    /// `import` or `export` starting a statement outside any bracket, unless a call, member or
-    /// property (`import(…)`, `export.x`, `import: 1`) follows: a module.
-    fn module_check(&mut self, t: &Sig<'s>) {
-        if std::mem::take(&mut self.module_candidate) && !(t.kind == T::Punct && matches!(t.text, "(" | "." | "=" | ":" | "," | ")")) {
-            self.module = true;
-        }
-        let starts = self.h[0].is_none() || t.nl || is(self.h[0], ";") || is(self.h[0], "}");
-        if t.kind == T::Ident && matches!(t.text, "import" | "export") && self.depth() == 0 && !member_mark(self.h[0]) && starts {
-            self.module_candidate = true;
-        }
-    }
-
     // ---------- preprocessor lines ----------
 
     fn directive(&mut self, t: &Token<'s>) {
@@ -2049,10 +1545,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             return;
         };
         let feature = match name {
-            "target" => "directive.target",
-            "include" | "includepath" => "directive.include",
-            "targetengine" => "directive.targetengine",
-            _ => "directive.other",
+            "target" => FeatureId::DirectiveTarget,
+            "include" | "includepath" => FeatureId::DirectiveInclude,
+            "targetengine" => FeatureId::DirectiveTargetengine,
+            _ => FeatureId::DirectiveOther,
         };
         let line = self.agg(t.line);
         self.acc.feature(feature, line);
@@ -2085,7 +1581,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             let bracket: &str = bracket.encode_utf8(&mut buf);
             self.acc.problem(report::UNCLOSED_BRACKET, Some(line), self.file, Some(bracket));
         }
-        let known = Known { bound: std::mem::take(&mut self.bound), files: std::mem::take(&mut self.files) };
+        // A variable that any assignment gave a value that may be a File object leaves as one.
+        let folders = self.folders.iter().filter(|name| self.folder(name)).cloned().collect();
+        let known = Known { bound: std::mem::take(&mut self.bound), files: std::mem::take(&mut self.files), folders, unsure: self.unsure };
         (std::mem::take(&mut self.includes), module, known)
     }
 }

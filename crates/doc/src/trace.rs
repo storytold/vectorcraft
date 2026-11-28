@@ -20,11 +20,18 @@ pub enum TraceView {
     OutlinesWithSource,
     /// Only the source image.
     Source,
+    /// The source image on the part of the image left of a divider across it, and the traced
+    /// shapes everywhere else ([`TraceView::split_of`]).
+    Split,
 }
+
+/// Where the Split view's divider is when the `trace` settings name no valid position: across the
+/// middle of the source image.
+pub const DEFAULT_TRACE_SPLIT: f64 = 0.5;
 
 impl TraceView {
     /// Panel order.
-    pub const ALL: [Self; 5] = [Self::Result, Self::ResultWithOutlines, Self::Outlines, Self::OutlinesWithSource, Self::Source];
+    pub const ALL: [Self; 6] = [Self::Result, Self::ResultWithOutlines, Self::Outlines, Self::OutlinesWithSource, Self::Source, Self::Split];
 
     /// The id used in command params and in the saved `trace` object.
     pub fn id(self) -> &'static str {
@@ -34,6 +41,7 @@ impl TraceView {
             Self::Outlines => "outlines",
             Self::OutlinesWithSource => "outlinesWithSourceImage",
             Self::Source => "sourceImage",
+            Self::Split => "split",
         }
     }
 
@@ -48,14 +56,21 @@ impl TraceView {
         trace.get("view").and_then(serde_json::Value::as_str).and_then(Self::from_id).unwrap_or_default()
     }
 
-    /// Whether the source image shows.
-    pub fn shows_source(self) -> bool {
-        matches!(self, Self::OutlinesWithSource | Self::Source)
+    /// The Split view's divider in `trace` settings: the fraction of the source image's width, from
+    /// its left edge in its own pixels, that shows the source image ([`DEFAULT_TRACE_SPLIT`] when
+    /// `split` is missing, not a number or outside 0 to 1).
+    pub fn split_of(trace: &serde_json::Value) -> f64 {
+        trace.get("split").and_then(serde_json::Value::as_f64).filter(|f| (0.0..=1.0).contains(f)).unwrap_or(DEFAULT_TRACE_SPLIT)
     }
 
-    /// Whether the traced shapes show filled.
+    /// Whether the source image shows (in the Split view, on one side of the divider).
+    pub fn shows_source(self) -> bool {
+        matches!(self, Self::OutlinesWithSource | Self::Source | Self::Split)
+    }
+
+    /// Whether the traced shapes show filled (in the Split view, on one side of the divider).
     pub fn shows_result(self) -> bool {
-        matches!(self, Self::Result | Self::ResultWithOutlines)
+        matches!(self, Self::Result | Self::ResultWithOutlines | Self::Split)
     }
 
     /// Whether the traced shapes' outlines show.
@@ -68,6 +83,12 @@ impl Node {
     /// The View of an Image Trace object (the tracing result for anything else, or an unknown id).
     pub fn trace_view(&self) -> TraceView {
         self.extras().trace.as_deref().map(TraceView::of).unwrap_or_default()
+    }
+
+    /// The Split view's divider of an Image Trace object ([`TraceView::split_of`];
+    /// [`DEFAULT_TRACE_SPLIT`] for anything else).
+    pub fn trace_split(&self) -> f64 {
+        self.extras().trace.as_deref().map_or(DEFAULT_TRACE_SPLIT, TraceView::split_of)
     }
 }
 
@@ -89,6 +110,26 @@ mod tests {
         g.extras_mut().trace = Some(Box::new(serde_json::json!({"view": "sepia"})));
         assert_eq!(g.trace_view(), TraceView::Result);
     }
+
+    #[test]
+    fn the_split_divider_reads_a_fraction_and_falls_back_to_the_middle() {
+        let mut g = Node::group(crate::NodeId(1), vec![]);
+        assert_eq!(g.trace_split(), DEFAULT_TRACE_SPLIT);
+        assert_eq!(TraceView::from_id("Split"), Some(TraceView::Split));
+        assert!(TraceView::Split.shows_source() && TraceView::Split.shows_result() && !TraceView::Split.shows_outlines());
+        for (split, want) in [
+            (serde_json::json!(0.25), 0.25),
+            (serde_json::json!(0), 0.0),
+            (serde_json::json!(1), 1.0),
+            (serde_json::json!(-0.1), DEFAULT_TRACE_SPLIT),
+            (serde_json::json!(1.5), DEFAULT_TRACE_SPLIT),
+            (serde_json::json!("0.3"), DEFAULT_TRACE_SPLIT),
+            (serde_json::Value::Null, DEFAULT_TRACE_SPLIT),
+        ] {
+            g.extras_mut().trace = Some(Box::new(serde_json::json!({"view": "split", "split": split})));
+            assert_eq!(g.trace_split(), want, "{split}");
+        }
+    }
     #[test]
     fn live_trace_result_bounds_exclude_the_retained_bitmap_at_any_angle() {
         use crate::{Appearance, Document, ImageObject, NodeId, NodeKind};
@@ -103,6 +144,7 @@ mod tests {
                 xf: Affine::IDENTITY,
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             })),
         );
         source.visible = false;
@@ -130,6 +172,13 @@ mod tests {
                     }
                 }
             }
+        }
+        // The Split view measures the whole image wherever the divider is, so the selection box
+        // stays put while the divider moves.
+        for split in [0.0, 0.01, 1.0] {
+            let want = Rect::new(0.0, 0.0, 200.0, 200.0);
+            group.extras_mut().trace = Some(Box::new(serde_json::json!({"view": "split", "split": split})));
+            assert_eq!((group.geometric_bounds(), group.visual_bounds()), (Some(want), Some(want)), "split {split}");
         }
         group.extras_mut().trace = None;
         assert_eq!(
