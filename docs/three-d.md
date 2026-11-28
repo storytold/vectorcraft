@@ -671,6 +671,11 @@ is VectorCraft's own.
 
 ## Parameters (`effect.apply`, `effect.setParams`)
 
+Approving an existing effect without changing its values preserves its stored parameters, document revision and
+Undo history, with Preview on or off. Supplying only the same validated parameters through `effect.setParams`
+also changes nothing and returns an empty `ids` array. Omitted defaults and equivalent numeric JSON count as the same
+values. Changed options save in one step, and invalid parameters are still refused.
+
 `threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
 `ogee`, or `custom` with `bevelName` and `bevelProfile`; `{custom: name}` takes a bevel of the bevels file), `bevelWidth`, `bevelHeight`, `bevelRepeat`, `bevelSpace` (%), `bevelInside`, `bevelBothSides`.
 `threeD.inflate`: `depth`, `volume` (%), `bothSides`. All three take the view and lighting parameters Revolve
@@ -757,6 +762,7 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Unchanged 3D effect options preserve the exact effect, document revision and Undo; the same rule applies to validated `effect.setParams` calls. |
 | 2026-11-13 | Extrude & Bevel cuts its walls into slices only for a twist. A taper alone keeps each wall flat, so it is one face, without the light ticks at the joints between slices or the light line down a wall (#7019). Inflate still slices its sides for a taper. |
 | 2026-11-12 | The seams of Extrude & Bevel, Inflate and Rotate under a white light, and of the faces of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), went from miter to round joins (the seams of Revolve and of colored lights, and 3D (Classic) Wireframe edges, were already round): no thorns on edge-on facets, and facets with no neighbor now have rounded convex corners ([Seams](#seams)). |
 | 2026-11-08 | Contours that cross, touch or overlap are merged by vectorcraft-pathops before Extrude & Bevel, Inflate and Rotate build a solid, sharing its limits; others are built as drawn. |
