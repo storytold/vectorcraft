@@ -105,10 +105,7 @@ fn run(app: &mut VectorcraftApp, event: &ManagerEvent, current: &str) -> Result<
             Ok(app.session.pdf_presets().get(above).map(|p| p.name.clone()))
         }
         ManagerAction::Import => preset_manager::import(app, KEY, "pdf.preset.import", "PDF presets", PRESET_EXTS),
-        ManagerAction::Export => {
-            crate::io::save_command_output(app, "pdf.preset.export", PRESET_FORMAT, json!({ "names": [current] }), |_, _| Ok(Value::Null))?;
-            Ok(None)
-        }
+        ManagerAction::Export => preset_manager::export(app, "pdf.preset.export", PRESET_FORMAT, current),
     }
 }
 
@@ -224,6 +221,33 @@ mod tests {
     }
 
     #[test]
+    fn a_late_preset_import_keeps_the_reopened_managers_selection() {
+        let mut app = app();
+        let picker = crate::tests_picks::scripted(&mut app);
+        app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": true})).unwrap();
+        let exported = app.run("pdf.preset.export", json!({"names": ["Mine"]})).unwrap();
+        let bytes = exported["data"].as_str().unwrap().as_bytes();
+
+        open(&mut app, Some("PDF/X-4:2010"));
+        press(&mut app, ManagerAction::Import);
+        assert_eq!(picker.requests().len(), 1, "Import requested a file");
+        host(&app, |h| h.cancel_by_id(&ctx(&app), dialog_id(KEY)));
+        open(&mut app, Some("Press Quality"));
+        let ctx = ctx(&app);
+        picker.answer_contents(&[("mine.vcpdfpresets", bytes)]);
+        crate::tests_picks::poll(&mut app, &ctx);
+        frame(&mut app);
+        assert!(app.session.prefs.pdf_presets.iter().any(|preset| preset.name == "Mine 2"), "the late reply still imports: {}", app.ui.status);
+        assert_eq!(manager_fields(&mut app)["selected"], "Press Quality");
+
+        press(&mut app, ManagerAction::Import);
+        picker.answer_contents(&[("mine.vcpdfpresets", bytes)]);
+        crate::tests_picks::poll(&mut app, &ctx);
+        frame(&mut app);
+        assert_eq!(manager_fields(&mut app)["selected"], "Mine 3", "the original manager selects its own import");
+    }
+
+    #[test]
     fn import_and_export_go_through_files() {
         let dir = std::env::temp_dir().join(format!("vc-pdfpresets-ui-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -234,6 +258,8 @@ mod tests {
         app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": true})).unwrap();
         open(&mut app, Some("Mine"));
         press(&mut app, ManagerAction::Export);
+        // The save panel suggests the preset's name.
+        assert_eq!(picker.requests().last().and_then(|r| r.file_name.clone()).as_deref(), Some("Mine.vcpdfpresets"));
         picker.answer_saved(&file, None);
         let ctx = ctx(&app);
         crate::tests_picks::poll(&mut app, &ctx);

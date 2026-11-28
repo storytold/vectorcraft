@@ -99,6 +99,195 @@ fn traced_app_with_ink(ink: u8) -> VectorcraftApp {
     app
 }
 
+/// Revert reloads the saved file even when its trace has the same node id and stored settings.
+/// A preview-off draft belongs to the discarded source pixels, not the reloaded object.
+#[test]
+fn native_file_revert_discards_pending_settings_for_reused_trace_ids() {
+    for frame_without_selection in [false, true] {
+        let mut app = traced_app_with_ink(0);
+        let old = find_target(&app);
+        let id = old.object.unwrap().1;
+        let old_source = source_image(app.session.active().unwrap().doc.node(id).unwrap()).unwrap().key.clone();
+        let dir = vectorcraft_testkit::TempDir::new("trace-native-revert");
+        let path = dir.join("saved.vectorcraft");
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+        app.run("object.move", json!({"ids": [id.0], "dx": 1, "dy": 0})).unwrap();
+
+        // Another saved copy supplies different pixels with the same trace identity and settings.
+        let mut saved = traced_app_with_ink(100);
+        let restored = find_target(&saved);
+        assert_eq!(restored.object.unwrap().1, id);
+        assert_eq!(old.stored.as_ref().unwrap()["params"], restored.stored.as_ref().unwrap()["params"]);
+        saved.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        saved.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+
+        let mut panel = panel_over(app);
+        panel.click("Preview");
+        panel.click("Strokes");
+        assert!(!panel.app().ui.image_trace_preview);
+        assert_eq!(shown(&panel).params["strokes"], json!(true));
+        assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)), "the changed setting remains a panel draft");
+        let uid = panel.app().session.active().unwrap().uid;
+        let reverts = panel.app().session.active().unwrap().reverts;
+        panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+        {
+            let app = panel.app();
+            let st = app.session.active().unwrap();
+            assert_eq!(st.uid, uid);
+            assert_eq!(st.reverts, reverts + 1, "the native Revert replaced the drawing contents");
+            assert!(st.selection.objects.is_empty());
+            assert_ne!(source_image(st.doc.node(id).unwrap()).unwrap().key, old_source, "Revert read the other saved pixels");
+        }
+        if frame_without_selection {
+            panel.frame();
+        }
+        select(&mut panel, id);
+        assert_eq!(shown(&panel).params, restored.stored.unwrap()["params"], "the saved trace's own settings are adopted");
+        assert!(shown(&panel).drafts.is_empty(), "the discarded source's draft is gone");
+        let before = undo(&panel.app());
+        panel.click("Preview");
+        assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)));
+        assert_eq!(undo(&panel.app()), before, "Preview must not apply the discarded source's draft");
+    }
+}
+
+#[test]
+fn closing_a_drawing_discards_only_its_own_trace_draft() {
+    for park_closed_draft in [true, false] {
+        let mut panel = panel_over(traced_app());
+        let remaining = shown(&panel).object.unwrap();
+        panel.click("Preview");
+        panel.click("Strokes");
+        assert_eq!(shown(&panel).params["strokes"], json!(true));
+
+        let dir = vectorcraft_testkit::TempDir::new("trace-native-close");
+        let path = dir.join("second.vectorcraft");
+        {
+            let mut app = panel.app();
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [100, 100, 100, 255] } else { [255, 255, 255, 255] }));
+            place_png(&mut app, "second.png", img);
+            app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
+            app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+            app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+            assert!(!app.session.active().unwrap().is_dirty());
+        }
+        panel.frame();
+        let closed = shown(&panel).object.unwrap();
+        assert_ne!(remaining.0, closed.0);
+        panel.click("Strokes");
+        assert_eq!(shown(&panel).params["strokes"], json!(true));
+        assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)));
+        if park_closed_draft {
+            panel.app().run("select.none", json!({})).unwrap();
+            panel.frame();
+            assert!(shown(&panel).drafts.contains_key(&closed));
+        }
+        assert!(shown(&panel).drafts.contains_key(&remaining));
+
+        panel.app().run("file.close", json!({})).unwrap();
+        assert_eq!(panel.app().session.documents().len(), 1);
+        assert_eq!(panel.app().session.active().unwrap().uid, remaining.0);
+        let after_close = shown(&panel);
+        assert!(!after_close.drafts.contains_key(&closed), "File Close releases the closed drawing's draft");
+        assert_ne!(after_close.object, Some(closed), "File Close releases the displayed draft's binding too");
+        assert!(after_close.drafts.contains_key(&remaining), "File Close preserves the open drawing's draft");
+
+        select(&mut panel, remaining.2);
+        assert!(shown(&panel).drafts.is_empty(), "the next frame does not put back the closed drawing's draft");
+        assert_eq!(shown(&panel).params["strokes"], json!(true));
+        assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)));
+        panel.click("Preview");
+        assert_eq!(param(&panel.app(), "strokes"), Some(json!(true)));
+    }
+}
+
+fn scroll_settings(panel: &mut Panel, dy: f32) {
+    panel.scroll_at(egui::pos2(30.0, 30.0), dy);
+    panel.advance(1.0);
+    panel.frame();
+}
+
+#[test]
+fn preview_trace_and_expand_stay_reachable_in_a_compact_panel() {
+    let mut app = traced_app();
+    app.run("imageTrace.release", json!({})).unwrap();
+    app.ui.image_trace_advanced = true;
+    let source = first_selected(&app).unwrap();
+    assert!(matches!(source.kind, NodeKind::Image(_)));
+    let mut panel = panel_over(app);
+    assert!(panel.rect_role("Image Trace", craft::ui::contract::Role::GROUP).is_positive());
+    for size in [egui::vec2(148.0, 480.0), egui::vec2(240.0, 170.0), egui::vec2(148.0, 170.0)] {
+        panel.room(size);
+        panel.frame();
+        panel.frame();
+        let room = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+        for label in ["Preview", "Trace", "Expand"] {
+            assert!(panel.in_view(label), "{label} is clipped at {size:?}");
+            let rect = panel.rect(label);
+            assert!(room.contains_rect(rect), "the whole {label} control {rect:?} fits at {size:?}");
+        }
+        assert!(panel.enabled("Trace"));
+        assert!(!panel.enabled("Expand"));
+    }
+    let preview = panel.app().ui.image_trace_preview;
+    panel.click("Preview");
+    assert_ne!(panel.app().ui.image_trace_preview, preview);
+
+    let action = panel.rect("Trace");
+    let first_preset = panel.rect("Auto Color").top();
+    scroll_settings(&mut panel, -1000.0);
+    assert!(!panel.shows("Auto Color") || panel.rect("Auto Color").top() < first_preset, "the settings scroll");
+    assert_eq!(panel.rect("Trace"), action, "scrolling settings leaves the action in place");
+    let ignore = shown(&panel).params["ignoreWhite"].clone();
+    panel.click("Ignore Color");
+    assert_ne!(shown(&panel).params["ignoreWhite"], ignore, "scrolling reaches the end of Advanced");
+
+    panel.click("Trace");
+    assert!(selected_trace(&panel.app()).is_some());
+    assert!(panel.enabled("Expand"));
+    panel.click("Expand");
+    assert!(selected_trace(&panel.app()).is_none());
+    assert!(!is_trace(&first_selected(&panel.app()).unwrap()));
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert!(selected_trace(&panel.app()).is_some());
+
+    // A single action row needs less height than the wrapped footer in the narrow panel.
+    panel.room(egui::vec2(240.0, 100.0));
+    panel.frame();
+    panel.frame();
+    scroll_settings(&mut panel, 1000.0);
+    let action = panel.rect("Trace");
+    let first_preset = panel.rect("Auto Color").top();
+    scroll_settings(&mut panel, -1000.0);
+    assert!(!panel.shows("Auto Color") || panel.rect("Auto Color").top() < first_preset, "the short settings viewport scrolls");
+    assert!(panel.in_view("Trace"));
+    assert_eq!(panel.rect("Trace"), action, "a short panel still pins the footer when the actions fit on one line");
+
+    // Shorten the panel while the settings-only body remains scrolled to Advanced.
+    panel.room(egui::vec2(148.0, 68.0));
+    panel.frame();
+    panel.frame();
+    let preview = panel.app().ui.image_trace_preview;
+    panel.click("Preview");
+    assert_ne!(panel.app().ui.image_trace_preview, preview, "Preview starts in view in a very short panel");
+    let ignore = shown(&panel).params["ignoreWhite"].clone();
+    scroll_settings(&mut panel, -1000.0);
+    panel.click("Ignore Color");
+    assert_ne!(shown(&panel).params["ignoreWhite"], ignore, "a very short panel still scrolls to the last setting");
+
+    panel.room(egui::vec2(240.0, 100.0));
+    panel.frame();
+    panel.room(egui::vec2(148.0, 68.0));
+    panel.frame();
+    panel.frame();
+    let preview = panel.app().ui.image_trace_preview;
+    panel.click("Preview");
+    assert_ne!(panel.app().ui.image_trace_preview, preview, "shrinking a second time starts at the actions");
+}
+
 #[test]
 fn sketch_quick_trace_reveals_all_adjustments_and_keeps_the_source() {
     let mut app = traced_app();
@@ -319,7 +508,8 @@ fn settings_that_wait_are_dropped_when_their_object_changed_since() {
     // A's settings as they were when the change was made, other than its settings now.
     {
         let mut app = panel.app();
-        let key = (app.session.active().unwrap().uid, a);
+        let doc = app.session.active().unwrap();
+        let key = (doc.uid, doc.reverts, a);
         let draft = app.ui.image_trace_panel.shown.drafts.get_mut(&key).expect("the change waits for A");
         assert_eq!(draft.1["strokes"], json!(true));
         draft.2["params"]["threshold"] = json!(1);
@@ -1079,7 +1269,7 @@ fn a_trace_off_the_ui_thread_is_adopted_when_it_lands() {
         assert_eq!(param(&app, "strokes"), Some(json!(true)));
         let st = &app.ui.image_trace_panel.shown;
         assert!(st.info.is_some(), "its counts show");
-        assert_eq!(st.object, find_target(&app).object);
+        assert_eq!(st.object, find_target(&app).object_key());
         assert!(st.drafts.is_empty(), "nothing waits for the object it replaced");
         app.ui.image_trace_preview = true;
     }
@@ -1108,9 +1298,11 @@ fn target_node_sorting_everything(app: &VectorcraftApp) -> Option<Node> {
 /// [`Target`] from [`target_node_sorting_everything`] and a scan of the whole selection for Image
 /// Trace objects, as the panel read them on every frame before.
 fn target_sorting_everything(app: &VectorcraftApp) -> Target {
+    let document = app.session.active().map(|st| (st.uid, st.reverts));
     let any_trace = app.session.active().is_some_and(|st| st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(is_trace)));
-    let Some(n) = target_node_sorting_everything(app) else { return Target { any_trace, ..Target::default() } };
+    let Some(n) = target_node_sorting_everything(app) else { return Target { document, any_trace, ..Target::default() } };
     Target {
+        document,
         object: app.session.active().map(|st| (st.uid, n.id)),
         is_trace: is_trace(&n),
         is_image: matches!(n.kind, NodeKind::Image(_)),
@@ -1263,7 +1455,8 @@ fn the_target_lookup_obeys_canonical_roots_and_explicit_id_validation() {
     for (parent, child) in [("clip", "clipped"), ("outer", "deep")] {
         select_as_is(&mut app, &[ids[parent], ids[child]]);
         let uid = app.session.active().unwrap().uid;
-        let expected = Target { object: Some((uid, ids[parent])), ..Default::default() };
+        let document = app.session.active().map(|st| (st.uid, st.reverts));
+        let expected = Target { document, object: Some((uid, ids[parent])), ..Default::default() };
         assert_eq!(find_target(&app), expected, "the selected {parent} supplies metadata, not its pruned image");
         assert_eq!(*target(&mut app), expected);
         assert_eq!(*target(&mut app), expected, "the canonical result is also cached");

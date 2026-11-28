@@ -5,7 +5,9 @@
 //!   (1998 primaries), Display P3, ProPhoto RGB) or user `.icc` files. Display output is sRGB;
 //!   the desktop canvas converts it into the display's own profile last, in the app.
 //! * **CMYK spaces:** [`GENERIC_CMYK`] is our own documented parametric press model
-//!   ([`generic`]); [`DEVICE_CMYK`] is the old profile-free formula (kept for exact legacy numbers);
+//!   ([`generic`]); [`FOGRA51_CMYK`] and [`FOGRA52_CMYK`] are the same model computed from
+//!   Fogra's published characterization data ([`measured`]); [`DEVICE_CMYK`] is the old
+//!   profile-free formula (kept for exact legacy numbers);
 //!   any CMYK `.icc` the user loads goes through `moxcms` (LUT-based profiles).
 //! * The **active settings** are process-wide: the working settings (Edit → Color Settings), with
 //!   the profiles [`use_document_profiles`] last put in place of the working spaces;
@@ -16,6 +18,7 @@
 pub mod generic;
 pub mod icc;
 pub mod lab;
+pub mod measured;
 
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -36,6 +39,12 @@ pub const DISPLAY_P3: &str = "Display P3";
 pub const PROPHOTO_RGB: &str = "ProPhoto RGB";
 /// Our parametric press model (see [`generic`]). Not an Adobe/ECI profile.
 pub const GENERIC_CMYK: &str = "VectorCraft Generic CMYK (SWOP-like)";
+/// VectorCraft's own press model computed from Fogra's FOGRA51 characterization data (offset on
+/// premium coated paper, see [`measured`]).
+pub const FOGRA51_CMYK: &str = "VectorCraft Coated CMYK (FOGRA51)";
+/// VectorCraft's own press model computed from Fogra's FOGRA52 characterization data (offset on
+/// wood-free uncoated paper, see [`measured`]).
+pub const FOGRA52_CMYK: &str = "VectorCraft Uncoated CMYK (FOGRA52)";
 /// Profile-free CMYK (`rgb = (1−c)(1−k)` …): uncalibrated, kept for legacy numbers.
 pub const DEVICE_CMYK: &str = "Device CMYK (uncalibrated)";
 /// The grey space greyscale exports are written in: sRGB's tone curve (a grey shows as on screen).
@@ -43,7 +52,7 @@ pub const GRAY: &str = "Gray (sRGB tone curve)";
 
 /// Built-in RGB and CMYK working spaces, in menu order.
 const BUILTIN_RGB: [&str; 4] = [SRGB, WIDE_GAMUT_RGB, DISPLAY_P3, PROPHOTO_RGB];
-const BUILTIN_CMYK: [&str; 2] = [GENERIC_CMYK, DEVICE_CMYK];
+const BUILTIN_CMYK: [&str; 4] = [GENERIC_CMYK, FOGRA51_CMYK, FOGRA52_CMYK, DEVICE_CMYK];
 
 /// Names earlier versions gave built-in profiles: (old name, current name). Settings, documents
 /// and commands that still use an old name get the current profile.
@@ -239,6 +248,21 @@ fn generic() -> Arc<GenericCmyk> {
     G.get_or_init(|| Arc::new(GenericCmyk::new(generic::swop_like()))).clone()
 }
 
+/// The working space of `condition`, computed from its data once and kept.
+fn measured_space(condition: &measured::Condition) -> Result<Arc<GenericCmyk>, CmsError> {
+    static SPACES: [OnceLock<Option<Arc<GenericCmyk>>>; measured::CONDITIONS.len()] = [const { OnceLock::new() }; measured::CONDITIONS.len()];
+    let slot = measured::CONDITIONS.iter().position(|c| c.name == condition.name).and_then(|i| SPACES.get(i));
+    slot.and_then(|s| s.get_or_init(|| measured::model(condition).map(Arc::new)).clone())
+        .ok_or_else(|| CmsError::BadProfile(format!("{}: the {} data does not give a press model", condition.name, condition.reference)))
+}
+
+/// The registered printing condition a built-in CMYK working space characterizes: its reference
+/// name, the `/OutputConditionIdentifier` of a PDF/X output intent, and the registry it belongs
+/// to (by its current or legacy name). `None` for every other profile.
+pub fn characterization(name: &str) -> Option<(&'static str, &'static str)> {
+    measured::condition(canonical_name(name)).map(|c| (c.reference, measured::REGISTRY))
+}
+
 static USER: RwLock<Vec<Arc<IccProfile>>> = RwLock::new(Vec::new());
 /// Counts the profiles [`register_icc`] has registered ([`profiles_generation`]).
 static PROFILES_GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -259,7 +283,11 @@ fn user_profile(name: &str) -> Option<Arc<IccProfile>> {
 }
 
 fn cmyk_space(name: &str) -> Result<CmykSpace, CmsError> {
-    match canonical_name(name) {
+    let canonical = canonical_name(name);
+    if let Some(c) = measured::condition(canonical) {
+        return measured_space(c).map(CmykSpace::Generic);
+    }
+    match canonical {
         GENERIC_CMYK => Ok(CmykSpace::Generic(generic())),
         DEVICE_CMYK => Ok(CmykSpace::Device),
         _ => match user_profile(name) {
@@ -382,9 +410,13 @@ pub fn icc_bytes(name: &str) -> Result<Arc<[u8]>, CmsError> {
             CmykSpace::Generic(g) => g.paper_xyz(),
             CmykSpace::Device | CmykSpace::Icc(_) => lab::D50,
         };
+        let copyright = match measured::condition(name) {
+            Some(c) => format!("Computed by VectorCraft from the {} characterization data. Data source: Fogra, www.fogra.org", c.reference),
+            None => icc::NO_COPYRIGHT.to_string(),
+        };
         let to_lab = |c| cms.cmyk_to_lab(c);
         let shadows = |l| mapped.lab_to_cmyk(l, Intent::RelativeColorimetric);
-        icc::encode(&icc::cmyk_profile(name, paper, to_lab, shadows, |l| cms.lab_to_cmyk(l, Intent::RelativeColorimetric)))?
+        icc::encode(&icc::cmyk_profile(name, paper, &copyright, to_lab, shadows, |l| cms.lab_to_cmyk(l, Intent::RelativeColorimetric)))?
     } else {
         icc::builtin_rgb_bytes(name)?
     }
@@ -496,7 +528,8 @@ impl Cms {
     /// directly into the RGB profile: not through display sRGB, which would clip colours a wider
     /// RGB space holds (Wide Gamut RGB keeps CMYK cyan that sRGB can't show), and with the
     /// settings' black-point compensation. The built-in CMYK spaces go through sRGB as before
-    /// (Generic CMYK compensates in its own model).
+    /// (Generic CMYK compensates in its own model); with the absolute colorimetric intent the
+    /// paper colour shows.
     pub fn cmyk_to_rgb(&self, cmyk: [f32; 4], intent: Intent) -> [f32; 3] {
         let cmyk = cmyk.map(|v| v.clamp(0.0, 1.0));
         let src = match &self.cmyk {
@@ -509,7 +542,7 @@ impl Cms {
         };
         src.zip(dest)
             .and_then(|(s, d)| s.to_rgb_of(&d, &cmyk, intent, self.settings.bpc))
-            .unwrap_or_else(|| self.srgb_to_rgb(self.cmyk_to_srgb(cmyk, false)))
+            .unwrap_or_else(|| self.srgb_to_rgb(self.cmyk_to_srgb(cmyk, intent == Intent::AbsoluteColorimetric)))
     }
     /// Display sRGB → working CMYK with `intent`.
     pub fn srgb_to_cmyk(&self, srgb: [f32; 3], intent: Intent) -> [f32; 4] {
@@ -1178,7 +1211,18 @@ pub fn active_settings() -> ColorSettings {
 
 /// The color-management context of Edit → Color Settings (the working spaces, intent and black
 /// point compensation), as [`set_active`] last set them, whatever profiles a document is assigned.
+/// Inside [`with_active`] on this thread: the working settings of the settings it was given.
 pub fn working() -> Arc<Cms> {
+    if SCOPED_FLAGS.with(Cell::get) & SCOPED_SET != 0
+        && let Some(c) = SCOPED.with(|s| s.borrow().clone())
+    {
+        return c.working.clone().unwrap_or(c);
+    }
+    installed_working()
+}
+
+/// The working settings of the process, as [`set_active`] last set them.
+fn installed_working() -> Arc<Cms> {
     if let Some(c) = WORKING.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
         return c.clone();
     }
@@ -1208,7 +1252,7 @@ pub fn set_active(settings: &ColorSettings) -> Result<(), CmsError> {
 /// is not of its model, leaves the working space. The working settings stay as they are. True when
 /// the active settings changed.
 pub fn use_document_profiles(rgb: Option<&str>, cmyk: Option<&str>) -> bool {
-    let working = working();
+    let working = installed_working();
     let st = document_settings(&working.settings, rgb, cmyk);
     if st == installed().settings {
         return false;
@@ -1248,7 +1292,7 @@ const DOCUMENT_CONTEXTS: usize = 8;
 /// loaded gives the working settings.
 pub fn for_document(rgb: Option<&str>, cmyk: Option<&str>) -> Arc<Cms> {
     static KEPT: Mutex<Vec<(u64, Arc<Cms>)>> = Mutex::new(Vec::new());
-    let working = working();
+    let working = installed_working();
     let st = document_settings(&working.settings, rgb, cmyk);
     let installed = installed();
     if st == installed.settings {
@@ -1275,7 +1319,10 @@ pub fn for_document(rgb: Option<&str>, cmyk: Option<&str>) -> Arc<Cms> {
 
 /// Run `f` with `cms` as the active settings on this thread ([`active`], [`crate::Color::to_rgb`]
 /// and the conversions that read them), as when drawing a document other than the front one
-/// through its own profiles. Other threads, and this thread after `f`, keep the settings they had.
+/// through its own profiles, and with the working settings `cms` was made from as the working
+/// settings ([`working`]): the ones [`for_document`] put the document's profiles in place of, else
+/// `cms` itself. A [`set_active`] while `f` runs, on any thread, does not change either on this
+/// thread. Other threads, and this thread after `f`, keep the settings they had.
 pub fn with_active<R>(cms: Arc<Cms>, f: impl FnOnce() -> R) -> R {
     /// Puts back the settings this thread had before, when `f` returns or unwinds.
     struct Restore(Option<Arc<Cms>>, u8);
@@ -1315,3 +1362,5 @@ pub(crate) fn cmyk_is_device() -> bool {
 mod tests;
 #[cfg(test)]
 mod tests_icc;
+#[cfg(test)]
+mod tests_measured;

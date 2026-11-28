@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 
 use craft::behavior::{ColumnWidth, IconId};
 use craft::egui::{Response, Ui};
-use craft::host::{PickRequest, Picked};
+use craft::host::PickRequest;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::contract::overlay::Trigger;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
@@ -157,20 +157,18 @@ pub(crate) fn save_preset_row(ui: &mut Ui, fields: &mut Map<String, Value>) -> O
     if !fields.contains_key("__savePreset") {
         return None;
     }
-    let typed = text(fields, "__savePreset").to_string();
-    let (mut edited, mut pick, mut cancel) = (None, None, false);
+    let mut typed = text(fields, "__savePreset").to_string();
+    let (mut pick, mut cancel) = (None, false);
     Row::new().show(ui, |ui, _| {
         Text::new(tl!("Name:")).shade(Shade::Muted).show(ui);
-        edited = TextField::new(tl!("Name:"), Bind::given(typed.clone())).id_salt("efs-save-preset").show(ui).value().cloned();
+        TextField::new(tl!("Name:"), Bind::bound(&mut typed)).id_salt("efs-save-preset").show(ui);
         let name = typed.trim();
         if Button::new(tl!("Save")).enabled(!name.is_empty()).show(ui).clicked() {
             pick = Some(PresetPick::Save(name.to_string()));
         }
         cancel |= Button::new(tl!("Cancel")).show(ui).clicked();
     });
-    if let Some(name) = edited {
-        fields.insert("__savePreset".into(), json!(name));
-    }
+    fields.insert("__savePreset".into(), json!(typed));
     if cancel {
         fields.remove("__savePreset");
     }
@@ -178,26 +176,16 @@ pub(crate) fn save_preset_row(ui: &mut Ui, fields: &mut Map<String, Value>) -> O
 }
 
 /// Import Preset…: the presets of a picked file are added to the saved ones; `then` gets the names
-/// added, or the error (`cancelled` when no file was picked). On the web the picked file arrives
-/// with its bytes and imports through `io::open_bytes`, which reports no names.
+/// added, or the error (`cancelled` when no file was picked). Browser picks use the file's contents.
 pub(crate) fn import_presets(app: &mut VectorcraftApp, then: impl FnOnce(&mut VectorcraftApp, Result<Vec<String>, String>) + 'static) {
     let request = PickRequest::open("export-presets").filter("Export presets", fileio::SCREEN_EXPORT_PRESET_EXTS);
     // `then` reports its own result, so the continuation never fails (a failure would reach the status line twice).
     let _ = file_asks::ask(app, request, Owner::Free, move |app, picked| {
-        let result: Result<Vec<String>, String> = match picked {
-            Picked::Contents(files) => match files.first() {
-                Some((name, bytes)) => io::open_bytes(app, name, bytes, None).map(|_| Vec::new()),
-                None => Err("cancelled".into()),
-            },
-            other => match other.first_path() {
-                Some(path) => {
-                    let path = path.to_string_lossy().into_owned();
-                    io::import_presets(app, "document.exportPresets.import", io::EXPORT_PRESETS, json!({ "path": path }))
-                        .map(|r| r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect())
-                }
-                None => Err("cancelled".into()),
-            },
-        };
+        let result = file_asks::open_params(&picked).ok_or_else(|| "cancelled".to_owned()).and_then(|mut params| {
+            params.remove("name");
+            io::import_presets(app, "document.exportPresets.import", io::EXPORT_PRESETS, Value::Object(params))
+                .map(|r| r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect())
+        });
         then(app, result);
         Ok(Value::Null)
     });
@@ -374,9 +362,10 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
     let one = rows.len() == 1;
     let first = settings_format(&rows);
     let shown = Stack::new().show(ui, |ui, _| {
-        Row::new().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+        // The buttons end at the right edge; a column too narrow for them puts them on more lines.
+        Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
             Text::new(tl!("Formats:")).shade(Shade::Muted).show(ui);
-            Row::new().show(ui, |ui, _| {
+            Row::new().wrap(true).show(ui, |ui, _| {
                 for (id, label) in PLATFORMS {
                     if Button::new(tl!(label)).selected(preset == id).id_salt(id).show(ui).clicked() {
                         platform = Some(id);
@@ -398,7 +387,7 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
                 let raster = row["format"].as_str().and_then(fileio::format).is_none_or(|f| f.raster);
                 let scale = row["scale"].as_str().unwrap_or("1x").to_string();
                 let typed = ComboBox::new(tl!("Scale"), Bind::given(scale.clone()), &sizes).id_salt(("efs-scale", i)).enabled(raster).show(ui);
-                if let Some(s) = typed.edit.value().filter(|s| **s != scale) {
+                if let Some(s) = typed.edit.events.committed().filter(|s| **s != scale) {
                     // The suffix follows the size while it is the automatic one.
                     let auto = |text: &str| ScreenSize::parse(text).map(ScreenSize::suffix);
                     if row["suffix"].as_str().is_none_or(|x| Some(x.to_string()) == auto(&scale))
@@ -411,7 +400,7 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
                 }
                 let suffix = row["suffix"].as_str().unwrap_or_default().to_string();
                 let typed = TextField::new(tl!("Suffix"), Bind::given(suffix.clone())).id_salt(("efs-suffix", i)).show(ui);
-                if let Some(s) = typed.value().filter(|s| **s != suffix) {
+                if let Some(s) = typed.events.committed().filter(|s| **s != suffix) {
                     put(row, "suffix", json!(s));
                     edited = true;
                 }
@@ -423,7 +412,7 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
                     .placeholder(format.to_uppercase())
                     .id_salt(("efs-fmt", i))
                     .show(ui);
-                if let Some((_, f, q, print)) = picked.value().and_then(|at| FORMATS.get(*at)) {
+                if let Some((_, f, q, print)) = picked.events.committed().and_then(|at| FORMATS.get(*at)) {
                     put(row, "format", json!(f));
                     if let Some(o) = row.as_object_mut() {
                         match q {
@@ -487,7 +476,6 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
     }
     shown.output
 }
-
 /// The format Format Settings opens on for format rows `rows`: the first row's format when it has
 /// settings of its own, else PNG. Row spellings (`jpeg`, `tif`) give the canonical id.
 pub(crate) fn settings_format(rows: &[Value]) -> &'static str {
@@ -523,7 +511,7 @@ pub(crate) fn settings(ui: &mut Ui, fields: &mut Map<String, Value>, presets: &[
         Text::new(tl!("Format Settings")).show(ui);
         Row::new().show(ui, |ui, _| {
             Text::new(tl!("Format:")).shade(Shade::Muted).show(ui);
-            if let Some(f) = Select::new(tl!("Format:"), Bind::given(id), &formats).id_salt("efs-settings-format").show(ui).value() {
+            if let Some(f) = Select::new(tl!("Format:"), Bind::given(id), &formats).id_salt("efs-settings-format").show(ui).events.committed() {
                 switch = Some(*f);
             }
         });
@@ -531,7 +519,9 @@ pub(crate) fn settings(ui: &mut Ui, fields: &mut Map<String, Value>, presets: &[
             Row::new().show(ui, |ui, _| {
                 Text::new(tl!("PDF Preset:")).shade(Shade::Muted).show(ui);
                 let current = mine.get("preset").and_then(Value::as_str).unwrap_or_default().to_string();
-                if let Some(p) = Select::new(tl!("PDF Preset:"), Bind::given(current), &pdf_presets).id_salt("efs-pdf-preset").show(ui).value() {
+                if let Some(p) =
+                    Select::new(tl!("PDF Preset:"), Bind::given(current), &pdf_presets).id_salt("efs-pdf-preset").show(ui).events.committed()
+                {
                     let mut next = mine.clone();
                     next.insert("preset".into(), json!(p));
                     changed = Some(next);
@@ -559,4 +549,189 @@ pub(crate) fn settings(ui: &mut Ui, fields: &mut Map<String, Value>, presets: &[
         fields.insert("__settings".into(), json!(""));
     }
     shown.output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    fn export_panel() -> Panel {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.services.download = Some(Box::new(|_, _| Ok(())));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(egui::vec2(1100.0, 1000.0));
+        panel.app().run("file.exportForScreens", json!({})).unwrap();
+        panel.frame();
+        panel
+    }
+
+    fn fields(panel: &Panel) -> Value {
+        super::super::tests_export::fields(&panel.app())
+    }
+
+    fn set(panel: &Panel, key: &str, value: Value) {
+        super::super::tests_export::set(&mut panel.app(), key, value);
+    }
+
+    #[test]
+    fn cancelled_format_choices_preserve_the_complete_row_and_preset() {
+        for row in [
+            json!({"format": "pdf", "marks": print_marks(), "scale": "1x", "suffix": "-print"}),
+            json!({"format": "jpg", "quality": 100, "scale": "1x", "suffix": ""}),
+        ] {
+            let mut panel = export_panel();
+            set(&panel, "formats", json!([row]));
+            set(&panel, "preset", json!("mobile"));
+            let before = fields(&panel);
+            let document = panel.app().session.active().unwrap().doc.clone();
+            let undo = panel.app().session.active().unwrap().history.undo.len();
+            panel.click_role("Format", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert_eq!(fields(&panel), before, "Escape retains quality, marks, suffix and the applied platform preset");
+            panel.click_role("Format", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Enter, Modifiers::NONE);
+            let after = fields(&panel);
+            assert_eq!(after["preset"], "");
+            assert_eq!(after["formats"][0]["suffix"], before["formats"][0]["suffix"]);
+            if before["formats"][0]["format"] == "pdf" {
+                assert_eq!(after["formats"][0]["format"], "eps");
+                assert!(after["formats"][0].get("marks").is_none());
+            } else {
+                assert_eq!(after["formats"][0]["format"], "jpg");
+                assert_eq!(after["formats"][0]["quality"], 80);
+            }
+            assert_eq!(panel.app().session.active().unwrap().doc, document);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+        }
+    }
+
+    #[test]
+    fn cancelled_scale_suffix_and_preset_name_typing_keep_the_opening_values() {
+        for (label, role, key, typed) in [
+            ("Scale", Role::COMBO_BOX, "scale", "2x"),
+            ("Suffix", Role::TEXT_INPUT, "suffix", "-new"),
+            ("Name:", Role::TEXT_INPUT, "__savePreset", "Changed"),
+        ] {
+            let mut panel = export_panel();
+            set(&panel, "formats", json!([{"format": "png", "scale": "1x", "suffix": ""}]));
+            set(&panel, "preset", json!("mobile"));
+            if key == "__savePreset" {
+                set(&panel, key, json!("Original"));
+            }
+            let before = fields(&panel);
+            panel.click_role(label, role);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(typed);
+            panel.key(Key::Escape, Modifiers::NONE);
+            if key == "scale" {
+                assert_eq!(fields(&panel), before, "Escape discards the Scale choice and its side effects");
+            } else {
+                assert!(fields(&panel).is_null(), "Escape from {label} cancels the current export dialog");
+                panel.app().run("file.exportForScreens", json!({})).unwrap();
+                panel.frame();
+                set(&panel, "formats", before["formats"].clone());
+                set(&panel, "preset", before["preset"].clone());
+                if key == "__savePreset" {
+                    set(&panel, key, before[key].clone());
+                }
+            }
+            assert!(panel.app().session.prefs.screen_export_presets.is_empty(), "Escape never saves a preset");
+            panel.click_role(label, role);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(typed);
+            panel.key(Key::Tab, Modifiers::NONE);
+            let after = fields(&panel);
+            if key == "__savePreset" {
+                assert_eq!(after[key], typed);
+            } else {
+                assert_eq!(after["formats"][0][key], typed);
+                assert_eq!(after["preset"], "");
+                if key == "scale" {
+                    assert_eq!(after["formats"][0]["suffix"], "@2x");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cancelled_settings_format_and_pdf_preset_choices_keep_all_options() {
+        for pdf in [false, true] {
+            let mut panel = export_panel();
+            let presets = fileio::pdf::presets(&panel.app().session);
+            assert!(presets.len() > 1);
+            set(&panel, "settings", json!({"png": {"dpi": 144}, "pdf": {"preset": presets[0]}}));
+            set(&panel, "__settings", json!(if pdf { "pdf" } else { "png" }));
+            let before = fields(&panel);
+            let label = if pdf { "PDF Preset:" } else { "Format:" };
+            panel.click_role(label, Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert_eq!(fields(&panel), before);
+            panel.click_role(label, Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Enter, Modifiers::NONE);
+            let after = fields(&panel);
+            if pdf {
+                assert_eq!(after["settings"]["pdf"]["preset"], presets[1]);
+                assert_eq!(after["__settings"], "pdf");
+            } else {
+                assert_eq!(after["__settings"], "png8");
+                assert_eq!(after["settings"], before["settings"]);
+            }
+        }
+    }
+
+    #[test]
+    fn a_new_preset_name_can_be_saved_by_a_direct_click_without_tab() {
+        let mut panel = export_panel();
+        set(&panel, "__savePreset", json!(""));
+        panel.click_role("Name:", Role::TEXT_INPUT);
+        panel.type_text("Fleet");
+        assert!(panel.enabled("Save"), "typing a name enables Save before the field loses focus");
+        panel.click("Save");
+        panel.frame();
+        assert!(fields(&panel).get("__savePreset").is_none());
+        assert_eq!(fields(&panel)["exportPreset"], "Fleet");
+        let formats = fields(&panel)["formats"].clone();
+        let app = panel.app();
+        let saved = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Fleet").expect("Save uses the name just typed");
+        assert_eq!(saved.settings["formats"], formats);
+    }
+
+    #[test]
+    fn the_browser_preset_picker_routes_by_content_without_opening_drawings() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.services.download = Some(Box::new(|_, _| Ok(())));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("document.exportPresets.save", json!({"name": "Fleet", "settings": {"formats": [{"format": "png"}]}})).unwrap();
+        let export = app.run("document.exportPresets.export", json!({"names": ["Fleet"]})).unwrap();
+        let bytes = export["data"].as_str().unwrap().as_bytes();
+        app.run("document.exportPresets.delete", json!({"name": "Fleet"})).unwrap();
+        let document = app.session.active().unwrap().uid;
+        let picker = crate::tests::picks::scripted(&mut app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let picked = |app: &mut VectorcraftApp, name: &str, bytes: &[u8]| {
+            let answer = Rc::new(Cell::new(None));
+            let report = Rc::clone(&answer);
+            import_presets(app, move |_, result| report.set(Some(result)));
+            picker.answer_contents(&[(name, bytes)]);
+            crate::tests::picks::poll(app, &ctx);
+            answer.take().unwrap()
+        };
+
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="30" height="20"><rect width="10" height="10"/></svg>"#;
+        let error = picked(&mut app, "drawing.svg", svg);
+        assert_eq!(app.session.documents().len(), 1, "Import Preset must not open a drawing");
+        assert!(error.unwrap_err().contains("not an export presets file"));
+
+        assert_eq!(picked(&mut app, "different-extension.svg", bytes), Ok(vec!["Fleet".to_string()]));
+        assert_eq!(app.ui.status, "Imported export presets: Fleet");
+        assert_eq!(app.session.active().unwrap().uid, document);
+    }
 }

@@ -81,11 +81,28 @@ rustix = { workspace = true, features = ["std", "process", "fs"] }
 # (walkdir), so this adds no new crate.
 [target.'cfg(windows)'.dependencies]
 same-file = "1.0.6"
+# Credential Manager, the system key store of grant_keys.rs on Windows (see keyring-core below).
+windows-native-keyring-store = "1.1"
 
 # The tiles of a HEIC photo decode in parallel on native; wasm stays single-threaded.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 heic-rs = { version = "=0.1.4", default-features = false, features = ["std", "parallel"], optional = true }
 rayon = { version = "1.12", optional = true }
+# The MAC that `grants.json` carries (grant_keys.rs) and the random key it is made with, which the
+# user's key store keeps: Keychain on macOS, Credential Manager on Windows, the Secret Service on
+# Linux. All MIT OR Apache-2.0.
+hmac = "0.12.1"
+sha2 = { version = "0.10", default-features = false }
+getrandom = "0.4"
+keyring-core = "1.1"
+
+# The system key store of grant_keys.rs on each platform, connected through keyring-core: the same
+# store crates and features that keyring 4.2 uses. All MIT OR Apache-2.0.
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
+zbus-secret-service-keyring-store = { version = "1.0.1", features = ["crypto-rust"] }
 
 [dev-dependencies]
 # JPEG XL files for the `.jxl` open and place tests.

@@ -60,6 +60,7 @@ mod process_identity;
 mod profile_root;
 #[cfg(not(any(target_os = "macos", windows)))]
 mod quit_windows;
+mod screen_density;
 #[cfg(not(target_os = "macos"))]
 mod single_instance;
 #[cfg(windows)]
@@ -69,8 +70,11 @@ mod window_frame;
 mod windows_alt_codes;
 #[cfg(windows)]
 mod windows_cores;
+#[cfg(windows)]
+mod windows_display_size;
 mod windows_stylus;
 mod windows_symbol_chars;
+mod windows_wintab;
 mod xwayland;
 
 use std::sync::{Arc, Mutex};
@@ -206,6 +210,9 @@ struct App {
     held_files: Vec<String>,
     /// Reads the profile of the display that shows the main window, for the canvas.
     display_profile: display_profile::Reader,
+    /// Measures the density of the display that shows the main window, for Display Print Size at
+    /// 100% Zoom.
+    screen_density: screen_density::Tracker,
     /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
     frame_start: Option<std::time::Instant>,
     /// The shortest time between the starts of two frames, while the window presents without vsync
@@ -817,6 +824,8 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_plugin_store(&mut session);
                 // File › Scripts lists the scripts of the Scripts folder next to the preferences.
                 prefs_dir::attach_scripts_dir(&mut session);
+                // The startup scripts are in the Startup Scripts folder next to the preferences.
+                prefs_dir::attach_startup_scripts_dir(&mut session);
                 // File Info's metadata templates live in their own folder next to the preferences.
                 prefs_dir::attach_metadata_templates_dir(&mut session);
                 prefs_dir::attach_new_doc_profiles(&mut session);
@@ -970,6 +979,9 @@ fn main() -> std::process::ExitCode {
                     single_instance::set_ui(&cc.egui_ctx);
                 }
                 let held_files = file_access::unconfined(|| open_or_hold(&mut app, command_line_files));
+                // With General › Run Startup Scripts on and Safe Mode off, the startup scripts run
+                // now, as the person's own; in Safe Mode they wait for the choice that ends it.
+                file_access::unconfined(|| vectorcraft_ui_egui::script_runs::run_at_launch(&mut app));
                 // The first frame is due from now (`gpu::watch_first_frame`).
                 #[cfg(feature = "wgpu")]
                 created.ready();
@@ -989,6 +1001,7 @@ fn main() -> std::process::ExitCode {
                     winit_window,
                     held_files,
                     display_profile: Default::default(),
+                    screen_density: Default::default(),
                     frame_start: None,
                     min_frame,
                     last_frame_began: None,

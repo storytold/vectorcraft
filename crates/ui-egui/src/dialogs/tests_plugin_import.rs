@@ -8,7 +8,7 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat::{self as tpl, Given};
 
-use super::tests_export::{fields, frame, kind, set, try_confirm};
+use super::tests_export::{cancel, fields, frame, kind, set, try_confirm};
 use super::*;
 use crate::Services;
 use crate::VectorcraftApp;
@@ -235,6 +235,189 @@ fn a_dropped_file_only_an_importer_reads_opens() {
 
     app.run("plugin.remove", json!({"id": "test.ui.dropped"})).unwrap();
     app.run("plugin.remove", json!({"id": "test.ui.dropshare"})).unwrap();
+}
+
+/// A file only an importer that places its files reads, dropped on the canvas, is placed there as
+/// one group by that importer, as one undo step; dropped where the platform gives no position, it
+/// opens as its own document, as a vector file does.
+#[test]
+fn a_dropped_file_a_placing_importer_reads_is_placed_on_the_canvas() {
+    use crate::place::{DropSpot, DropTarget, drop_files};
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    let on_canvas = DropSpot::Canvas(vectorcraft_geom::Point::new(400.0, 300.0));
+    let manifest = tpl::importer("test.ui.dropplace", r#"["tdp"]"#, "{}").replace(r#""kind":"importer""#, r#""kind":"importer","place":true"#);
+    assert!(manifest.contains(r#""place":true"#), "{manifest}");
+    install(&mut app, &tpl::returning(&manifest, RECT));
+
+    let target = app.drop_target("Drawing.tdp", on_canvas, false);
+    assert!(matches!(target, DropTarget::Place(_)), "{target:?}");
+    assert_eq!(app.drop_target("Drawing.tdp", DropSpot::Unknown, false), DropTarget::Open);
+    let steps = app.session.active().unwrap().history.undo.len();
+    drop_files(&mut app, vec![(target, ("Drawing.tdp".into(), None, b"?".to_vec()))]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.history.undo.len(), steps + 1, "one undo step");
+    let [id] = st.selection.objects[..] else { panic!("one placed object: {:?}", st.selection.objects) };
+    let n = st.doc.node(id).unwrap();
+    assert!(matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. }) && n.name.as_deref() == Some("Drawing.tdp"), "{n:?}");
+
+    app.run("plugin.remove", json!({"id": "test.ui.dropplace"})).unwrap();
+}
+
+/// A text file or DXF drawing placed with the importer `importer` names goes to that importer,
+/// without the text or DXF import options File › Place asks for those formats.
+#[test]
+fn a_named_placing_importer_skips_built_in_import_options() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let manifest = tpl::importer("test.ui.namedplace", r#"["txt","dxf"]"#, "{}").replace(r#""kind":"importer""#, r#""kind":"importer","place":true"#);
+    install(&mut app, &tpl::returning(&manifest, RECT));
+    for name in ["Notes.txt", "Plan.dxf"] {
+        let steps = app.session.active().unwrap().history.undo.len();
+        let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(b"0\nSECTION\n"), "importer": "plugin.test.ui.namedplace"});
+        let r = app.run("file.place", p).unwrap();
+        assert!(kind(&app).is_none(), "{name}: no import options dialog");
+        assert_eq!(r["format"], "plugin.test.ui.namedplace", "{name}: {r}");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "{name}");
+    }
+    app.run("plugin.remove", json!({"id": "test.ui.namedplace"})).unwrap();
+}
+
+/// `file.place` with `paths`, `importer` and `params` opens the Place dialog, and its OK places the
+/// files with that importer and those parameters: one file at once, several through the place
+/// cursor. The files are SVG files by their extension, which the built-in reader can't read.
+#[test]
+fn the_place_dialog_places_paths_with_the_importer_and_params_given() {
+    let dir = tmp_dir("placepaths");
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
+    let manifest = tpl::importer("test.ui.placepaths", r#"["svg"]"#, params).replace(r#""kind":"importer""#, r#""kind":"importer","place":true"#);
+    install(&mut app, &tpl::when_given(&manifest, Given::Params, r#""density":7.0"#, RECT));
+    let paths: Vec<String> = ["a.svg", "b.svg"]
+        .iter()
+        .map(|n| {
+            let p = dir.join(n);
+            std::fs::write(&p, b"?").unwrap();
+            p.to_string_lossy().into_owned()
+        })
+        .collect();
+    let given =
+        |paths: &[String]| json!({"paths": paths, "importer": "plugin.test.ui.placepaths", "params": {"density": 7}, "showImportOptions": false});
+
+    app.run("file.place", given(&paths[..1])).unwrap();
+    assert_eq!(kind(&app).as_deref(), Some(crate::dialogs::place::KIND));
+    let steps = app.session.active().unwrap().history.undo.len();
+    try_confirm(&mut app).unwrap();
+    assert_eq!(placed_group(&app).as_deref(), Some("a.svg"), "{}", app.ui.status);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1);
+
+    app.run("file.place", given(&paths)).unwrap();
+    try_confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options()["count"], 2, "{}", app.ui.status);
+
+    app.run("plugin.remove", json!({"id": "test.ui.placepaths"})).unwrap();
+}
+
+/// A PDF file placed with an importer plug-in named is not read to tell whether Link would place it
+/// as a document: the Place dialog counts it as a file the importer embeds. The file here doesn't
+/// exist, which counts as a document when its start is read.
+#[test]
+fn the_place_dialog_does_not_read_a_file_a_named_importer_places() {
+    let dir = tmp_dir("placenamedpdf");
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let manifest = tpl::importer("test.ui.placepdf", r#"["pdf"]"#, "{}").replace(r#""kind":"importer""#, r#""kind":"importer","place":true"#);
+    install(&mut app, &tpl::returning(&manifest, RECT));
+    let path = dir.join("missing.pdf").to_string_lossy().into_owned();
+    let counted = |app: &mut VectorcraftApp, p: serde_json::Value| {
+        app.run("file.place", p).unwrap();
+        assert_eq!(kind(app).as_deref(), Some(crate::dialogs::place::KIND));
+        let f = fields(app);
+        cancel(app);
+        (f["__documents"].clone(), f["__others"].clone())
+    };
+    assert_eq!(counted(&mut app, json!({"paths": [path]})), (json!(true), json!(false)));
+    assert_eq!(counted(&mut app, json!({"paths": [path], "importer": "plugin.test.ui.placepdf"})), (json!(false), json!(true)));
+    app.run("plugin.remove", json!({"id": "test.ui.placepdf"})).unwrap();
+}
+
+/// `file.place` with `importer` and `params` and no file asks for the files, and the Place dialog's
+/// OK places the picked files with that importer and those parameters: files the picker gives by
+/// their contents (the web) and by their paths. A pick without them places with neither, also while
+/// a pick with them is open.
+#[test]
+fn a_pick_places_with_the_importer_and_params_given() {
+    let dir = tmp_dir("placepick");
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
+    let manifest = tpl::importer("test.ui.placepick", r#"["svg"]"#, params).replace(r#""kind":"importer""#, r#""kind":"importer","place":true"#);
+    install(&mut app, &tpl::when_given(&manifest, Given::Params, r#""density":7.0"#, RECT));
+    let picker = scripted(&mut app);
+    let ctx = crate::testing::ui_context();
+    let with = json!({"importer": "plugin.test.ui.placepick", "params": {"density": 7}, "showImportOptions": false});
+    let picked_files = |app: &VectorcraftApp| {
+        let mut files = fields(app)["files"].clone();
+        for file in files.as_array_mut().unwrap() {
+            let source = file.as_object_mut().unwrap().remove("__pickedSource").expect("browser files keep their source identity");
+            let token = source.as_str().unwrap();
+            assert!(app.place.picked.iter().any(|(key, bytes)| key == token && bytes == b"?"));
+        }
+        files
+    };
+
+    // The web: the picker answers with the files' contents.
+    app.run("file.place", with.clone()).unwrap();
+    picker.answer_contents(&[("a.svg", b"?")]);
+    poll(&mut app, &ctx);
+    assert_eq!(picked_files(&app), json!([{"name": "a.svg", "importer": "plugin.test.ui.placepick", "params": {"density": 7}}]));
+    let steps = app.session.active().unwrap().history.undo.len();
+    try_confirm(&mut app).unwrap();
+    assert_eq!(placed_group(&app).as_deref(), Some("a.svg"), "{}", app.ui.status);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1);
+
+    // The desktop: the picker answers with paths.
+    let path = dir.join("b.svg");
+    std::fs::write(&path, b"?").unwrap();
+    let path = path.to_string_lossy().into_owned();
+    app.run("file.place", with.clone()).unwrap();
+    picker.answer(&[&path]);
+    poll(&mut app, &ctx);
+    assert_eq!(fields(&app)["files"], json!([{"path": path, "importer": "plugin.test.ui.placepick", "params": {"density": 7}}]));
+    try_confirm(&mut app).unwrap();
+    assert_eq!(placed_group(&app).as_deref(), Some("b.svg"), "{}", app.ui.status);
+
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("c.svg", b"?")]);
+    poll(&mut app, &ctx);
+    assert_eq!(picked_files(&app), json!([{"name": "c.svg"}]));
+    cancel(&mut app);
+
+    // Two picks open at once: each one's files keep that pick's importer and parameters, also when
+    // the later pick is answered first.
+    app.run("file.place", with).unwrap();
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("e.svg", b"?")]);
+    poll(&mut app, &ctx);
+    assert_eq!(picked_files(&app), json!([{"name": "e.svg"}]));
+    cancel(&mut app);
+    picker.answer_contents(&[("d.svg", b"?")]);
+    poll(&mut app, &ctx);
+    assert_eq!(picked_files(&app), json!([{"name": "d.svg", "importer": "plugin.test.ui.placepick", "params": {"density": 7}}]));
+    try_confirm(&mut app).unwrap();
+    assert_eq!(placed_group(&app).as_deref(), Some("d.svg"), "{}", app.ui.status);
+
+    app.run("plugin.remove", json!({"id": "test.ui.placepick"})).unwrap();
+}
+
+/// The name of the one selected object when it is a group: what an importer places.
+fn placed_group(app: &VectorcraftApp) -> Option<String> {
+    let st = app.session.active()?;
+    let [id] = st.selection.objects[..] else { return None };
+    let n = st.doc.node(id)?;
+    matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. }).then(|| n.name.clone()).flatten()
 }
 
 /// The extensions File › Open's filters leave out of importers' (`fileio::opens_as_other`) are the

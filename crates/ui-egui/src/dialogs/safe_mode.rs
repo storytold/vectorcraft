@@ -135,7 +135,8 @@ fn stopped_prompt(fields: &Value) -> StandardPrompt {
 
 /// The choice's Disable and Continue (`normal` false) or Start Normally: Safe Mode ends and the
 /// plug-ins load, without the stopped ones for Disable and Continue (kept off for later launches
-/// too).
+/// too), then the startup scripts run ([`crate::script_runs::run_at_launch`]), without a disabled
+/// one.
 fn confirm_stopped(app: &mut VectorcraftApp, normal: bool) {
     let items = stopped_items(&app.ui.stopped_plugin.take().unwrap_or(Value::Null));
     // When a disabled plug-in can't be saved for the next launch, that launch asks again. Every
@@ -154,6 +155,8 @@ fn confirm_stopped(app: &mut VectorcraftApp, normal: bool) {
     }
     safe_mode::set_active(None);
     vectorcraft_engine::cmd::plugin::load_prefs_folder(&mut app.session);
+    // The launch's startup scripts waited for Safe Mode to end.
+    crate::script_runs::run_at_launch(app);
 }
 
 /// Help › Safe Mode: the disabled plug-ins, none ticked for Enable on Re-launch. A plug-in disabled

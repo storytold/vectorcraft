@@ -184,10 +184,10 @@ impl ReadText {
         self.texts.get_or_insert_with(|| Texts::read(data)).as_ref()
     }
 
-    /// [`Self::texts`] with its characters painted by `patterns` ([`Texts::with_patterns`]).
-    fn texts_with(&mut self, data: &[u8], patterns: std::collections::HashMap<String, vectorcraft_color::Paint>) -> Option<&Texts> {
+    /// [`Self::texts`] with its characters painted by `paints` ([`Texts::with_paints`]).
+    fn texts_with(&mut self, data: &[u8], paints: std::collections::HashMap<String, vectorcraft_color::Paint>) -> Option<&Texts> {
         self.forget_in_tests();
-        let texts = self.texts.take().unwrap_or_else(|| Texts::read(data)).map(|t| t.with_patterns(patterns));
+        let texts = self.texts.take().unwrap_or_else(|| Texts::read(data)).map(|t| t.with_paints(paints));
         self.texts.insert(texts).as_ref()
     }
 }
@@ -336,7 +336,7 @@ pub(super) fn build_weighing(
         placed_pages,
         envelopes_drawn,
         styles_read,
-        text_patterns,
+        text_paints,
         canvas_scale,
         symbols_own_size,
         xml_ids,
@@ -497,7 +497,7 @@ pub(super) fn build_weighing(
     // The page's type that needs no text object of the layers: the layers' own legacy text, or
     // placed files that show it.
     let as_outlines = page_type_elsewhere(infos.is_empty(), infos.iter().all(|i| !i.shown), &mut shown, &mut hidden, &doc, &placed_elsewhere)?;
-    let texts = text.texts_with(data, text_patterns);
+    let texts = text.texts_with(data, text_paints);
     // Each story is read once, however many text objects name it.
     let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
     let stories: Vec<Option<Arc<Story>>> = infos
