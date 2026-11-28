@@ -142,6 +142,25 @@ fn toolbar_show_turns_the_controls_under_the_tools_on_and_off() {
     assert_eq!(serde_json::from_value::<crate::state::UiState>(old).unwrap().toolbar_show, crate::state::ToolbarShow::default());
 }
 
+/// The drawer's Show toggles are labeled: they sit in a field named "Show" whose label comes before them.
+#[test]
+fn the_drawer_labels_its_show_toggles() {
+    let mut app = app();
+    let ctx = ctx();
+    settle(&mut app, &ctx, 0.0);
+    app.run("window.editToolbar", json!({"open": true})).unwrap();
+    let nodes = settle(&mut app, &ctx, 1.0);
+    let open = drawer(&nodes);
+    let first = inside(&nodes, "Fill and Stroke Controls", open);
+    let label = named(&nodes, "Show")
+        .into_iter()
+        .chain(named(&nodes, "Show:"))
+        .find(|r| open.contains(r.center()))
+        .unwrap_or_else(|| panic!("the drawer shows a Show label: {:?}", nodes.iter().filter(|(_, r)| open.contains(r.center())).collect::<Vec<_>>()));
+    assert!(label.expand(0.5).contains_rect(first), "the Show field {label:?} holds the toggles {first:?}");
+    assert!(label.left() < first.left(), "the Show label in {label:?} comes before the toggles {first:?}");
+}
+
 /// Every tool is listed once, under a heading; the Basic toolbar's groups come first, in its order.
 #[test]
 fn every_tool_is_listed_once_under_a_heading() {

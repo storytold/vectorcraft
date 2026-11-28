@@ -718,10 +718,11 @@ fn quad_bounds(quad: &[Point; 4]) -> vectorcraft_geom::Rect {
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes and screen mode under the rail's
 /// tools: in two columns the three drawing modes show, in one only the current one, which cycles
 /// them. A row the rail is too narrow for goes on in the next line. The All Tools drawer's Show
-/// section hides any of them.
+/// section hides any of them. A rule above them parts them from the tools, which scroll above it in a short rail.
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
     let two = footer.columns > 1;
     let show = app.ui.toolbar_show;
+    Divider::horizontal().show(ui);
     if show.fill_stroke {
         crate::panels::proxy(app, ui);
     }
@@ -734,7 +735,8 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         ];
         let fallback = crate::panels::srgba(&app.session.last_solid);
         let mut clicked = None;
-        Row::new().wrap(true).show(ui, |ui, _| {
+        // A tight gap apart, as the drawing modes, so the three share one line in a one-column rail.
+        Row::new().gap(Gap::Tight).wrap(true).show(ui, |ui, _| {
             for (label, cmd, paint) in &chips {
                 let shown = Mixed::Same(well_paint(paint, &|_| None));
                 let out =

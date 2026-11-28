@@ -306,6 +306,40 @@ fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
     assert_eq!(app.session.draw_mode, vectorcraft_engine::DrawMode::Behind);
 }
 
+/// In one column the Color, Gradient and None chips share one line, and a rule across the rail parts the controls under
+/// the tools from the tools, which scroll above them in a short rail: it lies between the last tool and Fill and
+/// Stroke.
+#[test]
+fn the_controls_under_the_tools_share_a_line_under_a_rule() {
+    let mut app = app_with(200, 200);
+    let ctx = reader();
+    app.run("window.toolbarColumns", json!({ "double": false })).unwrap();
+    let nodes = settled(&mut app, &ctx, 0.0, 2000.0);
+    let chips = ["Color (, or Shift+,)", "Gradient (. or Shift+.)", "None (/)"].map(|label| named_rect(&nodes, label));
+    assert!(chips.iter().all(|r| (r.top() - chips[0].top()).abs() < 0.5), "one line: {chips:?}");
+    let last = cells(&app, &nodes).into_iter().max_by(|a, b| a.bottom().total_cmp(&b.bottom())).expect("the rail shows tools");
+    let proxy = named_rect(&nodes, "Fill and Stroke");
+    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 2000.0)));
+    let out = crate::testing::app_frame(&mut app, &ctx, egui::RawInput { time: Some(1.0), screen_rect, ..Default::default() });
+    let mut flat = Vec::new();
+    let mut stack: Vec<egui::Shape> = out.shapes.into_iter().map(|clipped| clipped.shape).collect();
+    while let Some(shape) = stack.pop() {
+        match shape {
+            egui::Shape::Vec(inner) => stack.extend(inner),
+            shape => flat.push(shape),
+        }
+    }
+    // A rule is a thin horizontal line or bar across most of the rail's width, between the tools and the controls.
+    let between = |y: f32| y > last.bottom() && y < proxy.top();
+    let across = |left: f32, right: f32| right - left >= last.width() * 0.75 && left < last.right() && right > last.left();
+    let ruled = flat.iter().any(|shape| match shape {
+        egui::Shape::LineSegment { points: [a, b], .. } => (a.y - b.y).abs() < 0.5 && between(a.y) && across(a.x.min(b.x), a.x.max(b.x)),
+        egui::Shape::Rect(r) => r.rect.height() <= 2.0 && between(r.rect.center().y) && across(r.rect.left(), r.rect.right()),
+        _ => false,
+    });
+    assert!(ruled, "a rule lies between the last tool {last:?} and Fill and Stroke {proxy:?}");
+}
+
 /// A screen reader reads the drawing-mode buttons' state as the rail shows it, in every mode: in two columns the
 /// current mode's button reads pressed and the other two not pressed; in one column the single button is named for the
 /// current mode and cycles the modes, so it reads as a plain button with no pressed state.

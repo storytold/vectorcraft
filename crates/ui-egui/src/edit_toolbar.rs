@@ -23,6 +23,7 @@ use craft::behavior::IconId;
 use craft::behavior::overlay::Side;
 use craft::ui::buttons::ToggleButton;
 use craft::ui::contract::{Bind, Outcome as _, Show as _, ShowContainer as _};
+use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
 use craft::ui::primitives::IconSpec;
@@ -462,14 +463,17 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ui: &mut Ui, rail_out: &ToolRailO
         if target.is_some() {
             return;
         }
-        Row::new().show(ui, |ui, _| {
-            for (name, label, icon) in crate::state::ToolbarShow::CONTROLS {
-                let on = shown.get(name);
-                let button = ToggleButton::new(tl!(label), Bind::given(on)).icon(IconSpec::svg(IconId::new(icon))).icon_only();
-                if button.show(ui).response().clicked() {
-                    toggled = Some(name);
+        // The toggles are labeled "Show:", as production's were, so the row says what its icons turn on and off.
+        Field::new(tl!("Show:")).show(ui, |ui, _| {
+            Row::new().show(ui, |ui, _| {
+                for (name, label, icon) in crate::state::ToolbarShow::CONTROLS {
+                    let on = shown.get(name);
+                    let button = ToggleButton::new(tl!(label), Bind::given(on)).icon(IconSpec::svg(IconId::new(icon))).icon_only();
+                    if button.show(ui).response().clicked() {
+                        toggled = Some(name);
+                    }
                 }
-            }
+            });
         });
     });
 
