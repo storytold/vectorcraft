@@ -7692,6 +7692,19 @@ request that leaves the anchor as it is records no undo step, and `link: true` w
 ("`link` and `independent` cannot both be true"), as is an x or y of 1e9 pt or more in size with `link: true`
 ("x and y must be finite"). `object.blend.spine.moveAnchor` takes `link` with `handle` in the
 same way for a blend's spine point; without `handle` it is refused. These rules are VectorCraft's own.
+`path.moveHandles {handles: [{id, subpath?, anchor, which}], dx, dy, independent?}` moves several direction handles,
+on one path or several, by the same offset as one undo step. An anchor with one handle listed places it as
+`path.setHandle` does, so a smooth anchor turns its other handle in line at its own length; an anchor with both handles
+listed moves both and becomes a corner. `independent: true` makes the anchor of every listed handle a corner and leaves
+its other handle where it is. A handle listed twice moves once, and a move by 0, 0 that makes no anchor a corner leaves
+the document as it is and records no undo step. An empty or missing `handles`, a `which` other than `"in"` or `"out"`,
+an object that is not a path, a missing subpath or anchor, a `dx` or `dy` that is missing, not a number or 1e9 pt or
+more in size, and an `independent` that is not true or false are refused, and the document does not change. With Direct
+Selection, a click on the end of a direction handle of a path picks that handle, a Shift-click adds it to the picked
+handles or takes it away, and Escape lets them go; picked handles show ringed. A Shift-press on a handle moves it only
+once the pointer has moved 3 pixels, so a Shift-click leaves it where it is. Dragging one of two or more picked handles
+moves all of them by the offset of the dragged one (`path.moveHandles`), which snaps as a single handle's drag does,
+and Alt sends `independent`; the handles stay picked after the drag. These rules are VectorCraft's own.
 `path.insertAnchor` keeps the direct-selected anchors and selected segments of the path on the same points: those
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
 selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
