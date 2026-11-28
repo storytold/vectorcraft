@@ -124,10 +124,13 @@ pub fn validate_root(root: &Path, env: impl Fn(&str) -> Option<OsString>, exe: O
 /// The arguments a child of this process starts with: a nightly launch hands its profile on, so the
 /// child opens the same private profile instead of being refused ("Open VectorCraft Nightly…"), and
 /// `--` keeps a file whose name starts with '-' a file. Stable's child arguments are unchanged.
+/// Only `single_instance` starts a child, and macOS does not build it.
+#[cfg(not(target_os = "macos"))]
 pub fn child_args(files: &[String]) -> Vec<OsString> {
     child_args_for(current(), files)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn child_args_for(profile: &Profile, files: &[String]) -> Vec<OsString> {
     let mut args: Vec<OsString> = match profile {
         Profile::Stable => Vec::new(),
@@ -245,12 +248,14 @@ mod tests {
         }
     }
 
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn a_stable_child_gets_the_file_delimiter_only() {
         let child = child_args_for(&Profile::Stable, &["a file.svg".to_string(), "--looks-like-a-flag".to_string()]);
         assert_eq!(child, args(&["--", "a file.svg", "--looks-like-a-flag"]));
     }
 
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn a_nightly_child_inherits_the_selected_profile() {
         let root = PathBuf::from(absolute());

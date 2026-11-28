@@ -185,7 +185,7 @@ fn top_row(ui: &mut Ui, d: &mut Fields, target: &SliderTarget, rows: &mut [Value
     let any_prominent = d.bool("__art") && prominent_parts(d, rows).iter().any(|p| rows.get(p.0).and_then(to_color).is_some());
     let (mut picked, mut link, mut save) = (None, None, None);
     Row::new().show(ui, |ui, _| {
-        picked = Select::new(tl!("Harmony Rules"), Bind::given(current), &rules).show(ui).value().copied();
+        picked = Select::new(tl!("Harmony Rules"), Bind::given(current), &rules).show(ui).events.committed().copied();
         let tip = if linked { tl!("Unlink harmony colors") } else { tl!("Link harmony colors") };
         link = ToggleButton::new(tl!("Link harmony colors"), Bind::given(linked))
             .icon(IconId::new("unlink"))
@@ -193,7 +193,8 @@ fn top_row(ui: &mut Ui, d: &mut Fields, target: &SliderTarget, rows: &mut [Value
             .icon_only()
             .tooltip(tip)
             .show(ui)
-            .value()
+            .events
+            .committed()
             .copied();
         let button = IconButton::new(IconId::new("new_folder"))
             .label(tl!("New Color Group"))
@@ -245,7 +246,7 @@ fn tool_row(ui: &mut Ui, d: &mut Fields, display: &'static str, axes: DiscRadius
     let displays = DISPLAYS.map(|(id, icon, name)| Entry::new(id, tl!(name)).icon(IconId::new(icon)));
     let (mut shown, mut tools, mut flipped) = (None, [None; 2], None);
     Row::new().show(ui, |ui, _| {
-        shown = Segmented::new(tl!("Color display"), Bind::given(display), &displays).show(ui).value().copied();
+        shown = Segmented::new(tl!("Color display"), Bind::given(display), &displays).show(ui).events.committed().copied();
         // PLAN: the sheet names a `Segmented` for the tools; a segment cannot be turned off again, so each tool is a `ToggleButton` and a second click puts the tool away, as in production.
         for (slot, (id, icon, name)) in tools.iter_mut().zip(TOOLS) {
             *slot = ToggleButton::new(tl!(name), Bind::given(on_wheel && tool == id))
@@ -254,7 +255,8 @@ fn tool_row(ui: &mut Ui, d: &mut Fields, display: &'static str, axes: DiscRadius
                 .tooltip(tl!(name))
                 .enabled(on_wheel)
                 .show(ui)
-                .value()
+                .events
+                .committed()
                 .copied();
         }
         let tip = if bright { tl!("Show saturation and hue on wheel") } else { tl!("Show brightness and hue on wheel") };
@@ -265,7 +267,8 @@ fn tool_row(ui: &mut Ui, d: &mut Fields, display: &'static str, axes: DiscRadius
             .tooltip(tip)
             .enabled(on_wheel)
             .show(ui)
-            .value()
+            .events
+            .committed()
             .copied();
     });
     if let Some(id) = shown {

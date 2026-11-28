@@ -14,8 +14,8 @@ use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
 use craft::ui::contract::{
-    Bind, CollectionEvent, ColumnSpec, Entry, Lazy, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, ToggleColumn,
-    clicked,
+    Bind, CollectionEvent, ColumnSpec, Entry, Lazy, Props as _, Scroll, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing,
+    ToggleColumn, TooltipSpec, clicked,
 };
 use craft::ui::display::Text;
 use craft::ui::layout_components::{Row, Stack};
@@ -49,9 +49,6 @@ const EYE: ColumnKey = ColumnKey::new("eye");
 const NAME: ColumnKey = ColumnKey::new("name");
 /// The command of the panel menu's Show All Plates row.
 const SHOW_ALL_PLATES: &str = "ui.separations.showAllPlates";
-/// How long the Color Settings section is, for the scroll area before it has been shown once.
-const COLOR_SETTINGS_ESTIMATE: f32 = 460.0;
-
 /// Runs command `id` with `p`; a failure goes to the status bar, so it returns `None`.
 fn act(app: &mut VectorcraftApp, id: &str, p: Value) -> Option<Value> {
     match app.run(id, p) {
@@ -252,7 +249,12 @@ fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     Row::new().show(ui, |ui, _| {
-        if clicked(&Button::new(tl!("Load Profile…")).id_salt("load-profile").show(ui)) {
+        let load = tl!("Load Profile…");
+        let picker = Button::new(load)
+            .id_salt("load-profile")
+            .enabled(app.host.files().can_pick())
+            .tooltip(TooltipSpec::new(load).disabled_text(tl!("Loading color profiles requires a desktop file picker.")));
+        if clicked(&picker.show(ui)) {
             load_profile(app);
         }
         if clicked(&Button::new(tl!("Gamut Check")).id_salt("gamut-check").show(ui)) {
@@ -273,6 +275,7 @@ fn load_profile(app: &mut VectorcraftApp) {
             Some(path) => app.run("color.loadProfile", json!({ "path": path })),
             None => Ok(Value::Null),
         },
+        Picked::Contents(files) if !files.is_empty() => Err("loading profiles from disk isn't available in the browser".into()),
         _ => Ok(Value::Null),
     });
 }
@@ -421,12 +424,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The flag is read by every pass of the frame, so a second pass reveals as well; only a real
     // pass (not a sizing one) spends it.
     let reveal = app.ui.color_settings_scroll;
-    Stack::new().label(tl!("Separations Preview")).show(ui, |ui, _| {
+    Stack::new().label(tl!("Separations Preview")).fill().scroll(Scroll::vertical()).show(ui, |ui, _| {
         crate::panels::section(tl!("Separations Preview")).show(ui, |ui, _| plates_section(app, ui));
         crate::panels::section(tl!("Proof Setup")).show(ui, |ui, _| proof_section(app, ui));
-        Lazy::new("color-settings", COLOR_SETTINGS_ESTIMATE).reveal(reveal).show(ui, |ui| {
-            crate::panels::section(tl!("Color Settings")).show(ui, |ui, _| settings_rows(app, ui));
-        });
+        // The scroll target is separate from the controls so they are registered for keyboard navigation
+        // even before the section has scrolled into view.
+        Lazy::new("color-settings", 0.0).reveal(reveal).show(ui, |_| {});
+        crate::panels::section(tl!("Color Settings")).show(ui, |ui, _| settings_rows(app, ui));
     });
     if reveal && !ui.is_sizing_pass() {
         app.ui.color_settings_scroll = false;
@@ -458,6 +462,43 @@ mod tests {
     use super::*;
     use crate::tests::panel_harness::Panel;
     use vectorcraft_engine::Session;
+
+    #[test]
+    fn load_profile_only_offers_a_picker_that_returns_a_path() {
+        use craft::host::ScriptedFiles;
+        use std::sync::Arc;
+
+        for browser in [false, true] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({})).unwrap();
+            let files = ScriptedFiles::held();
+            let files = Arc::new(if browser { files.in_browser() } else { files });
+            crate::tests::picks::install_files(&mut app, files.clone());
+            let mut panel = Panel::new(app, settings_rows);
+            assert_eq!(panel.enabled("Load Profile…"), !browser);
+            assert!(panel.enabled("Gamut Check"));
+            panel.click("Load Profile…");
+            assert_eq!(files.requests().len(), usize::from(!browser));
+        }
+    }
+
+    #[test]
+    fn browser_profile_pick_reports_why_it_cannot_load() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let picker = crate::tests::picks::scripted(&mut app);
+        app.status("Previous status");
+
+        load_profile(&mut app);
+        picker.cancel();
+        crate::file_asks::poll(&mut app);
+        assert_eq!(app.ui.status, "Previous status");
+
+        load_profile(&mut app);
+        assert_eq!(picker.requests().len(), 2);
+        picker.answer_contents(&[("proof.icc", b"test profile")]);
+        crate::file_asks::poll(&mut app);
+        assert_eq!(app.ui.status, "loading profiles from disk isn't available in the browser");
+    }
 
     /// The panel's Proof Setup list offers the targets of View › Proof Setup, in the same order and
     /// with the same labels, and each one is a target `view.proofSetup` accepts.
@@ -522,11 +563,6 @@ mod tests {
         }
     }
 
-    /// The panel inside a vertical scroll area, as the window shows it.
-    fn scrolled(app: &mut VectorcraftApp, ui: &mut Ui) {
-        Stack::new().fill().scroll(craft::ui::contract::Scroll::vertical()).show(ui, |ui, _| show(app, ui));
-    }
-
     /// #6419: Edit › Assign Profile… and Color Settings… show the panel scrolled to its Color
     /// Settings section, which a window shorter than the panel (a floated panel stops at 320
     /// points) otherwise shows only after scrolling past the plates and Proof Setup. Once: the
@@ -534,14 +570,15 @@ mod tests {
     #[test]
     fn color_settings_and_assign_profile_scroll_the_color_settings_into_view() {
         const BPC: &str = "Use Black Point Compensation";
+        const HEIGHT: f32 = 200.0;
         for id in ["edit.assignProfile", "edit.colorSettings"] {
             let mut app = VectorcraftApp::new(Session::new(), Default::default());
             app.run("file.new", json!({})).unwrap();
-            let mut panel = Panel::new(app, scrolled);
-            panel.room(egui::vec2(300.0, 120.0));
+            let mut panel = Panel::new(app, show);
+            panel.room(egui::vec2(300.0, HEIGHT));
             panel.frame();
-            // The section draws lazily: below the view it is not drawn at all.
-            assert!(!panel.shows(BPC) || !panel.in_view(BPC), "the section starts below the view");
+            // The settings controls start below the view.
+            assert!(panel.rect(BPC).top() >= HEIGHT, "the section starts below the view");
             panel.app().run(id, json!({})).unwrap();
             panel.frame();
             assert!(!panel.app().ui.color_settings_scroll, "{id}: the pass that read the request spent it");
@@ -549,11 +586,51 @@ mod tests {
             panel.advance(1.0);
             panel.frame();
             panel.frame();
-            assert!(panel.in_view(BPC), "{id} scrolls the section into the view");
+            let shown = panel.rect(BPC);
+            assert!(panel.in_view(BPC) && shown.top() >= 0.0 && shown.bottom() <= HEIGHT, "{id} scrolls the section into the view: {shown:?}");
             // PLAN: the harness has no scroll driver, so "a later scroll to the top stays there" is
             // covered only as far as the spent request not scrolling again.
             panel.frame();
-            assert!(panel.in_view(BPC), "{id}: nothing scrolls it again");
+            assert_eq!(panel.rect(BPC), shown, "{id}: nothing scrolls it again");
         }
+    }
+
+    #[test]
+    fn a_short_separations_panel_scrolls_to_the_color_settings_actions() {
+        use craft::ui::testing::{Fixture, pointer};
+
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({})).unwrap();
+        let mut fixture = Fixture::new(move |ui| show(&mut app, ui));
+        fixture.room(egui::vec2(220.0, 320.0)).settle();
+        let at = |fixture: &Fixture, name| fixture.by_label(name).unwrap().rect;
+        assert!(at(&fixture, "Load Profile…").top() >= 320.0, "Color Settings starts below the view");
+        for _ in 0..6 {
+            fixture.frame(vec![pointer::moved(egui::pos2(120.0, 250.0)), pointer::wheel(-300.0)]).settle();
+        }
+        for name in ["Load Profile…", "Gamut Check"] {
+            let rect = at(&fixture, name);
+            assert!(rect.top() >= 0.0 && rect.bottom() <= 320.0, "{name} scrolls into the view: {rect:?}");
+        }
+    }
+
+    #[test]
+    fn tab_reaches_color_settings_before_any_manual_scroll() {
+        use craft::ui::testing::Fixture;
+
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({})).unwrap();
+        let mut fixture = Fixture::new(move |ui| show(&mut app, ui));
+        fixture.room(egui::vec2(300.0, 120.0)).settle();
+        let focused_gamut_check = |fixture: &Fixture| fixture.tree().name_of(fixture.tree().focused_key()) == Some("Gamut Check");
+        for _ in 0..32 {
+            fixture.key(egui::Key::Tab, egui::Modifiers::NONE).settle();
+            if focused_gamut_check(&fixture) {
+                break;
+            }
+        }
+        assert!(focused_gamut_check(&fixture));
+        let gamut = fixture.by_label("Gamut Check").unwrap().rect;
+        assert!(gamut.top() >= 0.0 && gamut.bottom() <= 120.0, "focused action scrolls into the view: {gamut:?}");
     }
 }

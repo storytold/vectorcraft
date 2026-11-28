@@ -176,7 +176,8 @@ struct Shown {
 /// tilings ([`crate::pattern::hash_tiling`]) of the patterns in the fills and strokes of its
 /// objects and of type's characters, the address of each symbol instance's art, and the address of
 /// the read of each placed file that [`vectorcraft_doc::PlacedDocument::art`] shows (none before
-/// the file is read), and the address of the document's pixels for each image whose
+/// the file is read) with whether that art is the crossed box
+/// ([`vectorcraft_doc::placed_document::Crossed`]), and the address of the document's pixels for each image whose
 /// own fills or strokes follow them ([`crate::effects::follows_image_pixels`]). It walks `n` and
 /// then, one at a time from a list, the opacity-mask, pattern and symbol art it finds, each pattern
 /// and each symbol's art once ([`first_seen`]). `shown` records the type, placed files, reads,
@@ -214,6 +215,8 @@ fn hash_resources<'a>(symbols: &SymbolBoxes<'a>, n: &'a Node, shown: &mut Shown,
                 NodeKind::PlacedDocument(p) => {
                     let read = vectorcraft_doc::placed_document::read_cached(p);
                     read.as_ref().map(|r| Arc::as_ptr(r) as usize).hash(h);
+                    // The art is the crossed box instead in some Outline frames.
+                    vectorcraft_doc::placed_document::crossed().hash(h);
                     shown.reads.extend(read.as_ref().map(Arc::downgrade));
                     shown.text = true;
                     shown.placed = true;
@@ -583,7 +586,7 @@ impl Renderer {
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
         if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate || knockout) {
             let blends = self.blends_through(a);
-            let bounds = if blends { self.bounds_of(f.symbols, a) } else { None };
+            let bounds = if blends { self.frame_bounds_of(f, a) } else { None };
             let comp = crate::group::Composite { blend: a.blend, opacity, isolated: a.isolate, blends, bounds, ..Default::default() };
             self.group(ctx, f, comp, &mut |r, c, fr| r.draw_live_body(c, fr, a, true));
         } else {
@@ -634,6 +637,10 @@ impl Renderer {
 
     fn draw_mesh(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, m: &GradientMesh, cache: bool) {
         if !m.is_valid() {
+            return;
+        }
+        // A cropped mesh may lose a covered neighbor that supplied a color at its fringe.
+        if f.reject_patch() {
             return;
         }
         if f.opts.outline {

@@ -1,0 +1,2 @@
+# The characterization data files are kept byte for byte as published (CRLF line endings).
+*.txt -text

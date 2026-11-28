@@ -245,9 +245,11 @@ fn options(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let (mut output, mut ppi, mut active_only, mut force) = (None, None, None, false);
     FieldGroup::new(tl!("Preflight Options").to_owned()).show(ui, |ui, _| {
         Field::new(tl!("Output:").to_owned()).show(ui, |ui, _| {
+            // The output also resets Minimum PPI: keep both until the choice is confirmed.
             output = Select::new(tl!("Output:").to_owned(), Bind::given(current.output), &outputs)
                 .show(ui)
-                .value()
+                .events
+                .committed()
                 .copied()
                 .filter(|i| *i != current.output);
         });
@@ -302,7 +304,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn results(app: &mut VectorcraftApp, ui: &mut Ui, report: &Value) {
     let rows = PreflightRows::new(report);
     let pending = Pending::default();
-    let out = FindingsList::new("Findings").show_items(ui, &rows, &mut |key, icx| match rows.entries.get(*key as usize) {
+    let out = FindingsList::new(tl!("Findings")).show_items(ui, &rows, &mut |key, icx| match rows.entries.get(*key as usize) {
         Some(Entry_::Heading(c)) => heading_row(&rows.checks[*c], &pending),
         Some(Entry_::Finding(f)) => finding_row(*key, &rows.findings[*f], &icx.words::<FindingsWords>(), &pending),
         None => ListRow::new(String::new()),
