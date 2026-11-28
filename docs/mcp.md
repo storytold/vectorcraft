@@ -2750,8 +2750,10 @@ https://ecma-international.org/publications-and-standards/standards/ecma-357/): 
 (https://extendscript.docsforadobe.dev/integrating-xml/the-xml-object/). A script run from a `.js` file also has
 `Promise` (described below); a `.jsx` file and a script given as `source` do not, except that a named engine
 (`#targetengine`) has `Promise` from the first `.js` run that names it and keeps it for every later run, as it keeps
-its globals. The script reaches the app through the global object `vc`, and writes to the Script Console and runs
-other files through `$`:
+its globals. An ES5.1 script does not have `Map`, `Set`, `WeakMap`, `WeakSet`, `ArrayBuffer`, `DataView` or the
+typed arrays; the JavaScript engine's ECMAScript 2015 mode (`Options::es2015` in `vectorcraft-js`) adds them, as
+`docs/target-app-parity.md` describes. The script reaches the app through the global object `vc`, and writes to the
+Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
   catch. The documents and the session state the command changed, preferences included, go back, and any file it
