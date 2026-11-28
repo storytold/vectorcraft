@@ -3,8 +3,11 @@
 //! type runs along, `TP`), the modal character and paragraph attributes
 //! (`Tr Tf Ts Tz Tt TA Tl Ta Ti`, and §15.4.7 and §22's letter and word spacing `TC TW`, hanging
 //! punctuation `Tq`, hyphenation `Th` and tab stops `Xb Xe XB`, and §15.3.4's writing direction `TV`,
-//! Roman character rotation `Tv`, Kumi blocks `Ty TY` and binding punctuation `Tg`), the paint
-//! style, and the characters (`Tx`, `Tj`, overflow `TX`; `\r` ends a paragraph). Type set in rendering modes 4 to 7 is a mask (§5.7): the
+//! Roman character rotation `Tv`, Kumi blocks `Ty TY` and binding punctuation `Tg`, and §22.6's
+//! hyphenation language `XL`), the paint style, the characters (`Tx`, `Tj`, overflow `TX`; `\r` ends
+//! a paragraph), manual kerning pairs (`Tk`, overflow `TK`) and discretionary hyphens (`T+`, `T-`,
+//! read as soft hyphens). The line breaking value `TG` and the Japanese layout rules `Xu` (`Tu`) are
+//! not kept: a visible text object read while one is set gives a warning. Type set in rendering modes 4 to 7 is a mask (§5.7): the
 //! text object clips the objects of its clipping group. Final-form operators (the
 //! computed positions, §15.1) are skipped: the type is laid out again. Strings are decoded by the
 //! encoding pairs of the current font's `TZ`, then by the file's `TE` encoding unless that `TZ`'s
@@ -14,12 +17,12 @@
 
 use std::sync::Arc;
 
-use craft_pdf::interpret::hayro_cmap::{BfString, CMap, CMapName, load_embedded};
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Burasagari, CharStyle, Justify, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject, TextRun};
 use vectorcraft_geom::AnchorKind;
 
+use super::super::super::predefined_cmap::{self, CMapCodes, composite_font};
 use super::super::obj::V;
 use super::art::path_data;
 use super::{FLIP, GState, HashSet, Kind, Node, NodeId, Reader};
@@ -59,6 +62,14 @@ const MASK_NOT_CLIPPED: &str = "type used as a mask in linked areas, wraparound 
 /// The warning when `TV` changes after a text object's first character: the object keeps the
 /// direction of that character.
 const DIRECTION_CHANGE_LEFT_OUT: &str = "type that changes writing direction inside a text object opens in the direction of its first character";
+/// The warning when a visible text object is read while a line breaking value (`TG`) is set.
+const LINE_BREAKING_LEFT_OUT: &str = "the Line Breaking setting of legacy type was left out";
+/// The warning when a visible text object is read while Japanese layout rules (`Xu`, `Tu`) are set.
+const JAPANESE_LAYOUT_LEFT_OUT: &str = "the Japanese layout rules of legacy type were left out";
+/// The manual kerning range `text.setRangeStyle` takes, in 1/1000 em.
+const KERNING_RANGE: (f64, f64) = (-1000.0, 10_000.0);
+/// The soft hyphen a discretionary hyphen (`T+`, `T-`) is read as.
+const SOFT_HYPHEN: char = '\u{ad}';
 
 /// A text path (`Tp` … `TP`).
 #[derive(Debug, Default)]
@@ -124,6 +135,9 @@ pub(super) struct LegacyText {
     vertical: bool,
     /// A later character was set in the other direction.
     direction_changed: bool,
+    /// A manual kerning value (`Tk`, `TK`) read at the start of a line, in 1/1000 em: the space
+    /// before the next character, which starts the line.
+    kern_before: Option<f64>,
     /// The state when it began (lock, visibility), and whether it began on a `%_` line.
     gs: GState,
     hidden: bool,
@@ -146,6 +160,40 @@ impl LegacyText {
         let style = within_tabs(para, &mut self.tab_stops, &mut self.tabs_left_out);
         self.paras.push(ParaRun { style, count: 1, tabs_version });
     }
+}
+
+/// Add `text` in `style` to `runs`: to the last run when it has that style, else as a new run.
+fn push_run(runs: &mut Vec<TextRun>, text: String, style: CharStyle) {
+    if text.is_empty() {
+        return;
+    }
+    match runs.last_mut() {
+        Some(last) if last.inline.is_none() && last.style == style => last.text.push_str(&text),
+        _ => runs.push(TextRun::new(text, style)),
+    }
+}
+
+/// Give the last character of `runs` the manual kerning `kerning` (None: automatic), in a run of
+/// its own unless its run has one character, which joins the run before it when their styles
+/// match. False when there is no character or the last one ends a paragraph: the kerning is at
+/// the start of a line.
+fn set_last_kerning(runs: &mut Vec<TextRun>, kerning: Option<f64>) -> bool {
+    let Some(last) = runs.last_mut().filter(|r| r.inline.is_none()) else { return false };
+    let Some(c) = last.text.chars().next_back().filter(|&c| c != '\n') else { return false };
+    if last.style.kerning == kerning {
+        return true;
+    }
+    if last.text.len() > c.len_utf8() {
+        last.text.pop();
+        let style = CharStyle { kerning, ..last.style.clone() };
+        runs.push(TextRun::new(c.to_string(), style));
+        return true;
+    }
+    last.style.kerning = kerning;
+    if let Some(one) = runs.pop() {
+        push_run(runs, one.text, one.style);
+    }
+    true
 }
 
 /// Are `a` and `b` the same, leaving their tab stops out?
@@ -203,6 +251,10 @@ pub(super) struct TypeState {
     vertical: bool,
     /// `TY`: a Kumi block recorded for later use, which horizontal type keeps as its mark.
     kumi_recorded: bool,
+    /// A line breaking value (`TG`) was read: VectorCraft has no setting for it.
+    line_breaking: bool,
+    /// Japanese layout rules (`Xu`, `Tu`) were read: VectorCraft has no setting for them.
+    japanese_layout: bool,
     /// The encoding strings are in, by code (`TE`); None where it says nothing.
     encoding: Vec<Option<char>>,
     /// Re-encoded fonts' original names (`%AI3_BeginEncoding: _new old`, or `TZ`'s).
@@ -232,6 +284,8 @@ impl Default for TypeState {
             render: 0,
             vertical: false,
             kumi_recorded: false,
+            line_breaking: false,
+            japanese_layout: false,
             encoding: vec![None; 256],
             fonts: vec![],
             font_encodings: vec![],
@@ -284,257 +338,13 @@ impl TypeState {
 
     /// How strings in a font with predefined CMap `cmap` decode; `None` when the CMap can't be read.
     fn cmap_codes(&mut self, cmap: &str) -> Option<Arc<CMapCodes>> {
-        if let Some(form) = unicode_cmap(cmap) {
-            return Some(Arc::new(CMapCodes::Unicode(form)));
-        }
         if let Some((_, codes)) = self.cmaps.iter().find(|(n, _)| n == cmap) {
             return codes.clone();
         }
-        let codes = cid_codes(cmap).map(Arc::new);
+        let codes = predefined_cmap::codes(cmap).map(Arc::new);
         self.cmaps.push((cmap.to_string(), codes.clone()));
         codes
     }
-}
-
-/// How a composite font's strings decode.
-#[derive(Debug)]
-enum CMapCodes {
-    /// By a predefined CMap's codes to CIDs, then by its character collection's CID → Unicode CMap;
-    /// with `high_bit`, each byte 0x21 to 0x7E gets its high bit set first. `space` is the CMap's
-    /// code space ([`code_space`]).
-    Cids { codes: Box<CMap>, unicode: Box<CMap>, high_bit: bool, space: Option<CodeSpace> },
-    /// A predefined Unicode CMap: the codes are the characters.
-    Unicode(Unicode),
-}
-
-/// A CMap's code space: ranges of codes, each given by its lowest and highest code, both with the
-/// code's length in bytes.
-type CodeSpace = &'static [(&'static [u8], &'static [u8])];
-
-/// What control byte `b` is in a composite font's string: `\r` a paragraph break, `\t` a tab.
-fn control(b: u8) -> Option<char> {
-    match b {
-        b'\r' => Some('\n'),
-        b'\t' => Some('\t'),
-        _ => None,
-    }
-}
-
-impl CMapCodes {
-    /// The characters of string `bytes`, leaving out codes the CMaps don't map; a `\r` is a
-    /// paragraph break and a `\t` a tab (also as a byte left over after the last whole code of a
-    /// UTF-16 or UTF-32 string).
-    fn decode(&self, bytes: &[u8]) -> String {
-        let (codes, unicode, high_bit, space) = match self {
-            Self::Unicode(form) => {
-                let unit = match form {
-                    Unicode::Utf16 => 2,
-                    Unicode::Utf8 => 1,
-                    Unicode::Utf32 => 4,
-                };
-                let (whole, rest) = bytes.split_at_checked(bytes.len() - bytes.len() % unit).unwrap_or((bytes, &[]));
-                let mut text = unicode_text(whole, *form).replace('\r', "\n");
-                text.extend(rest.last().copied().and_then(control));
-                return text;
-            }
-            Self::Cids { codes, unicode, high_bit, space } => (codes, unicode, *high_bit, space),
-        };
-        let euc: Vec<u8>;
-        let bytes = if high_bit {
-            euc = bytes.iter().map(|&b| if (0x21..0x7f).contains(&b) { b | 0x80 } else { b }).collect();
-            euc.as_slice()
-        } else {
-            bytes
-        };
-        let mut out = String::new();
-        let mut at = 0;
-        while let Some(&first) = bytes.get(at) {
-            // VectorCraft reads a 0x0D byte as a paragraph break and a 0x09 byte as a tab in every
-            // CMap, as in other fonts' strings, including the row-and-cell CMaps, whose code space
-            // has no one-byte codes.
-            if let Some(control) = control(first) {
-                out.push(control);
-                at += 1;
-                continue;
-            }
-            let rest = bytes.get(at..).unwrap_or_default();
-            let code = |len: u8| rest.get(..usize::from(len)).map(|b| b.iter().fold(0u32, |c, &b| c << 8 | u32::from(b)));
-            let found = match space {
-                // The code is as long as the code space range it falls in; a byte that starts no
-                // code in the code space is skipped.
-                Some(space) => {
-                    let Some(len) = code_len(space, rest) else {
-                        at += 1;
-                        continue;
-                    };
-                    code(len).map(|c| (len, codes.lookup_cid_code(c, len)))
-                }
-                None => (1..=4u8).find_map(|len| Some((len, Some(codes.lookup_cid_code(code(len)?, len)?)))),
-            };
-            let Some((len, cid)) = found else {
-                at += 1;
-                continue;
-            };
-            at += usize::from(len);
-            // A code the CMap leaves out is dropped.
-            let Some(cid) = cid else { continue };
-            match unicode.lookup_bf_string(cid) {
-                // A one-byte Roman code whose CID the table gives as a combining mark alone (0x7E in
-                // the Mac Shift-JIS CMaps, U+0303): the ASCII character, as Adobe's cid2code.txt lists first.
-                Some(BfString::Char('\u{300}'..='\u{36f}')) if len == 1 && (0x20..0x7f).contains(&first) => out.push(char::from(first)),
-                Some(BfString::Char(c)) if c != char::REPLACEMENT_CHARACTER => out.push(c),
-                Some(BfString::String(s)) => out.extend(s.chars().filter(|c| *c != char::REPLACEMENT_CHARACTER)),
-                _ => {}
-            }
-        }
-        out
-    }
-}
-
-/// How a predefined Unicode CMap's codes encode their characters.
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum Unicode {
-    /// Two bytes a character (`UCS2`) or a UTF-16 surrogate pair, the high byte first.
-    Utf16,
-    Utf8,
-    /// Four bytes, the high byte first.
-    Utf32,
-}
-
-/// The encoding of predefined Unicode CMap `name`: `Uni` and a character collection, then `-UCS2`,
-/// `-UTF8`, `-UTF16` or `-UTF32` (and `-HW` for half-width forms), then `-H` or `-V`
-/// (`UniJIS-UCS2-H`, `UniGB-UTF16-V`: <https://github.com/adobe-type-tools/cmap-resources>).
-fn unicode_cmap(name: &str) -> Option<Unicode> {
-    let rest = name.strip_suffix("-H").or_else(|| name.strip_suffix("-V"))?;
-    let rest = rest.strip_suffix("-HW").unwrap_or(rest);
-    let (collection, form) = rest.rsplit_once('-')?;
-    let collections = ["UniJIS", "UniJISPro", "UniJIS2004", "UniJISX0213", "UniJISX02132004", "UniHojo", "UniGB", "UniCNS", "UniKS", "UniAKR"];
-    if !collections.contains(&collection) {
-        return None;
-    }
-    match form {
-        "UCS2" | "UTF16" => Some(Unicode::Utf16),
-        "UTF8" => Some(Unicode::Utf8),
-        "UTF32" => Some(Unicode::Utf32),
-        _ => None,
-    }
-}
-
-/// The characters string `s` encodes in Unicode form `form` (invalid codes left out).
-fn unicode_text(s: &[u8], form: Unicode) -> String {
-    match form {
-        Unicode::Utf16 => {
-            let units = s.as_chunks::<2>().0.iter().map(|b| u16::from_be_bytes(*b));
-            char::decode_utf16(units).filter_map(Result::ok).collect()
-        }
-        Unicode::Utf8 => s.utf8_chunks().map(|chunk| chunk.valid()).collect(),
-        Unicode::Utf32 => s.as_chunks::<4>().0.iter().filter_map(|b| char::from_u32(u32::from_be_bytes(*b))).collect(),
-    }
-}
-
-/// Predefined CMap `name` among those VectorCraft carries, leaving out the Identity CMaps, whose
-/// codes are CIDs of no known character collection.
-fn predefined(name: &str) -> Option<CMapName<'_>> {
-    match CMapName::from_bytes(name.as_bytes()) {
-        CMapName::Custom(_) | CMapName::IdentityH | CMapName::IdentityV => None,
-        name => Some(name),
-    }
-}
-
-/// Adobe's predefined CMaps that VectorCraft doesn't carry, by name without `-H` or `-V`
-/// (<https://github.com/adobe-type-tools/cmap-resources>): the nearest carried CMap with the same
-/// code space, and whether each byte of a row-and-cell code gets its high bit set first (the EUC
-/// form of the same code; `GB-H`, `CNS1-H` and `KSC-H` have no one-byte codes, their code space
-/// is `<2121>` to `<7E7E>`); `None` for those no carried CMap reads.
-fn stand_in(stem: &str) -> Option<Option<(&'static str, bool)>> {
-    Some(match stem {
-        "RKSJ" | "78-RKSJ" | "78ms-RKSJ" => Some(("90ms-RKSJ-H", false)),
-        "78-EUC" => Some(("EUC-H", false)),
-        "78" | "Add" | "Ext" | "NWP" => Some(("H", false)),
-        "GB" => Some(("GB-EUC-H", true)),
-        "CNS1" => Some(("CNS-EUC-H", true)),
-        "KSC" => Some(("KSC-EUC-H", true)),
-        "B5" => Some(("ETen-B5-H", false)),
-        "ETHK-B5" | "HKdla-B5" | "HKdlb-B5" | "HKgccs-B5" | "HKm314-B5" | "HKm471-B5" => Some(("HKscs-B5-H", false)),
-        "GBT" | "GBT-EUC" | "GBTpc-EUC" | "CNS2" | "KSC-Johab" => None,
-        _ => return None,
-    })
-}
-
-/// Predefined CMap `cmap`'s codes to CIDs, and its character collection's CID → Unicode CMap. A
-/// vertical CMap's codes are read with its horizontal CMap when VectorCraft carries that: the two
-/// differ only in the CIDs of vertical glyph forms. A CMap VectorCraft doesn't carry is read with
-/// its [`stand_in`].
-fn cid_codes(cmap: &str) -> Option<CMapCodes> {
-    let read = |name: &str| CMap::parse(load_embedded(predefined(name)?)?, load_embedded);
-    let horizontal = cmap.strip_suffix('V').map(|stem| format!("{stem}H"));
-    let stem = cmap.strip_suffix("-H").or_else(|| cmap.strip_suffix("-V"));
-    let (codes, high_bit) = horizontal.iter().map(String::as_str).chain([cmap]).find_map(|n| Some((read(n)?, false))).or_else(|| {
-        let (name, high_bit) = stand_in(stem?).flatten()?;
-        Some((read(name)?, high_bit))
-    })?;
-    let table = codes.metadata().character_collection.as_ref()?.family.ucs2_cmap()?;
-    let unicode = CMap::parse(load_embedded(table)?, load_embedded)?;
-    // A row-and-cell code read in its EUC form falls in the EUC CMap's code space.
-    let space = if high_bit { stand_in(stem?).flatten().and_then(|(name, _)| code_space(name)) } else { code_space(cmap) };
-    Some(CMapCodes::Cids { codes: Box::new(codes), unicode: Box::new(unicode), high_bit, space })
-}
-
-/// The code space of predefined CMap `cmap`, as Adobe's CMap files give it
-/// (<https://github.com/adobe-type-tools/cmap-resources>); a CMap's vertical form has its
-/// horizontal form's. `None` for a CMap not listed here.
-fn code_space(cmap: &str) -> Option<CodeSpace> {
-    const RKSJ: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa0", b"\xdf"), (b"\x81\x40", b"\x9f\xfc"), (b"\xe0\x40", b"\xfc\xfc")];
-    const RKSJ_MAC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa0", b"\xdf"), (b"\xfd", b"\xff"), (b"\x81\x40", b"\x9f\xfc"), (b"\xe0\x40", b"\xfc\xfc")];
-    const EUC_JP: CodeSpace = &[(b"\x00", b"\x80"), (b"\x8e\xa0", b"\x8e\xdf"), (b"\xa1\xa1", b"\xfe\xfe")];
-    const ROW_CELL: CodeSpace = &[(b"\x21\x21", b"\x7e\x7e")];
-    const EUC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa1\xa1", b"\xfe\xfe")];
-    const GB_PC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xfd", b"\xff"), (b"\xa1\xa1", b"\xfc\xfe")];
-    const GBK: CodeSpace = &[(b"\x00", b"\x80"), (b"\x81\x40", b"\xfe\xfe")];
-    const GBK2K: CodeSpace = &[(b"\x00", b"\x7f"), (b"\x81\x40", b"\xfe\xfe"), (b"\x81\x30\x81\x30", b"\xfe\x39\xfe\x39")];
-    const B5_PC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xfd", b"\xff"), (b"\xa1\x40", b"\xfc\xfe")];
-    const B5: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa1\x40", b"\xfe\xfe")];
-    const HKSCS: CodeSpace = &[(b"\x00", b"\x80"), (b"\x87\x40", b"\xfe\xfe")];
-    const HKDLB: CodeSpace = &[(b"\x00", b"\x80"), (b"\x8e\x40", b"\xfe\xfe")];
-    const HKGCCS: CodeSpace = &[(b"\x00", b"\x80"), (b"\x8a\x40", b"\xfe\xfe")];
-    const CNS_EUC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa1\xa1", b"\xfe\xfe"), (b"\x8e\xa1\xa1\xa1", b"\x8e\xa3\xfe\xfe")];
-    const KSC_PC: CodeSpace = &[(b"\x00", b"\x84"), (b"\xfe", b"\xff"), (b"\xa1\x41", b"\xfd\xfe")];
-    const UHC: CodeSpace = &[(b"\x00", b"\x80"), (b"\x81\x41", b"\xfe\xfe")];
-    let stem = match cmap {
-        "H" | "V" => "",
-        _ => cmap.strip_suffix("-H").or_else(|| cmap.strip_suffix("-V"))?,
-    };
-    let stem = stem.strip_suffix("-HW").unwrap_or(stem);
-    Some(match stem {
-        "83pv-RKSJ" | "90pv-RKSJ" => RKSJ_MAC,
-        _ if stem.ends_with("RKSJ") => RKSJ,
-        "EUC" | "78-EUC" => EUC_JP,
-        "" | "78" | "Add" | "Ext" | "NWP" => ROW_CELL,
-        "GB-EUC" | "GBT-EUC" | "KSC-EUC" => EUC,
-        "GBpc-EUC" | "GBTpc-EUC" => GB_PC,
-        "GBK-EUC" | "GBKp-EUC" => GBK,
-        "GBK2K" => GBK2K,
-        "B5pc" => B5_PC,
-        "B5" | "ETen-B5" | "ETenms-B5" | "HKdla-B5" | "HKm314-B5" | "HKm471-B5" => B5,
-        "HKscs-B5" | "ETHK-B5" => HKSCS,
-        "HKdlb-B5" => HKDLB,
-        "HKgccs-B5" => HKGCCS,
-        "CNS-EUC" => CNS_EUC,
-        "KSCpc-EUC" => KSC_PC,
-        "KSCms-UHC" => UHC,
-        _ => return None,
-    })
-}
-
-/// The length of the code string `bytes` starts with: the length of the code space range whose
-/// lowest and highest codes hold each of its bytes between them. `None` when no range does.
-fn code_len(space: CodeSpace, bytes: &[u8]) -> Option<u8> {
-    space
-        .iter()
-        .filter(|(lo, hi)| bytes.get(..lo.len()).is_some_and(|b| b.iter().zip(lo.iter().zip(hi.iter())).all(|(b, (lo, hi))| (lo..=hi).contains(&b))))
-        .map(|(lo, _)| lo.len())
-        .min()
-        .and_then(|len| u8::try_from(len).ok())
 }
 
 /// Encoding pairs (§3.3.1): codes, each followed by the glyph names from it on, into `table`.
@@ -554,36 +364,6 @@ fn encoding_pairs(table: &mut [Option<char>], vals: &[V]) {
             _ => {}
         }
     }
-}
-
-/// A composite font's name `base-CMap`: the base font's name and its CMap's name, when that is a
-/// predefined Unicode CMap ([`unicode_cmap`]), one of the predefined CMaps VectorCraft carries
-/// ([`predefined`]) or one of the others ([`stand_in`]), in its horizontal (`-H`) or vertical
-/// (`-V`) form. A name ending in an Identity CMap is not read as one, nor is one that ends in an
-/// unknown CMap name with an encoding part (`UniFoo-UTF8-H`), which would otherwise end in `H`.
-fn composite_font(name: &str) -> Option<(&str, &str)> {
-    if !(name.ends_with("-H") || name.ends_with("-V")) {
-        return None;
-    }
-    // The longest CMap name first: `83pv-RKSJ-H` before `H`.
-    // No predefined CMap name is longer than 32 bytes.
-    for (at, _) in name.match_indices('-').filter(|(at, _)| name.len() - at <= 33) {
-        let (Some(base), Some(cmap)) = (name.get(..at).filter(|b| !b.is_empty()), name.get(at + 1..)) else { continue };
-        if matches!(cmap, "Identity-H" | "Identity-V") {
-            return None;
-        }
-        let encoding_part =
-            base.rsplit('-').next().is_some_and(|part| ["UCS2", "UTF8", "UTF16", "UTF32", "HW", "EUC", "RKSJ", "B5", "UHC", "Johab"].contains(&part));
-        if matches!(cmap, "H" | "V") && encoding_part {
-            return None;
-        }
-        let vertical_of_predefined = || cmap.strip_suffix('V').is_some_and(|stem| predefined(&format!("{stem}H")).is_some());
-        let other = || cmap.strip_suffix("-H").or_else(|| cmap.strip_suffix("-V")).is_some_and(|stem| stand_in(stem).is_some());
-        if unicode_cmap(cmap).is_some() || predefined(cmap).is_some() || vertical_of_predefined() || other() {
-            return Some((base, cmap));
-        }
-    }
-    None
 }
 
 /// An operator's `N` operands, the last `N` values before it, when each is a finite number.
@@ -782,10 +562,16 @@ impl Reader<'_> {
                         None => (full.as_str(), None),
                     };
                     st.cmap = cmap;
-                    let (family, style) = super::super::super::text::family_style(name);
+                    // The installed face of that PostScript name, as type from a text document
+                    // takes it; else the name split into a family and style.
+                    let text = super::super::super::text::named_font(name, None);
+                    let (family, style, version) = text.unwrap_or_else(|| {
+                        let (family, style) = super::super::super::text::family_style(name);
+                        (family, style, None)
+                    });
                     st.style.font_family = family;
                     st.style.font_style = style;
-                    st.style.font_version = None;
+                    st.style.font_version = version;
                 }
                 if let Some(size) = vals.get(at + 1).and_then(V::num).filter(|s| s.is_finite() && *s > 0.0) {
                     st.style.size = size.min(MAX_SIZE);
@@ -952,6 +738,23 @@ impl Reader<'_> {
                     st.tabs_version = st.tabs_version.wrapping_add(1);
                 }
             }
+            // `languageID XL` (§22.6), the hyphenation language: 0 U.S. English (the default
+            // language, none), then U.K. English, French, German, Spanish, Dutch, Italian, Swedish,
+            // Norwegian, Finnish, Danish and Hungarian, as the Character panel's language tags.
+            "XL" => {
+                const TAGS: [&str; 11] = ["en-GB", "fr", "de", "es", "nl", "it", "sv", "nb", "fi", "da", "hu"];
+                match n0 {
+                    Some(0.0) => st.style.language = None,
+                    Some(id) if id.fract() == 0.0 && (1.0..=11.0).contains(&id) => {
+                        st.style.language = TAGS.get(id as usize - 1).map(|t| t.to_string());
+                    }
+                    _ => {}
+                }
+            }
+            // `linebreak TG` and `prop cjkLayout cjkRoman cjkCjk Xu` (`Tu` the same, §22.6). Either
+            // one is set only when its operands are numbers.
+            "TG" => st.line_breaking |= n0.is_some(),
+            "Xu" | "Tu" => st.japanese_layout |= nums::<4>(vals).is_some(),
             _ => {}
         }
     }
@@ -959,14 +762,59 @@ impl Reader<'_> {
     /// `(…) Tx` (`Tj`, overflow `TX`): characters in the current style and paint.
     pub(super) fn text_body(&mut self, w: &str, vals: &[V]) {
         let Some(bytes) = vals.iter().rev().find_map(|v| if let V::Str(s) = v { Some(s.clone()) } else { None }) else { return };
+        if self.text.is_none() {
+            return;
+        }
+        let decoded = self.type_state.decode(&bytes);
+        self.add_chars(w == "TX", decoded);
+    }
+
+    /// `autoKern kernValue Tk` (`TK` in overflow text): the space between the character before it
+    /// and the character after it. With `autoKern` 0 the pair takes `kernValue` in 1/1000 em as
+    /// manual kerning, kept to the range `text.setRangeStyle` takes; with 1 the pair takes the
+    /// automatic kerning. The value is the kerning after the character before it; at the start of
+    /// a line it is the space before the character after it. Operands that are missing, are not
+    /// numbers, or a flag other than 0 and 1 leave the type as it was, and so does a `Tk` outside a
+    /// text object.
+    pub(super) fn text_kern(&mut self, vals: &[V]) {
+        let Some([auto, value]) = nums::<2>(vals) else { return };
+        let Some(auto) = flag(auto) else { return };
+        let Some(t) = self.text.as_mut() else { return };
+        let kerning = (!auto).then(|| value.clamp(KERNING_RANGE.0, KERNING_RANGE.1));
+        let line_start = t.pending_break.is_some() || !set_last_kerning(&mut t.runs, kerning);
+        if line_start {
+            t.kern_before = kerning;
+        }
+    }
+
+    /// `T+` (a discretionary hyphen that doesn't print) or `T-` (`printed`: the character before it
+    /// is a discretionary hyphen that prints, §15.4.10.1): a soft hyphen, which shows as a hyphen
+    /// only where a line breaks at it. A printed hyphen character (`-` or U+2010) before `T-`
+    /// becomes the soft hyphen; else one is added.
+    pub(super) fn discretionary_hyphen(&mut self, printed: bool) {
+        let Some(t) = self.text.as_mut() else { return };
+        if printed
+            && t.pending_break.is_none()
+            && let Some(last) = t.runs.last_mut()
+            && last.inline.is_none()
+            && last.text.ends_with(['-', '\u{2010}'])
+        {
+            last.text.pop();
+            last.text.push(SOFT_HYPHEN);
+            return;
+        }
+        self.add_chars(false, SOFT_HYPHEN.to_string());
+    }
+
+    /// Characters in the current style and paint (`overflow`: read by `TX`).
+    fn add_chars(&mut self, overflow: bool, decoded: String) {
         let st = &mut self.type_state;
         let Some(t) = self.text.as_mut() else { return };
-        let decoded = st.decode(&bytes);
         if decoded.is_empty() {
             return;
         }
         // Overflow text ending the story with a paragraph break (`(\r) TX`) adds no paragraph.
-        if w == "TX" && decoded == "\n" {
+        if overflow && decoded == "\n" {
             if t.pending_break.is_none() {
                 let para = (!t.para_taken).then(|| (st.para.clone(), st.tabs_version));
                 t.pending_break = Some(PendingBreak { vertical: st.vertical, para });
@@ -1012,6 +860,8 @@ impl Reader<'_> {
             text.push('\n');
             t.para_taken = false;
         }
+        // Where the characters start in `text`, after a break read before them.
+        let at = text.len();
         for c in decoded.chars() {
             if c != '\n' && !t.para_taken {
                 t.begin_para(&mut st.para, st.tabs_version);
@@ -1025,10 +875,19 @@ impl Reader<'_> {
                 t.para_taken = false;
             }
         }
-        match t.runs.last_mut() {
-            Some(last) if last.style == style => last.text.push_str(&text),
-            _ => t.runs.push(TextRun::new(text, style)),
+        // Kerning read at the start of the line is the space before its first character; a
+        // paragraph break there leaves no character for it.
+        let first = decoded.chars().next().filter(|&c| c != '\n');
+        if let (Some(k), Some(c)) = (t.kern_before.take(), first) {
+            let end = at + c.len_utf8();
+            let (rest, after) = (text.split_off(end), CharStyle { kerning_before: k, ..style.clone() });
+            let own = text.split_off(at);
+            push_run(&mut t.runs, text, style.clone());
+            push_run(&mut t.runs, own, after);
+            push_run(&mut t.runs, rest, style);
+            return;
         }
+        push_run(&mut t.runs, text, style);
     }
 
     /// `TO`: the text object ends. Area type with several linked areas becomes one frame for each
@@ -1059,6 +918,15 @@ impl Reader<'_> {
         }
         if t.direction_changed {
             self.warn(DIRECTION_CHANGE_LEFT_OUT);
+        }
+        // A copy on `%_` lines is not the type the document shows.
+        if !(t.hidden || hidden) {
+            if self.type_state.line_breaking {
+                self.warn(LINE_BREAKING_LEFT_OUT);
+            }
+            if self.type_state.japanese_layout {
+                self.warn(JAPANESE_LAYOUT_LEFT_OUT);
+            }
         }
         let mut paras = std::mem::take(&mut t.paras);
         if paras.is_empty() {

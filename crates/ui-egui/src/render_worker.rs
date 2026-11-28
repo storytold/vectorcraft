@@ -2,11 +2,12 @@
 //! the previous frame reprojected to the current view. A second worker renders a low-resolution
 //! frame for the parts that frame does not reach (`canvas::fill_uncovered`). Light documents
 //! render synchronously so edits never lag behind overlays, after a first frame that renders here
-//! too: the UI thread waits for it only briefly (`canvas::FIRST_FRAME_GRACE`).
+//! too: the UI thread waits for it only briefly (`canvas::raster::FIRST_FRAME_GRACE`).
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
+use craft::platform::clock::monotonic_ms;
 use vectorcraft_doc::Document;
 use vectorcraft_engine::file_access::ScopeHandle;
 use vectorcraft_geom::Affine;
@@ -33,6 +34,9 @@ pub struct Job {
     /// The worker may keep the frame for its next frame to copy from
     /// ([`crate::canvas::render_job`]). Off: the worker holds no frame after this one.
     pub may_keep: bool,
+    /// The display profile the finished frame is converted into ([`crate::display_profile`]).
+    /// The frame the worker keeps stays sRGB.
+    pub display: Option<Arc<craft::color_ui::display::DisplayTransform>>,
 }
 
 pub struct Done {
@@ -47,6 +51,18 @@ pub struct Done {
     /// The frame holds pixels copied from the worker's last frame ([`crate::canvas::render_job`]),
     /// and `ms` is the time of the copy and of the parts rendered.
     pub reused: bool,
+    /// The frame drew art in a way that depends on its size
+    /// ([`vectorcraft_render::FrameStats::view_sized`]): a part of it drawn on its own may differ.
+    pub view_sized: bool,
+}
+
+/// Render `job` as the worker thread does: inside the job's automation roots and deferred
+/// effects, with the worker's renderer `r` and its last frame `kept`.
+pub(crate) fn render(r: &mut Renderer, kept: &mut Option<crate::canvas::KeptFrame>, job: Job) -> Done {
+    let t0 = monotonic_ms();
+    let frame = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(r, kept, &job)));
+    let ms = monotonic_ms() - t0;
+    Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused, view_sized: frame.view_sized }
 }
 
 pub struct Worker {
@@ -73,11 +89,7 @@ impl Worker {
                     while let Ok(newer) = jobs.try_recv() {
                         job = newer;
                     }
-                    let t0 = crate::now_ms();
-                    let frame = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(&mut r, &mut kept, &job)));
-                    let ms = crate::now_ms() - t0;
-                    let done = Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused };
-                    if done_tx.send(done).is_err() {
+                    if done_tx.send(render(&mut r, &mut kept, job)).is_err() {
                         break;
                     }
                     ctx.request_repaint();

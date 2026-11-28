@@ -1,9 +1,17 @@
 use proptest::prelude::*;
 
 use crate::{
-    BinaryOp, Expr, ExprId, ForInTarget, FunctionKind, Options, Program, PropertyValue, Stmt, StmtId, SyntaxError, TOO_DEEP, TokenKind, parse,
-    tokenize,
+    BinaryOp, Binding, Expr, ExprId, ForInTarget, FunctionKind, Options, Program, PropertyValue, Stmt, StmtId, SyntaxError, TOO_DEEP, TokenKind,
+    VarDecl, parse, tokenize,
 };
+
+/// The name a declaration binds; a pattern fails the test.
+fn decl_name(d: &VarDecl) -> &str {
+    match &d.target {
+        Binding::Name(n) => &n.name,
+        Binding::Pattern(_) => panic!("a pattern where a name was expected"),
+    }
+}
 
 fn ok(src: &str) -> Program {
     match parse(src, &Options::default()) {
@@ -132,6 +140,24 @@ fn accessors_take_the_right_number_of_parameters() {
     assert!(err("({get a(x) {}});").message.contains("getter"));
     assert!(err("({set a() {}});").message.contains("setter"));
     assert!(err("({set a(x, y) {}});").message.contains("setter"));
+}
+
+#[test]
+fn a_comma_may_end_arguments_and_parameters() {
+    let p = ok("f(1,);");
+    assert!(matches!(expr(&p, first_expr(&p)), Expr::Call { args, .. } if args.len() == 1));
+    let p = ok("new F(1, 2,);");
+    assert!(matches!(expr(&p, first_expr(&p)), Expr::New { args, .. } if args.len() == 2));
+    let p = ok("function g(a, b,) {}");
+    let Stmt::FunctionDecl(g) = stmt(&p, p.body[0]) else { panic!() };
+    assert_eq!(p.ast.function(*g).unwrap().params.len(), 2);
+    for src in ["(function (a,) {});", "({get a() {}, m: function (x,) {}});", "f(g(1,),);", "'use strict'; function h(a,) {}"] {
+        ok(src);
+    }
+    for src in ["f(,);", "f(1,,);", "f(, 1);", "function g(,) {}", "function g(a,,) {}", "new F(,);"] {
+        err(src);
+    }
+    assert!(err("({set a(v,) {}});").message.contains("setter"));
 }
 
 #[test]
@@ -364,7 +390,7 @@ fn string_literals_and_escapes() {
 fn identifiers_with_unicode_and_escapes() {
     let p = ok("var caf\\u00e9 = 1, \u{3b1}\u{3b2} = 2, $_x1 = 3, a\u{300} = 4;");
     let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!() };
-    let names: Vec<&str> = decls.iter().map(|d| d.name.name.as_str()).collect();
+    let names: Vec<&str> = decls.iter().map(decl_name).collect();
     assert_eq!(names, ["caf\u{e9}", "\u{3b1}\u{3b2}", "$_x1", "a\u{300}"]);
     let p = ok("\\u{61}b;");
     assert!(matches!(expr(&p, first_expr(&p)), Expr::Ident(n) if n == "ab"));
@@ -409,7 +435,7 @@ fn identifiers_take_the_other_id_start_and_continue_characters() {
         for src in [format!("var {ch} = 1;"), format!("var a{ch} = 1;"), format!("var \\u{c:04X}\\u{{{c:X}}} = 1;")] {
             let p = ok(&src);
             let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!("{src:?}") };
-            assert!(decls[0].name.name.contains(ch), "{src:?}");
+            assert!(decl_name(&decls[0]).contains(ch), "{src:?}");
         }
     }
     // Other_ID_Continue: may follow the first character, but cannot start a name.
@@ -422,6 +448,27 @@ fn identifiers_take_the_other_id_start_and_continue_characters() {
         assert!(err(&format!("var \\u{c:04X} = 1;")).message.contains("identifier escape"), "{c:X}");
         assert!(err(&format!("var \\u{{{c:X}}} = 1;")).message.contains("identifier escape"), "{c:X}");
     }
+}
+
+#[test]
+fn identifiers_take_the_characters_unicode_17_assigned() {
+    // U+088F (a letter, Lo) starts a name; U+1ACF (a combining mark, Mn) may follow the first
+    // character but cannot start a name. Unicode 17.0 assigned both.
+    for (src, name) in [
+        ("var \u{88F} = 1;", "\u{88F}"),
+        ("var \\u088F = 1;", "\u{88F}"),
+        (r"var \u{88F} = 1;", "\u{88F}"),
+        ("var _\u{1ACF} = 1;", "_\u{1ACF}"),
+        ("var _\\u1ACF = 1;", "_\u{1ACF}"),
+        (r"var _\u{1ACF} = 1;", "_\u{1ACF}"),
+    ] {
+        let p = ok(src);
+        let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!("{src:?}") };
+        assert_eq!(decl_name(&decls[0]), name, "{src:?}");
+    }
+    assert!(err("var \u{1ACF} = 1;").message.contains("unexpected character"));
+    assert!(err("var \\u1ACF = 1;").message.contains("identifier escape"));
+    assert!(err(r"var \u{1ACF} = 1;").message.contains("identifier escape"));
 }
 
 #[test]
@@ -441,7 +488,7 @@ fn identifiers_refuse_pattern_syntax_surrogates_and_bad_escapes() {
     // A supplementary letter is one identifier character, at the start and after a number.
     let p = ok("var \u{10000}\u{1D7CE} = 1;");
     let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!() };
-    assert_eq!(decls[0].name.name, "\u{10000}\u{1D7CE}");
+    assert_eq!(decl_name(&decls[0]), "\u{10000}\u{1D7CE}");
     assert!(err("1\u{10000};").message.contains("immediately after numeric literal"));
 }
 
@@ -480,12 +527,12 @@ fn no_pattern_syntax_or_white_space_character_is_an_identifier_character() {
 }
 
 #[test]
-fn identifier_characters_are_unicode_16_id_start_and_id_continue() {
+fn identifier_characters_are_unicode_17_id_start_and_id_continue() {
     use crate::chars::{is_id_part, is_id_start};
-    use unicode_general_category::{GeneralCategory as G, get_general_category};
+    use unicode_properties::{GeneralCategory as G, UnicodeGeneralCategory};
     // Unicode Standard Annex #31: ID_Start is the categories Lu, Ll, Lt, Lm, Lo and Nl plus
     // Other_ID_Start; ID_Continue adds Mn, Mc, Nd, Pc and Other_ID_Continue; both leave out
-    // Pattern_Syntax and Pattern_White_Space. Other_ID_Start and Other_ID_Continue as PropList 16.0
+    // Pattern_Syntax and Pattern_White_Space. Other_ID_Start and Other_ID_Continue as PropList 17.0
     // lists them.
     let other_start = [0x1885..=0x1886, 0x2118..=0x2118, 0x212E..=0x212E, 0x309B..=0x309C];
     let other_continue = [0xB7..=0xB7, 0x387..=0x387, 0x1369..=0x1371, 0x19DA..=0x19DA, 0x200C..=0x200D, 0x30FB..=0x30FB, 0xFF65..=0xFF65];
@@ -498,7 +545,7 @@ fn identifier_characters_are_unicode_16_id_start_and_id_continue() {
     let (mut id_starts, mut id_continues) = (0, 0);
     for c in (0..=0x10_FFFF_u32).filter(|c| !(0xD800..=0xDFFF).contains(c)) {
         let Some(ch) = char::from_u32(c) else { panic!("U+{c:04X}") };
-        let g = get_general_category(ch);
+        let g = ch.general_category();
         let letter = matches!(g, G::UppercaseLetter | G::LowercaseLetter | G::TitlecaseLetter | G::ModifierLetter | G::OtherLetter | G::LetterNumber);
         let id_start = (letter || other_start.iter().any(|r| r.contains(&c))) && !excluded[c as usize];
         let continuing = matches!(g, G::NonspacingMark | G::SpacingMark | G::DecimalNumber | G::ConnectorPunctuation);
@@ -509,8 +556,8 @@ fn identifier_characters_are_unicode_16_id_start_and_id_continue() {
         assert_eq!(is_id_start(c), id_start || c == 0x24 || c == 0x5F, "start U+{c:04X}");
         assert_eq!(is_id_part(c), id_continue || c == 0x24, "part U+{c:04X}");
     }
-    // The totals of ID_Start and ID_Continue in DerivedCoreProperties 16.0.
-    assert_eq!((id_starts, id_continues), (141_269, 144_541));
+    // The totals of ID_Start and ID_Continue in DerivedCoreProperties 17.0.
+    assert_eq!((id_starts, id_continues), (145_916, 149_240));
 }
 
 #[test]

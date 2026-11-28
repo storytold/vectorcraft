@@ -105,6 +105,15 @@ pub(crate) enum Op {
     /// Jumps, keeping the top value, when it is falsy; otherwise pops it.
     JumpIfFalseKeep(u32),
     JumpIfTrueKeep(u32),
+    /// Jumps, keeping the top value, when it is neither `undefined` nor `null`; otherwise pops
+    /// it (`??`).
+    JumpIfNotNullishKeep(u32),
+    /// When the top value is `undefined` or `null`, pops `drop` values (the top one among them)
+    /// and jumps; otherwise goes on with the stack as it was (a step of an optional chain).
+    JumpIfNullish {
+        target: u32,
+        drop: u32,
+    },
     Return,
     /// Returns the value of the last expression statement (script and eval code).
     ReturnCompletion,
@@ -127,6 +136,15 @@ pub(crate) enum Op {
     /// `object function` → `object`.
     InitGetter(u32),
     InitSetter(u32),
+    /// `object value` → `object`: `__proto__: value` sets the object's prototype to the value
+    /// when it is an object or `null` (ECMA-262 2015 section B.3.1).
+    InitProto,
+    /// `function` → `function`: gives the new function the `name` `names[i]` (ECMA-262 2015
+    /// section 9.2.11).
+    SetFunctionName(u32),
+    /// `name function` → `name function`: gives the new function the computed `name` on the
+    /// stack, after the prefix.
+    SetFunctionNameKey(NamePrefix),
     /// Pushes a new function made from `functions[i]` and the current environment.
     Closure(u32),
     /// Pushes a new regular expression object for `regexps[i]`.
@@ -145,6 +163,129 @@ pub(crate) enum Op {
     /// Pushes the completion value, which a `finally` block in script and eval code keeps and
     /// sets back with `SetCompletion` when it ends normally.
     GetCompletion,
+    /// `[qualifier] name` → an E4X name object.
+    XmlMakeName {
+        attribute: bool,
+        qualified: bool,
+    },
+    /// `object name` → the descendants that match.
+    XmlDescendants,
+    /// `value` → the string an embedded expression puts in a literal (0 content, 1 attribute
+    /// value, 2 name, 3 run of attributes).
+    XmlEscape(u8),
+    /// The `parts` strings → the XML or XMLList they spell.
+    XmlLiteral {
+        parts: u32,
+        list: bool,
+    },
+    /// `name` → the value of the name on the nearest XML value in scope that holds it.
+    XmlScopeGet,
+    /// `name` → `object name`: the nearest XML value in scope that holds the name, for an
+    /// assignment, update or `delete`.
+    XmlScopeRef,
+    /// `object` → the filter's state.
+    XmlFilterStart,
+    /// `state` → `state item`, or jumps with `state` when the items are used up.
+    XmlFilterNext(u32),
+    /// `state value` → `state`, the current item kept when the value is truthy.
+    XmlFilterTest,
+    /// `state` → the XMLList of the items kept.
+    XmlFilterEnd,
+    /// `iterator name x₁…xₙ` → `iterator name x₁…xₙ value`: the value under the name a `for each`
+    /// got, read after the `n` values its target pushed.
+    ForEachValue(u32),
+    /// `value` → nothing: sets the default XML namespace of the running code.
+    SetDefaultNamespace,
+    /// Enters a block's environment: the `let` and `const` names of `scopes[i]`, not yet
+    /// initialized, and its function declarations.
+    PushBlock(u32),
+    /// Replaces the current environment with a copy of it, for a `for` loop's next iteration.
+    CopyEnv,
+    /// `value` → nothing: initializes the nearest binding of `names[i]`, a `let`, a `const` or
+    /// a parameter of a function with default or rest parameters.
+    InitVar(u32),
+    /// Pushes the value of the parameter `names[i]` of the running function, initialized or not.
+    LoadParam(u32),
+    /// Ends the parameters of a function with default or rest parameters: enters the environment
+    /// of its body's variables and function declarations, and of its `let` and `const` names.
+    BodyEnv,
+    /// `value` → nothing: assigns the function declared in a block outside strict mode code to
+    /// the variable `names[i]` of the running code (ECMA-262 2015 Annex B.3.3).
+    AnnexB(u32),
+    /// `array value` → `array`, with the elements of the value appended (spread).
+    ArraySpread,
+    /// `function this array` → result: a call with the array's elements as its arguments, a
+    /// direct eval when `eval` is true and the function is the global `eval`.
+    CallSpread(bool),
+    /// `function array` → the new object, constructed with the array's elements as arguments.
+    NewSpread,
+    /// `value` → its string (a template literal's substitution).
+    ToStr,
+    /// Pushes the template object of `templates[i]`, the same object for each evaluation.
+    TemplateObject(u32),
+    /// `value` → its Iterator Record (GetIterator, ECMA-262 11th edition section 7.4.1).
+    GetIterator,
+    /// `record` → `record value`, or jumps with `record` when the iterator is done.
+    IterStep(u32),
+    /// `record x₁…xₙ` → `record x₁…xₙ value`: the next value, `undefined` once it is done.
+    IterValue(u32),
+    /// `record` → `record`: steps the iterator without reading the result's `value`, for a hole
+    /// in an array pattern.
+    IterSkip,
+    /// `record x₁…xₙ` → `record x₁…xₙ array`: the values left, in an array.
+    IterRest(u32),
+    /// `record` → nothing: closes the iterator unless it is done (IteratorClose).
+    IterClose,
+    /// `record exception` → throws the exception after closing the iterator unless it is done.
+    IterCloseThrow,
+    /// `value` → `value`: a `TypeError` when it is `undefined` or `null`.
+    RequireObjectCoercible,
+    /// `object key x₁…xₙ` → `object key x₁…xₙ object[key]`: an object pattern's property.
+    PatternGet(u32),
+    /// `object key value` → `object`: a property with a computed name.
+    InitIndex,
+    /// `object key function` → `object`: a getter (`true`) or a setter with a computed name.
+    InitAccessorIndex(bool),
+    /// Ends a generator function's call once its parameters are initialized: the frame becomes a
+    /// new generator object, which the call returns. The first `next` goes on after it.
+    GeneratorStart,
+    /// `value` → `received mode`: suspends the generator, giving its caller `{ value, done: false }`
+    /// (or, when true, the value itself, an iterator result from `yield*`'s delegate). It goes on
+    /// when the generator is resumed, with the value it was resumed with and how (0 `next`, 1
+    /// `throw`, 2 `return`).
+    Yield(bool),
+    /// `received mode` → `received`: goes on for `next`, throws the value for `throw`, and jumps
+    /// with it for `return`.
+    Resume(u32),
+    /// `value` → `iterator next`: GetIterator (ECMA-262 11th edition, section 7.4.1) for `yield*`,
+    /// which calls the iterator's methods itself.
+    DelegateIterator,
+    /// `iterator next received mode` → `iterator next mode method iterator received`, ready for
+    /// `Call(1)`: the delegate's `next`, `throw` or `return`. With `return` and no `return` method
+    /// it jumps with `iterator next received`; with `throw` and no `throw` method it closes the
+    /// iterator and throws a `TypeError` (section 14.4.14).
+    DelegateCall(u32),
+    /// `mode result` → `result` when the iterator result is not done; when it is, jumps with
+    /// `mode value`. A result that is not an object is a `TypeError`.
+    DelegateResult(u32),
+    /// `mode value` → `value`; for `return`, jumps with it.
+    DelegateDone(u32),
+}
+
+/// The names a block declares, entered with [`Op::PushBlock`].
+#[derive(Debug, Default)]
+pub(crate) struct BlockScope {
+    /// The `let` and `const` names, each with whether it is a `const`.
+    pub(crate) lets: Vec<(Key, bool)>,
+    /// The function declarations: their names and indices in `functions`.
+    pub(crate) funcs: Vec<(Key, u32)>,
+}
+
+/// A tagged template's strings: as read and as written.
+#[derive(Debug)]
+pub(crate) struct Template {
+    pub(crate) cooked: Vec<Str>,
+    pub(crate) raw: Vec<Str>,
 }
 
 /// What code is: a function body, a script, or eval code.
@@ -206,6 +347,70 @@ pub(crate) struct Code {
     pub(crate) source: Rc<Source>,
     /// Where the function's text starts and ends in the source.
     pub(crate) span: (u32, u32),
+    /// The block scopes [`Op::PushBlock`] enters.
+    pub(crate) scopes: Vec<BlockScope>,
+    /// The scope of the `let` and `const` names at the top of the body, script or eval code.
+    pub(crate) top_scope: Option<u32>,
+    /// The tagged templates [`Op::TemplateObject`] makes objects of.
+    pub(crate) templates: Vec<Template>,
+    /// The rest parameter's name.
+    pub(crate) rest: Option<Key>,
+    /// The function's `length`: its parameters before the first with a default value.
+    pub(crate) length: u32,
+    /// The code is an arrow function's.
+    pub(crate) arrow: bool,
+    /// The code reads `this` or calls `eval`, itself or in an arrow function inside it.
+    pub(crate) uses_this: bool,
+    /// The function has default, rest or destructured parameters: its parameters start
+    /// uninitialized, its code initializes them and then enters its body with [`Op::BodyEnv`].
+    pub(crate) param_init: bool,
+    /// The names the destructured parameters bind, which start uninitialized beside the
+    /// parameters. A destructured parameter's own entry in `params` is a name no script can
+    /// write.
+    pub(crate) pattern_names: Vec<Key>,
+    /// The code was read with [`crate::Options::es2015`]: its function's `length` can be
+    /// redefined, as ECMA-262 2015 section 19.2.4.1 has it.
+    pub(crate) es2015: bool,
+    /// The `name` its function objects get when they are made (ECMA-262 2015 sections 14.1.19
+    /// and 14.1.20): a declaration's or a named function expression's name, with
+    /// [`crate::Options::es2015`].
+    pub(crate) own_name: Option<Key>,
+    /// The code is a method's, a getter's or a setter's, read with [`crate::Options::es2015`]:
+    /// its functions have no `prototype` and cannot be constructed (section 14.3.8).
+    pub(crate) method: bool,
+    /// The code is a generator function's: a call makes a generator object ([`Op::GeneratorStart`]),
+    /// and it is not a constructor.
+    pub(crate) generator: bool,
+}
+
+/// What [`Op::SetFunctionNameKey`] puts before a computed name: `get ` and `set ` for accessors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NamePrefix {
+    None,
+    Get,
+    Set,
+}
+
+impl NamePrefix {
+    /// The prefix's code units, with the space that follows it.
+    pub(crate) fn units(self) -> &'static [u16] {
+        const GET: &[u16] = &[0x67, 0x65, 0x74, 0x20];
+        const SET: &[u16] = &[0x73, 0x65, 0x74, 0x20];
+        match self {
+            NamePrefix::None => &[],
+            NamePrefix::Get => GET,
+            NamePrefix::Set => SET,
+        }
+    }
+
+    /// The prefix with the space that follows it, as text.
+    pub(crate) fn text(self) -> &'static str {
+        match self {
+            NamePrefix::None => "",
+            NamePrefix::Get => "get ",
+            NamePrefix::Set => "set ",
+        }
+    }
 }
 
 impl Code {
@@ -259,7 +464,9 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::Neg | Op::Plus | Op::BitNot | Op::Not | Op::Typeof | Op::ToNumber | Op::ArrayHole | Op::ForInStart | Op::CheckObject => e(1, 1),
         Op::GetMemberThis(_) => e(1, 2),
         Op::SetMember(_) | Op::GetIndex | Op::DeleteIndex | Op::IncIndex { .. } | Op::Binary(_) => e(2, 1),
-        Op::ArrayPush | Op::InitProp(_) | Op::InitGetter(_) | Op::InitSetter(_) => e(2, 1),
+        Op::ArrayPush | Op::InitProp(_) | Op::InitGetter(_) | Op::InitSetter(_) | Op::InitProto => e(2, 1),
+        Op::SetFunctionName(_) => e(1, 1),
+        Op::SetFunctionNameKey(_) => e(2, 2),
         Op::GetIndexThis => e(2, 2),
         Op::SetIndex => e(3, 1),
         Op::Call(n) | Op::CallEval(n) => e(n.checked_add(2).ok_or("operand too large")?, 1),
@@ -267,14 +474,41 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::PopEnv => e(0, 0),
         Op::Jump(t) => Effect { pops: 0, next: None, jumps: vec![(t, 0)] },
         Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => Effect { pops: 1, next: Some(0), jumps: vec![(t, 0)] },
-        Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => Effect { pops: 1, next: Some(0), jumps: vec![(t, 1)] },
+        Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) | Op::JumpIfNotNullishKeep(t) => Effect { pops: 1, next: Some(0), jumps: vec![(t, 1)] },
+        Op::JumpIfNullish { drop: 0, .. } => return Err("a nullish jump that drops no values".into()),
+        Op::JumpIfNullish { target, drop } => Effect { pops: drop, next: Some(drop), jumps: vec![(target, 0)] },
         Op::Return | Op::Throw => end(1),
         Op::ReturnCompletion | Op::ThrowReferenceError(_) => end(0),
         Op::EndFinally(t) => {
             let table = finally_tables.get(t as usize).ok_or_else(|| format!("finally table {t} out of range"))?;
             Effect { pops: 2, next: Some(0), jumps: table.iter().map(|&target| (target, 1)).collect() }
         }
-        Op::ForInNext(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::ForInNext(t) | Op::XmlFilterNext(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::XmlMakeName { qualified, .. } => e(1 + u32::from(qualified), 1),
+        Op::XmlDescendants | Op::XmlFilterTest => e(2, 1),
+        Op::XmlEscape(_) | Op::XmlScopeGet | Op::XmlFilterStart | Op::XmlFilterEnd => e(1, 1),
+        Op::XmlLiteral { parts, .. } => e(parts, 1),
+        Op::XmlScopeRef => e(1, 2),
+        Op::ForEachValue(n) => e(n + 2, n + 3),
+        Op::SetDefaultNamespace => e(1, 0),
+        Op::PushBlock(_) | Op::CopyEnv | Op::BodyEnv => e(0, 0),
+        Op::InitVar(_) | Op::AnnexB(_) => e(1, 0),
+        Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
+        Op::ArraySpread | Op::NewSpread => e(2, 1),
+        Op::CallSpread(_) => e(3, 1),
+        Op::ToStr | Op::GetIterator | Op::IterSkip | Op::RequireObjectCoercible => e(1, 1),
+        Op::IterStep(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::IterValue(n) | Op::IterRest(n) => e(n.checked_add(1).ok_or("operand too large")?, n.checked_add(2).ok_or("operand too large")?),
+        Op::PatternGet(n) => e(n.checked_add(2).ok_or("operand too large")?, n.checked_add(3).ok_or("operand too large")?),
+        Op::IterClose => e(1, 0),
+        Op::IterCloseThrow => end(2),
+        Op::InitIndex | Op::InitAccessorIndex(_) => e(3, 1),
+        Op::GeneratorStart => e(0, 0),
+        Op::Yield(_) => e(1, 2),
+        Op::Resume(t) | Op::DelegateDone(t) => Effect { pops: 2, next: Some(1), jumps: vec![(t, 1)] },
+        Op::DelegateIterator => e(1, 2),
+        Op::DelegateCall(t) => Effect { pops: 2, next: Some(4), jumps: vec![(t, 1)] },
+        Op::DelegateResult(t) => Effect { pops: 2, next: Some(1), jumps: vec![(t, 2)] },
     })
 }
 
@@ -301,9 +535,16 @@ fn check_indices(op: Op, code: &Code) -> Result<(), String> {
         | Op::InitProp(i)
         | Op::InitGetter(i)
         | Op::InitSetter(i)
-        | Op::PushCatch(i) => check(i, code.names.len(), "name"),
+        | Op::SetFunctionName(i)
+        | Op::PushCatch(i)
+        | Op::InitVar(i)
+        | Op::LoadParam(i)
+        | Op::AnnexB(i) => check(i, code.names.len(), "name"),
         Op::Closure(i) => check(i, code.functions.len(), "function"),
+        Op::PushBlock(i) => check(i, code.scopes.len(), "scope"),
+        Op::TemplateObject(i) => check(i, code.templates.len(), "template"),
         Op::RegExp(i) => check(i, code.regexps.len(), "regular expression"),
+        Op::GeneratorStart | Op::Yield(_) if !code.generator => Err("a generator instruction outside a generator function".into()),
         _ => Ok(()),
     }
 }
@@ -323,8 +564,14 @@ pub(crate) fn verify(code: &Code) -> Result<u32, String> {
             return Err("a function declaration without a name".into());
         }
     }
-    if code.fun_decls.iter().any(|(_, i)| *i as usize >= code.functions.len()) {
+    if code.fun_decls.iter().chain(code.scopes.iter().flat_map(|s| &s.funcs)).any(|(_, i)| *i as usize >= code.functions.len()) {
         return Err("function declaration index out of range".into());
+    }
+    if code.top_scope.is_some_and(|i| i as usize >= code.scopes.len()) {
+        return Err("top scope out of range".into());
+    }
+    if code.templates.iter().any(|t| t.cooked.len() != t.raw.len()) {
+        return Err("a template whose strings do not match".into());
     }
     let mut depth: Vec<Option<u32>> = vec![None; len];
     let mut work: Vec<(u32, u32)> = vec![(0, 0)];

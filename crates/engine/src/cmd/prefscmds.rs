@@ -139,9 +139,14 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("cornerRadius", "General", "", "Corner Radius", len(0.0, 1296.0, General)),
     p!("pasteOffset", "General", "", "Paste Offset", len(0.0, 1296.0, General)),
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
+    p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
+    p!("deleteKeepsPathsJoined", "General", "Options", "Delete Removes Anchor Points and Keeps Paths Joined", bool),
+    p!("doubleClickAddsAnchorPoints", "General", "Options", "Double-Click Adds Anchor Points", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showToolCards", "General", "Options", "Show Tool Cards", bool),
     p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
+    p!("runStartupScripts", "General", "Options", "Run Startup Scripts", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),
     p!("showHomeScreen", "General", "Options", "Show The Home Screen When No Documents Are Open", bool),
@@ -156,6 +161,9 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
     p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
+    p!("holdShortcuts", "General", "Options", "Hold Shortcuts", bool),
+    p!("keyHoldDelay", "General", "Options", "Hold Shortcut Delay", num(0.2, 1.0, "s")),
+    p!("boundingBoxWhileMovingAndDrawing", "General", "Options", "Show Bounding Box While Moving and Drawing", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
     p!(
@@ -211,10 +219,12 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("fontNamesInEnglish", "Type", "Options", "Show Font Names in English", bool),
     p!("autoSizeAreaType", "Type", "Options", "Auto Size New Area Type", bool),
     p!("fontPreview", "Type", "Options", "Enable in-menu font previews", bool),
+    p!("fontSamplesOnWhite", "Type", "Options", "Show samples on white", bool),
     p!("fontPreviewSize", "Type", "Options", "Font Preview Size", choice(&[("small", "Small"), ("medium", "Medium"), ("large", "Large")])),
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
+    p!("showCharacterAlternates", "Type", "Options", "Show Character Alternates", bool),
     p!("highlightSubstitutedFonts", "Type", "Options", "Highlight Substituted Fonts", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
     p!("typedLists", "Type", "Options", "Start Lists From Typed Markers", bool),
@@ -311,12 +321,23 @@ pub const PREF_SPECS: &[PrefSpec] = &[
             ("or", "Odia"),
             ("as", "Assamese"),
             ("sa", "Sanskrit"),
-            ("ur", "Urdu")
+            ("ur", "Urdu"),
+            ("ne", "Nepali"),
+            ("kok", "Konkani"),
+            ("sd", "Sindhi")
         ])
     ),
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
     // Plug-ins & Scratch Disks
     p!("pluginsFolder", "Plug-ins & Scratch Disks", "Plug-ins", "Additional Plug-ins Folder", text),
+    // The instructions each object filter run gets: Large gives at least 250 M besides those for each byte of input.
+    p!(
+        "pluginInstructionBudget",
+        "Plug-ins & Scratch Disks",
+        "Plug-ins",
+        "Plug-in Instruction Budget",
+        choice(&[("normal", "Normal"), ("large", "Large")])
+    ),
     p!("scratchPrimary", "Plug-ins & Scratch Disks", "Scratch Disks", "Primary", text),
     p!("scratchSecondary", "Plug-ins & Scratch Disks", "Scratch Disks", "Secondary", text),
     // User Interface
@@ -362,10 +383,13 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("gpuPerformance", "Performance", "GPU Performance", "GPU Performance", bool),
     p!("animatedZoom", "Performance", "GPU Performance", "Animated Zoom", bool),
     p!("gpuPreference", "Performance", "GPU Performance", "Graphics Processor", choice(GPU_PREFERENCES)),
+    // Read by the desktop app at startup: the window presents without vsync, capped at 240 fps (#6013).
+    p!("lowLatencyDrawing", "Performance", "GPU Performance", "Low-Latency Drawing", bool),
     p!("historyStates", "Performance", "", "History States", int(5, 1000)),
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),
     p!("linuxDisplayServer", "Performance", "", "Linux Display Server", choice(LINUX_DISPLAY_SERVERS)),
+    p!("monitorProfileDisplay", "Performance", "", "Use Monitor Profile for Canvas", bool),
     // File Handling
     p!("backgroundSave", "File Handling", "", "Enable Background Save", bool),
     p!("backgroundExport", "File Handling", "", "Enable Background Export", bool),
@@ -375,6 +399,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("recoveryOffForComplex", "File Handling", "Data Recovery", "Turn off Data Recovery for complex documents", bool),
     p!("recentFilesCount", "File Handling", "Files", "Number of Recent Files to Display", int(0, 30)),
     p!("lowResProxyEps", "File Handling", "Files", "Use Low Resolution Proxy for Linked EPS", bool),
+    p!("pdfImportEmbeddedFonts", "File Handling", "Files", "Use fonts embedded in imported PDFs", bool),
     p!("antiAliasedBitmaps", "File Handling", "Files", "Display Bitmaps as Anti-aliased Images in Pixel Preview", bool),
     p!(
         "updateLinks",
@@ -383,6 +408,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         "Update Links",
         choice(&[("automatically", "Automatically"), ("manually", "Manually"), ("askWhenModified", "Ask When Modified")])
     ),
+    p!("pdfTextAs", "File Handling", "Files", "PDF Text", choice(&[("text", "Editable"), ("outlines", "Outlines")])),
     // Clipboard Handling
     p!("copyAsSvg", "Clipboard Handling", "On Copy", "Include SVG Code", bool),
     p!("copyAsPdf", "Clipboard Handling", "On Copy", "PDF", bool),
@@ -435,6 +461,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
     ),
     p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
+    // The Transform panel menu: drawing a shape shows the panel.
+    p!("showOnShapeCreation", "General", "Transform Panel", "Show on Shape Creation", bool),
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
@@ -452,10 +480,10 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
 /// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`), the
 /// Perspective Grid Options (`perspective.widget.options`), the Pathfinder Options
-/// (`object.pathfinder.options`) and the Snap to Glyph options (`view.snapToGlyph.options`).
-/// `prefs.get` and `prefs.set` take them by key (a partial object updates what it names) and
-/// `prefs.reset` without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap"];
+/// (`object.pathfinder.options`), the Snap to Glyph options (`view.snapToGlyph.options`) and the
+/// Pixel Snapping Options (`view.snapToPixel.options`). `prefs.get` and `prefs.set` take them by key
+/// (a partial object updates what it names) and `prefs.reset` without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap", "pixelSnap"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
@@ -473,6 +501,10 @@ fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<
         }
         "glyphSnap" => {
             let cur: vectorcraft_tools::GlyphSnap = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        "pixelSnap" => {
+            let cur: vectorcraft_tools::PixelSnap = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
         }
         "perspectiveWidget" => {
@@ -679,6 +711,12 @@ impl Prefs {
 }
 
 impl Session {
+    /// Take the categories `prefs.reset` reset since the last call, each once, with `None` for a
+    /// reset of every category. A frontend resets the settings it keeps itself in them.
+    pub fn take_prefs_resets(&mut self) -> Vec<Option<&'static str>> {
+        std::mem::take(&mut self.prefs_resets)
+    }
+
     /// Replace the preferences and push the ones with engine-side consumers into open documents
     /// and the renderer (grid, history depth, render threads).
     pub fn apply_prefs(&mut self, mut p: Prefs) {
@@ -686,6 +724,10 @@ impl Session {
         // automation roots in force: a refused one keeps its value.
         for e in self.prefs.keep_folders(&mut p) {
             log::warn!("{e}");
+        }
+        // Saved gradient presets get names no built-in preset or other saved one has.
+        for (old, new) in super::gradpresets::rename_clashing_presets(&mut p.gradient_presets) {
+            log::warn!("saved gradient preset {old} is listed as {new}: another preset has its name");
         }
         // The edit the active tool computes on another thread is applied first (the Preferences
         // dialog applies its settings here, outside a command). A failure to apply it was the
@@ -697,6 +739,9 @@ impl Session {
         let history_changed = p.history_states != self.prefs.history_states;
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         let fonts_folder_changed = p.fonts_folder != self.prefs.fonts_folder;
+        if p.plugins_folder.trim().is_empty() && !self.prefs.plugins_folder.trim().is_empty() {
+            super::plugin::forget_prefs_folder(&self.prefs.plugins_folder);
+        }
         let hyphen_exceptions_changed = p.hyphenation_exceptions != self.prefs.hyphenation_exceptions;
         let corner_radius_changed = p.corner_radius != self.prefs.corner_radius;
         let lock_guides_changed = p.lock_guides_by_default != self.prefs.lock_guides_by_default;
@@ -717,6 +762,13 @@ impl Session {
                 if t.id() == "roundedRectangle" {
                     t.set_option("cornerRadius", &r);
                 }
+            }
+            // A press of the tool that is dropped keeps the new radius, also when the tool lent a
+            // selection tool for the press.
+            if self.press_taken_by("roundedRectangle")
+                && let Some((_, saved)) = self.press_options.as_mut()
+            {
+                saved.insert("cornerRadius".into(), r);
             }
         }
         if fonts_folder_changed {
@@ -762,7 +814,7 @@ impl Session {
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!(query "prefs.get", "Get Preferences", [], None, "{key?} → the value of one preference (or preference group: eyedropper), or {prefs: {…all…}}", always, get),
+        cmd!(query "prefs.get", "Get Preferences", [], None, "{key?} → the value of one preference (or preference group: eyedropper), or {prefs: {…all…}}; under automation read roots a folder preference outside them is null, and an export preset's folder outside them is left out", always, get),
         cmd!(
             query "prefs.set",
             "Set Preference",
@@ -772,14 +824,14 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             set
         ),
-        cmd!(query "prefs.reset", "Reset Preferences", [], None, "{category?} reset one category (or everything) to defaults", always, reset),
-        cmd!(query "prefs.list", "List Preferences", [], None, "{} → [{key, category, section, label, kind, value, …}] every preference", always, list),
+        cmd!(query "prefs.reset", "Reset Preferences", [], None, "{category?: string} reset one category (or everything, with category left out or null) to defaults; an unknown category or one that is not a string is an error", always, reset),
+        cmd!(query "prefs.list", "List Preferences", [], None, "{} → [{key, category, section, label, kind, value, …}] every preference; under automation read roots a folder preference's value outside them is null", always, list),
         cmd!(
             query "prefs.export",
             "Export Preferences",
             [],
             None,
-            "{path?} write the preferences as a JSON file {format: \"vectorcraft-preferences\", version: 1, prefs: {key: value, …}}: every preference prefs.list lists and the eyedropper, perspectiveWidget, pathfinder and glyphSnap groups, without the folder preferences fontsFolder, pluginsFolder, recoveryFolder and templatesFolder and without saved presets; a file over 1 MB, which prefs.import would refuse, is an error and is not written → {path, count}; without path → {data: the file's text, count}",
+            "{path?} write the preferences as a JSON file {format: \"vectorcraft-preferences\", version: 1, prefs: {key: value, …}}: every preference prefs.list lists and the eyedropper, perspectiveWidget, pathfinder, glyphSnap and pixelSnap groups, without the folder preferences fontsFolder, pluginsFolder, scratchPrimary, scratchSecondary, recoveryFolder and templatesFolder and without saved presets; a file over 1 MB, which prefs.import would refuse, is an error and is not written → {path, count}; without path → {data: the file's text, count}",
             always,
             export
         ),
@@ -788,7 +840,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Preferences",
             [],
             None,
-            "{path? | data?: the file's text} apply the preferences of a file prefs.export wrote (at most 1 MB). Every value is checked first, as prefs.set checks it: another format, a newer version, an unknown preference, a value of the wrong type or out of range, or a folder preference is an error, and nothing changes. Preferences the file leaves out keep their values; the open document's units stay as they are; no undo step; not a command.batch step → {imported: count}",
+            "{path? | data?: the file's text} apply the preferences of a file prefs.export wrote (at most 1 MB). Every value is checked first, as prefs.set checks it: another format, a newer version, an unknown preference, a value of the wrong type or out of range, or a folder preference (for scratchPrimary and scratchSecondary, a folder; the choices Startup and None are read) is an error, and nothing changes. Preferences the file leaves out keep their values; the open document's units stay as they are; no undo step; not a command.batch step → {imported: count}",
             always,
             import
         ),
@@ -804,8 +856,20 @@ pub const PREFS_VERSION: u64 = 1;
 /// The largest preferences file `prefs.import` reads.
 const MAX_PREFS_FILE_BYTES: usize = 1 << 20;
 
-/// Folder preferences, which name folders on one computer: a preferences file leaves them out.
-const FOLDER_PREFS: &[&str] = &["fontsFolder", "pluginsFolder", "recoveryFolder", "templatesFolder"];
+/// Folder preferences, which name folders on one computer: a preferences file leaves them out, and
+/// under automation read roots one outside them is not shown.
+pub const FOLDER_PREFS: [&str; 6] = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
+
+/// The scratch disk choices that are not folders.
+pub const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
+
+/// Does `value`, set as preference `key`, name a folder: is `key` a folder preference
+/// ([`FOLDER_PREFS`]) and `value`, trimmed as the app uses it, neither empty (the default folder)
+/// nor a scratch disk choice ([`SCRATCH_CHOICES`])?
+pub fn names_a_folder(key: &str, value: &str) -> bool {
+    let path = value.trim();
+    FOLDER_PREFS.contains(&key) && !path.is_empty() && !(key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path))
+}
 
 /// The preferences `prefs.export` writes: every [`PREF_SPECS`] key but the [`FOLDER_PREFS`], and
 /// the [`PREF_GROUPS`].
@@ -854,7 +918,9 @@ fn read_prefs_file(bytes: &[u8]) -> std::result::Result<Map<String, Value>, Stri
     if prefs.is_empty() {
         return Err("the file holds no preferences".into());
     }
-    if let Some(key) = prefs.keys().find(|k| FOLDER_PREFS.contains(&k.as_str())) {
+    // A scratch disk choice or an empty scratch disk names no folder, and is read.
+    let folder = |k: &str, v: &Value| FOLDER_PREFS.contains(&k) && (!k.starts_with("scratch") || v.as_str().is_some_and(|v| names_a_folder(k, v)));
+    if let Some(key) = prefs.iter().find(|(k, v)| folder(k, v)).map(|(k, _)| k) {
         return Err(format!("`{key}` names a folder, which preferences files leave out"));
     }
     Ok(prefs.clone())
@@ -879,8 +945,36 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "imported": values.len() }))
 }
 
+/// The preferences as `prefs.get`, `prefs.list`, `prefs.set` and `prefs.reset` show them to the
+/// request being served. Under automation read roots, a folder preference ([`FOLDER_PREFS`]) outside
+/// them is `null`, as `ui.inspect` leaves it out, and an export preset's `folder` outside them is
+/// left out. An empty value (the default folder) and a scratch
+/// disk choice ([`SCRATCH_CHOICES`]) are shown. Without roots the preferences are shown as they are.
+fn shown_prefs(prefs: &Prefs) -> Value {
+    let mut all = prefs.to_json();
+    if crate::file_access::current().is_none() {
+        return all;
+    }
+    // The app trims a folder before it uses it.
+    let hidden = |path: &str| !path.trim().is_empty() && crate::file_access::check_read(path.trim()).is_err();
+    for key in FOLDER_PREFS {
+        let Some(path) = all[key].as_str() else { continue };
+        if hidden(path) && !(key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path.trim())) {
+            all[key] = Value::Null;
+        }
+    }
+    if let Some(presets) = all.get_mut("screenExportPresets").and_then(Value::as_array_mut) {
+        for settings in presets.iter_mut().filter_map(|p| p.get_mut("settings").and_then(Value::as_object_mut)) {
+            if settings.get("folder").and_then(Value::as_str).is_some_and(hidden) {
+                settings.remove("folder");
+            }
+        }
+    }
+    all
+}
+
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
-    let all = s.prefs.to_json();
+    let all = shown_prefs(&s.prefs);
     match str_param(p, "key") {
         Some(k) if spec(k).is_some() || PREF_GROUPS.contains(&k) => Ok(all[k].clone()),
         Some(k) => Err(bad("prefs.get", format!("unknown preference `{k}`"))),
@@ -908,25 +1002,27 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     if document_units && values.contains_key("unitsGeneral") && s.active().is_some() {
         s.set_document_units(s.default_units())?;
     }
-    let all = s.prefs.to_json();
+    let all = shown_prefs(&s.prefs);
     Ok(Value::Object(values.keys().map(|k| (k.clone(), all[k.as_str()].clone())).collect()))
 }
 
 fn reset(s: &mut Session, p: &Value) -> Result<Value> {
-    let cat = str_param(p, "category");
-    if let Some(c) = cat
-        && !PREF_CATEGORIES.iter().any(|x| x.eq_ignore_ascii_case(c))
-    {
-        return Err(bad("prefs.reset", format!("unknown category `{c}`")));
-    }
+    let cat = text_param(p, "category", "prefs.reset")?;
+    let known = |c: &str| {
+        PREF_CATEGORIES.iter().copied().find(|x| x.eq_ignore_ascii_case(c)).ok_or_else(|| bad("prefs.reset", format!("unknown category `{c}`")))
+    };
+    let category = cat.map(known).transpose()?;
     let mut next = s.prefs.clone();
     next.reset(cat);
     s.apply_prefs(next);
-    Ok(json!({ "prefs": s.prefs.to_json() }))
+    if !s.prefs_resets.contains(&category) {
+        s.prefs_resets.push(category);
+    }
+    Ok(json!({ "prefs": shown_prefs(&s.prefs) }))
 }
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
-    let all = s.prefs.to_json();
+    let all = shown_prefs(&s.prefs);
     Ok(Value::Array(
         PREF_SPECS
             .iter()

@@ -228,7 +228,41 @@ fn export_all_open_documents_writes_one_file_each() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 100, "name": "pic"})).unwrap();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.execute("file.place", &json!({"name": "a.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
     s.execute("document.save", &json!({"path": dir.join("pic.svg"), "format": "svg", "options": {"images": "link"}})).unwrap();
     let saved: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.path().is_file()).collect();
@@ -330,6 +364,34 @@ fn batch_trace_folder_traces_and_saves_each_image() {
     ] {
         assert!(s.execute(C, &bad).is_err(), "{bad}");
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A layered PSD is traced as its merged image: a white layer under a black square gives the
+/// square's shape, not a trace of the white layer alone.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn batch_trace_folder_traces_a_layered_psd_as_its_merged_image() {
+    const C: &str = "addon.document.batchTraceFolder";
+    let dir = folder("batch-trace-psd");
+    let (src, out) = (dir.join("in"), dir.join("out"));
+    std::fs::create_dir_all(&src).unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 24, "height": 24})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 24, "height": 24})).unwrap();
+    s.execute("layer.new", &json!({"name": "Square"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 6, "y": 6, "width": 12, "height": 12})).unwrap();
+    let psd = s.execute("document.export", &json!({"format": "psd"})).unwrap();
+    std::fs::write(src.join("two.psd"), vectorcraft_format::base64_decode(psd["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    let r =
+        s.execute(C, &json!({"folder": src, "destinationFolder": out, "format": "svg", "preset": "Black and White Logo", "expand": true})).unwrap();
+    assert_eq!(r["traced"].as_array().unwrap().len(), 1, "{r}");
+    let svg = std::fs::read_to_string(out.join("two.svg")).unwrap();
+    assert!(svg.contains("fill=\"#000000\""), "the black square is traced: {svg}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

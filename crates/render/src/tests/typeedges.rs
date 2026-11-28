@@ -43,6 +43,17 @@ fn partial(a: &[u8]) -> usize {
     a.iter().filter(|v| **v > 0 && **v < 255).count()
 }
 
+#[test]
+fn a_plain_patch_defers_frame_sensitive_type_edges() {
+    let mut renderer = Renderer::new();
+    renderer.threads = 0;
+    let opts = RenderOptions::default();
+    let sharp = page(TypeAntiAlias::Sharp, None);
+    let crisp = page(TypeAntiAlias::Crisp, None);
+    assert!(renderer.render_plain_patch(&sharp, W, H, Affine::IDENTITY, &opts).is_some());
+    assert!(renderer.render_plain_patch(&crisp, W, H, Affine::IDENTITY, &opts).is_none());
+}
+
 /// The first pixels of `drawn` (type drawn with `m`) that are not the share `edge_coverage` gives
 /// the same pixel of `sharp` (the type drawn with Sharp), within a step of rounding: (pixel,
 /// Sharp, drawn).
@@ -859,7 +870,7 @@ fn type_outside_its_frame_is_drawn() {
 fn a_pan_draws_the_type_from_the_kept_pixels() {
     let _fonts = crate::tests_fontchange::fonts_steady();
     let opts = RenderOptions::default();
-    let fonts = || vectorcraft_text::FontDb::global().generation();
+    let fonts = vectorcraft_text::layout_inputs;
     // How many type objects a renderer drew offscreen for `b` in `second` after drawing `a` in
     // `first`. The second frame's pixels are a new renderer's, each channel within `near`. The
     // frames are drawn again while the fonts change between them (other tests load fonts, and the

@@ -1,6 +1,8 @@
 # Development
 
-> **Last updated:** 2026-11-06 · **Change:** Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending.
+> **Last updated:** 2026-11-24 · **Change:** Fonts: the interface font stack is the framework's, set up by `ui_fonts()` and installed by `embed::install`; `theme::install_fonts` is gone and the `interface-fonts` feature changes nothing.
+> **Last updated:** 2026-11-12 · **Change:** Tests canonicalize temporary roots and normalize Windows verbatim prefixes before comparing preset refusal paths or probing a case-variant script folder (#6860); production access checks unchanged.
+> **Last updated:** 2026-11-12 · **Change:** minor (clipboard failure helper follows its Linux/BSD and test callers; previously: Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending).
 > **Last updated:** 2026-11-01 · **Change:** Linux: Automatic Linux Display Server opens the window through XWayland when a pen is attached on a Wayland session, so the pen draws (#4967); `VECTORCRAFT_NATIVE_WAYLAND=1` keeps Wayland.
 > **Last updated:** 2026-10-31 · **Change:** files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance`.
 > **Last updated:** 2026-10-29 · **Change:** Linux clipboard: the Flatpak on GNOME copies and pastes text through the core Wayland protocol.
@@ -82,6 +84,8 @@ The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (
   - `WGPU_VALIDATION_INDIRECT_CALL=1`: turns wgpu's check of indirect draw arguments back on. VectorCraft draws nothing indirectly and turns it off, since the compute shader it needs fails to compile on some drivers (#651).
   - On Linux with Mesa, `MESA_VK_DEVICE_SELECT=10de:2f04!` (vendor:device as `vulkaninfo --summary` or `lspci -nn` show it) leaves only that GPU to Vulkan, and `DRI_PRIME=1` picks the other GPU.
 - Help › About and the control channel's `ui.inspect` (`graphicsAdapter`) show the adapter in use, and the app logs it at startup.
+- **How frames reach the display.** By default the window presents with `autovsync` and lets the display queue one frame. With `autovsync`, wgpu uses relaxed vsync (FifoRelaxed, which tears a frame that arrives late) where the driver offers it, else vsync (Fifo). For a launch, `--present-mode` (or `VECTORCRAFT_PRESENT_MODE`) sets the present mode to `fifo` (vsync), `autovsync` or `novsync` (wgpu uses Immediate, else Mailbox, else Fifo, whichever the driver offers), and `--frame-latency` (or `VECTORCRAFT_FRAME_LATENCY`) sets the frames the display may queue, `1` to `3`. A flag overrides its variable, and a value that is not one of these stops the app with a message. On Windows and Linux, a launch with either one set opens its files in a new window, as with `--new-instance`, instead of handing them to a running VectorCraft. At startup the log records what the app asks the window surface for, for example `requested window surface: autovsync, frame latency 2 (override)`. The driver chooses the mode that `autovsync` and `novsync` resolve to and may clamp the latency, and on macOS egui uses at least 2 frames while the window is being resized. The code is `apps/vectorcraft/src/presentation.rs`.
+- **Preferences › Performance › Low-Latency Drawing** (`lowLatencyDrawing`, off by default) presents with `novsync` and is read when the app starts, so a change applies after a restart. The present mode comes from `--present-mode` first, then `VECTORCRAFT_PRESENT_MODE`, then this preference, then the default (`autovsync`); `--frame-latency` and `VECTORCRAFT_FRAME_LATENCY` still set the latency with it on. The log names where the mode came from: `requested window surface: novsync (preference), frame latency 1`. Whenever the window presents without vsync (`novsync`, from the preference or an override), frames start at most 240 times a second (about 4.17 ms apart); with vsync the display paces them and no cap applies.
 
 ## Logs
 
@@ -89,12 +93,16 @@ The desktop app writes its `log` records to standard error and to `logs/vectorcr
 
 By default VectorCraft's own crates log at `info` and everything else at `warn`. `RUST_LOG` replaces that with env_logger-style directives, for example `RUST_LOG=debug`, `RUST_LOG=warn,vectorcraft_render=trace` or `RUST_LOG=info,wgpu_core=warn`; a directive ending in `*` covers every target starting with it (`vectorcraft*=debug`). The logger is `apps/vectorcraft/src/logging.rs`. `vectorcraft-cli mcp` has its own logger, which sends records to the MCP client (`docs/mcp.md`).
 
+When the interface thread stays in one part of a frame for 3 s (VectorCraft's own value), a watching thread writes a hang report to the log and to `logs/hang-report-<process id>.txt`, which the process keeps locked. The report gives the part of the frame (the input hook, the app's logic, the interface, or the renderer after a frame in which any window had input), a system clipboard read or write in progress, the last 8 different command ids (a command run again moves to the end of the list), the times of the last 16 frames, the platform, the window system (Wayland, X11, AppKit, Win32, other or unknown), `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, whether the app runs in a Flatpak, the graphics adapter, the present mode and frame latency the app asks the window surface for, the session's running time and how many documents are open. It holds no document contents, file paths or command parameters, and no native stack. The time after a frame that minimizes or hides the main window, or starts moving or resizing it, is not timed, and neither is an in-line file dialog (Windows and Linux) or an open menu of the macOS menu bar. When the interface answers again, the log records after how long and the file is removed. A file that no process holds locked at a later launch was left by a session that was closed while it did not answer (a locked one belongs to another instance and is left alone): that launch writes the report to the log, moves the file to `logs/hang-report.1.txt` (older abandoned reports beyond the newest 16 are removed) and, unless another start-up message is showing, says so in the status bar. Help › Copy Troubleshooting Info (`help.copyTroubleshootingInfo`) copies the platform facts, the recent commands and frame times, and the hang reports of this session and the last one, for a bug report. The watch is `apps/vectorcraft/src/hang_watch.rs`; the marks it reads are `crates/ui-egui/src/hang_beacon.rs`.
+
 ## Environment variables (desktop app)
 
 | Variable | Effect |
 |---|---|
 | `VECTORCRAFT_CONTROL_PORT` | Same as `--control <port>`, which overrides it; a value that isn't a port from 1 to 65535 stops the app |
 | `VECTORCRAFT_IN_WINDOW_MENUS` | Any value but empty or `0`: same as `--in-window-menus` (see [macOS: the menu bar](#macos-the-menu-bar)) |
+| `VECTORCRAFT_PRESENT_MODE` | Same as `--present-mode`, which overrides it: `fifo`, `autovsync` or `novsync`; any other value stops the app (see [Desktop graphics processor](#desktop-graphics-processor)) |
+| `VECTORCRAFT_FRAME_LATENCY` | Same as `--frame-latency`, which overrides it: `1` to `3` frames; any other value stops the app (see [Desktop graphics processor](#desktop-graphics-processor)) |
 | `VECTORCRAFT_NO_PREFS` | No preferences read or written, no default Data Recovery folder and no log file, and no saved PDF presets or loaded ICC profiles kept (agents' test runs; also for `vectorcraft-cli`) |
 | `VECTORCRAFT_CONFIG_DIR` | The folder for the preferences and the folders next to them (`PDF Presets`, `Color Profiles`, …), for the app and `vectorcraft-cli` (see `docs/control-protocol.md`) |
 | `WGPU_POWER_PREF` | Graphics adapter: `low`, `high` or `none` (see [Desktop graphics processor](#desktop-graphics-processor)) |
@@ -105,7 +113,7 @@ By default VectorCraft's own crates log at `info` and everything else at `warn`.
 
 ## macOS: the menu bar
 
-On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search icon and the workspace switcher next to the traffic lights, centred on the bar by `apps/vectorcraft/src/mac_window.rs`). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
+On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search field and the workspace switcher next to the traffic lights, centred on the bar by `apps/vectorcraft/src/mac_window.rs`). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
 
 - **One menu model.** `crates/ui-egui/src/native_menu.rs` (platform-free, tested on every platform) builds the menu bar from the in-window menus (`menus::menu_tree`, each item through `menus::entry`, which the in-window menus draw too) and lays it out the Mac way: the VectorCraft menu holds About, Settings ▸ (one item per Preferences page, General… ⌘K), Language ▸, Appearance ▸ (UI brightness), Services, Hide VectorCraft ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All and Quit ⌘Q (the app's own `app.quit`, so unsaved documents are asked about); those leave Edit and Help. The in-window bar itself never shows the VectorCraft menu (it starts at File, as in Illustrator, on every platform): Language and Appearance have no in-window menu and are synthesized in `mac_layout`, and Quit is File › Exit in the window, relabelled to Quit in the App menu. Window starts with Minimize ⌃⌘M and Zoom and ends with Bring All to Front, and Help is the system's Help menu (its search field). A system key a command (or a user's shortcut) already has stays the command's, and the log says so.
 - **The native side** is `apps/vectorcraft/src/mac_menu.rs`: muda (`=0.21.1`, default features off, macOS only, no `unsafe`) builds the `NSMenu`s. Labels, enabled and checked are updated in place when anything they show may have changed (a command ran, the document, its history or selection changed, a click or a key press); a change of structure (a recent file, the language, a shortcut) rebuilds the menus. While an interaction is open (for example a move, scale or shape drag, a dialog's preview or the font menu's preview), the app updates them for the document's changes only when the interaction begins and when it ends.
@@ -118,12 +126,12 @@ A file opened from the file manager (double-click, Open With, a drop on the exec
 
 ## Linux: Wayland and X11
 
-On GNOME/Wayland, enable **Preferences › User Interface › System Title Bar** and restart to use winit's font-free Adwaita window controls (`wayland-csd-adwaita-notitle`); the existing custom title bar remains the Linux default. On X11, on a Wayland compositor that draws server-side decorations such as KDE Plasma, and in a window opened through XWayland, enable **Preferences › User Interface › VectorCraft Title Bar on Every Desktop** and restart to use the app bar as the title bar instead of the desktop's frame. `VECTORCRAFT_TITLEBAR=app`, `=system` or `=desktop` chooses the frame for one run and takes precedence over System Title Bar and VectorCraft Title Bar on Every Desktop. The variable is case-sensitive and surrounding spaces are ignored; any other value, such as `unknown`, is ignored and does not override System Title Bar.
+On GNOME/Wayland, enable **Preferences › User Interface › System Title Bar** and restart to use winit's font-free Adwaita window controls (`wayland-csd-adwaita-notitle`); the app bar is the title bar by default only on a Wayland compositor that leaves the window's frame to the app, such as GNOME's, in a window not opened through XWayland (see the drop and pen items below). On X11, on a Wayland compositor that draws server-side decorations such as KDE Plasma, and in a window opened through XWayland, enable **Preferences › User Interface › VectorCraft Title Bar on Every Desktop** and restart to use the app bar as the title bar instead of the desktop's frame. `VECTORCRAFT_TITLEBAR=app`, `=system` or `=desktop` chooses the frame for one run and takes precedence over System Title Bar and VectorCraft Title Bar on Every Desktop. The variable is case-sensitive and surrounding spaces are ignored; any other value, such as `unknown`, is ignored and does not override System Title Bar.
 
 The window runs natively on Wayland (eframe's `wayland` feature) and on X11. On machines with two GPUs it renders on the one the desktop runs on unless Preferences say otherwise; see [Desktop graphics processor](#desktop-graphics-processor) (#502). The system clipboard (`apps/vectorcraft/src/clipboard.rs`) is arboard with its `wayland-data-control` feature:
 
-- **Clipboard:** under Wayland arboard talks to the compositor through the data-control protocol (wlroots compositors such as Sway and Hyprland, KDE Plasma), so bitmaps (`image/png`), SVG markup and text copied in any app paste (#398). Where the compositor lacks the protocol (GNOME's Mutter, [arboard#223](https://github.com/1Password/arboard/issues/223)), arboard falls back to the X11 clipboard through XWayland, which only holds what X11 apps copied. Where there is no X11 either (the Flatpak on a Wayland session: `--socket=fallback-x11` gives it none), Copy and Paste use the compositor's core data-device protocol on the window's own connection through smithay-clipboard: text only (a copy's text or its SVG markup), and only while the window has focus. smithay-clipboard waits for the owner's data with no limit, so its reads run on a worker thread and a Paste waits 2 s at most: an owner that never sends its data costs one Paste 2 s, and later reads return at once until it answers. A clipboard neither backend opens is tried again after 1 s, doubling to a minute (a Copy or Paste of the user's at most once a second), and logged once when it goes and once when it comes back: before, the background Paste check reconnected and logged a warning every 250 ms. egui's own text paste into fields goes through smithay-clipboard and works either way.
-- **Clipboard owners that never answer (#510):** reading the clipboard waits on the app that owns it: arboard gives up on an X11 owner after 4 s, and a Wayland read waits for the owner to send its data. So on Linux the check that enables the Paste menu items runs on a background thread with a second clipboard handle (`crates/ui-egui/src/clipboard_probe.rs`, installed as `Services::clipboard_probe`), only while nothing is copied in the app and a document is open, and the window keeps drawing. A paste itself still reads on the UI thread, so pasting from such an owner waits for it once. Windows and macOS keep the check on the UI thread: Windows only asks which formats the clipboard holds, macOS asks the pasteboard server.
+- **Clipboard:** under Wayland arboard talks to the compositor through the data-control protocol (wlroots compositors such as Sway and Hyprland, KDE Plasma), so bitmaps (`image/png`), SVG markup and text copied in any app paste (#398). Where the compositor lacks the protocol (GNOME's Mutter, [arboard#223](https://github.com/1Password/arboard/issues/223)), arboard falls back to the X11 clipboard through XWayland, which only holds what X11 apps copied. Where there is no X11 either (the Flatpak on a Wayland session: `--socket=fallback-x11` gives it none), Copy and Paste use the compositor's core data-device protocol (`wl_data_device`) on the window's own connection, and only while the window has focus. One Copy offers the PNG as `image/png`, the SVG as `image/svg+xml` (with Include SVG Code on) and the text as `text/plain;charset=utf-8`, `UTF8_STRING` and `text/plain`; a format with no data is not offered. Paste reads the files a file manager copied (`text/uri-list`, else `x-special/gnome-copied-files`; local `file:` URIs only, 1,024 at most), then `image/svg+xml`, then text, then `image/png`, and blank text or text that only names a picture gives way to the PNG; the Paste menu item is enabled by the types offered, without reading any data. Whether the clipboard still holds VectorCraft's Copy is told by its data source, which the compositor cancels when another app copies. A read takes 64 MiB at most and fails beyond that. Reads run on a worker thread: text waits 2 s at most on the UI thread, file lists, SVG and PNG 10 s on the paste's background thread. An owner that never sends its data costs one read its wait, and later reads return at once until it answers. When a text read gets no answer in its 2 s, the paste waits on its background thread for that read's answer, up to 10 s after the read was sent, then reads the clipboard again unless it holds VectorCraft's Copy. Another app's paste of a Copy is sent on a thread of its own, 8 at once at most; a paste beyond them gets nothing. A clipboard neither backend opens is tried again after 1 s, doubling to a minute (a Copy or Paste of the user's at most once a second), and logged once when it goes and once when it comes back: before, the background Paste check reconnected and logged a warning every 250 ms. egui's own text paste into fields goes through smithay-clipboard and works either way.
+- **Clipboard owners that never answer (#510):** reading the clipboard waits on the app that owns it: arboard gives up on an X11 owner after 4 s for each format it tries, and a Wayland read waits for the owner to send its data. So on Linux the check that enables the Paste menu items runs on a background thread with a second clipboard handle (`crates/ui-egui/src/clipboard_probe.rs`, installed as `Services::clipboard_probe`), only while nothing is copied in the app and a document is open, and the window keeps drawing. Every arboard read on Linux and the BSDs, including the UI thread's (a paste, and a Copy or Cut checking what the clipboard held), runs on a worker thread with a handle of its own and waits 2 s at most: an owner that never sends its data costs one read that wait, and later reads fail at once until it answers. A paste's bitmap read waits up to 10 s on the paste's background thread, so the UI thread does not wait for it. When one of a paste's reads gets no answer in its 2 s, or a paste follows a read that has not been answered yet, such as the paste's own check whether the clipboard still holds what VectorCraft copied, the paste waits on that thread for that read's answer, up to 10 s after the read was sent, and pastes what it holds. When the answer is what VectorCraft copied, holds nothing to paste, or does not come, the paste takes the internal clipboard. On X11, quitting within 25 s of a read that got no answer waits for that read to end, so the app's own handle is the last one and hands what it copied to the clipboard manager when one runs. That includes a read of the Paste menu check's handle: quitting waits up to 27 s for the background thread to drop it before the app drops its own, and quits after that wait even when the handle has not been dropped. The app takes its windows off screen before these waits (`apps/vectorcraft/src/quit_windows.rs`). An X11 main window, an XWayland one included, is hidden. winit cannot hide a native Wayland window, so on Linux the app attaches no buffer to the main window's surface, which unmaps it while the window and its connection stay open for the Wayland clipboard. On Linux the X11 windows of floating panels and documents are unmapped through a second X11 connection. On native Wayland, floating panels and documents are normally drawn inside the main window; on the BSDs a native Wayland main window stays on screen until the waits end. Windows and macOS keep the check on the UI thread: Windows only asks which formats the clipboard holds, macOS asks the pasteboard server.
 - **Copied files:** files copied in a file manager (`text/uri-list`; `CF_HDROP` on Windows, file URLs on macOS) paste as the first one that is art (SVG, PDF, EPS, EMF/WMF or a bitmap; a `.ai` or `.ait` file from the editing data it holds, else as the PDF or PostScript it holds), before the clipboard's other formats (which include the files' paths as text).
 - **Dropping files on the window does not work under Wayland:** winit 0.30, which eframe 0.37 runs on, has no Wayland drag and drop ([winit#1881](https://github.com/rust-windowing/winit/issues/1881), added in winit 0.31; [egui#1563](https://github.com/emilk/egui/issues/1563)), so no `dropped_files` arrive. Until eframe moves to winit 0.31: copy the files in the file manager and paste them, use File › Place or Open, or open the window through XWayland, where drops work: set **Preferences › Performance › Linux Display Server** to **X11 (XWayland)** and restart (#1151), or start the app with `WAYLAND_DISPLAY= vectorcraft`. The preference (`linuxDisplayServer`, read at startup in `apps/vectorcraft/src/main.rs`, shown on Linux only) has winit open the window on X11 (`EventLoopBuilderExtX11::with_x11`) when the session is Wayland, `DISPLAY` is set and the X11 libraries winit loads are installed (`apps/vectorcraft/src/xwayland.rs` reads `ldconfig -p` and the usual library directories); otherwise the window opens on Wayland and the log says why. Unlike clearing `WAYLAND_DISPLAY`, it leaves the clipboard on the compositor's own.
 - **Pens and pen displays under Wayland (#491, #2028):** winit 0.30 doesn't bind the Wayland tablet protocol (`zwp_tablet_v2`; tablet input arrives in winit 0.31, [winit#4318](https://github.com/rust-windowing/winit/pull/4318), [egui#7731](https://github.com/emilk/egui/pull/7731)). Since Plasma 6.3, KWin no longer turns tablet input into pointer input for such apps ([kwin!6336](https://invent.kde.org/plasma/kwin/-/merge_requests/6336), commit [25c65abd](https://invent.kde.org/plasma/kwin/-/commit/25c65abddd95eb87fb892a8594faccbf509ff62f)), and GNOME's Mutter does not turn it into pointer input either (that commit's message): on KWin the pen moves the compositor's cursor over the window, but the app gets no motion or presses and shows none of its own cursors. Until eframe moves to winit 0.31, the app runs under XWayland, which supports the tablet protocol and hands the pen to X11 apps as a pointer: Preferences › Performance › Linux Display Server's Automatic (the default) and X11 (XWayland) When a Pen Is Attached (`x11WithPen`) open the window through XWayland when `/proc/bus/input/devices` lists a pen as the app starts, a device with the `BTN_TOOL_PEN` key and the `ABS_X` and `ABS_Y` axes, and log `pen found: opening the window through XWayland`, as PhotoCraft does (#4967; `VECTORCRAFT_NATIVE_WAYLAND=1` keeps the window on Wayland). For a pen attached after the app started, either run the app under XWayland (Preferences › Performance › Linux Display Server › X11 (XWayland); `WAYLAND_DISPLAY= vectorcraft`, or `env -u WAYLAND_DISPLAY vectorcraft`; for a desktop launcher, put `env WAYLAND_DISPLAY=` before the command in its `Exec=` line), or turn KWin's deprecated emulation back on for the whole session by setting `KWIN_WAYLAND_EMULATE_TABLET=1` in KWin's environment (for example in a file under `~/.config/environment.d/` or in `/etc/environment`) and logging in again. The pen then works as a mouse. Under XWayland the app also reads the pen's pressure (next item); with KWin's emulation on native Wayland the pen has no pressure. Other compositors that don't emulate a pointer for tablets behave the same way.
@@ -163,10 +171,13 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   All other supplied faces follow those existing document fallbacks in manifest order, so they
   can also be selected by family name. This does not change which faces the web build embeds
   or fetches, and no craft-fonts faces are registered when the optional input is absent.
-- UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first, then
-  Noto Sans Georgian for the Georgian interface), after the UI fonts and before the installed fonts
-  `ui_fonts.rs` discovers for other scripts. On the web, Noto Sans Georgian is fetched at startup
-  and reaches the UI through `ui_fonts.rs`.
+- UI: `ui_fonts()` (`crates/ui-egui/src/ui_fonts.rs`) hands them to the framework's interface font
+  stack, which puts the UI language's faces after the interface face (ahead of it for a script
+  that face lacks and that doesn't fit a Latin row, such as Georgian), then the other scripts'
+  faces, then the installed fonts it finds for other scripts on the desktop. On the web the
+  `startup` and `demand` faces of `crates/text/web-fonts.txt` are served under `fonts/ui/`
+  instead: the stack fetches the UI language's at once and the others the first time text needs
+  them.
 - Tests that need Japanese or Georgian glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
@@ -184,18 +195,18 @@ and text has no glyphs until a font is added.
 
 An embedder that also hosts the egui panels depends on `vectorcraft-ui-egui` with
 `default-features = false` as well: its own `bundled-fonts` feature, on by default, turns the
-engine's on; `vectorcraft-mcp` has the same feature. The panels' interface faces (Source Sans 3
-Regular and Semibold, Inter Regular and SemiBold, JetBrains Mono, about 2 MB: `theme.rs`) are
-`vectorcraft-ui-egui`'s `interface-fonts` feature, also on by default; without it the panels draw in
-egui's built-in fonts, which lack some symbols they show (→ ▾ ● ✓), so such an embedder adds a
-font that has them to each of the families below (`ctx.add_font` with an `InsertFontFamily` per
-family).
+engine's on; `vectorcraft-mcp` has the same feature. The panels' interface faces come from the
+framework, with or without these features: Inter Regular and SemiBold (cut to Latin, Greek and
+Cyrillic) and egui's Hack for monospace, which craft-fonts' monospace face leads when the build
+embeds it. `vectorcraft-ui-egui`'s `interface-fonts` feature is still declared but changes nothing.
 
-The panels and dialogs draw in their own egui families (`theme::FONT_UI`, `FONT_UI_SEMIBOLD`,
-`FONT_MONO`), and egui panics drawing text in a family no font is bound to. `VectorcraftApp::logic`
-binds them on its first frame; an embedder that draws the panels or dialogs without it calls
-`theme::install_fonts` once on its context, with or without `interface-fonts`. It replaces the
-context's font definitions, so the embedder's own fonts are added after it.
+The panels and dialogs draw in egui's proportional and monospace families and the framework's
+semibold family (`craft::ui::fonts::SEMIBOLD`), and egui panics drawing text in a family no font is
+bound to. `embed::install(ctx, spec, &vectorcraft_ui_egui::ui_fonts())` binds them; the desktop and
+web apps call it once when they create the app (the web app adds `.fetcher(BrowserFetcher)` so the
+served faces are fetched), and an embedder that draws the panels or dialogs calls it once on its
+context. It replaces the context's font definitions, so an embedder's own faces go into the stack
+(`ui_fonts().app_face(…)`) before it is installed.
 
 - The workspace declares `vectorcraft-text` and `vectorcraft-engine` without default features, so
   each crate that wants the fonts asks for them (the apps, and `vectorcraft-testkit` for tests);
@@ -208,9 +219,9 @@ context's font definitions, so the embedder's own fonts are added after it.
   see that configuration, since their dev-dependencies turn the fonts on.
 - `cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts` checks the
   configuration without them, and `cargo test -p vectorcraft-ui-egui --no-default-features --test
-  install_fonts` that the panels without their interface faces still bind every family; the same
-  step lints `vectorcraft-ui-egui` without its default features. Of the crate's other tests, those
-  about the interface faces need them.
+  install_fonts` that the fonts `embed::install` sets up bind the proportional, monospace and
+  semibold families, so an effect dialog draws; the same step lints `vectorcraft-ui-egui` without
+  its default features.
 
 ### Arabic fonts and the web build
 
@@ -291,12 +302,26 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). Czech, German, Greek, Spanish, French, Georgian, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish and Catalan
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). A template needs text
+  between any two placeholders, since the catalog cannot tell where `{a}{b}` splits: make the message with the
+  side-by-side values joined into one (`unknown parameter `{key}``, where `key` is `marks.ofset`). The catalog
+  leaves out a row whose template has two placeholders in a row or no text; `i18n::tests` fails on such a row
+  and on such a message, and the untranslated report counts it as missing. A value that starts with
+  `{` is translated only when it has an exact row, so a JSON object stays as it is; a value that starts with `[` is
+  also matched against a template that starts with `[` and an index of digits, such as an effect's refusal
+  ``[{j}] `{_1}`: {why}``, so its reason is translated while a JSON array stays as it is. A literal brace in a
+  row is written `{{` or `}}`, in the English and in the translation: a message made with `format!` keeps the
+  doubled braces of its format string, and a plain string literal has each of its braces doubled, so the row for
+  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch, Danish, Indonesian and Bulgarian
   translate status and error messages (`COMPLETE_MESSAGES` in `i18n::tests`); the untranslated report lists the
-  message literals the scan finds that one of them has no row for. The scan reads `Err("…")`, `Other(…)`,
+  message literals the scan finds, and the phrases a parameter schema's error builds at run time
+  (`SCHEMA_PHRASES`), that one of them has no row for. The scan covers the crates in `MESSAGE_CRATES`, the
+  effects and the crates whose errors the engine passes on included. It reads `Err("…")`, `Other(…)`,
   `#[error(…)]` and `status(…)` messages, messages given to an error enum's variant (`PsError::Limit(…)`, the reason
   in `EngineError::Disabled(id, …)`), to the engine's `bad(cmd, …)`, `err(…)` or `error(…)`, and to the PDF writer's
-  `bad(…)` or `failed(…)`, and skips calls inside comments
+  `bad(…)` or `failed(…)`, and the messages a `.map_err(|e| …)` closure returns (from each `if` branch,
+  `match` arm and statement of a block) or the handler a `.map_err(name)` names returns (a closure bound with `let name = |e| …;` or a
+  function `fn name(…)`), and skips calls inside comments
   (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui dump_source_strings` lists them
   all). A missing row shows the English message. Other languages show messages in English until they add `@msg`
   rows.
@@ -309,7 +334,11 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
 
 ## Cursors
 
-`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (CLAUDE.md › Adding a cursor). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (see Adding a cursor below). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+
+### Adding a cursor
+
+The app decides which cursors exist; whoever draws them works from the list. For a new tool state with a cursor of its own: add the `Cursor` variant (`crates/tools/src/lib.rs`, with a doc comment), return it from the tool's `cursor()` with a tool test, map it in `cursors::tool_cursor` (`crates/ui-egui/src/cursors.rs`), using a catalog icon or an SVG in `assets/cursors/` (with its `ASSETS.md` row and `CURSOR_ICONS` entry), or give it a stand-in in `Cursor::stand_in()` until it is drawn, and add its `[[cursor]]` entry to `crates/tools/src/cursors.toml` (when it shows, in plain behaviour terms, and its hotspot). A missing entry only warns (`cargo xtask cursors`): the cursor still works.
 
 ## Vendor names gate
 
@@ -348,6 +377,10 @@ parameters. Shipped code therefore never panics. Anything that can fail returns 
 `Option`), the caller handles or propagates it, and the user sees an error message.
 
 ### Enforced by lints
+
+The clipboard timeout failure helper is compiled for Linux/BSD workers and unit tests; production
+macOS reads synchronously. Keep helper target gates aligned with their callers instead of disabling
+dead-code warnings across the workspace.
 
 `Cargo.toml` denies these clippy lints for the whole workspace, and `cargo xtask ci` runs clippy with
 `-D warnings`. The gate targets the current stable Rust (`rust-version` in `Cargo.toml` is only the
@@ -477,7 +510,36 @@ to the source tab resumes a move (Alt copies). Escape or release outside the can
 Changing the source revision or unexpectedly changing/closing the destination cancels a stale
 transfer; focus loss, touch cancellation and multitouch cancel too. Moving tabs under a stationary
 pointer does not activate further tabs until the pointer moves. The close icon does not activate a tab during a drag. Overflow-menu hover activation and
-cross-window dragging remain outside this change.
+dragging into a floating document window that is an OS window of its own remain outside this change.
+
+Under Window › Arrange › Tile, a Selection move released over another document's pane copies the
+artwork into that document through `edit.dropSelection`, with no tab hover first. The pane becomes
+the current window, the grab point lands under the pointer in that pane's own zoom and rotation, and
+the source move is rolled back, including when the pointer enters the pane and the button is released
+in the same frame. A release over another view of the source document (Window › New Window) moves the
+artwork there with `object.move`, and Alt copies it. While the artwork is held over a pane, the cursor
+shows a copy or a move. A release over a pane's rulers or scroll bars, or after Escape, changes
+neither document. A press in another pane with no artwork carried still only makes its document
+current. Page 14 of [the help page](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf)
+describes documents arranged side by side, with items dragged from one document into another.
+Evidence: the `canvas::panes` tests drive real pointer frames from the current pane into another
+document's pane, back the other way, into another view, through a tab into a third document's pane,
+and off a pane's art area.
+
+The same release works for documents in floating windows (Window › Arrange › Float in Window) where
+those windows are drawn inside the main window: on the web, on Wayland and with a control channel
+attached. A Selection move released over the art area of another document's floating window copies
+the artwork into that document, and one released over the pane the main window draws while the
+current document floats copies it into the main window's document. A floating window that shows
+another view of the source document takes a move, and Alt copies. The release is taken at the start
+of the frame, before any canvas sees it, so a release in the first frame over a window still drops the
+artwork. A release on a window's title bar, rulers or scroll bars, or after Escape, changes neither
+document. A floating window that is an OS window of its own, the default on Windows, macOS and X11,
+does not take the artwork: its pointer positions are in that window's points, not the main window's.
+Evidence: the `doc_windows` tests drive real pointer frames from the main window's canvas into a
+floating window (rotated and zoomed, and in the frame the pointer arrives), from a floating window
+into the main window's pane, into a floating view of the same document, and onto a title bar and
+after Escape, and check that no OS window's pane is noted.
 The cited regressions assert the internal clipboard; they do not exercise the native
 system-clipboard adapter. Tab activation resets the Selection tool through
 `Session::set_active`; gesture regressions verify it is idle after switching, dropping
@@ -506,6 +568,9 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-24 | minor | Fonts: the interface font stack is the framework's, set up by `ui_fonts()` and installed by `embed::install` (craft-fonts faces, the web's served faces, embedders); `theme::install_fonts` is gone and `interface-fonts` changes nothing. |
+| 2026-11-12 | minor | Tests (#6860): compare preset refusal roots after canonicalization and Windows display normalization; canonicalize the script fixture base before constructing `MAIN`. This keeps macOS `/var` → `/private/var` aliases from masking the case-sensitivity checks; no production-code change. |
+| 2026-11-12 | minor | Compile the clipboard failure helper only for Linux/BSD worker callers and unit tests; keep production macOS free of the unused helper without suppressing workspace dead-code warnings. |
 | 2026-11-06 | minor | Localisation: Hindi catalog, zero/one plurals, desktop and web font requirements; AI/MT draft, native review pending. |
 | 2026-10-31 | minor | Files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance` opts out. |
 | 2026-10-29 | minor | Linux clipboard: core Wayland protocol text fallback where arboard has neither data-control nor X11 (the Flatpak on GNOME).; its reads wait 2 s at most. |

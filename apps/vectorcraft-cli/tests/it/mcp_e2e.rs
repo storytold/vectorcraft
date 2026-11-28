@@ -6,8 +6,6 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use serde_json::{Value, json};
 use vectorcraft_testkit::raster::Image;
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft-cli");
-
 struct Mcp {
     child: Child,
     stdin: Option<ChildStdin>,
@@ -17,7 +15,7 @@ struct Mcp {
 
 impl Mcp {
     fn spawn() -> Self {
-        let mut child = Command::new(BIN)
+        let mut child = Command::new(crate::bin())
             .args(["mcp", "--headless"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

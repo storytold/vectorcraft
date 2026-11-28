@@ -93,7 +93,7 @@ fn too_many_guide_pieces_are_refused() {
     let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
     for i in 1..3000 {
         for vertical in [true, false] {
-            doc.guides.push(vectorcraft_doc::Guide::new(vertical, f64::from(i) * 0.1));
+            doc.add_ruler_guide(&vectorcraft_doc::Guide::new(vertical, f64::from(i) * 0.1));
         }
     }
     assert!(s.execute("object.slice.fromGuides", &json!({})).unwrap_err().to_string().contains("more than"));
@@ -440,9 +440,9 @@ fn a_canceled_undo_scope_leaves_locked_or_hidden_slices_deselected() {
 
 /// Select slice `id` and the first ruler guide together, through [`Session::select`].
 fn pick_slice_and_guide(s: &mut Session, id: u64) {
-    s.select(|_, sel| {
+    s.select(|d, sel| {
         sel.slices = vec![NodeId(id)];
-        sel.guides = vec![0];
+        sel.guides = d.ruler_guides().first().and_then(|g| g.id).into_iter().collect();
     })
     .unwrap();
 }

@@ -9,8 +9,9 @@ use crate::*;
 
 /// Every file reads as a 40×20 artboard filled blue; a file whose bytes start with `loop` also
 /// places itself (the same key) in its middle, one whose bytes start with `cut` also shows an
-/// image whose pixels can't be decoded over its left half, and one whose bytes start with `bad`
-/// can't be read.
+/// image whose pixels can't be decoded over its left half, one whose bytes start with `pict` also
+/// shows a linked red image over its left half (its own Show Images in Outline Mode off), and one
+/// whose bytes start with `bad` can't be read.
 fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     if bytes.starts_with(b"bad") {
         return None;
@@ -31,6 +32,22 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
             pixels: None,
         };
         children.push(Arc::new(Node::new(NodeId(3), NodeKind::Image(Box::new(im)))));
+    }
+    if bytes.starts_with(b"pict") {
+        let raw = [255u8, 0, 0, 255].repeat(16);
+        let red = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, raw).ok()?;
+        let png = craft_image_codecs::encode(&red, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
+        d.images.insert("pict-image".into(), ImageBlob::new("image/png", png.to_vec()));
+        let im = vectorcraft_doc::ImageObject {
+            key: "pict-image".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::scale(5.0),
+            link: Some(LinkInfo::new("/art/red.png")),
+            placement: Default::default(),
+            pixels: None,
+        };
+        children.push(Arc::new(Node::new(NodeId(4), NodeKind::Image(Box::new(im)))));
     }
     if bytes.starts_with(b"loop") {
         d.images.insert(p.key.clone(), ImageBlob::new("application/json", bytes.to_vec()));
@@ -130,12 +147,101 @@ fn a_placed_document_draws_exactly_with_its_own_art() {
 }
 
 #[test]
+fn outline_mode_draws_a_placed_document_as_its_box_crossed_unless_the_setup_shows_images() {
+    let outline = |d: &Document| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+        Renderer::new().render(d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let inked = |r: &Rendered, x: u32, y: u32| r.pixel(x, y)[0] < 200;
+    // The box is (10, 10)–(90, 50): (20, 15) is on its diagonal from the top left. The file places
+    // itself again in the box (30, 20)–(70, 40), whose top edge passes (50, 20) and whose diagonal
+    // from the top left passes (35, 22).
+    let mut d = doc_with("outline-cross-1", b"loop");
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "the box is crossed from corner to corner");
+    assert!(!inked(&r, 50, 20), "none of the file's art is drawn");
+    // The file's own setup has Show Images in Outline Mode off; this document's setting applies
+    // to the art inside it.
+    d.setup.outline_images = true;
+    let r = outline(&d);
+    assert!(!inked(&r, 20, 15), "with Show Images in Outline Mode it is not crossed");
+    assert!(inked(&r, 50, 20), "and its art is drawn in outline");
+    assert!(!inked(&r, 35, 22), "nor is the file it places");
+    // A drop shadow does not change what Outline mode shows.
+    let mut d = doc_with("outline-cross-2", b"loop");
+    let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a placed document with a drop shadow is crossed");
+    assert!(!inked(&r, 50, 20), "and none of the file's art is drawn");
+    // The same in a clip group, whose members Outline mode draws one by one.
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut clip = Node::path(NodeId(71), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let group = Node::new(NodeId(70), NodeKind::Group { children: vec![Arc::new(clip), placed], clip: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group).unwrap();
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a clipped placed document with a drop shadow is crossed");
+    assert!(!inked(&r, 50, 20), "and none of its file's art is drawn");
+    // A color adjustment changes no geometry either.
+    let mut d = doc_with("outline-cross-3", b"loop");
+    let params = serde_json::json!({"brightness": 50});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "adjust.brightnessContrast".into(),
+        params,
+        visible: true,
+    });
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a placed document with a color adjustment is crossed");
+    assert!(!inked(&r, 50, 20), "and none of its file's art is drawn");
+    // A Transform effect reshapes the file's art, read when the crossed box was drawn: its rectangle
+    // is drawn moved 40 points down to (10, 50)–(90, 90), its bottom edge at y = 90, with no cross
+    // through it ((20, 55) is on its diagonal) or where the box was.
+    let mut d = doc_with("outline-cross-4", b"loop");
+    assert!(inked(&outline(&d), 20, 15), "first drawn crossed");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 50, 89) || inked(&r, 50, 90), "the file's art is drawn moved");
+    assert!(!inked(&r, 20, 55), "uncrossed");
+    assert!(!inked(&r, 20, 15), "and nothing is drawn where the box was");
+    // The same when the box was first drawn crossed with a drop shadow.
+    let mut d = doc_with("outline-cross-5", b"loop");
+    let shadow = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: shadow,
+        visible: true,
+    });
+    assert!(inked(&outline(&d), 20, 15), "first drawn crossed with a drop shadow");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 50, 89) || inked(&r, 50, 90), "the file's art is drawn moved after a drop shadow");
+}
+
+#[test]
+fn outline_mode_shows_a_linked_image_in_a_placed_document_by_this_documents_setup() {
+    // The file's red image is (10, 10)–(50, 50) here; (35, 30) is inside it, off its diagonals and
+    // off the placed box's.
+    let mut d = doc_with("outline-pict-1", b"pict");
+    d.setup.outline_images = true;
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    let [red, green, blue, _] = r.pixel(35, 30);
+    assert!(red == green && green == blue && (50..=58).contains(&red), "the image's gray pixels, not crossed: {:?}", r.pixel(35, 30));
+}
+
+#[test]
 fn an_enveloped_placed_document_shows_its_file_once_read() {
     let mut d = doc("enveloped-1");
     let placed = d.remove(NodeId(50)).unwrap();
     let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("a placed document") };
     let p = (**p).clone();
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let envelope = NodeKind::Envelope {
         content: vec![placed],
         kind: Box::new(kind),
@@ -374,7 +480,41 @@ fn a_placed_document_kept_as_its_preview_draws_the_preview() {
     // Only the preview (a 20×10 green PNG) is there, and the file can't be read here.
     let img = image::RgbaImage::from_pixel(20, 10, image::Rgba([0, 200, 0, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut blob = ImageBlob::new("image/png", png);
     blob.proxy = Some(blob.bytes.clone());
     d.images.insert("preview-1".into(), blob);

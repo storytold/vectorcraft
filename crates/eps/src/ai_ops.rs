@@ -3,11 +3,9 @@
 //! Format Specification, version 7.0, §5.3, §5.4 and §6), and the colors they write in place of
 //! the paint they can't hold.
 
-use std::fmt::Write;
-
 use vectorcraft_color::{Color, Gradient};
 use vectorcraft_doc::{LAYER_COLORS, LayerColor, LineCap, LineJoin, StrokeLayer};
-use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, SubPath};
+use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, Shape, SubPath};
 
 use crate::ps;
 
@@ -36,10 +34,8 @@ pub(crate) fn subpath(s: &mut String, xf: Affine, sp: &SubPath) {
             s.push_str(if smooth { "c\n" } else { "C\n" });
         }
     };
-    for pair in sp.anchors.windows(2) {
-        if let [a, b] = pair {
-            segment(s, a, b);
-        }
+    for (a, b) in sp.anchors.iter().zip(sp.anchors.iter().skip(1)) {
+        segment(s, a, b);
     }
     if sp.closed
         && sp.anchors.len() > 1
@@ -103,35 +99,98 @@ pub(crate) fn unit(v: f32) -> f32 {
     if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
 }
 
-/// The average colour of a gradient's stops (in RGB).
+/// `color` as a reader reads it back from the values written for it ([`ps::written`]): RGB values
+/// clamped to 0..1, L to 0..100 and a and b to -128..127, each to four decimals; other colors
+/// unchanged.
+pub(crate) fn as_written(color: Color) -> Color {
+    let w = |v: f32| ps::written(f64::from(v)) as f32;
+    match color {
+        Color::Rgb { r, g, b } => Color::rgb(w(unit(r)), w(unit(g)), w(unit(b))),
+        Color::Lab { l, a, b } => Color::lab(w(l.clamp(0.0, 100.0)), w(a.clamp(-128.0, 127.0)), w(b.clamp(-128.0, 127.0))),
+        c => c,
+    }
+}
+
+/// The RGB values written for `color`, clamped to 0..1, in the working RGB space, as a reader
+/// reads them back: an RGB color's own values, any other color's display RGB converted into the
+/// working RGB space.
+pub(crate) fn rgb_values(color: Color) -> [f32; 3] {
+    match color {
+        Color::Rgb { r, g, b } => [r, g, b].map(unit),
+        c => vectorcraft_color::cms::active().srgb_to_rgb(c.to_rgb()).map(unit),
+    }
+}
+
+/// The average color of a gradient's stops: the average of their display RGB, as an RGB color in
+/// the working RGB space.
 pub(crate) fn average(g: &Gradient) -> Color {
     let n = g.stops.len().max(1) as f32;
     let sum = g.stops.iter().map(|s| s.color.to_rgb()).fold([0.0f32; 3], |a, c| [a[0] + c[0], a[1] + c[1], a[2] + c[2]]);
-    Color::rgb(unit(sum[0] / n), unit(sum[1] / n), unit(sum[2] / n))
+    let [r, green, b] = vectorcraft_color::cms::active().srgb_to_rgb(sum.map(|v| v / n)).map(unit);
+    Color::rgb(r, green, b)
+}
+
+/// The pixels an image's part keeps past the edge of the region that shows it, on each side: as
+/// many as smoothing reads from beside a pixel, and one more.
+const WINDOW_MARGIN: f64 = 2.0;
+
+/// The part of an image of `w` × `h` pixels, which `to_doc` places in the document, that regions
+/// `clips` (each in the document, the image cut to all of them) show, with [`WINDOW_MARGIN`] pixels
+/// more on each side: `[x0, y0, x1, y1]`, in pixels from the top left. One pixel of the image, the
+/// nearest to where the regions are, when they show none of it. `None` when that part has half the
+/// image's pixels or more, or when `to_doc` can't be undone; the whole image is written then.
+pub(crate) fn image_window(clips: &[kurbo::BezPath], to_doc: Affine, (w, h): (u32, u32)) -> Option<[u32; 4]> {
+    if clips.is_empty() || w == 0 || h == 0 || !to_doc.is_finite() || to_doc.determinant().abs() < 1e-12 {
+        return None;
+    }
+    let to_pixels = to_doc.inverse();
+    let (mut x0, mut y0, mut x1, mut y1) = (0.0, 0.0, f64::from(w), f64::from(h));
+    for clip in clips {
+        let b = (to_pixels * clip.clone()).bounding_box();
+        if !b.is_finite() {
+            return None;
+        }
+        x0 = f64::max(x0, b.x0.floor() - WINDOW_MARGIN);
+        y0 = f64::max(y0, b.y0.floor() - WINDOW_MARGIN);
+        x1 = f64::min(x1, b.x1.ceil() + WINDOW_MARGIN);
+        y1 = f64::min(y1, b.y1.ceil() + WINDOW_MARGIN);
+    }
+    if x0 >= x1 || y0 >= y1 {
+        let (x, y) = ((x0 as u32).min(w - 1), (y0 as u32).min(h - 1));
+        return Some([x, y, x + 1, y + 1]);
+    }
+    if 2.0 * (x1 - x0) * (y1 - y0) >= f64::from(w) * f64::from(h) {
+        return None;
+    }
+    Some([x0 as u32, y0 as u32, x1 as u32, y1 as u32])
+}
+
+/// The rows `y0..y1` and columns `x0..x1` (`window`) of `samples`, `w` pixels a row of `channels`
+/// bytes each, rows from the top.
+pub(crate) fn window_samples(samples: &[u8], w: u32, channels: usize, [x0, y0, x1, y1]: [u32; 4]) -> Vec<u8> {
+    let row = w as usize * channels;
+    let (from, to) = (x0 as usize * channels, x1 as usize * channels);
+    let mut out = Vec::with_capacity((y1 - y0) as usize * (to - from));
+    for y in y0 as usize..y1 as usize {
+        if let Some(part) = samples.get(y * row + from..y * row + to) {
+            out.extend_from_slice(part);
+        }
+    }
+    out
 }
 
 /// The stroke's width, cap, join, miter limit and dashes: `w J j M d`.
 pub(crate) fn line_style(s: &mut String, st: &StrokeLayer) {
     let cap = match st.cap {
-        LineCap::Butt => 0,
-        LineCap::Round => 1,
-        LineCap::Square => 2,
+        LineCap::Butt => ps::LineCap::Butt,
+        LineCap::Round => ps::LineCap::Round,
+        LineCap::Square => ps::LineCap::Square,
     };
     let join = match st.join {
-        LineJoin::Miter => 0,
-        LineJoin::Round => 1,
-        LineJoin::Bevel => 2,
+        LineJoin::Miter => ps::LineJoin::Miter,
+        LineJoin::Round => ps::LineJoin::Round,
+        LineJoin::Bevel => ps::LineJoin::Bevel,
     };
-    ps::push_num(s, st.width);
-    let _ = write!(s, " w {cap} J {join} j ");
-    ps::push_num(s, if st.miter_limit.is_finite() { st.miter_limit.max(1.0) } else { 10.0 });
-    s.push_str(" M [");
-    let dash = st.dash.as_ref().filter(|d| d.is_dashed());
-    if let Some(d) = dash {
-        ps::push_nums(s, &d.pattern);
-        s.pop();
-    }
-    s.push_str("] ");
-    ps::push_num(s, dash.map_or(0.0, |d| d.offset));
-    s.push_str(" d\n");
+    let dash = st.dash.as_ref().filter(|d| d.is_dashed()).map(|d| (d.pattern.as_slice(), d.offset));
+    ps::push_line_style(s, st.width, cap, join, st.miter_limit, dash);
 }

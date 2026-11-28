@@ -156,6 +156,36 @@ fn id_lists_points_and_color_lists_count_toward_the_nesting_limit() {
     assert!(check(MAX_DEPTH, &Type::Color, &json!("#ff0000")).is_ok());
 }
 
+/// `ty` inside `levels` lists.
+fn in_lists(levels: usize, ty: Type) -> Type {
+    (0..levels).fold(ty, |inner, _| Type::Array(Box::leak(Box::new(inner))))
+}
+
+/// `v` inside `levels` lists.
+fn wrapped(levels: usize, v: Value) -> Value {
+    (0..levels).fold(v, |inner, _| Value::Array(vec![inner]))
+}
+
+/// The schema check and the value check agree on the fixed-shape lists at the nesting limit: an id
+/// list or a point there could take no value, so the schema is wrong in itself, and a color there
+/// takes a string, while a color list is refused as nested too deeply, at its path.
+#[test]
+fn fixed_shape_lists_at_the_nesting_limit_follow_the_schema_check() {
+    for ty in [Type::Ids, Type::Point, Type::Color] {
+        assert_eq!(one(in_lists(MAX_DEPTH - 1, ty)).definition_problem(), None, "{ty:?}");
+    }
+    for ty in [Type::Ids, Type::Point] {
+        let problem = one(in_lists(MAX_DEPTH, ty)).definition_problem();
+        assert!(problem.as_deref().is_some_and(|p| p.contains("nests deeper")), "{ty:?}: {problem:?}");
+    }
+    let color = one(in_lists(MAX_DEPTH, Type::Color));
+    assert_eq!(color.definition_problem(), None);
+    assert_eq!(color.validate(&json!({"x": wrapped(MAX_DEPTH, json!("#ff0000"))})).unwrap(), None);
+    let e = color.validate(&json!({"x": wrapped(MAX_DEPTH, json!([1, 0, 0]))})).unwrap_err();
+    assert_eq!(e.problem, Problem::TooDeep);
+    assert_eq!(e.path, format!("x{}", "[0]".repeat(MAX_DEPTH)));
+}
+
 #[test]
 fn a_saved_retired_key_past_the_nesting_limit_is_refused() {
     let params = holding("older", nested_lists(500_000));

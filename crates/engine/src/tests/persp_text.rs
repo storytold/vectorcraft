@@ -378,6 +378,60 @@ fn flare_spiral_and_polar_grid_draw_in_perspective() {
     assert_eq!(attached(&s, NodeId(r["id"].as_u64().unwrap())).map(|a| a.0), Some(Plane::Left));
 }
 
+/// Alt-click (Option-click on macOS) with the Flare tool draws one flare with the tool's options as
+/// one undo step, without a dialog. On the active plane it is the flare the click-opened Flare Tool
+/// Options draw there; without the grid it is drawn flat. A plain click opens the dialog.
+#[test]
+fn an_alt_click_with_the_flare_tool_draws_the_flare_the_click_dialog_draws() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, _) = persp_session();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "left"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("flare", v).unwrap();
+    s.set_tool_option_cmd(&json!({"tool": "flare", "values": {"diameter": 40, "rays": 6, "ringsOn": false}})).unwrap();
+    let options = s.tool_options_of("flare");
+    let at = Point::new(300.0, 380.0);
+    let alt = Mods { alt: true, ..Default::default() };
+    let alt_click = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(alt), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y).with_mods(alt), v).unwrap()
+    };
+    let n = undo_len(&s);
+    assert_eq!(alt_click(&mut s), vec![], "no dialog");
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.journal.last().unwrap().0, "perspective.draw");
+    let id = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert_eq!(attached(&s, id).map(|a| a.0), Some(Plane::Left));
+    let drawn = node(&s, id).geometric_bounds().unwrap();
+    assert_eq!(s.tool_options_of("flare"), options, "the click leaves the options as they are");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_none());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(node(&s, id).geometric_bounds(), Some(drawn));
+    s.execute("edit.undo", &json!({})).unwrap();
+    let params = vectorcraft_tools::extra::flare_params(&options, at);
+    let (cmd, p) = crate::perspective_click(&s, "shape.flare", &params, at).unwrap();
+    let dialog = NodeId(s.execute(&cmd, &p).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(node(&s, dialog).geometric_bounds(), Some(drawn), "the flare the dialog's OK draws");
+    // A click above the ground plane's horizon draws nothing and reports the error.
+    s.execute("perspective.plane.set", &json!({"plane": "ground"})).unwrap();
+    let above = grid(&s).horizon - 50.0;
+    let n = undo_len(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, above).with_mods(alt), v).unwrap();
+    assert!(s.pointer(&PointerEvent::new(PointerKind::Up, at.x, above).with_mods(alt), v).is_err());
+    assert_eq!(undo_len(&s), n);
+    // Without the grid the flare is drawn flat; a plain click opens the dialog.
+    s.execute("perspective.grid.show", &json!({"visible": false})).unwrap();
+    assert_eq!(alt_click(&mut s), vec![]);
+    assert_eq!(s.journal.last().unwrap().0, "shape.flare");
+    let flat = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert_eq!(attached(&s, flat), None);
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y), v).unwrap();
+    let ui = s.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y), v).unwrap();
+    assert_eq!(ui, vec![UiRequest::Dialog("flare".into(), json!({"x": at.x, "y": at.y}))]);
+}
+
 #[test]
 fn click_to_size_dialogs_draw_on_the_active_plane_in_plane_units() {
     let (mut s, _) = persp_session();
@@ -397,6 +451,22 @@ fn click_to_size_dialogs_draw_on_the_active_plane_in_plane_units() {
     // Without a shown grid (or with no active plane) nothing changes.
     s.execute("perspective.plane.set", &json!({"plane": "none"})).unwrap();
     assert!(crate::perspective_click(&s, "shape.rectangle", &json!({}), at).is_none());
+}
+
+/// The Ellipse dialog's anchor count reaches the ellipse drawn on the active plane.
+#[test]
+fn an_ellipse_of_six_anchors_made_by_a_click_draws_on_the_active_plane() {
+    let (mut s, _) = persp_session();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "right"})).unwrap();
+    let at = Point::new(470.0, 300.0);
+    let p = json!({"x": at.x, "y": at.y, "width": 50, "height": 30, "anchors": 6});
+    let (cmd, p) = crate::perspective_click(&s, "shape.ellipse", &p, at).unwrap();
+    let n = undo_len(&s);
+    let id = NodeId(s.execute(&cmd, &p).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(attached(&s, id).map(|a| a.0), Some(Plane::Right));
+    assert_eq!(node(&s, id).path_data().unwrap().anchor_count(), 6);
 }
 
 #[test]

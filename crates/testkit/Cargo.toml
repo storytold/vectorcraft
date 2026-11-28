@@ -20,6 +20,6 @@ vectorcraft-svg = { workspace = true }
 kurbo = { workspace = true }
 serde_json = { workspace = true }
 proptest = { workspace = true }
-image = { workspace = true }
+craft-image-codecs = { workspace = true }
 # A Group 4 encoder and the T.4 run codes, to write CCITT Group 3 TIFFs (`tiff::group3`).
 fax = "0.2"

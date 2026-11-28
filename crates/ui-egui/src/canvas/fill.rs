@@ -1,5 +1,10 @@
+use craft::behavior::CanvasView;
+use egui::{Color32, Pos2, Shape, pos2, vec2};
+use vectorcraft_geom::{Affine, Point};
+
 use super::cursor::only_view_differs;
-use super::{Affine, CacheKey, Color32, Point, Pos2, Shape, VectorcraftApp, Xf, color_image_owned, pos2, vec2};
+use super::{VectorcraftApp, color_image_owned};
+use crate::CacheKey;
 
 /// The fraction of the canvas's resolution, each way, that [`Fill`] is rendered at.
 const FILL_SCALE: f64 = 0.25;
@@ -54,7 +59,7 @@ pub(super) fn fill_uncovered(
     key: &CacheKey,
     doc: &std::sync::Arc<vectorcraft_doc::Document>,
     rect: egui::Rect,
-    xf: &Xf,
+    canvas: &CanvasView,
 ) {
     // Taken every frame, so a fill that is no longer needed does not stay queued.
     let done = app.canvas.fill_worker.as_mut().and_then(|w| w.poll());
@@ -68,7 +73,7 @@ pub(super) fn fill_uncovered(
         app.canvas.fill = None;
         return;
     }
-    let screen_to_doc = xf.affine().inverse();
+    let screen_to_doc = canvas.affine().inverse();
     let corners =
         [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()].map(|p| screen_to_doc * Point::new(p.x as f64, p.y as f64));
     let usable = |f: &CacheKey| only_view_differs(f, key) && (0.5..=2.0).contains(&(key.zoom / f.zoom));
@@ -81,7 +86,7 @@ pub(super) fn fill_uncovered(
             })
     };
     let opts = vectorcraft_render::RenderOptions { kept_images_only: true, image_mips: true, interacting: false, dragging: true, ..opts.clone() };
-    let gaps = shown_frame(k, rect, xf).map_or_else(Vec::new, |shown| uncovered(shown, rect));
+    let gaps = shown_frame(k, rect, canvas).map_or_else(Vec::new, |shown| uncovered(shown, rect));
     if let Some(done) = done.filter(|d| usable(&d.key)) {
         let (fw, fh) = (done.img.width, done.img.height);
         let color = color_image_owned(done.img);
@@ -96,6 +101,7 @@ pub(super) fn fill_uncovered(
         app.canvas.fill = Some(Fill { key: done.key, view, size: (fw, fh), tex });
     }
     let effects = app.session.documents().iter().find(|d| d.uid as usize == key.doc).map(|d| d.plugin_effects.clone()).unwrap_or_default();
+    let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
     let Some(worker) = app.canvas.fill_worker.as_mut().filter(|_| !gaps.is_empty()) else { return };
     if !app.canvas.fill.as_ref().is_some_and(|f| covers(&f.key)) && !worker.pending.as_ref().is_some_and(covers) {
         let (w, h, view) = fill_view(key);
@@ -110,6 +116,7 @@ pub(super) fn fill_uncovered(
             effects,
             may_copy: false,
             may_keep: false,
+            display,
         });
     }
     let Some(f) = app.canvas.fill.as_ref().filter(|f| usable(&f.key)) else { return };
@@ -140,19 +147,19 @@ pub(super) fn fill_uncovered(
     painter.add(Shape::mesh(mesh));
 }
 
-/// Where the canvas draws the frame shown (its key `k`) in the view `xf` of the canvas `rect`:
+/// Where the canvas draws the frame shown (its key `k`) in the view `canvas` of the canvas `rect`:
 /// the unit square (the frame's texture coordinates) → screen points. None when the mapping is
 /// degenerate.
-fn shown_frame(k: &CacheKey, rect: egui::Rect, xf: &Xf) -> Option<Affine> {
+fn shown_frame(k: &CacheKey, rect: egui::Rect, canvas: &CanvasView) -> Option<Affine> {
     let to_screen = match k.pixel {
         Some([x0, y0, x1, y1]) => {
-            xf.affine() * Affine::translate((x0 as f64, y0 as f64)) * Affine::scale_non_uniform((x1 - x0) as f64, (y1 - y0) as f64)
+            canvas.affine() * Affine::translate((x0 as f64, y0 as f64)) * Affine::scale_non_uniform((x1 - x0) as f64, (y1 - y0) as f64)
         }
         None => {
             let ppp = if k.ppp > 0.0 { k.ppp } else { 1.0 };
             let old_rect = egui::Rect::from_center_size(rect.center(), vec2(k.w as f32 / ppp, k.h as f32 / ppp));
-            let old = Xf { rect: old_rect, zoom: k.zoom, center: Point::new(k.cx, k.cy), rot: k.rot.to_radians() };
-            xf.affine()
+            let old = CanvasView::new(old_rect, Point::new(k.cx, k.cy), k.zoom).rotation(k.rot);
+            canvas.affine()
                 * old.affine().inverse()
                 * Affine::translate((old_rect.min.x as f64, old_rect.min.y as f64))
                 * Affine::scale_non_uniform(old_rect.width() as f64, old_rect.height() as f64)

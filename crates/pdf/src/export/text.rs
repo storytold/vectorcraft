@@ -1,6 +1,6 @@
 use vectorcraft_geom::Point;
 
-use super::exporter::{GlyphLine, MAX_INLINE_DEPTH, in_range, norm, to_path, writable, xf};
+use super::exporter::{GlyphLine, MAX_INLINE_DEPTH, blend, in_range, norm, to_path, writable, xf};
 use super::images::embed;
 use super::{
     Affine, AppearanceItem, BezPath, BlendMode, Color, Cow, Embedding, Exporter, Fill, FillRule, Glyph, GlyphId, KrillaGlyph, ListMarker, Mark, Node,
@@ -38,8 +38,9 @@ impl Exporter<'_> {
         // stroke overprints.
         let text_space = xf(t.xf);
         // Ruby can't be real text in one run (it isn't characters of the base text): the type's
-        // characters go out as outlines where ruby is present, ruby included.
-        let plain = (!self.outline_text && t.ruby.is_empty()).then(|| t.plain_text());
+        // characters go out as outlines where ruby is present, ruby included. Warichu's stacked
+        // lines go out as outlines too.
+        let plain = (!self.outline_text && t.ruby.is_empty() && !t.stacks_warichu()).then(|| t.plain_text());
         let bars = vectorcraft_text::decorations(&layout, vectorcraft_text::FontDb::global(), t);
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();
@@ -55,7 +56,7 @@ impl Exporter<'_> {
             let fill = &run.style.fill;
             // Colour bitmap glyphs (emoji) real text doesn't write: all of them, or those it leaves.
             let mut images: Option<Vec<usize>> = None;
-            self.overprinting(s, run.style.overprint_fill, fill, |ex, s| {
+            self.char_overprinting(s, run.style.overprint_fill, fill, |ex, s| {
                 s.push_transform(&text_space);
                 // The outlines left to fill as paths: all of them, or those real text leaves.
                 let outlines = match plain.as_deref().filter(|_| !fill.is_none() && !ex.area_paint(fill, true)) {
@@ -120,7 +121,7 @@ impl Exporter<'_> {
             if let Some(path) = path {
                 // Character strokes are drawn in text space, with their cap, join and dashes.
                 let st = run.style.stroke_layer();
-                self.overprinting(s, st.overprint, &st.paint, |ex, s| {
+                self.char_overprinting(s, st.overprint, &st.paint, |ex, s| {
                     s.push_transform(&text_space);
                     ex.stroke(s, &bp, &path, FillRule::NonZero, &st, page, layout.bounds);
                     s.pop();
@@ -133,7 +134,7 @@ impl Exporter<'_> {
             self.inline_depth += 1;
             for ig in &layout.inlines {
                 let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
-                let Some(sym) = doc.symbols.iter().find(|x| x.name == art.symbol) else { continue };
+                let Some(sym) = self.symbols.symbol(&art.symbol) else { continue };
                 let mut node = (*sym.art).clone();
                 // Strokes scale with the art, as on the canvas.
                 node.transform(t.xf * ig.xf * doc.symbol_natural_xf(&art.symbol), true);
@@ -156,9 +157,16 @@ impl Exporter<'_> {
                     if !ex.area(s, path, krilla::paint::FillRule::NonZero, &fl.paint, (fl.opacity, fl.blend), tb, bp.bounding_box(), true)
                         && let Some(paint) = ex.paint(s, &fl.paint, tb)
                     {
+                        let bl = fl.blend != BlendMode::Normal;
+                        if bl {
+                            s.push_blend_mode(blend(fl.blend));
+                        }
                         s.set_stroke(None);
                         s.set_fill(Some(Fill { paint, opacity: norm(fl.opacity), rule: krilla::paint::FillRule::NonZero }));
                         s.draw_path(path);
+                        if bl {
+                            s.pop();
+                        }
                     }
                 }),
                 AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => {
@@ -245,7 +253,8 @@ impl Exporter<'_> {
             // Spaces are written too (text extraction needs them); control characters and soft
             // hyphens draw nothing.
             let blank = g.outline.elements().is_empty() && !coloured;
-            if blank && !ch.is_some_and(|c| c.is_whitespace() && !c.is_control()) {
+            // Characters before the start of an open path are not drawn, spaces included.
+            if g.off_path || (blank && !ch.is_some_and(|c| c.is_whitespace() && !c.is_control())) {
                 continue;
             }
             // The glyph at the font size of its vertical scale: `frame` maps that size's glyph
@@ -324,7 +333,7 @@ impl Exporter<'_> {
         let img = match self.images.get(&cache) {
             Some(img) => img.clone(),
             None => {
-                let img = embed(&image.blob, self.interpolate, self.sixteen_bit);
+                let img = embed(&image.blob, self.interpolate, self.sixteen_bit, self.out.source_profiles());
                 self.images.insert(cache, img.clone());
                 img
             }

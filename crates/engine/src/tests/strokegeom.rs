@@ -51,7 +51,7 @@ fn profiles_come_from_the_preset_catalogue() {
     assert!(spec.params.contains("arrowAlign"));
     // …and every arrowhead name `startArrow`/`endArrow` accept.
     for a in vectorcraft_doc::Arrowhead::ALL {
-        let name = serde_json::to_value(a).unwrap();
+        let name = serde_json::to_value(&a).unwrap();
         assert!(spec.params.contains(name.as_str().unwrap()), "{name}");
         s.execute("stroke.set", &json!({"endArrow": name})).unwrap();
         assert_eq!(stroke(&s, id).end_arrow, Some(a));

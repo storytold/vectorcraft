@@ -326,7 +326,7 @@ fn an_importer_past_its_budget_opens_nothing() {
     ];
     for (id, limits, _) in &cases {
         let wasm = wat::parse_str(tpl::module(&tpl::importer(id, r#"["tbg"]"#, "{}"), SPINS, "", 1)).unwrap();
-        vectorcraft_plugins::registry::install(Plugin::load(&wasm, limits.clone()).unwrap());
+        vectorcraft_plugins::registry::install(Plugin::load(&wasm, limits.clone()).unwrap()).unwrap();
     }
     let mut s = Session::new();
     for (id, _, why) in &cases {
@@ -393,7 +393,41 @@ fn a_built_in_file_past_the_input_limit_still_opens() {
     echo(&mut s, "test.largepng", r#"["tsp"]"#);
     let path = dir.join("big.tsp");
     let mut png = std::io::Cursor::new(vec![]);
-    image::RgbaImage::new(2, 2).write_to(&mut png, image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::new(2, 2)).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.get_mut().extend_from_slice(&__b))
+    }
+    .unwrap();
     std::fs::write(&path, png.get_ref()).unwrap();
     std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len(vectorcraft_plugins::import::MAX_INPUT_BYTES as u64 + 1).unwrap();
     let e = s.execute("document.open", &json!({"path": path_of(&path), "importer": "plugin.test.largepng"})).unwrap_err();

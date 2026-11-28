@@ -154,6 +154,21 @@ fn faults_refuse_the_whole_result_by_field() {
     assert_eq!(declined, Error::Failed("nothing to do".into()));
 }
 
+/// A top-level `notice` is ignored, as a filter-only key a live effect may hand back; other
+/// unknown top-level keys still refuse the result.
+#[test]
+fn a_notice_is_ignored_and_other_top_level_keys_refused() {
+    let ok = json!({"path": square(), "fills": [red()]});
+    let decode_top = |top: Value| decode(&serde_json::to_vec(&top).unwrap(), Scope::Object, FillRule::NonZero);
+    let pieces = decode_top(json!({"objects": [ok], "notice": "Done"})).unwrap();
+    assert_eq!(pieces.len(), 1);
+    assert_eq!(decode_top(json!({"objects": [ok], "notice": 12})).unwrap().len(), 1);
+    for key in ["note", "notices", "message"] {
+        let e = decode_top(json!({"objects": [ok], key: "Done"})).unwrap_err().to_string();
+        assert!(e.contains(&format!("{key}:")) && e.contains("returns only `objects` and `notice`"), "{key}: {e}");
+    }
+}
+
 /// A key a paint does not have, at any level of it, refuses the result and is named; it is not
 /// dropped.
 #[test]
@@ -238,4 +253,98 @@ fn named_swatches_and_patterns_must_exist() {
     assert!(e.contains("objects[0].fills[0].swatch"), "{e}");
     let e = check_references(&pieces(json!([{"path": square(), "fills": [{"type": "pattern", "pattern": "Dots"}]}])), None).unwrap_err().to_string();
     assert!(e.contains("objects[0].fills[0].pattern"), "{e}");
+}
+
+/// A gradient of two stops: a plain first one, then `stop`, with `extra` keys on the paint.
+fn ramp(stop: Value, extra: Value) -> Value {
+    let mut g = json!({"type": "gradient", "gradient": {"kind": "Linear", "stops": [{"offset": 0, "color": {"model": "gray", "k": 0}}, stop]}});
+    g.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+    g
+}
+
+/// A second stop with process `plates`, and `extra` keys.
+fn plated(extra: Value) -> Value {
+    let mut s = json!({"offset": 1, "color": {"model": "gray", "k": 1}, "plates": [0.1, 0.2, 0.3, 0.4]});
+    s.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+    s
+}
+
+/// A gradient stop's process `plates` need the stop's own link to a swatch: a stop without one
+/// (no `swatch` or a `null` one) refuses the whole result, naming the stop's `plates`, in a fill or
+/// a stroke at every scope.
+#[test]
+fn unlinked_gradient_stop_plates_refuse_the_whole_painted_result() {
+    const WHY: &str = "`plates` requires a stop linked to a spot swatch";
+    for orphan in [ramp(plated(json!({})), json!({})), ramp(plated(json!({"swatch": null})), json!({}))] {
+        let fills = out(json!([{"path": square(), "fills": [red()]}, {"path": square(), "fills": [red(), orphan]}]));
+        for scope in [Scope::Object, Scope::Fill] {
+            let e = decode(&fills, scope, FillRule::NonZero).unwrap_err();
+            assert_eq!(e.to_string(), format!("plug-in output: objects[1].fills[1].gradient.stops[1].plates: {WHY}"), "{scope:?}");
+        }
+        let strokes = out(json!([{"path": square(), "strokes": [{"paint": red()}]}, {"path": square(), "strokes": [{"paint": orphan, "width": 2}]}]));
+        for scope in [Scope::Object, Scope::Stroke] {
+            let e = decode(&strokes, scope, FillRule::NonZero).unwrap_err();
+            assert_eq!(e.to_string(), format!("plug-in output: objects[1].strokes[0].paint.gradient.stops[1].plates: {WHY}"), "{scope:?}");
+        }
+    }
+    // `plugin.info`'s `lastError` names the plug-in before it.
+    let e = decode(&out(json!([{"path": square(), "fills": [ramp(plated(json!({})), json!({}))]}])), Scope::Object, FillRule::NonZero).unwrap_err();
+    assert_eq!(named("Test Tone", &e), format!("Test Tone: plug-in output: objects[0].fills[0].gradient.stops[1].plates: {WHY}"));
+    // A plate out of range keeps its own error.
+    let wide = ramp(json!({"offset": 1, "color": {"model": "gray", "k": 1}, "plates": [2, 0, 0, 0]}), json!({}));
+    let e = decode(&out(json!([{"path": square(), "fills": [wide]}])), Scope::Object, FillRule::NonZero).unwrap_err().to_string();
+    assert!(e.contains("objects[0].fills[0].gradient.stops[1].plates: a plate must be from 0 to 1"), "{e}");
+}
+
+/// The gradient's own `swatch` does not link its stops, so it does not admit a stop's `plates`.
+#[test]
+fn gradient_swatch_does_not_link_its_stops_plates() {
+    let fill = ramp(plated(json!({})), json!({"swatch": "Ink"}));
+    let e = decode(&out(json!([{"path": square(), "fills": [fill]}])), Scope::Object, FillRule::NonZero).unwrap_err().to_string();
+    assert!(e.contains("objects[0].fills[0].gradient.stops[1].plates: `plates` requires a stop linked to a spot swatch"), "{e}");
+}
+
+/// A stop's `plates` beside a link to a swatch that is not a spot swatch (a process swatch or
+/// Registration) refuse the result at the reference check; a link to a missing swatch keeps the
+/// error that names the swatch.
+#[test]
+fn process_swatch_cannot_back_stop_plates() {
+    let mut doc = Document::new(100.0, 100.0);
+    doc.swatches.push(Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0)), global: true, spot: true });
+    doc.swatches.push(Swatch { name: "Process".into(), paint: Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0)), global: true, spot: false });
+    let check = |pieces: Value| check_references(&decode(&out(pieces), Scope::Object, FillRule::NonZero).unwrap(), Some(&doc));
+    for name in ["Process", vectorcraft_color::swatch::REGISTRATION] {
+        let fill = ramp(plated(json!({"swatch": name})), json!({}));
+        let e = check(json!([{"path": square(), "fills": [fill.clone()]}])).unwrap_err().to_string();
+        assert!(e.contains("objects[0].fills[0].gradient.stops[1].plates: `plates` requires a stop linked to a spot swatch"), "{name}: {e}");
+        let e = check(json!([{"path": square()}, {"path": square(), "strokes": [{"paint": fill}]}])).unwrap_err().to_string();
+        assert!(e.contains("objects[1].strokes[0].paint.gradient.stops[1].plates:"), "{name}: {e}");
+        // Without `plates`, a stop may link to any swatch of the document.
+        let plain = ramp(json!({"offset": 1, "color": {"model": "gray", "k": 1}, "swatch": name}), json!({}));
+        assert!(check(json!([{"path": square(), "fills": [plain]}])).is_ok(), "{name}");
+    }
+    let gone = ramp(plated(json!({"swatch": "Gone"})), json!({}));
+    let e = check(json!([{"path": square(), "fills": [gone]}])).unwrap_err().to_string();
+    assert!(e.contains("objects[0].fills[0].gradient.stops[1].swatch:"), "{e}");
+}
+
+/// A stop linked to a spot swatch keeps its `plates` as given, all-zero ones included, through the
+/// reference check and the swatch colors.
+#[test]
+fn linked_spot_stop_plates_are_kept() {
+    let mut doc = Document::new(100.0, 100.0);
+    doc.swatches.push(Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0)), global: true, spot: true });
+    let zero = json!({"offset": 0, "color": {"model": "gray", "k": 0}, "swatch": "Ink", "plates": [0, 0, 0, 0]});
+    let fill = json!({"type": "gradient", "gradient": {"kind": "Linear", "stops": [zero, plated(json!({"swatch": "Ink"}))]}});
+    let stroke = ramp(plated(json!({"swatch": "Ink"})), json!({}));
+    let pieces =
+        decode(&out(json!([{"path": square(), "fills": [fill], "strokes": [{"paint": stroke}]}])), Scope::Object, FillRule::NonZero).unwrap();
+    assert!(check_references(&pieces, Some(&doc)).is_ok());
+    let pieces = with_swatch_colors(std::sync::Arc::new(pieces), &doc);
+    let plates = |p: &Paint| match p {
+        Paint::Gradient(g) => g.gradient.stops.iter().map(|s| s.plates).collect::<Vec<_>>(),
+        _ => panic!("{p:?}"),
+    };
+    assert_eq!(plates(&pieces[0].fills.as_ref().unwrap()[0]), [Some([0.0; 4]), Some([0.1, 0.2, 0.3, 0.4])]);
+    assert_eq!(plates(&pieces[0].strokes.as_ref().unwrap()[0].paint), [None, Some([0.1, 0.2, 0.3, 0.4])]);
 }

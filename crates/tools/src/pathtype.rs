@@ -59,6 +59,8 @@ pub struct Brackets {
     arc: ArcPath,
     /// [`TextKind::path_span`].
     span: (f64, f64),
+    /// [`TextKind::path_text_start`]: below 0 when the type starts before an open path's start.
+    text_start: f64,
     /// The end bracket was placed (not the end of the path, or once round it).
     end_set: bool,
 }
@@ -78,7 +80,9 @@ impl Brackets {
         if !det.is_finite() || det.abs() < 1e-12 || arc.is_empty() {
             return None;
         }
-        Some(Self { id, xf: t.xf, arc, span: t.kind.path_span()?, end_set: end.is_some() })
+        let span = t.kind.path_span()?;
+        let text_start = t.kind.path_text_start().unwrap_or(span.0);
+        Some(Self { id, xf: t.xf, arc, span, text_start, end_set: end.is_some() })
     }
 
     /// Where bracket `b` stands, as a fraction of the path's length (past 1 round a closed path).
@@ -269,7 +273,13 @@ impl BracketDrag {
                     d -= d.round();
                 }
                 let place = |x: f64| if closed { x.rem_euclid(1.0) } else { x.clamp(0.0, 1.0) };
-                let start = place(s + d);
+                // Type that starts before an open path's start slides from there, and goes no
+                // further before the path than it was: both brackets stay where they are.
+                let lead = !closed && b.text_start < 0.0;
+                if lead {
+                    d = d.max(0.0);
+                }
+                let start = if lead { (b.text_start + d).min(1.0) } else { place(s + d) };
                 m.insert("start".into(), json!(start));
                 if b.end_set {
                     m.insert("end".into(), json!(if closed { place(e + d) } else { place(e + d).max(start) }));
@@ -407,6 +417,35 @@ mod tests {
         // Cmd/Ctrl held: it only slides.
         let v = preview(&drag(&cx, grab, Point::new(250.0, 320.0), Mods { cmd: true, ..Mods::default() })).clone();
         assert!(v.get("flip").is_none(), "{v}");
+    }
+
+    /// Type that starts before its open path slides from where it starts, not from the path's start.
+    #[test]
+    fn dragging_the_center_bracket_slides_type_that_starts_before_the_path() {
+        let (mut d, id) = doc_with_path_type();
+        if let Some(vectorcraft_doc::NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind)
+            && let TextKind::OnPath { start, .. } = &mut t.kind
+        {
+            *start = -0.25;
+        }
+        let s = selected(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        // The center bracket stands in the middle of the brackets (the start bracket at the path's start).
+        let v = preview(&drag(&cx, Point::new(250.0, 295.0), Point::new(280.0, 295.0), Mods::default())).clone();
+        assert!((v["start"].as_f64().unwrap() + 0.15).abs() < 1e-6, "{v}");
+        // Back past where it started: it stays there, and so does a placed end bracket.
+        let v = preview(&drag(&cx, Point::new(250.0, 295.0), Point::new(150.0, 295.0), Mods::default())).clone();
+        assert!((v["start"].as_f64().unwrap() + 0.25).abs() < 1e-6, "{v}");
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind)
+            && let TextKind::OnPath { end, .. } = &mut t.kind
+        {
+            *end = Some(0.5);
+        }
+        let ended = crate::testutil::cx(&d, &s, &p);
+        // The center bracket stands at 0.25 of the path, between the start bracket (0) and the end.
+        let v = preview(&drag(&ended, Point::new(175.0, 295.0), Point::new(130.0, 295.0), Mods::default())).clone();
+        assert!((v["start"].as_f64().unwrap() + 0.25).abs() < 1e-6 && (v["end"].as_f64().unwrap() - 0.5).abs() < 1e-6, "{v}");
     }
 
     #[test]

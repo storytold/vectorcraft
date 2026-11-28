@@ -22,7 +22,7 @@ use crate::shape::{
     Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, mark_word_ends, no_line_end, no_line_start, punct, run_face, shape_range, shape_runs,
     soft_line_start, style_metrics,
 };
-use crate::{Composer, FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
+use crate::{FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
 
 mod bidi;
 mod breaking;
@@ -31,20 +31,23 @@ mod flow;
 mod on_path;
 mod region;
 mod ruby;
+mod shaped;
 mod vertical;
+mod warichu;
 
-pub(crate) use bidi::{is_rtl, para_bidi};
+pub(crate) use bidi::{is_rtl, para_bidi, starts_bidi};
+pub(crate) use breaking::is_hanging_punctuation;
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};
+pub use driver::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 #[cfg(test)]
-pub(crate) use driver::layout_faces_per_call;
-pub use driver::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
+pub(crate) use driver::{fit_passes, layout_faces_per_call};
+#[cfg(test)]
+pub(crate) use on_path::{layout_trying_each_start, path_arrangements};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
 
-#[cfg(test)]
-pub(crate) use driver::envelope_ink_inputs;
-pub use driver::{envelope_ink, register_envelope_ink};
+pub use driver::{envelope_ink, layout_inputs, register_envelope_ink};
 
 const EPS: f64 = 1e-6;
 
@@ -60,30 +63,22 @@ fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
 /// ([`upright_extent`]) as a share of `upright`, the length in font units its own width runs down.
 /// Empty for a glyph of one character.
 fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: Option<f64>) -> Vec<(usize, f64)> {
-    use unicode_segmentation::UnicodeSegmentation;
-    let Some(s) = text.get(g.byte..g.byte + g.len).filter(|_| g.len > 1) else { return Vec::new() };
-    let starts: Vec<usize> = s.grapheme_indices(true).skip(1).map(|(i, _)| g.byte + i).collect();
-    if starts.is_empty() {
-        return Vec::new();
-    }
-    let parts = starts.len() + 1;
-    let from_font = if let Some(length) = upright {
-        let (cell, top) = upright_extent(g);
-        g.face
-            .vertical_ligature_carets(g.gid, starts.len(), top, cell)
-            .filter(|c| c.len() == starts.len() && length > 0.0)
-            .map(|c| c.into_iter().map(|d| d / length).collect::<Vec<f64>>())
-            .filter(|c| c.iter().all(|f| *f > 0.0 && *f < 1.0))
-    } else {
-        let advance = g.face.advance(g.gid);
-        g.face
-            .ligature_carets(g.gid, starts.len())
-            .filter(|c| c.len() == starts.len() && advance > 0.0)
-            .map(|c| c.into_iter().map(|x| if rtl { 1.0 - x / advance } else { x / advance }).collect::<Vec<f64>>())
-    };
-    let mut at = from_font.unwrap_or_else(|| (1..parts).map(|j| j as f64 / parts as f64).collect());
-    at.sort_by(f64::total_cmp);
-    starts.into_iter().zip(at).collect()
+    craft::font_catalog::ligature_caret_stops(text, g.byte, g.len, |count| {
+        if let Some(length) = upright {
+            let (cell, top) = upright_extent(g);
+            g.face
+                .vertical_ligature_carets(g.gid, count, top, cell)
+                .filter(|c| c.len() == count && length > 0.0)
+                .map(|c| c.into_iter().map(|d| d / length).collect::<Vec<f64>>())
+                .filter(|c| c.iter().all(|f| *f > 0.0 && *f < 1.0))
+        } else {
+            let advance = g.face.advance(g.gid);
+            g.face
+                .ligature_carets(g.gid, count)
+                .filter(|c| c.len() == count && advance > 0.0)
+                .map(|c| c.into_iter().map(|x| if rtl { 1.0 - x / advance } else { x / advance }).collect::<Vec<f64>>())
+        }
+    })
 }
 
 /// Does glyph `g`, standing upright in vertical type, take a cell of its own down the column? Every
@@ -99,14 +94,17 @@ fn takes_cell(g: &SGlyph) -> bool {
 ///
 /// It stands in glyph space as it stands in vertical point type's line space: a quarter turn
 /// counterclockwise from horizontal path type's pose about the center of its cell, a baseline shift
-/// kept across the column and a leading space taken off moving it along the path, then moved across
+/// kept across the column and a leading space taken off (or the space before a column's first
+/// character) moving it along the path, then moved across
 /// the path as a glyph lying on its side is.
 fn upright_path_turn(g: &SGlyph, em: f64, pre: Affine, local: Affine, unturned: Affine, angle: f64, advance: f64) -> (Affine, f64) {
     let cell = if takes_cell(g) { upright_cell(g) } else { advance };
     let (shift, unshift) = (Affine::translate((0.0, -g.bshift)), Affine::translate((0.0, g.bshift)));
     let about = Point::new(cell * 0.5, -upright_centre(g, cell, em));
-    let mut turn =
-        Affine::translate((-g.lead, g.face.ideographic_centre() * em)) * shift * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, about) * unshift;
+    let mut turn = Affine::translate((g.kern_shift - g.lead, g.face.ideographic_centre() * em))
+        * shift
+        * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, about)
+        * unshift;
     // The effects that keep the glyph's axes fixed (Stair Step) leave its top toward the path's end on
     // a path that runs to the left: it turns half a turn about its cell's center.
     let tangent = Vec2::new(angle.cos(), angle.sin());
@@ -224,11 +222,14 @@ impl Ctx<'_> {
         out
     }
 
-    /// Shape paragraph `r` (its bidi resolution `bidi`).
-    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>) -> Vec<SGlyph> {
+    /// Shape paragraph `r` (its bidi resolution `bidi`, its attributes `para`). A Standard composer
+    /// sets a complex script glyph by glyph ([`OtFeatures::unshaped_complex`]).
+    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>, para: &ParaStyle) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
         let levels = bidi.map_or(&[][..], |b| &b.levels);
-        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &self.opts.features, levels, &mut v);
+        let standard = !self.opts.composer.unwrap_or(para.composer).shapes_complex_scripts();
+        let feats = OtFeatures { unshaped_complex: standard, ..self.opts.features };
+        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &feats, levels, &mut v);
         self.finish_shaping(&mut v, |g| self.style_at(g.byte));
         v
     }
@@ -238,9 +239,11 @@ impl Ctx<'_> {
     /// Layout on or Fractional Widths off, whole-point advances.
     fn finish_shaping<'s>(&self, v: &mut [SGlyph], style: impl Fn(&SGlyph) -> &'s CharStyle) {
         if self.vertical {
-            tate_chu_yoko(v, |g| {
+            tate_chu_yoko(v, self.system_layout || !self.fractional_widths, |g| {
                 let st = style(g);
-                TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right }
+                // Type on a path sets warichu characters as they are, its digits included.
+                let warichu = st.warichu && !self.on_path;
+                TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right, warichu }
             });
             // An upright glyph advances down the column by its vertical advance (the font's vertical
             // metrics; without them at least one em, as CJK fonts' is), centred across it: a narrow
@@ -248,26 +251,76 @@ impl Ctx<'_> {
             // of the glyph before it takes no cell of its own: it turns with that glyph (`emit`).
             for i in 0..v.len() {
                 let continues = continues_cluster(i.checked_sub(1).and_then(|p| v.get(p)), v.get(i));
-                let Some(g) = v.get_mut(i).filter(|g| g.adv > 0.0 && !continues && stands_upright(g)) else { continue };
-                let extra = upright_cell(g) - g.face.advance(g.gid) * g.sx;
+                if continues || !v.get(i).is_some_and(stands_upright) {
+                    continue;
+                }
+                // Tsume measured the cluster across its glyphs' widths when it was shaped: an
+                // upright glyph's blank space runs down its cell, so that is taken back first.
+                let measured_down = v.get(i).is_some_and(|g| g.tcy.is_none());
+                if measured_down {
+                    let end = (i + 1..v.len()).find(|&j| !continues_cluster(v.get(j - 1), v.get(j))).unwrap_or(v.len());
+                    let tsume = v.get(end - 1).map_or(0.0, |g| g.tsume);
+                    for g in v.get_mut(i..end).unwrap_or_default() {
+                        g.dx += g.tsume_shift;
+                        g.tsume_shift = 0.0;
+                    }
+                    if let Some(g) = v.get_mut(end - 1) {
+                        g.adv += tsume;
+                        g.tsume = 0.0;
+                    }
+                }
+                let Some(g) = v.get_mut(i).filter(|g| g.adv > 0.0) else { continue };
+                let cell = upright_cell(g);
+                let extra = cell - g.face.advance(g.gid) * g.sx;
                 g.dx += extra * 0.5;
                 g.adv += extra;
                 // Proportional Metrics: `vpal` (and the vertical kerning with it) moves it and
                 // changes its length down the column, in fonts with vertical metrics (else the cell
                 // stays as it is, #966).
+                let mut length = cell;
                 if let Some(a) = g.vpal.filter(|_| g.tcy.is_none() && g.face.vertical_glyph(g.gid).is_some()) {
                     g.dx += a.dx;
                     g.dy += a.dy;
                     g.adv += a.advance;
                     g.proportional = a.proportional;
+                    length += a.advance;
+                }
+                let st = style(g);
+                if measured_down && st.tsume > 0.0 {
+                    self.tighten_upright(g, cell, length, st.size, st.tsume);
                 }
             }
+        }
+        // Warichu: each stretch of marked characters stacked as one block inside its line, after
+        // tate-chu-yoko and the upright cells have set the glyphs' lengths along it. Type on a path
+        // sets them as they are.
+        if !self.on_path {
+            warichu::warichu(v, (self.vertical, self.system_layout || !self.fractional_widths), |g| warichu::WariStyle::of(style(g)));
         }
         // System Layout or Fractional Widths off: whole-point advances, after tate-chu-yoko and the
         // upright cell have set the widths the line breaker will use. A zero advance stays zero.
         if self.system_layout || !self.fractional_widths {
             whole_character_widths(v);
         }
+    }
+
+    /// Tsume `tsume` on upright glyph `g` in vertical type, in type of size `em`, its cell `cell`
+    /// long down the column and `length` long with the Proportional Metrics change to it: its share
+    /// of the blank space above and below what it paints, inside that length, comes out of its
+    /// advance, and it is drawn the share above it earlier, keeping its shape. A combining mark in
+    /// its cluster moves with it. A glyph that paints nothing keeps its place and length.
+    fn tighten_upright(&self, g: &mut SGlyph, cell: f64, length: f64, em: f64, tsume: f64) {
+        let Some(b) = crate::shape::painted_box(self.db, g) else { return };
+        // The glyph turns about the center of its cell, which is `upright_centre` above the
+        // baseline: a point of it in font units (y down) lands that far below the center, down the
+        // column from the top of the cell.
+        let centre = cell * 0.5 + upright_centre(g, cell, em) + g.dy;
+        let (a, z) = (centre + b.y0 * g.sy, centre + b.y1 * g.sy);
+        let Some((above, below)) = crate::shape::tsume_shares((a.min(z), a.max(z)), length, tsume) else { return };
+        g.kern_shift -= above;
+        g.tsume_shift = above;
+        g.adv -= above + below;
+        g.tsume = above + below;
     }
 
     /// Bullets and numbered lists: put marker `text` (the bullet, or the number and its period;
@@ -287,7 +340,13 @@ impl Ctx<'_> {
     /// paragraph's embedding level.
     fn prepend_marker(&self, pr: &Range<usize>, para: &ParaStyle, text: Option<&str>, rtl: bool, sg: &mut Vec<SGlyph>) -> usize {
         let Some(text) = text.filter(|_| para.list.is_some() && !pr.is_empty()) else { return 0 };
-        let st = vectorcraft_doc::text::ParaList::marker_style(self.style_at(pr.start));
+        let first = self.style_at(pr.start);
+        let mut st = vectorcraft_doc::text::ParaList::marker_style(first);
+        // A paragraph that starts with warichu: the marker takes the size of the line, not the
+        // block's ([`warichu::warichu_sizes`] set the first character smaller).
+        if warichu::stacked(first, self.vertical) && !self.on_path {
+            st.size = warichu::WariStyle::of(first).parent_size();
+        }
         let run = self.runs.partition_point(|(r, _)| r.end <= pr.start);
         if !self.runs.get(run).is_some_and(|(r, _)| r.start <= pr.start && pr.start < r.end) {
             return 0;
@@ -315,13 +374,18 @@ impl Ctx<'_> {
         tab.dx = 0.0;
         tab.dy = 0.0;
         tab.kern_shift = 0.0;
+        tab.aki_shift = 0.0;
+        tab.aki = 0.0;
+        tab.tsume_shift = 0.0;
+        tab.tsume = 0.0;
         tab.tcy = None;
+        tab.wari = None;
         tab.vpal = None;
         let left = para.laid_out_left_indent();
         let pen = left + para.first_line_indent + marker.iter().map(|g| g.adv).sum::<f64>();
         let to_indent = left - pen;
         let stop_before_indent = para.tabs.iter().any(|t| t.position > pen + EPS && t.position < left - EPS);
-        tab.adv = if to_indent > EPS && !stop_before_indent { to_indent } else { tab_advance(&para.tabs, 0.0, pen, sg).0 };
+        tab.adv = if to_indent > EPS && !stop_before_indent { to_indent } else { tab_advance(&para.tabs, 0.0, pen, sg.iter()).0 };
         if para.list.is_some_and(|l| l.align == ListAlign::Right) {
             marker.insert(0, tab);
         } else {
@@ -332,11 +396,25 @@ impl Ctx<'_> {
         n
     }
 
+    /// Does glyph `g`'s own width start where its placement sets it ([`PositionedGlyph::width_start`])?
+    /// Not for an inline graphic, nor in vertical type for an upright or tate-chu-yoko glyph, which
+    /// start their cell at the start of their advance.
+    fn places_own_width(&self, g: &SGlyph) -> bool {
+        g.inline.is_none() && !(self.vertical && (g.tcy.is_some() || (takes_cell(g) && stands_upright(g))))
+    }
+
+    /// How far glyph `g`'s own width moves when the glyph is drawn `shift` further along its
+    /// advance: `shift` when its placement sets where that width starts, otherwise 0.
+    fn own_width_shift(&self, g: &SGlyph, shift: f64) -> f64 {
+        if self.places_own_width(g) { shift } else { 0.0 }
+    }
+
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
         // Only the glyph right after an upright glyph can continue its cluster.
         let cluster = self.upright_cluster.take();
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
-        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}';
+        // Joiners and direction marks are format controls: no ink either, whatever glyph the font maps.
+        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}' || crate::justify::is_format_control(g.ch);
         // A colour glyph draws its art (COLR layers, an SVG document) or its image (a bitmap, or
         // COLR paints documents have no form for), not its outline; COLR, then SVG, then bitmaps.
         // Art in the text's colours takes the run's fill (black when it isn't a colour) and
@@ -359,19 +437,20 @@ impl Ctx<'_> {
         } else {
             self.db.outline(&g.face, g.gid)
         };
-        // A glyph whose leading space was taken off (mojikumi) is drawn that much earlier: an
-        // upright one in vertical type by moving it up the column once it stands upright.
+        // A glyph whose leading space was taken off (mojikumi) is drawn that much earlier, and one
+        // moved along the line by manual kerning ([`SGlyph::kern_shift`]) that much later: an
+        // upright one in vertical type by moving it along the column once it stands upright.
         let upright = self.vertical && g.tcy.is_none() && stands_upright(g) && !(self.on_path && g.inline.is_some());
-        let lead = if upright { 0.0 } else { g.lead };
+        let (lead, kern_shift) = if upright { (0.0, 0.0) } else { (g.lead, g.kern_shift) };
         let local = match &g.inline {
             // Inline graphics: art space to glyph space (no font outline), moved along the line by
             // right-to-left manual kerning as a glyph is.
-            Some(ib) => Affine::translate((g.kern_shift - lead, -g.bshift)) * ib.xf,
+            Some(ib) => Affine::translate((kern_shift - lead, -g.bshift)) * ib.xf,
             // Baseline shift moves the glyph across its line, and Character Rotation then turns it
             // about its shifted pen position, so the shift is across the line at any rotation.
             // Manual kerning and composition trim move that pen position along the line.
             None => {
-                Affine::translate((g.kern_shift - lead, -g.bshift))
+                Affine::translate((kern_shift - lead, -g.bshift))
                     * Affine::rotate(-g.rotation.to_radians())
                     * Affine::translate((g.dx, g.dy))
                     * Affine::scale_non_uniform(g.sx, g.sy)
@@ -379,7 +458,7 @@ impl Ctx<'_> {
         };
         // The turning point in font units, which later moves of the glyph's transform keep.
         let pivot = match local.determinant() {
-            det if det != 0.0 && det.is_finite() => local.inverse() * Point::new(g.kern_shift - lead, -g.bshift),
+            det if det != 0.0 && det.is_finite() => local.inverse() * Point::new(kern_shift - lead, -g.bshift),
             _ => Point::ZERO,
         };
         let unturned = if g.inline.is_none() && g.rotation != 0.0 && g.sx != 0.0 && g.sy != 0.0 {
@@ -490,9 +569,10 @@ impl Ctx<'_> {
                 // space after the cell, and must not push the glyph off the centre line).
                 let em = self.style_at(g.byte).size;
                 let cell = if takes_cell(g) { upright_cell(g) } else { advance };
-                // A leading space taken off moves it up the column after the turn (moving the
-                // turning point instead would move it across the column too).
-                let turn = Affine::translate((-g.lead, 0.0))
+                // A leading space taken off moves it up the column after the turn, and the space
+                // before a column's first character down it (moving the turning point instead
+                // would move it across the column too).
+                let turn = Affine::translate((g.kern_shift - g.lead, 0.0))
                     * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em)));
                 m = shift * turn * unshift * m;
                 // Its own advance across, from where the cell centres it: where the shaper set the
@@ -527,10 +607,16 @@ impl Ctx<'_> {
         };
         // Where its own width starts along its advance: the shaper's placement, a leading space
         // taken off and right-to-left manual kerning move the glyph along the line. An upright or
-        // tate-chu-yoko glyph in vertical type starts its cell at the start of its advance.
-        let width_start = if g.inline.is_none() && !upright && !(self.vertical && g.tcy.is_some()) {
+        // tate-chu-yoko glyph in vertical type starts its cell at the start of its advance, an
+        // upright one after the space before a column's first character.
+        let along = {
             let [a, b, ..] = pre.as_coeffs();
-            Some((g.kern_shift + g.dx - g.lead) * a.hypot(b)).filter(|s| s.is_finite()).unwrap_or(0.0)
+            a.hypot(b)
+        };
+        let width_start = if self.places_own_width(g) {
+            Some((g.kern_shift + g.dx - g.lead) * along).filter(|s| s.is_finite()).unwrap_or(0.0)
+        } else if upright {
+            Some(g.kern_shift * along).filter(|s| s.is_finite()).unwrap_or(0.0)
         } else {
             0.0
         };
@@ -579,6 +665,9 @@ impl Ctx<'_> {
             },
             width,
             width_start,
+            warichu: g.wari.map(|w| w.start),
+            warichu_line: g.wari.map_or(0.0, |w| w.across),
+            off_path: false,
         });
     }
 
@@ -606,11 +695,16 @@ impl Ctx<'_> {
         k.dx = 0.0;
         k.dy = 0.0;
         k.kern_shift = 0.0;
+        k.aki_shift = 0.0;
+        k.aki = 0.0;
+        k.tsume_shift = 0.0;
+        k.tsume = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
         k.inline = None;
         k.tcy = None;
+        k.wari = None;
         // Base letter's run: `g` may be a mark (last in the shaping cluster) with mark paint.
         if let Some(run) = self.run_index_at(g.byte) {
             k.run = run;
@@ -659,9 +753,14 @@ mod emit_kashida_mark_last {
             len: 2,
             run: 0,
             adv: 10.0,
+            tracking: 0.0,
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -673,8 +772,11 @@ mod emit_kashida_mark_last {
             xh: 20.0,
             ch: 'ب',
             tcy: None,
+            wari: None,
             inline: None,
             word_end: false,
+            keeps_word: false,
+            keeps_next: false,
             lead: 0.0,
             proportional: false,
             vpal: None,
@@ -719,9 +821,14 @@ mod emit_kashida_mark_last {
             len: 4,
             run: 1,
             adv: 0.0,
+            tracking: 0.0,
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -733,8 +840,11 @@ mod emit_kashida_mark_last {
             xh: 20.0,
             ch: '\u{064E}',
             tcy: None,
+            wari: None,
             inline: None,
             word_end: false,
+            keeps_word: false,
+            keeps_next: false,
             lead: 0.0,
             proportional: false,
             vpal: None,

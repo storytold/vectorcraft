@@ -15,8 +15,9 @@ use crate::{Error, Kind, Result};
 
 /// The plug-in API level this host implements. A manifest's `api` (1 when left out) may be at most
 /// this. Level 2 adds the host imports ([`PROGRESS_API`]) and a live effect's `paintOutput`
-/// ([`crate::painted`]).
-pub const API_LEVEL: u32 = 2;
+/// ([`crate::painted`]); level 3 adds a filter's `writes` ([`WRITES_API`]) and a manifest's
+/// `context` ([`CONTEXT_API`]).
+pub const API_LEVEL: u32 = 3;
 
 /// The API level that adds the host imports ([`crate::host::IMPORTS`]) and the `progress`,
 /// `settings`, `cache` and `commands` permissions they need.
@@ -24,6 +25,17 @@ pub const PROGRESS_API: u32 = 2;
 
 /// The API level that adds a filter's `inputs` ([`crate::InputKind`]).
 pub const INPUTS_API: u32 = 2;
+
+/// The API level that adds a filter's `writes`: the kinds among its `inputs` it may change.
+pub const WRITES_API: u32 = 3;
+
+/// The API level that reads a command's `menu` ([`crate::manifest::MenuPlace`]); below it the key
+/// is ignored.
+pub const MENU_API: u32 = 2;
+
+/// The API level that adds a manifest's `context` ([`crate::ContextSection`]): the document's
+/// settings, artboards, layers and swatches, given to a run with or without a selection.
+pub const CONTEXT_API: u32 = 3;
 
 /// Most permissions a manifest may list.
 pub const MAX_PERMISSIONS: usize = 16;
@@ -42,7 +54,8 @@ pub const RESERVED: &[&str] = &["ui.panel", "ui.tool"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Permission {
     /// Read the objects the host hands it: a filter's selected paths, the object a live effect is
-    /// on, the document an exporter writes.
+    /// on, the document an exporter writes; and the document information a manifest's `context`
+    /// asks for ([`crate::ContextSection`]).
     #[serde(rename = "doc.read")]
     DocRead,
     /// Change, add and delete objects (a filter's output), as one undo step.
@@ -272,6 +285,32 @@ impl Grant {
     /// whose own hash is not a valid SHA-256 ([`sha256_hex`]) covers nothing.
     pub fn covers(&self, id: &str, hash: &str, wanted: &[Permission]) -> bool {
         self.id == id && is_sha256_hex(&self.hash) && self.hash == hash && wanted.iter().all(|w| self.permissions.contains(w))
+    }
+}
+
+/// A [`Grant`] that [`crate::registry::grant`] records. The engine makes one where it records what
+/// a person approved and where it loads the grants kept in its plug-in folder; tests that set up a
+/// grant use the same constructors. `tests/grant_sites.rs` fails when other shipped code makes one.
+/// Native code linked into the app can still call these constructors, so the token does not
+/// protect against such code.
+#[derive(Debug)]
+pub struct GrantToken(Grant);
+
+impl GrantToken {
+    /// The grant the engine records after a person approved the module it covers, or in a session
+    /// whose starter allowed requests to grant permissions (`--allow-plugin-grants`).
+    pub fn after_engine_approval(grant: Grant) -> Self {
+        Self(grant)
+    }
+
+    /// A grant the engine read from the grants file of its plug-in folder, for a module it loads.
+    pub fn from_engine_grants_file(grant: Grant) -> Self {
+        Self(grant)
+    }
+
+    /// The grant it holds.
+    pub fn grant(&self) -> &Grant {
+        &self.0
     }
 }
 

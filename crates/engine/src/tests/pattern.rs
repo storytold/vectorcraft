@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::pattern::{PATTERN_EDIT_LAYER, RepeatKind, TileType};
+use vectorcraft_doc::pattern::{PATTERN_EDIT_LAYER, RepeatKind, TileType, pattern_paint};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
@@ -212,6 +212,355 @@ fn cancel_new_pattern_removes_it() {
     assert_eq!(doc(&s).layers.len(), 1);
 }
 
+/// A 30×40 blue rectangle at (100, 100) with no stroke, selected.
+fn blue_rect(s: &mut Session) -> NodeId {
+    let b = rect(s, 100.0, 100.0, 30.0, 40.0);
+    s.execute("paint.setFill", &json!({"ids": [b.0], "color": "#0000ff"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [b.0], "none": true})).unwrap();
+    sel(s, &[b]);
+    b
+}
+
+/// Replace Pattern Art gives the pattern copies of the selected art as its tile art in one undo
+/// step: the pattern keeps its name, swatch, place, tile and options, art painted with it keeps the
+/// paint, and the selected art stays on the canvas, selected. Undo and Redo swap the two tiles.
+#[test]
+fn replace_art_gives_a_pattern_new_tile_art() {
+    let mut s = session();
+    let red = make_dots(&mut s);
+    let filled = rect(&mut s, 200.0, 200.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"ids": [filled.0], "swatch": "Dots"})).unwrap();
+    s.execute("pattern.options", &json!({"name": "Dots", "tileType": "hexByRow"})).unwrap();
+    let blue = blue_rect(&mut s);
+    let old = doc(&s).pattern("Dots").unwrap().clone();
+    let place = |s: &Session| doc(s).swatches_iter().position(|w| w.name == "Dots");
+    let (at, swatches, steps) = (place(&s), doc(&s).swatches_iter().count(), s.doc().unwrap().history.undo.len());
+    let v = s.execute("object.pattern.replaceArt", &json!({"name": "Dots"})).unwrap();
+    assert_eq!(v["name"], "Dots");
+    let d = doc(&s);
+    let def = d.pattern("Dots").unwrap();
+    assert_eq!(def.art.len(), 1);
+    assert_eq!(def.art[0].kind, node(&s, blue).kind, "the tile art is the blue rectangle");
+    assert_eq!(def.art[0].appearance, node(&s, blue).appearance);
+    assert_ne!(def.art[0].id, blue, "a copy with an id of its own");
+    assert_eq!((def.tile, def.tile_type, &def.name), (old.tile, old.tile_type, &old.name), "the tile and options stay");
+    assert_eq!((d.patterns.len(), place(&s), d.swatches_iter().count()), (1, at, swatches), "no new pattern or swatch");
+    assert!(is_pattern(&node(&s, filled).appearance.fill_paint(), "Dots"), "the filled art keeps the pattern");
+    assert!(d.node(blue).is_some() && d.node(red).is_some(), "the art stays");
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), vec![blue], "the art stays selected");
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.undo.last().map(|e| e.label.as_str())), (steps + 1, Some("Replace Pattern Art")));
+    let new = def.art.clone();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(doc(&s).pattern("Dots").unwrap(), &old, "Undo gives the old tile art back");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(doc(&s).pattern("Dots").unwrap().art, new, "Redo gives the new tile art");
+}
+
+/// With Size Tile to Art on, the tile fits the new art (and its spacing); `ids` names the art.
+#[test]
+fn replace_art_fits_the_tile_when_size_tile_to_art_is_on() {
+    let mut s = session();
+    make_dots(&mut s);
+    s.execute("pattern.options", &json!({"name": "Dots", "sizeTileToArt": true, "hSpacing": 4, "vSpacing": 6})).unwrap();
+    let blue = blue_rect(&mut s);
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [blue.0]})).unwrap();
+    assert_eq!(doc(&s).pattern("Dots").unwrap().tile, Rect::new(98.0, 97.0, 132.0, 143.0));
+}
+
+/// Art that matches the tile art already, its own ids aside, records no undo step.
+#[test]
+fn replace_art_that_matches_the_tile_art_records_nothing() {
+    let mut s = session();
+    make_dots(&mut s);
+    blue_rect(&mut s);
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots"})).unwrap();
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(doc(&s), &before);
+}
+
+/// Replace Pattern Art is refused, changing nothing, for a missing name or pattern, with no art,
+/// while a pattern is edited, and for art painted with the pattern itself, directly, through
+/// another pattern, through a symbol, through the paints a graph stores, through a graph design a
+/// graph draws its columns with, through the art of a brush on a stroke and through the symbol of an
+/// inline graphic in type.
+#[test]
+fn replace_art_is_refused_without_changing_anything() {
+    let mut s = session();
+    make_dots(&mut s);
+    // "Holds dots": a pattern whose tile is painted with Dots.
+    let other = rect(&mut s, 100.0, 100.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [other.0], "swatch": "Dots"})).unwrap();
+    sel(&mut s, &[other]);
+    s.execute("object.pattern.make", &json!({"name": "Holds dots", "edit": false})).unwrap();
+    let via = rect(&mut s, 150.0, 150.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [via.0], "swatch": "Holds dots"})).unwrap();
+    let stroked = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    s.execute("paint.setStroke", &json!({"ids": [stroked.0], "swatch": "Dots"})).unwrap();
+    sel(&mut s, &[stroked]);
+    let instance = id_of(&s.execute("symbol.new", &json!({"name": "Dotted"})).unwrap());
+    let graph = graph_painted_with(&mut s, "Dots");
+    // A graph whose stored columns name design "Dotted columns", drawn with Dots, before it is drawn
+    // again.
+    let design = rect(&mut s, 300.0, 300.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [design.0], "swatch": "Dots"})).unwrap();
+    s.execute("graph.design", &json!({"new": "Dotted columns", "ids": [design.0]})).unwrap();
+    let v = s.execute("graph.create", &json!({"type": "column", "x": 300, "y": 200, "width": 60, "height": 40, "csv": ",2024\nQ1,3"}));
+    let designed = id_of(&v.unwrap());
+    let mut extras = doc_mut(&mut s).node_mut(designed).unwrap().extras_mut();
+    extras.graph.as_mut().unwrap().series_columns =
+        vec![Some(vectorcraft_doc::ColumnDesign { design: "Dotted columns".into(), ..Default::default() })];
+    drop(extras);
+    // A path stroked with an art brush whose art is filled with Dots.
+    let brush_art = rect(&mut s, 300.0, 350.0, 20.0, 5.0);
+    s.execute("paint.setFill", &json!({"ids": [brush_art.0], "swatch": "Dots"})).unwrap();
+    s.execute("brush.new", &json!({"type": "art", "name": "Dotted brush", "ids": [brush_art.0]})).unwrap();
+    let brushed = rect(&mut s, 300.0, 380.0, 40.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [brushed.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [brushed.0], "color": "#000000"})).unwrap();
+    s.execute("brush.apply", &json!({"name": "Dotted brush", "ids": [brushed.0]})).unwrap();
+    // Type that shows symbol "Dotted" as an inline graphic.
+    let typed = id_of(&s.execute("text.create", &json!({"x": 20, "y": 420, "text": "Hi"})).unwrap());
+    s.execute("text.insertInline", &json!({"id": typed.0, "at": 0, "symbol": "Dotted"})).unwrap();
+    let plain = blue_rect(&mut s);
+    let unchanged = |s: &Session, before: &vectorcraft_doc::Document, steps: usize, case: &str| {
+        assert_eq!(doc(s), before, "{case}: the document stays");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{case}: no undo step");
+    };
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    for (case, p, why) in [
+        ("no name", json!({}), "missing name".to_string()),
+        ("no pattern", json!({"name": "Stripes"}), "no pattern `Stripes`".into()),
+        ("no art", json!({"name": "Dots", "ids": []}), "select the art for the pattern tile".into()),
+        ("painted with it", json!({"name": "Dots", "ids": [other.0]}), "art painted with `Dots` can't be its tile".into()),
+        ("through a pattern", json!({"name": "Dots", "ids": [via.0]}), "art painted with `Dots` can't be its tile".into()),
+        ("through a symbol", json!({"name": "Dots", "ids": [instance.0]}), "art painted with `Dots` can't be its tile".into()),
+        ("through a graph's paints", json!({"name": "Dots", "ids": [graph.0]}), "art painted with `Dots` can't be its tile".into()),
+        ("through a graph design", json!({"name": "Dots", "ids": [designed.0]}), "art painted with `Dots` can't be its tile".into()),
+        ("through a brush", json!({"name": "Dots", "ids": [brushed.0]}), "art painted with `Dots` can't be its tile".into()),
+        ("through an inline graphic", json!({"name": "Dots", "ids": [typed.0]}), "art painted with `Dots` can't be its tile".into()),
+    ] {
+        let err = s.execute("object.pattern.replaceArt", &p).unwrap_err();
+        assert!(err.to_string().contains(&why), "{case}: {err}");
+        unchanged(&s, &before, steps, case);
+    }
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    let err = s.execute("object.pattern.replaceArt", &json!({"name": "Dots"})).unwrap_err();
+    assert!(err.to_string().contains("select the art for the pattern tile"), "nothing selected: {err}");
+    unchanged(&s, &before, steps, "nothing selected");
+    s.execute("object.pattern.edit", &json!({"name": "Holds dots"})).unwrap();
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    let err = s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [plain.0]})).unwrap_err();
+    assert!(matches!(&err, EngineError::Disabled(_, w) if w == "finish editing the pattern first"), "while editing: {err}");
+    unchanged(&s, &before, steps, "while editing");
+}
+
+/// Make, Replace Pattern Art and the Repeat commands return an error, changing nothing, when an
+/// `ids` entry names no object, also beside one that does: they never act on the rest alone.
+#[test]
+fn pattern_and_repeat_commands_refuse_an_unknown_id_without_changing_anything() {
+    let mut s = session();
+    make_dots(&mut s);
+    let blue = blue_rect(&mut s);
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    for (cmd, p) in [
+        ("object.pattern.replaceArt", json!({"name": "Dots", "ids": [blue.0, 9999]})),
+        ("object.pattern.make", json!({"name": "P", "ids": [blue.0, 9999]})),
+        ("object.repeat.radial", json!({"ids": [blue.0, 9999]})),
+        ("object.repeat.grid", json!({"ids": [9999, blue.0]})),
+        ("object.repeat.mirror", json!({"ids": [9999]})),
+    ] {
+        let err = s.execute(cmd, &p).unwrap_err();
+        assert!(err.to_string().contains("no such object id 9999"), "{cmd}: {err}");
+        assert_eq!(doc(&s), &before, "{cmd}: the document stays");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}: no undo step");
+    }
+}
+
+fn doc_mut(s: &mut Session) -> &mut vectorcraft_doc::Document {
+    Arc::make_mut(&mut s.doc_mut().unwrap().doc)
+}
+
+fn is_pattern(p: &Paint, name: &str) -> bool {
+    matches!(p, Paint::Pattern { pattern, .. } if pattern == name)
+}
+
+/// How many paints of pattern `name` the document holds: in the art and the definitions
+/// ([`vectorcraft_doc::Document::visit_paints`]), the swatches, the character styles and the
+/// stored brush library.
+fn pattern_uses(d: &vectorcraft_doc::Document, name: &str) -> usize {
+    let mut n = 0;
+    d.visit_paints(&mut |p| n += usize::from(is_pattern(p, name)));
+    n += d.swatches_iter().filter(|w| is_pattern(&w.paint, name)).count();
+    let styled = d.char_styles.iter().flat_map(|c| ["fill", "stroke"].map(|k| c.attrs.get(k).cloned())).flatten();
+    n += styled.filter(|v| serde_json::from_value::<Paint>(v.clone()).is_ok_and(|p| is_pattern(&p, name))).count();
+    let needle = format!("\"pattern\":\"{name}\"");
+    n + d.unknown.get(vectorcraft_brush::DOC_KEY).map_or(0, |v| v.to_string().matches(&needle).count())
+}
+
+/// Canceling a new pattern removes every swatch of it, a color group's included, and the fills and
+/// strokes of it on art outside the editing layer become no paint. The object's other paints, and
+/// a swatch that only shares the pattern's name, stay.
+#[test]
+fn cancel_new_pattern_forgets_group_swatch_and_outside_fills_and_strokes() {
+    let mut s = session();
+    let other = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setStroke", &json!({"ids": [other.0], "color": "#00ff00"})).unwrap();
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("object.pattern.make", &json!({"name": "Tiles"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [other.0], "swatch": "Tiles"})).unwrap();
+    let d = doc_mut(&mut s);
+    let solid = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    d.swatch_groups.push(vectorcraft_color::SwatchGroup {
+        name: "Mine".into(),
+        swatches: vec![
+            vectorcraft_color::Swatch { name: "Grouped".into(), paint: pattern_paint("Tiles"), global: false, spot: false },
+            vectorcraft_color::Swatch { name: "Tiles".into(), paint: solid.clone(), global: false, spot: false },
+        ],
+    });
+    assert!(pattern_uses(doc(&s), "Tiles") >= 3);
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    let d = doc(&s);
+    assert!(d.pattern("Tiles").is_none());
+    assert_eq!(pattern_uses(d, "Tiles"), 0);
+    assert!(d.swatch("Grouped").is_none(), "the group's pattern swatch goes");
+    assert_eq!(d.swatch("Tiles").map(|w| &w.paint), Some(&solid), "a color swatch named like the pattern stays");
+    let n = node(&s, other);
+    assert!(n.appearance.fill_paint().is_none());
+    assert!(matches!(n.appearance.stroke_paint(), Paint::Solid { .. }), "the stroke stays");
+}
+
+/// Save a Copy keeps the copy as its own pattern when the new pattern is canceled, and the copy's
+/// tile art loses its paints of the canceled pattern.
+#[test]
+fn cancel_new_pattern_forgets_its_paints_in_a_saved_copy() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("object.pattern.make", &json!({"name": "Tiles"})).unwrap();
+    let layer = doc(&s).pattern_edit.as_ref().unwrap().layer;
+    let tile = doc(&s).node(layer).unwrap().children().unwrap()[0].id;
+    s.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Tiles"})).unwrap();
+    assert_eq!(s.execute("object.pattern.saveCopy", &json!({})).unwrap()["name"], "Tiles copy");
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    let d = doc(&s);
+    let copy = d.pattern("Tiles copy").expect("the copy stays");
+    assert_eq!(copy.art.len(), 1);
+    assert!(copy.art[0].appearance.fill_paint().is_none());
+    assert_eq!(pattern_uses(d, "Tiles"), 0);
+}
+
+/// Canceling a new pattern also clears its paints in type, opacity mask art, symbol definitions,
+/// graph designs, graphic and character styles and brush art, and in the fill, stroke and
+/// appearance new art takes, so new art does not take a paint of a pattern that is gone.
+#[test]
+fn cancel_new_pattern_forgets_hidden_paints_and_new_art_defaults() {
+    let mut s = session();
+    let masked = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let m = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, m.0]})).unwrap();
+    let t = id_of(&s.execute("text.create", &json!({"x": 20, "y": 300, "text": "Hi"})).unwrap());
+    let band = rect(&mut s, 200.0, 200.0, 40.0, 10.0);
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("object.pattern.make", &json!({"name": "Tiles"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [band.0], "swatch": "Tiles"})).unwrap();
+    s.execute("brush.new", &json!({"type": "art", "name": "Band", "ids": [band.0]})).unwrap();
+    let p = pattern_paint("Tiles");
+    let d = doc_mut(&mut s);
+    let art = d.node(band).unwrap().clone();
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Sym".into(), art: Arc::new(art.clone()), dynamic: false });
+    d.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Bar".into(), art: Arc::new(art.clone()) });
+    d.graphic_styles.push(vectorcraft_doc::GraphicStyle {
+        name: "Style".into(),
+        appearance: (*art.appearance).clone(),
+        id: 0,
+        opacity: 1.0,
+        blend: Default::default(),
+        isolate: false,
+        knockout: Default::default(),
+        unit_box: true,
+    });
+    let attrs = json!({"fill": p, "stroke": p, "size": 12});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Char".into(), attrs: attrs.as_object().unwrap().clone() });
+    if let Some(NodeKind::Text(text)) = d.node_mut(t).map(|n| &mut n.kind) {
+        text.runs[0].style.fill = p.clone();
+    }
+    let mask = d.node_mut(masked).and_then(|n| n.extras_if_any()).and_then(|e| e.mask.as_deref_mut()).expect("the mask");
+    Arc::make_mut(&mut mask.art).appearance = vectorcraft_doc::Appearance::basic(p.clone(), Paint::None, 0.0).into();
+    s.paint.fill = p.clone();
+    s.paint.appearance = Some(vectorcraft_doc::Appearance::basic(Paint::None, p.clone(), 1.0));
+    assert!(pattern_uses(doc(&s), "Tiles") >= 10, "{}", pattern_uses(doc(&s), "Tiles"));
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    assert_eq!(pattern_uses(doc(&s), "Tiles"), 0);
+    assert!(doc(&s).char_styles[0].attrs["size"] == json!(12), "the style's other attributes stay");
+    assert!(s.paint.fill.is_none());
+    assert!(s.paint.appearance.as_ref().unwrap().items.iter().all(|it| match it {
+        vectorcraft_doc::AppearanceItem::Fill(f) => !is_pattern(&f.paint, "Tiles"),
+        vectorcraft_doc::AppearanceItem::Stroke(k) => !is_pattern(&k.paint, "Tiles"),
+    }));
+    let fresh = rect(&mut s, 300.0, 300.0, 20.0, 20.0);
+    let n = node(&s, fresh);
+    assert!(!is_pattern(&n.appearance.fill_paint(), "Tiles") && !is_pattern(&n.appearance.stroke_paint(), "Tiles"));
+}
+
+/// Cancel is one undo step: Undo gives the pattern, its paints and the fill new art takes back, and
+/// Redo clears them again.
+#[test]
+fn cancel_new_pattern_is_one_undo_step() {
+    let mut s = session();
+    let other = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("object.pattern.make", &json!({"name": "Tiles"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [other.0], "swatch": "Tiles"})).unwrap();
+    s.paint.fill = pattern_paint("Tiles");
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert!(s.paint.fill.is_none() && doc(&s).pattern("Tiles").is_none());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(is_pattern(&s.paint.fill, "Tiles"));
+    assert!(doc(&s).pattern("Tiles").is_some() && doc(&s).pattern_edit.is_some());
+    assert!(is_pattern(&node(&s, other).appearance.fill_paint(), "Tiles"));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.paint.fill.is_none() && doc(&s).pattern("Tiles").is_none());
+    assert_eq!(pattern_uses(doc(&s), "Tiles"), 0);
+}
+
+/// Canceling the edit of a pattern that Pattern Options renamed while it was edited gives the
+/// pattern its old name back, with its swatch and the paints of it, so nothing is left painted
+/// with a name no pattern has.
+#[test]
+fn cancel_after_renaming_an_edited_pattern_restores_its_name_and_paints() {
+    let mut s = session();
+    make_dots(&mut s);
+    let big = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [big.0], "swatch": "Dots"})).unwrap();
+    s.execute("object.pattern.edit", &json!({"name": "Dots"})).unwrap();
+    s.execute("pattern.options", &json!({"newName": "Spots"})).unwrap();
+    assert!(is_pattern(&node(&s, big).appearance.fill_paint(), "Spots"));
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    let d = doc(&s);
+    assert!(d.pattern("Dots").is_some() && d.pattern("Spots").is_none());
+    assert!(d.swatch("Dots").is_some_and(|w| is_pattern(&w.paint, "Dots")));
+    assert!(is_pattern(&node(&s, big).appearance.fill_paint(), "Dots"));
+    assert_eq!(pattern_uses(d, "Spots"), 0);
+    // When Save a Copy has taken the old name since, the pattern keeps its new name and paints.
+    s.execute("object.pattern.edit", &json!({"name": "Dots"})).unwrap();
+    s.execute("pattern.options", &json!({"newName": "Spots"})).unwrap();
+    s.execute("object.pattern.saveCopy", &json!({"name": "Dots"})).unwrap();
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    let d = doc(&s);
+    assert!(d.pattern("Dots").is_some() && d.pattern("Spots").is_some());
+    assert!(is_pattern(&node(&s, big).appearance.fill_paint(), "Spots"));
+}
+
 #[test]
 fn edit_then_cancel_restores_definition() {
     let mut s = session();
@@ -312,6 +661,111 @@ fn options_set_tile_type_spacing_and_overlap() {
     assert!(s.execute("pattern.options", &json!({"name": "Dots", "width": -1})).is_err());
 }
 
+/// Move Tile with Art: in pattern editing mode, a move of all of the tile art moves the tile by the
+/// same offset, through `object.move`, `object.nudge` and `object.transform`. With the option off
+/// (a new pattern's default), a move of part of the art, a rotation or a copy, the tile stays.
+/// Undo puts the tile back, and Done keeps the moved tile.
+#[test]
+fn move_tile_with_art_moves_the_tile_when_all_of_the_art_moves() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 12.0, 0.0, 6.0, 6.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    let tile = |s: &Session| doc(s).pattern("P").unwrap().tile;
+    let start = tile(&s);
+    let art: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(art.len(), 2);
+    assert!(!doc(&s).pattern("P").unwrap().move_tile_with_art, "off for a new pattern");
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    assert_eq!(tile(&s), start, "with the option off the tile stays");
+    s.execute("object.move", &json!({"dx": -5, "dy": 0})).unwrap();
+
+    s.execute("pattern.options", &json!({"moveTileWithArt": true})).unwrap();
+    assert_eq!(s.execute("pattern.list", &json!({})).unwrap()["patterns"][0]["moveTileWithArt"], true);
+    s.execute("object.move", &json!({"dx": 3, "dy": 4})).unwrap();
+    assert_eq!(tile(&s), start + vectorcraft_geom::Vec2::new(3.0, 4.0));
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, -1, 2]})).unwrap();
+    assert_eq!(tile(&s), start + vectorcraft_geom::Vec2::new(2.0, 6.0));
+    let k = s.prefs.keyboard_increment;
+    s.execute("object.nudge", &json!({"dx": 1, "dy": 0})).unwrap();
+    assert_eq!(tile(&s), start + vectorcraft_geom::Vec2::new(2.0 + k, 6.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(tile(&s), start + vectorcraft_geom::Vec2::new(3.0, 4.0), "undo puts the tile back");
+    let moved = tile(&s);
+
+    sel(&mut s, &art[..1]);
+    s.execute("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+    assert_eq!(tile(&s), moved, "a move of part of the art leaves the tile");
+    sel(&mut s, &art);
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    assert_eq!(tile(&s), moved, "a rotation leaves the tile");
+    s.execute("object.move", &json!({"dx": 1, "dy": 1, "copy": true})).unwrap();
+    assert_eq!(tile(&s), moved, "a copy leaves the tile");
+
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    assert_eq!(tile(&s), moved, "Done keeps the moved tile");
+    assert!(doc(&s).pattern("P").unwrap().move_tile_with_art);
+}
+
+/// Move Tile with Art counts a group in the tile art as moved when each of its members moved, one
+/// by one selected.
+#[test]
+fn move_tile_with_art_counts_a_group_whose_members_all_moved() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 12.0, 0.0, 6.0, 6.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "G"})).unwrap();
+    s.execute("pattern.options", &json!({"moveTileWithArt": true})).unwrap();
+    let start = doc(&s).pattern("G").unwrap().tile;
+    let layer = doc(&s).pattern_edit.as_ref().unwrap().layer;
+    let group = doc(&s).node(layer).unwrap().children().unwrap()[0].clone();
+    let members: Vec<NodeId> = group.children().unwrap().iter().map(|c| c.id).collect();
+    assert_eq!(members.len(), 2);
+    sel(&mut s, &members[..1]);
+    s.execute("object.move", &json!({"dx": 4, "dy": 0})).unwrap();
+    assert_eq!(doc(&s).pattern("G").unwrap().tile, start, "one member of two");
+    sel(&mut s, &members);
+    s.execute("object.move", &json!({"dx": 0, "dy": 5})).unwrap();
+    assert_eq!(doc(&s).pattern("G").unwrap().tile, start + vectorcraft_geom::Vec2::new(0.0, 5.0), "every member");
+}
+
+/// Move Tile with Art moves the tile as far as the art moved: when the art is aligned to the pixel
+/// grid and a move snaps it to the grid, the tile moves by the snapped distance.
+#[test]
+fn move_tile_with_art_follows_art_that_snaps_to_the_pixel_grid() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a]);
+    s.execute("object.pattern.make", &json!({"name": "P"})).unwrap();
+    s.execute("pattern.options", &json!({"moveTileWithArt": true})).unwrap();
+    let art = s.doc().unwrap().selection.objects[0];
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(art).unwrap().extras_mut().pixel_aligned = true;
+    let start = doc(&s).pattern("P").unwrap().tile;
+    let origin = |s: &Session| doc(s).node(art).unwrap().geometric_bounds().unwrap().origin();
+    let before = origin(&s);
+    s.execute("object.move", &json!({"dx": 0.3, "dy": 0})).unwrap();
+    let moved = origin(&s) - before;
+    assert!((moved.x - 0.3).abs() > 1e-6, "the art snapped to the grid: {moved:?}");
+    assert_eq!(doc(&s).pattern("P").unwrap().tile, start + moved, "the tile moved as far");
+}
+
+/// Pattern Options that change nothing record no undo step.
+#[test]
+fn options_that_change_nothing_record_no_undo_step() {
+    let mut s = session();
+    make_dots(&mut s);
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    s.execute("pattern.options", &json!({"name": "Dots", "moveTileWithArt": false, "copies": 5})).unwrap();
+    assert_eq!(steps(&s), before);
+    s.execute("pattern.options", &json!({"name": "Dots", "moveTileWithArt": true})).unwrap();
+    assert_eq!(steps(&s), before + 1);
+}
+
 #[test]
 fn options_rename_updates_swatch_and_paints() {
     let mut s = session();
@@ -379,6 +833,187 @@ fn delete_pattern_unpaints_objects() {
     assert!(doc(&s).pattern("Dots").is_none() && doc(&s).swatch("Dots").is_none());
     assert!(node(&s, big).appearance.fill_paint().is_none());
     assert!(s.execute("pattern.delete", &json!({"name": "Dots"})).is_err());
+}
+
+/// Puts paints of pattern `name` where the layers do not reach: a symbol definition, another
+/// pattern's tile, a graphic style, a character style, a type run, a color group's swatch and the
+/// fill new art takes.
+fn paint_outside_the_layers(s: &mut Session, name: &str) {
+    let t = id_of(&s.execute("text.create", &json!({"x": 20, "y": 300, "text": "Hi"})).unwrap());
+    let p = pattern_paint(name);
+    let d = doc_mut(s);
+    let shape = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0));
+    let art = Node::path(d.alloc_id(), shape, vectorcraft_doc::Appearance::basic(p.clone(), Paint::None, 0.0));
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Sym".into(), art: Arc::new(art.clone()), dynamic: false });
+    d.patterns.push(vectorcraft_doc::pattern::PatternDef::new("Other", vec![Arc::new(art.clone())]));
+    d.graphic_styles.push(vectorcraft_doc::GraphicStyle {
+        name: "Style".into(),
+        appearance: (*art.appearance).clone(),
+        id: 0,
+        opacity: 1.0,
+        blend: Default::default(),
+        isolate: false,
+        knockout: Default::default(),
+        unit_box: true,
+    });
+    let attrs = json!({"fill": p});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Char".into(), attrs: attrs.as_object().unwrap().clone() });
+    if let Some(NodeKind::Text(text)) = d.node_mut(t).map(|n| &mut n.kind) {
+        text.runs[0].style.fill = p.clone();
+    }
+    d.swatch_groups.push(vectorcraft_color::SwatchGroup {
+        name: "Mine".into(),
+        swatches: vec![vectorcraft_color::Swatch { name: "Grouped".into(), paint: p.clone(), global: false, spot: false }],
+    });
+    s.paint.fill = p;
+}
+
+/// Delete Pattern clears the pattern's paints outside the layers too, and in the fill new art takes.
+#[test]
+fn delete_pattern_forgets_paints_outside_the_layers() {
+    let mut s = session();
+    make_dots(&mut s);
+    paint_outside_the_layers(&mut s, "Dots");
+    assert_eq!(pattern_uses(doc(&s), "Dots"), 7);
+    let v = s.execute("pattern.delete", &json!({"name": "Dots"})).unwrap();
+    assert_eq!(v["unpainted"], 5, "the symbol, the other tile, the graphic style, the character style and the type");
+    assert_eq!(pattern_uses(doc(&s), "Dots"), 0);
+    assert!(doc(&s).swatch("Grouped").is_none() && doc(&s).pattern("Other").is_some());
+    assert!(s.paint.fill.is_none());
+}
+
+/// A Pattern Options rename renames the pattern's paints outside the layers too, and in the fill
+/// new art takes.
+#[test]
+fn rename_pattern_reaches_paints_outside_the_layers() {
+    let mut s = session();
+    make_dots(&mut s);
+    paint_outside_the_layers(&mut s, "Dots");
+    s.execute("pattern.options", &json!({"name": "Dots", "newName": "Spots"})).unwrap();
+    assert_eq!(pattern_uses(doc(&s), "Dots"), 0);
+    assert_eq!(pattern_uses(doc(&s), "Spots"), 7);
+    assert!(is_pattern(&s.paint.fill, "Spots"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(is_pattern(&s.paint.fill, "Dots"), "Undo gives the fill its old name back");
+}
+
+/// A new graph whose stored series fill and stroke and value label fill and stroke are pattern
+/// `name`, as a later redraw would give them to its marks and labels.
+fn graph_painted_with(s: &mut Session, name: &str) -> NodeId {
+    let v = s.execute("graph.create", &json!({"type": "column", "x": 200, "y": 200, "width": 60, "height": 40, "csv": ",2024\nQ1,3\nQ2,5"}));
+    let id = id_of(&v.unwrap());
+    let p = pattern_paint(name);
+    let mut extras = doc_mut(s).node_mut(id).unwrap().extras_mut();
+    let spec = extras.graph.as_mut().unwrap();
+    spec.series_paints = vec![vectorcraft_doc::SeriesPaint { fill: Some(p.clone()), stroke: Some(p.clone()), ..Default::default() }];
+    spec.label_styles.values = Some(vectorcraft_doc::CharStyle { fill: p.clone(), stroke: p, ..Default::default() });
+    id
+}
+
+/// The series and label paints a graph stores, in order: series fill and stroke, then the value
+/// labels' fill and stroke.
+fn stored_graph_paints(s: &Session, id: NodeId) -> Vec<Paint> {
+    let n = node(s, id);
+    let g = n.extras().graph.as_deref().unwrap();
+    let series = g.series_paints.iter().flat_map(|p| [p.fill.clone(), p.stroke.clone()]).flatten();
+    series.chain(g.label_styles.values.iter().flat_map(|st| [st.fill.clone(), st.stroke.clone()])).collect()
+}
+
+/// Delete Pattern clears the series and label paints a graph stores, and a rename renames them, so
+/// a later `graph.setData` draws no paint of a missing pattern.
+#[test]
+fn delete_and_rename_reach_a_graphs_stored_paints() {
+    let mut s = session();
+    make_dots(&mut s);
+    let g = graph_painted_with(&mut s, "Dots");
+    s.execute("pattern.options", &json!({"name": "Dots", "newName": "Spots"})).unwrap();
+    assert!(stored_graph_paints(&s, g).iter().all(|p| is_pattern(p, "Spots")), "the rename reaches the graph");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(stored_graph_paints(&s, g).iter().all(|p| is_pattern(p, "Dots")));
+    let v = s.execute("pattern.delete", &json!({"name": "Dots"})).unwrap();
+    assert_eq!(v["unpainted"], 4, "the series fill and stroke and the value labels' fill and stroke");
+    assert!(stored_graph_paints(&s, g).iter().all(Paint::is_none));
+    s.execute("graph.setData", &json!({"id": g.0, "rows": [[2], [4]]})).unwrap();
+    assert_eq!(pattern_uses(doc(&s), "Dots"), 0, "the redrawn graph holds no paint of the deleted pattern");
+}
+
+/// Canceling a new pattern clears the series and label paints a graph stores.
+#[test]
+fn cancel_new_pattern_reaches_a_graphs_stored_paints() {
+    let mut s = session();
+    // The graph is made outside the editing layer, and its paints take the new pattern's name.
+    let g = graph_painted_with(&mut s, "Tiles");
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("object.pattern.make", &json!({"name": "Tiles"})).unwrap();
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    assert_eq!(stored_graph_paints(&s, g).len(), 4);
+    assert!(stored_graph_paints(&s, g).iter().all(Paint::is_none));
+    assert_eq!(pattern_uses(doc(&s), "Tiles"), 0);
+}
+
+/// With New Art Has Basic Appearance off, Redo of Delete Pattern gives new art the paints the
+/// command left, the selected object's appearance taken after the pattern's fill was cleared.
+#[test]
+fn redo_of_delete_pattern_keeps_the_inherited_new_art_paints() {
+    let mut s = session();
+    let r = make_dots(&mut s);
+    s.prefs.new_art_basic = false;
+    sel(&mut s, &[r]);
+    s.paint.fill = pattern_paint("Dots");
+    s.execute("pattern.delete", &json!({"name": "Dots"})).unwrap();
+    let after = s.paint.clone();
+    assert!(!is_pattern(&after.fill, "Dots"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.paint, after);
+}
+
+/// A Pattern Options rename tried as a preview changes the fill new art takes only while the
+/// preview stands: another preview and Cancel start from the fill the interaction began with.
+/// Keeping the preview keeps the rename, and Undo takes it back.
+#[test]
+fn rename_previews_restore_the_fill_new_art_takes() {
+    let mut s = session();
+    make_dots(&mut s);
+    s.paint.fill = pattern_paint("Dots");
+    s.begin_interaction("Pattern Options").unwrap();
+    s.preview("pattern.options", &json!({"name": "Dots", "newName": "Spots"})).unwrap();
+    assert!(is_pattern(&s.paint.fill, "Spots"));
+    s.preview("pattern.options", &json!({"name": "Dots", "newName": "Tiles"})).unwrap();
+    assert!(is_pattern(&s.paint.fill, "Tiles"));
+    s.cancel_interaction().unwrap();
+    assert!(is_pattern(&s.paint.fill, "Dots") && doc(&s).pattern("Dots").is_some());
+    s.begin_interaction("Pattern Options").unwrap();
+    s.preview("pattern.options", &json!({"name": "Dots", "newName": "Spots"})).unwrap();
+    s.commit_interaction().unwrap();
+    assert!(is_pattern(&s.paint.fill, "Spots") && doc(&s).pattern("Spots").is_some());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(is_pattern(&s.paint.fill, "Dots") && doc(&s).pattern("Dots").is_some());
+}
+
+/// With New Art Has Basic Appearance off, a canceled rename preview leaves new art with the
+/// appearance of the selected object as the document has it again, so no paint of the previewed
+/// name is left.
+#[test]
+fn canceled_rename_preview_leaves_no_inherited_paint_of_the_new_name() {
+    let mut s = session();
+    make_dots(&mut s);
+    let big = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [big.0], "swatch": "Dots"})).unwrap();
+    s.prefs.new_art_basic = false;
+    sel(&mut s, &[big]);
+    s.paint = vectorcraft_tools::PaintDefaults::default();
+    s.begin_interaction("Pattern Options").unwrap();
+    s.preview("pattern.options", &json!({"name": "Dots", "newName": "Spots"})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert!(doc(&s).pattern("Dots").is_some() && doc(&s).pattern("Spots").is_none());
+    let items = s.paint.appearance.iter().flat_map(|a| a.items.iter()).map(|it| match it {
+        vectorcraft_doc::AppearanceItem::Fill(f) => f.paint.clone(),
+        vectorcraft_doc::AppearanceItem::Stroke(k) => k.paint.clone(),
+    });
+    let paints: Vec<Paint> = [s.paint.fill.clone(), s.paint.stroke.clone()].into_iter().chain(items).collect();
+    assert!(paints.iter().all(|p| !is_pattern(p, "Spots")), "{paints:?}");
 }
 
 #[test]
@@ -1032,21 +1667,31 @@ fn mirror_axis(s: &Session) -> vectorcraft_tools::mirror::MirrorAxis {
     vectorcraft_tools::mirror::MirrorAxis::of(&st.doc, &st.selection, 1.0).unwrap()
 }
 
+/// A press on the mirror axis at `at`, as the canvas's selection widgets take it.
+fn mirror_press(s: &mut Session, at: Point) -> vectorcraft_tools::mirror::MirrorDrag {
+    s.with_tool_context(ViewInfo::default(), |cx| vectorcraft_tools::mirror::MirrorDrag::hit(cx, at, Mods::default())).expect("a press on the axis")
+}
+
+/// The mirror axis drag `d` moved to `to`, its actions applied as the canvas's selection widgets apply them.
+fn mirror_drag(s: &mut Session, d: &mut vectorcraft_tools::mirror::MirrorDrag, to: Point, mods: Mods) {
+    let acts = s.with_tool_context(ViewInfo::default(), |cx| d.drag(cx, to, mods));
+    s.apply_actions(acts).unwrap();
+}
+
 #[test]
 fn mirror_axis_drag_previews_once_and_undo_redo_preserve_source() {
-    use vectorcraft_tools::{PointerEvent, PointerKind};
     let mut s = session();
     rect(&mut s, 100.0, 100.0, 60.0, 80.0);
     let id = id_of(&s.execute("object.repeat.mirror", &json!({})).unwrap());
     let before = node(&s, id);
     let axis = mirror_axis(&s);
-    let v = ViewInfo::default();
-    s.select_tool("selection", v).unwrap();
     let h = crate::tests::history(&s);
-    for (kind, dx) in [(PointerKind::Down, 0.0), (PointerKind::Drag, 20.0), (PointerKind::Drag, 30.0), (PointerKind::Up, 40.0)] {
-        s.pointer(&PointerEvent::new(kind, axis.center.x + dx, axis.center.y), v).unwrap();
+    let mut d = mirror_press(&mut s, axis.center);
+    for dx in [20.0, 30.0, 40.0] {
+        mirror_drag(&mut s, &mut d, axis.center + vectorcraft_geom::Vec2::new(dx, 0.0), Mods::default());
         assert!(close(mirror_axis(&s).center, axis.center + vectorcraft_geom::Vec2::new(dx, 0.0)));
     }
+    s.apply_actions(d.finish()).unwrap();
     assert_eq!(crate::tests::history(&s).0, h.0 + 1);
     let after = node(&s, id);
     let (NodeKind::Repeat(a), NodeKind::Repeat(b)) = (&before.kind, &after.kind) else { panic!() };
@@ -1060,33 +1705,29 @@ fn mirror_axis_drag_previews_once_and_undo_redo_preserve_source() {
 
 #[test]
 fn mirror_axis_rotation_snaps_and_escape_restores_document_and_history() {
-    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
     let mut s = session();
     rect(&mut s, 100.0, 100.0, 60.0, 80.0);
     let id = id_of(&s.execute("object.repeat.mirror", &json!({})).unwrap());
-    let v = ViewInfo::default();
-    s.select_tool("selection", v).unwrap();
     let before = node(&s, id);
     let h = crate::tests::history(&s);
     let axis = mirror_axis(&s);
     let end = axis.ends[1];
     let destination = axis.center + vectorcraft_geom::Vec2::new(70.0, 60.0);
-    s.pointer(&PointerEvent::new(PointerKind::Down, end.x, end.y), v).unwrap();
     let shift = Mods { shift: true, ..Default::default() };
-    s.pointer(&PointerEvent::new(PointerKind::Drag, destination.x, destination.y).with_mods(shift), v).unwrap();
+    let mut d = mirror_press(&mut s, end);
+    mirror_drag(&mut s, &mut d, destination, shift);
     assert!((mirror_axis(&s).angle - 45.0).abs() < 1e-6);
     assert_eq!(mirror_axis(&s).center, axis.center);
-    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
-    assert!(!s.tool_busy());
-    s.pointer(&PointerEvent::new(PointerKind::Up, destination.x, destination.y), v).unwrap();
+    s.apply_actions(d.cancel()).unwrap();
     assert_eq!(node(&s, id), before);
     assert_eq!(crate::tests::history(&s), h);
     // A click is not an edit, and a subsequent real drag still works after cancellation.
-    s.pointer(&PointerEvent::new(PointerKind::Down, end.x, end.y), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, end.x, end.y), v).unwrap();
+    let click = mirror_press(&mut s, end).finish();
+    s.apply_actions(click).unwrap();
     assert_eq!(crate::tests::history(&s), h);
-    s.pointer(&PointerEvent::new(PointerKind::Down, end.x, end.y), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, destination.x, destination.y).with_mods(shift), v).unwrap();
+    let mut d = mirror_press(&mut s, end);
+    mirror_drag(&mut s, &mut d, destination, shift);
+    s.apply_actions(d.finish()).unwrap();
     assert!((mirror_axis(&s).angle - 45.0).abs() < 1e-6);
     assert_eq!(crate::tests::history(&s).0, h.0 + 1);
 }
@@ -1264,6 +1905,7 @@ fn pattern_commands_refuse_a_param_of_the_wrong_type() {
             ("pattern.options", options(json!({"copies": "5"})), number("copies", json!("5"))),
             ("pattern.options", options(json!({"dimCopies": "50"})), number("dimCopies", json!("50"))),
             ("pattern.options", options(json!({"sizeTileToArt": "true"})), switch("sizeTileToArt")),
+            ("pattern.options", options(json!({"moveTileWithArt": "yes"})), switch("moveTileWithArt")),
             ("pattern.options", options(json!({"showTileEdge": 1})), switch("showTileEdge")),
             ("pattern.options", options(json!({"showSwatchBounds": "no"})), switch("showSwatchBounds")),
             ("pattern.options", options(json!({"overlap": "right"})), "`overlap` must be an object, not \"right\"".into()),

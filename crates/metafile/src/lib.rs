@@ -1,6 +1,7 @@
 //! Windows metafiles: hand-written EMF and WMF writers and readers.
 //!
-//! [`export`] writes the visible art over one region of a document (an artboard) as a metafile:
+//! [`export`] writes the visible art over one region of a document (an artboard) as a metafile,
+//! and [`export_regions`] one metafile per region:
 //!
 //! - **EMF**: paths keep their Bézier curves, fills are solid brushes, strokes geometric pens with
 //!   their width, caps, joins, miter limit and dashes; strokes a pen can't draw (aligned inside or
@@ -13,22 +14,24 @@
 //!   lines or gradients, so clipped art is written whole, images over white, dashes as separate
 //!   lines and gradients and patterns as one colour (each loss comes back as a warning).
 //!
-//! [`import`] reads either format back into a document of one artboard (the picture's frame) and
-//! one layer: paths with fills and strokes, clipping, images and text. Records it doesn't read are
-//! skipped, with one warning.
+//! [`import`] reads either format (an EMF with its EMF+ records too, through `craft_metafile`)
+//! into a document of one artboard (the picture's frame) and one layer: paths with fills and
+//! strokes, clipping, images and text. Records it doesn't read are skipped, with one warning.
+//! A picture cut short by a reader limit, images and pattern brushes that can't be read, clips
+//! that can't be applied and raster operations other than a plain copy each add a warning.
+//! [`import_pict`] reads QuickDraw pictures (PICT, versions 1 and 2) into the same kind of
+//! document.
 //!
-//! - `bytes`: little-endian writing and bounds-checked reading.
-//! - `dib`: device-independent bitmaps, both ways.
-//! - `scene`: the document walk both writers share.
-//! - `emf`, `wmf`: the writers.
-//! - `import`: the reader.
+//! The app walks its document and maps its drawing operations to the shared writers.
 
+#[cfg(test)]
 mod bytes;
 mod dib;
-mod emf;
+mod encode;
+#[cfg(test)]
+mod expansion_test;
 mod import;
 mod scene;
-mod wmf;
 
 use vectorcraft_doc::Document;
 use vectorcraft_geom::Rect;
@@ -54,13 +57,10 @@ impl Kind {
 
 /// The metafile format `bytes` start like, if any.
 pub fn sniff(bytes: &[u8]) -> Option<Kind> {
-    if emf::is_emf(bytes) {
-        Some(Kind::Emf)
-    } else if wmf::is_wmf(bytes) {
-        Some(Kind::Wmf)
-    } else {
-        None
-    }
+    craft_metafile::sniff(bytes).map(|kind| match kind {
+        craft_metafile::Kind::Emf => Kind::Emf,
+        craft_metafile::Kind::Wmf => Kind::Wmf,
+    })
 }
 
 /// A written metafile.
@@ -72,22 +72,45 @@ pub struct Output {
 }
 
 /// Write the visible art of `doc` over `region` (document space: its top-left corner is the
-/// picture's origin, its size the picture's) as `kind`. Live geometry effects are applied first;
-/// template layers, hidden objects and guides are left out. Raster effects should be turned into
-/// images before (the engine does); the ones left are reported and left out.
+/// picture's origin, its size the picture's) as `kind`. Live geometry effects are applied first,
+/// in symbols' art too, where each instance places that art (EMF clips 9-slice cells, WMF does
+/// not); template layers, hidden objects and guides are left out. Raster effects should be turned
+/// into images before (the engine does); the ones left are reported and left out.
 pub fn export(doc: &Document, region: Rect, kind: Kind) -> Result<Output, String> {
-    let r = region.abs();
-    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0 {
+    Ok(export_regions(doc, &[region], kind)?.pop().unwrap_or_default())
+}
+
+/// The error [`export_regions`] returns for `regions`, without writing anything: a region whose
+/// corners are not all finite, or that has no width or no height, is empty. Corners in either
+/// order are allowed.
+pub fn check_regions(regions: &[Rect]) -> Result<(), String> {
+    let empty = |r: Rect| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0;
+    if regions.iter().any(|r| empty(r.abs())) {
         return Err("the export region is empty".into());
     }
-    let baked = vectorcraft_effects::bake_document(doc);
+    Ok(())
+}
+
+/// Write the visible art of `doc` over each of `regions` as `kind`, one metafile per region in the
+/// same order, each as [`export`] writes it over that region. The live effects are applied once
+/// for all of them. When any region is empty, nothing is written and the result is an error.
+pub fn export_regions(doc: &Document, regions: &[Rect], kind: Kind) -> Result<Vec<Output>, String> {
+    check_regions(regions)?;
+    let regions: Vec<Rect> = regions.iter().map(|r| r.abs()).collect();
+    if regions.is_empty() {
+        return Ok(Vec::new());
+    }
+    // The scene writes layers that do not print and leaves hidden layers and objects out.
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, kind == Kind::Emf, layers);
     let doc = baked.as_ref().unwrap_or(doc);
-    let (ops, mut warnings) = scene::Scene::new(doc, r, kind == Kind::Emf).run();
-    let bytes = match kind {
-        Kind::Emf => emf::write(&ops, r, &doc.title),
-        Kind::Wmf => wmf::write(&ops, r, &mut warnings),
-    };
-    Ok(Output { bytes, warnings })
+    regions
+        .into_iter()
+        .map(|r| {
+            let (ops, mut warnings) = scene::Scene::new(doc, r, kind == Kind::Emf).run();
+            encode::write(ops, r, kind, doc.info_title(), &mut warnings).map(|bytes| Output { bytes, warnings })
+        })
+        .collect()
 }
 
 /// A metafile read into a document.
@@ -105,6 +128,28 @@ pub fn import(bytes: &[u8]) -> Result<Imported, String> {
     let mut i = import::import(bytes)?;
     i.document.limit_depth_noting(&mut i.warnings);
     Ok(i)
+}
+
+/// A QuickDraw picture read into a document.
+#[derive(Clone, Debug)]
+pub struct Picture {
+    pub document: Document,
+    /// What was approximated or skipped.
+    pub warnings: Vec<String>,
+}
+
+/// Do `bytes` hold a QuickDraw picture (version 1 or 2), after a PICT file's 512 bytes of
+/// application data or on their own?
+pub fn is_pict(bytes: &[u8]) -> bool {
+    craft_metafile::is_pict(bytes)
+}
+
+/// Read a QuickDraw picture (version 1 or 2; a PICT file, or a picture on its own) into a document
+/// whose one artboard is the picture's frame.
+pub fn import_pict(bytes: &[u8]) -> Result<Picture, String> {
+    let mut p = import::import_pict(bytes)?;
+    p.document.limit_depth_noting(&mut p.warnings);
+    Ok(p)
 }
 
 #[cfg(test)]

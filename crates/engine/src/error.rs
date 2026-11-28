@@ -3,6 +3,9 @@ use super::{NodeId, cancel};
 /// The text of [`EngineError::Busy`], which ends every error a frontend reports for it.
 pub const SCRIPT_BUSY: &str = "a script is running: stop it or wait for it to finish";
 
+/// Stable prefix for a save refused by the filesystem: choose another destination.
+pub const READ_ONLY_LOCATION: &str = "READ_ONLY_LOCATION";
+
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
     #[error("unknown command `{0}`")]
@@ -20,6 +23,10 @@ pub enum EngineError {
     NoNode(NodeId),
     #[error("{0}")]
     Other(String),
+    /// The save's terminal filesystem error refuses writes here. The reason keeps the path and
+    /// system message. This never means an automation-root refusal or a recovery-copy failure.
+    #[error("{code}: {0}", code = READ_ONLY_LOCATION)]
+    ReadOnlyLocation(String),
     /// The caller asked for the command to stop ([`cancel`]). It changed nothing.
     #[error("cancelled; nothing was changed")]
     Cancelled,
