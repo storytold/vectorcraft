@@ -10,7 +10,7 @@ use craft::ui::contract::{Bind, BodyCx, Props, Show, ShowContainer};
 use craft::ui::display::Picture;
 use craft::ui::layout_components::Row;
 use craft::ui::primitives::IconSpec;
-use craft::ui::runtime::windows::WindowHost;
+use craft::ui::runtime::windows::{WindowAction, WindowHost};
 use craft::ui::shell::{Frame, Title, TitleBar};
 use craft::ui::style::{SurfaceKind, Variant};
 use egui::Ui;
@@ -144,11 +144,12 @@ pub fn app_bar(ui: &mut Ui, _cx: &mut BodyCx<'_>, app: &mut VectorcraftApp) {
     } else {
         TitleBar::new().surface(SurfaceKind::Background).show_fitted(ui, start, end)
     };
-    // The title bar reports a caption Close click in its output and never acts on it; acting here
-    // keeps the click from being dropped (the unsaved-changes prompt runs from the close request
-    // the command raises, as an OS close does).
+    // The title bar reports a caption Close click in its output and never acts on it. The window host sends the close,
+    // and a close of the main window goes through the app's close guard, so the unsaved-changes prompt runs as it does
+    // for an OS close.
     if out.close_requested {
-        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        let ctx = ui.ctx().clone();
+        WindowHost::of(&ctx).act(ctx.viewport_id(), WindowAction::Close);
     }
 }
 
