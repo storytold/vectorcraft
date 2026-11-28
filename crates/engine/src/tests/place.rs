@@ -657,6 +657,28 @@ fn pdf_pages_and_native_artboards_place_as_clipped_groups() {
     }
 }
 
+/// Place and Set Bounds use the layout of native point type, including its alignment.
+#[test]
+fn bounding_native_placement_measures_aligned_point_type() {
+    for (justify, x) in [("center", 190), ("right", 275)] {
+        let mut src = session();
+        let square = src.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 180, "height": 180})).unwrap()["id"].clone();
+        src.execute("paint.setStroke", &json!({"id": square, "none": true})).unwrap();
+        src.execute("text.create", &json!({"text": "Sample test", "x": x, "y": 150, "size": 18, "justify": justify})).unwrap();
+        let shown = vectorcraft_render::encode::art_bounds(&src.doc().unwrap().doc).unwrap();
+        let width = node(&src, &square).geometric_bounds().unwrap().width();
+        assert!(close(shown.width(), width), "the {justify}-aligned text starts inside the square");
+        let native = serialize(&mut src, "vectorcraft");
+
+        let mut placed = session();
+        let r = place(&mut placed, "aligned.vectorcraft", &native, json!({"crop": "bounding", "link": false}));
+        assert!(close(r["width"].as_f64().unwrap(), width), "{justify}: {r}");
+        placed.execute("object.setBounds", &json!({"width": width, "proportional": true})).unwrap();
+        let after = vectorcraft_render::encode::art_bounds(&placed.doc().unwrap().doc).unwrap();
+        assert!(close(after.width(), shown.width()), "{justify}: {shown:?} became {after:?}");
+    }
+}
+
 /// With crop "bounding", the art's box is the box of what shows, as an export measures it: a hidden
 /// member of a group does not count, and is still placed, hidden.
 #[test]
@@ -999,7 +1021,10 @@ fn a_placed_brush_whose_art_uses_a_renamed_image_is_copied() {
         let mut s = session();
         s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
         s.edit("Brush", |d, _| {
-            d.images.insert("k".into(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+            d.images.insert(
+                "k".into(),
+                vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() },
+            );
             let im = vectorcraft_doc::ImageObject {
                 key: "k".into(),
                 width: 2,
@@ -1199,9 +1224,16 @@ fn a_click_of_the_place_cursor_asks_the_frontend_to_place_the_file_when_asked_to
     let reqs = s.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), view).unwrap();
     let [UiRequest::Place(p)] = &reqs[..] else { panic!("{reqs:?}") };
     assert_eq!(p["rect"], json!([10.0, 10.0, 40.0, 20.0]));
+    assert_eq!(p[vectorcraft_tools::place::SOURCE_INDEX], 0);
+    assert_eq!(p[vectorcraft_tools::place::CLICK], true);
     assert!(top_children(&s).is_empty(), "the frontend places it");
     assert_eq!(s.tool_options()["names"], json!(["b.png"]), "the cursor goes on to the next file");
-    s.execute("file.place", p).unwrap();
+    // The frontend consumes the private source identity before placing the file.
+    let mut p = p.clone();
+    for key in [vectorcraft_tools::place::SOURCE_INDEX, vectorcraft_tools::place::CLICK] {
+        p.as_object_mut().unwrap().remove(key);
+    }
+    s.execute("file.place", &p).unwrap();
     // Left out: the second each document was made in.
     let doc = |s: &Session| {
         let mut d = (*s.doc().unwrap().doc).clone();

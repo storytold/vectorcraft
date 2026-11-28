@@ -21,3 +21,5 @@ mod ops;
 mod pixels;
 
 pub(crate) use filters::Stream;
+#[cfg(test)]
+pub(crate) use ops::measured;

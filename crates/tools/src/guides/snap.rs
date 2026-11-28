@@ -325,9 +325,10 @@ pub fn square(d: Vec2) -> Vec2 {
 /// too, so they all snap alike, and shows its [`Self::guides`].
 ///
 /// The targets ([`Targets::for_drawing`], the art in the window) are gathered once per document
-/// state: hovering gathers them again only after the document, the selection, what is left out,
-/// the window or the snapping options changed; a press always gathers them afresh, and the drag
-/// it starts keeps them, the document then showing the drag's own previews.
+/// state: hovering and pressing gather them again only after the document, the selection, what is
+/// left out, the window or the snapping options changed, so a press keeps the targets the hover
+/// before it gathered. The drag a press starts keeps them, the document then showing the drag's
+/// own previews.
 ///
 /// The Measure and Measure & Inspect tools keep one too, for the ends of a drag only. They do not
 /// ask it while hovering. [`Self::measure`] gathers [`Targets::for_measure`] instead, and a press
@@ -376,6 +377,28 @@ impl SnapKey {
     }
 }
 
+/// Every setting that can move a snapped drawn point besides the document: the window and the
+/// zoom, the options and tolerances [`SnapKey`] holds except the guides' color and labels, and
+/// the construction guides' angles a [`Leave::segment`] follows. A tool that keeps a hover's
+/// snapped point compares two of these to see whether a click would still snap the same way.
+#[derive(PartialEq)]
+pub(crate) struct SnapSettings {
+    screen: Option<ScreenFrame>,
+    zoom: f64,
+    view: [bool; 7],
+    snap_to_glyph: Option<GlyphSnap>,
+    alignment_lines: bool,
+    tolerances: [f64; 2],
+    angles: &'static [f64],
+}
+
+impl SnapSettings {
+    pub(crate) fn of(cx: &ToolContext) -> Self {
+        let SnapKey { screen, view, snap_to_glyph, style, tolerances, .. } = SnapKey::of(cx, &[]);
+        Self { screen, zoom: cx.zoom, view, snap_to_glyph, alignment_lines: style.lines, tolerances, angles: cx.construction_angles }
+    }
+}
+
 /// The part of the document the window shows (none headless: all of it).
 pub(super) fn visible(cx: &ToolContext) -> Option<Rect> {
     let s = cx.screen?;
@@ -393,17 +416,14 @@ impl DrawSnap {
     /// Snap the pointer hovering at `p` (the art but `exclude` as targets, the anchors of
     /// `exclude` still pulling), reusing the targets while nothing they depend on changed.
     pub fn hover(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
-        let key = SnapKey::of(cx, exclude);
-        if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
-            self.gather(cx, key);
-        }
+        self.gather_unless_current(cx, exclude);
         self.snap(cx, p, from)
     }
 
-    /// Snap the point pressed at `p`, the targets gathered afresh: the drag that follows keeps
-    /// them ([`Self::drag`]).
+    /// Snap the point pressed at `p`, reusing the targets the last hover or press gathered while
+    /// nothing they depend on changed: the drag that follows keeps them ([`Self::drag`]).
     pub fn press(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
-        self.gather(cx, SnapKey::of(cx, exclude));
+        self.gather_unless_current(cx, exclude);
         self.snap(cx, p, from)
     }
 
@@ -493,6 +513,14 @@ impl DrawSnap {
         t.nearest_point(p, tol).is_some_and(|(a, _)| at(a)) || t.crossing(p, tol).is_some_and(at)
     }
 
+    /// Whether a point at `p` leaving `from` lands on one of the targets the last hover or press
+    /// gathered ([`Targets::snap_hit`]), whether or not its guides show. False with Smart Guides
+    /// off, with no targets, and while pixels or the grid snap instead.
+    pub(crate) fn lands_on_target(&self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> bool {
+        let Some((_, PointSnap { targets: Some((t, tol)), op })) = &self.targets else { return false };
+        cx.smart_guides && !cx.snaps_to_pixel(*op) && !cx.snap_to_grid && t.snap_hit(p, from, cx.tol(*tol)).2
+    }
+
     /// The guides of the last snap.
     pub fn guides(&self) -> &[Overlay] {
         &self.guides
@@ -512,6 +540,15 @@ impl DrawSnap {
             Some((_, PointSnap { targets: Some((t, _)), .. })) => t.label(p, text).into_iter().collect(),
             _ => vec![],
         };
+    }
+
+    /// Gather the targets for the art but `exclude` unless the last hover or press gathered them
+    /// for the same [`SnapKey`].
+    fn gather_unless_current(&mut self, cx: &ToolContext, exclude: &[NodeId]) {
+        let key = SnapKey::of(cx, exclude);
+        if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
+            self.gather(cx, key);
+        }
     }
 
     fn gather(&mut self, cx: &ToolContext, key: SnapKey) {

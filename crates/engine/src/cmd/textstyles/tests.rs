@@ -37,6 +37,48 @@ fn character_style_attributes_refuse_a_glyph_choice() {
     assert!(err.to_string().contains("glyphAlternate"), "{err}");
 }
 
+/// `charStyle.edit` and `paraStyle.edit` give a Normal style that was never redefined its first definition, in one
+/// undo step: the type set in it takes the new attributes and keeps its overrides. The Normal style keeps its name,
+/// and an edit that changes nothing records no undo step.
+#[test]
+fn style_options_edit_defines_a_normal_style_in_one_undo_step() {
+    let (mut s, id) = session_with_text("One\nTwo");
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 7, "size": 30.0})).unwrap();
+    s.execute("text.setFormat", &json!({"id": id, "start": 4, "end": 4, "leftIndent": 20.0})).unwrap();
+    for (command, normal, attrs) in [
+        ("charStyle.edit", NORMAL_CHAR, json!({"size": 18.0, "tracking": 40.0})),
+        ("paraStyle.edit", NORMAL_PARA, json!({"left_indent": 12.0, "space_before": 6.0})),
+    ] {
+        assert!(Kind::Char.defs(&s.doc().unwrap().doc).iter().chain(Kind::Para.defs(&s.doc().unwrap().doc)).all(|d| d.name != normal));
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        s.execute(command, &json!({"name": normal, "to": normal, "attrs": attrs})).unwrap();
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{command}: one undo step");
+        let d = &s.doc().unwrap().doc;
+        let defs = if command == "charStyle.edit" { &d.char_styles } else { &d.para_styles };
+        assert_eq!(defs.iter().find(|def| def.name == normal).map(|def| json!(def.attrs)), Some(attrs.clone()), "{command}: the definition");
+        let changed = s.doc().unwrap().doc.clone();
+        s.execute(command, &json!({"name": normal, "to": normal, "attrs": attrs})).unwrap();
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{command}: the same attributes record nothing");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before, "{command}: undo");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, changed, "{command}: redo");
+    }
+    let r = runs(&s, id);
+    assert_eq!(
+        r.iter().map(|r| (r.style.style_name.as_deref(), r.style.size, r.style.tracking)).collect::<Vec<_>>(),
+        [(None, 18.0, 40.0), (None, 30.0, 40.0)],
+        "the type in Normal takes the new size and tracking and keeps its own size"
+    );
+    let p = paras(&s, id);
+    assert_eq!(
+        p.iter().map(|p| (p.style_name.as_deref(), p.left_indent, p.space_before)).collect::<Vec<_>>(),
+        [(None, 12.0, 6.0), (None, 20.0, 6.0)],
+        "the paragraphs in Normal take the new indent and space and keep their own indent"
+    );
+}
+
 fn session_with_text(text: &str) -> (Session, u64) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -401,6 +443,11 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
         json!({"tsume": 100.1}),
         json!({"diacriticHorizontal": -1000.1}),
         json!({"diacriticVertical": 1000.1}),
+        json!({"tracking": -1000.1}),
+        json!({"kerning": 10000.1}),
+        json!({"rotation": 360.1}),
+        json!({"stroke_miter_limit": 0.9}),
+        json!({"small_caps": 200.1}),
     ] {
         let key = attrs.as_object().unwrap().keys().next().unwrap();
         for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
@@ -425,7 +472,9 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
             "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0,
             "akiLeft": 0.0, "akiRight": 1000.0,
             "tsume": 100.0,
-            "diacriticHorizontal": -1000.0, "diacriticVertical": 1000.0
+            "diacriticHorizontal": -1000.0, "diacriticVertical": 1000.0,
+            "tracking": 10000.0, "kerning": -1000.0, "rotation": -360.0,
+            "stroke_miter_limit": 500.0, "small_caps": 200.0
         }}),
     )
     .unwrap();
@@ -518,6 +567,23 @@ fn editing_character_style_clears_removed_size_without_losing_local_override() {
     assert_eq!((r[0].style.size, r[1].style.size), (15.0, 31.0));
 }
 
+/// A size a style starts to set reaches the text that had the size the style left it (Normal's,
+/// or the default when Normal itself is redefined), and not text with a size of its own.
+#[test]
+fn a_size_a_character_style_starts_to_set_keeps_local_overrides() {
+    for name in ["Body", NORMAL_CHAR] {
+        let (mut s, id) = session_with_text("One two");
+        if name != NORMAL_CHAR {
+            s.execute("charStyle.new", &json!({"name": name, "attrs": {}})).unwrap();
+            s.execute("charStyle.apply", &json!({"name": name, "id": id})).unwrap();
+        }
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 7, "size": 36.0})).unwrap();
+        s.execute("charStyle.setAttrs", &json!({"name": name, "attrs": {"size": 24.0}})).unwrap();
+        let r = runs(&s, id);
+        assert_eq!((r[0].style.size, r[1].style.size), (24.0, 36.0), "{name}");
+    }
+}
+
 #[test]
 fn replacing_character_style_attrs_clears_removed_size() {
     let (mut s, id) = session_with_text("Text");
@@ -533,7 +599,7 @@ fn character_style_options_edit_validates_names_and_allows_case_changes() {
     s.execute("charStyle.new", &json!({"name":"Body","attrs":{"size":24.0}})).unwrap();
     s.execute("charStyle.new", &json!({"name":"Other","attrs":{}})).unwrap();
     for (name, to, message) in
-        [(super::NORMAL_CHAR, "New", "can't be edited this way"), ("Body", "  ", "give the style a name"), ("Body", "Other", "already exists")]
+        [(super::NORMAL_CHAR, "New", "can't be renamed"), ("Body", "  ", "give the style a name"), ("Body", "Other", "already exists")]
     {
         let error = s.execute("charStyle.edit", &json!({"name":name,"to":to,"attrs":{}})).unwrap_err().to_string();
         assert!(error.contains(message), "{error}");
@@ -830,8 +896,8 @@ fn load_all_styles_loads_both_kinds_in_one_step() {
     assert_eq!(s.doc().unwrap().doc, before);
 }
 
-/// A loaded character style whose size, scale, leading, shift, warichu Line Gap or stroke width is
-/// out of the range `charStyle.new` takes is skipped.
+/// A loaded character style whose size, scale, leading, shift, warichu Line Gap, stroke width or
+/// miter limit, tracking, kerning or rotation is out of the range `charStyle.new` takes is skipped.
 #[test]
 fn loaded_styles_out_of_range_are_skipped() {
     let (mut s, _) = session_with_text("Title");
@@ -841,11 +907,17 @@ fn loaded_styles_out_of_range_are_skipped() {
         ("Shifted", json!({"baseline_shift": 5000.0})),
         ("Thick", json!({"stroke_width": -2.0})),
         ("Gapped", json!({"warichuGap": 500.0})),
+        ("Spun", json!({"rotation": 720.0})),
+        ("Tracked", json!({"tracking": 50000.0})),
+        ("Kerned", json!({"kerning": -5000.0})),
+        ("Before", json!({"kerningBefore": 50000.0})),
+        ("Mitered", json!({"stroke_miter_limit": 0.5})),
         ("Fine", json!({"size": 12.0, "h_scale": 50.0})),
     ];
     let data = styles_file(&file, &[]);
     let r = s.execute("charStyle.load", &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
-    assert_eq!(r, json!({"added": ["Fine"], "existing": [], "skipped": ["Huge", "Flat", "Shifted", "Thick", "Gapped"]}));
+    let skipped = ["Huge", "Flat", "Shifted", "Thick", "Gapped", "Spun", "Tracked", "Kerned", "Before", "Mitered"];
+    assert_eq!(r, json!({"added": ["Fine"], "existing": [], "skipped": skipped}));
     assert_eq!(listed(&mut s, "charStyle"), [NORMAL_CHAR, "Fine"]);
 }
 
@@ -1642,13 +1714,13 @@ fn paragraph_style_options_edit_applies_to_users_and_is_one_saved_undo_step() {
     assert_eq!(s.doc().unwrap().doc, before);
     s.execute("edit.redo", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().doc, changed);
-    // The Normal style, an empty or a taken name and an unknown style are errors.
+    // Renaming the Normal style, an empty or a taken name and an unknown style are errors.
     s.execute("paraStyle.new", &json!({"name": "Other"})).unwrap();
     for (params, why) in [
         (json!({"name": "Text", "to": " ", "attrs": {}}), "give the style a name"),
         (json!({"name": "Text", "to": "Other", "attrs": {}}), "already exists"),
         (json!({"name": "Missing", "to": "Missing", "attrs": {}}), "no style `Missing`"),
-        (json!({"name": NORMAL_PARA, "to": NORMAL_PARA, "attrs": {}}), "can't be edited"),
+        (json!({"name": NORMAL_PARA, "to": "Basic", "attrs": {}}), "can't be renamed"),
     ] {
         let error = s.execute("paraStyle.edit", &params).unwrap_err().to_string();
         assert!(error.contains(why), "{params}: {error}");

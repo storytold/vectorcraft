@@ -438,6 +438,22 @@ impl Tool for BrushPaintTool {
     fn wants_samples(&self) -> bool {
         self.inner.wants_samples()
     }
+    /// The brush it paints with varies with the wheel: a Calligraphic brush with a value on Stylus
+    /// Wheel and a variation other than 0, a Scatter brush with a value on it whose two values
+    /// differ, an Art brush whose width is on it with two different widths, or a Pattern brush
+    /// whose scale is on it with two different scales.
+    fn reads_wheel(&self, cx: &ToolContext) -> bool {
+        use vectorcraft_brush::{BrushKind, Variation};
+        let wheel = |mode: Variation| mode == Variation::StylusWheel;
+        let Some(brush) = self.brush_name(cx).and_then(|n| vectorcraft_brush::find(cx.doc, &n)) else { return false };
+        match brush.kind {
+            BrushKind::Calligraphic(c) => c.modes().into_iter().zip(c.variation).any(|(m, v)| wheel(m) && v != 0.0),
+            BrushKind::Scatter(s) => s.modes().into_iter().zip(s.values()).any(|(m, (a, b))| wheel(m) && a != b),
+            BrushKind::Art(a) => a.width_mode.is_some_and(wheel) && a.width_range().0 != a.width_range().1,
+            BrushKind::Pattern(p) => p.scale_mode.is_some_and(wheel) && p.scale_range().0 != p.scale_range().1,
+            BrushKind::Bristle(_) => false,
+        }
+    }
     fn busy(&self) -> bool {
         self.inner.busy()
     }
@@ -757,5 +773,60 @@ mod tests {
         d.unknown.insert("currentBrush".into(), json!("Also deleted"));
         let a = drag(&d, &mut BrushPaintTool::default());
         assert!(matches!(&a, Action::Preview(c, v) if c == "path.freehand" && v.get("brush").is_none()), "no brush: {a:?}");
+    }
+
+    #[test]
+    fn the_paintbrush_reads_the_wheel_only_with_a_stylus_wheel_brush() {
+        use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Calligraphic, PatternBrush, Scatter, Variation};
+        let wheel = Variation::StylusWheel;
+        let calligraphic =
+            |modes, size| BrushKind::Calligraphic(Calligraphic { variation: [0.0, 0.0, size], modes: Some(modes), ..Calligraphic::default() });
+        let scatter = |size| {
+            BrushKind::Scatter(Scatter { size, modes: Some([wheel, Variation::Fixed, Variation::Fixed, Variation::Fixed]), ..Scatter::default() })
+        };
+        let art = |width_mode, width_max| BrushKind::Art(ArtBrush { width_mode, width_max: Some(width_max), ..ArtBrush::default() });
+        let pattern = |scale_mode, scale_max| BrushKind::Pattern(PatternBrush { scale_mode, scale_max: Some(scale_max), ..PatternBrush::default() });
+        let library = [
+            Brush { name: "Plain".into(), kind: calligraphic([Variation::Fixed, Variation::Fixed, Variation::Pressure], 2.0) },
+            Brush { name: "Nib".into(), kind: calligraphic([Variation::Fixed, Variation::Fixed, wheel], 2.0) },
+            Brush { name: "Still nib".into(), kind: calligraphic([Variation::Fixed, Variation::Fixed, wheel], 0.0) },
+            Brush { name: "Dots".into(), kind: scatter((50.0, 150.0)) },
+            Brush { name: "Even dots".into(), kind: scatter((100.0, 100.0)) },
+            Brush { name: "Taper".into(), kind: art(Some(wheel), 200.0) },
+            Brush { name: "Even taper".into(), kind: art(Some(wheel), 100.0) },
+            Brush { name: "Flat".into(), kind: art(None, 200.0) },
+            Brush { name: "Tiles".into(), kind: pattern(Some(wheel), 200.0) },
+            Brush { name: "Even tiles".into(), kind: pattern(Some(wheel), 100.0) },
+            Brush { name: "Fixed tiles".into(), kind: pattern(None, 200.0) },
+        ];
+        let (mut d, _) = doc_with_rect();
+        d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), serde_json::to_value(library).unwrap());
+        let (s, p) = (Selection::default(), paint());
+        let reads = |d: &vectorcraft_doc::Document, t: &BrushPaintTool| t.reads_wheel(&cx(d, &s, &p));
+        let mut t = BrushPaintTool::default();
+        assert!(!reads(&d, &t), "no brush");
+        let brushes = [
+            ("Plain", false),
+            ("Nib", true),
+            ("Still nib", false),
+            ("Dots", true),
+            ("Even dots", false),
+            ("Taper", true),
+            ("Even taper", false),
+            ("Flat", false),
+            ("Tiles", true),
+            ("Even tiles", false),
+            ("Fixed tiles", false),
+            ("Deleted", false),
+        ];
+        for (name, varies) in brushes {
+            d.unknown.insert(vectorcraft_brush::CURRENT_KEY.into(), json!(name));
+            assert_eq!(reads(&d, &t), varies, "the current brush {name}");
+        }
+        t.set_option("brush", &json!("Plain"));
+        assert!(!reads(&d, &t), "the tool's own brush comes first");
+        t.set_option("brush", &json!("Nib"));
+        d.unknown.remove(vectorcraft_brush::CURRENT_KEY);
+        assert!(reads(&d, &t), "and reads the wheel");
     }
 }

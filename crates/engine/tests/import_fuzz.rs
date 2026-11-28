@@ -10,6 +10,7 @@
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
 //! `.cdr` drawings (mutated and cut short, plain, compressed and packaged, opened and placed),
 //! nor `.cmx` files (mutated, cut short and garbage after the header, opened and placed),
+//! nor layered raster `.pcraft` documents (mutated and cut short archives and manifests, opened and placed),
 //! nor the font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
@@ -477,6 +478,93 @@ proptest! {
             let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "CMX placement panicked: {:?}", r.err());
+    }
+}
+
+// ---------- layered raster .pcraft documents ----------
+
+/// A `.pcraft` manifest of a 40 × 30 canvas with two visible raster layers, one under a layer mask,
+/// that can be combined, and a hidden one.
+fn pcraft_manifest() -> String {
+    let surface = |mode: &str, pixel: &str| {
+        let alpha = mode == "Rgb";
+        format!(r#"{{"format":{{"mode":"{mode}","sample":"U8","alpha":{alpha}}},"default":"{pixel}","tiles":[]}}"#)
+    };
+    let layer = |visible: bool, pixel: &str, mask: &str| {
+        format!(
+            r#"{{"id":1,"name":"L","visible":{visible},"locks":{{}},"blend":"Normal","opacity":0.5,"fill_opacity":1.0,"clipped":false,"mask":{mask},
+                "effects":{{"enabled":false,"items":[],"psd_raw":null}},"label":"None","content":{{"kind":"raster","surface":{}}},
+                "psd_blocks":[],"psd_id":null,"fill_cache":null}}"#,
+            surface("Rgb", pixel)
+        )
+    };
+    let mask = format!(r#"{{"surface":{},"enabled":true,"linked":true,"density":0.75,"feather":0.0}}"#, surface("Grayscale", "40"));
+    format!(
+        r#"{{"format_version":1,"generator":"test 0.1.0","document":{{"id":1,"name":"U","size":{{"width":40,"height":30}},"resolution_dpi":72.0,
+            "mode":"Rgb","depth":"U8","icc_profile":null,"layers":[{},{},{}],"channels":[],"guides":{{}},"selection":null,"metadata":{{}},
+            "global_light":{{}}}},"thumbnail":null,"composite":"composite/preview.png"}}"#,
+        layer(true, "ff000080", "null"),
+        layer(true, "0000ffff", &mask),
+        layer(false, "00ff00ff", "null"),
+    )
+}
+
+/// A `.pcraft` bundle of `manifest` with a 4 × 3 preview.
+fn pcraft_bundle(manifest: &[u8]) -> Vec<u8> {
+    let mut preview = vec![];
+    image::RgbaImage::new(4, 3).write_to(&mut std::io::Cursor::new(&mut preview), image::ImageFormat::Png).unwrap();
+    vectorcraft_engine::cmd::fileio::zip::store(&[("manifest.json", manifest), ("composite/preview.png", &preview)]).unwrap()
+}
+
+/// Open and place `.pcraft` file `bytes`: neither may panic.
+fn pcraft_survives(what: &str, bytes: &[u8]) -> Result<(), TestCaseError> {
+    survive(what, || vectorcraft_engine::cmd::fileio::load("x.pcraft", bytes).ok().map(|l| l.doc))?;
+    let r = catch_quiet(|| {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+        let p = json!({"name":"x.pcraft", "dataBase64":vectorcraft_format::base64_encode(bytes)});
+        let _ = no_panic(s.execute("file.place", &p));
+    });
+    prop_assert!(r.is_ok(), "{what}: placement panicked: {:?}", r.err());
+    Ok(())
+}
+
+#[test]
+fn the_pcraft_sample_combines_its_layers() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.pcraft", &pcraft_bundle(pcraft_manifest().as_bytes())).unwrap();
+    assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+    assert_eq!(l.doc.artboards[0].rect.width(), 40.0, "the canvas, not the preview");
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn pcraft_mutated_bundles_open_and_place(
+        cut in prop::option::of(4usize..4096),
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = pcraft_bundle(pcraft_manifest().as_bytes());
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        pcraft_survives(".pcraft bundle", &bytes)?;
+    }
+
+    #[test]
+    fn pcraft_mutated_manifests_open_and_place(
+        cut in prop::option::of(1usize..2048),
+        edits in prop::collection::vec((0usize..4096, any::<u8>()), 1..16),
+    ) {
+        let mut manifest = pcraft_manifest().into_bytes();
+        let n = manifest.len();
+        for (at, b) in edits { manifest[at % n] = b; }
+        if let Some(cut) = cut {
+            manifest.truncate(cut);
+        }
+        pcraft_survives(".pcraft manifest", &pcraft_bundle(&manifest))?;
     }
 }
 
@@ -966,7 +1054,9 @@ fn pdf_of(objs: &[Vec<u8>]) -> Vec<u8> {
 
 /// A file filling thousands of paths with function-based shadings, each a long PostScript
 /// calculator function of fine stripes, opens in bounded time: each shading is read once, and all
-/// of them within one budget of function evaluations per import (#3621 review).
+/// of them within one budget of function evaluations per import (#3621 review). One shading
+/// filling 5,000 paths takes no more evaluations than filling one, and twenty no more than the
+/// budget.
 #[test]
 fn pdf_many_paths_filled_with_long_function_shadings_open_in_bounded_time() {
     let shadings = 20;
@@ -981,13 +1071,21 @@ fn pdf_many_paths_filled_with_long_function_shadings_open_in_bounded_time() {
                 .into_bytes()
         })
         .collect();
-    let content: String = (0..5000).map(|i| format!("/Pattern cs /P{} scn {} {} 2 2 re f\n", i % shadings, i % 100 * 2, i / 100 * 2)).collect();
-    let pdf = handmade_pdf_with(&content, &format!("<< /Pattern << {patterns}>> >>"), "[0 0 200 100]", &functions);
-    let start = std::time::Instant::now();
-    let d = vectorcraft_pdf::import(&pdf).unwrap();
-    let took = start.elapsed();
-    assert!(!d.layers.is_empty());
-    assert!(took < std::time::Duration::from_secs(30), "took {took:?}");
+    // The evaluations an import of a file filling `paths` paths with the first `used` shadings takes.
+    let evaluations = |used: usize, paths: usize| {
+        let content: String = (0..paths).map(|i| format!("/Pattern cs /P{} scn {} {} 2 2 re f\n", i % used, i % 100 * 2, i / 100 * 2)).collect();
+        let pdf = handmade_pdf_with(&content, &format!("<< /Pattern << {patterns}>> >>"), "[0 0 200 100]", &functions);
+        let before = vectorcraft_pdf::function_evaluations_of(&pdf);
+        let d = vectorcraft_pdf::import(&pdf).unwrap();
+        assert!(!d.layers.is_empty());
+        vectorcraft_pdf::function_evaluations_of(&pdf) - before
+    };
+    let limit = vectorcraft_pdf::function_evaluation_limit();
+    let (one, one_many) = (evaluations(1, 1), evaluations(1, 5000));
+    assert!(one > 0 && one < limit, "one path: {one} evaluations, the budget {limit}");
+    assert!(one_many <= one, "one shading: 5,000 paths took {one_many} evaluations, one path {one}");
+    let all = evaluations(shadings, 5000);
+    assert!(all <= limit, "{shadings} shadings: {all} evaluations, the budget {limit}");
 }
 
 /// One content-stream operation with junk operands.
@@ -2095,7 +2193,8 @@ proptest! {
 
     /// Mutated copies of the PSD and PSB samples never crash opening them with their layers, hidden
     /// ones too: the PSD's layer records, channel lengths and data, and the PSB's layer count.
-    /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`.)
+    /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`, and
+    /// Invert, Threshold and Posterize layers by `tests_psdlayers::damaged_adjustment_layers_never_panic`.)
     /// Neither does `document.psdInfo`, nor placing them with their layers as objects.
     #[test]
     fn mutated_layered_psds_open_without_panics(which in 6usize..8, cut in 0usize..1_000_000, edits in prop::collection::vec((0usize..1_000_000, any::<u8>()), 0..12)) {
@@ -2956,6 +3055,95 @@ proptest! {
         let _ = vectorcraft_format::sniff(&bytes);
         let _ = vectorcraft_format::preview(&bytes);
         survive("mutated native file", || vectorcraft_engine::cmd::fileio::load("x.vectorcraft", &bytes).ok().map(|l| l.doc))?;
+    }
+}
+
+// ---------- generated art objects' saved fields ----------
+
+/// A native document holding one generated art object (a square drawn by plug-in
+/// `org.example.gen`), as pretty JSON text.
+fn generated_sample() -> Value {
+    use std::sync::Arc;
+    use vectorcraft_doc::generated::GeneratedArt;
+    use vectorcraft_doc::{Node, NodeId};
+    let mut d = Document::new(200.0, 200.0);
+    let layer = d.layers.first().map(|l| l.id);
+    let square =
+        Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 10.0, 60.0, 60.0)), Default::default());
+    let mut g = Node::group(NodeId(0), vec![Arc::new(square)]);
+    g.id = d.alloc_id();
+    let mut params = serde_json::Map::new();
+    params.insert("size".into(), json!(50));
+    g.extras_mut().generated = Some(Box::new(GeneratedArt::new("org.example.gen", "Squares", params)));
+    d.insert(layer, usize::MAX, g).unwrap();
+    serde_json::from_slice(&vectorcraft_format::save(&d, true)).unwrap()
+}
+
+/// The object of `v` (a native file's JSON) that holds a `generated` field.
+fn generated_node(v: &mut Value) -> Option<&mut Value> {
+    match v {
+        Value::Object(o) if o.contains_key("generated") => Some(v),
+        Value::Object(o) => o.values_mut().find_map(generated_node),
+        Value::Array(a) => a.iter_mut().find_map(generated_node),
+        _ => None,
+    }
+}
+
+/// Any JSON a damaged or hand-made file may hold in a saved field: strings (empty, long, with NUL,
+/// control, bidi and path characters), numbers, booleans, null, lists and objects.
+fn arb_saved_value() -> impl Strategy<Value = Value> {
+    let leaf = prop_oneof![
+        Just(Value::Null),
+        any::<bool>().prop_map(Value::from),
+        any::<i64>().prop_map(Value::from),
+        any::<f64>().prop_map(|f| serde_json::Number::from_f64(f).map_or(Value::Null, Value::Number)),
+        ".{0,80}".prop_map(Value::from),
+        prop::sample::select(vec!["org.example.gen", "org.example.gen ", "../x", "a\u{0}b", "\u{202e}gen", "", "x.y-z_1"]).prop_map(Value::from),
+        (0usize..200_000).prop_map(|n| Value::from("p".repeat(n))),
+    ];
+    leaf.prop_recursive(3, 24, 6, |inner| {
+        prop_oneof![
+            prop::collection::vec(inner.clone(), 0..6).prop_map(Value::from),
+            prop::collection::btree_map("[a-z_]{0,8}", inner, 0..6).prop_map(|m| Value::Object(m.into_iter().collect())),
+        ]
+    })
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A generated art object's saved plug-in id, name, parameters, transforms, scales and hash
+    /// replaced by anything, and the whole field too: the file opens without running a plug-in and
+    /// keeps the art, or is refused; an id is kept only when it is a plug-in id. It then renders,
+    /// exports and saves.
+    #[test]
+    fn generated_art_saved_fields_never_panic_and_keep_the_art(field in 0usize..9, value in arb_saved_value()) {
+        let mut v = generated_sample();
+        let node = generated_node(&mut v).unwrap();
+        let art = node["kind"].clone();
+        let id = vectorcraft_doc::NodeId(node["id"].as_u64().unwrap());
+        match ["plugin", "name", "params", "transform", "strokeScale", "effectScale", "patternTransform", "hash"].get(field) {
+            Some(key) => node["generated"][*key] = value,
+            None => node["generated"] = value,
+        }
+        let bytes = serde_json::to_vec(&v).unwrap();
+        let loaded = vectorcraft_engine::cmd::fileio::load("x.vectorcraft", &bytes);
+        if let Ok(l) = &loaded {
+            // The group keeps its art whatever was read of its generated art fields.
+            let group = l.doc.node(id);
+            prop_assert!(group.is_some(), "the group is gone");
+            prop_assert_eq!(group.map(|n| serde_json::to_value(&n.kind).unwrap()), Some(art));
+            let mut plugins = vec![];
+            l.doc.walk(|n| {
+                if let Some(g) = n.extras().generated.as_deref() {
+                    plugins.push(g.plugin.clone());
+                }
+            });
+            for plugin in &plugins {
+                prop_assert!(plugin.is_empty() || vectorcraft_doc::generated::valid_id(plugin), "{plugin:?}");
+            }
+        }
+        survive("generated art fields", || loaded.ok().map(|l| l.doc))?;
     }
 }
 
@@ -4814,6 +5002,53 @@ proptest! {
         prop_assert!(!opened);
     }
 
+    /// A `.ai` whose private data is cut into streams anywhere, each deflated or not and some
+    /// damaged, opens or is refused without a panic, and its streams read one after the other give
+    /// what joining them gives.
+    #[test]
+    fn ai_private_data_cut_into_streams_anywhere_never_panics(
+        sizes in prop::collection::vec(1usize..400, 1..6),
+        damage in prop::collection::vec((0usize..4_000, any::<u8>()), 0..4),
+        deflate in any::<bool>(),
+    ) {
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing_text())].concat();
+        let mut parts: Vec<Vec<u8>> = vec![];
+        let mut rest = private.as_slice();
+        for size in sizes.iter().cycle() {
+            if rest.is_empty() {
+                break;
+            }
+            let (part, after) = rest.split_at((*size).min(rest.len()));
+            parts.push(if deflate { deflated(part) } else { part.to_vec() });
+            rest = after;
+        }
+        let total: usize = parts.iter().map(Vec::len).sum();
+        for (at, b) in damage {
+            let mut at = at % total.max(1);
+            for part in &mut parts {
+                if let Some(x) = part.get_mut(at) {
+                    *x = b;
+                    break;
+                }
+                at -= part.len();
+            }
+        }
+        let parts: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+        let filter = if deflate { "/Filter /FlateDecode " } else { "" };
+        let bytes = vectorcraft_testkit::ai::ai_with_parts(&parts, vectorcraft_testkit::ai::page_pdf(), "", filter);
+        let read_all = |r: &mut dyn std::io::Read| {
+            let mut data = vec![];
+            r.read_to_end(&mut data).map(|_| data).map_err(|e| e.to_string())
+        };
+        let (joined, streamed) = catch_quiet(|| {
+            let opened = vectorcraft_pdf::open_pdf(&bytes, None).ok();
+            (opened.as_ref().and_then(|o| o.illustrator_data()), opened.as_ref().and_then(|o| o.read_illustrator_data(read_all)))
+        })
+        .expect("the private data read panicked");
+        prop_assert_eq!(streamed, joined.map(Ok));
+        survive("a .ai whose private data is cut into streams", || vectorcraft_engine::cmd::fileio::load("x.ai", &bytes).ok().map(|l| l.doc))?;
+    }
+
     /// A `.ai` whose strokes have any width (0, which draws a hairline, negative, huge, not a number) on a
     /// path, on a gradient-filled path that `1 BB` strokes and on type in any rendering mode,
     /// damaged or hostile.
@@ -4937,6 +5172,37 @@ proptest! {
         data.truncate(cut.min(data.len()));
         let private = [b"%AI24_ZStandard_Data".as_slice(), &ruzstd::encoding::compress_to_vec(data.as_slice(), ruzstd::encoding::CompressionLevel::Fastest)].concat();
         survive("hostile .ai images and placed files", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
+    /// A `.ai` whose placed EPS files have their bytes included between `%%BeginDocument:` and
+    /// `%%EndDocument` (one on `%_` lines, one with a nested document and counted data in it),
+    /// damaged, opened and drawn: their bytes are read as an EPS file when drawn.
+    #[test]
+    fn ai_placed_eps_files_with_included_bytes_never_panic(
+        cut in 0usize..4_000,
+        edits in prop::collection::vec((0usize..4_000, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '[', ']', '%', '_', '`', '~', 'E', 'D'])), 0..12),
+    ) {
+        use vectorcraft_testkit::ai;
+        let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 40\n%%EndComments\n0 0 1 setrgbcolor\n0 0 60 40 rectfill\n%%EOF\n";
+        let nested = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 9 9\n%%BeginDocument: c.eps\nnewpath\n%%EndDocument\n%%BeginData: 14 Binary Bytes\n%%EndDocument\n%%EOF\n";
+        let place = |path: &str, matrix: &str, doc: &str| {
+            format!(
+                "%AI5_BeginPlace\n%%FileType: 0\n{matrix} 0 0 60 40 4 4 0\n({path})`\n%%BeginDocument: {path}\n{doc}\n%%EndDocument\n\
+                 %AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n(src/)\n%AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n"
+            )
+        };
+        let hidden: String = place("/tmp/b.eps", "[1 0 0 1 20 20]", eps).lines().map(|l| format!("%_{l}\n")).collect();
+        let body = format!("{}{hidden}{}", place("/tmp/a.eps", "[1 0 0 1 20 20]", eps), place("/tmp/c.eps", "[1 0 0 1 0 0]", nested));
+        let fixture = ai::editing_data(200.0, 100.0, &ai::layer("L", &body));
+        // A session reads placed documents' files when they are drawn.
+        let _ = vectorcraft_engine::Session::new();
+        let whole = vectorcraft_engine::cmd::fileio::load("x.ai", &ai::ai(fixture.as_bytes(), "0 0 1 rg 20 20 60 40 re f"));
+        let mut placed = 0;
+        whole.iter().for_each(|l| l.doc.visit_placed(|_, _| placed += 1));
+        prop_assert!(placed == 3 && fixture.len() < 4_000, "{placed} placed documents, {} bytes: {:?}", fixture.len(), whole.map(|l| l.warnings));
+        let text = mutate_text(&fixture, cut, &edits);
+        let file = ai::ai(text.as_bytes(), "0 0 1 rg 20 20 60 40 re f");
+        survive("hostile .ai placed EPS files with included bytes", || vectorcraft_engine::cmd::fileio::load("x.ai", &file).ok().map(|l| l.doc))?;
     }
 
     /// A `.ai` whose type (point type turned, vertical type, area type, threaded area type and type
@@ -6379,6 +6645,12 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%%BeginData: 14 Binary Bytes\n",
             "\n%%BeginBinary: 99999999999\n",
             "\n%%BeginData: 3 Hex Lines\n",
+            // A placed EPS file's bytes included in the data: one drawn, one with a box it can't
+            // take, one on `%_` lines.
+            "\n%%BeginDocument: a.eps\n%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 9 9\n0 0 1 setrgbcolor 0 0 9 9 rectfill\n%%EndDocument\n",
+            "\n%%BeginDocument: a.eps\n%!PS\n%%BoundingBox: 0 0 1e308 -5\n%%EndDocument\n",
+            "\n%_%%BeginDocument: a.eps\n%_%!PS\n%_0 0 9 9 rectfill\n%_%%EndDocument\n",
+            "[1 0 0 1 0 0] 0 0 1e308 1e308 4 4 0 (a.eps) `",
             "\n%AI5_EndPlace\n",
             "Xm",
             "50 -50 -100 -100 5000 -2000 Xm",
@@ -7715,7 +7987,8 @@ fn pdf_streams_the_reader_would_fail_on_are_refused() {
 
 /// A page drawing a thousand times one form that decodes to 64 MiB (of spaces, then a square):
 /// each drawing reads the form again, so the import stops at the page's form content instead of
-/// decoding 64 GB (#3569, which hung).
+/// decoding 64 GB (#3569, which hung). The scan walks no more than the page's limit and the form
+/// that passes it.
 #[test]
 fn pdf_a_huge_form_drawn_over_and_over_is_refused_in_bounded_time() {
     use std::io::Write as _;
@@ -7723,14 +7996,17 @@ fn pdf_a_huge_form_drawn_over_and_over_is_refused_in_bounded_time() {
     for _ in 0..64 {
         e.write_all(&[b' '; 1 << 20]).unwrap();
     }
-    e.write_all(b"0 0 5 5 re f").unwrap();
+    let square = b"0 0 5 5 re f";
+    e.write_all(square).unwrap();
     let form = packed_as_is(FORM, &e.finish().unwrap());
     let bytes = pdf_with(&"/F Do ".repeat(1000), "<< /XObject << /F 5 0 R >> >>", &[form]);
-    let start = std::time::Instant::now();
+    let before = vectorcraft_pdf::form_content_of(&bytes);
     let e = vectorcraft_engine::cmd::fileio::load("repeated.pdf", &bytes).err().map(|e| e.to_string());
-    let took = start.elapsed();
+    let walked = vectorcraft_pdf::form_content_of(&bytes) - before;
+    let one_form = (64 << 20) + square.len();
+    assert!(walked > 0, "the page's scan reads the form");
+    assert!(walked <= vectorcraft_pdf::form_content_limit() + one_form, "{walked} bytes of form content walked");
     assert!(e.as_deref().is_some_and(|e| e.contains("no document was imported")), "{e:?}");
-    assert!(took < std::time::Duration::from_secs(60), "took {took:?}");
 }
 
 // A large file the reader would fail on says which stream (#4366): an image with its size in
@@ -8356,21 +8632,30 @@ fn ai_private(layer_art: &str) -> Vec<u8> {
 }
 
 /// A blend of many steps doesn't stall the import: one within the limits (a thousand steps between
-/// two keys) is checked and made live quickly, one past them keeps its drawn steps without being
-/// laid out.
+/// two keys) is checked and made live with no more measuring per object than a blend of three
+/// steps, one past them keeps its drawn steps without being laid out.
 #[test]
 fn large_ai_blends_import_in_bounded_time() {
-    for (steps, live) in [(3, true), (998, true), (1_500, false)] {
+    // The objects laid out and the laid objects measured against drawn steps, reading `steps`.
+    let work = |steps: usize, live: bool| {
         let private = ai_private(&blend_text(steps));
-        let started = std::time::Instant::now();
+        let before = vectorcraft_eps::blend_work();
         let (doc, notes, read) = vectorcraft_eps::layered_ai(&private, Document::new(4000.0, 200.0), vec![], false, true, 1.0);
+        let after = vectorcraft_eps::blend_work();
         assert!(read, "{steps} steps: read from the layers ({notes:?})");
-        let took = started.elapsed();
-        assert!(took < std::time::Duration::from_secs(30), "{steps} steps took {took:?}");
         let mut blends = 0;
         doc.walk(|n| blends += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Blend { .. })));
         assert_eq!(blends == 1, live, "{steps} steps: live {live}");
-    }
+        (after.0 - before.0, after.1 - before.1)
+    };
+    let (small_laid, small_measured) = work(3, true);
+    let (laid, measured) = work(998, true);
+    assert!(small_laid > 0 && laid > small_laid, "laid out: {small_laid} for 3 steps, {laid} for 998");
+    assert!(
+        measured * small_laid <= 2 * small_measured * laid,
+        "998 steps: {measured} measured for {laid} laid out; 3 steps: {small_measured} for {small_laid}"
+    );
+    assert_eq!(work(1_500, false), (0, 0), "a blend past the limits isn't laid out");
 }
 
 proptest! {

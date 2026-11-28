@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Links",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. Images and placed documents inside symbols, graph designs, patterns, opacity masks and the art of stored brushes have ids of their own, as links.list gives them; those that show the same content as one read again are read again too. An image changed by Perspective Distort or Free Distort keeps its corners, with the file's pixels between them, and its Placement Options do not apply; the clipping path its file names is drawn through the corners, and a clip group of the old file's clipping path gets the new one, or becomes a plain group when the file names none. One undo step → {updated: [ids], missing: [ids], warnings?: [a DCS file's spot plate whose ink a swatch of the document already names, as file.place warns]}",
+            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. Images and placed documents inside symbols, graph designs, patterns, opacity masks and the art of stored brushes have ids of their own, as links.list gives them; those that show the same content as one read again are read again too. An image changed by Perspective Distort or Free Distort keeps its corners, with the file's pixels between them, and its Placement Options do not apply; the clipping path its file names is drawn through the corners, and a clip group of the old file's clipping path gets the new one, or becomes a plain group when the file names none. One undo step → {updated: [ids], missing: [ids], warnings?: [a DCS file's spot plate whose ink a swatch of the document already names, as file.place warns; a .pcraft file read only as its reduced preview, after the file's name]}",
             has_doc,
             update
         ),
@@ -75,6 +75,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object linked to the same file as one of them, in the layers, opacity-mask art, symbols, graph designs, patterns and the art of stored brushes) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. An image changed by Perspective Distort or Free Distort keeps its corners, with the new file's pixels between them, whatever preserve or its Placement Options say, and its clipping is handled as links.update handles it. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's, and, when preserve is given, one naming the distorted images it was not applied to)}",
             has_doc,
             relink
+        ),
+        cmd!(
+            "links.replaceEmbedded",
+            "Replace Image",
+            [],
+            None,
+            "{ids: [canvas image ids], dataBase64: raster file bytes} replace the images with embedded pixels, keeping their ids and fitting their new aspect ratio inside their old bounds. Distorted images keep their corners. One undo step → {replaced: [ids], warnings?: [a .pcraft document read only as its reduced preview]}",
+            has_doc,
+            replace_embedded
         ),
         cmd!(
             query "links.list",
@@ -108,7 +117,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unembed",
             [],
             None,
-            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path and link the image to it, keeping its bounds (an image changed by Perspective Distort or Free Distort keeps its corners). The image is written as stored (PNG, JPEG, GIF, WebP or TIFF; as PNG when that format is not one of VectorCraft's raster file formats) when path has no extension or names the stored format, and converted when path ends in another of .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp. Written as stored (here and with folder), an image from a PSD or PSB file keeps the clip group of the clipping path that file names, and the file written keeps the path, so Open, Place, Relink and Update Links read the file with that clip group (drawn through a distorted image's corners); a converted file holds no clipping path, and the clip group becomes a plain group. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds (a distorted image its corners). One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
+            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path and link the image to it, keeping its bounds (an image changed by Perspective Distort or Free Distort keeps its corners). The image is written as stored (PNG, JPEG, GIF, WebP or TIFF; as PNG when that format is not one of VectorCraft's raster file formats) when path has no extension or names the stored format, and converted when path ends in another of .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp. Written as stored (here and with folder), an image from a PSD or PSB file keeps the clip group of the clipping path that file names, and the file written keeps the path, so Open, Place, Relink and Update Links read the file with that clip group (drawn through a distorted image's corners); a converted file holds no clipping path, and the clip group becomes a plain group. A clipping mask released, edited or made in the document stays as it is, in either case. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds (a distorted image its corners). One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
             has_doc,
             unembed
         ),
@@ -328,7 +337,12 @@ impl<'a> LinkBase<'a> {
 
     /// The open document `st`'s. One with no file of its own looks beside the file it was read from.
     pub(crate) fn of(st: &'a crate::DocState) -> Self {
-        let (path, from) = (st.path.as_deref(), st.links_from.as_deref());
+        Self::of_files(st.path.as_deref(), st.links_from.as_deref())
+    }
+
+    /// An open document's, by its own file `path` and the file it was read from, `from`
+    /// ([`crate::DocState::links_from`]), as [`Self::of`] gives them.
+    pub(crate) fn of_files(path: Option<&'a str>, from: Option<&'a str>) -> Self {
         Self { doc: path.or(from), relative: from.or(path) }
     }
 }
@@ -399,6 +413,29 @@ fn locate(link: &LinkInfo, base: LinkBase) -> Option<Found> {
         Path::new(&from).parent().and_then(|dir| relative_path(Path::new(&f.path), dir))
     });
     Some(f)
+}
+
+/// The files the links of `d` (a document looking from `base`) lead to now: where [`locate`]
+/// finds each linked image's and placed document's file from `base` and from no document (as
+/// output reads them, [`full_linked_images`]), the plate files of their own of images placed from
+/// DCS files, and the image files its data sets name. The commands a script runs may read these
+/// for the documents open when the run began, as the person left them
+/// ([`crate::file_access::ScriptGate::linked`]).
+pub(crate) fn files_linked(d: &Document, base: LinkBase) -> Vec<String> {
+    let mut out = vec![];
+    for g in groups(d, None) {
+        for from in [base, LinkBase::default()] {
+            let Some(f) = locate(&g.link, from) else { continue };
+            out.extend(g.plate_files.iter().filter_map(|p| super::place::dcs::plate_file_path(&f.path, &p.name)));
+            out.push(f.path);
+        }
+    }
+    let values = d.variables.datasets.iter().flat_map(|set| set.values.values());
+    out.extend(values.filter_map(|v| match v {
+        DataValue::Image(path) => fileio::document_path(path, base.doc).ok(),
+        _ => None,
+    }));
+    out
 }
 
 /// The place `stored` names from the file `from`, as `resolve` ([`fileio::document_path`]) follows
@@ -563,7 +600,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a
             Some(f) if img.blob.bytes.as_slice() == bytes.as_slice() => f.mime.to_string(),
             _ => img.blob.mime.clone(),
         };
-        out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview });
+        out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview, file_font: Default::default() });
     }
     let mut warnings = vec![];
     match previews.len() {
@@ -599,11 +636,12 @@ pub(crate) fn store_image(d: &mut Document, key: &str, full: ImageBlob, linked: 
     d.images.insert(key.to_string(), blob);
 }
 
-/// Whether `bytes` are a PNG, JPEG, GIF or WebP file: the formats [`fileio::raster_image`] keeps
-/// as they are after reading only their header.
+/// Whether `bytes` are a PNG, JPEG, GIF or WebP file, the formats [`fileio::raster_image`] keeps
+/// as they are after reading only their header, or a `.pcraft` document, whose full-size composite
+/// or preview it keeps the same way.
 pub(crate) fn kept_unread(bytes: &[u8]) -> bool {
     use craft_image_codecs::Format as F;
-    matches!(craft_image_codecs::detect(bytes), Some(F::Png | F::Jpeg | F::Gif | F::WebP))
+    matches!(craft_image_codecs::detect(bytes), Some(F::Png | F::Jpeg | F::Gif | F::WebP)) || fileio::is_pcraft(bytes)
 }
 
 /// `blob`, an image [`fileio::raster_image`] read from a file, ready to keep. When `unread` (the
@@ -1220,6 +1258,33 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
     install(d, &[id], read, Some(Preserve::Bounds), None)
 }
 
+/// The browser's Replace Image uses embedded bytes and the same Fit installer as a path-based replacement.
+fn replace_embedded(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "links.replaceEmbedded";
+    let ids = ids_param(p, "ids", C)?.filter(|ids| !ids.is_empty()).ok_or_else(|| bad(C, "give the image ids to replace"))?;
+    let doc = &s.doc()?.doc;
+    let mut seen = BTreeSet::new();
+    for id in &ids {
+        if !seen.insert(*id) {
+            return Err(bad(C, format!("image {} is listed twice", id.0)));
+        }
+        if !doc.node(*id).is_some_and(|node| matches!(node.kind, NodeKind::Image(_))) {
+            return Err(bad(C, format!("object {} is not an image", id.0)));
+        }
+    }
+    let data = text_param(p, "dataBase64", C)?.ok_or_else(|| bad(C, "give dataBase64"))?;
+    let bytes = vectorcraft_format::base64_decode(data).ok_or_else(|| bad(C, "bad dataBase64"))?;
+    let mut img = fileio::raster_image(&bytes)?;
+    img.blob = readable_and_kept(img.blob, kept_unread(&bytes), false)?;
+    let note = img.note.clone();
+    s.edit("Replace Image", |d, _| install_with(d, &ids, None, img, Some(Preserve::Fit), None, false))?;
+    let mut out = json!({ "replaced": ids_json(&ids) });
+    if let Some(note) = note {
+        out["warnings"] = json!([note]);
+    }
+    Ok(out)
+}
+
 /// Distorted image `n` shows the file read for `link` (`img`) and keeps its corners: the new pixels
 /// fill them. Its transform is scaled to the new pixel size, so a reader that places it by the
 /// transform still gives it its old size. Its Placement Options do not apply. The result is what
@@ -1228,13 +1293,19 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
 /// new file (`img.clip`, else the path kept in its stored PNG or TIFF, as Unembed writes it:
 /// [`file_clip`]) are mapped to the page through its corners, anchors and handles alike, as a
 /// distort maps a path's.
-fn refill_distorted(n: &mut Node, old_clip: Option<&FileClip>, link: &LinkInfo, img: &RasterImage, held: Option<(&PathData, FillRule)>) -> ClipTo {
+fn refill_distorted(
+    n: &mut Node,
+    old_clip: Option<&FileClip>,
+    link: Option<&LinkInfo>,
+    img: &RasterImage,
+    held: Option<(&PathData, FillRule)>,
+) -> ClipTo {
     let old = old_clip.filter(|_| held.is_some()).and_then(|(path, rule)| Some((warped(path, &n.image_map()?)?, *rule)));
     if let NodeKind::Image(im) = &mut n.kind {
         if (img.width, img.height) != (im.width, im.height) && img.width > 0 && img.height > 0 {
             im.xf *= Affine::scale_non_uniform(f64::from(im.width) / f64::from(img.width), f64::from(im.height) / f64::from(img.height));
         }
-        (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
+        (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, link.cloned());
     }
     let file = img.clip.clone().or_else(|| file_clip(&img.blob)).and_then(|(path, rule)| Some((warped(&path, &n.image_map()?)?, rule)));
     placed_clip_to(old.as_ref(), None, file, held)
@@ -1265,6 +1336,32 @@ fn warped(path: &PathData, map: &Homography) -> Option<PathData> {
 /// with `also` (a file's path and the content shown), so do the images outside the layer tree that
 /// show that content.
 fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Option<Preserve>, also: Option<(&str, &str)>) -> Result<()> {
+    install_with(d, ids, Some(&link), img, force, also, false)
+}
+
+/// What Unembed (`unembed`) does with the clip `to` of an image whose clip group holding just it
+/// has a clipping path (`held`): a clipping mask released, edited or made in the document stays as
+/// it is, and only a clip group of the old file's own clipping path follows the file written.
+fn unembed_clip(to: ClipTo, held: bool) -> ClipTo {
+    match to {
+        ClipTo::Nest(_) => ClipTo::Keep,
+        ClipTo::File(_) if !held => ClipTo::Keep,
+        to => to,
+    }
+}
+
+/// Installs raster pixels with their filesystem link, if any. With `unembed`, each clip goes
+/// through [`unembed_clip`].
+fn install_with(
+    d: &mut Document,
+    ids: &[NodeId],
+    link: Option<&LinkInfo>,
+    img: RasterImage,
+    force: Option<Preserve>,
+    also: Option<(&str, &str)>,
+    unembed: bool,
+) -> Result<()> {
+    let keep = |to: ClipTo, held: bool| if unembed { unembed_clip(to, held) } else { to };
     let new_pt = super::place::pt_per_px(img.ppi);
     let mut clips = vec![];
     let nested = nested_ids(d, ids);
@@ -1289,8 +1386,8 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
                     NodeKind::Image(im) => old.get(&im.key).and_then(|(_, clip)| clip.clone()),
                     _ => None,
                 };
-                let clip = refill_distorted(&mut n, old_clip.as_ref(), &link, &img, held);
-                return (n, clip);
+                let clip = refill_distorted(&mut n, old_clip.as_ref(), link, &img, held);
+                return (n, keep(clip, held.is_some()));
             }
             if let NodeKind::Image(im) = &mut n.kind {
                 let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
@@ -1300,8 +1397,8 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
                     None => (super::place::pt_per_px(None), None),
                 };
                 let (xf, c) = placed_xf(im.xf, size(im.width, im.height), old_pt, size(img.width, img.height), new_pt, o);
-                clip = clip_to(im.xf, old_clip, c, &img, xf, held);
-                (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
+                clip = keep(clip_to(im.xf, old_clip, c, &img, xf, held), held.is_some());
+                (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, link.cloned());
             }
             (n, clip)
         };
@@ -1315,7 +1412,8 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
             };
             let held = clip_path_of(d, *id).map(|(path, rule)| (path.clone(), rule));
             if let Some(n) = d.node_mut(*id) {
-                clips.push((*id, refill_distorted(n, old_clip.as_ref(), &link, &img, held.as_ref().map(|(path, rule)| (path, *rule)))));
+                let clip = refill_distorted(n, old_clip.as_ref(), link, &img, held.as_ref().map(|(path, rule)| (path, *rule)));
+                clips.push((*id, keep(clip, held.is_some())));
             }
             continue;
         }
@@ -1326,16 +1424,17 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         // Placement Options' clip, else the clipping path of a DCS file (read again with its
         // plates) or of a PSD or PSB file.
         let old_clip = d.images.get(&im.key).and_then(file_clip);
-        clips.push((*id, clip_to(im.xf, old_clip.as_ref(), clip, &img, xf, clip_path_of(d, *id))));
+        let held = clip_path_of(d, *id);
+        clips.push((*id, keep(clip_to(im.xf, old_clip.as_ref(), clip, &img, xf, held), held.is_some())));
         if let Some(n) = d.node_mut(*id)
             && let NodeKind::Image(im) = &mut n.kind
         {
-            (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
+            (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, link.cloned());
         }
     }
     // A DCS file's spot plates print on spot swatches of their inks.
     super::place::dcs::add_spot_swatches(d, &img.blob.spot_plates());
-    store_image(d, &img.key, img.blob, true);
+    store_image(d, &img.key, img.blob, link.is_some());
     clips.into_iter().try_for_each(|(id, clip)| match clip {
         ClipTo::Keep => Ok(()),
         ClipTo::Path(path) => clip_image_to(d, id, path),
@@ -1996,7 +2095,8 @@ fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -
         }
     }
     let updated: Vec<u64> = reads.iter().flat_map(|(g, _)| ids_json(&g.ids)).collect();
-    let warnings = spot_swatch_notes(&st.doc, reads.iter().map(|(_, read)| read));
+    let mut warnings = spot_swatch_notes(&st.doc, reads.iter().map(|(_, read)| read));
+    warnings.extend(file_notes(reads.iter().map(|(_, read)| read)));
     if !reads.is_empty() {
         s.edit("Update Links", |d, _| {
             editing_brush_art(d, |d| reads.into_iter().try_for_each(|(g, read)| install_read(d, &g.ids, read, None, Some(&g))))
@@ -2007,6 +2107,22 @@ fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -
         out["warnings"] = json!(warnings);
     }
     Ok(out)
+}
+
+/// The notes of the images in `reads` that leave part of their file out ([`RasterImage::note`], a
+/// `.pcraft` document read as its reduced preview), each after its file's name, once per file.
+fn file_notes<'a>(reads: impl Iterator<Item = &'a Read>) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for read in reads {
+        let Read::Image((link, img)) = read else { continue };
+        let Some(note) = &img.note else { continue };
+        let name = Path::new(&link.path).file_name().map_or_else(|| link.path.clone(), |n| n.to_string_lossy().into_owned());
+        let note = format!("{name}: {note}");
+        if !out.contains(&note) {
+            out.push(note);
+        }
+    }
+    out
 }
 
 /// The warnings for the spot plates of the DCS files in `reads` whose ink a swatch of `d` already
@@ -2261,6 +2377,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     let unpreserved = preserve.and_then(|_| unpreserved_note(&doc, &reads));
     drop(doc);
     let mut warnings = spot_swatch_notes(&s.doc()?.doc, reads.iter().map(|(_, read)| read));
+    warnings.extend(file_notes(reads.iter().map(|(_, read)| read)));
     warnings.extend(unpreserved);
     if !reads.is_empty() {
         s.edit("Relink", |d, _| editing_brush_art(d, |d| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, preserve, None))))?;
@@ -2827,9 +2944,9 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     // Read before writing: pixels that can't be read leave no file behind.
     let img = linked_image(&bytes, Some(&path))?;
     write_file(&path, &bytes)?;
-    let read = (link_info(&path, &bytes), img);
+    let link = link_info(&path, &bytes);
     drop(doc);
-    s.edit("Unembed", |d, _| editing_brush_art(d, |d| install(d, &[id], read, Some(Preserve::Bounds), None)))?;
+    s.edit("Unembed", |d, _| editing_brush_art(d, |d| install_with(d, &[id], Some(&link), img, Some(Preserve::Bounds), None, true)))?;
     Ok(json!({ "id": id.0, "path": path }))
 }
 
@@ -2896,7 +3013,9 @@ fn unembed_to_folder(s: &mut Session, p: &Value, ids: Option<Vec<NodeId>>) -> Re
     drop(doc);
     let done: Vec<Value> = reads.iter().map(|(id, (l, _))| json!({ "id": id.0, "path": l.path })).collect();
     let edited = s.edit("Unembed", |d, _| {
-        editing_brush_art(d, |d| reads.into_iter().try_for_each(|(id, read)| install(d, &[id], read, Some(Preserve::Bounds), None)))
+        editing_brush_art(d, |d| {
+            reads.into_iter().try_for_each(|(id, (link, img))| install_with(d, &[id], Some(&link), img, Some(Preserve::Bounds), None, true))
+        })
     });
     if let Err(e) = edited {
         remove_written(&written);

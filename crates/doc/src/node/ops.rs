@@ -131,6 +131,13 @@ impl Node {
         matches!(self.kind, NodeKind::Layer { template: true, .. })
     }
 
+    /// Whether a view that hides template layers (`templates`) or guides (`guides`) leaves this
+    /// object out: a template layer while templates are hidden, or a path made into a guide while
+    /// guides are hidden. The canvas draws ruler guides apart from the art.
+    pub fn hidden_by_view(&self, templates: bool, guides: bool) -> bool {
+        (templates && self.is_template()) || (guides && matches!(self.kind, NodeKind::Path { guide: true, .. }))
+    }
+
     /// The art objects of this container: its children, looking through sublayers, which are not
     /// objects (bottom first). With `editable`, only the visible, unlocked objects in visible,
     /// unlocked, non-template sublayers.
@@ -360,15 +367,30 @@ impl Node {
         self.geometric(Some(symbols))
     }
 
-    /// Children that contribute to a container's editing bounds and selection highlights. A live trace retains a
-    /// hidden bitmap for re-tracing/release; only source-image views measure that bitmap.
+    /// Children that contribute to a container's editing bounds. A live trace retains a hidden bitmap for
+    /// re-tracing/release; only source-image views measure that bitmap. Selection highlights outline
+    /// [`Node::drawn_children`].
     pub fn editing_children(&self) -> &[Arc<Node>] {
         let children = self.children().map(Vec::as_slice).unwrap_or_default();
-        let trace_source = self.extras().trace.is_some()
-            && !self.trace_view().shows_source()
-            && children.first().is_some_and(|n| !n.visible && matches!(n.kind, NodeKind::Image(_)));
+        let trace_source = !self.trace_view().shows_source() && self.trace_source().is_some_and(|n| !n.visible);
         let skip = usize::from(self.extras().shaper.is_some() || trace_source);
         children.get(skip..).unwrap_or_default()
+    }
+
+    /// The children a selection highlight outlines: [`Node::editing_children`] without the hidden
+    /// members, which the canvas does not draw. An Image Trace object's hidden source image stays
+    /// when the object's view shows it, and every path of a compound path stays, since the compound
+    /// path draws all of them.
+    pub fn drawn_children(&self) -> impl Iterator<Item = &Arc<Node>> {
+        let members = !matches!(self.kind, NodeKind::Compound { .. });
+        let source = self.trace_source().filter(|_| self.trace_view().shows_source());
+        self.editing_children().iter().filter(move |c| !members || c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)))
+    }
+
+    /// The first child of an Image Trace object when it is an image: the bitmap the trace keeps.
+    fn trace_source(&self) -> Option<&Arc<Node>> {
+        self.extras().trace.as_ref()?;
+        self.children()?.first().filter(|n| matches!(n.kind, NodeKind::Image(_)))
     }
 
     /// The box of [`Node::geometric_bounds`], or of [`Node::geometric_bounds_with`] when `symbols`
@@ -409,6 +431,17 @@ impl Node {
         }
     }
 
+    /// The box of what a path, or the paths of a compound path, draw before the strokes' reach
+    /// ([`PathData::drawn_bounds`]): lone anchors of closed subpaths count only with `dots`. Other
+    /// members of a compound path count by their geometric box. `None` when nothing is drawn.
+    fn drawn(&self, symbols: Option<&SymbolBoxes>, dots: bool) -> Option<Rect> {
+        match &self.kind {
+            NodeKind::Path { path, .. } => path.drawn_bounds(dots),
+            NodeKind::Compound { .. } => self.editing_children().iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.drawn(symbols, dots))),
+            _ => self.geometric(symbols),
+        }
+    }
+
     /// Visual bounds: what the object paints, its strokes included (paths and compound paths
     /// measure theirs along their own shape, see [`Appearance::stroked_bounds`]). An image is
     /// measured by its frame. A symbol instance is measured as in [`Node::geometric_bounds`],
@@ -430,12 +463,74 @@ impl Node {
         self.visual(Some(symbols))
     }
 
-    /// The visual box of a group or layer without a clipping path, from the visual boxes of its
-    /// [`Node::editing_children`]: for a walk that measures the members as well.
+    /// A box round a group or layer without a clipping path, from boxes round its
+    /// [`Node::editing_children`], grown by the farthest its own strokes can reach from any path
+    /// ([`Appearance::outset`]): for boxes measured where the members' shapes are not at hand.
+    /// [`Node::visual_of_measured_members`] measures the strokes along the members.
     pub fn visual_of_members(&self, members: impl Iterator<Item = Option<Rect>>) -> Option<Rect> {
         // The container's own strokes paint around its members.
         let o = self.appearance.outset();
         members.fold(None, vectorcraft_geom::union_opt).map(|b| b.inflate(o, o))
+    }
+
+    /// The visual box of a group or layer without a clipping path, from its
+    /// [`Node::editing_children`] paired with their visual boxes: for a walk that measures the
+    /// members as well. The container's own strokes are measured along the shape of each member
+    /// path and compound path, at any depth in its groups; they paint nothing round images, symbol
+    /// instances, guides and hidden members, and grow the box of any other member by the farthest
+    /// they can reach ([`Appearance::outset`]), measured with `symbols` as in
+    /// [`Node::visual_bounds_with`].
+    pub fn visual_of_measured_members<'a>(
+        &self,
+        members: impl Iterator<Item = (&'a Node, Option<Rect>)>,
+        symbols: Option<&SymbolBoxes>,
+    ) -> Option<Rect> {
+        let stroked = self.appearance.painted_strokes().next().is_some();
+        members.fold(None, |acc, (c, b)| {
+            let own = if stroked { c.strokes_of_container(&self.appearance, Some(b), symbols) } else { None };
+            vectorcraft_geom::union_opt(vectorcraft_geom::union_opt(acc, b), own)
+        })
+    }
+
+    /// The box the strokes of `appearance`, the appearance of a group or layer that holds this
+    /// object, paint along it, measured with `symbols` as in [`Node::visual_bounds_with`]: the box
+    /// [`Node::visual_of_measured_members`] takes in for this member besides its own visual box.
+    pub fn painted_by_container(&self, appearance: &Appearance, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
+        appearance.painted_strokes().next()?;
+        self.strokes_of_container(appearance, None, symbols)
+    }
+
+    /// The box the strokes of `appearance`, a container's, paint along this member, whose visual
+    /// box is `measured` when known: along the shape of a path or compound path, as it measures its
+    /// own strokes ([`Appearance::stroked_bounds`]); along the members of a group or layer without
+    /// a clipping path that is not a compound shape; nothing for a hidden member, a guide, an image
+    /// or a symbol instance, which the strokes do not paint; and the member's visual box grown by
+    /// the farthest the strokes can reach ([`Appearance::outset`]) for anything else.
+    fn strokes_of_container(&self, appearance: &Appearance, measured: Option<Option<Rect>>, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
+        if !self.visible || self.is_guide() {
+            return None;
+        }
+        match &self.kind {
+            NodeKind::Path { .. } | NodeKind::Compound { .. } => self.stroked_by(appearance, symbols),
+            NodeKind::Group { clip: false, .. } | NodeKind::Layer { clip: false, .. } if !self.is_compound_shape() => self
+                .editing_children()
+                .iter()
+                .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.strokes_of_container(appearance, None, symbols))),
+            NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => None,
+            _ => {
+                let o = appearance.outset();
+                measured.unwrap_or_else(|| self.visual(symbols)).map(|b| b.inflate(o, o))
+            }
+        }
+    }
+
+    /// The visual box of this path or compound path painted with the strokes of `appearance`,
+    /// measured along its shape ([`Appearance::stroked_bounds`]).
+    fn stroked_by(&self, appearance: &Appearance, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
+        // A lone anchor is drawn only as the dot of a round or projecting cap on a closed subpath.
+        let dots = appearance.painted_strokes().any(|s| matches!(s.cap, crate::LineCap::Round | crate::LineCap::Square));
+        let b = self.drawn(symbols, dots).or_else(|| self.geometric(symbols))?;
+        Some(appearance.stroked_bounds(b, || self.stroke_path().unwrap_or_default()))
     }
 
     /// The box of [`Node::visual_bounds`], or of [`Node::visual_bounds_with`] when `symbols` is
@@ -452,7 +547,9 @@ impl Node {
                 }
             }
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols))),
-            NodeKind::Layer { .. } | NodeKind::Group { .. } => self.visual_of_members(self.editing_children().iter().map(|c| c.visual(symbols))),
+            NodeKind::Layer { .. } | NodeKind::Group { .. } => {
+                self.visual_of_measured_members(self.editing_children().iter().map(|c| (c.as_ref(), c.visual(symbols))), symbols)
+            }
             NodeKind::Blend { children, spec } => {
                 let b = children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols)));
                 let o = crate::live::max_outset(children, symbols);
@@ -462,10 +559,7 @@ impl Node {
                 let o = crate::live::max_outset(content, symbols);
                 self.geometric(symbols).map(|b| b.inflate(o, o))
             }
-            NodeKind::Path { .. } | NodeKind::Compound { .. } => {
-                let b = self.geometric(symbols)?;
-                Some(self.appearance.stroked_bounds(b, || self.stroke_path().unwrap_or_default()))
-            }
+            NodeKind::Path { .. } | NodeKind::Compound { .. } => self.stroked_by(&self.appearance, symbols),
             NodeKind::SymbolInstance { symbol, xf } => {
                 let b = match symbols.and_then(|s| Some((s, s.art(symbol)?))) {
                     Some((s, art)) if !s.art_strokes() => xf.transform_rect_bbox(art.geometric),
@@ -517,19 +611,23 @@ impl Node {
         self.children()?.iter().find(|c| c.id == r.path)?.path_data()
     }
 
-    fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
-        // A dimension's measurement moves with it.
-        if let Some(e) = self.extras_if_any()
-            && let Some(dimension) = &mut e.dimension
-        {
+    /// Moves what `a` moves in the node's extras: a dimension's measurement, a flare's center and
+    /// end point, and the place a generator's art is drawn again at, with what `sc` scales.
+    fn transform_extras(&mut self, a: Affine, sc: &Scaling) {
+        let Some(e) = self.extras_if_any() else { return };
+        if let Some(dimension) = &mut e.dimension {
             dimension.transform(a);
         }
-        // So does a flare's center and end point.
-        if let Some(e) = self.extras_if_any()
-            && let Some(flare) = &mut e.flare
-        {
+        if let Some(flare) = &mut e.flare {
             flare.transform(a);
         }
+        if let Some(generated) = &mut e.generated {
+            generated.transform(a, sc);
+        }
+    }
+
+    fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
+        self.transform_extras(a, sc);
         // The path the objects are attached to, before it is transformed.
         let on_path_before = self.on_path_data().cloned();
         // A distorted image's placement nearest its corners, before they are transformed (`None`

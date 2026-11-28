@@ -32,6 +32,7 @@ mod clipflavours;
 mod clippaint;
 mod cmdsplit;
 mod cmykflatten;
+mod colorcontrast;
 mod colorguide;
 mod colorguidelib;
 mod colorize;
@@ -49,10 +50,12 @@ mod curvature_circle;
 mod cut;
 mod dashalign;
 mod dcs;
+mod delete_keeps_joined;
 mod distort;
 mod docsetup;
 mod document_close;
 mod document_move;
+mod double_click_adds_anchor;
 mod draw2;
 mod dynamic_symbols;
 mod dynamic_text;
@@ -87,9 +90,11 @@ mod history_document;
 mod history_mem;
 mod ids_without_selection;
 mod inline;
+mod interaction_commands;
 mod interactivity;
 mod interpolate_handles;
 mod intertwine;
+mod isolation_removed;
 mod journal;
 mod keyanchor;
 mod keyguide;
@@ -123,6 +128,7 @@ mod outlineobject;
 pub(super) mod outlinestroke;
 mod overprint;
 mod package;
+mod paintopacity;
 mod paintproxy;
 mod panelcmds;
 mod paragraphs;
@@ -172,12 +178,18 @@ mod scalestrokes;
 mod script_console;
 mod script_dialogs;
 mod script_dollar;
+mod script_dom;
 mod script_engines;
 mod script_folder;
 mod script_include;
 mod script_io;
 mod script_run;
+mod script_scriptui;
+mod script_tags;
+mod script_variables;
+mod script_xmp;
 mod scripts;
+mod segment_nudge;
 mod select_effects;
 mod select_ids_first;
 mod shaper;
@@ -365,15 +377,23 @@ fn unknown_command_names_the_nearest_id() {
     assert!(e.to_string().contains("did you mean `select.all`?"), "{e}");
 }
 
+/// An unknown command id or parameter key of 200,000 characters is answered without measuring
+/// its distance to every id and key: it takes no more character comparisons than one of 20.
 #[test]
 fn a_long_unknown_command_id_is_answered_at_once() {
+    use crate::cmd::params::DISTANCE_CELLS;
     let mut s = session();
-    let long = "x".repeat(200_000);
-    let start = std::time::Instant::now();
-    assert!(matches!(s.execute(&long, &json!({})), Err(EngineError::UnknownCommand(_))));
-    let e = crate::check_params("file.new", &json!({ long.as_str(): 1 })).unwrap_err();
-    assert!(e.to_string().contains("the command takes:"), "{e}");
-    assert!(start.elapsed() < std::time::Duration::from_secs(2), "{:?}", start.elapsed());
+    let mut compared = |id: &str| {
+        DISTANCE_CELLS.set(0);
+        assert!(matches!(s.execute(id, &json!({})), Err(EngineError::UnknownCommand(_))), "{}", id.len());
+        let e = crate::check_params("file.new", &json!({ id: 1 })).unwrap_err();
+        assert!(e.to_string().contains("the command takes:"), "{e}");
+        DISTANCE_CELLS.get()
+    };
+    let short = compared(&"x".repeat(20));
+    let long = compared(&"x".repeat(200_000));
+    assert!(short > 0, "a 20-character id is measured against the ids near its length");
+    assert!(long <= short, "200,000 characters: {long} comparisons, 20 characters: {short}");
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -3492,6 +3512,65 @@ fn flare_counts_are_whole_numbers() {
     assert!(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 2.5})).is_err());
 }
 
+/// `shape.flare` given only one of `x2` and `y2`, the other left out or null, refuses the call
+/// naming the missing one, draws nothing and adds no undo step.
+#[test]
+fn flare_requires_both_endpoint_coordinates() {
+    let mut s = session();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.node_count(), st.history.undo.len(), st.history.redo.len())
+    };
+    let before = state(&s);
+    for (p, key) in [
+        (json!({"cx": 100, "cy": 100, "x2": 300}), "y2"),
+        (json!({"cx": 100, "cy": 100, "x2": 300, "y2": null}), "y2"),
+        (json!({"cx": 100, "cy": 100, "y2": 300}), "x2"),
+        (json!({"cx": 100, "cy": 100, "x2": null, "y2": 300}), "x2"),
+    ] {
+        let err = s.execute("shape.flare", &p).expect_err(&p.to_string()).to_string();
+        assert_eq!(err, format!("invalid parameters for `shape.flare`: missing number `{key}`"), "{p}");
+        assert_eq!(state(&s), before, "{p}");
+    }
+}
+
+/// `shape.flare` with neither `x2` nor `y2` (left out or null) places the rings' end point from
+/// `pathLength` and `direction`; with both it uses them.
+#[test]
+fn flare_omitted_or_null_endpoint_coordinates_use_path_fallback() {
+    let mut s = session();
+    let mut end = |p: serde_json::Value| {
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let spec = flare_settings(&s.doc().unwrap().doc, id).expect("a flare");
+        Point::new(spec.params["x2"].as_f64().unwrap(), spec.params["y2"].as_f64().unwrap())
+    };
+    for p in [
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": null}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "y2": null}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": null, "y2": null}),
+    ] {
+        let e = end(p.clone());
+        assert!((e.x - 300.0).abs() < 1e-9 && (e.y - 100.0).abs() < 1e-9, "{p}: {e:?}");
+    }
+    assert_eq!(end(json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": 40, "y2": 70})), Point::new(40.0, 70.0));
+}
+
+/// Settings a file holds with only one of `x2` and `y2` are not a flare's: the group stays as art,
+/// but is not a flare that can be edited.
+#[test]
+fn flare_settings_with_a_lone_endpoint_coordinate_are_not_a_flare() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    let mut d = (*s.doc().unwrap().doc).clone();
+    assert!(flare_settings(&d, id).is_some());
+    let mut extras = d.node_mut(id).unwrap().extras_mut();
+    let spec = extras.flare.as_deref_mut().expect("flare settings");
+    spec.params.as_object_mut().unwrap().remove("y2");
+    drop(extras);
+    assert!(flare_settings(&d, id).is_none());
+}
+
 /// `shape.editFlare` on a flare scaled far down: a `pathLength`, an end point or a center that,
 /// taken back to where the flare was drawn, is not a finite number is an error, and the flare keeps
 /// its settings.
@@ -4439,6 +4518,69 @@ fn object_mosaic_tiles_follow_the_image_colours() {
     // 4 pt spacing: each 50 pt tile shrinks to 46 pt; the image is gone.
     assert!((tiles[0].geometric_bounds().unwrap().width() - 46.0).abs() < 1e-6);
     assert!(!st.doc.layers[0].children().unwrap().iter().any(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_))));
+}
+
+/// On an image changed by Perspective Distort, each tile is its cell placed between the image's corners: its four
+/// anchors are the cell's corners mapped as the image's pixels are, in one undo step. A new size resizes the warped
+/// tiles as it resizes the image's bounds, and spacing is measured at the mean length of the image's sides.
+#[test]
+fn object_mosaic_tiles_of_a_distorted_image_follow_its_corners() {
+    use vectorcraft_geom::Point;
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [a.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true, "ids": [a.0]})).unwrap();
+    let b = rect(&mut s, 50.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [b.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true, "ids": [b.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[20, 0], [80, 0], [100, 50], [0, 50]]})).unwrap();
+    let image = s.doc().unwrap().selection.objects.clone();
+    let node = s.doc().unwrap().doc.node(image[0]).unwrap().clone();
+    assert!(node.is_distorted_image());
+    let vectorcraft_doc::NodeKind::Image(im) = &node.kind else { panic!("not an image") };
+    let (w, h) = (f64::from(im.width), f64::from(im.height));
+    let map = node.image_map().unwrap();
+    let at = |x: f64, y: f64| map.apply(Point::new(x, y)).unwrap();
+    let anchors = |n: &vectorcraft_doc::Node| n.path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect::<Vec<_>>();
+    let near = |got: &[Point], want: &[Point]| got.len() == want.len() && got.iter().zip(want).all(|(g, w)| g.distance(*w) < 1e-6);
+    let tiles_of = |s: &Session, r: &serde_json::Value| {
+        s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().children().unwrap().iter().map(|t| (**t).clone()).collect::<Vec<_>>()
+    };
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 2, "rows": 2})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let tiles = tiles_of(&s, &r);
+    assert_eq!(tiles.len(), 4);
+    for (i, t) in tiles.iter().enumerate() {
+        let (x0, y0) = ((i % 2) as f64 * w / 2.0, (i / 2) as f64 * h / 2.0);
+        let want = [at(x0, y0), at(x0 + w / 2.0, y0), at(x0 + w / 2.0, y0 + h / 2.0), at(x0, y0 + h / 2.0)];
+        assert!(near(&anchors(t), &want), "tile {i}: {:?} against {want:?}", anchors(t));
+    }
+    // The first tile starts at the image's top left corner and its right side halves the top edge; the row line is
+    // nearer the narrow top, as the perspective puts the image's middle row there.
+    assert!(anchors(&tiles[0])[0].distance(Point::new(20.0, 0.0)) < 1e-6, "{:?}", anchors(&tiles[0]));
+    assert!((anchors(&tiles[0])[1].x - 50.0).abs() < 1e-6, "{:?}", anchors(&tiles[0]));
+    assert!(anchors(&tiles[0])[2].y < 24.0, "{:?}", anchors(&tiles[0]));
+    let fill = |n: &vectorcraft_doc::Node| n.appearance.fill_paint();
+    assert_eq!(fill(&tiles[0]), vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(fill(&tiles[1]), vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+    // Twice the width: the warped tiles stretch from the left of the image's bounds.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 2, "rows": 2, "width": 200, "percentages": true})).unwrap();
+    let tiles = tiles_of(&s, &r);
+    let stretched = |p: Point| Point::new(p.x * 2.0, p.y);
+    assert!(near(&anchors(&tiles[3]), &[at(w / 2.0, h / 2.0), at(w, h / 2.0), at(w, h), at(w / 2.0, h)].map(stretched)), "{:?}", anchors(&tiles[3]));
+    // 8 pt between columns: the image's top and bottom sides are 60 and 100 pt long, so a pixel is 80 / w pt across
+    // and the gap is w / 10 pixels, half of it on each side of a tile.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 2, "rows": 1, "spacingX": 8})).unwrap();
+    let tiles = tiles_of(&s, &r);
+    let g = w / 20.0;
+    assert!(near(&anchors(&tiles[0]), &[at(g, 0.0), at(w / 2.0 - g, 0.0), at(w / 2.0 - g, h), at(g, h)]), "{:?}", anchors(&tiles[0]));
 }
 
 /// Columns and rows that are not whole numbers (a fraction, a negative number, a string or another value) are an

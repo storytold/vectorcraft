@@ -176,6 +176,13 @@ fn click(s: &mut Session, mods: Mods, x: f64, y: f64) {
     }
 }
 
+/// The path the last `shape.curvatureCircle` drew on.
+fn drawn_on(s: &Session) -> NodeId {
+    let (cmd, p) = s.journal.last().unwrap().clone();
+    assert_eq!(cmd, C);
+    id_of(&p)
+}
+
 /// With the Curvature Circle tool, a click on a path draws the circle that matches it there, in
 /// one undo step; with Shift, on the other side. A click on a straight line or away from every
 /// path draws nothing.
@@ -223,4 +230,110 @@ fn the_next_click_passes_over_the_circle_the_tool_drew() {
     assert_eq!(object_count(&s), count + 1, "the circle drawn first is within reach again");
     let third = *s.doc().unwrap().selection.objects.first().unwrap();
     assert!(bounds_are(&s, third, Rect::new(100.0, 200.0, 300.0, 400.0)), "the click drew the first circle's own circle");
+    assert_eq!(drawn_on(&s), first, "the click hit the first circle");
+}
+
+/// After Deselect, the pointer reaches the circle the tool drew again, with no edit in between,
+/// and still does when the circle is selected again before the pointer moves.
+#[test]
+fn after_deselect_the_pointer_reaches_the_circle_the_tool_drew() {
+    for reselect in [false, true] {
+        let mut s = session();
+        let path = parabola(&mut s);
+        s.select_tool("curvatureCircle", view()).unwrap();
+        click(&mut s, Mods::default(), 200.0, 200.0);
+        let first = *s.doc().unwrap().selection.objects.first().unwrap();
+        assert_eq!(drawn_on(&s), path);
+        let undo = undo_len(&s);
+        s.execute("select.none", &json!({})).unwrap();
+        if reselect {
+            s.execute("select.set", &json!({"ids": [first.0]})).unwrap();
+        }
+        assert_eq!(undo_len(&s), undo, "Deselect is not an edit");
+        click(&mut s, Mods::default(), 280.0, 236.0);
+        assert_eq!(drawn_on(&s), first, "the click hit the circle drawn first ({reselect})");
+    }
+}
+
+/// The anchors of `id`'s path.
+fn anchors_of(s: &Session, id: NodeId) -> Vec<Point> {
+    let doc = &s.doc().unwrap().doc;
+    doc.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect()
+}
+
+/// With `anchors: "touch"` the circle is a plain path with an anchor where it touches the path;
+/// with the default, its anchors stay at 0°, 90°, 180° and 270° whatever General › Constrain Angle
+/// is; anything else is an error that draws nothing.
+#[test]
+fn the_anchors_go_where_the_circle_touches_or_at_standard_positions() {
+    let mut s = session();
+    let path = parabola(&mut s);
+    let v = s.execute(C, &json!({"id": path.0, "segment": 0, "t": 0.5, "anchors": "touch"})).unwrap();
+    let id = id_of(&v);
+    let node = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(matches!(node.kind, vectorcraft_doc::NodeKind::Path { live: None, .. }), "{node:?}");
+    let anchors = anchors_of(&s, id);
+    assert_eq!(anchors.len(), 4);
+    assert!(anchors.iter().any(|a| a.distance(Point::new(200.0, 200.0)) < 1e-6), "{anchors:?}");
+    assert!(bounds_are(&s, id, Rect::new(100.0, 200.0, 300.0, 400.0)));
+
+    let upright = id_of(&s.execute(C, &json!({"id": path.0, "segment": 0, "t": 0.5})).unwrap());
+    let upright = anchors_of(&s, upright);
+    s.execute("prefs.set", &json!({"key": "constrainAngle", "value": 30})).unwrap();
+    let v = s.execute(C, &json!({"id": path.0, "segment": 0, "t": 0.5})).unwrap();
+    assert_eq!(anchors_of(&s, id_of(&v)), upright);
+
+    let count = object_count(&s);
+    for bad in [json!("points"), json!(4), json!(true)] {
+        assert!(s.execute(C, &json!({"id": path.0, "segment": 0, "t": 0.5, "anchors": bad})).is_err());
+    }
+    assert!(s.execute(C, &json!({"id": path.0, "segment": 0, "t": 0.5, "constantRadius": "no"})).is_err());
+    assert_eq!(object_count(&s), count);
+}
+
+/// Near the edge of the canvas, the circle is refused only when the path drawn reaches past it: the
+/// circle with standard anchors, or with its anchors where it touches at a standard position, fits,
+/// while with an anchor where it touches about 20° from the right one, a cubic bulges past the edge.
+#[test]
+fn the_canvas_check_measures_the_path_drawn() {
+    let mut s = session();
+    let edge = vectorcraft_doc::MAX_COORD - 0.05;
+    let v = s.execute("shape.ellipse", &json!({"x": edge - 2000.0, "y": 0, "width": 2000, "height": 2000})).unwrap();
+    let path = id_of(&v);
+    let count = object_count(&s);
+    let near_right = json!({"id": path.0, "segment": 1, "t": 0.79});
+    assert!(s.execute(C, &near_right).is_ok());
+    assert!(s.execute(C, &json!({"id": path.0, "segment": 0, "t": 0.0, "anchors": "touch"})).is_ok());
+    let e = s.execute(C, &json!({"id": path.0, "segment": 1, "t": 0.79, "anchors": "touch"})).unwrap_err();
+    assert!(e.to_string().contains("past the canvas"), "{e}");
+    assert_eq!(object_count(&s), count + 2);
+}
+
+/// The tool's options are saved with the preferences and come back in the next session.
+#[test]
+fn the_tool_options_are_saved_with_the_preferences() {
+    let mut s = session();
+    s.select_tool(vectorcraft_tools::curvature_circle::ID, ViewInfo::default()).unwrap();
+    let changed =
+        json!({"snapTolerance": 12.0, "snapWithoutGuides": false, "annotateRadius": false, "standardAnchors": false, "constantRadius": false});
+    for (k, v) in changed.as_object().unwrap() {
+        s.set_tool_option(k, v);
+    }
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    let saved = serde_json::to_string(&s.prefs).unwrap();
+    let mut next = session();
+    next.apply_prefs(serde_json::from_str(&saved).unwrap());
+    next.select_tool(vectorcraft_tools::curvature_circle::ID, ViewInfo::default()).unwrap();
+    assert_eq!(next.tool_options(), changed);
+}
+
+/// With `constantRadius: false`, a circle's segment gives the cubic's own curvature, smaller than
+/// the circle's at an anchor, so a larger radius, and the result is not nominal.
+#[test]
+fn without_constant_radius_an_arc_gives_its_own_curvature() {
+    let mut s = session();
+    let path = circle(&mut s);
+    let v = s.execute(C, &json!({"id": path.0, "segment": 0, "t": 0.0, "constantRadius": false})).unwrap();
+    assert_eq!(v["nominal"], json!(false));
+    assert!(v["radius"].as_f64().unwrap() > 100.5, "{v}");
 }
