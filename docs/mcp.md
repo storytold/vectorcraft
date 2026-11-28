@@ -2721,7 +2721,12 @@ not UTF-8. The language is ES5.1, except that identifiers take the characters Un
 declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
 parameters, spread in array literals, calls and `new`, `for`-`of` loops, array and object destructuring in `var`,
 `let` and `const` declarations, assignments, parameters and `catch` clauses (with defaults, holes and rest elements),
-and shorthand and computed property names in object literals (https://262.ecma-international.org/11.0/). Spread,
+shorthand and computed property names in object literals, and classes with `extends`, `static` members, accessors and
+computed method names, `super` calls and properties and `new.target` (https://262.ecma-international.org/11.0/). A
+class can extend a class, a function, `null` or the built-in constructors `Object`, `Function`, `Array`, `String`,
+`Number`, `Boolean`, `RegExp`, `Date` and the error types. A class can name another built-in constructor in
+`extends`, but `new` on that class throws a `TypeError` when it reaches the built-in constructor, a rule that is
+VectorCraft's own. Spread,
 `for`-`of` and array patterns use the iterator protocol. A loop or pattern left early, by `break`, `return`, a
 `continue` to an outer loop or an exception, calls the iterator's `return` method when it has one. An iterator is not
 closed when its `next()` throws or gives a result that is not an object, when reading the result's `done` or `value`
@@ -2738,7 +2743,7 @@ an own empty `name` otherwise, as the 12th edition gives it (https://262.ecma-in
 20.2.4.2). A function's `length` can be redefined. The built-in functions get their names the first time a run reads
 ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. A `.js` script also has
 generator functions (ECMA-262 11th edition, sections 14.4 and 25.4, https://262.ecma-international.org/11.0/):
-`function*` declarations and expressions, `*name() {…}` methods in object literals, `yield`, and `yield*`, which
+`function*` declarations and expressions, `*name() {…}` methods in object literals and classes, `yield`, and `yield*`, which
 passes `next`, `throw` and `return` on to the iterator it delegates to. Calling a generator function returns a
 generator object whose `next`, `return` and `throw` run its body to the next `yield`; `return` runs the body's
 `finally` blocks, and resuming a generator while its body runs throws a `TypeError`. Each resumption takes fuel and

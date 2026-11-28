@@ -149,7 +149,7 @@ impl Parser<'_> {
         // `*name(…) {…}`: a generator method (ECMA-262 2015 section 14.4).
         if self.eat(Punct::Star)? {
             let key = if self.at(Punct::LBracket) { self.computed_key()? } else { self.parse_property_key()?.0 };
-            let function = self.parse_function_rest(FunctionKind::Method, None, start, true)?;
+            let function = self.parse_function_with(FunctionKind::Method, None, start, true, true)?;
             return Ok(Property { key, value: PropertyValue::Method(function), span: self.span_from(start) });
         }
         // `get` and `set` start an accessor only when written without escapes and followed by a
@@ -164,7 +164,8 @@ impl Parser<'_> {
         {
             self.bump()?;
             let key = if self.at(Punct::LBracket) { self.computed_key()? } else { self.parse_property_key()?.0 };
-            let function = self.parse_function_rest(kind, None, start, false)?;
+            // An accessor is a method, whose home object is the literal's object.
+            let function = self.parse_function_with(kind, None, start, true, false)?;
             let value = if kind == FunctionKind::Getter { PropertyValue::Get(function) } else { PropertyValue::Set(function) };
             return Ok(Property { key, value, span: self.span_from(start) });
         }
@@ -198,7 +199,7 @@ impl Parser<'_> {
     /// the value may still turn out to be a pattern.
     fn cover_property_value(&mut self, key: PropertyKey, start: Span) -> Result<Property> {
         if self.at(Punct::LParen) {
-            let function = self.parse_function_rest(FunctionKind::Method, None, start, false)?;
+            let function = self.parse_function_with(FunctionKind::Method, None, start, true, false)?;
             return Ok(Property { key, value: PropertyValue::Method(function), span: self.span_from(start) });
         }
         self.expect(Punct::Colon)?;
@@ -208,8 +209,8 @@ impl Parser<'_> {
     }
 
     /// An assignment's, `++`'s or `--`'s target without the call that ECMAScript 5.1 code may
-    /// assign to: an identifier (in strict code neither `eval` nor `arguments`), a property or an
-    /// E4X name standing alone.
+    /// assign to: an identifier (in strict code neither `eval` nor `arguments`), a property (a
+    /// super property included) or an E4X name standing alone.
     fn check_simple_target(&self, expr: ExprId, message: &str) -> Result<()> {
         let inner = self.ast.unparenthesized(expr);
         match self.ast.expr(inner) {
@@ -219,7 +220,7 @@ impl Parser<'_> {
                 }
                 Ok(())
             }
-            Some(Expr::Member { .. } | Expr::Index { .. } | Expr::XmlScopeName(_)) => Ok(()),
+            Some(Expr::Member { .. } | Expr::Index { .. } | Expr::XmlScopeName(_) | Expr::SuperMember(_) | Expr::SuperIndex(_)) => Ok(()),
             _ => Err(self.error_at_offset(self.ast.expr_span(expr).start, message)),
         }
     }

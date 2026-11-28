@@ -103,6 +103,12 @@ fn redeclarations_and_bad_declarations_are_syntax_errors() {
     // Outside strict mode code `let` is still a name where no declaration can start.
     truth("var let = 3; let === 3");
     truth("{ function f() { return 1; } function f() { return 2; } } f() === 2");
+    // A labeled function in a block declares its name in the block.
+    syntax("{ let f; label: function f() {} }");
+    truth("function g() { var f; L: function f() {} return typeof f; } g() === 'function'");
+    // A method's parameter names are unique outside strict mode code too.
+    syntax("({ m(x, x) {} })");
+    truth("function f(x, x) { return x; } f(1, 2) === 2");
 }
 
 #[test]
@@ -124,7 +130,14 @@ fn functions_declared_in_blocks_are_scoped_to_the_block() {
     truth("var before = typeof f; { function f() { return 1; } } before === 'undefined' && f() === 1");
     truth("{ let x = 2; function g() { return x; } } g() === 2");
     truth("function h() { if (true) { function inner() { return 'i'; } } return inner(); } h() === 'i'");
-    // Only a `let` or `const` around the declaration, or a parameter, keeps the name from being a variable.
+    // Only a `let` or `const` around the declaration, a function declared in a block around it, or
+    // a parameter keeps the name from being a variable.
+    truth("var f; { function f() { return 1; } { function f() { return 2; } } } f() === 1");
+    // A function standing alone as an `if` branch is in a block of its own.
+    truth("var f; { function f() { return 1; } if (true) function f() { return 2; } } f() === 1");
+    truth("var f; if (true) function f() { return 2; } else function f() { return 3; } f() === 2");
+    // A labeled function in a block is made when the block is entered.
+    truth("{ var result = typeof lf; L: function lf() {} } result === 'function'");
     truth("function f() { { let g; } { function g() {} } return typeof g; } f() === 'function'");
     truth("function f() { let g = 1; { function g() {} } return g; } f() === 1");
     truth("function f() { { let g = 1; { function g() {} } } return typeof g; } f() === 'undefined'");
@@ -171,6 +184,26 @@ fn global_lexical_bindings_stay_across_runs_and_cannot_be_redeclared() {
     assert_eq!(realm.run("kept"), Ok(JsValue::Number(5.0)));
     let restricted = realm.run("let undefined = 1;");
     assert!(restricted.is_err(), "{restricted:?}");
+}
+
+#[test]
+fn a_script_stopped_at_a_limit_before_it_runs_leaves_no_global_lexical_bindings() {
+    // The 200 functions take a unit of fuel each after the `let` is declared, so each of these
+    // fuel limits stops the script before it runs. A second run with the default limits then
+    // declares `pending` again; a thrown error once the script runs keeps the binding.
+    let functions: String = (0..200).map(|k| format!("function f{k}() {{}} ")).collect();
+    let src = format!("let pending = 1; {functions} pending");
+    for fuel in (2..150).step_by(7) {
+        let mut realm = Realm::with_options(es_options(), Limits { fuel, ..Limits::default() });
+        let e = realm.run(&src).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "fuel {fuel}: {e:?}");
+        realm.set_limits(Limits::default());
+        assert_eq!(realm.run(&src), Ok(JsValue::Number(1.0)), "fuel {fuel}");
+    }
+    let mut realm = es();
+    assert!(realm.run("let thrown = 1; throw 0;").is_err());
+    let again = realm.run("let thrown = 2;");
+    assert!(matches!(&again, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("SyntaxError")), "{again:?}");
 }
 
 #[test]
@@ -267,6 +300,23 @@ fn a_global_function_that_cannot_be_declared_declares_nothing() {
 }
 
 #[test]
+fn a_global_variable_that_cannot_be_declared_declares_nothing() {
+    // A global object that is not extensible takes no new variable (ECMA-262 2015 sections 15.1.8
+    // and 18.2.1.2, CanDeclareGlobalVar), and nothing else the code declares is declared.
+    let mut realm = es();
+    assert_eq!(realm.run("var kept = 1; Object.preventExtensions(this); 0"), Ok(JsValue::Number(0.0)));
+    for decl in ["let pending = 1; var missing;", "eval('var missing;')", "(0, eval)('var missing;')"] {
+        let failed = realm.run(decl);
+        assert!(
+            matches!(&failed, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("TypeError")),
+            "{decl}: {failed:?}"
+        );
+    }
+    assert_eq!(realm.run("typeof pending === 'undefined' && !this.hasOwnProperty('missing')"), Ok(JsValue::Bool(true)));
+    assert_eq!(realm.run("var kept = 2; kept"), Ok(JsValue::Number(2.0)));
+}
+
+#[test]
 fn a_global_function_is_judged_by_the_global_objects_own_property() {
     // ECMA-262 2015 sections 8.1.1.4.16 and 8.1.1.4.18 read the global object's own property, so
     // a fixed property the global object inherits does not stop the declaration.
@@ -317,8 +367,29 @@ fn a_global_var_stops_a_later_let_even_on_a_configurable_property() {
     assert!(is_thrown(&realm.run("let z;"), "SyntaxError"));
     assert_eq!(realm.run("delete z"), Ok(JsValue::Bool(true)));
     assert_eq!(realm.run("let z = 3; z"), Ok(JsValue::Number(3.0)));
+    // Deleting the property itself, not through the global environment, keeps the record
+    // (ECMA-262 2015 sections 12.5.3.2 and 8.1.1.4.7).
     assert_eq!(realm.run("(0, eval)('var w = 1'); delete this.w"), Ok(JsValue::Bool(true)));
-    assert_eq!(realm.run("let w = 4; w"), Ok(JsValue::Number(4.0)));
+    assert!(is_thrown(&realm.run("let w = 4;"), "SyntaxError"));
+    assert_eq!(realm.run("(0, eval)('var u = 1'); with (this) { delete u; }"), Ok(JsValue::Bool(true)));
+    assert!(is_thrown(&realm.run("let u = 5;"), "SyntaxError"));
+    // Deleting a name the global object only inherits deletes no variable.
+    assert_eq!(realm.run("(0, eval)('var t = 1'); delete this.t; Object.prototype.t = 2; delete t"), Ok(JsValue::Bool(true)));
+    assert!(is_thrown(&realm.run("let t = 6;"), "SyntaxError"));
+}
+
+#[test]
+fn a_5_1_var_on_an_inherited_name_is_not_a_global_var() {
+    // The 5.1 edition's `var` on a name the global object only inherits makes no property, so the
+    // name does not stop a later `let` once the inherited property is gone.
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("Object.prototype.x = 1; Object.prototype.y = 1; this.y = 2; 0"), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("var x, y; this.hasOwnProperty('x')"), Ok(JsValue::Bool(false)));
+    assert_eq!(realm.run("delete Object.prototype.x"), Ok(JsValue::Bool(true)));
+    realm.set_es2015(true);
+    assert_eq!(realm.run("let x = 1; x"), Ok(JsValue::Number(1.0)));
+    // A `var` on an own property is still recorded.
+    assert!(is_thrown(&realm.run("let y = 3;"), "SyntaxError"));
 }
 
 #[test]
@@ -553,6 +624,14 @@ fn rest_parameters_collect_the_remaining_arguments() {
     truth("function f(a, ...r) { return Array.isArray(r) && r.length === 2 && r[0] === 2 && r[1] === 3; } f(1, 2, 3)");
     truth("function f(...r) { return r.length; } f() === 0");
     truth("function f(...r) { r.push(1); return r.length; } f(0) === 2");
+    // Without default values the parameters and the body share one environment, so a `var` of a
+    // parameter's name, in the body or in direct eval, is the parameter.
+    truth("function f(...r) { return eval('var r; r[0]'); } f(3) === 3");
+    truth("function f(a, ...r) { eval('var a = 5; var r = 6'); return a + r; } f(1, 2) === 11");
+    truth("function f(...r) { var r; return r[0]; } f(4) === 4");
+    // The arguments object still does not follow the parameters, and its callee throws.
+    truth("function f(a, ...r) { a = 9; return arguments[0]; } f(1) === 1");
+    throws("function f(...r) { return arguments.callee; } f();", "TypeError");
     syntax("function f(...r, a) {}");
     syntax("function f(...r = []) {}");
     syntax("function f(a, a = 1) {}");
@@ -668,20 +747,27 @@ fn spread_counts_each_index_name_against_the_heap() {
         assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
         measure.interp().collect_garbage();
         let base = measure.interp().heap.bytes;
-        for extra in (0..640usize).map(|k| k * 1024) {
+        let mut spread_all = 0;
+        for extra in (0..1280usize).map(|k| k * 2048) {
             let heap_bytes = base + extra;
             let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
-            if realm.run(setup).is_err() {
+            // Only the heap limit may stop the setup.
+            if let Err(e) = realm.run(setup) {
+                assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "setup at {heap_bytes}: {e:?}");
                 continue;
             }
             match realm.run(&format!("var b = {spread}; b.length")) {
-                Ok(v) => assert_eq!(v, JsValue::Number(4000.0), "{spread} at {heap_bytes}"),
+                Ok(v) => {
+                    assert_eq!(v, JsValue::Number(4000.0), "{spread} at {heap_bytes}");
+                    spread_all += 1;
+                }
                 Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{spread} at {heap_bytes}: {e:?}"),
             }
             // A collection counts what is live, without the bytes the spread held while it ran.
             realm.interp().collect_garbage();
             assert!(realm.interp().heap.bytes <= heap_bytes, "{spread}: {} > {heap_bytes}", realm.interp().heap.bytes);
         }
+        assert!(spread_all > 0, "{spread}: no limit in the range fit the whole spread");
     }
 }
 
@@ -847,10 +933,12 @@ fn a_rest_parameter_checks_the_heap_before_its_array_is_made() {
 fn a_body_after_default_parameters_checks_the_heap_before_its_scope_is_made() {
     // The default value fills the heap a little more each run, so at some count the room left
     // after it is smaller than the body's long variable names need. The call then ends with the
-    // heap limit before the heap estimate passes it.
+    // heap limit before the heap estimate passes it. Only a run that stops after `fill` has
+    // returned counts as stopped by the body.
     let vars = (0..200).map(|i| format!("v{i:0>60}")).collect::<Vec<_>>().join(", ");
     let setup = format!(
-        "var keep = []; function fill(k) {{ for (var i = 0; i < k; i++) keep.push(i); }} function f(a = fill(count)) {{ var {vars}; return 1; }} 0"
+        "var keep = [], filled = false; function fill(k) {{ for (var i = 0; i < k; i++) keep.push(i); filled = true; }} \
+         function f(a = fill(count)) {{ var {vars}; return 1; }} 0"
     );
     let mut measure = Realm::with_options(es_options(), Limits::default());
     assert_eq!(measure.run(&setup), Ok(JsValue::Number(0.0)));
@@ -860,16 +948,21 @@ fn a_body_after_default_parameters_checks_the_heap_before_its_scope_is_made() {
     for count in (0..4000).step_by(20) {
         let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
         assert_eq!(realm.run(&setup), Ok(JsValue::Number(0.0)));
-        match realm.run(&format!("var count = {count}; f()")) {
+        let result = realm.run(&format!("var count = {count}; f()"));
+        // The estimate is read before the next run, whose code may make the collector run.
+        let bytes = realm.interp().heap.bytes;
+        assert!(bytes <= heap_bytes, "{count}: {bytes} > {heap_bytes}");
+        match result {
             Ok(v) => assert_eq!(v, JsValue::Number(1.0), "{count}"),
             Err(e) => {
                 assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{count}: {e:?}");
-                stopped += 1;
+                if realm.run("filled") == Ok(JsValue::Bool(true)) {
+                    stopped += 1;
+                }
             }
         }
-        assert!(realm.interp().heap.bytes <= heap_bytes, "{count}: {} > {heap_bytes}", realm.interp().heap.bytes);
     }
-    assert!(stopped > 0, "no count reached the heap limit");
+    assert!(stopped > 0, "no count reached the heap limit after the default value was made");
 }
 
 #[test]
@@ -1014,6 +1107,74 @@ fn new_scopes_survive_a_collection_at_each_reservation() {
 }
 
 #[test]
+fn calls_and_strict_eval_survive_collections_while_their_scopes_are_made() {
+    // Heaps just big enough make the collector run while a call's or a strict eval's scopes are
+    // made; the receiver, the arguments and eval's own environment stay reachable.
+    let src = "var total = 0; \
+        for (var i = 0; i < 300; i++) { \
+        total += (function () { 'use strict'; let x = i; return this.marker + x - i; }).call({ marker: 1 }); \
+        total += (function (a) { let y = a; return arguments.length + y.v; })({ v: 1 }, {}, {}); \
+        total += eval(\"'use strict'; var x = 7; let y = 1; function g() { return x; } x + y + g() + i - i\"); \
+        total += (0, eval)(\"'use strict'; var x = 2; let y = 1; function g() { return x; } x + y + g() + i - i\"); } total";
+    let mut completed = 0;
+    for kib in 16..400 {
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes: kib << 10, ..Limits::default() });
+        match realm.run(src) {
+            Ok(v) => {
+                assert_eq!(v, JsValue::Number(7500.0), "{kib} KiB");
+                completed += 1;
+            }
+            Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{kib} KiB: {e:?}"),
+        }
+    }
+    assert!(completed > 0);
+}
+
+#[test]
+fn strict_eval_keeps_its_environment_through_a_collection_while_its_scope_is_made() {
+    // The scope of 500 names is the biggest piece eval code makes, so the collector runs while it
+    // is made at many heap sizes; eval's own environment, with `x` in it, stays.
+    let lets: Vec<String> = (0..500).map(|k| format!("l{k}")).collect();
+    let src = format!(
+        "var total = 0; var src = \"'use strict'; var x = 7; let {}; function g() {{ return x; }} x + g() + i - i\"; \
+         for (var i = 0; i < 10; i++) {{ total += eval(src) + (0, eval)(src); }} total",
+        lets.join(", ")
+    );
+    let mut completed = 0;
+    for kib in (64..1024).step_by(2) {
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes: kib << 10, ..Limits::default() });
+        match realm.run(&src) {
+            Ok(v) => {
+                assert_eq!(v, JsValue::Number(280.0), "{kib} KiB");
+                completed += 1;
+            }
+            Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{kib} KiB: {e:?}"),
+        }
+    }
+    assert!(completed > 0);
+}
+
+#[test]
+fn template_objects_go_when_their_code_does() {
+    // Two sites in one function share its code; both strings objects go once the function does.
+    let mut realm = es();
+    let src = "function tag(s) { return s; } (function () { tag`a`; tag`b`; })(); (function () { tag`c`; })(); 0";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(0.0)));
+    realm.interp().collect_garbage();
+    realm.interp().collect_garbage();
+    assert_eq!(realm.interp().template_objects.len(), 0);
+}
+
+#[test]
+fn a_directive_after_a_template_over_lines_must_start_its_line() {
+    let options = Options { preprocessor_lines: true, ..es_options() };
+    let p = crate::parse("var s = `${1}\nx` //@include \"missing.jsx\"\nvar t = `a\nb` //@include \"other.jsx\"", &options).unwrap();
+    assert!(p.directives.is_empty(), "{:?}", p.directives);
+    assert!(crate::parse("var s = `${1}\nx` #include x", &options).is_err());
+    assert_eq!(crate::parse("var s = `${1}\nx`\n//@include \"a.jsx\"", &options).unwrap().directives.len(), 1);
+}
+
+#[test]
 fn nested_arrows_and_templates_stay_within_the_depth_limit() {
     let deep = format!("{}0", "x => ".repeat(400));
     let e = es().run(&deep).unwrap_err();
@@ -1033,6 +1194,185 @@ fn for_each_takes_let_and_const_with_e4x() {
     assert_eq!(realm.run(src), Ok(JsValue::Bool(true)));
     let e = Realm::with_options(Options { e4x: true, ..es_options() }, Limits::default()).run("for each (let a = 1 in []) {}").unwrap_err();
     assert_eq!(e.kind, RunErrorKind::Syntax, "{e:?}");
+}
+
+// ---- classes ----
+
+#[test]
+fn classes_make_constructors_with_methods_on_their_prototype() {
+    truth("class A { constructor(x) { this.x = x; } get() { return this.x; } } new A(3).get() === 3");
+    truth(
+        "class A {} typeof A === 'function' && Object.getPrototypeOf(A) === Function.prototype && Object.getPrototypeOf(A.prototype) === Object.prototype",
+    );
+    truth("class A { m() {} } var d = Object.getOwnPropertyDescriptor(A.prototype, 'm'); d.writable && !d.enumerable && d.configurable");
+    truth("class A {} var d = Object.getOwnPropertyDescriptor(A, 'prototype'); !d.writable && !d.enumerable && !d.configurable");
+    truth("class A {} var d = Object.getOwnPropertyDescriptor(A.prototype, 'constructor'); d.value === A && !d.enumerable");
+    truth("class A { m() {} } !A.prototype.m.hasOwnProperty('prototype')");
+    truth("var k = 'dyn'; class A { [k + 1]() { return 1; } } new A().dyn1() === 1");
+    truth("var C = class Named { who() { return Named; } }; new C().who() === C && typeof Named === 'undefined'");
+    truth("class A { ;; m() { return 2; }; } new A().m() === 2");
+    assert!(string("class A { m() { return 1; } } String(A)").starts_with("class A"));
+    // A class body is strict mode code.
+    truth("class A { m() { return this; } } A.prototype.m.call(undefined) === undefined");
+    throws("class A { m() { undeclared = 1; } } new A().m();", "ReferenceError");
+}
+
+#[test]
+fn classes_and_their_methods_are_named_after_their_keys() {
+    let named = |f: &str| {
+        format!(
+            "(function (f) {{ var d = Object.getOwnPropertyDescriptor(f, 'name'); return d.value + (d.writable || d.enumerable ? '!' : '') + (d.configurable ? '' : '!'); }})({f})"
+        )
+    };
+    let src = "var d = Symbol('d'), e = Symbol(); class A { m() {} get g() {} set s(v) {} static [Symbol.iterator]() {} static [d]() {} [e]() {} ['c' + 1]() {} }";
+    assert_eq!(string(&format!("{src} {}", named("A"))), "A");
+    assert_eq!(string(&format!("{src} {}", named("A.prototype.m"))), "m");
+    assert_eq!(string(&format!("{src} {}", named("Object.getOwnPropertyDescriptor(A.prototype, 'g').get"))), "get g");
+    assert_eq!(string(&format!("{src} {}", named("Object.getOwnPropertyDescriptor(A.prototype, 's').set"))), "set s");
+    assert_eq!(string(&format!("{src} {}", named("A[Symbol.iterator]"))), "[Symbol.iterator]");
+    assert_eq!(string(&format!("{src} {}", named("A.prototype.c1"))), "c1");
+    truth(&format!("{src} A[d].name === '[d]' && A.prototype[e].name === ''"));
+    // A static `name` member replaces the class's name.
+    truth("class B { static name() { return 1; } } typeof B.name === 'function' && B.name() === 1");
+    // An anonymous class takes the name of what it is assigned to.
+    truth("var C = class {}; var o = { D: class {} }; C.name === 'C' && o.D.name === 'D' && (class {}).name === ''");
+    truth("var E = class { static name() {} }; typeof E.name === 'function'");
+    truth("var G = class { static ['foo']() {} static [Symbol.iterator]() {} }; G.name === 'G'");
+    truth("var H = class { static ['na' + 'me']() {} }; typeof H.name === 'function'");
+    truth("var I = class { static get name() { return 'x'; } }; I.name === 'x'");
+    truth("var F = class Inner {}; F.name === 'Inner'");
+}
+
+#[test]
+fn classes_have_generator_methods() {
+    let src = "class P { *items() { yield 1; } } class A extends P { *m(n) { yield n; yield* super.items(); } static *[Symbol.iterator]() { yield 'a'; yield 'b'; } }";
+    truth(&format!("{src} var it = new A().m(5); it.next().value === 5 && it.next().value === 1 && it.next().done"));
+    truth(&format!("{src} [...A].join() === 'a,b' && A.prototype.m.name === 'm'"));
+    truth(&format!(
+        "{src} var d = Object.getOwnPropertyDescriptor(A.prototype, 'm'); !d.enumerable && Object.getPrototypeOf(new A().m()) === A.prototype.m.prototype"
+    ));
+    throws(&format!("{src} new A.prototype.m()"), "TypeError");
+    syntax("class A { static *prototype() {} }");
+    syntax("class A { *m() { yield = 1; } }");
+    truth("class A { *get() { yield 2; } } new A().get().next().value === 2");
+}
+
+#[test]
+fn computed_methods_and_accessors_of_object_literals_have_a_home_object() {
+    let src = "var p = { x: 1 }; var k = Symbol('k'); var o = { __proto__: p, ['m']() { return super.x; }, get [k]() { return super.x + 1; }, set ['s'](v) { super.x = v; } };";
+    truth(&format!("{src} o.m() === 1 && o[k] === 2 && o.m.name === 'm'"));
+    truth(&format!("{src} o.s = 5; o.x === 5 && p.x === 1 && Object.getOwnPropertyDescriptor(o, k).get.name === 'get [k]'"));
+    truth(&format!("{src} Object.getOwnPropertyDescriptor(o, 'm').enumerable && !o.m.hasOwnProperty('prototype')"));
+    throws(&format!("{src} new o.m()"), "TypeError");
+}
+
+#[test]
+fn super_properties_read_and_write_symbol_keys() {
+    let src = "var s = Symbol('s'); class P {} P.prototype[s] = 5; class Q extends P { f() { return super[s]; } g() { super[s] = 7; return this[s]; } h() { super[s]++; return this[s]; } }";
+    truth(&format!("{src} new Q().f() === 5"));
+    truth(&format!("{src} var q = new Q(); q.g() === 7 && q.hasOwnProperty(s) && P.prototype[s] === 5"));
+    truth(&format!("{src} new Q().h() === 6"));
+    truth("var s = Symbol(); var o = { __proto__: { [s]() { return 3; } }, m() { return super[s](); } }; o.m() === 3");
+}
+
+#[test]
+fn static_and_accessor_members_go_on_the_constructor_and_prototype() {
+    truth("class A { static make() { return new A(); } } A.make() instanceof A");
+    truth("class A { static get n() { return 4; } } A.n === 4 && !A.prototype.hasOwnProperty('n')");
+    truth(
+        "class A { constructor() { this._v = 1; } get v() { return this._v; } set v(x) { this._v = x * 2; } } var a = new A(); a.v = 5; a.v === 10",
+    );
+    truth(
+        "class A { get v() { return 1; } set v(x) {} } var d = Object.getOwnPropertyDescriptor(A.prototype, 'v'); typeof d.get === 'function' && typeof d.set === 'function' && !d.enumerable",
+    );
+    truth(
+        "class A { static() { return 's'; } get() { return 'g'; } set() { return 't'; } } var a = new A(); a.static() + a.get() + a.set() === 'sgt'",
+    );
+    throws("class A { static ['proto' + 'type']() {} }", "TypeError");
+    syntax("class A { static prototype() {} }");
+}
+
+#[test]
+fn subclasses_inherit_and_reach_the_superclass_through_super() {
+    truth(
+        "class A { constructor(x) { this.x = x; } m() { return 'A' + this.x; } } \
+           class B extends A { constructor(x) { super(x + 1); } m() { return 'B' + super.m(); } } \
+           var b = new B(1); b.m() === 'BA2' && b instanceof A && Object.getPrototypeOf(B) === A",
+    );
+    truth("class A { constructor(...a) { this.n = a.length; } } class B extends A {} new B(1, 2, 3).n === 3");
+    truth("class A { static s() { return 1; } } class B extends A { static s() { return super.s() + 1; } } B.s() === 2");
+    truth("class A {} class B extends A { m() { super.x = 5; return this.x; } } var b = new B(); b.m() === 5 && !A.prototype.hasOwnProperty('x')");
+    // A super property is a target of destructuring and of `for-of` as well.
+    truth(
+        "class A {} class B extends A { m() { [super.x, super['y']] = [1, 2]; ({ z: super.z } = { z: 3 }); for (super.w of [4]) {} \
+           return this.x * 1000 + this.y * 100 + this.z * 10 + this.w; } } new B().m() === 1234 && !A.prototype.hasOwnProperty('x')",
+    );
+    truth(
+        "class A { get v() { return this.w; } } class B extends A { constructor() { super(); this.w = 7; } get v() { return super.v + 1; } } new B().v === 8",
+    );
+    // `super.n` reads the prototype's property and writes the instance's.
+    truth(
+        "class A {} A.prototype.n = 1; class B extends A { m() { super.n += 2; var a = this.n; super['n']++; return a * 10 + this.n; } } new B().m() === 32 && A.prototype.n === 1",
+    );
+    truth("class A { constructor() { this.made = new.target; } } class B extends A {} new B().made === B && new A().made === A");
+    truth("class A {} class B extends A { constructor() { var f = () => super(); f(); this.ok = true; } } new B().ok");
+    truth("function F() { this.f = 1; } class B extends F {} new B().f === 1");
+    truth("class E extends Error { constructor(m) { super(m); } } var e = new E('x'); e instanceof E && e instanceof Error && e.message === 'x'");
+    truth("class L extends Array {} var l = new L(); l.push(1); l instanceof L && l.length === 1");
+    throws("class A {} class B extends A { m() { delete super.x; } } new B().m();", "ReferenceError");
+    // The constructor's home object is the prototype (section 14.5.14, step 12), so `super.x` in
+    // it reads the superclass's prototype, not the superclass.
+    truth(
+        "class A { m() { return 'p'; } static m() { return 's'; } } \
+           class B extends A { constructor() { super(); this.r = super.m(); } } new B().r === 'p'",
+    );
+}
+
+#[test]
+fn object_literal_methods_are_enumerable_and_reach_super() {
+    truth("var o = { m(x) { return x + 1; } }; o.m(1) === 2 && Object.keys(o).join() === 'm'");
+    truth("var o = { m() {} }; !o.m.hasOwnProperty('prototype')");
+    throws("var o = { m() {} }; new o.m();", "TypeError");
+    // `super` reads the home object's prototype, `Object.prototype`, as it is at the access.
+    truth(
+        "Object.prototype.hi = function () { return 'base ' + this.n; }; var o = { n: 1, hi() { return 'o ' + super.hi(); } }; o.hi() === 'o base 1'",
+    );
+    truth("Object.prototype.v = 1; var o = { v: 9, m() { return super.v; } }; var a = o.m(); Object.prototype.v = 2; a === 1 && o.m() === 2");
+    truth("Object.prototype.v = 3; var o = { v: 9, get g() { return super.v; } }; o.g === 3");
+    truth("Object.prototype.v = 4; var o = { v: 9, m() { return (() => super.v)(); } }; o.m() === 4");
+    truth("var o = { get: 1, set: 2, get() { return 3; } }; o.get() === 3 && o.set === 2");
+    // A `super` write that cannot be made does nothing outside strict mode code.
+    truth("var o = { m() { super.x = 1; Object.freeze(o); super.y = 2; return 1; } }; o.m() === 1 && o.x === 1 && !('y' in o)");
+    throws("var o = { m() { 'use strict'; Object.freeze(o); super.y = 2; } }; o.m();", "TypeError");
+    // So does a realm's strict writes setting.
+    let mut realm = es();
+    realm.set_strict_writes(true);
+    let failed = realm.run("var o = { m() { Object.freeze(o); super.y = 2; } }; o.m();");
+    assert!(matches!(&failed, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("TypeError")), "{failed:?}");
+    syntax("var o = { m() { super(); } };");
+    syntax("var o = { f: function () { return super.x; } };");
+    let r = Realm::new().run("var o = { m() {} };");
+    assert!(matches!(r, Err(RunError { kind: RunErrorKind::Syntax, .. })), "{r:?}");
+}
+
+#[test]
+fn this_before_super_is_a_reference_error() {
+    throws("class A {} class B extends A { constructor() { this.x = 1; super(); } } new B();", "ReferenceError");
+    throws("class A {} class B extends A { constructor() { var f = () => this; f(); super(); } } new B();", "ReferenceError");
+    throws("class A {} class B extends A { constructor() {} } new B();", "ReferenceError");
+    throws("class A {} class B extends A { constructor() { super(); super(); } } new B();", "ReferenceError");
+    throws("class A {} class B extends A { constructor() { return 1; } } new B();", "TypeError");
+    truth("class A {} class B extends A { constructor() { return { o: 1 }; } } new B().o === 1");
+    truth("class A {} class B extends A { constructor() { var f = () => this; super(); this.f = f; } } var b = new B(); b.f() === b");
+    // A handler in the constructor does not catch what its return throws.
+    throws("class A {} class B extends A { constructor() { try { return; } catch (e) {} } } new B();", "ReferenceError");
+    // Direct eval reads the constructor's `this` binding when it runs.
+    throws("class A {} class B extends A { constructor() { eval('this'); super(); } } new B();", "ReferenceError");
+    truth("class A {} class B extends A { constructor() { eval('1'); super(); this.ok = eval('this') === this; } } new B().ok");
+    truth("class A {} class B extends A { constructor() { var f = eval('() => this'); super(); this.f = f; } } var b = new B(); b.f() === b");
+    truth(
+        "var seen; class A {} class B extends A { constructor() { var o = { g() { return eval('this'); } }; seen = o.g() === o; super(); } } new B(); seen",
+    );
 }
 
 #[test]
@@ -1186,6 +1526,113 @@ fn an_exception_that_closes_an_iterator_keeps_where_it_was_thrown() {
         "var t = { [Symbol.iterator]: function () { return this; }, next: function () { return { value: 1, done: false }; }, \
          get return() { throw 2; } }; var r; try { for (var x of t) throw 1; } catch (e) { r = e; } r === 1",
     );
+}
+
+#[test]
+fn extends_null_and_bad_heritage() {
+    truth("class N extends null {} Object.getPrototypeOf(N.prototype) === null && Object.getPrototypeOf(N) === Function.prototype");
+    truth("class N extends null { constructor() { return Object.create(N.prototype); } } new N() instanceof N");
+    throws("class N extends null {} new N();", "TypeError");
+    throws("class B extends 3 {}", "TypeError");
+    throws("var f = () => {}; class B extends f {}", "TypeError");
+    throws("function F() {} F.prototype = 3; class B extends F {}", "TypeError");
+    throws("class B extends B {}", "ReferenceError");
+    throws("class A { m() {} } class B extends A.prototype.m {}", "TypeError");
+}
+
+#[test]
+fn class_heritage_and_computed_keys_run_as_strict_mode_code() {
+    throws("var o = {}; Object.defineProperty(o, 'x', { value: 1 }); class C { [(o.x = 2)]() {} }", "TypeError");
+    throws("class C extends (undeclared = Object) {}", "ReferenceError");
+    throws("var C = class { static [(undeclared = 'k')]() {} };", "ReferenceError");
+    // The code around the class stays sloppy, after the class and in a handler of what it throws.
+    truth("class C extends Object {} after = 1; after === 1");
+    truth("try { class C extends (function () { throw 1; })() {} } catch (e) { caught = e; } caught === 1");
+    truth("try { class C { [(function () { throw 2; })()]() {} } } catch (e) { caught = e; } caught === 2");
+}
+
+#[test]
+fn a_class_extends_other_built_ins_but_new_on_it_throws() {
+    let e4x = || Realm::with_options(Options { e4x: true, ..es_options() }, Limits::default());
+    assert_eq!(e4x().run("class X extends XML {} typeof X === 'function' && Object.getPrototypeOf(X) === XML"), Ok(JsValue::Bool(true)));
+    for src in ["class X extends XML {} new X('<a/>');", "class X extends XML { constructor() { super('<a/>'); } } new X();"] {
+        match e4x().run(src) {
+            Err(RunError { kind: RunErrorKind::Thrown, message, .. }) => assert!(message.starts_with("TypeError"), "{src}: {message}"),
+            other => panic!("{src}: {other:?}"),
+        }
+    }
+    truth("class E extends RangeError {} var e = new E('m'); e instanceof E && e instanceof RangeError && e.message === 'm'");
+}
+
+#[test]
+fn a_class_is_called_only_with_new() {
+    throws("class A {} A();", "TypeError");
+    throws("class A {} A.call({});", "TypeError");
+    throws("class A { m() {} } new A.prototype.m();", "TypeError");
+    throws("class A { static m() {} } new A.m();", "TypeError");
+    throws("class A {} class B extends A {} B();", "TypeError");
+    truth("class A {} var Bound = A.bind(null); new Bound() instanceof A");
+}
+
+#[test]
+fn class_bindings_follow_let_rules() {
+    throws("new A(); class A {}", "ReferenceError");
+    truth("class A {} { class A { m() { return 2; } } } typeof A.prototype.m === 'undefined'");
+    throws("class A { m() { A = 1; } } new A().m();", "TypeError");
+    // The inner name is initialized only after every method is defined (section 14.5.14, steps
+    // 21 and 23), so a computed key that reads it is a `ReferenceError`.
+    throws("class A { [A]() {} }", "ReferenceError");
+    throws("var C = class D { static [D]() {} };", "ReferenceError");
+    truth("class A {} A = 1; A === 1");
+    syntax("class A {} class A {}");
+    syntax("if (1) class A {}");
+    syntax("class {}");
+    syntax("class A { constructor() {} constructor() {} }");
+    syntax("class A { get constructor() {} }");
+    syntax("class A { *constructor() {} }");
+    syntax("class A { m() { super(); } }");
+    syntax("class A extends Object { m() { super(); } }");
+    syntax("function f() { super.x; }");
+    syntax("super.x");
+    syntax("new.target");
+    syntax("class A { constructor() { var o = { f: function () { super.x; } }; } }");
+}
+
+#[test]
+fn new_target_names_the_constructor_new_was_applied_to() {
+    truth("function F() { return new.target; } new F() === F && F() === undefined");
+    truth("function F() { return (() => new.target)(); } new F() === F");
+    truth("function F() { this.t = new.target; } var B = F.bind(null); new B().t === F");
+}
+
+#[test]
+fn deep_class_chains_stay_within_the_limits() {
+    let src = "var C = class {}; for (var i = 0; i < 2000; i++) { C = class extends C {}; } new C();";
+    let e = Realm::with_options(es_options(), Limits { frames: 500, ..Limits::default() }).run(src).unwrap_err();
+    assert!(matches!(e.kind, RunErrorKind::Limit(_)), "{e:?}");
+    let mut realm = Realm::with_options(es_options(), Limits { fuel: 50_000, ..Limits::default() });
+    let e = realm.run("class A { constructor() { new B(); } } class B extends A {} new B();").unwrap_err();
+    assert!(matches!(e.kind, RunErrorKind::Limit(_)), "{e:?}");
+}
+
+#[test]
+fn classes_survive_collections_while_they_are_made() {
+    let src = "var total = 0; for (var i = 0; i < 200; i++) { \
+        class A { constructor(x) { this.x = x; } m() { return this.x; } static s() { return 1; } get g() { return 1; } } \
+        class B extends A { constructor() { super(1); } m() { return super.m() + 1; } } \
+        total += new B().m() + B.s() + new B().g; } total";
+    let mut completed = 0;
+    for kib in (16..400).step_by(4) {
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes: kib << 10, ..Limits::default() });
+        match realm.run(src) {
+            Ok(v) => {
+                assert_eq!(v, JsValue::Number(800.0), "{kib} KiB");
+                completed += 1;
+            }
+            Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{kib} KiB: {e:?}"),
+        }
+    }
+    assert!(completed > 0);
 }
 
 #[test]
@@ -1422,6 +1869,9 @@ fn without_the_option_the_new_forms_are_syntax_errors() {
         "function f(...r) {}",
         "f(...a)",
         "[...a]",
+        "class A {}",
+        "var C = class {};",
+        "function F() { return new.target; }",
         "for (var x of []) {}",
         "var [a] = [1];",
         "var { a } = {};",
@@ -1517,6 +1967,13 @@ const FRAGMENTS: &[&str] = &[
     "case ",
     "default:",
     "break;",
+    "class ",
+    " extends ",
+    "super",
+    "static ",
+    "get ",
+    "constructor",
+    "new.target",
 ];
 
 proptest! {

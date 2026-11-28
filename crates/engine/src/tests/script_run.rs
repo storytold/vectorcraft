@@ -454,6 +454,29 @@ fn every_script_reads_e4x_and_has_the_xml_objects() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn a_js_script_defines_classes_and_a_jsx_script_cannot() {
+    let dir = fresh_folder("es2015-classes");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let modern = "class Shape { constructor(n) { this.n = n; } sides() { return this.n; } }\n\
+                  class Square extends Shape { constructor() { super(4); } sides() { return super.sides() * 10; } }\n\
+                  vc.log(new Square().sides());\nvc.log(eval('class E {} typeof E'));\n";
+    let r = s.execute("script.run", &path(&write("shapes.js", modern))).unwrap();
+    assert_eq!(r["log"], json!([40, "function"]), "{r}");
+    for (name, text) in [("legacy.jsx", "class A {}"), ("object.jsx", "var o = { m() {} };")] {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    assert!(run(&mut s, "var C = class {};").unwrap_err().to_string().contains("SyntaxError"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A new empty folder for test `name`.
 fn fresh_folder(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("vc-script-run-{name}-{}", std::process::id()));

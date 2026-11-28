@@ -47,9 +47,10 @@ pub(crate) enum Abrupt {
 
 pub(crate) type JsResult<T> = Result<T, Abrupt>;
 
-/// The binding that holds an arrow function's `this` in the environment it closes over. It starts
-/// with a NUL, which no identifier holds.
-const ARROW_THIS: &[u16] = &[0, 0x74, 0x68, 0x69, 0x73];
+/// The binding that holds an arrow function's `this` in the environment it closes over, and a
+/// derived class constructor's `this` in its function environment. It starts with a NUL, which no
+/// identifier holds.
+pub(crate) const ARROW_THIS: &[u16] = &[0, 0x74, 0x68, 0x69, 0x73];
 
 pub(crate) fn internal<T>(message: &str) -> JsResult<T> {
     Err(Abrupt::Internal(message.into()))
@@ -210,9 +211,20 @@ pub(crate) struct Frame {
     /// `with` and catch environments entered and not yet left.
     pub(crate) env_depth: u32,
     pub(crate) this: Value,
+    /// `this` is the binding of the environment chain that an arrow function or a derived class
+    /// constructor reads, not [`Self::this`]: in such code and in the direct eval code it runs.
+    pub(crate) this_in_env: bool,
+    /// The frame is running a class's heritage or computed keys, which are strict mode code
+    /// (ECMA-262 2015 section 10.2.1) inside code that is not.
+    pub(crate) strict_class: bool,
     pub(crate) callee: Option<ObjId>,
     /// The object `new` made, returned unless the function returns an object.
     pub(crate) construct: Option<ObjId>,
+    /// `new.target` of a function that was constructed.
+    pub(crate) new_target: Option<ObjId>,
+    /// The environment of a derived class constructor's `this`, function object and
+    /// `new.target`, which `super(…)` reads.
+    pub(crate) this_env: Option<EnvId>,
     pub(crate) completion: Value,
     /// Returning from this frame returns from the Rust call that pushed it.
     pub(crate) boundary: bool,
@@ -505,14 +517,14 @@ pub(crate) fn random_seed_from(os: Result<u64, getrandom::Error>) -> u64 {
 }
 
 /// The estimated bytes of a binding or property named by `len` code units.
-fn binding_bytes(len: usize) -> usize {
+pub(crate) fn binding_bytes(len: usize) -> usize {
     PROP_BYTES + string_bytes(len)
 }
 
 /// At least the bytes that a function object made from `code` adds to the heap: the function,
 /// its prototype object, their properties and the environment holding a function expression's
 /// own name.
-fn closure_bytes(code: &Code) -> usize {
+pub(crate) fn closure_bytes(code: &Code) -> usize {
     let props = (if code.strict { 5 } else { 3 }) + usize::from(code.own_name.is_some());
     let named = code.self_name.as_ref().map_or(0, |n| ENV_BYTES + binding_bytes(n.len()));
     2 * OBJECT_BYTES + props * binding_bytes("constructor".len()) + named
@@ -543,13 +555,15 @@ fn arguments_bytes(args: usize) -> usize {
     OBJECT_BYTES.saturating_add(args.saturating_add(4).saturating_mul(binding_bytes(10)))
 }
 
-/// A call to a function written in JavaScript, ready to enter.
+/// A call to a function written in JavaScript, ready to enter; `new_target` is set when it is
+/// constructed.
 pub(crate) struct Entry {
-    callee: ObjId,
-    code: Rc<Code>,
-    env: EnvId,
-    this: Value,
-    args: Vec<Value>,
+    pub(crate) callee: ObjId,
+    pub(crate) code: Rc<Code>,
+    pub(crate) env: EnvId,
+    pub(crate) this: Value,
+    pub(crate) args: Vec<Value>,
+    pub(crate) new_target: Option<ObjId>,
 }
 
 /// What a call resolved to.
@@ -744,7 +758,7 @@ impl Interp {
         self.frames.last_mut().ok_or_else(|| Abrupt::Internal("no frame".into()))
     }
 
-    fn base(&self) -> usize {
+    pub(crate) fn base(&self) -> usize {
         self.frames.last().map_or(0, |f| f.base)
     }
 
@@ -914,7 +928,8 @@ impl Interp {
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
-            roots.objects.extend(f.callee.iter().chain(f.construct.iter()).chain(f.generator.iter()));
+            roots.objects.extend(f.callee.iter().chain(f.construct.iter()).chain(f.new_target.iter()).chain(f.generator.iter()));
+            roots.envs.extend(f.this_env);
             roots.envs.push(f.env);
             roots.envs.push(f.var_env);
             roots.codes.push(&f.code);
@@ -1049,6 +1064,9 @@ impl Interp {
                     frame.env_depth -= 1;
                 }
                 frame.pc = h.target as usize;
+                // A handler of this frame is never inside a class's heritage or keys: they are
+                // expressions, and a function in them runs in a frame of its own.
+                frame.strict_class = false;
                 if self.stack.len() < target_len {
                     return internal("handler stack deeper than the stack");
                 }
@@ -1091,7 +1109,21 @@ impl Interp {
         }
     }
 
-    fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
+    fn return_value(&mut self, mut v: Value) -> JsResult<Option<Value>> {
+        if let Some(env) = self.frames.last().filter(|f| f.code.derived).and_then(|f| f.this_env) {
+            match self.derived_result(env, v) {
+                Ok(result) => v = result,
+                Err(e) => {
+                    // The error is thrown as the frame returns: from its last instruction, outside
+                    // every handler of its code, and reported at the return.
+                    self.note_site();
+                    if let Some(f) = self.frames.last_mut() {
+                        f.pc = f.code.ops.len();
+                    }
+                    return Err(e);
+                }
+            }
+        }
         // A generator's body that returns ends it, and its caller gets `{ value, done: true }`,
         // made while the frame is still there to fail in.
         let v = match self.frames.last().and_then(|f| f.generator) {
@@ -1119,18 +1151,18 @@ impl Interp {
         Ok(())
     }
 
-    fn name(&self, i: u32) -> JsResult<Key> {
+    pub(crate) fn name(&self, i: u32) -> JsResult<Key> {
         self.frame()?.code.names.get(i as usize).cloned().ok_or_else(|| Abrupt::Internal("name out of range".into()))
     }
 
     pub(crate) fn strict(&self) -> bool {
-        self.frames.last().is_some_and(|f| f.code.strict)
+        self.frames.last().is_some_and(|f| f.code.strict || f.strict_class)
     }
 
     /// Does a property write the running code makes throw when it cannot be made? It does in
     /// strict mode code and in code from a source with [`crate::bytecode::Source::strict_writes`].
     pub(crate) fn strict_writes(&self) -> bool {
-        self.frames.last().is_some_and(|f| f.code.strict || f.code.source.strict_writes)
+        self.frames.last().is_some_and(|f| f.code.strict || f.strict_class || f.code.source.strict_writes)
     }
 
     /// [`crate::bytecode::Source::strict_writes`] for source compiled now: the running code's,
@@ -1154,7 +1186,7 @@ impl Interp {
                 self.push(s.map_or(Value::Undefined, Value::String))
             }
             Op::This => {
-                let this = self.frame()?.this.clone();
+                let this = self.this_value()?;
                 self.push(this)
             }
             Op::Pop => self.pop().map(drop),
@@ -1270,6 +1302,32 @@ impl Interp {
                 self.replace(1, Value::String(s))
             }
             Op::TemplateObject(i) => self.op_template_object(i),
+            Op::Pick(n) => {
+                let v = self.peek(n as usize)?;
+                self.push(v)
+            }
+            Op::ClassStart { ctor, heritage } => self.op_class_start(ctor, heritage),
+            Op::StrictClass(on) => {
+                self.frame_mut()?.strict_class = on;
+                Ok(())
+            }
+            Op::ClassMethod { func, kind, is_static } => self.op_class_method(func, kind, is_static),
+            Op::InitMethod { func, kind, name } => self.op_init_method(func, kind, name),
+            Op::InitMethodKey { func, kind } => self.op_init_method_key(func, kind),
+            Op::SuperRef => self.op_super_ref(),
+            Op::SuperGet => self.op_super_get(false),
+            Op::SuperGetThis => self.op_super_get(true),
+            Op::SuperSet => self.op_super_set(),
+            Op::SuperDup => self.op_dup(3),
+            Op::SuperInc { prefix, dec } => self.op_super_inc(prefix, dec),
+            Op::SuperCtor => self.op_super_ctor(),
+            Op::SuperCall(n) => self.op_super_call(n),
+            Op::SuperCallSpread => {
+                let n = self.unpack_args()?;
+                self.op_super_call(n)
+            }
+            Op::BindThis => self.op_bind_this(),
+            Op::NewTarget => self.op_new_target(),
             Op::GetIterator => self.op_get_iterator(),
             Op::IterStep(t) => self.op_iter_step(t),
             Op::IterValue(n) => self.op_iter_value(n),
@@ -1397,7 +1455,7 @@ impl Interp {
         Ok(Resolved::Unresolved)
     }
 
-    fn binding_value(&self, env: EnvId, name: &[u16]) -> JsResult<Value> {
+    pub(crate) fn binding_value(&self, env: EnvId, name: &[u16]) -> JsResult<Value> {
         match self.heap.env(env) {
             Some(Env::Decl { bindings, .. }) => Ok(bindings.get(name).map_or(Value::Undefined, |b| b.value.clone())),
             _ => internal("not a declarative environment"),
@@ -1410,7 +1468,7 @@ impl Interp {
     }
 
     /// The binding `name` of the declarative environment `env` is in its temporal dead zone.
-    fn uninitialized(&self, env: EnvId, name: &[u16]) -> bool {
+    pub(crate) fn uninitialized(&self, env: EnvId, name: &[u16]) -> bool {
         matches!(self.heap.env(env), Some(Env::Decl { bindings, .. }) if bindings.get(name).is_some_and(|b| b.uninitialized))
     }
 
@@ -1522,7 +1580,18 @@ impl Interp {
                 }
                 _ => return internal("not a declarative environment"),
             },
-            Resolved::Obj { object, .. } => self.delete(object, &name, false)?,
+            Resolved::Obj { object, with_this } => {
+                let own = self.get_own_property(object, &name)?.is_some();
+                let deleted = self.delete(object, &name, false)?;
+                // A global variable whose own property is deleted through the global environment
+                // no longer stops a `let` or `const` of its name (ECMA-262 2015 section 8.1.1.4.7).
+                // Deleting the global object's property any other way, as `delete this.x` does,
+                // or deleting a name it only inherits, keeps the record.
+                if own && deleted && !with_this && object == self.global {
+                    self.global_vars.remove(&name);
+                }
+                deleted
+            }
         };
         self.push(Value::Bool(result))
     }
@@ -2080,12 +2149,6 @@ impl Interp {
         match self.get_own_property(id, k)? {
             None => Ok(true),
             Some(p) if p.configurable() => {
-                // A deleted global variable no longer stops a `let` or `const` of its name
-                // (ECMA-262 2015 section 8.1.1.4.7), and the names kept are never more than the
-                // global object's properties.
-                if id == self.global {
-                    self.global_vars.remove(k);
-                }
                 let o = self.object_mut(id)?;
                 o.props.remove(k);
                 if let Class::Arguments(map) = &mut o.class
@@ -2440,6 +2503,18 @@ impl Interp {
     /// Gives `f` its `name` (ECMA-262 2015 section 9.2.11): not writable, not enumerable,
     /// configurable.
     pub(crate) fn set_function_name(&mut self, f: ObjId, name: Value) -> JsResult<()> {
+        // A class whose static members define `name` keeps that member (section 12.14.4,
+        // step 1.e): its own `name` is no longer the empty string it was made with.
+        let object = self.object(f)?;
+        let class_ctor = matches!(&object.class, Class::Function(Func::Closure { code, .. }) if code.class_ctor);
+        let default = match object.props.get(&key("name")) {
+            None => true,
+            Some(Prop::Data { value: Value::String(s), .. }) => s.len() == 0,
+            Some(_) => false,
+        };
+        if class_ctor && !default {
+            return Ok(());
+        }
         // The empty `name` an ECMAScript 2015 function is made with is replaced in place.
         if !self.object(f)?.props.contains(&key("name")) {
             self.rooted(&[name.clone(), Value::Object(f)], |i| i.reserve_heap(PROP_BYTES + string_bytes("name".len())))?;
@@ -2450,10 +2525,14 @@ impl Interp {
     fn op_closure(&mut self, i: u32) -> JsResult<()> {
         let frame = self.frame()?;
         let (env, this) = (frame.env, frame.this.clone());
+        // In an arrow function or a derived class constructor, and in the direct eval code they
+        // run, `this` is already a binding of the environment chain, which the new function reads
+        // as it is when it runs.
+        let this_bound = frame.this_in_env;
         let Some(code) = frame.code.functions.get(i as usize).cloned() else { return internal("function out of range") };
         // An arrow function keeps the `this` of the code it is made in (ECMA-262 2015 section
         // 14.2.16), in an environment of its own that only the call reads.
-        let env = if code.arrow && code.uses_this {
+        let env = if code.arrow && code.uses_this && !this_bound {
             self.reserve_heap(ENV_BYTES + binding_bytes(ARROW_THIS.len()))?;
             let mut bindings = PropMap::default();
             bindings.insert(Rc::from(ARROW_THIS), Binding::new(this, false, false));
@@ -2478,6 +2557,7 @@ impl Interp {
         let strict = code.strict;
         let arrow = code.arrow;
         let method = code.method;
+        let class_ctor = code.class_ctor;
         let self_name = code.self_name.clone();
         let own_name = code.own_name.clone();
         // With ECMAScript 2015, `length` can be redefined (section 19.2.4.1).
@@ -2500,8 +2580,9 @@ impl Interp {
             return Ok(f);
         }
         // An arrow function, a method and an accessor of ECMAScript 2015 code have no
-        // `prototype` and cannot be constructed (sections 14.2.16 and 14.3.8).
-        if arrow || method {
+        // `prototype` and cannot be constructed (sections 14.2.16 and 14.3.8); a class
+        // constructor gets its `prototype` from the class.
+        if arrow || method || class_ctor {
             return Ok(f);
         }
         let p = self.new_object();
@@ -2519,7 +2600,7 @@ impl Interp {
         Ok(f)
     }
 
-    fn env_insert(&mut self, env: EnvId, name: Key, b: Binding) -> JsResult<()> {
+    pub(crate) fn env_insert(&mut self, env: EnvId, name: Key, b: Binding) -> JsResult<()> {
         let Some(Env::Decl { bindings, .. }) = self.heap.env_mut(env) else { return internal("not a declarative environment") };
         let new = !bindings.contains(&name);
         let name_len = name.len();
@@ -2643,7 +2724,7 @@ impl Interp {
         self.push(v)
     }
 
-    /// Enters the body of a function with default or rest parameters: a variable environment
+    /// Enters the body of a function with default values for its parameters: a variable environment
     /// inside the parameters' one, whose variables start with the value of a parameter of the
     /// same name (ECMA-262 2015 section 9.2.12, step 28), and the body's function declarations
     /// and `let` and `const` names.
@@ -2651,7 +2732,8 @@ impl Interp {
         let frame = self.frame()?;
         let (code, params) = (frame.code.clone(), frame.env);
         // The parameters' values may have filled the room the call reserved, so the body's
-        // environments and declarations are checked against the heap again, together.
+        // environments and declarations are checked against the heap again, together, and each
+        // declaration again just before it is made.
         let top = code.top_scope.map_or(0, |i| scope_bytes(&code, i));
         self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(top))?;
         // Each new environment is in the frame, where the collector finds it, before the next
@@ -2665,6 +2747,7 @@ impl Interp {
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
+            self.reserve_heap(binding_bytes(name.len()).saturating_add(closure_bytes(&fcode)))?;
             let f = self.make_closure(fcode, lex)?;
             self.temp_roots.push(Value::Object(f));
             let r = self.env_insert(var_env, name.clone(), Binding::new(Value::Object(f), true, false));
@@ -2680,6 +2763,9 @@ impl Interp {
                 Some(Env::Decl { bindings, .. }) => bindings.get(v).map_or(Value::Undefined, |b| b.value.clone()),
                 _ => Value::Undefined,
             };
+            // The initial value is reachable from the parameters' environment while the heap is
+            // checked.
+            self.reserve_heap(binding_bytes(v.len()))?;
             self.env_insert(var_env, v.clone(), Binding::new(initial, true, false))?;
         }
         Ok(())
@@ -2883,21 +2969,7 @@ impl Interp {
         v.as_object().and_then(|o| self.heap.object(o)).is_some_and(|o| matches!(o.class, Class::Function(_)))
     }
 
-    /// Whether `new` can construct with `v` (section 7.2.4): a function written in JavaScript, a
-    /// built-in constructor, or a bound function whose target is one, as `op_new` accepts.
-    pub(crate) fn is_constructor(&self, v: &Value) -> bool {
-        let mut f = v.as_object();
-        while let Some(o) = f {
-            match self.heap.object(o).map(|o| &o.class) {
-                Some(Class::Function(Func::Closure { .. } | Func::Native { constructor: true, .. })) => return true,
-                Some(Class::Function(Func::Bound { target, .. })) => f = Some(*target),
-                _ => return false,
-            }
-        }
-        false
-    }
-
-    fn func_of(&self, v: &Value) -> Option<Func> {
+    pub(crate) fn func_of(&self, v: &Value) -> Option<Func> {
         match &self.heap.object(v.as_object()?)?.class {
             Class::Function(f) => Some(f.clone()),
             _ => None,
@@ -2910,9 +2982,12 @@ impl Interp {
         loop {
             let Some(func) = self.func_of(&f) else { return Err(self.type_error("the value is not a function")) };
             match func {
+                Func::Closure { code, .. } if code.class_ctor => {
+                    return Err(self.type_error("a class constructor cannot be called without 'new'"));
+                }
                 Func::Closure { code, env } => {
                     let callee = f.as_object().ok_or_else(|| Abrupt::Internal("callee is not an object".into()))?;
-                    return Ok(Prepared::Closure(Entry { callee, code, env, this, args }));
+                    return Ok(Prepared::Closure(Entry { callee, code, env, this, args, new_target: None }));
                 }
                 Func::Native { kind: NativeKind::Resume(mode), .. } => {
                     self.use_fuel()?;
@@ -3055,66 +3130,15 @@ impl Interp {
         let n = argc as usize;
         let start =
             self.stack.len().checked_sub(n + 1).filter(|&s| s >= self.base()).ok_or_else(|| Abrupt::Internal("new below the stack".into()))?;
-        let mut f = self.stack.get(start).cloned().unwrap_or(Value::Undefined);
-        let mut args: Vec<Value> = self.stack.get(start + 1..).map(<[Value]>::to_vec).unwrap_or_default();
-        // A bound function constructs its target with its arguments first (section 15.3.4.5.2);
-        // the bound function on the stack keeps them reachable.
-        while let Some(Func::Bound { target, args: bound_args, .. }) = self.func_of(&f) {
-            self.use_fuel()?;
-            let mut all = bound_args.to_vec();
-            all.append(&mut args);
-            args = all;
-            f = Value::Object(target);
-        }
-        match self.func_of(&f) {
-            Some(Func::Closure { code, .. }) if code.arrow => Err(self.type_error("an arrow function is not a constructor")),
-            Some(Func::Closure { code, .. }) if code.generator => Err(self.type_error("a generator function is not a constructor")),
-            Some(Func::Closure { code, .. }) if code.method => Err(self.type_error("a method is not a constructor")),
-            Some(Func::Closure { code, env }) => {
-                let Some(callee) = f.as_object() else { return internal("callee is not an object") };
-                let proto = match self.get_from(callee, &key("prototype"), &f)? {
-                    Value::Object(p) => p,
-                    _ => self.intrinsics.object_proto,
-                };
-                let obj = self.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
-                self.stack.truncate(start);
-                self.enter_function(Entry { callee, code, env, this: Value::Object(obj), args }, Some(obj), false)
-            }
-            Some(Func::Native { f: native, constructor: true, .. }) => {
-                let held = self.held_bytes;
-                let r = native(self, Value::Undefined, &args, true);
-                self.held_bytes = held;
-                let v = r?;
-                self.stack.truncate(start);
-                self.push(v)
-            }
-            // A host class's constructor ([`crate::host_classes`]) gives the object it makes. A plain
-            // object it gives inherits from the class's prototype. The class's other functions are
-            // not constructors. A constructor called with `new` cannot wait for its result.
-            Some(Func::Data { f: host, name, read: read @ crate::host::ArgRead::Hosted })
-                if f.as_object().is_some_and(|o| self.is_host_constructor(o)) =>
-            {
-                let was = std::mem::replace(&mut self.constructing, true);
-                let v = self.call_data(&host, &name, &Value::Undefined, &args, &read);
-                self.constructing = was;
-                let v = v?;
-                if let (Some(callee), Value::Object(o)) = (f.as_object(), &v)
-                    && matches!(self.object(*o)?.class, Class::Ordinary)
-                    && let Some(Prop::Data { value: Value::Object(proto), .. }) = self.find_property(callee, &key("prototype"))?
-                {
-                    self.object_mut(*o)?.proto = Some(proto);
-                }
-                self.stack.truncate(start);
-                self.push(v)
-            }
-            _ => Err(self.type_error("the value is not a constructor")),
-        }
+        let f = self.stack.get(start).cloned().unwrap_or(Value::Undefined);
+        let args: Vec<Value> = self.stack.get(start + 1..).map(<[Value]>::to_vec).unwrap_or_default();
+        self.construct(start, f, args, None)
     }
 
     /// Pushes a frame for a call to a function written in JavaScript, its operands already off
     /// the stack.
-    fn enter_function(&mut self, entry: Entry, construct: Option<ObjId>, boundary: bool) -> JsResult<()> {
-        let Entry { callee, code, env, this, args } = entry;
+    pub(crate) fn enter_function(&mut self, entry: Entry, construct: Option<ObjId>, boundary: bool) -> JsResult<()> {
+        let Entry { callee, code, env, this, args, new_target } = entry;
         if self.frames.len() >= self.limits.frames {
             return Err(Abrupt::Limit(LimitKind::Frames));
         }
@@ -3128,20 +3152,24 @@ impl Interp {
             }
             None => 0,
         };
-        let need = declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(params).saturating_add(arguments).saturating_add(rest);
+        let need = declaration_bytes(&code)
+            .saturating_add(ENV_BYTES)
+            .saturating_add(params)
+            .saturating_add(arguments)
+            .saturating_add(rest)
+            .saturating_add(crate::class_ops::hidden_bytes(&code));
         // The callee, the receiver and the arguments stay reachable until the frame holds them:
         // the reservation and the scopes, functions and objects the call makes can collect.
         let mark = self.temp_roots.len();
         self.temp_roots.push(Value::Object(callee));
         self.temp_roots.push(this.clone());
         self.temp_roots.extend(construct.map(Value::Object));
+        self.temp_roots.extend(new_target.map(Value::Object));
         self.temp_roots.extend(args.iter().cloned());
-        let instantiate = || -> JsResult<(Value, EnvId, EnvId)> {
-            if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
-                self.reserve_heap(need)?;
-            }
+        let enter = || -> JsResult<()> {
+            self.reserve_heap(need)?;
             let this = if code.arrow {
-                if code.uses_this { self.binding_value(env, ARROW_THIS)? } else { Value::Undefined }
+                if code.uses_this { self.arrow_this(env) } else { Value::Undefined }
             } else if code.strict {
                 this
             } else {
@@ -3153,33 +3181,38 @@ impl Interp {
             };
             self.temp_roots.push(this.clone());
             let (fenv, var_env) = self.instantiate_function(&code, env, &args, callee)?;
-            Ok((this, fenv, var_env))
+            let this_env = self.function_bindings(&code, var_env, callee, new_target)?;
+            let base = self.stack.len();
+            let this_in_env = code.arrow || code.derived;
+            self.frames.push(Frame {
+                code,
+                pc: 0,
+                base,
+                env: fenv,
+                var_env,
+                env_depth: 0,
+                this,
+                this_in_env,
+                strict_class: false,
+                callee: Some(callee),
+                construct,
+                new_target,
+                this_env,
+                completion: Value::Undefined,
+                boundary,
+                generator: None,
+            });
+            Ok(())
         };
-        let r = instantiate();
+        let r = enter();
         self.temp_roots.truncate(mark);
-        let (this, fenv, var_env) = r?;
-        let base = self.stack.len();
-        self.frames.push(Frame {
-            code,
-            pc: 0,
-            base,
-            env: fenv,
-            var_env,
-            env_depth: 0,
-            this,
-            callee: Some(callee),
-            construct,
-            completion: Value::Undefined,
-            boundary,
-            generator: None,
-        });
-        Ok(())
+        r
     }
 
     /// Declaration binding instantiation for function code (section 10.5). Each parameter and
     /// declaration takes a unit of fuel.
     /// Gives the environment the body runs in and its variable environment. A function with
-    /// default or rest parameters gets its parameters uninitialized, and its code enters the
+    /// default values for its parameters gets its parameters uninitialized, and its code enters the
     /// body's environments with [`Op::BodyEnv`] once they are initialized (ECMA-262 2015 section
     /// 9.2.12).
     fn instantiate_function(&mut self, code: &Rc<Code>, outer: EnvId, args: &[Value], callee: ObjId) -> JsResult<(EnvId, EnvId)> {
@@ -3314,7 +3347,7 @@ impl Interp {
     /// strict mode code in a function with plain parameters (ECMA-262 2015 section 9.2.12).
     fn create_arguments(&mut self, code: &Code, env: EnvId, args: &[Value], callee: ObjId) -> JsResult<ObjId> {
         let mut names = vec![None; args.len()];
-        if !code.strict && !code.param_init {
+        if !code.strict && code.simple_params() {
             let mut mapped = std::collections::HashSet::new();
             for (i, p) in code.params.iter().enumerate().take(args.len()).rev() {
                 if mapped.insert(p.clone())
@@ -3330,7 +3363,7 @@ impl Interp {
             self.define(a, index_key(u32::try_from(i).unwrap_or(u32::MAX)), Prop::Data { value: v.clone(), flags: OPEN })?;
         }
         self.define(a, key("length"), Prop::Data { value: Value::Number(args.len() as f64), flags: HIDDEN })?;
-        if code.strict || code.param_init {
+        if code.strict || !code.simple_params() {
             let thrower = Some(self.intrinsics.throw_type_error);
             for name in ["callee", "caller"] {
                 self.define(a, key(name), Prop::Accessor { get: thrower, set: thrower, flags: 0 })?;
@@ -3495,7 +3528,7 @@ impl Interp {
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let frame = self.frame()?;
-        let (caller_env, caller_var_env, this) = (frame.env, frame.var_env, frame.this.clone());
+        let (caller_env, caller_var_env, this, this_in_env) = (frame.env, frame.var_env, frame.this.clone(), frame.this_in_env);
         let (env, var_env) = if code.strict {
             let e = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(caller_env) });
             (e, e)
@@ -3505,7 +3538,10 @@ impl Interp {
         self.stack.truncate(start);
         self.check_frame_room()?;
         let env = self.instantiate_pending(&code, env, var_env, true)?;
-        self.push_code_frame(code, env, var_env, this, false)
+        self.push_code_frame(code, env, var_env, this, false)?;
+        // The eval code reads `this` the way the code that called it does (section 18.2.1.1).
+        self.frame_mut()?.this_in_env = this_in_env;
+        Ok(())
     }
 
     /// [`Self::instantiate_global`] with `code` and its environment `env` kept reachable, and the
@@ -3668,8 +3704,12 @@ impl Interp {
             var_env,
             env_depth: 0,
             this,
+            this_in_env: false,
+            strict_class: false,
             callee: None,
             construct: None,
+            new_target: None,
+            this_env: None,
             completion: Value::Undefined,
             boundary,
             generator: None,
@@ -3703,8 +3743,9 @@ impl Interp {
                 self.check_global_vars(code)?;
             }
         }
+        let global_lets = !is_eval && env == self.global_lex;
         let lex = match code.top_scope {
-            _ if !is_eval && env == self.global_lex => {
+            _ if global_lets => {
                 self.declare_global_lexical(code, env)?;
                 env
             }
@@ -3715,9 +3756,24 @@ impl Interp {
         // some of it (a script's names in the global scope were checked with the declarations
         // before they were added). Their environment stays reachable if the check collects.
         self.temp_envs.push(lex);
-        let r = self.reserve_heap(declaration_bytes(code));
+        let r = self.reserve_heap(declaration_bytes(code)).and_then(|()| self.declare_global_functions_and_vars(code, lex, var_env, configurable));
         self.temp_envs.pop();
-        r?;
+        if r.is_err() && global_lets {
+            // A script that stops before it runs, at a limit, leaves none of its `let` and `const`
+            // names behind, so running it again in the same realm does not redeclare them.
+            let lets = code.top_scope.and_then(|i| code.scopes.get(i as usize)).map_or(&[][..], |s| &s.lets);
+            if let Some(Env::Decl { bindings, .. }) = self.heap.env_mut(lex) {
+                for (name, _) in lets {
+                    bindings.remove(name);
+                }
+            }
+        }
+        r.map(|()| lex)
+    }
+
+    /// Declares the functions and variables of global or eval code for
+    /// [`Self::instantiate_global_rooted`], each taking a unit of fuel.
+    fn declare_global_functions_and_vars(&mut self, code: &Rc<Code>, lex: EnvId, var_env: EnvId, configurable: u8) -> JsResult<()> {
         // Functions close over the code's own environment with ES2015's scoping, and over its
         // variable environment otherwise (ECMA-262 5.1 section 13). When that is the global
         // object's, they close over the global scope inside it, which also holds the scripts'
@@ -3742,7 +3798,7 @@ impl Interp {
             self.declare(var_env, v, None, configurable)?;
             self.note_global_var(on_global, v)?;
         }
-        Ok(lex)
+        Ok(())
     }
 
     /// Adds `name`, which global code just declared, to [`Self::global_vars`] when `on_global`
