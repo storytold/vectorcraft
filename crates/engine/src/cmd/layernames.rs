@@ -1,5 +1,5 @@
 //! Read-only naming candidates and atomic, guarded application of reviewed names.
-use super::*;
+use super::{CommandSpec, NodeId, Result, Session, Value, bad, cmd, has_doc};
 use serde_json::json;
 use std::collections::HashSet;
 
