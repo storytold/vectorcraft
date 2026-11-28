@@ -64,7 +64,9 @@ pub mod worker;
 
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
-pub use manifest::{Budget, Command, ContextSection, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec, Runtime};
+pub use manifest::{
+    Budget, Command, ContextMenu, ContextPlace, ContextSection, ContextWhen, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec, Runtime,
+};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, RunJob, Step, heavy_terms, keep_modules};
 #[doc(hidden)]
 pub use runtime::{BYTES_COPIED_PER_FUEL, FUEL_SLICE};
