@@ -1658,7 +1658,7 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
     }
     // The object's outline reshaped as it is drawn: its effects from its own bounds.
     for path in &mut ours {
-        let bounds = kurbo::Shape::bounding_box(&path.to_bezpath());
+        let bounds = path.bounds().unwrap_or_default();
         *path = vectorcraft_effects::apply_geometry(&appearance.effects, path, bounds);
     }
     let max = MAX_OUTLINE_PAIRS.isqrt();
@@ -2039,6 +2039,29 @@ mod tests {
         let started = std::time::Instant::now();
         assert!(!draws_look_outline(&object, &appearance, &look(5_000)));
         assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+    }
+
+    /// The outline check reshapes the object as it is drawn, its effects working from its bounds
+    /// with its lone anchors: a 10 pt line with a lone anchor at (100, 50), scaled 200% about
+    /// (50, 25), matches a look of that line drawn from (-50, -25), and not one of the line scaled
+    /// about its own center.
+    #[test]
+    fn the_outline_check_reshapes_from_bounds_with_lone_anchors() {
+        use vectorcraft_geom::{Point, SubPath};
+        let scale =
+            vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"scaleH": 200, "scaleV": 200}), visible: true };
+        let path = PathData::new(vec![
+            SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0)], false),
+            SubPath::polyline(&[Point::new(100.0, 50.0)], false),
+        ]);
+        let appearance = Appearance { effects: vec![scale], ..Appearance::basic(Paint::None, Paint::None, 0.0) };
+        let object = Node::path(NodeId(1), path, appearance.clone());
+        let look = |from: Point, to: Point| {
+            let drawn = PathData::single(SubPath::polyline(&[from, to], false));
+            Node::group(NodeId(2), vec![Arc::new(Node::path(NodeId(3), drawn, Appearance::default()))])
+        };
+        assert!(draws_look_outline(&object, &appearance, &look(Point::new(-50.0, -25.0), Point::new(-30.0, -25.0))));
+        assert!(!draws_look_outline(&object, &appearance, &look(Point::new(-5.0, 0.0), Point::new(15.0, 0.0))));
     }
 
     /// The outline check holds for every point of the outlines, not only the points it checks: a
