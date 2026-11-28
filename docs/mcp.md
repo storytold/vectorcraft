@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-27 · **Change:** Anchor Inspector: canceled Corner and Shared Edge option edits restore their opening values; previously: Production Preflight command and report coverage; previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+> **Last updated:** 2026-11-28 · **Change:** `pattern.options {proportional}` keeps the tile's proportions when only `width` or `height` is given (#8566); previously: Anchor Inspector: canceled Corner and Shared Edge option edits restore their opening values; previously: Production Preflight command and report coverage; previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 >
 > Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 
@@ -7114,9 +7114,12 @@ the pattern's or the repeat's current value, with two exceptions. A brick `tileT
 `gridType` in `object.repeat.options` with `brickOffset` omitted or null sets the offset to 0.5. While `sizeTileToArt`
 is on, each `pattern.options` call sizes the tile to the art plus `hSpacing` and `vSpacing` again and ignores `width`
 and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` still rejects a non-null `width` or
-`height` that is not a positive number, such as `"width": 0`, and changes nothing. Without a `name`,
-`object.pattern.edit` edits the pattern that fills or strokes a selected object, and `pattern.options` changes the
-pattern being edited; each returns an error when there is no such pattern. `pattern.delete` requires `name`.
+`height` that is not a positive number, such as `"width": 0`, and changes nothing. With `proportional: true` (the
+Pattern Options panel passes its Constrain Width and Height Proportions link), a `width` changes the height in
+proportion and a `height` given alone changes the width; with both given, the width wins, as in `object.setBounds`.
+Without a `name`, `object.pattern.edit` edits the pattern that fills or strokes a selected object, and
+`pattern.options` changes the pattern being edited; each returns an error when there is no such pattern.
+`pattern.delete` requires `name`.
 `object.pattern.make`, `object.pattern.replaceArt`, `object.repeat.radial`, `object.repeat.grid` and
 `object.repeat.mirror` return the error "no such object id N", and change nothing, when an `ids` entry names no object,
 even when the other entries name objects.
@@ -17575,6 +17578,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-28 | `pattern.options {proportional}`: a new width or height keeps the tile's proportions, as the Pattern Options panel's Constrain Width and Height Proportions link does (#8566). |
 | 2026-11-27 | Existing 3D effect options: unchanged validated parameters preserve the stored effect, document revision and Undo, including defaults and equivalent numeric JSON. |
 | 2026-11-27 | Shape Control bar: canceled numeric edits restore future-tool settings and coupled radii along with selected artwork; retired edits cannot overwrite a different tool. Native scrub, keyboard, next-shape and Undo cases covered. Scores and estimates unchanged. |
 | 2026-11-27 | Anchor Inspector: Cancel restores Corner radius/kind and Shared Edge diameter/coincidence tool values; accepted settings leave document history unchanged. Native numeric and menu cases covered. Scores and estimates unchanged. |

@@ -1,24 +1,25 @@
 //! Pattern Options panel: active in pattern editing mode (Object → Pattern → Make / Edit
-//! Pattern). Name, Tile Type, Brick Offset, Width/Height, Size Tile to Art with H/V spacing, Move
-//! Tile with Art, Overlap, Copies, Dim Copies, Show Tile Edge, Show Swatch Bounds; Save a Copy / Done / Cancel. Outside editing
-//! mode it lists the document's patterns with an Edit button.
+//! Pattern). Name, Tile Type, Brick Offset, Width/Height with the W/H link, Size Tile to Art with
+//! H/V spacing, Move Tile with Art, Overlap, Copies, Dim Copies, Show Tile Edge, Show Swatch
+//! Bounds; Save a Copy / Done / Cancel. Outside editing mode it lists the document's patterns with
+//! an Edit button.
 
 use craft::behavior::IconId;
 use craft::keymap::CommandRef;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Bracket, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::{Field, FieldGroup};
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::menu::PanelRow;
 use craft::ui::notices::{Notice, NoticeIcon, NoticeLayout};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::env::LengthUnits;
 use craft::ui::runtime::focus::{self, FocusTarget};
-use craft::ui::text::{NumberField, TextField};
+use craft::ui::text::{NumberField, TextField, link_toggle};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::pattern::{PatternDef, RepeatKind, TileType};
@@ -109,6 +110,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         _ => None,
     };
     let sized = def.size_tile_to_art;
+    // The Constrain Width and Height Proportions link: the preference the Transform panel's link sets.
+    let linked = app.session.prefs.constrain_proportions;
+    let mut link: Option<bool> = None;
     let canvas = crate::doc_windows::current(app).map(crate::canvas::canvas_id);
     // The temporary layer identifies this editing session even when the pattern is renamed.
     FieldGroup::new(tl!("Pattern Options")).id_salt(edit_scope).show(ui, |ui, _| {
@@ -137,9 +141,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 edits.push(json!({ "brickOffset": v }));
             }
         });
-        for (key, label, value) in [("width", tl!("Width:"), def.tile.width()), ("height", tl!("Height:"), def.tile.height())] {
-            row(ui, label, |ui, label| edits.extend(length(ui, label, value, lengths, !sized).map(|v| json!({ key: v }))));
-        }
+        // Width and Height, with the link beside them, halfway between the two, and after them in Tab order. While it
+        // is on, or when Ctrl/Cmd+Enter applies the value, a new width or height changes the other in proportion (#8566).
+        Row::new().bracket(Bracket::Unlinked).show(ui, |ui, _| {
+            Stack::new().show(ui, |ui, _| {
+                for (key, label, value) in [("width", tl!("Width:"), def.tile.width()), ("height", tl!("Height:"), def.tile.height())] {
+                    row(ui, label, |ui, label| {
+                        let out = NumberField::length(label.to_owned(), Bind::given(Some(value)), lengths).enabled(!sized).show(ui);
+                        let keep = linked || out.submit_mods.cmd;
+                        edits.extend(out.events.committed().copied().flatten().map(|v| json!({ key: v, "proportional": keep })));
+                    });
+                }
+            });
+            link = link_toggle(tl!("Constrain Width and Height Proportions"), Bind::given(linked)).enabled(!sized).show(ui).value().copied();
+        });
         edits.extend(check(ui, tl!("Size Tile to Art"), sized).map(|on| json!({ "sizeTileToArt": on })));
         edits.extend(check(ui, tl!("Move Tile with Art"), def.move_tile_with_art).map(|on| json!({ "moveTileWithArt": on })));
         for (key, label, value) in [("hSpacing", tl!("H Spacing:"), def.h_spacing), ("vSpacing", tl!("V Spacing:"), def.v_spacing)] {
@@ -182,6 +197,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if renames && let Some((now, _)) = editing(app) {
             name = now.name;
         }
+    }
+    if let Some(on) = link {
+        super::transform::set_pref(app, "constrainProportions", on);
     }
     if let Some(id) = run_command {
         command(app, id, json!({}));
@@ -280,6 +298,43 @@ mod tests {
         panel.type_into("Name", "Waves");
         assert!(named(&panel, "Waves"), "Enter applies the name");
         assert!(!panel.focused("Name"), "Enter ends the editing");
+    }
+
+    /// The Constrain Width and Height Proportions link sits right of the Width and Height fields,
+    /// between them. A click turns it on (the preference the Transform panel's link sets), and then
+    /// a new width changes the height in proportion (#8566). With the link off, Ctrl/Cmd+Enter in a
+    /// field keeps the proportions too. While Size Tile to Art is on, the link is disabled with the
+    /// fields.
+    #[test]
+    fn the_size_link_keeps_the_tile_proportions() {
+        const LINK: &str = "Constrain Width and Height Proportions";
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 10})).unwrap();
+        let mut panel = Panel::new(app, show);
+        let size = |panel: &Panel| {
+            let tile = panel.app().session.active().unwrap().doc.pattern("Dots").unwrap().tile;
+            (tile.width(), tile.height())
+        };
+        panel.frame();
+        let (w, h, link) = (panel.rect("Width"), panel.rect("Height"), panel.rect(LINK));
+        assert!(panel.enabled(LINK));
+        assert!(link.left() >= w.right() && link.left() >= h.right(), "right of the fields: {link:?}, {w:?}, {h:?}");
+        assert!(w.center().y < link.center().y && link.center().y < h.center().y, "between them: {link:?}, {w:?}, {h:?}");
+        assert!(!panel.app().session.prefs.constrain_proportions);
+        panel.click(LINK);
+        assert!(panel.app().session.prefs.constrain_proportions, "the click turned the link on");
+        panel.type_into("Width", "40");
+        assert_eq!(size(&panel), (40.0, 20.0), "a new width changed the height in proportion");
+        panel.app().run("prefs.set", json!({"key": "constrainProportions", "value": false})).unwrap();
+        panel.type_into("Height", "30");
+        assert_eq!(size(&panel), (40.0, 30.0), "with the link off a new height leaves the width");
+        panel.type_into_with("Height", "15", egui::Modifiers::COMMAND);
+        assert_eq!(size(&panel), (20.0, 15.0), "Ctrl/Cmd+Enter kept the proportions with the link off");
+        panel.app().run("pattern.options", json!({"sizeTileToArt": true})).unwrap();
+        panel.frame();
+        assert!(!panel.enabled(LINK) && !panel.enabled("Width"), "disabled with Size Tile to Art");
     }
 
     #[test]

@@ -98,7 +98,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pattern Options",
             ["Window", "Pattern Options"],
             None,
-            "{name? (default: the pattern being edited), newName? (trimmed; blank: the name is kept), tileType?, brickOffset?, width?, height?, hSpacing?, vSpacing?, sizeTileToArt?: bool, moveTileWithArt?: bool (in pattern editing mode, a move of all of the tile art moves the tile with it; off for a new pattern), overlap?: {h: left|right, v: top|bottom}, copies?: 3|5|7|9, dimCopies?: %, showTileEdge?: bool, showSwatchBounds?: bool (outline the part of the tiling the swatch repeats, dashed)}",
+            "{name? (default: the pattern being edited), newName? (trimmed; blank: the name is kept), tileType?, brickOffset?, width?, height?, proportional?: bool (a new width changes the height in proportion, or a height given alone the width, as the Pattern Options panel's Constrain Width and Height Proportions link does), hSpacing?, vSpacing?, sizeTileToArt?: bool, moveTileWithArt?: bool (in pattern editing mode, a move of all of the tile art moves the tile with it; off for a new pattern), overlap?: {h: left|right, v: top|bottom}, copies?: 3|5|7|9, dimCopies?: %, showTileEdge?: bool, showSwatchBounds?: bool (outline the part of the tiling the swatch repeats, dashed)}",
             has_doc,
             pattern_options
         ),
@@ -710,6 +710,21 @@ fn pattern_save_copy(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "name": name }))
 }
 
+/// The size `pattern.options` gives a tile that is `tile` now, for its `width` and `height`
+/// params: a missing one keeps its side. With `proportional`, the other side scales with the given
+/// one so the tile keeps its proportions; with both given, the width wins, as in
+/// `object.setBounds`. A tile with a side that is not a positive number has no proportions to
+/// keep, so its other side is kept or taken as given.
+fn tile_size(tile: Rect, width: Option<f64>, height: Option<f64>, proportional: bool) -> (f64, f64) {
+    let (w0, h0) = (tile.width(), tile.height());
+    let usable = |v: f64| v.is_finite() && v > 0.0;
+    match (proportional, width, height) {
+        (true, Some(w), _) if usable(h0 * w / w0) => (w, h0 * w / w0),
+        (true, None, Some(h)) if usable(w0 * h / h0) => (w0 * h / h0, h),
+        _ => (width.unwrap_or(w0), height.unwrap_or(h0)),
+    }
+}
+
 fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "pattern.options";
     let name = match text_param(p, "name", C)? {
@@ -720,6 +735,7 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
     let tt = tile_type_param(p, C, cur.tile_type)?;
     check_numbers(p, &["width", "height", "hSpacing", "vSpacing", "copies", "dimCopies"], C)?;
     check_switches(p, &["sizeTileToArt", "moveTileWithArt", "showTileEdge", "showSwatchBounds"], C)?;
+    let proportional = switch_or(p, "proportional", false, C)?;
     let num = |k: &str| p.get(k).and_then(Value::as_f64);
     for k in ["width", "height"] {
         if num(k).is_some_and(|v| !(v.is_finite() && v > 0.0)) {
@@ -787,7 +803,7 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
             def.art = saved;
         } else if num("width").is_some() || num("height").is_some() {
             let c = def.tile.center();
-            def.tile = Rect::from_center_size(c, (num("width").unwrap_or(def.tile.width()), num("height").unwrap_or(def.tile.height())));
+            def.tile = Rect::from_center_size(c, tile_size(def.tile, num("width"), num("height"), proportional));
         }
     };
     // Options that change nothing leave the document and its undo history as they are.

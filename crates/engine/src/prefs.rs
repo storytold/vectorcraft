@@ -413,7 +413,7 @@ pub struct Prefs {
     pub print_presets: Vec<cmd::printpresets::PrintPreset>,
     /// Constrain Width and Height Proportions: the link between W and H in the Transform panel,
     /// the Properties panel and the Control bar (their size fields pass `proportional` to
-    /// `object.setBounds`).
+    /// `object.setBounds`), and in the Pattern Options panel (to `pattern.options`).
     pub constrain_proportions: bool,
     /// One Corner Radius field sets every corner of a live rectangle (off: a field per corner).
     pub single_corner_radius: bool,

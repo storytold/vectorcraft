@@ -914,6 +914,36 @@ fn move_tile_with_art_follows_art_that_snaps_to_the_pixel_grid() {
     assert_eq!(doc(&s).pattern("P").unwrap().tile, start + moved, "the tile moved as far");
 }
 
+/// `pattern.options {proportional}`, which the Pattern Options panel's Constrain Width and Height
+/// Proportions link passes (#8566): a width or height given alone changes the other in proportion,
+/// in one undo step. Without it the other side stays, and with both given the width wins, as in
+/// `object.setBounds`. A `proportional` that is not a bool is refused.
+#[test]
+fn options_proportional_keeps_the_tile_proportions() {
+    let mut s = session();
+    make_dots(&mut s);
+    let size = |s: &Session| {
+        let t = doc(s).pattern("Dots").unwrap().tile;
+        (t.width(), t.height())
+    };
+    s.execute("pattern.options", &json!({"name": "Dots", "width": 20, "height": 10})).unwrap();
+    assert_eq!(size(&s), (20.0, 10.0));
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("pattern.options", &json!({"name": "Dots", "width": 40, "proportional": true})).unwrap();
+    assert_eq!(size(&s), (40.0, 20.0), "a new width scales the height");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    s.execute("pattern.options", &json!({"name": "Dots", "height": 5, "proportional": true})).unwrap();
+    assert_eq!(size(&s), (10.0, 5.0), "a new height scales the width");
+    s.execute("pattern.options", &json!({"name": "Dots", "width": 30, "proportional": false})).unwrap();
+    assert_eq!(size(&s), (30.0, 5.0), "off, the height stays");
+    s.execute("pattern.options", &json!({"name": "Dots", "width": 12, "height": 12, "proportional": true})).unwrap();
+    assert_eq!(size(&s), (12.0, 2.0), "both given, the width wins");
+    s.execute("pattern.options", &json!({"name": "Dots", "width": 8, "height": 8})).unwrap();
+    assert_eq!(size(&s), (8.0, 8.0), "both given without it, both are taken");
+    assert!(s.execute("pattern.options", &json!({"name": "Dots", "width": 16, "proportional": "yes"})).is_err());
+    assert_eq!(size(&s), (8.0, 8.0));
+}
+
 /// Pattern Options that change nothing record no undo step.
 #[test]
 fn options_that_change_nothing_record_no_undo_step() {
