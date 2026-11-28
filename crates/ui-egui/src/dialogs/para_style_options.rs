@@ -764,7 +764,8 @@ pub(crate) fn hosted(key: &'static str, title: &'static str, opening: &Arc<Openi
 pub(crate) struct ParaStyleOptions {
     inner: HostedPropertiesDialog,
     opening: Arc<Opening>,
-    document: u64,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
 }
 
 impl ParaStyleOptions {
@@ -784,7 +785,7 @@ pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     crate::panels::character::end_typing(app);
     let unit = app.session.general_unit();
     let state = app.session.active().ok_or("no document open")?;
-    let (document, doc) = (state.uid, &state.doc);
+    let (document, doc) = ((state.uid, state.reverts), &state.doc);
     let def = doc.para_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no style `{name}`"))?;
     let opening = Arc::new(Opening::new(name, def.attrs.clone(), unit, vertical_text(app)));
     let dialog = ParaStyleOptions { inner: hosted(KIND, tl!("Paragraph Style Options"), &opening, name).previews(), opening, document };

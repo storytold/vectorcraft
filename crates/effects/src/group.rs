@@ -350,7 +350,7 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
 fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
     let mut m = src.clone();
     if let Some((path, rule)) = geometry(src) {
-        let bounds = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
+        let bounds = path.bounds().unwrap_or_default();
         let (g, carry) =
             crate::apply_geometry_carrying(&n.appearance.effects, &path, bounds, &crate::GeomContext { doc, ..crate::GeomContext::of(n) });
         m.kind = NodeKind::Path { path: g, rule, live: None, clipping: false, guide: false };

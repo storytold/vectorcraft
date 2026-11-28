@@ -107,7 +107,8 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 .look(SelectLook::Filled)
                 .enabled(view.is_some())
                 .show(ui)
-                .value()
+                .events
+                .committed()
                 .copied();
         });
         Divider::vertical().show(ui);
@@ -120,7 +121,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         Field::new(tl!("Artboard")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             if let Some(i) =
-                Select::new(tl!("Artboard"), Bind::given(cur), &boards).look(SelectLook::Filled).enabled(nab > 0).show(ui).value().copied()
+                Select::new(tl!("Artboard"), Bind::given(cur), &boards).look(SelectLook::Filled).enabled(nab > 0).show(ui).events.committed().copied()
             {
                 go = Some(json!(i));
             }
@@ -185,6 +186,83 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let Some(message) = invalid_zoom {
         app.status(message);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+
+    #[test]
+    fn canceling_artboard_choices_keeps_the_active_artboard_and_view() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("artboard.new", json!({"x": 400, "y": 50, "width": 100, "height": 80, "name": "Back"})).unwrap();
+        app.run("view.goToArtboard", json!({"index": 0})).unwrap();
+        app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 400.0));
+        let original = {
+            let view = app.view().unwrap();
+            (view.artboard, view.center, view.zoom, view.rotation)
+        };
+        let document = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, status_bar);
+        panel.room(egui::vec2(1200.0, 300.0));
+        panel.click_role("Artboard", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.app().view().unwrap().artboard, 0, "highlighting another board does not navigate");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        {
+            let app = panel.app();
+            let view = app.view().unwrap();
+            assert_eq!((view.artboard, view.center, view.zoom, view.rotation), original);
+            assert_eq!(app.session.active().unwrap().doc, document);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        }
+        panel.click_role("Artboard", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert_eq!(panel.app().view().unwrap().artboard, 1, "an accepted choice navigates to the board");
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+    }
+
+    #[test]
+    fn canceling_rotation_choices_keeps_an_unlisted_view_angle() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 400.0));
+        app.run("view.rotate", json!({"angle": 17})).unwrap();
+        let original = {
+            let view = app.view().unwrap();
+            (view.rotation, view.center, view.zoom)
+        };
+        let document = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, status_bar);
+        panel.room(egui::vec2(1200.0, 300.0));
+        panel.click_role("Rotation", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.app().view().unwrap().rotation, 17.0, "highlighting a preset does not rotate the canvas");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        {
+            let app = panel.app();
+            let view = app.view().unwrap();
+            assert_eq!((view.rotation, view.center, view.zoom), original, "Escape keeps the arbitrary opening view");
+            assert_eq!(app.session.active().unwrap().doc, document);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        }
+        panel.click_role("Rotation", Role::COMBO_BOX);
+        panel.click("30°");
+        {
+            let app = panel.app();
+            let view = app.view().unwrap();
+            assert_eq!(view.rotation, 30.0, "a deliberate choice rotates the view");
+            assert_eq!((view.center, view.zoom), (original.1, original.2));
+            assert_eq!(app.session.active().unwrap().doc, document);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        }
     }
 }
 

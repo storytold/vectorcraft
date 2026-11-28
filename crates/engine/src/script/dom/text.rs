@@ -41,12 +41,12 @@ use std::sync::{Arc, Weak};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextObject};
-use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, Realm, RunError, host_ref};
+use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, MemberInfo, Realm, RunError, host_ref};
 
 use super::{
-    Answer, Doc, Host, Item, Link, NOT_FOUND, STALE_ITEM, all_editable, arg, boolean, class, command, doc_of, doc_ref, edit_item, editable, float,
-    frame, function, get, handle_of, id_parts, item_of, item_ref, method, named, num, number, on_doc, page_items, point, property, text, typename_of,
-    whole, with_doc,
+    Answer, Described, Doc, Host, Item, Link, NOT_FOUND, STALE_ITEM, all_editable, arg, boolean, class, command, doc_of, doc_ref, edit_item,
+    editable, float, frame, function, get, handle_of, id_parts, item_of, item_ref, method, named, num, number, on_doc, page_items, point, property,
+    returns, text, typed, typename_of, whole, with_doc,
 };
 use crate::{DocState, Document, NodeId, NodeKind};
 
@@ -331,12 +331,18 @@ fn usize_of(n: f64) -> Option<usize> {
 }
 
 /// A new object of `class` for the span `s..e` of the frame `item` at generation `stamp`. Each
-/// object is numbered, so setting one range's `length` leaves every other range as it is.
+/// object is numbered, so setting one range's `length` leaves every other range as it is. The
+/// first five numbers are the frame's page item handle, so a range goes stale with its frame,
+/// after `file.revert` too.
 fn range_ref(h: &Host, item: Item, s: usize, e: usize, stamp: u64, class: &str) -> Data {
     let [high, low] = id_parts(item.id);
+    let reverts = h.session.borrow().documents().get(item.doc.index).map_or(0, |d| d.reverts);
     let made = &h.dom.text.made;
     made.set(made.get() + 1);
-    host_ref(class, &[float(h.run), float(item.doc.uid), high, low, float(s as u64), float(e as u64), float(stamp), float(made.get())])
+    host_ref(
+        class,
+        &[float(h.run), float(item.doc.uid), high, low, float(reverts), float(s as u64), float(e as u64), float(stamp), float(made.get())],
+    )
 }
 
 /// The span `d` names, when it is an object of one of `classes`.
@@ -347,10 +353,10 @@ fn span_of(h: &Host, d: &Data, classes: &[&str]) -> std::result::Result<Span, Ho
 /// The span `d` names and the number of its object, when it is an object of one of `classes`.
 fn span_and_number(h: &Host, d: &Data, classes: &[&str]) -> std::result::Result<(Span, u64), HostError> {
     let handle = classes.iter().find_map(|c| handle_of(d, c));
-    let Some(&[run, uid, high, low, s, e, stamp, number]) = handle.as_deref() else {
+    let Some(&[run, uid, high, low, reverts, s, e, stamp, number]) = handle.as_deref() else {
         return Err(HostError::Type(format!("this is not a {}", classes.first().copied().unwrap_or("TextRange"))));
     };
-    let frame = item_of(h, &host_ref("TextFrame", &[run, uid, high, low])).map_err(|_| HostError::Error(STALE_RANGE.into()))?;
+    let frame = item_of(h, &host_ref("TextFrame", &[run, uid, high, low, reverts])).map_err(|_| HostError::Error(STALE_RANGE.into()))?;
     let (Some(start), Some(end), Some(stamp), Some(number)) = (usize_of(s), usize_of(e), whole(stamp), whole(number)) else {
         return Err(HostError::Error(STALE_RANGE.into()));
     };
@@ -1519,7 +1525,7 @@ fn read_only(link: &Link, g: super::Member, class: &'static str, name: &'static 
     }
 }
 
-fn attr_members(link: &Link) -> Vec<(String, HostMember)> {
+fn attr_members(link: &Link) -> Vec<Described> {
     let mut out = Vec::new();
     for (name, attr) in ATTRS {
         let l = link.clone();
@@ -1534,12 +1540,17 @@ fn attr_members(link: &Link) -> Vec<(String, HostMember)> {
             h.charge_call(16 + a.iter().map(super::data_size).sum::<u64>())?;
             write_attr(&h, &a, attr, name)
         });
-        out.push((name.to_string(), HostMember::Property { get: g, set: s }));
+        let data_type = match attr {
+            Attr::AutoLeading | Attr::Underline | Attr::StrikeThrough => "boolean",
+            Attr::TextFont => "TextFont",
+            _ => "number",
+        };
+        out.push((name.to_string(), HostMember::Property { get: g, set: s }, typed(data_type)));
     }
     out
 }
 
-fn para_members(link: &Link) -> Vec<(String, HostMember)> {
+fn para_members(link: &Link) -> Vec<Described> {
     let mut out = Vec::new();
     for (name, attr) in PARA_ATTRS {
         let l = link.clone();
@@ -1554,7 +1565,8 @@ fn para_members(link: &Link) -> Vec<(String, HostMember)> {
             h.charge_call(16 + a.iter().map(super::data_size).sum::<u64>())?;
             write_para(&h, &a, attr, name)
         });
-        out.push((name.to_string(), HostMember::Property { get: g, set: s }));
+        let data_type = if matches!(attr, ParaAttr::Justification) { "Justification" } else { "number" };
+        out.push((name.to_string(), HostMember::Property { get: g, set: s }, typed(data_type)));
     }
     out
 }
@@ -1581,17 +1593,18 @@ pub(super) fn install_enums(realm: &mut Realm) -> std::result::Result<(), RunErr
 /// The classes of type, `TextFrame` among them, which inherits from `PageItem`.
 pub(super) fn classes(l: &Link) -> Vec<HostClass> {
     let mut frame = named(vec![
-        ("kind", get(l, frame_kind)),
-        ("contents", property(l, frame_contents, frame_set_contents)),
-        ("textRange", get(l, frame_range)),
-        ("characters", get(l, characters)),
-        ("words", get(l, words)),
-        ("paragraphs", get(l, paragraphs)),
-        ("orientation", read_only(l, frame_orientation, "TextFrame", "orientation")),
-        ("createOutline", method(l, frame_outline)),
-        ("convertAreaObjectToPointObject", method(l, frame_to_point)),
-        ("convertPointObjectToAreaObject", method(l, frame_to_area)),
+        ("kind", get(l, frame_kind), typed("TextType")),
+        ("contents", property(l, frame_contents, frame_set_contents), typed("string")),
+        ("textRange", get(l, frame_range), typed("TextRange")),
+        ("characters", get(l, characters), MemberInfo { collection: true, ..typed("Characters") }),
+        ("words", get(l, words), MemberInfo { collection: true, ..typed("Words") }),
+        ("paragraphs", get(l, paragraphs), MemberInfo { collection: true, ..typed("Paragraphs") }),
+        ("orientation", read_only(l, frame_orientation, "TextFrame", "orientation"), typed("TextOrientation")),
+        ("createOutline", method(l, frame_outline), returns("GroupItem", &[])),
+        ("convertAreaObjectToPointObject", method(l, frame_to_point), returns("TextFrame", &[])),
+        ("convertPointObjectToAreaObject", method(l, frame_to_area), returns("TextFrame", &[])),
     ]);
+    frame.extend(super::variables::item_members(l, "TextFrame"));
     frame.extend(
         [
             "lines",
@@ -1617,21 +1630,21 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         .map(|m| super::later(l, "TextFrame", m)),
     );
     let mut range = named(vec![
-        ("typename", get(l, range_typename)),
-        ("parent", get(l, range_parent)),
-        ("contents", property(l, range_contents, range_set_contents)),
-        ("start", read_only(l, range_start, "TextRange", "start")),
-        ("end", read_only(l, range_end, "TextRange", "end")),
-        ("characterOffset", read_only(l, range_start, "TextRange", "characterOffset")),
-        ("length", property(l, range_length, range_set_length)),
-        ("characters", get(l, characters)),
-        ("words", get(l, words)),
-        ("paragraphs", get(l, paragraphs)),
-        ("characterAttributes", get(l, character_attributes)),
-        ("paragraphAttributes", get(l, paragraph_attributes)),
-        ("getParagraphLength", method(l, range_paragraph_length)),
-        ("getTextRunLength", method(l, range_run_length)),
-        ("remove", method(l, range_remove)),
+        ("typename", get(l, range_typename), typed("string")),
+        ("parent", get(l, range_parent), typed("*")),
+        ("contents", property(l, range_contents, range_set_contents), typed("string")),
+        ("start", read_only(l, range_start, "TextRange", "start"), typed("number")),
+        ("end", read_only(l, range_end, "TextRange", "end"), typed("number")),
+        ("characterOffset", read_only(l, range_start, "TextRange", "characterOffset"), typed("number")),
+        ("length", property(l, range_length, range_set_length), typed("number")),
+        ("characters", get(l, characters), MemberInfo { collection: true, ..typed("Characters") }),
+        ("words", get(l, words), MemberInfo { collection: true, ..typed("Words") }),
+        ("paragraphs", get(l, paragraphs), MemberInfo { collection: true, ..typed("Paragraphs") }),
+        ("characterAttributes", get(l, character_attributes), typed("CharacterAttributes")),
+        ("paragraphAttributes", get(l, paragraph_attributes), typed("ParagraphAttributes")),
+        ("getParagraphLength", method(l, range_paragraph_length), returns("number", &[("charIndex", "number")])),
+        ("getTextRunLength", method(l, range_run_length), returns("number", &[("charIndex", "number")])),
+        ("remove", method(l, range_remove), returns("undefined", &[])),
     ]);
     range.extend(attr_members(l));
     range.extend(para_members(l));
@@ -1661,18 +1674,18 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             name,
             None,
             named(vec![
-                ("typename", get(l, part_typename)),
-                ("length", get(l, part_length)),
-                ("parent", get(l, part_parent)),
-                ("add", method(l, part_add_after)),
-                ("addBefore", method(l, part_add_before)),
+                ("typename", get(l, part_typename), typed("string")),
+                ("length", get(l, part_length), typed("number")),
+                ("parent", get(l, part_parent), typed("*")),
+                ("add", method(l, part_add_after), returns("TextRange", &[("contents", "string")])),
+                ("addBefore", method(l, part_add_before), returns("TextRange", &[("contents", "string")])),
             ]),
             Some(function(l, part_at)),
         )
     };
-    let mut chars = named(vec![("typename", get(l, char_attrs_typename))]);
+    let mut chars = named(vec![("typename", get(l, char_attrs_typename), typed("string"))]);
     chars.extend(attr_members(l));
-    let mut paras = named(vec![("typename", get(l, para_attrs_typename))]);
+    let mut paras = named(vec![("typename", get(l, para_attrs_typename), typed("string"))]);
     paras.extend(para_members(l));
     vec![
         class("TextFrame", Some("PageItem"), frame, None),
@@ -1686,16 +1699,16 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "TextFrames",
             None,
             named(vec![
-                ("typename", get(l, frames_typename)),
-                ("length", get(l, frames_length)),
-                ("parent", get(l, frames_parent)),
-                ("index", method(l, frames_index)),
-                ("getByName", method(l, frames_by_name)),
-                ("add", method(l, frames_add)),
-                ("pointText", method(l, frames_point_text)),
-                ("areaText", method(l, frames_area_text)),
-                ("pathText", method(l, frames_path_text)),
-                ("removeAll", method(l, frames_remove_all)),
+                ("typename", get(l, frames_typename), typed("string")),
+                ("length", get(l, frames_length), typed("number")),
+                ("parent", get(l, frames_parent), typed("Document")),
+                ("index", method(l, frames_index), returns("number", &[("itemKey", "TextFrame")])),
+                ("getByName", method(l, frames_by_name), returns("TextFrame", &[("name", "string")])),
+                ("add", method(l, frames_add), returns("TextFrame", &[])),
+                ("pointText", method(l, frames_point_text), returns("TextFrame", &[("anchor", "Array"), ("orientation", "TextOrientation")])),
+                ("areaText", method(l, frames_area_text), returns("TextFrame", &[("textPath", "PathItem"), ("orientation", "TextOrientation")])),
+                ("pathText", method(l, frames_path_text), returns("TextFrame", &[("textPath", "PathItem"), ("startTValue", "number")])),
+                ("removeAll", method(l, frames_remove_all), returns("undefined", &[])),
             ]),
             Some(function(l, frames_at)),
         ),
@@ -1703,11 +1716,11 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "TextFonts",
             None,
             named(vec![
-                ("typename", typename_of("TextFonts")),
-                ("length", get(l, fonts_length)),
-                ("parent", get(l, app_ref)),
-                ("index", method(l, fonts_index)),
-                ("getByName", method(l, fonts_by_name)),
+                ("typename", typename_of("TextFonts"), typed("string")),
+                ("length", get(l, fonts_length), typed("number")),
+                ("parent", get(l, app_ref), typed("Application")),
+                ("index", method(l, fonts_index), returns("number", &[("itemKey", "TextFont")])),
+                ("getByName", method(l, fonts_by_name), returns("TextFont", &[("name", "string")])),
             ]),
             Some(function(l, fonts_at)),
         ),
@@ -1715,11 +1728,11 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "TextFont",
             None,
             named(vec![
-                ("typename", get(l, font_typename)),
-                ("name", get(l, font_name)),
-                ("family", get(l, font_family)),
-                ("style", get(l, font_style)),
-                ("parent", get(l, font_parent)),
+                ("typename", get(l, font_typename), typed("string")),
+                ("name", get(l, font_name), typed("string")),
+                ("family", get(l, font_family), typed("string")),
+                ("style", get(l, font_style), typed("string")),
+                ("parent", get(l, font_parent), typed("Application")),
             ]),
             None,
         ),

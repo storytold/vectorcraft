@@ -37,7 +37,7 @@ commands:
   ui-commands     regenerate crates/mcp/src/ui_catalog.rs from desktop UI_COMMANDS; --check fails on drift
   pdf-deps        verify immutable shared PDF writer and patched Krilla sources
   layers          enforce the crate dependency layering (plan/architecture.md §3)
-  wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates and the web app
+  wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates, the web app and its plug-in worker
   test            the workspace tests (cargo nextest when installed, else cargo test), then the doctests
   ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), ui-commands --check, layers, wasm (stops at first failure)
   ci shard        shard $GATE_SHARD of $GATE_SHARDS of ci (xtask/src/shards.rs): a test shard runs
@@ -221,7 +221,8 @@ fn cmd_layers() -> Result<(), String> {
 }
 
 /// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
-/// shell, and the web app (its wasm-only code is compiled by nothing else). Each comes with its
+/// shell, and the web app and its plug-in worker (their wasm-only code is compiled by nothing
+/// else). Each comes with its
 /// package id, which `-p` takes where the name would be ambiguous: craft-libs builds against this
 /// repo's geom and pathops by git, so the graph can hold a second, older copy of a workspace crate.
 fn wasm_set() -> Result<Vec<(String, String)>, String> {
@@ -233,7 +234,7 @@ fn wasm_set() -> Result<Vec<(String, String)>, String> {
         .filter(|c| match layers::classify(&c.name) {
             Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
             Some(layers::Class::Standalone) => true,
-            _ => layers::short_name(&c.name) == "web",
+            _ => matches!(layers::short_name(&c.name), "web" | "plugin-worker"),
         })
         .map(|c| {
             let id = ids.get(c.name.as_str()).ok_or_else(|| format!("cargo metadata: no package id for {}", c.name))?.to_string();

@@ -179,6 +179,29 @@ fn ranges_made_before_file_revert_go_stale_even_when_the_text_is_the_same() {
 }
 
 #[test]
+fn a_frame_and_its_ranges_held_across_file_revert_go_stale() {
+    let (mut s, _) = doc_with("one two");
+    let path = std::env::temp_dir().join(format!("vc-text-revert-held-{}.vectorcraft", std::process::id()));
+    s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    let out = log(
+        &mut s,
+        "var t = app.activeDocument.textFrames[0], r = t.textRange, w = t.words;\
+         vc.run('shape.rectangle', {x: 1, y: 1, width: 5, height: 5}); vc.run('file.revert', {});\
+         try { vc.log(t.contents); } catch (e) { vc.log(e.message); }\
+         try { vc.log(r.contents); } catch (e) { vc.log(e.message); }\
+         try { vc.log(w.length); } catch (e) { vc.log(e.message); }\
+         var now = app.activeDocument.textFrames[0], r2 = now.textRange;\
+         vc.log(r2.contents); r2.contents = 'three'; vc.log(now.contents);",
+    );
+    let _ = std::fs::remove_file(&path);
+    assert!(out[0].as_str().is_some_and(|m| m.contains("Stale page item")), "{out:?}");
+    assert!(out[1].as_str().is_some_and(|m| m.contains("Stale text range")), "{out:?}");
+    assert!(out[2].as_str().is_some_and(|m| m.contains("Stale text range")), "{out:?}");
+    assert_eq!(out[3], json!("one two"), "a range made after the revert reads the reverted text");
+    assert_eq!(out[4], json!("three"), "a frame found after the revert can be edited");
+}
+
+#[test]
 fn a_range_an_edit_covers_holds_the_edits_new_text() {
     let (mut s, _) = doc_with("abc");
     let out = log(
