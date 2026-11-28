@@ -52,9 +52,22 @@ pub(crate) struct Open {
     pub id: DialogId,
     /// The preview OK commits and Cancel rolls back.
     pub preview: LivePreview,
-    document: u64,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
     /// The tool reset count when the current preview record was created.
     preview_tool_resets: u64,
+}
+
+impl Open {
+    fn in_source(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().is_some_and(|doc| (doc.uid, doc.reverts) == self.document)
+    }
+
+    /// Whether the active document is the opening one, reverted since the dialog opened.
+    fn reverted(&self, app: &VectorcraftApp) -> bool {
+        let (uid, reverts) = self.document;
+        app.session.active().is_some_and(|doc| doc.uid == uid && doc.reverts != reverts)
+    }
 }
 
 /// Whether [`rows`] draws the link and the Relative / Absolute choice (Transform Each) or only the
@@ -432,6 +445,15 @@ pub(crate) fn reference_point(ui: &mut Ui, fields: &mut DialogFields) -> Respons
     shown.response
 }
 
+/// The reference point picker with its name beside it, for a full-width row that draws no label of its own.
+fn labelled_reference_point(ui: &mut Ui, fields: &mut DialogFields) -> Response {
+    let shown = Row::new().show(ui, |ui, _| {
+        reference_point(ui, fields);
+        Text::new(tl!("Reference Point")).show(ui);
+    });
+    shown.output
+}
+
 /// The dialog's rows: Scale, Move and Rotate in one row, then the options.
 fn dialog_params(lengths: LengthUnits) -> Vec<Param> {
     vec![
@@ -451,7 +473,7 @@ fn dialog_params(lengths: LengthUnits) -> Vec<Param> {
                 Ok(())
             })
             .full_width(),
-        Param::custom("reference", tl!("Reference Point"), |ui, f, _| reference_point(ui, f))
+        Param::custom("reference", tl!("Reference Point"), |ui, f, _| labelled_reference_point(ui, f))
             .on_set(|f, key, value| {
                 let at = value.as_i64().filter(|at| (0..=8).contains(at)).ok_or_else(|| FieldRefusal::Rejects(&value).message(key))?;
                 f.set(key, at);
@@ -473,7 +495,7 @@ fn form(fields: &mut DialogFields, shared: Shared, lengths: LengthUnits) -> Para
 /// Opens Transform Each on the values it was last confirmed with.
 pub(crate) fn open(app: &mut VectorcraftApp) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
-    let Some(document) = app.session.active().map(|doc| doc.uid) else { return };
+    let Some(document) = app.session.active().map(|doc| (doc.uid, doc.reverts)) else { return };
     let shared = shared_size(app, app.session.general_unit());
     let lengths = crate::canvas::general_lengths(app); // PLAN: assumed path of cv.B5b
     let mut f = opening_fields(app, &ctx);
@@ -493,7 +515,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
 /// Cancel rolls the preview back.
 fn cancel(app: &mut VectorcraftApp) {
     if let Some(open) = app.object_dialogs.each.take()
-        && app.session.active().is_some_and(|doc| doc.uid == open.document)
+        && open.in_source(app)
         && app.session.tool_resets() == open.preview_tool_resets
     {
         open.preview.cancel(app);
@@ -503,15 +525,20 @@ fn cancel(app: &mut VectorcraftApp) {
 /// Applies the confirmed values as one undo step.
 fn commit(app: &mut VectorcraftApp, f: &DialogFields) -> Result<(), String> {
     let open = app.object_dialogs.each.as_ref().ok_or("the Transform Each dialog is closed")?;
-    if app.session.active().is_none_or(|doc| doc.uid != open.document) {
-        let reason = if app.session.documents().iter().any(|doc| doc.uid == open.document) {
+    let (in_source, reverted, (uid, _), preview_tool_resets) = (open.in_source(app), open.reverted(app), open.document, open.preview_tool_resets);
+    if !in_source {
+        let reason = if reverted {
+            let reason = tl!("The document was reverted. Reopen this dialog to continue.");
+            app.status(reason);
+            reason
+        } else if app.session.documents().iter().any(|doc| doc.uid == uid) {
             "switch back to the document where Transform Each was opened"
         } else {
             "the document where Transform Each was opened has closed"
         };
         return Err(reason.into());
     }
-    if app.session.tool_resets() != open.preview_tool_resets && app.session.in_interaction() {
+    if app.session.tool_resets() != preview_tool_resets && app.session.in_interaction() {
         return Err("finish the active edit before applying Transform Each".into());
     }
     let p = with_scale_options(app, f, command_params(app, f))?;
@@ -519,14 +546,14 @@ fn commit(app: &mut VectorcraftApp, f: &DialogFields) -> Result<(), String> {
     preview.commit(app, CMD, p).map(|_| ())
 }
 
-/// OK: transforms each object and keeps the values for the next open. A refusal clears Copy, or the
-/// next plain OK would copy.
+/// OK: transforms each object and keeps the values for the next open. A refusal turns Copy off, or
+/// the next plain OK would copy; a refused plain OK keeps its values, so the dialog shows the reason.
 fn ok(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Result<(), String> {
     if let Err(reason) = commit(app, &result.fields) {
         if let (Some(id), Some(dialogs)) = (app.object_dialogs.each.as_ref().map(|o| o.id), app.dialogs()) {
             dialogs.with(|host| {
                 if let Some(d) = host.get_mut_by_id::<HostedParamDialog>(id) {
-                    d.clear_field(COPY);
+                    d.set_field(COPY, FieldValue::Bool(false));
                 }
             });
         }
@@ -546,16 +573,14 @@ fn ok(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Re
 /// Each frame: previews the dialog's values while Preview is on, and turns a press of Copy into a
 /// confirm with `copy` set.
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some((id, document)) = app.object_dialogs.each.as_ref().map(|o| (o.id, o.document)) else { return };
+    let Some((id, in_source)) = app.object_dialogs.each.as_ref().map(|o| (o.id, o.in_source(app))) else { return };
     let Some(dialogs) = app.dialogs() else { return };
     let Some((previewing, fields, action)) =
         dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone(), d.take_action())))
     else {
         return;
     };
-    if app.session.active().is_some_and(|doc| doc.uid == document)
-        && let Some(mut open) = app.object_dialogs.each.take()
-    {
+    if in_source && let Some(mut open) = app.object_dialogs.each.take() {
         let tool_resets = app.session.tool_resets();
         if open.preview_tool_resets == tool_resets || !app.session.in_interaction() {
             if open.preview_tool_resets != tool_resets {
@@ -814,6 +839,98 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().session.doc().unwrap().doc, gesture, "Cancel also leaves the newer gesture alone");
         assert!(h.state().session.in_interaction());
+    }
+
+    /// A harness on a saved copy of [`square_app`], with Transform Each open on it. The directory
+    /// holds the saved file.
+    fn open_on_a_saved_document(tag: &str) -> (Harness, NodeId, vectorcraft_testkit::TempDir) {
+        let (mut app, id) = square_app();
+        let dir = vectorcraft_testkit::TempDir::new(tag);
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let mut h = start(app);
+        open(h.state_mut());
+        h.run_steps(2);
+        (h, id, dir)
+    }
+
+    /// Reverts the document to its saved copy and selects the restored square again.
+    fn revert_and_reselect(h: &mut Harness) {
+        h.state_mut().run("file.revert", json!({"confirmed": true})).unwrap();
+        h.state_mut().run("select.all", json!({})).unwrap();
+        h.run_steps(2);
+    }
+
+    const REVERTED: &str = "The document was reverted. Reopen this dialog to continue.";
+
+    /// Asserts that the held OK was refused because the document was reverted, under the rows and
+    /// on the status line.
+    fn assert_refused_for_the_revert(h: &Harness) {
+        assert_eq!(h.state().ui.status, REVERTED, "the status line reports the revert");
+        let id = id(h);
+        let held = h.state().dialogs().unwrap().with(|host| host.held_state(id));
+        assert!(
+            matches!(&held, Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str() == REVERTED),
+            "OK is refused for the revert, the held state is {held:?}"
+        );
+    }
+
+    /// After File > Revert the draft neither previews on nor commits to the restored square, and OK
+    /// is refused; reopened, the dialog applies again.
+    #[test]
+    fn transform_each_refuses_its_draft_after_file_revert() {
+        let (mut h, square, _dir) = open_on_a_saved_document("transform-each-revert");
+        set(&mut h, "moveH", json!(45));
+        h.run_steps(2);
+        assert!(h.state().session.in_interaction(), "the draft previews before the revert");
+
+        revert_and_reselect(&mut h);
+        let restored = h.state().session.doc().unwrap().doc.clone();
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        set(&mut h, "moveH", json!(60));
+        h.run_steps(2);
+        assert_eq!(h.state().session.doc().unwrap().doc, restored, "Preview must leave the restored square unchanged");
+        confirm(&mut h);
+        assert_eq!(h.state().session.doc().unwrap().doc, restored, "OK must leave the restored square unchanged");
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "OK must record no undo step");
+        assert!(h.state().object_dialogs.each.is_some(), "the dialog stays open with the refusal");
+        assert_refused_for_the_revert(&h);
+
+        let (ctx, dialog) = (h.ctx.clone(), id(&h));
+        assert!(h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, dialog)));
+        h.run_steps(3);
+        assert_eq!(h.state().session.doc().unwrap().doc, restored, "Cancel must leave the restored square unchanged");
+        open(h.state_mut());
+        h.run_steps(2);
+        set(&mut h, "moveH", json!(30));
+        confirm(&mut h);
+        assert!(h.state().object_dialogs.each.is_none(), "the reopened dialog applies");
+        let x0 = h.state().session.doc().unwrap().doc.node(square).unwrap().geometric_bounds().unwrap().x0;
+        assert!((x0 - 50.0).abs() < 1e-6, "the reopened dialog moves the restored square, x0 is {x0}");
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 1);
+    }
+
+    /// After File > Revert, Copy does not copy the restored square either.
+    #[test]
+    fn copy_refuses_its_draft_after_file_revert() {
+        let (mut h, _, _dir) = open_on_a_saved_document("transform-each-copy-revert");
+        set(&mut h, "preview", json!(false));
+        set(&mut h, "moveH", json!(100));
+        h.run_steps(2);
+        // With Preview off the document has no unsaved change to revert yet.
+        h.state_mut().run("object.move", json!({"dx": 5, "dy": 0})).unwrap();
+
+        revert_and_reselect(&mut h);
+        let restored = h.state().session.doc().unwrap().doc.clone();
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
+        h.run_steps(4);
+        assert_eq!(h.state().session.doc().unwrap().doc, restored, "Copy must leave the restored document unchanged");
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "Copy must record no undo step");
+        assert_ne!(field(&h, COPY), Some(FieldValue::Bool(true)), "a refused Copy clears its flag");
+        assert_eq!(h.state().ui.status, REVERTED, "the status line reports the revert");
+        assert!(h.state().object_dialogs.each.is_some(), "the dialog stays open");
     }
 
     #[test]

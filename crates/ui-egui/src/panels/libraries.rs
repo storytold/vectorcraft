@@ -362,15 +362,19 @@ impl<'a> View<'a> {
 
     fn contents(&self, ui: &mut Ui, cx: &mut BodyCx<'_>, closed: &mut HashSet<(String, String)>, acts: &RefCell<Vec<Act>>) {
         if self.empty {
-            Notice::new(Tone::Neutral, tl!("Drag art or swatches here, or use + to add the selection's colors and text styles."))
-                .title(tl!("This library is empty"))
-                .layout(NoticeLayout::Centred)
-                .show(ui);
+            super::notice_frame(ui, |ui| {
+                Notice::new(Tone::Neutral, tl!("Drag art or swatches here, or use + to add the selection's colors and text styles."))
+                    .title(tl!("This library is empty"))
+                    .layout(NoticeLayout::Centred)
+                    .show(ui);
+            });
             return;
         }
         if self.searching && self.counts.iter().all(|n| *n == 0) {
             let message = crate::i18n::fmt(tl!("No items in this library match “{query}”."), &[("query", &self.query)]);
-            Notice::new(Tone::Neutral, message).title(tl!("No results")).layout(NoticeLayout::Centred).show(ui);
+            super::notice_frame(ui, |ui| {
+                Notice::new(Tone::Neutral, message.clone()).title(tl!("No results")).layout(NoticeLayout::Centred).show(ui);
+            });
             return;
         }
         if !self.kinds(ui, cx, None, acts) && self.dragging_grouped(ui) {
@@ -809,19 +813,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The panel with no library: what libraries are, and Create New Library. → whether it was pressed.
 fn no_library(ui: &mut Ui) -> bool {
     let shown = Panel::new(tl!("Libraries")).show(ui, |ui, _| {
-        Notice::new(
-            Tone::Neutral,
-            tl!(
-                "Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required."
-            ),
-        )
-        .title(tl!("Local Libraries"))
-        .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new("library"))))
-        .layout(NoticeLayout::Centred)
-        .action(NoticeAction::new(tl!("Create New Library")))
-        .show(ui)
-        .action
-        .is_some()
+        super::notice_frame(ui, |ui| {
+            Notice::new(
+                Tone::Neutral,
+                tl!(
+                    "Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required."
+                ),
+            )
+            .title(tl!("Local Libraries"))
+            .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new("library"))))
+            .layout(NoticeLayout::Centred)
+            .action(NoticeAction::new(tl!("Create New Library")))
+            .show(ui)
+            .action
+            .is_some()
+        })
+        .unwrap_or_default()
     });
     shown.inner.unwrap_or_default()
 }

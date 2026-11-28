@@ -976,6 +976,57 @@ fn set_bounds_gives_a_closed_path_with_beveled_or_mitered_corners_the_size_out_o
 }
 
 #[test]
+fn set_bounds_gives_a_group_whose_own_stroke_miters_a_slanted_corner_the_size_out_of_proportion() {
+    // The group's own beveled or mitered stroke paints along the unstroked triangle in it, so its
+    // margins at the tip follow the slanted segments' directions too.
+    let mut wrong = vec![];
+    for (join, limit) in [("bevel", 10.0), ("miter", 2.0), ("miter", 10.0)] {
+        let mut s = session();
+        let anchors = json!([{"x": 100, "y": 150}, {"x": 110, "y": 100}, {"x": 120, "y": 150}]);
+        let path = NodeId(run(&mut s, "path.create", json!({"anchors": anchors, "closed": true}))["id"].as_u64().unwrap());
+        let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+        run(&mut s, "appearance.addStroke", json!({"ids": [group.0]}));
+        run(&mut s, "stroke.set", json!({"weight": 2, "join": join, "miterLimit": limit}));
+        run(&mut s, "select.set", json!({"ids": [path.0]}));
+        run(&mut s, "paint.setStroke", json!({"none": true}));
+        let doc = &s.doc().unwrap().doc;
+        let painted = |id: NodeId| doc.node(id).unwrap().appearance.painted_strokes().count();
+        assert_eq!((painted(path), painted(group)), (0, 1), "only the group has a stroke");
+        preview(&mut s, true);
+        run(&mut s, "select.set", json!({"ids": [group.0]}));
+        run(&mut s, "object.setBounds", json!({"width": 60, "height": 20, "reference": 0, "strokes": false}));
+        let v = s.transform_bounds(&[group]).unwrap();
+        if (v.width() - 60.0).abs() > 1e-6 || (v.height() - 20.0).abs() > 1e-6 {
+            wrong.push(format!("{join} {limit}: {v:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
+#[test]
+fn set_bounds_gives_a_stroked_group_with_a_hidden_subgroup_the_requested_width() {
+    // The hidden subgroup supplies the rightmost geometry, but the outer group's stroke paints
+    // only along the visible rectangle. Square corners keep the resize in the span solver.
+    let mut s = session();
+    let shown = rect(&mut s, 100.0, 50.0, 0.0);
+    rect(&mut s, 200.0, 50.0, 0.0);
+    let hidden = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [shown.0, hidden.0]}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({"ids": [group.0]}));
+    run(&mut s, "paint.setStroke", json!({"ids": [group.0], "item": 0, "color": "#000000"}));
+    run(&mut s, "stroke.set", json!({"weight": 10, "join": "miter"}));
+    run(&mut s, "object.hide", json!({"ids": [hidden.0]}));
+    preview(&mut s, true);
+    run(&mut s, "select.set", json!({"ids": [group.0]}));
+    let before = s.transform_bounds(&[group]).unwrap();
+    assert!(close(before, Rect::new(95.0, 95.0, 250.0, 155.0)), "{before:?}");
+    run(&mut s, "object.setBounds", json!({"width": 300, "reference": 0, "strokes": false}));
+    let after = s.transform_bounds(&[group]).unwrap();
+    assert!((after.width() - 300.0).abs() < 1e-6, "{after:?}");
+}
+
+#[test]
 fn set_bounds_gives_a_symbol_instance_of_a_diagonal_butt_line_the_size_out_of_proportion() {
     let mut s = session();
     butt_line(&mut s, (100.0, 100.0), (130.0, 140.0));
@@ -1034,19 +1085,21 @@ fn set_bounds_measures_the_members_of_groups_one_by_one() {
             wrong.push(format!("nested {nested}, plain {plain}, strokes {strokes}: {v:?}"));
         }
     }
-    // The group with a 1 pt stroke of its own, which reaches 5 pt at its miter limit of 10, around
-    // each member: the visual box runs from (-7, 90) to (110, 160). Set to 224 wide from its left
-    // edge, it is 224 wide and its left edge stays at -7, with strokes kept or scaling.
+    // The group with a 20 pt miter-joined stroke of its own, which paints 10 pt past each member's
+    // corners, not the 100 pt its miter limit of 10 could reach: the visual box runs from (-10, 90)
+    // to (110, 160). Set to 224 wide from its left edge, it is 224 wide and its left edge stays at
+    // -10, with strokes kept or scaling.
     for strokes in [false, true] {
         let (mut s, _) = thin_and_thick();
         let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
         run(&mut s, "appearance.addStroke", json!({"ids": [group.0]}));
+        run(&mut s, "stroke.set", json!({"weight": 20}));
         let ids = [group, rect(&mut s, 100.0, 10.0, 0.0)];
         run(&mut s, "select.set", json!({"ids": [ids[0].0, ids[1].0]}));
-        assert!(close(s.transform_bounds(&ids).unwrap(), Rect::new(-7.0, 90.0, 110.0, 160.0)), "{:?}", s.transform_bounds(&ids));
+        assert!(close(s.transform_bounds(&ids).unwrap(), Rect::new(-10.0, 90.0, 110.0, 160.0)), "{:?}", s.transform_bounds(&ids));
         run(&mut s, "object.setBounds", json!({"width": 224, "reference": 0, "strokes": strokes}));
         let v = s.transform_bounds(&ids).unwrap();
-        if !close(v, Rect::new(-7.0, 90.0, 217.0, 160.0)) {
+        if !close(v, Rect::new(-10.0, 90.0, 214.0, 160.0)) {
             wrong.push(format!("the group with a stroke, strokes {strokes}: {v:?}"));
         }
     }
@@ -1258,6 +1311,13 @@ fn a_handle_drag_keeps_the_opposite_edge_of_the_offset_shape() {
     }
 }
 
+/// Holds the fonts, the hyphenation exceptions and the plug-ins steady on other threads: the memo
+/// also answers for them ([`vectorcraft_doc::hit::live_inputs`]), and a test that counts what it
+/// measures or checks must not count a refresh that another test's change caused.
+fn steady_live_inputs() -> (vectorcraft_text::test_fonts::SteadyFonts, vectorcraft_plugins::steady::SteadyPlugins) {
+    (vectorcraft_text::test_fonts::steady_fonts(vectorcraft_text::FontDb::global()), vectorcraft_plugins::steady::steady_plugins())
+}
+
 #[test]
 fn a_hover_checks_the_memo_as_often_however_many_objects_are_selected() {
     let checks = |objects: u32| {
@@ -1273,6 +1333,7 @@ fn a_hover_checks_the_memo_as_often_however_many_objects_are_selected() {
             s.pointer(&PointerEvent::new(PointerKind::Move, 350.0, 350.0), v).unwrap();
             s.cursor(Point::new(350.0, 350.0), Mods::default(), v)
         };
+        let _steady = steady_live_inputs();
         hover(&mut s);
         let before = s.preview_memo.checks();
         hover(&mut s);
@@ -1297,6 +1358,7 @@ fn hovering_over_an_unchanged_document_measures_nothing_again() {
         s.cursor(Point::new(x, 150.0), Mods::default(), v)
     };
     let xs = [210.0, 150.0, 151.0, 180.0, 250.0];
+    let _steady = steady_live_inputs();
     for x in xs {
         hover(&mut s, x);
     }

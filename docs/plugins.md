@@ -40,6 +40,9 @@ in `crates/engine/src/cmd/plugin.rs`).
 | `plugin.clearCache` | `{"id"?}` | Deletes every entry in the [cache](#settings-and-cache) of plug-in `id`, or of every installed plug-in; settings stay. Returns `{"cleared": [id], "bytesFreed"}`. |
 | `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` and `*.vcplugin` in a folder, the first 1,000 by file name; a bad module is reported and skipped, and so are an entry that is not a regular file, a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). Returns `{"folder", "loaded", "failed": [{file, error}], "leftOut"}`; `leftOut` counts the `*.wasm` and `*.vcplugin` files past the first 1,000, which were not tried. |
 | `plugin.retry` | `{"file"?}` (a file `plugin.list`'s `failed` names; default: every one) | Loads a plug-in file that [didn't load](#plug-ins-that-didnt-load) again, with the same checks as the load it failed in. Returns `{"retried": [{file, loaded, id?, error?}]}`. |
+| `plugin.generate` | `{"id", "params"?: {…}}` | Runs a [generator](#generators) and adds its art to the current layer as a new generated art object, selected. One undo step named after the plug-in. Returns `{"id", "plugin"}`. |
+| `plugin.editGenerated` | `{"id"?: object, "params": {…}}` (default: the selected generated art object) | Runs the object's generator again with the saved parameters changed by `params` and replaces its art, one undo step; parameters that change nothing run nothing and make no undo step. Returns `{"id", "plugin", "changed"}`. |
+| `plugin.generatedInfo` | `{"id"?: object}` (default: the selected one) | `{"id", "plugin", "name", "params", "state", "installed"}`: `state` is `"intact"`, `"damaged"` (its saved plug-in id, parameters, transforms or scales can't be read) or `"changed"` (its art doesn't match the hash its file gave). |
 
 Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>", "params": {…}}`, edited with
 `effect.setParams`, listed by `effect.list` (menu `Effect › Plug-ins`) and baked by Object › Expand Appearance.
@@ -145,6 +148,49 @@ too (on the web this is how plug-ins get in). A heavy filter asks before it is i
 ([below](#heavy-filters)). A plug-in that lists permissions asks for them before it is installed
 ([below](#permissions)).
 
+### Generators
+
+A plug-in of kind `generator` draws art from its parameters alone. Its art goes into a **generated art object**: a group that keeps the plug-in's id and name, the parameters the
+art was drawn with and the art itself, so the art can be drawn again when the parameters change.
+
+- **Menus.** Installed generators are listed under **Object › Plug-ins** with the filters. One without parameters
+  draws its art at once; one with parameters opens a dialog generated from its schema, and OK draws the art.
+  **Object › Plug-ins › Edit Generated Art…** (`ui.editGeneratedArt`), enabled while one generated art object is
+  selected, opens the same dialog with the parameters the object was drawn with, and OK draws it again.
+- **Runs.** The generator is given `{"objects": []}` and its parameters with `_context.mode` `"generate"`
+  ([Parameters](#parameters)), and returns new objects as a filter does (`{"objects": [...]}`, each without `id`), or
+  `{"error": "…"}` to decline. It runs under its own instruction budget and the Plug-in Instruction Budget preference,
+  and Cancel stops it as it stops a filter. Its output is checked before the document changes: an output with no
+  objects, a key other than `objects` and `error`, an object with an `id`, an object the filter checks refuse, art
+  outside the canvas and art past 16 MiB of JSON are errors, and the document is left as it was.
+- **Parameters.** Given parameters are checked against the manifest: a name it doesn't declare, a value of the wrong
+  type, a number outside its range (each number of a `numberList` too) and text longer than its `maxLength` are
+  errors, and parameters left out take their defaults. The parameters a generated art object keeps are at most 64 KiB
+  of JSON. `plugin.editGenerated`
+  checks the parameters it is given the same way and takes the others from the object; saved parameters the plug-in
+  no longer declares are dropped, and saved values outside a narrower range are brought into it.
+- **Editing.** Drawing the art again replaces the group's art as one undo step named **Edit Generated Art**, placed
+  as the object has been moved, scaled, rotated, reflected or sheared since it was drawn. The new art's stroke weights,
+  dashes and effect distances are scaled as Scale Strokes & Effects scaled the old art's, and its pattern tiles are
+  moved as Transform Patterns moved them. Object › Expand makes a generated art object an ordinary group of its art. A
+  generated art object can't be drawn again while its plug-in isn't installed or is installed as a plug-in of another
+  kind, or while its saved fields are damaged. The error names the plug-in when it is missing or of another kind, and
+  the object's art stays as it is.
+- **Files.** The native file keeps each generated art object's plug-in id, its name (at most 64 characters), the
+  parameters, the transform since it was drawn, what its strokes and effects were scaled by and its pattern tiles
+  transformed by (`strokeScale`, `effectScale`, `patternTransform`), and a SHA-256 of its art's JSON (`generated`).
+  Opening a file never runs a plug-in: each object is drawn from the art the file holds. When its plug-in isn't
+  installed or is a plug-in of another kind, when its saved plug-in id is not a plug-in id or its parameters,
+  transforms or scales can't be read, or when its art doesn't match the hash, the art stays as the file has it and the
+  open's warnings say so. The warnings name the plug-in, except for damaged fields, where they say that a generated
+  art object's plug-in id or parameters are damaged. Saving writes the hash of the art as it is then, and an object whose
+  saved fields were damaged is saved with `damaged: true`, so it still can't be drawn again after the file is opened
+  again. A generated art object inside another one's art is saved as plain art, without its own settings. A file that
+  has settings on such an object anyway opens with them left out, and the outer object reads as `changed`.
+- **Permissions.** A generator implies `doc.write`, and a list of `permissions` must hold it.
+
+These rules are VectorCraft's own.
+
 ### Commands
 
 A filter or a live effect may declare commands of its own in its manifest (`commands`, [below](#manifest)). Each
@@ -154,7 +200,8 @@ replaced by a module without it.
 - **Menus.** A plug-in with commands is a submenu of **Object › Plug-ins** (a live effect: **Effect › Plug-ins**)
   named after the plug-in. The submenu holds the plug-in's own item, then its commands. A command with parameters has
   an ellipsis and opens a dialog for them, with a live preview, as a filter's own item does. A command whose manifest
-  gives a `menu` is listed in that menu instead ([below](#placing-a-command-in-another-menu)).
+  gives a `menu` is listed in that menu instead ([below](#placing-a-command-in-another-menu)), and one whose `menu`
+  gives a `context` is also listed in the canvas or Layers panel context menu ([Context menus](#context-menus)).
 - **Keyboard Shortcuts.** Edit › Keyboard Shortcuts lists each command under its menu, and the user can give it a
   shortcut. A manifest cannot give a command a shortcut.
 - **Actions and agents.** A command run is recorded in an action like any other command and plays back with its
@@ -183,8 +230,9 @@ Inverse.
   `["Object", "Clipping Mask"]`, `["Type"]`, `["Select"]`, `["Select", "Same"]`, `["Select", "Object"]`, `["Effect"]`
   and `["View"]`. The File, Window and Help menus, the application menu, Edit › Preferences and the submenus that list
   files, fonts, panels or plug-ins cannot be named. Any other `path`, a `menu` that is not an object or is given twice,
-  a key other than `path` and `after`, and an `after` that is not 1–64 printable characters are refused when the
-  module is installed, and the error names the command.
+  a key other than `path`, `after` and `context`, and an `after` that is not 1–64 printable characters are refused when
+  the module is installed, and the error names the command. `path` may be left out only when `context` is given
+  ([Context menus](#context-menus)), and `after` needs `path`.
 - `after` is the English label of a built-in item or submenu of that menu, with or without its closing ellipsis
   (`"Inverse"`). The command is listed right after it. An item that switches between two labels is matched by either
   of them (`"Show Edges"` and `"Hide Edges"`, `"Start Global Edit"` and `"Stop Global Edit"`). Without `after`, or when no
@@ -205,6 +253,34 @@ Inverse.
 - A placed command leaves the menus when its plug-in is removed or replaced by a module without the command. Turning
   the plug-in off (`plugin.setEnabled`) removes it at the next launch.
 - At `api` 1 a `menu` key, repeated or not, is ignored and the command stays in the plug-in's submenu.
+
+#### Context menus
+
+At `api` 2 a command's `menu` may also list it in the canvas context menu and in the menu of a Layers panel row, with
+`context`: a list of `{"menu": "canvas" | "layers", "when"?: condition}`. For example,
+`"menu": {"context": [{"menu": "canvas", "when": "typeObject"}, {"menu": "layers"}]}`. The command stays where `path`
+puts it (or in its plug-in's submenu) as well.
+
+- The canvas context menu lists the command while objects are selected, after Export Selection…, in a **Plug-ins**
+  submenu that holds a submenu named after each plug-in, in plug-in id order. Its items are the commands in manifest
+  order, under their own labels, with an ellipsis for a command with parameters. A row's menu in the Layers panel lists
+  the same way after Collect for Export. Guide rows and blend spine rows list no plug-in commands. With no command
+  listed there, the menu has no Plug-ins submenu.
+- `when` is one of `"selection"` (one or more objects are selected, or rows clicked), `"oneObject"` (exactly one
+  object that is not a layer), `"typeObject"` (one of them is a type object) and `"layerRow"` (every clicked row is a
+  layer or sublayer; Layers panel only). Without `when` the item can always be chosen. While its condition fails, the
+  item is shown dimmed.
+- Choosing the item runs `plugin.<id>.<command>` as its other menu items do, with the same permissions, and one run is
+  one undo step. On the canvas it runs on the selection. In the Layers panel it runs on the clicked row, or on every
+  highlighted row when the clicked row is one of them, whatever is selected on the canvas; a layer or group row gives
+  the run the objects in it. Both pass the objects as `ids`, so an action records them. A command with parameters
+  opens its dialog first, and its preview and OK run on those objects. Nothing runs until an item is chosen.
+- Each menu may be listed once in a command's `context`. A `context` that is not a list, an entry that is not an
+  object or has a key other than `menu` and `when`, an unknown `menu` or `when`, `"layerRow"` for the canvas and a
+  menu named twice are refused when the module is installed. A plug-in may list at most 8 commands in each context
+  menu; the module is refused otherwise. Each error names the command and the key.
+- `plugin.list` gives the command's `menu` with its `context`, and so does the `manifest` that `plugin.info` gives.
+- At `api` 1 the key is ignored, as the rest of `menu` is.
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
@@ -352,7 +428,7 @@ capability model proposed for PhotoCraft plug-ins
 | Permission | Kinds | What it allows |
 |---|---|---|
 | `doc.read` | filter, effect, exporter | Read the objects it is given, and the [document information](#document-information) its `context` lists. |
-| `doc.write` | filter, effect with `commands` | Change, add and delete objects in the document. |
+| `doc.write` | filter, effect with `commands`, generator | Change, add and delete objects in the document. |
 | `state` | filter, effect with `commands` | Keep data of its own with the document (`documentData`). |
 | `effect.render` | effect | Change how the objects its effect is applied to are drawn. |
 | `export.write` | exporter | Write the document as a file in its own format. |
@@ -364,11 +440,11 @@ capability model proposed for PhotoCraft plug-ins
 
 - A manifest without `permissions` gets the ones its kind implies, as plug-ins did before the key existed: a filter
   `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`, and also `doc.write` and `state`
-  when it declares [commands](#commands); an exporter `doc.read` and `export.write`; an importer `import.read`. Such a
-  plug-in installs without a prompt. This rule is VectorCraft's own. A filter whose list is empty may do none of
+  when it declares [commands](#commands); an exporter `doc.read` and `export.write`; an importer `import.read`; a generator `doc.write`.
+  Such a plug-in installs without a prompt. This rule is VectorCraft's own. A filter whose list is empty may do none of
   these, and also installs without a prompt.
-- An effect, an exporter or an importer that lists permissions lists all of its implied ones (`doc.read` and
-  `effect.render`; `doc.read` and `export.write`; `import.read`). An effect with commands may add `doc.write` and
+- An effect, an exporter, an importer or a generator that lists permissions lists all of its implied ones (`doc.read`
+  and `effect.render`; `doc.read` and `export.write`; `import.read`; `doc.write`). An effect with commands may add `doc.write` and
   `state`, which only its commands use. A filter may list any of its three, and `commands` with a `commandAllowlist`.
   Any kind may add `progress`, `settings` and `cache`, which no kind implies. An unknown name, a name listed twice, a
   name that doesn't apply to the kind, more than 16 names, `progress`, `settings`, `cache` or `commands` with an `api`
@@ -788,8 +864,9 @@ the module's start function, in a run that isn't a filter's run on a document, o
 - `id`: 1–64 characters from `A-Z a-z 0-9 . _ -` (reverse-DNS recommended). Installing a module with the same id
   replaces the old one. A live effect's effect id is `plugin.<id>`.
 - `name`: the menu label, or an exporter's or importer's format name in Export As, Open and Open With (1–64 printable
-  characters). `kind`: `"filter"` (object filter), `"effect"` (live effect), `"exporter"` or `"importer"`. Exporters
-  and importers came after the first ABI v1 hosts, which refuse the kind when the plug-in is installed.
+  characters). `kind`: `"filter"` (object filter), `"effect"` (live effect), `"exporter"`, `"importer"` or
+  `"generator"` ([generators](#generators)). Exporters, importers and generators came after the first ABI v1 hosts,
+  which refuse the kind when the plug-in is installed.
 - `budget` (filters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
@@ -835,7 +912,8 @@ the module's start function, in a run that isn't a filter's run on a document, o
   ([Commands](#commands)), each `{"id": "grow", "label": "Grow", "params"?: {…}, "menu"?: {…}}`. An `id` is 1–32
   characters from `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters;
   menus show it with control and bidirectional characters escaped. `params` are declared as the plug-in's own `params`
-  are. `menu` (`api` 2 and later; ignored at `api` 1) places the command in [another menu](#placing-a-command-in-another-menu).
+  are. `menu` (`api` 2 and later; ignored at `api` 1) places the command in [another menu](#placing-a-command-in-another-menu)
+  and lists it in [context menus](#context-menus).
   A malformed entry is refused when the module is installed, and the error names the command by its id (or its place,
   `[0]`).
 - `commandAllowlist` (filters at `api` 2 with the usual budget, and only with the `commands` permission, which needs

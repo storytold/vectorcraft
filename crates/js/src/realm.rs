@@ -305,6 +305,8 @@ impl Realm {
         interp.waiting_hosted = false;
         interp.constructing = false;
         interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
         interp.finally_marks.clear();
@@ -363,6 +365,8 @@ impl Realm {
         interp.waiting_hosted = false;
         interp.constructing = false;
         interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
         interp.passing = Value::Undefined;
         interp.end_jobs(result.is_ok());
         if let Some(es2015) = interp.next_es2015.take() {
@@ -596,6 +600,19 @@ impl Realm {
     /// next run would give.
     pub fn define_host_object(&mut self, name: &str, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
         match self.interp.install_host_object(name, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds ScriptUI's global constructor `Window` ([`crate::scriptui`]), whose dialogs the host
+    /// functions in `items` show: `open` and `wait`, each given the dialog's description, and
+    /// `end`, given the result of `show()` and whether `show()` ended normally. A run that ends
+    /// while `show()` waits for `wait`'s answer, because it is stopped or the host does not resume
+    /// it, ends without a call to `end`: the host releases what it holds for the dialog when the run
+    /// ends, and does not wait for `end`.
+    pub fn define_script_ui(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
+        match crate::scriptui::install(&mut self.interp, items) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }

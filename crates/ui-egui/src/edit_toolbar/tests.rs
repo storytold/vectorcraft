@@ -172,6 +172,104 @@ fn a_saved_toolbar_without_enclosing_lasso_keeps_its_layout() {
     assert!(slot.is_some_and(|s| s.contains(&id)), "Reset Toolbar adds it");
 }
 
+/// The Polygonal Lasso Tool is in the Lasso tool's flyout in both toolbars, after the Enclosing
+/// Lasso, once in the All Tools drawer (under Select) and in Keyboard Shortcuts' list, with no
+/// shortcut; its button's tip names it; Reset Toolbar keeps it there.
+#[test]
+fn polygonal_lasso_is_in_the_lasso_flyout() {
+    let mut app = app();
+    let id = vectorcraft_tools::addons::polygonal_lasso::ID;
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    for advanced in [false, true] {
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        let s = slots(&app);
+        let slot = slot_of(&app, "lasso").map(|i| s[i].clone()).expect("a Lasso slot");
+        let lasso = slot.iter().position(|t| *t == "lasso").expect("the Lasso");
+        assert_eq!(slot.get(lasso + 1..lasso + 3), Some(&[enclosing, id][..]), "advanced: {advanced}");
+        assert_eq!(s.iter().filter(|ids| ids.contains(&id)).count(), 1, "advanced: {advanced}");
+    }
+    assert_eq!(heading(id), "Select");
+    assert_eq!(sections().iter().flat_map(|(_, tools)| tools.iter()).filter(|t| t.id == id).count(), 1, "listed once in the drawer");
+    // Keyboard Shortcuts lists the window's commands once it has drawn a frame.
+    let ctx = ctx();
+    settle(&mut app, &ctx, 0.0);
+    let rows = app.run("shortcuts.list", json!({"query": id})).unwrap();
+    let rows: Vec<_> = rows.as_array().unwrap().iter().filter(|r| r["id"] == format!("tool:{id}")).collect();
+    assert_eq!(rows.len(), 1, "listed once in Keyboard Shortcuts");
+    assert_eq!((&rows[0]["group"], &rows[0]["shortcut"]), (&json!("Tools"), &Value::Null));
+    let info = vectorcraft_tools::tool_info(id).expect("catalogued");
+    assert_eq!((info.label, info.shortcut), ("Polygonal Lasso Tool", None));
+    assert_eq!(crate::toolbar::tip(&ctx, info), "Polygonal Lasso Tool");
+    app.run("tool.select", json!({"tool": id})).unwrap();
+    assert_eq!(app.session.tool_id(), id);
+    let shown = slot_of(&app, id).map(|i| crate::toolbar::shown_tool(&app, &slots(&app)[i]));
+    assert_eq!(shown, Some(id), "the slot's button shows the tool once chosen");
+    app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+    assert!(slot_of(&app, id).is_none(), "it can be taken out");
+    app.run("toolbar.addTool", json!({"tool": id})).unwrap();
+    assert!(slot_of(&app, id).is_some(), "the drawer adds it back");
+    app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+    app.run("toolbar.reset", json!({})).unwrap();
+    let after_reset = slot_of(&app, "lasso").map(|i| slots(&app)[i].contains(&id));
+    assert_eq!(after_reset, Some(true), "Reset Toolbar puts it back");
+}
+
+/// A toolbar edited and saved before the Polygonal Lasso Tool joined the Lasso group keeps its
+/// saved layout, in both toolbars: the tool stays in the drawer until Reset Toolbar or a drag adds
+/// it, and a toolbar that already had it in a slot of its own keeps it there, once.
+#[test]
+fn a_saved_toolbar_without_polygonal_lasso_keeps_its_layout() {
+    let id = vectorcraft_tools::addons::polygonal_lasso::ID;
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    let category = |slots: &[&[&str]]| ToolbarCategory {
+        name: Some("Select".into()),
+        slots: slots.iter().map(|s| s.iter().map(|t| t.to_string()).collect()).collect(),
+    };
+    for advanced in [false, true] {
+        let edits = |saved: Vec<ToolbarCategory>| {
+            if advanced { ToolbarEdits { basic: None, advanced: Some(saved) } } else { ToolbarEdits { basic: Some(saved), advanced: None } }
+        };
+        let mut app = app();
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        app.ui.toolbar_edits = edits(vec![category(&[&["lasso", enclosing]])]);
+        app.ui = std::mem::take(&mut app.ui).sanitized();
+        assert_eq!(slots(&app), [["lasso", enclosing]], "advanced: {advanced}");
+        assert!(slot_of(&app, id).is_none(), "advanced: {advanced}");
+        app.run("toolbar.reset", json!({})).unwrap();
+        let slot = slot_of(&app, "lasso").map(|i| slots(&app)[i].clone());
+        assert!(slot.is_some_and(|s| s.contains(&id)), "Reset Toolbar adds it; advanced: {advanced}");
+        app.ui.toolbar_edits = edits(vec![category(&[&["lasso", enclosing], &[id]])]);
+        app.ui = std::mem::take(&mut app.ui).sanitized();
+        assert_eq!(slots(&app), [vec!["lasso", enclosing], vec![id]], "advanced: {advanced}");
+    }
+}
+
+/// The Lasso group torn off the Tools panel shows the Polygonal Lasso Tool after the Enclosing
+/// Lasso, in both toolbars, and shows it again after Reset Toolbar puts it back.
+#[test]
+fn a_torn_off_lasso_group_shows_polygonal_lasso() {
+    let id = vectorcraft_tools::addons::polygonal_lasso::ID;
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    for advanced in [false, true] {
+        let mut app = app();
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        app.run("window.floatTools", json!({"tool": "lasso", "floating": true})).unwrap();
+        let lasso = |app: &VectorcraftApp| crate::toolbar::strips(app, None).into_iter().find(|g| g.first() == Some(&"lasso"));
+        let after_lasso = |app: &VectorcraftApp| lasso(app).and_then(|g| g.get(1..3).map(|s| s.to_vec()));
+        assert_eq!(after_lasso(&app), Some(vec![enclosing, id]), "advanced: {advanced}");
+        app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+        assert!(lasso(&app).is_some_and(|g| !g.contains(&id)), "advanced: {advanced}");
+        app.run("toolbar.reset", json!({})).unwrap();
+        assert_eq!(after_lasso(&app), Some(vec![enclosing, id]), "advanced: {advanced}");
+    }
+}
+
 /// The Smart Pen Tool is in the Pen tool's flyout in both toolbars, after the Pen family's own
 /// tools, once in the All Tools drawer (under Draw) and in Keyboard Shortcuts' list, with no
 /// shortcut; its button's tip names it; Reset Toolbar keeps it there.
@@ -277,7 +375,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     // Before the first slot, moved out of its group.
     app.run("toolbar.addTool", json!({"tool": "magicWand", "slot": 0})).unwrap();
     assert_eq!(&slots(&app)[..3], [&["magicWand"][..], &["selection"], &["directSelection", "groupSelection"]]);
-    assert_eq!(slots(&app)[3], ["lasso", "enclosingLasso"]);
+    assert_eq!(slots(&app)[3], ["lasso", "enclosingLasso", "polygonalLasso"]);
     // After a slot, and into a group (last), moved out of the Rectangle group.
     app.run("toolbar.addTool", json!({"tool": "slice", "slot": 1, "place": "after"})).unwrap();
     assert_eq!(slots(&app)[2], ["slice"]);
@@ -522,15 +620,14 @@ fn a_saved_toolbar_without_trim_at_crossings_keeps_its_layout() {
 }
 
 /// The add-ons' tools are in neither toolbar as they ship (the Trim at Crossings Tool, in the
-/// Scissors tool's group, the Enclosing Lasso Tool, in the Lasso tool's group, and the Smart Pen
-/// Tool, in the Pen tool's group, aside): the drawer lists them under their add-on's heading, and
-/// they can be added from there.
+/// Scissors tool's group, the Enclosing Lasso and Polygonal Lasso tools, in the Lasso tool's
+/// group, and the Smart Pen Tool, in the Pen tool's group, aside): the drawer lists them under
+/// their add-on's heading, and they can be added from there.
 #[test]
 fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let mut app = app();
     let contour = vectorcraft_tools::addons::contour::ID;
     let box3d = vectorcraft_tools::addons::box3d::ID;
-    let polygonal = vectorcraft_tools::addons::polygonal_lasso::ID;
     let addon: Vec<&str> = vectorcraft_tools::addons::GROUPS.iter().flat_map(|g| g.iter().map(|t| t.id)).collect();
     assert_eq!(
         addon,
@@ -544,8 +641,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
             "sharedEdge",
             "tangentCircle",
             contour,
-            box3d,
-            polygonal
+            box3d
         ]
     );
     for advanced in [false, true] {
@@ -560,8 +656,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..8].to_vec())));
     assert_eq!(listed(contour), Some(("Contour", vec![contour])));
     assert_eq!(listed(box3d), Some(("3D Box", vec![box3d])));
-    assert_eq!(listed(polygonal), Some(("Polygonal Lasso", vec![polygonal])));
-    for tool in ["extendPath", contour, box3d, polygonal] {
+    for tool in ["extendPath", contour, box3d] {
         app.run("toolbar.addTool", json!({"tool": tool})).unwrap();
         assert!(slot_of(&app, tool).is_some(), "{tool}");
     }
@@ -814,4 +909,212 @@ fn a_plugin_command_button_works_again_when_the_plugin_returns() {
     assert_eq!(back, Some(false), "its name, and it can run, once it is installed");
     assert!(added.is_ok(), "an installed plug-in's command can be added: {added:?}");
     assert_eq!(gone_again, Some(true), "dimmed again once it is removed");
+}
+
+/// The labels given to the command buttons of the toolbar called Mine.
+fn mine_labels(app: &VectorcraftApp) -> std::collections::BTreeMap<String, String> {
+    crate::custom_toolbars::find(&app.ui, "Mine").unwrap().labels.clone()
+}
+
+/// `toolbar.renameCommand` gives a command button a label of its own, an empty label gives it back
+/// its command's, and a bad call changes nothing. `toolbar.addCommand` takes the label too. A move
+/// and Manage Toolbars' copy keep it, Remove and Reset drop it, and the preferences keep it while a
+/// toolbar saved without labels loads unchanged.
+#[test]
+fn a_command_button_takes_a_label_of_its_own() {
+    let mut app = app();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    let done = app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine", "label": "  Grp "})).unwrap();
+    assert_eq!(done, json!({"command": "object.group", "label": "Grp"}), "spaces at the ends are dropped");
+    let list = app.run("window.toolbar.list", json!({})).unwrap();
+    assert_eq!(list[0]["labels"], json!({"object.group": "Grp"}), "listed");
+    let long = "x".repeat(65);
+    for (p, why) in [
+        (json!({"command": "object.group", "toolbar": "Mine", "label": long}), "a label past the limit"),
+        (json!({"command": "object.group", "toolbar": "Mine", "label": 3}), "a label that is not text"),
+        (json!({"command": "object.ungroup", "toolbar": "Mine", "label": "U"}), "a button the toolbar does not have"),
+        (json!({"command": "object.group", "label": "G"}), "no toolbar"),
+        (json!({"toolbar": "Mine", "label": "G"}), "no command"),
+    ] {
+        assert!(app.run("toolbar.renameCommand", p.clone()).is_err(), "{why}: {p}");
+        assert_eq!(mine_labels(&app).get("object.group").map(String::as_str), Some("Grp"), "{why} changes nothing");
+    }
+    for p in [
+        json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": "x".repeat(65)}),
+        json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": false}),
+    ] {
+        assert!(app.run("toolbar.addCommand", p.clone()).is_err(), "{p}");
+        assert_eq!(mine_commands(&app), ["object.group"], "a bad label adds nothing: {p}");
+    }
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine", "at": 0, "label": "Tidy"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine", "at": 0})).unwrap();
+    assert_eq!(mine_commands(&app), ["object.group", "object.path.cleanUp"]);
+    let both =
+        std::collections::BTreeMap::from([("object.group".to_string(), "Grp".to_string()), ("object.path.cleanUp".to_string(), "Tidy".to_string())]);
+    assert_eq!(mine_labels(&app), both, "a move keeps the label");
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": "Clear"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": ""})).unwrap();
+    assert!(!mine_labels(&app).contains_key("object.path.cleanUp"), "an empty label on addCommand gives back the command's");
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": "Tidy"})).unwrap();
+    assert_eq!(mine_labels(&app), both);
+    // Kept with the preferences; an older toolbar without labels loads with none.
+    let kept = app.ui.custom_toolbars.clone();
+    let prefs: crate::state::UiState = serde_json::from_slice(&serde_json::to_vec(&app.ui).unwrap()).unwrap();
+    assert_eq!(prefs.sanitized().custom_toolbars, kept, "kept with the preferences");
+    let mut old = serde_json::to_value(&kept[0]).unwrap();
+    old.as_object_mut().unwrap().remove("labels");
+    let old: crate::state::CustomToolbar = serde_json::from_value(old).unwrap();
+    assert!(old.labels.is_empty() && old.commands == kept[0].commands, "an older toolbar loads with its buttons and no labels");
+    let copy = app.run("window.toolbar.duplicate", json!({"name": "Mine"})).unwrap();
+    let copy = copy["toolbar"].as_str().unwrap().to_string();
+    assert_eq!(crate::custom_toolbars::find(&app.ui, &copy).unwrap().labels, both, "the copy has them");
+    // An empty label gives back the command's own.
+    let done = app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine", "label": " "})).unwrap();
+    assert_eq!(done, json!({"command": "object.group", "label": null}));
+    assert!(!mine_labels(&app).contains_key("object.group"));
+    // Removing the button drops its label, so adding it again shows the command's label.
+    app.run("toolbar.removeCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine"})).unwrap();
+    assert!(mine_labels(&app).is_empty(), "removed with its button");
+    app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine", "label": "G"})).unwrap();
+    app.run("toolbar.reset", json!({"toolbar": "Mine"})).unwrap();
+    assert!(mine_labels(&app).is_empty(), "Reset drops the labels");
+    assert_eq!(crate::custom_toolbars::find(&app.ui, &copy).unwrap().labels, both, "the copy keeps its own");
+}
+
+/// Loading drops the spaces at a label's ends, and drops a label whose button the toolbar does not
+/// have, one past the limit and an empty one.
+#[test]
+fn labels_load_sanitized() {
+    let mut app = app();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.ungroup", "toolbar": "Mine"})).unwrap();
+    let bar = crate::custom_toolbars::find_mut(&mut app.ui, "Mine").unwrap();
+    bar.labels.insert("object.group".into(), " Grp ".into());
+    bar.labels.insert("object.ungroup".into(), "x".repeat(65));
+    bar.labels.insert("object.path.cleanUp".into(), "Tidy".into());
+    bar.commands.push("edit.selectAll".into());
+    bar.labels.insert("edit.selectAll".into(), String::new());
+    let loaded = app.ui.clone().sanitized();
+    let bar = loaded.custom_toolbars.iter().find(|b| b.name == "Mine").unwrap();
+    assert_eq!(bar.labels, std::collections::BTreeMap::from([("object.group".to_string(), "Grp".to_string())]));
+}
+
+/// A button with a label of its own shows that label, and a screen reader says the label and then
+/// the command's name.
+/// Control characters and characters that change the text's direction show as escapes.
+#[test]
+fn a_renamed_button_shows_its_label_and_keeps_the_command_name() {
+    let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), Default::default());
+    let ctx = ctx();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine", "label": "Grp"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.ungroup", "toolbar": "Mine", "label": "a\u{202E}b"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine"})).unwrap();
+    let text = |app: &mut VectorcraftApp, id: &str| in_pass(app, &ctx, |app, ui| crate::palette::button_text(app, ui, id)).expect("the result");
+    let texts = |app: &mut VectorcraftApp| in_pass(app, &ctx, |app, ui| crate::custom_toolbars::button_texts(app, ui, "Mine"));
+    let group = text(&mut app, "object.group");
+    let shown = texts(&mut app);
+    let (label, said) = &shown[0];
+    assert_eq!(label, "Grp");
+    assert!(said.starts_with("Grp") && said.contains(&group.name), "the screen reader says the label, then the name: {said}");
+    assert!(!shown[1].0.contains('\u{202E}') && shown[1].0.contains("202E"), "escaped: {:?}", shown[1].0);
+    assert_eq!(shown[2].0, text(&mut app, "object.path.cleanUp").label, "no label: the command's");
+    // Drawn on the toolbar, and named so in the screen-reader tree.
+    assert!(mine_button(&mut app, &ctx, 0.0, said).is_some(), "the tree names it {said}");
+    assert!(mine_button(&mut app, &ctx, 0.2, &group.label).is_none(), "and not by the command's label");
+    // A label that is the command's own label is said once; escapes do not cut a label short.
+    app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine", "label": group.label.clone()})).unwrap();
+    let escaped = format!("{}{}", "\u{202E}".repeat(20), "y".repeat(44));
+    app.run("toolbar.renameCommand", json!({"command": "object.ungroup", "toolbar": "Mine", "label": escaped})).unwrap();
+    let texts = texts(&mut app);
+    assert_eq!(texts[0].1, group.label, "said once");
+    assert!(texts[1].0.ends_with(&"y".repeat(44)) && !texts[1].0.contains('…'), "not cut: {:?}", texts[1].0);
+}
+
+/// Rename Button… in a command button's context menu opens the Rename Button dialog.
+#[test]
+fn rename_button_in_the_context_menu_opens_its_dialog() {
+    let mut app = crate::testing::windowed(app());
+    let ctx = app.ui_ctx.clone().expect("a window");
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    let group = in_pass(&mut app, &ctx, |app, ui| crate::palette::button_text(app, ui, "object.group")).expect("Group's result").label;
+    let (at, _) = mine_button(&mut app, &ctx, 0.0, &group).expect("the button");
+    let at = at.center();
+    let secondary = |pressed| Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), secondary(true)]);
+    frame(&mut app, &ctx, 1.05, vec![secondary(false)]);
+    let shown = settle(&mut app, &ctx, 1.1);
+    let item = named(&shown, "Rename Button…");
+    assert_eq!(item.len(), 1, "Rename Button… in the context menu");
+    click(&mut app, &ctx, 2.0, item[0].center());
+    assert_eq!(crate::tests::picks::open_dialogs(&app).len(), 1, "the dialog opens");
+}
+
+/// The Rename Button dialog shows the button's label (empty: the command's own), and OK gives the
+/// button the label typed. A label past the limit is refused and the dialog stays open, and Cancel
+/// changes nothing. An OK after switching workspaces is refused, so it cannot rename a button of the
+/// same name on a toolbar of the same name in the workspace switched to.
+#[test]
+fn the_rename_button_dialog_renames_the_button() {
+    use crate::tests::panel_harness::Panel;
+    use crate::tests::picks::open_dialogs;
+    use egui::{Key, Modifiers};
+
+    fn type_label(panel: &mut Panel, label: &str) {
+        panel.click("Label");
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text(label);
+        panel.key(Key::Tab, Modifiers::NONE);
+    }
+    let rename = json!({"command": "object.group", "toolbar": "Mine"});
+
+    let mut panel = Panel::new(crate::testing::windowed(app()), crate::tests::picks::dialogs);
+    panel.room(egui::vec2(800.0, 600.0));
+    panel.app().run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    panel.app().run("toolbar.addCommand", rename.clone()).unwrap();
+    assert!(panel.app().run("toolbar.renameCommand", json!({"command": "object.ungroup", "toolbar": "Mine"})).is_err(), "no such button");
+    assert!(open_dialogs(&panel.app()).is_empty(), "and no dialog");
+    let opened = panel.app().run("toolbar.renameCommand", rename.clone()).unwrap();
+    assert_eq!(opened, Value::Null);
+    panel.frame();
+    assert_eq!(panel.value("Label").as_deref(), Some(""), "empty while the button shows its command's label");
+    type_label(&mut panel, "Grp");
+    panel.click("OK");
+    panel.frame();
+    assert!(open_dialogs(&panel.app()).is_empty(), "OK closes it");
+    assert_eq!(mine_labels(&panel.app()).get("object.group").map(String::as_str), Some("Grp"));
+
+    panel.app().run("toolbar.renameCommand", rename.clone()).unwrap();
+    panel.frame();
+    assert_eq!(panel.value("Label").as_deref(), Some("Grp"), "opened again, it shows the label");
+    type_label(&mut panel, &"x".repeat(65));
+    panel.click("OK");
+    panel.frame();
+    assert_eq!(open_dialogs(&panel.app()).len(), 1, "a label past the limit keeps the dialog open");
+    assert_eq!(mine_labels(&panel.app()).get("object.group").map(String::as_str), Some("Grp"), "unchanged");
+    type_label(&mut panel, "Other");
+    panel.click("Cancel");
+    panel.frame();
+    assert!(open_dialogs(&panel.app()).is_empty());
+    assert_eq!(mine_labels(&panel.app()).get("object.group").map(String::as_str), Some("Grp"), "Cancel changes nothing");
+
+    // Drawing starts with a copy of Mine, so both workspaces have Mine with a Group button.
+    panel.app().run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine", "label": ""})).unwrap();
+    panel.app().run("window.workspace.new", json!({"name": "Drawing"})).unwrap();
+    panel.app().run("toolbar.renameCommand", rename.clone()).unwrap();
+    panel.frame();
+    panel.app().run("window.workspace", json!({"name": "Essentials"})).unwrap();
+    type_label(&mut panel, "Grp");
+    panel.click("OK");
+    panel.frame();
+    assert_eq!(open_dialogs(&panel.app()).len(), 1, "an OK after switching workspaces is refused");
+    assert!(mine_labels(&panel.app()).is_empty(), "Essentials' Mine keeps its command's label");
+    panel.click("Cancel");
+    panel.frame();
+    panel.app().run("window.workspace", json!({"name": "Drawing"})).unwrap();
+    assert!(mine_labels(&panel.app()).is_empty(), "and so does Drawing's");
 }

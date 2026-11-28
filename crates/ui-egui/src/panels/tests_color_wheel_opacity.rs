@@ -242,6 +242,84 @@ fn an_opacity_edit_keeps_the_hue_picked_for_a_white_stop() {
     assert_eq!(p.number("Hue"), Some(120.0), "the strip keeps the hue after the opacity edit");
 }
 
+/// The OKLCH hue picked last for a white gradient stop stays on the OKLCH Hue row after the row
+/// sets the stop's opacity.
+#[test]
+fn an_opacity_edit_keeps_the_oklch_hue_picked_for_a_white_stop() {
+    let mut app = app();
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.setFill", json!({"gradient": {"stops": stops, "start": [10, 35], "end": [60, 35]}})).unwrap();
+    app.select_tool("gradient");
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
+    let mut p = Panel::new(app);
+    p.fx.room(egui::vec2(260.0, 480.0)).settle();
+    p.set("Hue", 120.0);
+    assert_eq!(p.number("Hue"), Some(120.0), "the Hue row shows the hue picked for white");
+    act(&mut p, AccessActionKind::SetValue(30.0));
+    let Paint::Gradient(g) = crate::panels::current_paints(&p.app()).0 else { panic!("still a gradient") };
+    assert!((g.gradient.stops[0].opacity - 0.3).abs() < 1e-6, "{:?}", g.gradient.stops);
+    assert_eq!(p.number("Hue"), Some(120.0), "the Hue row keeps the hue after the opacity edit");
+}
+
+/// A screen reader's SetValue for the Opacity slider and one for the node named `label`, in one
+/// frame.
+fn set_both(p: &mut Panel, opacity: f64, (label, value): (&str, f64)) {
+    use egui::accesskit::{Action, ActionData, ActionRequest, NodeId, TreeId};
+    let set = |t: &Target, v: f64| {
+        let target_node = NodeId(t.node.raw());
+        egui::Event::AccessKitActionRequest(ActionRequest {
+            action: Action::SetValue,
+            target_tree: TreeId::ROOT,
+            target_node,
+            data: Some(ActionData::NumericValue(v)),
+        })
+    };
+    let events = vec![set(&slider(p), opacity), set(&p.node(label), value)];
+    p.fx.frame(events).idle(2);
+}
+
+/// A gradient stop with stops red and blue, the first selected.
+fn stop_app() -> VectorcraftApp {
+    let mut app = app();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.setFill", json!({"gradient": {"stops": stops, "start": [10, 35], "end": [60, 35]}})).unwrap();
+    app.select_tool("gradient");
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    app
+}
+
+/// The first stop of the fill's gradient.
+fn first_stop(p: &Panel) -> vectorcraft_color::GradientStop {
+    let Paint::Gradient(g) = crate::panels::current_paints(&p.app()).0 else { panic!("still a gradient") };
+    g.gradient.stops[0].clone()
+}
+
+/// An opacity edit and a pick on the box's hue strip in one frame: the stop keeps both.
+#[test]
+fn an_opacity_edit_and_a_hue_pick_in_one_frame_keep_both() {
+    let mut app = stop_app();
+    app.run("ui.colorWheel", json!({"view": "box", "channel": "hue"})).unwrap();
+    let mut p = Panel::new(app);
+    set_both(&mut p, 30.0, ("Hue", 120.0));
+    let stop = first_stop(&p);
+    assert!((stop.opacity - 0.3).abs() < 1e-6, "the stop keeps the opacity: {stop:?}");
+    assert_ne!(stop.color.to_hex(), "#ff0000", "the stop takes the pick: {stop:?}");
+}
+
+/// An opacity edit and an OKLCH Hue edit in one frame: the stop keeps both.
+#[test]
+fn an_opacity_edit_and_an_oklch_edit_in_one_frame_keep_both() {
+    let mut app = stop_app();
+    app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
+    let mut p = Panel::new(app);
+    p.fx.room(egui::vec2(260.0, 480.0)).settle();
+    set_both(&mut p, 30.0, ("Hue", 140.0));
+    let stop = first_stop(&p);
+    assert!((stop.opacity - 0.3).abs() < 1e-6, "the stop keeps the opacity: {stop:?}");
+    assert_ne!(stop.color.to_hex(), "#ff0000", "the stop takes the edit: {stop:?}");
+}
+
 /// A drag across the slider previews and ends as one undo step named Opacity.
 #[test]
 fn a_drag_is_one_undo_step() {

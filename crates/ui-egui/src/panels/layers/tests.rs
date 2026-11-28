@@ -590,7 +590,8 @@ fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place()
         let id = app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
         let dst = app.run("layer.new", json!({"name": "Destination"})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [id]})).unwrap();
-        (app.session.active().unwrap().uid, NodeId(id), source, NodeId(dst))
+        let st = app.session.active().unwrap();
+        ((st.uid, st.reverts), NodeId(id), source, NodeId(dst))
     };
     let (first_doc, first, _, _) = setup(10);
     let (second_doc, second, source, destination) = setup(60);
@@ -603,7 +604,11 @@ fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place()
     panel.drag_hold_role("Select art of Source", Role::BUTTON, to - from);
     assert!(drag::mark(panel.ctx()).is_some(), "the destination accepts artwork in its own document");
     panel.key(Key::F6, Modifiers::COMMAND);
-    assert_eq!(panel.app().session.active().unwrap().uid, second_doc);
+    {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), second_doc);
+    }
     let carried = drag::active::<cells::ArtDrag>(panel.ctx()).expect("the shortcut leaves the drag held");
     assert_eq!((carried.document, carried.ids.as_slice()), (first_doc, &[first][..]));
     assert!(drag::mark(panel.ctx()).is_none(), "the destination rejects the foreign artwork");
@@ -613,6 +618,57 @@ fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place()
 
     panel.drag("Select art of Source", "Destination", Modifiers::NONE);
     assert_eq!(layer(&panel.app()), Some(destination), "a same-document selection-square drag still moves the rectangle");
+}
+
+#[test]
+fn a_selection_square_drop_after_file_revert_leaves_the_restored_artwork_in_place() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::Modifiers;
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let source = app.session.active().unwrap().doc.layers[0].id;
+    name_row(&mut app, source, "Source");
+    let rect = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap());
+    let destination = NodeId(app.run("layer.new", json!({"name": "Destination"})).unwrap()["id"].as_u64().unwrap());
+    let folder = vectorcraft_testkit::TempDir::new("layers-art-drag-revert");
+    let path = folder.join("drawing.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    app.run("shape.rectangle", json!({"x": 120, "y": 30, "width": 30, "height": 30})).unwrap();
+    app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+
+    let mut panel = Panel::new(app, show);
+    let from = panel.rect_role("Select art of Source", Role::BUTTON).center();
+    let to = panel.rect("Destination").center();
+    panel.drag_hold_role("Select art of Source", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "the destination accepts the selected artwork before the revert");
+    let opening = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    panel.frame();
+    {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+    }
+    assert!(drag::active::<cells::ArtDrag>(panel.ctx()).is_some(), "the revert leaves the drag held");
+    assert!(drag::mark(panel.ctx()).is_none(), "the destination rejects artwork carried from before the revert");
+    panel.release();
+    let layer = |app: &VectorcraftApp| app.session.active().unwrap().doc.layer_of(rect);
+    assert_eq!(layer(&panel.app()), Some(source), "the restored rectangle with the same ID has not moved");
+
+    panel.app().run("select.set", json!({"ids": [rect.0]})).unwrap();
+    panel.frame();
+    panel.drag("Select art of Source", "Destination", Modifiers::NONE);
+    assert_eq!(layer(&panel.app()), Some(destination), "a selection-square drag started after the revert still moves the rectangle");
 }
 
 /// The target and the selected objects, sorted.
@@ -873,4 +929,122 @@ fn full_layers_are_the_layers_with_all_their_art_selected() {
             .collect();
         assert_eq!(rows::full_layers(&doc, &sel), want, "selection {bits:b}");
     }
+}
+
+/// A row's menu ends with a Plug-ins submenu while a plug-in lists commands in the Layers panel's
+/// context menu (`menu.context`): a submenu named after the plug-in holding those commands, each
+/// enabled while its `when` holds for the rows the menu acts on. A pick runs the command on that
+/// row's object, whatever the selection, as one undo step.
+#[test]
+fn row_menus_list_plugin_commands() {
+    use craft::keymap::CommandRef;
+    use craft::layers::ui::panel::MenuTarget;
+    use craft::ui::menu::MenuRow;
+    use vectorcraft_plugins::wat::{Given, when_given};
+    let (mut app, layer, [a, b]) = two_rects();
+    let id = "test.layers.context";
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Row Tools","api":2,"version":"1","kind":"filter","commands":[
+        {{"id":"one","label":"One","menu":{{"context":[{{"menu":"layers","when":"oneObject"}}]}}}},
+        {{"id":"canvas","label":"Canvas","menu":{{"context":[{{"menu":"canvas"}}]}}}}]}}"#
+    );
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    let module = wat::parse_str(when_given(&manifest, Given::Input, r#""name":"Target""#, triangle)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    app.run("layer.setProps", json!({"ids": [a.0], "name": "Target"})).unwrap();
+    app.run("select.set", json!({"ids": [b.0]})).unwrap();
+    // The Plug-ins submenu of the menu on `row`: (plug-in, [(label, command, params, enabled)]).
+    type Entries = Vec<(String, String, serde_json::Value, bool)>;
+    let plugins = |app: &VectorcraftApp, row: NodeId| -> Vec<(String, Entries)> {
+        let tree = DocLayers::new(app, app.session.active().unwrap());
+        let menu = controls::row_menu(&tree, &MenuTarget::new(Some(layer_key(row))));
+        let groups = menu.iter().find_map(|r| match r {
+            MenuRow::Submenu(label, groups) if label.as_str() == tl!("Plug-ins") => Some(groups.clone()),
+            _ => None,
+        });
+        let entry = |r: &MenuRow<String>| {
+            let MenuRow::Entry(e) = r else { panic!("a plug-in's submenu holds entries only") };
+            let c = CommandRef::parse_key(e.value().expect("an entry runs a command")).expect("a command key");
+            (e.label().as_str().to_string(), c.id.to_string(), c.params.clone(), e.is_enabled())
+        };
+        let group = |r: &MenuRow<String>| {
+            let MenuRow::Submenu(name, entries) = r else { panic!("a plug-in's group is a submenu") };
+            (name.as_str().to_string(), entries.iter().map(entry).collect())
+        };
+        groups.unwrap_or_default().iter().map(group).collect()
+    };
+    let one = vectorcraft_engine::cmd::plugin::command_id(id, "one");
+    assert_eq!(plugins(&app, a), vec![("Row Tools".to_string(), vec![("One".to_string(), one.clone(), json!({"ids": [a.0]}), true)])]);
+    assert!(!plugins(&app, layer)[0].1[0].3, "a layer row is not one object");
+
+    let undo = undo_len(&app);
+    feed(&mut app, vec![LayersEvent::menu(MenuTarget::new(Some(layer_key(a))), CommandRef::with_params(&one, json!({"ids": [a.0]})).key())]);
+    let st = app.session.active().unwrap();
+    assert_eq!((undo_len(&app), st.history.undo.last().map(|s| s.label.as_str())), (undo + 1, Some("One")));
+    assert!(st.doc.node(a).is_none() && st.doc.node(b).is_some(), "the plug-in was given the row's object, not the selection");
+
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    assert!(plugins(&app, b).is_empty(), "removed: no Plug-ins submenu");
+}
+
+/// A target circle's appearance held across File › Revert and dropped on another row's circle
+/// leaves the restored objects with the same IDs as they were; a drag started after the revert
+/// still moves the appearance.
+#[test]
+fn a_target_circle_drop_after_file_revert_leaves_the_restored_appearance_in_place() {
+    use crate::panel_drag::PanelDrag;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::Modifiers;
+
+    let (mut app, _, [a, b]) = two_rects();
+    name_row(&mut app, a, "A");
+    name_row(&mut app, b, "B");
+    app.run("paint.setFill", json!({"color": "#ff0000", "ids": [a.0]})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff", "ids": [b.0]})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let folder = vectorcraft_testkit::TempDir::new("layers-appearance-drag-revert");
+    let path = folder.join("drawing.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    let fill = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().appearance.fill_paint();
+    let (red, blue) = (fill(&app, a), fill(&app, b));
+    assert_ne!(red, blue);
+    // An edit that leaves the rows where they are, so the revert has changes to discard.
+    app.run("paint.setFill", json!({"color": "#00ff00", "ids": [b.0]})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+
+    let mut panel = Panel::new(app, show);
+    let from = panel.rect_role("Target A", Role::BUTTON).center();
+    let to = panel.rect_role("Target B", Role::BUTTON).center();
+    panel.drag_hold_role("Target A", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "the other row's circle takes the appearance before the revert");
+    let opening = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    panel.frame();
+    let history = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+        st.history.undo.len()
+    };
+    let carried = drag::active::<PanelDrag>(panel.ctx());
+    assert!(matches!(carried.as_deref(), Some(PanelDrag::Appearance { source, .. }) if *source == a), "the revert leaves the drag held");
+    assert!(drag::mark(panel.ctx()).is_none(), "the circle refuses an appearance carried from before the revert");
+    panel.release();
+    {
+        let app = panel.app();
+        assert_eq!((fill(&app, a), fill(&app, b)), (red.clone(), blue.clone()), "the restored objects with the same IDs keep their looks");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), history, "the stale drop makes no edit");
+    }
+
+    panel.drag("Target A", "Target B", Modifiers::NONE);
+    assert_eq!(fill(&panel.app(), b), red, "a target circle drag started after the revert still moves the appearance");
 }

@@ -5,10 +5,10 @@ use craft::behavior::IconId;
 use craft::keymap::CommandRef;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, LabelScheme, Props as _, Show as _, ShowContainer as _, Sizing, Trigger, clicked};
+use craft::ui::contract::{Bind, Gap, LabelScheme, Props as _, Show as _, ShowContainer as _, Sizing, Trigger, clicked};
 use craft::ui::display::{Elide, Shade, Text};
-use craft::ui::form::Field;
-use craft::ui::layout_components::Row;
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::menu::Menu;
 use craft::ui::popover::Popover;
 use craft::ui::style::TypeRole;
@@ -194,27 +194,40 @@ pub(crate) fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     let caption = |ui: &mut Ui, text: &'static str| {
         Text::new(text).role(TypeRole::Caption).shade(Shade::Muted).show(ui);
     };
-    caption(ui, tl!("Match"));
-    if let Some(on) = option_check(ui, tl!("Appearance"), o.appearance) {
-        set(app, json!({ "appearance": on }));
+    let results = global_edit_results(global_edit_count(app));
+    // Each group is its caption over its options a row gap apart; the groups and the Results line are a stack gap
+    // apart. A click is kept and run after the stack returns.
+    let mut changes = Vec::new();
+    Stack::new().gap(Gap::Stack).show(ui, |ui, _| {
+        FieldGroup::new(tl!("Match")).show(ui, |ui, _| {
+            caption(ui, tl!("Match"));
+            if let Some(on) = option_check(ui, tl!("Appearance"), o.appearance) {
+                changes.push(json!({ "appearance": on }));
+            }
+            if let Some(on) = option_check(ui, tl!("Size"), o.size) {
+                changes.push(json!({ "size": on }));
+            }
+        });
+        FieldGroup::new(tl!("On Artboards")).show(ui, |ui, _| {
+            caption(ui, tl!("On Artboards"));
+            if let Some(all) = option_check(ui, tl!("All Artboards"), o.artboards.is_none()) {
+                changes.push(json!({ "artboards": if all { "all" } else { "1" } }));
+            }
+            if let Some(range) = &o.artboards {
+                let typed = Field::new(tl!("Range:")).show(ui, |ui, _| TextField::new(tl!("Range:"), Bind::given(range.clone())).show(ui)).inner;
+                if let Some(range) = typed.and_then(|t| t.events.committed().cloned()) {
+                    changes.push(json!({ "artboards": range }));
+                }
+            }
+            if let Some(on) = option_check(ui, tl!("Include Objects On Canvas"), o.include_canvas) {
+                changes.push(json!({ "includeCanvas": on }));
+            }
+        });
+        Text::new(results.clone()).shade(Shade::Muted).show(ui);
+    });
+    for p in changes {
+        set(app, p);
     }
-    if let Some(on) = option_check(ui, tl!("Size"), o.size) {
-        set(app, json!({ "size": on }));
-    }
-    caption(ui, tl!("On Artboards"));
-    if let Some(all) = option_check(ui, tl!("All Artboards"), o.artboards.is_none()) {
-        set(app, json!({ "artboards": if all { "all" } else { "1" } }));
-    }
-    if let Some(range) = &o.artboards {
-        let typed = Field::new(tl!("Range:")).show(ui, |ui, _| TextField::new(tl!("Range:"), Bind::given(range.clone())).show(ui)).inner;
-        if let Some(range) = typed.and_then(|t| t.events.committed().cloned()) {
-            set(app, json!({ "artboards": range }));
-        }
-    }
-    if let Some(on) = option_check(ui, tl!("Include Objects On Canvas"), o.include_canvas) {
-        set(app, json!({ "includeCanvas": on }));
-    }
-    Text::new(global_edit_results(global_edit_count(app))).shade(Shade::Muted).show(ui);
 }
 
 /// The options' line with how many objects Start Global Edit would take, in the interface language.

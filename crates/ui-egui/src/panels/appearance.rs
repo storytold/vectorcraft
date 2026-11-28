@@ -806,7 +806,9 @@ fn object_row<'r>(cx: &'r RowCx<'_>) -> ListRow<'r> {
     };
     let row = row.thumb(ThumbSize::Small, move |painter, rect| paint_preview::paint_rect(painter, rect, &fill));
     match cx.node.filter(|_| cx.mix.is_none()).zip(cx.app.session.active()) {
-        Some((n, st)) => row.part_drag(RowDragSpot::Thumb(ThumbTarget::First), PanelDrag::Appearance { document: st.uid, source: n.id }),
+        Some((n, st)) => {
+            row.part_drag(RowDragSpot::Thumb(ThumbTarget::First), PanelDrag::Appearance { document: st.uid, reverts: st.reverts, source: n.id })
+        }
         None => row,
     }
 }

@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::cms::Model;
+use vectorcraft_color::css;
 use vectorcraft_color::harmony::{self, Guide, GuideOptions, Harmony};
 use vectorcraft_color::wcag::{self, Category};
 use vectorcraft_color::{BlendMode, Color, Paint, keep_model};
@@ -137,6 +138,15 @@ pub fn specs() -> Vec<CommandSpec> {
             harmony
         ),
         cmd!(
+            query "color.parse",
+            "Parse Color",
+            [],
+            None,
+            "{text: a hex color or a CSS color (a hex color is #rgb, #rgba, #rrggbb or #rrggbbaa, and the # may be left out; a CSS color is rgb() or rgba() or hsl() or hsla(), space-separated with an optional / alpha or in the comma-separated legacy form, or oklch(), as CSS Color 4 defines them: https://www.w3.org/TR/css-color-4/#hex-notation, https://www.w3.org/TR/css-color-4/#rgb-functions, https://www.w3.org/TR/css-color-4/#the-hsl-notation, https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch; this is a subset of CSS: a function's arguments are literal numbers, percentages, angles (deg, grad, rad or turn) and none, so calc(), var(), color-mix() and every other function, named colors and the other color spaces are errors; at most 48 characters, the spaces, tabs, line breaks and form feeds around it not counted)} the color the text gives → {color: an RGB color, the numbers written for a hex color, rgb() or hsl() and the sRGB of an oklch() color, whose chroma is lowered to fit sRGB; hex: \"#rrggbb\" of it; opacity: 0..100, the text's alpha, or null when the text gives none (CSS reads that as 100)}; values are clamped where CSS clamps them when it parses them, and an hsl() channel outside 0..255 is clipped; an hsl() color whose saturation and lightness are so large that a channel overflows to an infinity is an error, as is any other text, and so is oklch() while the working RGB space is not sRGB",
+            always,
+            parse_color
+        ),
+        cmd!(
             query "color.contrast",
             "Contrast",
             [],
@@ -146,6 +156,21 @@ pub fn specs() -> Vec<CommandSpec> {
             contrast
         ),
     ]
+}
+
+fn parse_color(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "color.parse";
+    let text = text_param(p, "text", C)?.ok_or_else(|| bad(C, "missing `text`"))?;
+    let parsed = css::parse(text).ok_or_else(|| {
+        bad(C, "`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters")
+    })?;
+    if parsed.space == css::Space::Oklch && !vectorcraft_color::cms::active().rgb_is_srgb() {
+        return Err(bad(C, "OKLCH needs sRGB as the working RGB space"));
+    }
+    let [r, g, b] = parsed.rgb;
+    // As paint.proxies answers an opacity: a percentage to two places.
+    let opacity = parsed.alpha.map(|a| (f64::from(a) * 10_000.0).round() / 100.0);
+    Ok(json!({ "color": Color::rgb(r, g, b), "hex": css::hex_of(parsed.rgb), "opacity": opacity }))
 }
 
 /// The RGB inverse of `c`, expressed in `c`'s colour model.

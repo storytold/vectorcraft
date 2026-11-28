@@ -2691,6 +2691,9 @@ file-filter	Templates	Modelli
 	Only Web Colors	Solo colori web
 	Opacity	Opacità
 	Show Opacity	Mostra opacità
+	Show Hex Field	Mostra campo hex
+	Hex or CSS color	Colore hex o CSS
+	Parse Color	Analizza colore
 	Opacity & Mask Define Knockout Shape	Opacità e maschera definiscono la forma di foratura
 	Opacity Mask	Maschera di opacità
 	Opacity Mask Info	Informazioni maschera di opacità
@@ -5294,6 +5297,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve essere hue, saturation, brightness, red, green o blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` deve essere none, oklch o hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` deve essere un colore hex (#rgb, #rgba, #rrggbb o #rrggbbaa) o un colore CSS rgb(), hsl() o oklch() di al massimo 48 caratteri
 @msg	`{k}` must be [x, y]	`{k}` deve essere [x, y]
 @msg	`{name}` has no options	`{name}` non ha opzioni
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` è un'area di lavoro integrata; scegli un altro nome
@@ -8804,7 +8808,9 @@ breakText	Glyphs	Glifi
 @msg	missing `picks`	`picks` mancante
 @msg	missing `word`	`word` mancante
 @msg	must be an object with `kind` and `value`	deve essere un oggetto con `kind` e `value`
-@msg	must have `kind` alert, confirm or prompt	deve avere `kind` alert, confirm o prompt
+@msg	must have `kind` alert, confirm, prompt or window	deve avere `kind` alert, confirm, prompt o window
+@msg	is a window's answer, whose `value` must be a list of steps	è la risposta di una finestra, il cui `value` deve essere un elenco di passaggi
+@msg	has a step {i} that is not a valid click, change or close	ha un passaggio {i} che non è un clic, una modifica o una chiusura validi
 @msg	must have exactly `kind` and `value`	deve avere esattamente `kind` e `value`
 @msg	needs a closing quote after the name	richiede una virgoletta di chiusura dopo il nome
 @msg	needs a name	richiede un nome

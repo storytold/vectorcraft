@@ -1721,8 +1721,7 @@ mod tests {
                 look(&app) != before
             })
         };
-        // `layer.setProps {}` and `path.moveAnchors {}` record an undo step that changes nothing.
-        let changed: Vec<&str> = ids.iter().copied().filter(|id| !["layer.setProps", "path.moveAnchors"].contains(id) && acts(id)).collect();
+        let changed: Vec<&str> = ids.iter().copied().filter(|id| acts(id)).collect();
         assert!(changed.is_empty(), "a pick of these does something: {changed:?}");
         for c in &dropped {
             assert!(c.shortcut.is_none() && crate::shortcut_editor::menu_bar_path(c.id).is_none(), "{}", c.id);

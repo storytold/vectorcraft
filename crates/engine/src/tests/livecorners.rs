@@ -6,8 +6,8 @@ use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{AnchorRef, LiveCorners, LiveShape, NodeKind};
-use vectorcraft_geom::Affine;
 use vectorcraft_geom::shapes::CornerKind;
+use vectorcraft_geom::{Affine, Point};
 
 use crate::*;
 
@@ -885,6 +885,164 @@ fn a_line_takes_its_length_and_angle() {
     let n = steps(&s);
     run(&mut s, json!({"ids": [rect.0], "lineLength": 30, "lineAngle": 45}));
     assert_eq!(steps(&s), n);
+}
+
+/// Each live shape edit that moves, turns or scales the shape (Rectangle, Ellipse and Polygon
+/// Angle, Polygon Radius, Side Length, Make Sides Equal, Line Length and Line Angle) takes a linked
+/// opacity mask and a placed gradient along, so they keep their place in the shape's own frame; a
+/// new side count or pie leaves them where they are. Scale Strokes & Effects comes from `strokes`,
+/// and the bounding box keeps its angle.
+#[test]
+fn shape_edits_take_a_linked_mask_and_placed_gradient_along() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let add = |s: &mut Session, cmd: &str, p: Value| NodeId(s.execute(cmd, &p).unwrap()["id"].as_u64().unwrap());
+    // Each shape gets a placed linear gradient fill and a linked opacity mask off its center.
+    let dress = |s: &mut Session, id: NodeId, start: [f64; 2], end: [f64; 2], mask: [f64; 2]| {
+        s.execute("paint.setFill", &json!({"ids": [id.0], "gradient": {"kind": "linear"}})).unwrap();
+        s.execute("paint.setGradientGeom", &json!({"ids": [id.0], "start": start, "end": end})).unwrap();
+        let m = s.execute("shape.rectangle", &json!({"x": mask[0], "y": mask[1], "width": 20, "height": 12})).unwrap()["id"].as_u64().unwrap();
+        s.execute("transparency.makeOpacityMask", &json!({"ids": [id.0, m]})).unwrap();
+    };
+    let rect = add(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 60}));
+    dress(&mut s, rect, [20.0, 30.0], [90.0, 50.0], [15.0, 40.0]);
+    let ellipse = add(&mut s, "shape.ellipse", json!({"x": 200, "y": 200, "width": 120, "height": 80}));
+    dress(&mut s, ellipse, [210.0, 240.0], [300.0, 220.0], [270.0, 205.0]);
+    let polygon = add(&mut s, "shape.polygon", json!({"cx": 200, "cy": 100, "radius": 50, "sides": 6}));
+    dress(&mut s, polygon, [170.0, 90.0], [230.0, 120.0], [205.0, 70.0]);
+    let line = add(&mut s, "shape.line", json!({"x1": 100, "y1": 300, "x2": 200, "y2": 300}));
+    dress(&mut s, line, [100.0, 300.0], [200.0, 300.0], [120.0, 290.0]);
+    // The shape's own frame: its untransformed unit box, a polygon's unit circle, or a line from 0 to 1 along x.
+    let frame = |l: &LiveShape| match l {
+        LiveShape::Rectangle { w, h, xf, .. } | LiveShape::Ellipse { w, h, xf, .. } => *xf * Affine::scale_non_uniform(*w, *h),
+        LiveShape::Polygon { radius, xf, .. } => *xf * Affine::scale(*radius),
+        LiveShape::Line { a, b } => {
+            let d = *b - *a;
+            Affine::new([d.x, d.y, -d.y, d.x, a.x, a.y])
+        }
+        l => panic!("{l:?}"),
+    };
+    // The mask art's center and the gradient's start in the shape's frame, the gradient's value at the
+    // frame's origin and its two unit points (a linear gradient's isolines, which a shear keeps but
+    // its end point does not), and the mask art's center in the document.
+    let local = |s: &Session, id: NodeId| {
+        let n = s.doc().unwrap().doc.node(id).unwrap();
+        let to_doc = frame(n.live_shape().unwrap());
+        let to_local = to_doc.inverse();
+        let mask = n.extras().mask.as_deref().unwrap().art.geometric_bounds().unwrap().center();
+        let vectorcraft_color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
+        let geom = g.geom.unwrap();
+        let along = geom.end - geom.start;
+        let t = |x: f64, y: f64| (to_doc * Point::new(x, y) - geom.start).dot(along) / along.hypot2();
+        ([to_local * mask, to_local * geom.start, Point::new(t(0.0, 0.0), t(1.0, 0.0)), Point::new(t(0.0, 1.0), 0.0)], mask)
+    };
+    let edits = [
+        (rect, json!({"rectangleAngle": 30})),
+        (ellipse, json!({"ellipseAngle": 50})),
+        (polygon, json!({"polygonAngle": 20})),
+        (polygon, json!({"polygonRadius": 80})),
+        (polygon, json!({"sideLength": 30})),
+        (polygon, json!({"makeSidesEqual": true})),
+        (line, json!({"lineLength": 50})),
+        (line, json!({"lineAngle": 90})),
+        (line, json!({"lineLength": 140, "lineAngle": 210})),
+    ];
+    // Every edit is checked, and the ones that leave the mask or gradient behind are listed together.
+    let mut left_behind = Vec::new();
+    for (id, edit) in edits {
+        if edit.get("makeSidesEqual").is_some() {
+            // Scaled unevenly and turned first, so Make Sides Equal has a shear and an uneven scale to drop.
+            s.execute("object.scale", &json!({"ids": [polygon.0], "sx": 200, "sy": 100})).unwrap();
+            s.execute("object.rotate", &json!({"ids": [polygon.0], "angle": 30})).unwrap();
+            s.execute("object.scale", &json!({"ids": [polygon.0], "sx": 100, "sy": 150})).unwrap();
+        }
+        let angle = s.doc().unwrap().doc.node(id).unwrap().bbox_angle;
+        let (was, _) = local(&s, id);
+        let mut p = edit.clone();
+        p["ids"] = json!([id.0]);
+        run(&mut s, p);
+        let now = local(&s, id).0;
+        if now.iter().zip(&was).any(|(now, then)| now.distance(*then) >= 1e-9) {
+            left_behind.push(format!("{edit}: {now:?} from {was:?}"));
+        }
+        assert_eq!(s.doc().unwrap().doc.node(id).unwrap().bbox_angle, angle, "{edit}: the bounding box keeps its angle");
+    }
+    assert!(left_behind.is_empty(), "moved off the shape:\n{}", left_behind.join("\n"));
+    // A new side count or pie keeps the shape's place, angle and size: the mask stays where it is.
+    for (id, edit) in [(polygon, json!({"sides": 8})), (ellipse, json!({"pieStart": 30, "pieEnd": 200}))] {
+        let (_, was) = local(&s, id);
+        let mut p = edit.clone();
+        p["ids"] = json!([id.0]);
+        run(&mut s, p);
+        assert_eq!(local(&s, id).1, was, "{edit}");
+    }
+    // With Scale Strokes & Effects off a new radius keeps the stroke's weight; on, the stroke scales with it.
+    let weight = |s: &Session| s.doc().unwrap().doc.node(polygon).unwrap().appearance.stroke_width();
+    s.execute("stroke.set", &json!({"ids": [polygon.0], "weight": 4})).unwrap();
+    run(&mut s, json!({"ids": [polygon.0], "polygonRadius": 160, "strokes": false}));
+    assert!((weight(&s) - 4.0).abs() < 1e-9, "{}", weight(&s));
+    run(&mut s, json!({"ids": [polygon.0], "polygonRadius": 320, "strokes": true}));
+    assert!((weight(&s) - 8.0).abs() < 1e-9, "the stroke scaled with the shape: {}", weight(&s));
+    for bad in [json!({"ids": [polygon.0], "polygonRadius": 50, "strokes": "yes"}), json!({"ids": [polygon.0], "polygonRadius": 50, "patterns": 1})] {
+        assert!(s.execute("object.setLiveShape", &bad).is_err(), "{bad}");
+    }
+    // An object named twice moves once, and a rounded rectangle in its mask keeps its corner radius
+    // with Scale Corners on, as the shape's own corners do.
+    let star = add(&mut s, "shape.polygon", json!({"cx": 300, "cy": 300, "radius": 40, "sides": 5}));
+    s.execute("paint.setFill", &json!({"ids": [star.0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [star.0], "start": [280, 300], "end": [320, 310]})).unwrap();
+    let m = add(&mut s, "shape.rectangle", json!({"x": 290, "y": 280, "width": 30, "height": 20, "radius": 5}));
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [star.0, m.0]})).unwrap();
+    s.prefs.scale_corners = true;
+    let (was, _) = local(&s, star);
+    run(&mut s, json!({"ids": [star.0, star.0], "polygonRadius": 80}));
+    let (now, _) = local(&s, star);
+    assert!(now.iter().zip(&was).all(|(now, then)| now.distance(*then) < 1e-9), "moved once: {now:?} from {was:?}");
+    let n = s.doc().unwrap().doc.node(star).unwrap();
+    let art = &n.extras().mask.as_deref().unwrap().art;
+    let rect = match &art.kind {
+        NodeKind::Group { children, .. } => &children[0],
+        _ => art,
+    };
+    let Some(LiveShape::Rectangle { radii, xf, w, .. }) = rect.live_shape() else { panic!("a live rectangle in the mask") };
+    assert!((w * xf.as_coeffs()[0] - 60.0).abs() < 1e-9, "the mask doubled with the shape: {w}, {xf:?}");
+    assert!((radii[0] * xf.as_coeffs()[0] - 5.0).abs() < 1e-9, "the corner keeps its radius: {radii:?}, {xf:?}");
+}
+
+/// A pixel-aligned line that a new angle carries off the pixel grid snaps back to it, and with
+/// `patterns` on its pattern moves with the snap as well as with the turn; with `patterns` off the
+/// pattern stays where it was.
+#[test]
+fn a_pixel_aligned_line_takes_its_pattern_through_the_snap() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let line = |s: &mut Session, aligned: bool| {
+        let id = NodeId(s.execute("shape.line", &json!({"x1": 0, "y1": 0.5, "x2": 100, "y2": 0.5})).unwrap()["id"].as_u64().unwrap());
+        let n = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap();
+        n.appearance.set_stroke(vectorcraft_color::Paint::Pattern { pattern: "P".into(), xf: Affine::default() });
+        n.extras_mut().pixel_aligned = aligned;
+        id
+    };
+    let node = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().clone();
+    let pattern = |s: &Session, id: NodeId| match node(s, id).appearance.stroke_paint() {
+        vectorcraft_color::Paint::Pattern { xf, .. } => xf,
+        p => panic!("a pattern stroke: {p:?}"),
+    };
+    let origin = |s: &Session, id: NodeId| node(s, id).geometric_bounds().unwrap().origin();
+    for patterns in [true, false] {
+        let (aligned, free) = (line(&mut s, true), line(&mut s, false));
+        run(&mut s, json!({"ids": [aligned.0, free.0], "lineAngle": 90, "patterns": patterns}));
+        let snapped = origin(&s, aligned) - origin(&s, free);
+        assert!(snapped.hypot() > 1e-6, "the aligned line snapped to the grid: {snapped:?}");
+        if patterns {
+            let want = Affine::translate(snapped) * pattern(&s, free);
+            let got = pattern(&s, aligned);
+            let off = got.as_coeffs().iter().zip(want.as_coeffs()).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+            assert!(off < 1e-9, "the pattern moved with the snap: {got:?}, want {want:?}");
+        } else {
+            assert_eq!(pattern(&s, aligned), Affine::default(), "the pattern stays where it was");
+        }
+    }
 }
 
 #[test]
