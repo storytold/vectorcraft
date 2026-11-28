@@ -52,3 +52,6 @@ vectorcraft-testkit = { workspace = true }
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 # Tests: a Group 4 encoder and the T.4 run codes, to write CCITT test images.
 fax = "0.2"
+# The counters vectorcraft-engine's tests turn on, also when this crate is tested without
+# vectorcraft-engine (`cargo xtask ci shard`).
+vectorcraft-eps = { path = ".", features = ["work-count"] }
