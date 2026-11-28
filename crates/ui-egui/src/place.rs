@@ -537,6 +537,19 @@ pub(crate) fn fill_lines(app: &mut VectorcraftApp, files: &[Value], info: &mut V
     }
 }
 
+/// Unit tests: waits until the open Place dialog's lines have been read, and leaves them for
+/// [`fill_lines`].
+#[cfg(test)]
+pub(crate) fn wait_lines(app: &mut VectorcraftApp) {
+    let Some((_, read)) = &mut app.place.reading_lines else { return };
+    let (tx, rx) = std::sync::mpsc::channel();
+    // A read that stopped without lines leaves the new channel closed too.
+    if let Ok(lines) = read.recv() {
+        let _ = tx.send(lines);
+    }
+    *read = rx;
+}
+
 /// One line about `file` for the Place dialog, read at once ([`line`]).
 fn summary(app: &mut VectorcraftApp, file: &Value, units: vectorcraft_doc::Unit) -> String {
     let Some(p) = source(app, file) else { return "not found".into() };
