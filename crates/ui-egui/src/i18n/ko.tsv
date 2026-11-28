@@ -9637,7 +9637,9 @@ breakText	Glyphs	글리프
 @msg	more than {MAX_IMPORT} presets	사전 설정이 {MAX_IMPORT}개보다 많습니다
 @msg	moved must be [[x,y]…]	moved는 [[x,y]…]여야 합니다
 @msg	must be an object with `kind` and `value`	`kind`와 `value`가 있는 개체여야 합니다
-@msg	must have `kind` alert, confirm or prompt	`kind`가 alert, confirm 또는 prompt여야 합니다
+@msg	must have `kind` alert, confirm, prompt or window	`kind`가 alert, confirm, prompt 또는 window여야 합니다
+@msg	is a window's answer, whose `value` must be a list of steps	창의 답이며, `value`는 단계 목록이어야 합니다
+@msg	has a step {i} that is not a valid click, change or close	단계 {i}이(가) 올바른 클릭, 변경 또는 닫기가 아닙니다
 @msg	must have exactly `kind` and `value`	`kind`와 `value`만 있어야 합니다
 @msg	name (a toolbar's name) is required	name(도구 막대 이름)이 필요합니다
 @msg	name (a toolbar's name) must be a string	name(도구 막대 이름)은 문자열이어야 합니다

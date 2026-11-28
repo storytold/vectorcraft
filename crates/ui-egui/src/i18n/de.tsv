@@ -8755,7 +8755,9 @@ breakText	Glyphs	Glyphen
 @msg	missing `picks`	`picks` fehlt
 @msg	missing `word`	`word` fehlt
 @msg	must be an object with `kind` and `value`	muss ein Objekt mit `kind` und `value` sein
-@msg	must have `kind` alert, confirm or prompt	muss `kind` alert, confirm oder prompt haben
+@msg	must have `kind` alert, confirm, prompt or window	muss `kind` alert, confirm, prompt oder window haben
+@msg	is a window's answer, whose `value` must be a list of steps	ist die Antwort auf ein Fenster, deren `value` eine Liste von Schritten sein muss
+@msg	has a step {i} that is not a valid click, change or close	hat einen Schritt {i}, der kein gültiger Klick, keine gültige Änderung und kein gültiges Schließen ist
 @msg	must have exactly `kind` and `value`	muss genau `kind` und `value` haben
 @msg	needs a closing quote after the name	braucht ein schließendes Anführungszeichen nach dem Namen
 @msg	needs a name	braucht einen Namen

@@ -21,6 +21,7 @@ use craft::ui::runtime::env::{Env, Label};
 use craft::ui::text::{NumberField, NumberPick};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::setup::DocSetup;
+use vectorcraft_engine::cmd::textstyles::NORMAL_CHAR;
 
 use super::preview::LivePreview;
 use crate::VectorcraftApp;
@@ -290,9 +291,11 @@ pub(crate) fn tri_state(key: impl Into<String>, label: impl Into<Label>) -> Para
     })
 }
 
-/// The General tab's rows: the style's name and what it sets, or nothing of that while `attrs` is refused.
-pub(crate) fn general_rows(attrs: Result<Map<String, Value>, String>) -> Vec<PropertyRow> {
-    let mut rows = vec![PropertyRow::field(text("name", tl!("Style Name:")))];
+/// The General tab's rows: the style's name and what it sets, or nothing of that while `attrs` is refused. The name
+/// row is disabled when `fixed_name` (a Normal style, which keeps its name).
+pub(crate) fn general_rows(attrs: Result<Map<String, Value>, String>, fixed_name: bool) -> Vec<PropertyRow> {
+    let name = text("name", tl!("Style Name:"));
+    let mut rows = vec![PropertyRow::field(if fixed_name { name.disabled() } else { name })];
     rows.extend(attrs.into_iter().flatten().map(|(key, value)| PropertyRow::value(Label::Empty, super::form::attribute_line(&key, &value))));
     rows
 }
@@ -1020,7 +1023,8 @@ fn opentype_rows() -> Vec<PropertyRow> {
 pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTab> {
     let titles =
         [tl!("General"), tl!("Basic Character Formats"), tl!("Advanced Character Formats"), tl!("Character Color"), tl!("OpenType Features")];
-    let bodies = [general_rows(edited_attrs(fields, opening)), basic_rows(), advanced_rows(), color_rows(opening), opentype_rows()];
+    let general = general_rows(edited_attrs(fields, opening), opening.style == NORMAL_CHAR);
+    let bodies = [general, basic_rows(), advanced_rows(), color_rows(opening), opentype_rows()];
     SECTIONS
         .into_iter()
         .zip(titles)
@@ -1194,8 +1198,13 @@ pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     crate::panels::character::end_typing(app);
     let state = app.session.active().ok_or("no document open")?;
     let (document, doc) = ((state.uid, state.reverts), &state.doc);
-    let def = doc.char_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no character style `{name}`"))?;
-    let opening = Arc::new(Opening::new(name, def.attrs.clone(), &doc.setup, swatch_choices(doc)));
+    // [Normal Character Style] has no definition until it is first redefined: it sets nothing.
+    let attrs = match doc.char_styles.iter().find(|s| s.name == name) {
+        Some(def) => def.attrs.clone(),
+        None if name == NORMAL_CHAR => Map::new(),
+        None => return Err(format!("no character style `{name}`")),
+    };
+    let opening = Arc::new(Opening::new(name, attrs, &doc.setup, swatch_choices(doc)));
     let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening, document };
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(json!({"dialog": KIND}))

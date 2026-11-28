@@ -503,9 +503,18 @@ button is dimmed while that item is. A missing `toolbar` is an error for both an
 command the toolbar has no button for, a tool's id included, is not an error: it answers with the toolbar's command
 buttons unchanged. A command that is no longer installed keeps its button, dimmed, and `toolbar.removeCommand` still
 takes it off.
+`toolbar.renameCommand {command, toolbar, label?}` (Rename Button… in the button's context menu, which opens a
+dialog; without `label` the command opens that dialog and returns null) gives a button a label of its own, and
+`toolbar.addCommand` takes the same optional `label`. The label loses the spaces at its ends and has at most 64
+characters; an empty one, on either command, gives the button its command's label again. The hover text still shows
+the command's name and shortcut, and a screen reader says the label and then the command's name, or only the label
+when it is the command's label or name. A longer label, a
+label that is not text or a button the toolbar does not have is an error and changes nothing. `toolbar.removeCommand`
+and `toolbar.reset` drop a button's label with it.
 `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with it.
-`window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, commands, shown flag,
-two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once docked).
+`window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, commands, labels,
+shown flag, two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once
+docked).
 `window.toolbar.dock {name, side?, order?}` docks a toolbar as a column of the dock along the window's left or right
 edge, and `window.toolbar.float {name, x?, y?}` floats it again; dragging its title bar does the same (see the docking section in `docs/mcp.md`). They are kept with the workspace they were made in:
 switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new

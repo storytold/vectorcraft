@@ -10061,7 +10061,9 @@ swatch	Yellow Green	Verde-amarelado
 @msg	more than {MAX_IMPORT} presets	mais de {MAX_IMPORT} predefinições
 @msg	moved must be [[x,y]…]	moved deve ser [[x,y]…]
 @msg	must be an object with `kind` and `value`	deve ser um objeto com `kind` e `value`
-@msg	must have `kind` alert, confirm or prompt	deve ter `kind` alert, confirm ou prompt
+@msg	must have `kind` alert, confirm, prompt or window	deve ter `kind` alert, confirm, prompt ou window
+@msg	is a window's answer, whose `value` must be a list of steps	é a resposta de uma janela, cujo `value` deve ser uma lista de etapas
+@msg	has a step {i} that is not a valid click, change or close	tem uma etapa {i} que não é um clique, uma alteração nem um fechamento válido
 @msg	must have exactly `kind` and `value`	deve ter exatamente `kind` e `value`
 @msg	name (a toolbar's name) is required	name (o nome de uma barra de ferramentas) é obrigatório
 @msg	name (a toolbar's name) must be a string	name (o nome de uma barra de ferramentas) deve ser uma string

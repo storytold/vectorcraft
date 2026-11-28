@@ -141,7 +141,9 @@
 @msg	is a confirm's answer, whose `value` must be true or false	adalah jawaban confirm, yang `value`-nya harus true atau false
 @msg	is longer than 16 KiB	lebih panjang dari 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	adalah jawaban prompt, yang `value`-nya harus berupa string atau null
-@msg	must have `kind` alert, confirm or prompt	harus memiliki `kind` alert, confirm, atau prompt
+@msg	must have `kind` alert, confirm, prompt or window	harus memiliki `kind` alert, confirm, prompt, atau window
+@msg	is a window's answer, whose `value` must be a list of steps	adalah jawaban jendela, yang `value`-nya harus berupa daftar langkah
+@msg	has a step {i} that is not a valid click, change or close	memiliki langkah {i} yang bukan klik, perubahan, atau penutupan yang valid
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` hanya untuk proses tanpa orang yang dapat ditanya: di aplikasi, pengguna menjawab setiap dialog
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` harus berupa bilangan bulat dari 1 sampai {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` bersarang lebih dari 64 tingkat

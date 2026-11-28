@@ -394,6 +394,11 @@ pub enum DimensionSource {
     /// it is vertical. Versions without this source do not open the file.
     Extent {
         node: NodeId,
+        /// Placed with Use Preview Bounds on: the points are moved out to the outside of the
+        /// strokes the path paints ([`preview_extents`]), the width or height that W and H show.
+        /// Versions without it measure between the outermost points themselves.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        preview: bool,
     },
 }
 
@@ -402,7 +407,7 @@ impl DimensionSource {
         match self {
             Self::Segment { edge } | Self::Arc { edge } => vec![edge.node],
             Self::Angle { first, second } => vec![first.node, second.node],
-            Self::Circle { node } | Self::Extent { node } => vec![*node],
+            Self::Circle { node } | Self::Extent { node, .. } => vec![*node],
             Self::Points { a, b, vertex, free_a, free_b } => [a, b, vertex]
                 .into_iter()
                 .filter_map(|p| p.as_ref().map(|r| r.node))
@@ -425,10 +430,18 @@ impl DimensionSource {
         })
     }
     /// Whether a path it measures differs between `before` and `after`, or is in only one of them.
-    /// A node without a path, or missing from both, counts as changed.
+    /// A node without a path, or missing from both, counts as changed. For a dimension of a whole
+    /// path placed with Use Preview Bounds on, so does a change to the strokes the path paints
+    /// ([`stroked_by`]): their appearance, the node they come from, or which arrowheads they draw
+    /// on it, and the path being made into a guide or released from one.
     pub fn art_changed(&self, before: &Document, after: &Document) -> bool {
+        let strokes = matches!(self, Self::Extent { preview: true, .. });
         self.nodes().into_iter().any(|id| match (before.node(id), after.node(id)) {
-            (Some(old), Some(new)) => old.path_data().is_none() || (!std::ptr::eq(old, new) && old.path_data() != new.path_data()),
+            (Some(old), Some(new)) => {
+                old.path_data().is_none()
+                    || (!std::ptr::eq(old, new) && old.path_data() != new.path_data())
+                    || (strokes && (old.is_guide() != new.is_guide() || stroked_by(before, id) != stroked_by(after, id)))
+            }
             _ => true,
         })
     }
@@ -845,7 +858,9 @@ impl Dimension {
         let (a, b) = (self.a.to_vec2().dot(n), self.b.to_vec2().dot(n));
         let (low, high) = (a.min(b), a.max(b));
         match (doc, &self.source) {
-            (Some(doc), Some(DimensionSource::Extent { node })) => reach(doc, *node, n).map_or((low, high), |(l, h)| (low.min(l), high.max(h))),
+            (Some(doc), Some(DimensionSource::Extent { node, preview })) => {
+                reach(doc, *node, n, *preview).map_or((low, high), |(l, h)| (low.min(l), high.max(h)))
+            }
             _ => (low, high),
         }
     }
@@ -891,8 +906,8 @@ impl Dimension {
             };
         }
         next.orientation = orientation;
-        if let Some(DimensionSource::Extent { node }) = &next.source {
-            (next.a, next.b) = extent(doc, *node, orientation == Orientation::Vertical).ok_or("Measured path no longer exists")?;
+        if let Some(DimensionSource::Extent { node, preview }) = &next.source {
+            (next.a, next.b) = extent(doc, *node, orientation == Orientation::Vertical, *preview).ok_or("Measured path no longer exists")?;
         }
         // Along the new normal, relative to the new first point, so that the result is the offset.
         let n = next.normal();
@@ -1020,8 +1035,8 @@ impl Dimension {
                 let (center, radius) = arc(doc, edge).ok_or("Choose a circle or a perfect arc")?;
                 self.set_radial(center, radius);
             }
-            Some(DimensionSource::Extent { node }) => {
-                let (a, b) = extent(doc, *node, self.orientation == Orientation::Vertical).ok_or("Measured path no longer exists")?;
+            Some(DimensionSource::Extent { node, preview }) => {
+                let (a, b) = extent(doc, *node, self.orientation == Orientation::Vertical, *preview).ok_or("Measured path no longer exists")?;
                 self.a = a;
                 self.b = b;
                 self.length = self.measured();
@@ -1176,14 +1191,86 @@ fn same_extents(before: &Document, after: &Document, id: NodeId) -> bool {
 }
 
 /// [`extents`] along one axis: the leftmost and the rightmost points, or with `vertical` the
-/// topmost and the bottommost.
-pub fn extent(doc: &Document, id: NodeId, vertical: bool) -> Option<(Point, Point)> {
-    extents(doc, id).map(|ends| ends[usize::from(vertical)])
+/// topmost and the bottommost. With `preview`, the points of [`preview_extents`].
+pub fn extent(doc: &Document, id: NodeId, vertical: bool, preview: bool) -> Option<(Point, Point)> {
+    let ends = if preview { preview_extents(doc, id) } else { extents(doc, id) };
+    ends.map(|ends| ends[usize::from(vertical)])
+}
+
+/// [`extents`] moved out to the box the path paints, its strokes included ([`painted_box`]), as Use
+/// Preview Bounds measures it: the leftmost and the rightmost points move out to that box's left
+/// and right sides at the same height, and the topmost and the bottommost to its top and bottom at
+/// the same place across. A path that paints no stroke keeps the points of [`extents`]. None for a
+/// node without a path or without segments.
+pub fn preview_extents(doc: &Document, id: NodeId) -> Option<[(Point, Point); 2]> {
+    let [(left, right), (top, bottom)] = extents(doc, id)?;
+    let Some(b) = painted_box(doc, id) else { return Some([(left, right), (top, bottom)]) };
+    Some([
+        (Point::new(left.x.min(b.x0), left.y), Point::new(right.x.max(b.x1), right.y)),
+        (Point::new(top.x, top.y.min(b.y0)), Point::new(bottom.x, bottom.y.max(b.y1))),
+    ])
+}
+
+/// The node whose strokes a path paints with: the compound path that holds it, or the path itself.
+fn painter(doc: &Document, id: NodeId) -> Option<&crate::Node> {
+    let n = doc.node(id)?;
+    match doc.parent_of(id).and_then(|p| doc.node(p)) {
+        Some(c) if matches!(c.kind, crate::NodeKind::Compound { .. }) => Some(c),
+        _ => Some(n),
+    }
+}
+
+/// What the strokes a path paints with depend on, besides its own shape: the node they come from
+/// ([`painter`]), its appearance, and which arrowheads they draw on the path ([`heads_on`]).
+fn stroked_by(doc: &Document, id: NodeId) -> Option<(NodeId, &crate::Appearance, (bool, bool))> {
+    painter(doc, id).map(|p| (p.id, &*p.appearance, heads_on(p, id)))
+}
+
+/// The box a path paints, its strokes included, measured along its own shape as
+/// [`crate::Node::visual_bounds`] measures a path: a member of a compound path is stroked with the
+/// compound path's strokes, with only the arrowheads the compound path paints on it. None for a
+/// node without a path or without anything drawn, and for a path made into a guide, which paints
+/// no strokes.
+fn painted_box(doc: &Document, id: NodeId) -> Option<vectorcraft_geom::Rect> {
+    let n = doc.node(id)?;
+    if n.is_guide() {
+        return None;
+    }
+    let path = n.path_data()?;
+    let painter = painter(doc, id)?;
+    let a = &painter.appearance;
+    // A lone anchor is drawn only as the dot of a round or projecting cap on a closed subpath.
+    let dots = a.painted_strokes().any(|s| matches!(s.cap, crate::LineCap::Round | crate::LineCap::Square));
+    let b = path.drawn_bounds(dots).or_else(|| n.geometric_bounds())?;
+    let (start, end) = heads_on(painter, id);
+    let mut shape = None;
+    Some(a.stroked_bounds_by(b, |s| {
+        let bp = shape.get_or_insert_with(|| n.stroke_path().unwrap_or_default());
+        if (s.start_arrow.is_some() && !start) || (s.end_arrow.is_some() && !end) {
+            let mut s = s.clone();
+            s.start_arrow = s.start_arrow.filter(|_| start);
+            s.end_arrow = s.end_arrow.filter(|_| end);
+            s.bounds_on(bp, b)
+        } else {
+            s.bounds_on(bp, b)
+        }
+    }))
+}
+
+/// Whether the start and the end arrowheads of `painter`'s strokes can be drawn on its member
+/// `id`. A compound path's strokes put the start head on its first subpath and the end head on its
+/// last, so a member gets the start head only when it holds the first subpath with anchors and
+/// the end head only when it holds the last one. A path that is its own painter gets both.
+fn heads_on(painter: &crate::Node, id: NodeId) -> (bool, bool) {
+    let Some(members) = painter.children().filter(|_| painter.id != id) else { return (true, true) };
+    let drawn = |c: &&std::sync::Arc<crate::Node>| c.path_data().is_some_and(|p| p.subpaths.iter().any(|sp| !sp.anchors.is_empty()));
+    (members.iter().find(drawn).is_some_and(|c| c.id == id), members.iter().rfind(drawn).is_some_and(|c| c.id == id))
 }
 
 /// How far a path's outline reaches along the unit direction `u`: the lowest and the highest
-/// `p · u` over the points of its segments. None for a node without a path or without segments.
-pub fn reach(doc: &Document, id: NodeId, u: Vec2) -> Option<(f64, f64)> {
+/// `p · u` over the points of its segments, and with `preview` over the corners of the box it
+/// paints too ([`painted_box`]). None for a node without a path or without segments.
+pub fn reach(doc: &Document, id: NodeId, u: Vec2, preview: bool) -> Option<(f64, f64)> {
     use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveExtrema};
     let path = doc.node(id)?.path_data()?;
     // Turns `u` onto the x axis, so the turned curve's extrema include those along `u`.
@@ -1202,6 +1289,15 @@ pub fn reach(doc: &Document, id: NodeId, u: Vec2) -> Option<(f64, f64)> {
             for t in (turn * seg).extrema() {
                 take(seg.eval(t));
             }
+        }
+    }
+    if preview
+        && let Some((low, high)) = span.as_mut()
+        && let Some(b) = painted_box(doc, id)
+    {
+        for corner in [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)] {
+            let v = corner.to_vec2().dot(u);
+            (*low, *high) = (low.min(v), high.max(v));
         }
     }
     span

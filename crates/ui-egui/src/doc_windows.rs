@@ -26,7 +26,8 @@ use crate::canvas::{BodyKind, show_document};
 
 mod views;
 pub(crate) use views::{
-    Views, Win, close_current, close_window, current, label, new_window, retain as retain_views, show_window, unfit_all, view, view_mut, windows,
+    Views, Win, close_current, close_window, current, label, new_window, retain as retain_views, show_window, unfit_all, view, view_by_id_mut,
+    view_mut, windows,
 };
 use views::{find, key, window_param};
 

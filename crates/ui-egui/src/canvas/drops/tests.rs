@@ -152,8 +152,8 @@ fn a_drop_runs_the_effect_of_its_payload() {
     drop_at(&mut app, Payload::Panel(PanelDrag::paint(Paint::Gradient(Box::new(gradient)))), on_b, Move).unwrap();
     assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()), "a gradient fits the object it lands on");
     app.run("transparency.set", json!({"opacity": 40})).unwrap();
-    let document = app.session.active().unwrap().uid;
-    let appearance = |source| Payload::Panel(PanelDrag::Appearance { document, source });
+    let (document, reverts) = (app.session.active().unwrap().uid, app.session.active().unwrap().reverts);
+    let appearance = |source| Payload::Panel(PanelDrag::Appearance { document, reverts, source });
     drop_at(&mut app, appearance(a), on_b, Move).unwrap();
     let doc = &app.session.active().unwrap().doc;
     let (na, nb) = (doc.node(a).unwrap(), doc.node(b).unwrap());
@@ -619,7 +619,7 @@ fn a_foreign_appearance_drop_never_copies_a_matching_local_object() {
         NodeId(app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap())
     };
     let source = add(&mut app, 20);
-    let document = app.session.active().unwrap().uid;
+    let (document, reverts) = (app.session.active().unwrap().uid, app.session.active().unwrap().reverts);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     let other = add(&mut app, 20);
     assert_eq!(source, other, "both documents have different objects with the same local ID");
@@ -631,7 +631,92 @@ fn a_foreign_appearance_drop_never_copies_a_matching_local_object() {
     let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(target).unwrap().appearance.fill_paint();
     let before = fill(&app);
     let history = undo_len(&app);
-    drop_at(&mut app, Payload::Panel(PanelDrag::Appearance { document, source }), Point::new(250.0, 70.0), DropOperation::Move).unwrap();
+    let foreign = PanelDrag::Appearance { document, reverts, source };
+    drop_at(&mut app, Payload::Panel(foreign), Point::new(250.0, 70.0), DropOperation::Move).unwrap();
     assert_eq!(fill(&app), before);
     assert_eq!(undo_len(&app), history, "a foreign appearance drop makes no edit");
+}
+
+/// An appearance held across File › Revert, released on the canvas: the restored object with the same ID keeps its
+/// look, both where the canvas takes the drop and where the drop is applied. A drag started after the revert copies.
+#[test]
+fn an_appearance_drop_after_file_revert_leaves_the_restored_object_unchanged() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::ShowCollection as _;
+    use craft::ui::contract::{ListDrag, Role};
+    use craft::ui::list::{List, ListRow};
+    use craft::ui::runtime::drag;
+
+    fn source_and_canvas(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+        app.sync_views();
+        let st = app.session.active().unwrap();
+        let (document, reverts) = (st.uid, st.reverts);
+        let source = st.doc.layers[0].children().unwrap()[0].id;
+        egui::Panel::top("appearance-source").exact_size(60.0).show(ui, |ui| {
+            let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
+            List::<usize>::new("Appearance source")
+                .drag_payload(move |_: &ListDrag<usize>| Some(PanelDrag::Appearance { document, reverts, source }))
+                .show_items(ui, &keys, &mut |_, _| ListRow::new("Dragged appearance"));
+        });
+        canvas::show(app, ui);
+    }
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let add = |app: &mut VectorcraftApp, x, color| {
+        let id = NodeId(app.run("shape.rectangle", json!({"x": x, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+        app.run("paint.setFill", json!({"color": color, "ids": [id.0]})).unwrap();
+        id
+    };
+    let source = add(&mut app, 20, "#ff0000");
+    let target = add(&mut app, 260, "#0000ff");
+    let folder = vectorcraft_testkit::TempDir::new("canvas-appearance-drop-revert");
+    let path = folder.join("drawing.vectorcraft");
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    app.run("shape.ellipse", json!({"x": 20, "y": 20, "width": 20, "height": 20})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(target).unwrap().appearance.fill_paint();
+    let (red, blue) = (app.session.active().unwrap().doc.node(source).unwrap().appearance.fill_paint(), fill(&app));
+    assert_ne!(red, blue);
+
+    let mut panel = Panel::new(app, source_and_canvas);
+    let hold = |panel: &mut Panel| {
+        let from = panel.rect("Dragged appearance").center();
+        let to = panel.app().canvas_view().unwrap().to_screen(Point::new(310.0, 150.0));
+        panel.drag_hold_role("Dragged appearance", Role::LIST_ITEM, to - from);
+        let carried = drag::active::<PanelDrag>(panel.ctx());
+        assert!(matches!(carried.as_deref(), Some(PanelDrag::Appearance { source: s, .. }) if *s == source), "the source drags its appearance");
+    };
+    hold(&mut panel);
+    assert!(drag::mark(panel.ctx()).is_some(), "the canvas takes an appearance from the current contents");
+    let opening = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    panel.frame();
+    let history = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+        assert!(st.doc.node(source).is_some() && st.doc.node(target).is_some(), "the restored objects keep their IDs");
+        st.history.undo.len()
+    };
+    assert!(drag::active::<PanelDrag>(panel.ctx()).is_some(), "the revert leaves the drag held");
+    assert!(drag::mark(panel.ctx()).is_none(), "the canvas refuses an appearance carried from before the revert");
+    panel.release();
+    assert_eq!(fill(&panel.app()), blue, "the restored object with the same ID keeps its look");
+    assert_eq!(undo_len(&panel.app()), history, "the stale drop makes no edit");
+
+    let stale = PanelDrag::Appearance { document: opening.0, reverts: opening.1, source };
+    let at = Point::new(310.0, 150.0);
+    drop_at(&mut panel.app(), Payload::Panel(stale), at, DropOperation::Move).unwrap();
+    assert_eq!(fill(&panel.app()), blue, "a stale appearance that reaches the drop is not applied");
+
+    hold(&mut panel);
+    panel.release();
+    assert_eq!(fill(&panel.app()), red, "a drag started after the revert copies the appearance");
 }

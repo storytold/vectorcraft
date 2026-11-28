@@ -4991,7 +4991,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	is a confirm's answer, whose `value` must be true or false	är svaret på en confirm, vars `value` måste vara true eller false
 @msg	is longer than 16 KiB	är längre än 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	är svaret på en prompt, vars `value` måste vara en sträng eller null
-@msg	must have `kind` alert, confirm or prompt	måste ha `kind` alert, confirm eller prompt
+@msg	must have `kind` alert, confirm, prompt or window	måste ha `kind` alert, confirm, prompt eller window
+@msg	is a window's answer, whose `value` must be a list of steps	är ett fönsters svar, vars `value` måste vara en lista med steg
+@msg	has a step {i} that is not a valid click, change or close	har ett steg {i} som inte är ett giltigt klick, en giltig ändring eller en giltig stängning
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` är bara för en körning utan någon att fråga: i appen svarar personen på varje dialogruta
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` måste vara ett heltal från 1 till {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` är kapslat mer än 64 nivåer djupt
