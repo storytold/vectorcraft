@@ -1623,6 +1623,17 @@ fn type_names_compared_or_created_are_listed() {
 }
 
 #[test]
+fn collections_and_typed_arrays_are_not_type_names() {
+    let r = report(concat!(
+        "var m = new Map(), s = new Set(), wm = new WeakMap(), ws = new WeakSet();\n",
+        "var b = new ArrayBuffer(8), v = new DataView(b), u = new Uint8Array(b), c = new Uint8ClampedArray(2);\n",
+        "var i = [new Int8Array(1), new Int16Array(1), new Uint16Array(1), new Int32Array(1), new Uint32Array(1)];\n",
+        "var f = [new Float32Array(1), new Float64Array(1)];\n",
+    ));
+    assert!(r.types.is_empty(), "{:?}", r.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>());
+}
+
+#[test]
 fn menu_commands_are_counted_with_their_lines() {
     let r = report(concat!(
         "app.executeMenuCommand('acmecopyall');\n",

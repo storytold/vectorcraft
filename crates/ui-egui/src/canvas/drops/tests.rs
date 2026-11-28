@@ -202,6 +202,64 @@ fn a_drop_runs_the_effect_of_its_payload() {
     symbol_at(&app, empty);
 }
 
+/// With Object Selection by Path Only, a point inside a filled rectangle and away from its outline is still on art:
+/// a brush with art places nothing there.
+#[test]
+fn a_brush_with_art_dropped_inside_a_fill_with_path_only_places_nothing() {
+    let (mut app, _ctx) = app_with_canvas();
+    app.run("shape.rectangle", json!({"x": 250, "y": 200, "width": 100, "height": 80})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ffffff"})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.run("prefs.set", json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
+    let uid = app.session.active().unwrap().uid;
+    let n = undo_len(&app);
+    drop_at(&mut app, Payload::Brush(BrushKey { doc: uid, name: "Arrow".into(), group: false }), Point::new(300.0, 240.0), DropOperation::Move)
+        .unwrap();
+    assert_eq!(undo_len(&app), n, "{}", app.ui.status);
+}
+
+/// A pattern swatch of the Swatches panel dropped where there is no art places a copy of its tile art and tile there,
+/// centered on the drop point and selected, in one undo step; a color swatch, a pattern from elsewhere and a drop
+/// inside a fill with Object Selection by Path Only place nothing, and a drop on art fills it.
+#[test]
+fn a_pattern_swatch_dropped_off_the_art_places_a_copy_of_its_tile_art_there() {
+    use crate::panel_drag::SwatchRows;
+    let (mut app, _ctx) = app_with_canvas();
+    let id = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let tile = app.run("shape.rectangle", json!({"x": 300, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [tile], "name": "Checks", "edit": false})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let document = app.session.active().unwrap().uid;
+    let swatch = |name: &str, paint: Paint| {
+        let rows = SwatchRows { document, grabbed: name.into(), names: vec![name.into()], groups: false, unlinked_process_color: false };
+        Payload::Panel(PanelDrag::Paint { paint, params: json!({"swatch": name}), rows: Some(rows), library: None })
+    };
+    let pattern = swatch("Checks", vectorcraft_doc::pattern::pattern_paint("Checks"));
+    let off = Point::new(250.0, 220.0);
+    let n = undo_len(&app);
+    drop_at(&mut app, swatch("Red", Paint::solid(Color::from_hex("#ed1c24").unwrap())), off, DropOperation::Move).unwrap();
+    let elsewhere = Payload::Panel(PanelDrag::paint(vectorcraft_doc::pattern::pattern_paint("Checks")));
+    drop_at(&mut app, elsewhere, off, DropOperation::Move).unwrap();
+    assert_eq!(undo_len(&app), n, "a color swatch and a pattern from elsewhere place nothing");
+    drop_at(&mut app, pattern.clone(), off, DropOperation::Move).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(undo_len(&app), n + 1);
+    assert_eq!(st.history.undo.last().unwrap().label, "Place Pattern Art");
+    let [placed] = st.selection.objects.as_slice() else { panic!("one object selected: {:?}", st.selection.objects) };
+    let b = st.doc.node(*placed).unwrap().geometric_bounds().unwrap();
+    assert!((b.center() - off).hypot() < 0.1, "{b:?}");
+    let inside = Point::new(100.0, 100.0);
+    app.run("paint.setFill", json!({"ids": [id], "color": "#ffffff"})).unwrap();
+    app.run("prefs.set", json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
+    let n = undo_len(&app);
+    drop_at(&mut app, pattern.clone(), inside, DropOperation::Move).unwrap();
+    assert_eq!(undo_len(&app), n, "inside a fill with Object Selection by Path Only is still on art");
+    app.run("prefs.set", json!({"key": "objectSelectionByPathOnly", "value": false})).unwrap();
+    drop_at(&mut app, pattern, inside, DropOperation::Move).unwrap();
+    let fill = app.session.active().unwrap().doc.node(NodeId(id)).unwrap().appearance.fill_paint();
+    assert!(matches!(&fill, Paint::Pattern { pattern, .. } if pattern == "Checks"), "{fill:?}");
+}
+
 #[test]
 fn a_foreign_brush_drop_never_applies_or_places_a_same_named_brush() {
     let (mut app, ctx) = app_with_canvas();
