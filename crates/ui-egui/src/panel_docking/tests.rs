@@ -17,6 +17,7 @@ struct Harness {
     ctx: egui::Context,
     time: f64,
     nodes: Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>,
+    shapes: Vec<egui::epaint::ClippedShape>,
 }
 
 impl Harness {
@@ -26,7 +27,7 @@ impl Harness {
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let ctx = crate::testing::ui_context();
         ctx.enable_accesskit();
-        let mut h = Self { app, ctx, time: 0.0, nodes: Vec::new() };
+        let mut h = Self { app, ctx, time: 0.0, nodes: Vec::new(), shapes: Vec::new() };
         h.frames(3);
         h
     }
@@ -43,10 +44,11 @@ impl Harness {
         }
     }
 
-    /// Draw one application frame and retain its accessibility output for assertions.
+    /// Draw one application frame and retain its accessibility output and shapes for assertions.
     fn run(&mut self, input: egui::RawInput) {
         let out = crate::testing::app_frame(&mut self.app, &self.ctx, input);
         self.nodes = out.platform_output.accesskit_update.map_or_else(Vec::new, |update| update.nodes);
+        self.shapes = out.shapes;
     }
 
     /// The rect of the node of `role` named like `panel` (its title, ignoring case and spaces) in the last frame.
@@ -1009,6 +1011,85 @@ fn a_floating_panel_resized_past_the_panel_minimum_stops_at_it() {
     let after = body_width(&h, "Stroke");
     assert!(after < before - 1.0, "the drag narrowed the window: {before} to {after}");
     assert!(after >= PANEL_MIN_WIDTH - 0.5, "dragged in past the minimum: {after}");
+}
+
+/// #8307: Swatches with more swatches than fit, floating or docked above Transparency and sized
+/// short, keeps its footer buttons inside the panel, and scrolled to its end shows nothing from its
+/// list in the strip between those buttons and the panel's bottom edge.
+#[test]
+fn a_short_swatches_panel_keeps_its_footer_inside_and_its_rows_out_of_the_strip_under_it() {
+    for (docked, below, height) in
+        [(false, false, None), (false, true, None), (true, false, None), (true, true, None), (true, true, Some(200.0)), (true, true, Some(150.0))]
+    {
+        let case = format!("docked {docked}, above Transparency {below}, height {height:?}");
+        let mut h = Harness::new();
+        h.app.run("window.panel.float", json!({"panel": "swatches"})).unwrap();
+        if below {
+            h.app.run("window.panel.float", json!({"panel": "transparency", "below": "swatches"})).unwrap();
+        }
+        if docked {
+            h.app.run("window.panel.dock", json!({"panel": "swatches", "column": 1})).unwrap();
+        }
+        if height.is_some() {
+            let mut layout = h.layout();
+            layout.apply(Action::resize_group("swatches".into(), height)).unwrap();
+            h.set_layout(layout);
+        }
+        h.frames(3);
+        footer_strip_shows_no_rows(&mut h, &case);
+    }
+}
+
+/// Scrolls the Swatches list to its end and checks its footer and the strip under the footer.
+fn footer_strip_shows_no_rows(h: &mut Harness, case: &str) {
+    let rect = |b: egui::accesskit::Rect| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32));
+    // The wheel turns over the list, or over the panel when it is too short to show any row.
+    let named =
+        |h: &Harness, role| h.nodes.iter().find(|(_, n)| n.role() == role && n.label() == Some("Swatches")).and_then(|(_, n)| n.bounds()).map(rect);
+    let over = named(h, egui::accesskit::Role::ListBox)
+        .or_else(|| named(h, egui::accesskit::Role::TabPanel))
+        .unwrap_or_else(|| panic!("{case}: the panel is drawn"));
+    let wheel = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, -400.0),
+        modifiers: Default::default(),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    for _ in 0..10 {
+        h.frame(vec![Event::PointerMoved(over.center()), wheel.clone()]);
+    }
+    h.frames(10);
+    let footer = ["Swatch Libraries Menu", "Show Swatch Kinds", "Swatch Options", "Delete Swatch", "New Swatch", "New Color Group"]
+        .iter()
+        .map(|label| {
+            let found = h.nodes.iter().find(|(_, n)| n.label() == Some(*label)).and_then(|(_, n)| n.bounds()).map(rect);
+            found.unwrap_or_else(|| panic!("{case}: the footer's {label} button is drawn"))
+        })
+        .reduce(|a, b| a.union(b))
+        .unwrap_or(Rect::NOTHING);
+    let body = named(h, egui::accesskit::Role::TabPanel).unwrap_or_else(|| panic!("{case}: the panel body is drawn"));
+    assert!(body.contains_rect(footer), "{case}: the footer buttons {footer:?} lie outside the panel {body:?}");
+    // A shape of the list starts above the footer; any part of it seen in the strip is a row showing through.
+    let strip = Rect::from_min_max(pos2(body.left(), footer.bottom()), body.right_bottom());
+    let transparent = |shape: &egui::Shape| match shape {
+        egui::Shape::Noop => true,
+        egui::Shape::Rect(r) => r.fill.a() == 0,
+        egui::Shape::Mesh(m) => m.vertices.iter().all(|v| v.color.a() == 0),
+        _ => false,
+    };
+    let showing: Vec<Rect> = h
+        .shapes
+        .iter()
+        .filter(|c| !transparent(&c.shape))
+        .map(|c| (c.shape.visual_bounding_rect(), c.clip_rect))
+        .filter(|(bounds, clip)| {
+            let seen = clip.intersect(*bounds).intersect(strip);
+            bounds.height() < 60.0 && bounds.top() < footer.top() && seen.is_positive() && seen.height() > 0.5
+        })
+        .map(|(bounds, _)| bounds)
+        .collect();
+    assert!(showing.is_empty(), "{case}: list shapes show in the strip {strip:?} under the footer: {showing:?}");
 }
 
 /// A docked column saved narrower than `PANEL_MIN_WIDTH` is drawn at the minimum.
