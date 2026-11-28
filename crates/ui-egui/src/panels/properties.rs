@@ -104,9 +104,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
         });
     }
     let is_image = n_sel == 1 && matches!(kind, Some(NodeKind::Image(_)));
-    if is_image {
-        object_sections::image_section(app, ui);
-    }
+    object_sections::image_properties_section(app, ui);
     if let Some((preset, view)) = crate::panels::image_trace::selected_trace(app) {
         object_sections::trace_section(app, ui, &preset, view);
     }
@@ -300,3 +298,6 @@ pub(crate) mod vertical_align;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod pixelated_tests;

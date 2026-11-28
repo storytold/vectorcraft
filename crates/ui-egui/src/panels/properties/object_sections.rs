@@ -4,6 +4,7 @@ use craft::behavior::{Anchor9, ColumnWidth, Mixed};
 use craft::host::PickKind;
 use craft::keymap::CommandRef;
 use craft::ui::buttons::Button;
+use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, Sizing};
 use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
@@ -20,6 +21,39 @@ use crate::panels::{links, transform};
 
 /// Two equal columns: a pair of buttons side by side.
 pub(super) const HALVES: [ColumnWidth; 2] = [ColumnWidth::fill(1.0); 2];
+
+/// The selected images and their shared interpolation setting are absent for other selections.
+pub(super) fn selected_image_pixelated(app: &VectorcraftApp) -> Option<(Vec<u64>, Option<bool>)> {
+    let st = app.session.active()?;
+    let mut ids = Vec::new();
+    let mut values = Vec::new();
+    for id in &st.selection.objects {
+        let node = st.doc.node(*id)?;
+        if !matches!(&node.kind, vectorcraft_doc::NodeKind::Image(_)) {
+            return None;
+        }
+        ids.push(id.0);
+        values.push(node.extras().pixelated);
+    }
+    let first = *values.first()?;
+    Some((ids, values.iter().all(|value| *value == first).then_some(first)))
+}
+
+/// The selected images show a Pixelated checkbox, including a mixed value when they differ.
+pub(super) fn image_properties_section(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some((ids, pixelated)) = selected_image_pixelated(app) else { return };
+    if ids.len() == 1 {
+        image_section(app, ui);
+    }
+    super::section(tl!("Image")).show(ui, |ui, _| {
+        let shown = pixelated.map_or(Mixed::Mixed, Mixed::Same);
+        if let Some(value) = Checkbox::new(Bind::given(shown)).label(tl!("Pixelated")).show(ui).events.committed().copied()
+            && let Err(error) = app.run("object.setProps", json!({"ids": ids, "pixelated": value}))
+        {
+            app.status(error);
+        }
+    });
+}
 
 /// The one selected image: its file (or Embedded), colour mode and resolution, and the Links
 /// panel's actions for it.

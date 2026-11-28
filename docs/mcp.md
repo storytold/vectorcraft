@@ -4065,6 +4065,12 @@ that were already hidden or locked. The key object is cleared when it is one of 
 them again with the key object. When the call changes nothing, it records no undo step and still deselects them.
 Other `object.setProps` calls leave the selection unchanged.
 
+`object.setProps {ids?|id?, pixelated?: bool|null}` sets image interpolation. `true` forces nearest-neighbor
+interpolation, and `false` uses normal image-rendering settings. A null value leaves the setting unchanged, as
+when the key is omitted. The command returns an error before any target changes if `pixelated` has a value
+other than a boolean or null, or if a boolean update includes a non-image target. Setting every target to its
+existing value records no undo step. A change to several images creates one undo step.
+
 `object.unlockAll` and `object.showAll` unlock or show every locked or hidden object in the document and select
 them → `{count}`. Ruler guides locked or hidden on their own are counted, and are selected as guides. In isolation
 mode they take only the objects inside the isolated object. With `scope: "group"` they take only the objects inside the groups that hold the selected objects:
