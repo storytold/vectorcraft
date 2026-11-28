@@ -699,6 +699,210 @@ fn desktop_items_of_placeable_menus_are_known_to_the_engine() {
     assert!(missing.is_empty(), "missing from DESKTOP_MENU_ITEMS:\n{}", rows.join("\n"));
 }
 
+/// A filter at API level 2 named Ctx whose commands are `commands` (a JSON list): each adds a
+/// triangle when it is given an object named Target, and leaves its input as it is otherwise.
+fn context_plugin(id: &str, commands: &str) -> String {
+    let manifest = format!(r#"{{"id":"{id}","name":"Ctx","api":2,"version":"1","kind":"filter","commands":{commands}}}"#);
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    vectorcraft_format::base64_encode(&wat::parse_str(tpl::when_given(&manifest, tpl::Given::Input, r#""name":"Target""#, triangle)).unwrap())
+}
+
+/// The items of the canvas context menu's Plug-ins submenu: (plug-in, label, command, params).
+fn canvas_plugin_items(app: &VectorcraftApp) -> Vec<(String, String, String, Value)> {
+    let items = menus::context_items(app);
+    let plugins = items.iter().find_map(|it| match it {
+        menus::Node::Submenu { label, children, .. } if label.as_str() == "Plug-ins" => Some(children),
+        _ => None,
+    });
+    let mut out = Vec::new();
+    for p in plugins.into_iter().flatten() {
+        let menus::Node::Submenu { label: name, children, .. } = p else { panic!("a plug-in's group is a submenu: {p:?}") };
+        for c in children {
+            let menus::Node::Item(i) = c else { panic!("a plug-in group holds commands only: {c:?}") };
+            out.push((name.as_str().to_string(), i.label.as_str().to_string(), i.command.id.to_string(), i.command.params.clone()));
+        }
+    }
+    out
+}
+
+/// The plug-in command the open plug-in dialog runs, and the objects it runs on.
+fn dialog_runs(app: &VectorcraftApp) -> Option<(String, Option<Value>)> {
+    app.plugin_dialog.as_ref()?.runs_command().map(|(c, ids)| (c.to_string(), ids.cloned()))
+}
+
+/// A command whose manifest's `menu.context` names the canvas or the Layers panel is listed in that
+/// context menu, in a Plug-ins submenu holding a submenu named after the plug-in; a command without
+/// it is not. An item whose `when` fails is greyed out. Chosen, it runs its command on the
+/// selection (canvas) or on the clicked rows (Layers panel, whatever the selection) as one undo
+/// step named after the command; one with parameters opens its dialog first, and OK runs it on
+/// those objects. Nothing is listed while nothing is selected, and nothing once the plug-in is
+/// removed.
+#[test]
+fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
+    use dialogs::plugin::{ContextCommand, context_commands};
+    use vectorcraft_plugins::ContextMenu;
+    let mut h = window(app());
+    let id = "test.ui.context";
+    let command = |c: &str| vectorcraft_engine::cmd::plugin::command_id(id, c);
+    let commands = r#"[{"id":"tidy","label":"Tidy","menu":{"context":[{"menu":"canvas"},{"menu":"layers","when":"oneObject"}]}},
+        {"id":"text","label":"Text Only","menu":{"context":[{"menu":"canvas","when":"typeObject"},{"menu":"layers","when":"layerRow"}]}},
+        {"id":"size","label":"Size","menu":{"context":[{"menu":"canvas"},{"menu":"layers"}]},"params":{"by":{"type":"number","min":0,"max":10,"default":2}}},
+        {"id":"plain","label":"Plain"}]"#;
+    let app = h.state_mut();
+    app.run("plugin.install", json!({"dataBase64": context_plugin(id, commands)})).unwrap();
+    let target = red_rect(app);
+    app.run("layer.setProps", json!({"ids": [target.0], "name": "Target"})).unwrap();
+    let other = red_rect(app);
+    let layer = app.session.doc().unwrap().doc.layers[0].id;
+
+    app.run("select.none", json!({})).unwrap();
+    assert!(canvas_plugin_items(app).is_empty(), "nothing selected: no Plug-ins submenu");
+
+    app.run("select.set", json!({"ids": [target.0]})).unwrap();
+    let ids = json!({"ids": [target.0]});
+    let listed = canvas_plugin_items(app);
+    let expected = [("Ctx", "Tidy", command("tidy")), ("Ctx", "Text Only", command("text")), ("Ctx", "Size…", command("size"))];
+    assert_eq!(listed.iter().map(|(p, l, c, _)| (p.as_str(), l.as_str(), c.clone())).collect::<Vec<_>>(), expected);
+    assert!(listed.iter().all(|(.., p)| *p == ids), "{listed:?}");
+    let shown = |app: &VectorcraftApp, c: &str| menus::shown_state(app, c, &ids).map(|(enabled, _)| enabled);
+    assert_eq!((shown(app, &command("tidy")), shown(app, &command("text"))), (Some(true), Some(false)), "no type object is selected");
+    fn rendered_enabled(nodes: &[menus::Node], command: &str) -> Option<bool> {
+        nodes.iter().find_map(|node| match node {
+            menus::Node::Item(item) if item.command.id == command => Some(item.enabled),
+            menus::Node::Submenu { children, .. } => rendered_enabled(children, command),
+            _ => None,
+        })
+    }
+    let rendered = menus::context_items(app);
+    assert_eq!(rendered_enabled(&rendered, &command("tidy")), Some(true));
+    assert_eq!(rendered_enabled(&rendered, &command("text")), Some(false));
+
+    let doc = app.session.doc().unwrap().doc.clone();
+    let rows = |ids: &[u64]| context_commands(ContextMenu::Layers, &doc, ids);
+    let item = |label: &'static str, c: &str, enabled| ContextCommand { label, command: vectorcraft_plugins::registry::intern(&command(c)), enabled };
+    assert_eq!(rows(&[target.0]), vec![("Ctx", vec![item("Tidy", "tidy", true), item("Text Only", "text", false), item("Size…", "size", true)])]);
+    assert_eq!(rows(&[layer.0])[0].1[..2], [item("Tidy", "tidy", false), item("Text Only", "text", true)], "a layer row");
+    assert_eq!(rows(&[target.0, other.0])[0].1[0], item("Tidy", "tidy", false), "two rows are not one object");
+
+    // The canvas item runs on the selection as one undo step.
+    // The plug-in's output, a triangle in place of what it was given, replaces Target only when
+    // Target is what it was given.
+    let undo = app.session.doc().unwrap().history.undo.len();
+    menus::invoke(app, &command("tidy"), ids.clone());
+    let st = app.session.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Tidy"));
+    assert!(st.doc.node(target).is_none() && st.doc.node(other).is_some(), "the plug-in was given Target alone");
+    app.run("edit.undo", json!({})).unwrap();
+
+    // Clicking the canvas item of a command with parameters opens the plug-in's own dialog for the
+    // selection, not the generic parameter dialog.
+    let (_, label, c, p) = listed.iter().find(|(_, l, ..)| l == "Size…").unwrap();
+    let (cmd, p) = menus::click_target(label, c, p);
+    assert_eq!(cmd, command("size"), "not the generic parameter dialog");
+    menus::invoke(app, &cmd, p);
+    step(&mut h);
+    assert_eq!(dialog_runs(h.state()), Some((command("size"), Some(json!([target.0])))), "Size opens its dialog from the canvas");
+    answer(&mut h, false);
+
+    // A row's item runs on that row's object, not on the selection; one with parameters asks first.
+    h.state_mut().run("select.set", json!({"ids": [other.0]})).unwrap();
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    menus::invoke(h.state_mut(), &command("size"), ids.clone());
+    step(&mut h);
+    assert_eq!(dialog_runs(h.state()), Some((command("size"), Some(json!([target.0])))), "Size opens its dialog");
+    answer(&mut h, true);
+    let st = h.state().session.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Size"));
+    assert!(st.doc.node(target).is_none() && st.doc.node(other).is_some(), "the plug-in was given the row's object, not the selection");
+
+    let app = h.state_mut();
+    let list = app.run("plugin.list", json!({})).unwrap();
+    let entry = list["plugins"].as_array().unwrap().iter().find(|p| p["id"] == id).unwrap().clone();
+    assert_eq!(entry["commands"][0]["menu"], json!({"context": [{"menu": "canvas"}, {"menu": "layers", "when": "oneObject"}]}));
+    assert!(entry["commands"][3].get("menu").is_none(), "Plain lists no menu");
+
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    assert!(canvas_plugin_items(app).is_empty(), "removed: nothing listed");
+    assert!(rows(&[other.0]).is_empty());
+}
+
+/// A command dialog opened for objects of one document changes no document once another document
+/// is the active one, even one holding an object with the same id: drawn, the dialog closes and
+/// leaves that document's edit in progress, and OK closes it. On its own document, OK runs the
+/// command on those objects.
+#[test]
+fn a_plugin_command_dialog_stays_with_its_document() {
+    let mut h = window(app());
+    let id = "test.ui.context.doc";
+    let size = vectorcraft_engine::cmd::plugin::command_id(id, "size");
+    let commands = r#"[{"id":"size","label":"Size","params":{"by":{"type":"number","min":0,"max":10,"default":2}}}]"#;
+    let app = h.state_mut();
+    app.run("plugin.install", json!({"dataBase64": context_plugin(id, commands)})).unwrap();
+    let target = red_rect(app);
+    app.run("layer.setProps", json!({"ids": [target.0], "name": "Target"})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let twin = red_rect(app);
+    app.run("layer.setProps", json!({"ids": [twin.0], "name": "Target"})).unwrap();
+    assert_eq!(twin, target, "the second document's object has the first one's id");
+    let ids = json!({"ids": [target.0]});
+    let undos = |app: &VectorcraftApp| app.session.documents().iter().map(|st| st.history.undo.len()).collect::<Vec<_>>();
+    let kept = |app: &VectorcraftApp| app.session.documents().iter().map(|st| st.doc.node(target).is_some()).collect::<Vec<_>>();
+    let before = undos(app);
+    let opened = Some((size.clone(), Some(json!([target.0]))));
+
+    // Drawn while the other document is active, the dialog closes.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    menus::invoke(app, &size, ids.clone());
+    step(&mut h);
+    assert_eq!(dialog_runs(h.state()), opened);
+    h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+    h.state_mut().begin_interaction("Edit").unwrap();
+    step(&mut h);
+    assert!(h.state().plugin_dialog.is_none() && top(h.state()).is_none(), "the dialog closes on another document");
+    assert!(h.state().session.in_interaction(), "closing it leaves the other document's edit in progress");
+    h.state_mut().session.cancel_interaction().unwrap();
+    assert_eq!((undos(h.state()), kept(h.state())), (before.clone(), vec![true, true]));
+
+    // OK while the other document is active closes the dialog and changes neither document.
+    h.state_mut().run("document.activate", json!({"index": 0})).unwrap();
+    menus::invoke(h.state_mut(), &size, ids.clone());
+    step(&mut h);
+    assert_eq!(dialog_runs(h.state()), opened);
+    h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+    answer(&mut h, true);
+    assert!(h.state().plugin_dialog.is_none());
+    assert_eq!((undos(h.state()), kept(h.state())), (before.clone(), vec![true, true]));
+
+    // On its own document, OK runs the command on the objects it opened for.
+    h.state_mut().run("document.activate", json!({"index": 0})).unwrap();
+    menus::invoke(h.state_mut(), &size, ids);
+    step(&mut h);
+    answer(&mut h, true);
+    assert_eq!((undos(h.state()), kept(h.state())), (vec![before[0] + 1, before[1]], vec![false, true]));
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// A command with parameters given params that are neither nothing nor an object of `ids` alone
+/// opens no dialog: they go to the command as they were given, and it changes nothing.
+#[test]
+fn a_plugin_command_given_other_params_opens_no_dialog() {
+    let mut h = window(app());
+    let id = "test.ui.context.params";
+    let size = vectorcraft_engine::cmd::plugin::command_id(id, "size");
+    let commands = r#"[{"id":"size","label":"Size","params":{"by":{"type":"number","min":0,"max":10,"default":2}}}]"#;
+    let app = h.state_mut();
+    app.run("plugin.install", json!({"dataBase64": context_plugin(id, commands)})).unwrap();
+    let target = red_rect(app);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    for p in [json!(5), json!("by"), json!([target.0]), json!({"ids": target.0})] {
+        menus::invoke(h.state_mut(), &size, p.clone());
+        step(&mut h);
+        assert!(h.state().plugin_dialog.is_none(), "{p} opens no dialog");
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "{p} changes nothing");
+    }
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+}
+
 /// The `grant` and `allowHeavy` that `ui.installPlugin` is given approve nothing: it asks all the
 /// same, and what OK would approve comes from the manifest. A module with nothing to approve
 /// installs without either.

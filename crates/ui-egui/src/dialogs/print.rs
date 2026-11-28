@@ -706,7 +706,10 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
         flag("collate", tl!("Collate")).enabled_when_in("copies", counts),
         flag("reverse", tl!("Reverse Order")),
         Param::new("artboards", tl!("Artboards"), ParamKind::radio(artboards, None)),
-        Param::new("range", tl!("Range:"), ParamKind::text("")).hint("1-3, 5").enabled_when("artboards", PrintArtboards::Range.id()),
+        Param::new("range", tl!("Range:"), ParamKind::text(""))
+            .hint("1-3, 5")
+            .enabled_when("artboards", PrintArtboards::Range.id())
+            .under_option(PrintArtboards::Range.id()),
         flag("skipBlank", tl!("Skip Blank Artboards")).enabled_when_in("artboards", [PrintArtboards::All.id(), PrintArtboards::Range.id()]),
         Param::section(tl!("Media")),
         pick::<Media>("media", tl!("Size:")),

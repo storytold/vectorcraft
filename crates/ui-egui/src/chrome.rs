@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use craft::behavior::IconId;
 use craft::menu::MenuBarUi;
 use craft::ui::buttons::{Button, IconButton, ToggleButton};
-use craft::ui::contract::{Bind, BodyCx, Props, Show, ShowContainer};
+use craft::ui::contract::{Bind, BodyCx, Gap, Props, Show, ShowContainer};
 use craft::ui::display::Picture;
 use craft::ui::layout_components::Row;
 use craft::ui::primitives::IconSpec;
@@ -114,17 +114,20 @@ fn leading(ui: &mut Ui, app: &mut VectorcraftApp) {
 }
 
 /// The end of the bar: each ranked control in a row of its own, which the fitted title bar gives up whole, lowest rank
-/// first, before the menus narrow.
+/// first, before the menus narrow. The controls are `space.gap.item` apart, the gap between neighboring controls in a
+/// bar.
 fn trailing(ui: &mut Ui, app: &mut VectorcraftApp) {
     let safe = vectorcraft_plugins::safe_mode::active();
-    for t in Trailing::SHOWN.into_iter().filter(|t| safe || *t != Trailing::Safe) {
-        match t.rank() {
-            Some(rank) => {
-                Row::new().fit_rank(rank).show(ui, |ui, _| t.show(app, ui));
+    Row::new().gap(Gap::Item).show(ui, |ui, _| {
+        for t in Trailing::SHOWN.into_iter().filter(|t| safe || *t != Trailing::Safe) {
+            match t.rank() {
+                Some(rank) => {
+                    Row::new().fit_rank(rank).show(ui, |ui, _| t.show(app, ui));
+                }
+                None => t.show(app, ui),
             }
-            None => t.show(app, ui),
         }
-    }
+    });
 }
 
 /// The application bar, the body of the shell's title bar: brand mark, Home and menus, then Discord,

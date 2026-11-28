@@ -4,7 +4,8 @@ use super::{Sep, Value, VectorcraftApp, c, cp, heading, json, sub};
 use craft::menu::{Node, tidy};
 
 /// The canvas context menu (right-click): what applies to the selection, or to the view when
-/// nothing is selected. Commands that can't run now are left out rather than greyed out.
+/// nothing is selected. Commands that can't run now are left out rather than greyed out; a plug-in
+/// command whose `when` fails for the selection is greyed out in the Plug-ins submenu.
 pub fn context_items(app: &VectorcraftApp) -> Vec<Node> {
     use vectorcraft_doc::NodeKind;
     let Some(st) = app.session.active() else { return vec![] };
@@ -140,6 +141,11 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Node> {
             Sep,
             c("Export Selection…", "file.exportSelection"),
         ]);
+        // The commands plug-in manifests list here (`menu.context`), each run on the selection.
+        let ids: Vec<u64> = st.selection.objects.iter().map(|id| id.0).collect();
+        if let Some(plugins) = crate::dialogs::plugin::canvas_submenu(&st.doc, &ids) {
+            v.extend([Sep, plugins]);
+        }
     }
     [spelling, prune(app, v)].concat()
 }

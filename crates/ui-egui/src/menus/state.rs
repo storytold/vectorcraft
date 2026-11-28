@@ -173,7 +173,9 @@ fn east_asian_hidden(app: &VectorcraftApp, id: &str) -> bool {
 /// another stands in for ([`swapped_out`]) or an East Asian item with those options hidden
 /// ([`east_asian_hidden`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
-    let en = enabled(app, id) && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p));
+    let en = enabled(app, id)
+        && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p))
+        && (!vectorcraft_engine::cmd::plugin::is_command_id(id) || crate::dialogs::plugin::canvas_item_enabled(app, id, p));
     if (!en && hidden_when_disabled(id)) || swapped_out(app, id) || east_asian_hidden(app, id) {
         return None;
     }

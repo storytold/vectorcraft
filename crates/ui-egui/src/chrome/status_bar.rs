@@ -120,8 +120,15 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
         Field::new(tl!("Artboard")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
-            if let Some(i) =
-                Select::new(tl!("Artboard"), Bind::given(cur), &boards).look(SelectLook::Filled).enabled(nab > 0).show(ui).events.committed().copied()
+            // With no document the navigator shows a dash, as the info readout does.
+            if let Some(i) = Select::new(tl!("Artboard"), Bind::given(cur), &boards)
+                .placeholder("\u{2013}")
+                .look(SelectLook::Filled)
+                .enabled(nab > 0)
+                .show(ui)
+                .events
+                .committed()
+                .copied()
             {
                 go = Some(json!(i));
             }
@@ -263,6 +270,15 @@ mod tests {
             assert_eq!(app.session.active().unwrap().doc, document);
             assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
         }
+    }
+
+    #[test]
+    fn with_no_document_the_artboard_navigator_shows_a_dash() {
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut panel = Panel::new(app, status_bar);
+        panel.room(egui::vec2(1200.0, 300.0));
+        panel.frame();
+        assert_eq!(panel.value_role("Artboard", Role::COMBO_BOX).as_deref(), Some("\u{2013}"), "the empty navigator reads as a dash");
     }
 }
 
