@@ -1,0 +1,3074 @@
+use super::*;
+
+/// #2413: `text.create` and `text.createInPath` return the new type's `bounds`, the box
+/// `document.inspect` reports for it, so a script can place it without a helper object.
+#[test]
+fn text_create_returns_the_inspect_bounds() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    let inspected = |s: &mut Session, id: &Value| {
+        let doc = s.execute("document.inspect", &json!({})).unwrap();
+        fn find(v: &Value, id: &Value) -> Option<Value> {
+            if &v["id"] == id {
+                return Some(v["bounds"].clone());
+            }
+            v.get("children").or_else(|| v.get("layers"))?.as_array()?.iter().find_map(|c| find(c, id))
+        }
+        find(&doc, id).unwrap()
+    };
+    let made = s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Hello", "size": 24, "justify": "center"})).unwrap();
+    assert!(made["bounds"]["width"].as_f64().unwrap() > 10.0, "{made}");
+    assert_eq!(made["bounds"], inspected(&mut s, &made["id"]));
+    let rect = s.execute("shape.rectangle", &json!({"x": 10, "y": 200, "width": 100, "height": 50})).unwrap();
+    let area = s.execute("text.createInPath", &json!({"path": rect["id"], "mode": "area", "text": "Boxed"})).unwrap();
+    assert_eq!(area["bounds"], inspected(&mut s, &area["id"]));
+}
+
+/// #1748: `text.create` takes `justify`; point type then lines up on its point (centred on
+/// it, or ending there), and `text.setStyle` moves it the same way afterwards.
+#[test]
+fn text_create_justify_anchors_point_type_on_its_point() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    let bounds = |s: &Session, id: &Value| {
+        let id = NodeId(id.as_u64().unwrap());
+        let st = s.doc().unwrap();
+        st.doc.bounds_of(&[id], false).unwrap()
+    };
+    let make = |s: &mut Session, extra: Value| {
+        let mut p = json!({"x": 300, "y": 100, "text": "Centred title", "size": 24});
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        s.execute("text.create", &p).unwrap()["id"].clone()
+    };
+    let id = make(&mut s, json!({}));
+    let left = bounds(&s, &id);
+    assert!(left.width() > 10.0, "{left:?}");
+    assert!((left.x0 - 300.0).abs() < 1.0, "left (the default) starts at x: {left:?}");
+    let id = make(&mut s, json!({"justify": "center"}));
+    let centre = bounds(&s, &id);
+    assert!((centre.center().x - 300.0).abs() < 0.5, "centred on x: {centre:?}");
+    assert!((centre.width() - left.width()).abs() < 0.5);
+    let right = make(&mut s, json!({"justify": "right"}));
+    let r = bounds(&s, &right);
+    assert!((r.x1 - 300.0).abs() < 1.0, "ends at x: {r:?}");
+    let got = |s: &Session, id: &Value| match &s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
+        NodeKind::Text(t) => t.para.justify,
+        _ => panic!("not text"),
+    };
+    assert_eq!(got(&s, &right), Justify::Right);
+    // Changed afterwards, it moves to the same place as made centred.
+    s.execute("text.setStyle", &json!({"id": right, "justify": "center"})).unwrap();
+    let moved = bounds(&s, &right);
+    assert!((moved.center().x - 300.0).abs() < 0.5, "{moved:?}");
+    assert!(s.execute("text.create", &json!({"x": 0, "y": 0, "text": "a", "justify": "middle"})).is_err());
+    // Type in or on a path takes it too.
+    let path = s.execute("path.create", &json!({"d": "M50 300 L550 300"})).unwrap()["id"].clone();
+    let on = s.execute("text.createInPath", &json!({"path": path, "mode": "onPath", "text": "On a path", "justify": "center"})).unwrap();
+    assert_eq!(got(&s, &on["id"]), Justify::Center);
+}
+
+#[test]
+fn kinsoku_set_is_set_per_paragraph_and_saved_only_when_not_hard() {
+    use vectorcraft_doc::Kinsoku;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "あカッ", "area": {"width": 40, "height": 100}})).unwrap()["id"].as_u64().unwrap();
+    let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para.clone(),
+        _ => panic!("text"),
+    };
+    // New type: Hard, today's set.
+    assert_eq!(para(&s).kinsoku, Kinsoku::Hard);
+    assert!(serde_json::to_value(para(&s)).unwrap().get("kinsoku").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    assert!(s.execute("text.setFormat", &json!({"kinsoku": "strict"})).is_err());
+    s.execute("text.setFormat", &json!({"kinsoku": "soft"})).unwrap();
+    assert_eq!(para(&s).kinsoku, Kinsoku::Soft);
+    assert_eq!(serde_json::to_value(para(&s)).unwrap()["kinsoku"], "soft");
+    s.execute("text.setFormat", &json!({"kinsoku": "none"})).unwrap();
+    assert_eq!(para(&s).kinsoku, Kinsoku::None);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(para(&s).kinsoku, Kinsoku::Hard);
+    // Documents from before it read as Hard.
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert_eq!(old.kinsoku, Kinsoku::Hard);
+}
+
+/// Paragraph panel menu › Kinsoku Shori Type: `text.setFormat {kinsokuType}` sets it per
+/// paragraph in one undo step, refuses unknown values, saves it only when it is not Push Out Only
+/// (new type's and older documents' type), reopens with the file, and paragraph styles carry it.
+#[test]
+fn kinsoku_shori_type_is_set_per_paragraph_and_saved_only_when_not_push_out_only() {
+    use vectorcraft_doc::KinsokuShoriType;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "あ」\nい", "area": {"width": 100, "height": 100}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.clone(),
+        _ => panic!("text"),
+    };
+    assert_eq!(text(&s).para_at(0).kinsoku_type, KinsokuShoriType::PushOutOnly);
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("kinsoku_type").is_none());
+    s.execute("text.setFormat", &json!({"id": id, "start": 0, "end": 1, "kinsokuType": "pushInFirst"})).unwrap();
+    assert_eq!((text(&s).para_at(0).kinsoku_type, text(&s).para_at(1).kinsoku_type), (KinsokuShoriType::PushInFirst, KinsokuShoriType::PushOutOnly));
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["kinsoku_type"], "pushInFirst");
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((back.para_at(0).kinsoku_type, back.para_at(1).kinsoku_type), (KinsokuShoriType::PushInFirst, KinsokuShoriType::PushOutOnly));
+    assert!(s.execute("text.setFormat", &json!({"id": id, "kinsokuType": "pushIn"})).is_err());
+    assert_eq!(text(&s).para_at(0).kinsoku_type, KinsokuShoriType::PushInFirst, "an unknown value changes nothing");
+    s.execute("text.setFormat", &json!({"id": id, "kinsokuType": "pushOutFirst"})).unwrap();
+    assert_eq!(text(&s).para_at(1).kinsoku_type, KinsokuShoriType::PushOutFirst);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((text(&s).para_at(0).kinsoku_type, text(&s).para_at(1).kinsoku_type), (KinsokuShoriType::PushInFirst, KinsokuShoriType::PushOutOnly));
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Pushed in", "attrs": {"kinsoku_type": "pushOutFirst"}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Pushed in", "id": id})).unwrap();
+    assert_eq!(text(&s).para_at(1).kinsoku_type, KinsokuShoriType::PushOutFirst);
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert_eq!(old.kinsoku_type, KinsokuShoriType::PushOutOnly);
+}
+
+#[test]
+fn burasagari_is_set_per_paragraph_and_saved_only_when_on() {
+    use vectorcraft_doc::Burasagari;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "雅楽、笙。", "area": {"width": 200, "height": 100}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para.clone(),
+        _ => panic!("text"),
+    };
+    // New type: Standard.
+    assert_eq!(para(&s).burasagari, Burasagari::Standard);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    assert!(s.execute("text.setFormat", &json!({"burasagari": "strong"})).is_err());
+    s.execute("text.setFormat", &json!({"burasagari": "forced"})).unwrap();
+    assert_eq!(para(&s).burasagari, Burasagari::Forced);
+    assert_eq!(serde_json::to_value(para(&s)).unwrap()["burasagari"], "forced");
+    s.execute("text.setFormat", &json!({"burasagari": "none"})).unwrap();
+    assert_eq!(para(&s).burasagari, Burasagari::None);
+    // Saved only when on; documents from before it read as None.
+    assert!(serde_json::to_value(para(&s)).unwrap().get("burasagari").is_none());
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(para(&s).burasagari, Burasagari::Standard);
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert_eq!(old.burasagari, Burasagari::None);
+}
+
+/// Type › Optical Margin Alignment: `type.opticalMarginAlignment` sets or toggles the flag on
+/// the selected type in one undo step, the opening quotation mark then hangs left of the
+/// frame, and the flag is saved only when on and survives a native save.
+#[test]
+fn optical_margin_alignment_is_set_per_object_and_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "size": 40, "text": "“Quoted” words", "area": {"width": 300, "height": 100}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    // The left edge of the glyphs in text space, where the frame's left edge is at 0.
+    let left = |s: &Session| text(s).cached_bounds.unwrap().x0;
+    // New type: off, and not saved.
+    assert!(!text(&s).optical_margin);
+    assert!(serde_json::to_value(text(&s)).unwrap().get("opticalMarginAlignment").is_none());
+    let inside = left(&s);
+    assert!(inside >= 0.0, "{inside}");
+    // Nothing but a rectangle selected: an error.
+    let rect = s.execute("shape.rectangle", &json!({"x": 0, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    assert!(s.execute("type.opticalMarginAlignment", &json!({})).is_err());
+    // Toggled on: the quotation mark hangs outside the frame.
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    assert_eq!(s.execute("type.opticalMarginAlignment", &json!({})).unwrap()["on"], true);
+    assert!(text(&s).optical_margin);
+    assert!(left(&s) < inside - 5.0, "{} {inside}", left(&s));
+    assert_eq!(serde_json::to_value(text(&s)).unwrap()["opticalMarginAlignment"], true);
+    // `on` sets it; without `on` it toggles.
+    // Setting the value the type already has: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("type.opticalMarginAlignment", &json!({"on": true})).unwrap()["on"], true);
+    assert!(text(&s).optical_margin);
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
+    assert_eq!(s.execute("type.opticalMarginAlignment", &json!({})).unwrap()["on"], false);
+    assert!(!text(&s).optical_margin);
+    assert_eq!(left(&s), inside);
+    // One undo step each.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(text(&s).optical_margin);
+    // Saved and reopened as it was; a document from before it reads as off.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert!(t.optical_margin);
+    let mut old = serde_json::to_value(text(&s)).unwrap();
+    old.as_object_mut().unwrap().remove("opticalMarginAlignment");
+    assert!(!serde_json::from_value::<TextObject>(old).unwrap().optical_margin);
+}
+
+/// Character panel menu › System Layout: `type.systemLayout` sets the document and every text
+/// object in one undo step. New type inherits it. Off by default and in a document from before
+/// the flag, and saved only when on. On, each positive advance is a whole number of points.
+#[test]
+fn system_layout_sets_the_document_and_every_text_object() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 40, "size": 13, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setStyle", &json!({"id": id, "tracking": 50})).unwrap();
+    let other = s.execute("text.create", &json!({"x": 10, "y": 80, "text": "Yo"})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let setup = |s: &Session| s.doc().unwrap().doc.setup.clone();
+    let advances =
+        |s: &Session| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    assert!(!setup(&s).system_layout);
+    assert!(!text(&s, id).system_layout && !text(&s, other).system_layout);
+    assert!(serde_json::to_value(setup(&s)).unwrap().get("systemLayout").is_none());
+    assert!(serde_json::to_value(text(&s, id)).unwrap().get("systemLayout").is_none());
+    let fractional = advances(&s);
+    assert!(fractional.iter().any(|a| (a - a.round()).abs() > 1e-6), "{fractional:?}");
+    assert_eq!(s.execute("type.systemLayout", &json!({})).unwrap()["on"], true);
+    assert!(setup(&s).system_layout);
+    assert!(text(&s, id).system_layout && text(&s, other).system_layout);
+    let whole = advances(&s);
+    assert!(whole.iter().all(|a| *a >= 1.0 && (a - a.round()).abs() < 1e-9), "{whole:?}");
+    assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
+    assert_eq!(serde_json::to_value(setup(&s)).unwrap()["systemLayout"], true);
+    assert_eq!(serde_json::to_value(text(&s, id)).unwrap()["systemLayout"], true);
+    // Setting the value the document and its type already have: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("type.systemLayout", &json!({"on": true})).unwrap()["on"], true);
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
+    // New type inherits the document's setting.
+    let made = s.execute("text.create", &json!({"x": 10, "y": 120, "text": "Z"})).unwrap()["id"].as_u64().unwrap();
+    assert!(text(&s, made).system_layout);
+    // A boolean given as text is an error, and the setting stays on.
+    assert!(s.execute("type.systemLayout", &json!({"on": "no"})).is_err());
+    assert!(setup(&s).system_layout && text(&s, id).system_layout);
+    assert_eq!(s.execute("type.systemLayout", &json!({"on": false})).unwrap()["on"], false);
+    assert!(!setup(&s).system_layout && !text(&s, id).system_layout && !text(&s, made).system_layout);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(setup(&s).system_layout && text(&s, id).system_layout);
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert!(back.setup.system_layout);
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert!(t.system_layout);
+    let mut old = serde_json::to_value(setup(&s)).unwrap();
+    old.as_object_mut().unwrap().remove("systemLayout");
+    assert!(!serde_json::from_value::<vectorcraft_doc::DocSetup>(old).unwrap().system_layout);
+}
+
+/// Character panel menu › Fractional Widths: `type.fractionalWidths` sets or toggles the flag
+/// on the selected type in one undo step. New type and a document from before the flag are on,
+/// and the flag is saved only when off. Off, each positive advance is a whole number of points.
+#[test]
+fn fractional_widths_is_set_per_object_and_saved_only_when_off() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 40, "size": 13, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setStyle", &json!({"id": id, "tracking": 50})).unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let advances =
+        |s: &Session| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    // New type: on, and not saved.
+    assert!(text(&s).fractional_widths);
+    assert!(serde_json::to_value(text(&s)).unwrap().get("fractionalWidths").is_none());
+    let fractional = advances(&s);
+    assert!(fractional.iter().any(|a| (a - a.round()).abs() > 1e-6), "{fractional:?}");
+    // Nothing but a rectangle selected: an error.
+    let rect = s.execute("shape.rectangle", &json!({"x": 0, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    assert!(s.execute("type.fractionalWidths", &json!({})).is_err());
+    // Toggled off: whole-point advances, and the key is written.
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    assert_eq!(s.execute("type.fractionalWidths", &json!({})).unwrap()["on"], false);
+    assert!(!text(&s).fractional_widths);
+    let whole = advances(&s);
+    assert!(whole.iter().all(|a| *a >= 1.0 && (a - a.round()).abs() < 1e-9), "{whole:?}");
+    assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
+    assert_eq!(serde_json::to_value(text(&s)).unwrap()["fractionalWidths"], false);
+    // A boolean given as text is an error, and the flag stays off.
+    assert!(s.execute("type.fractionalWidths", &json!({"on": "no"})).is_err());
+    assert!(!text(&s).fractional_widths);
+    assert_eq!(s.execute("type.fractionalWidths", &json!({})).unwrap()["on"], true);
+    assert!(text(&s).fractional_widths);
+    assert_eq!(s.execute("type.fractionalWidths", &json!({"on": false})).unwrap()["on"], false);
+    assert!(!text(&s).fractional_widths);
+    // Setting the value the type already has: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("type.fractionalWidths", &json!({"on": false})).unwrap()["on"], false);
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
+    // One undo step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(text(&s).fractional_widths);
+    // Saved and reopened as it was; a document from before it reads as on.
+    s.execute("type.fractionalWidths", &json!({"on": false})).unwrap();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert!(!t.fractional_widths);
+    let mut old = serde_json::to_value(text(&s)).unwrap();
+    old.as_object_mut().unwrap().remove("fractionalWidths");
+    assert!(serde_json::from_value::<TextObject>(old).unwrap().fractional_widths);
+}
+
+/// Paragraph panel menu › Hyphenation…: `text.setFormat` sets each paragraph's hyphenation
+/// options, rounded and clamped, in one undo step; they are saved only when not the defaults,
+/// and paragraph styles carry them.
+#[test]
+fn hyphenation_options_are_set_per_paragraph_and_saved_only_when_not_default() {
+    use vectorcraft_doc::HyphenationOptions;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo", "area": {"width": 200, "height": 100}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let paras = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (t.para_at(0).clone(), t.para_at(1).clone()),
+        _ => panic!("text"),
+    };
+    assert_eq!(paras(&s).0.hyphenation, HyphenationOptions::default());
+    assert!(serde_json::to_value(paras(&s).0).unwrap().get("hyphenation").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute(
+        "text.setFormat",
+        &json!({"wordsLongerThan": 7.6, "afterFirst": 0, "beforeLast": 40, "hyphenLimit": 2, "hyphenationZone": 18, "hyphenateCapitalized": false, "start": 5, "end": 5}),
+    )
+    .unwrap();
+    let want = HyphenationOptions { words_longer_than: 8, after_first: 1, before_last: 15, hyphen_limit: 2, zone: 18.0, capitalized: false };
+    let (first, second) = paras(&s);
+    assert_eq!((first.hyphenation, &second.hyphenation), (HyphenationOptions::default(), &want), "only the paragraph the caret is in");
+    assert_eq!(serde_json::to_value(&second).unwrap()["hyphenation"]["hyphen_limit"], 2);
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(serde_json::to_value(&second).unwrap()).unwrap();
+    assert_eq!(back.hyphenation, want);
+    s.execute("text.setFormat", &json!({"hyphenLimit": -3, "hyphenationZone": 5000})).unwrap();
+    assert_eq!((paras(&s).0.hyphenation.hyphen_limit, paras(&s).1.hyphenation.zone), (0, 1296.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paras(&s).1.hyphenation, HyphenationOptions::default());
+    // A paragraph style carries them; an older file's paragraph reads the defaults.
+    s.execute("paraStyle.new", &json!({"name": "Loose", "attrs": {"hyphenation": {"words_longer_than": 9}}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Loose", "id": id})).unwrap();
+    assert_eq!(paras(&s).0.hyphenation, HyphenationOptions { words_longer_than: 9, ..HyphenationOptions::default() });
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left", "hyphenate": true})).unwrap();
+    assert_eq!(old.hyphenation, HyphenationOptions::default());
+}
+
+/// Paragraph panel menu › Roman Hanging Punctuation: `text.setFormat {romanHangingPunctuation}`
+/// sets it per paragraph in one undo step, the opening quotation mark then hangs left of the
+/// frame, it is saved only when on, and paragraph styles carry it.
+#[test]
+fn roman_hanging_punctuation_is_set_per_paragraph_and_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "size": 40, "text": "“Quoted”\n“Two”", "area": {"width": 300, "height": 200}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let left = |s: &Session| text(s).cached_bounds.unwrap().x0;
+    assert!(!text(&s).para_at(0).roman_hanging);
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("roman_hanging").is_none());
+    let inside = left(&s);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    // Only the first paragraph (the caret's range).
+    s.execute("text.setFormat", &json!({"romanHangingPunctuation": true, "start": 0, "end": 0})).unwrap();
+    assert!(text(&s).para_at(0).roman_hanging && !text(&s).para_at(1).roman_hanging);
+    assert!(left(&s) < inside - 5.0, "{} {inside}", left(&s));
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["roman_hanging"], true);
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(serde_json::to_value(text(&s).para_at(0)).unwrap()).unwrap();
+    assert!(back.roman_hanging);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!text(&s).para_at(0).roman_hanging);
+    assert!((left(&s) - inside).abs() < 1e-9);
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Hung", "attrs": {"roman_hanging": true}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Hung", "id": id})).unwrap();
+    assert!(text(&s).para_at(1).roman_hanging);
+}
+
+/// Paragraph panel menu › Korean Line Break Anywhere: new type has it off and saves that;
+/// `text.setFormat {koreanLineBreakAnywhere}` sets it per paragraph in one undo step and refuses a
+/// value that is not true or false, a paragraph saved before the option opens with it on, and
+/// paragraph styles carry it. `text.setRangeStyle`, a character command, does not take it.
+#[test]
+fn korean_line_break_anywhere_is_set_per_paragraph_and_saved_only_when_off() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "가나다\n라마"})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert!(!text(&s).para_at(0).korean_line_break_anywhere, "new type has it off");
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["korean_line_break_anywhere"], false);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    // Only the first paragraph (the caret's range).
+    s.execute("text.setFormat", &json!({"koreanLineBreakAnywhere": true, "start": 0, "end": 0})).unwrap();
+    assert!(text(&s).para_at(0).korean_line_break_anywhere && !text(&s).para_at(1).korean_line_break_anywhere);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("korean_line_break_anywhere").is_none());
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(serde_json::to_value(text(&s).para_at(0)).unwrap()).unwrap();
+    assert!(back.korean_line_break_anywhere);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!text(&s).para_at(0).korean_line_break_anywhere);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(text(&s).para_at(0).korean_line_break_anywhere);
+    // Saved before the option: on, the line breaks it was laid out with.
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert!(old.korean_line_break_anywhere);
+    assert!(s.execute("text.setFormat", &json!({"ids": [id], "koreanLineBreakAnywhere": "yes"})).is_err());
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "koreanLineBreakAnywhere": false})).is_err());
+    assert!(text(&s).para_at(0).korean_line_break_anywhere, "a refused call changes nothing");
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Anywhere", "attrs": {"korean_line_break_anywhere": true}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Anywhere", "id": id})).unwrap();
+    assert!(text(&s).para_at(1).korean_line_break_anywhere);
+    s.execute("paraStyle.new", &json!({"name": "Words", "attrs": {"korean_line_break_anywhere": false}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Words", "id": id})).unwrap();
+    assert!(!text(&s).para_at(0).korean_line_break_anywhere && !text(&s).para_at(1).korean_line_break_anywhere);
+}
+
+/// Paragraph panel menu › Bunri-Kinshi: off for new type and for a paragraph saved before it, and
+/// saved only when on; `text.setFormat {bunriKinshi}` sets it per paragraph in one undo step and
+/// refuses a value that is not true or false, kinsoku None keeps it, and paragraph styles carry it.
+#[test]
+fn bunri_kinshi_is_set_per_paragraph_and_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "あ——い\nう……え"})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert!(!text(&s).para_at(0).bunri_kinshi, "new type has it off");
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("bunri_kinshi").is_none());
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert!(!old.bunri_kinshi, "saved before the option: off");
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    // Only the second paragraph.
+    let second = "あ——い\n".len();
+    s.execute("text.setFormat", &json!({"bunriKinshi": true, "start": second, "end": second})).unwrap();
+    assert!(!text(&s).para_at(0).bunri_kinshi && text(&s).para_at(1).bunri_kinshi);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    let saved = serde_json::to_value(text(&s).para_at(1)).unwrap();
+    assert_eq!(saved["bunri_kinshi"], true);
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(saved).unwrap();
+    assert!(back.bunri_kinshi);
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert!(!back.para_at(0).bunri_kinshi && back.para_at(1).bunri_kinshi, "the file keeps it per paragraph");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!text(&s).para_at(1).bunri_kinshi);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(text(&s).para_at(1).bunri_kinshi);
+    for bad in [json!("yes"), json!(1)] {
+        assert!(s.execute("text.setFormat", &json!({"ids": [id], "bunriKinshi": bad, "kinsoku": "none"})).is_err(), "{bad}");
+    }
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "bunriKinshi": false})).is_err());
+    assert!(text(&s).para_at(1).bunri_kinshi && text(&s).para_at(1).kinsoku != vectorcraft_doc::Kinsoku::None, "a refused call changes nothing");
+    // Kinsoku None keeps the setting, without effect, and turning kinsoku back on restores it.
+    s.execute("text.setFormat", &json!({"ids": [id], "kinsoku": "none"})).unwrap();
+    assert!(text(&s).para_at(1).bunri_kinshi);
+    s.execute("text.setFormat", &json!({"ids": [id], "kinsoku": "hard"})).unwrap();
+    assert!(text(&s).para_at(1).bunri_kinshi);
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Pairs", "attrs": {"bunri_kinshi": true}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Pairs", "id": id})).unwrap();
+    assert!(text(&s).para_at(0).bunri_kinshi && text(&s).para_at(1).bunri_kinshi);
+    s.execute("paraStyle.new", &json!({"name": "Split", "attrs": {"bunri_kinshi": false}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Split", "id": id})).unwrap();
+    assert!(!text(&s).para_at(0).bunri_kinshi && !text(&s).para_at(1).bunri_kinshi);
+}
+
+/// Paragraph panel menu › Kurikaeshi Moji Shori: off for new type and for a paragraph saved before
+/// it, and saved only when on; `text.setFormat {kurikaeshiMojiShori}` sets it per paragraph in one
+/// undo step, records nothing when the paragraphs already have the value, refuses a value that is
+/// not true or false, and paragraph styles carry it. The text keeps its repeat marks.
+#[test]
+fn kurikaeshi_moji_shori_is_set_per_paragraph_and_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "時々\nすゝ"})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori, "new type has it off");
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("kurikaeshi_moji_shori").is_none());
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert!(!old.kurikaeshi_moji_shori, "saved before the option: off");
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    // Only the second paragraph.
+    let second = "時々\n".len();
+    s.execute("text.setFormat", &json!({"kurikaeshiMojiShori": true, "start": second, "end": second})).unwrap();
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori && text(&s).para_at(1).kurikaeshi_moji_shori);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert_eq!(text(&s).plain_text(), "時々\nすゝ", "the text keeps its marks");
+    // The same value again records nothing.
+    s.execute("text.setFormat", &json!({"kurikaeshiMojiShori": true, "start": second, "end": second})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    let saved = serde_json::to_value(text(&s).para_at(1)).unwrap();
+    assert_eq!(saved["kurikaeshi_moji_shori"], true);
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(saved).unwrap();
+    assert!(back.kurikaeshi_moji_shori);
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert!(!back.para_at(0).kurikaeshi_moji_shori && back.para_at(1).kurikaeshi_moji_shori, "the file keeps it per paragraph");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!text(&s).para_at(1).kurikaeshi_moji_shori);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(text(&s).para_at(1).kurikaeshi_moji_shori);
+    for bad in [json!("yes"), json!(1)] {
+        assert!(s.execute("text.setFormat", &json!({"ids": [id], "kurikaeshiMojiShori": bad, "kinsoku": "none"})).is_err(), "{bad}");
+    }
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "kurikaeshiMojiShori": false})).is_err());
+    assert!(
+        text(&s).para_at(1).kurikaeshi_moji_shori && text(&s).para_at(1).kinsoku != vectorcraft_doc::Kinsoku::None,
+        "a refused call changes nothing"
+    );
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Repeats", "attrs": {"kurikaeshi_moji_shori": true}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Repeats", "id": id})).unwrap();
+    assert!(text(&s).para_at(0).kurikaeshi_moji_shori && text(&s).para_at(1).kurikaeshi_moji_shori);
+    s.execute("paraStyle.new", &json!({"name": "Marks", "attrs": {"kurikaeshi_moji_shori": false}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Marks", "id": id})).unwrap();
+    assert!(!text(&s).para_at(0).kurikaeshi_moji_shori && !text(&s).para_at(1).kurikaeshi_moji_shori);
+}
+
+/// Paragraph panel › Insert Kashidas: `text.setFormat {kashida}` sets it per paragraph in one
+/// undo step, the paragraph is saved with it only when it is not None and opens with it, an
+/// unknown value changes nothing, and paragraph styles carry it.
+#[test]
+fn insert_kashidas_is_set_per_paragraph_and_saved_only_when_set() {
+    use vectorcraft_doc::text::Kashida;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "كتب محمد\nعلي", "area": {"width": 300, "height": 200}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert_eq!(text(&s).para_at(0).kashida, Kashida::None);
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("kashida").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    // Only the first paragraph (the caret's range).
+    s.execute("text.setFormat", &json!({"kashida": "medium", "start": 0, "end": 0})).unwrap();
+    assert_eq!((text(&s).para_at(0).kashida, text(&s).para_at(1).kashida), (Kashida::Medium, Kashida::None));
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["kashida"], "medium");
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((back.para_at(0).kashida, back.para_at(1).kashida), (Kashida::Medium, Kashida::None));
+    assert!(s.execute("text.setFormat", &json!({"kashida": "wide"})).is_err());
+    assert_eq!(text(&s).para_at(0).kashida, Kashida::Medium, "an unknown value changes nothing");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(text(&s).para_at(0).kashida, Kashida::None);
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Stretched", "attrs": {"kashida": "stylistic"}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Stretched", "id": id})).unwrap();
+    assert_eq!(text(&s).para_at(1).kashida, Kashida::Stylistic);
+}
+
+/// Paragraph panel › Bullets: `text.setFormat {list, bullet}` makes the paragraphs it touches a
+/// bulleted list and refuses unknown values. A paragraph that joins a list with no left or
+/// first-line indent gets 18 pt and -18 pt, unless the call sets an indent, and one with indents
+/// keeps them. The list is saved only when set and opens with the file, Return continues it,
+/// "none" turns it off, and paragraph styles set it and turn it off.
+#[test]
+fn bulleted_lists_are_set_per_paragraph_saved_and_continued() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo\nThree", "area": {"width": 300, "height": 200}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let list = |s: &Session, i: usize| text(s).para_at(i).list;
+    let indents = |s: &Session, i: usize| (text(s).para_at(i).left_indent, text(s).para_at(i).first_line_indent);
+    let dot = Some(ParaList::bulleted(Bullet::Dot));
+    assert_eq!(list(&s, 0), None);
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("list").is_none(), "no list is saved without one");
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"start": 4, "end": 4, "leftIndent": 30, "firstLineIndent": 5})).unwrap();
+    // The first two paragraphs: the first gets the hanging indent, the second keeps its indents.
+    s.execute("text.setFormat", &json!({"list": "bullet", "start": 0, "end": 4})).unwrap();
+    assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (dot, dot, None));
+    assert_eq!((indents(&s, 0), indents(&s, 1), indents(&s, 2)), ((18.0, -18.0), (30.0, 5.0), (0.0, 0.0)));
+    // `bullet` picks the bullet, and `list: "bullet"` keeps it; the indents stay as they are.
+    s.execute("text.setFormat", &json!({"bullet": "square", "start": 0, "end": 0})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "bullet", "start": 0, "end": 0})).unwrap();
+    let square = Some(ParaList::bulleted(Bullet::Square));
+    assert_eq!((list(&s, 0), indents(&s, 0)), (square, (18.0, -18.0)));
+    for bad in [json!({"list": "numbers"}), json!({"bullet": "star"}), json!({"list": 1}), json!({"bullet": true})] {
+        assert!(s.execute("text.setFormat", &bad).is_err(), "{bad}");
+    }
+    assert_eq!((list(&s, 0), list(&s, 2)), (square, None), "an unknown value changes nothing");
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["list"], json!({"bullet": "square"}));
+    // A saved list reads the fields it leaves out as their defaults and ignores those it doesn't know.
+    let read = |v: serde_json::Value| serde_json::from_value::<vectorcraft_doc::ParaStyle>(json!({ "list": v })).unwrap().list;
+    assert_eq!((read(json!({})), read(json!({"bullet": "dash", "restart": 2}))), (dot, Some(ParaList::bulleted(Bullet::Dash))));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((back.para_at(0).list, back.para_at(1).list, back.para_at(2).list), (square, dot, None));
+    // Return at the end of a list item starts another one.
+    s.execute("text.editRange", &json!({"id": id, "start": 3, "end": 3, "insert": "\nOne more"})).unwrap();
+    assert_eq!((list(&s, 1), indents(&s, 1)), (square, (18.0, -18.0)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // "none" turns the list off and leaves the indents.
+    s.execute("text.setFormat", &json!({"bullet": "none", "start": 0, "end": 0})).unwrap();
+    assert_eq!((list(&s, 0), indents(&s, 0)), (None, (18.0, -18.0)));
+    s.execute("text.setFormat", &json!({"list": "none", "start": 4, "end": 4})).unwrap();
+    assert_eq!(list(&s, 1), None);
+    // Indents the call sets win over the hanging indent.
+    s.execute("text.setFormat", &json!({"list": "bullet", "leftIndent": 0, "firstLineIndent": 0, "start": 8, "end": 8})).unwrap();
+    assert_eq!((list(&s, 2), indents(&s, 2)), (dot, (0.0, 0.0)));
+    // A style that holds a list sets it; a style captured from a paragraph without one turns it off.
+    s.execute("paraStyle.new", &json!({"name": "Listed", "attrs": {"list": {"bullet": "dash"}}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Listed", "id": id})).unwrap();
+    let dash = Some(ParaList::bulleted(Bullet::Dash));
+    assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (dash, dash, dash));
+    let plain = s.execute("text.create", &json!({"x": 10, "y": 300, "text": "Plain"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Plain", "id": plain})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Plain", "id": id})).unwrap();
+    assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (None, None, None));
+}
+
+/// Numbered lists: `list: "number"` numbers the paragraphs 1, 2, 3 and `number` picks the
+/// style; a list switched between bullets and numbers keeps its bullet and its indents; an
+/// unknown value is an error; the list is saved, reopened and carried by paragraph styles.
+#[test]
+fn numbered_lists_are_set_per_paragraph_saved_and_styled() {
+    use vectorcraft_doc::text::{Bullet, NumberStyle, ParaList};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo\nThree", "area": {"width": 300, "height": 200}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let list = |s: &Session, i: usize| text(s).para_at(i).list;
+    let numbers = |s: &Session| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number"})).unwrap();
+    let arabic = Some(ParaList::numbered(NumberStyle::Arabic));
+    assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (arabic, arabic, arabic));
+    assert_eq!((text(&s).para_at(0).left_indent, text(&s).para_at(0).first_line_indent), (18.0, -18.0));
+    assert_eq!(numbers(&s), ["1.", "2.", "3."]);
+    // `number` picks the style, `list: "number"` keeps it, and the count runs on through both.
+    s.execute("text.setFormat", &json!({"number": "upperRoman", "start": 0, "end": 0})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number", "start": 0, "end": 0})).unwrap();
+    let roman = Some(ParaList::numbered(NumberStyle::UpperRoman));
+    assert_eq!(list(&s, 0), roman);
+    assert_eq!(numbers(&s), ["I.", "2.", "3."]);
+    // A bullet makes it bulleted, a number style numbered again, and `list: "bullet"` brings
+    // back the bullet it had; the indents stay as they are.
+    s.execute("text.setFormat", &json!({"bullet": "square", "start": 0, "end": 0})).unwrap();
+    assert_eq!(list(&s, 0), Some(ParaList::bulleted(Bullet::Square)));
+    s.execute("text.setFormat", &json!({"number": "lowerLetters", "start": 0, "end": 0})).unwrap();
+    let letters = Some(ParaList { bullet: Bullet::Square, number: Some(NumberStyle::LowerLetters), ..ParaList::default() });
+    assert_eq!(list(&s, 0), letters);
+    assert_eq!(numbers(&s), ["a.", "2.", "3."]);
+    assert_eq!((text(&s).para_at(0).left_indent, text(&s).para_at(0).first_line_indent), (18.0, -18.0));
+    for bad in [json!({"number": "roman"}), json!({"number": 1}), json!({"list": "numbered"}), json!({"number": true})] {
+        assert!(s.execute("text.setFormat", &bad).is_err(), "{bad}");
+    }
+    assert_eq!((list(&s, 0), list(&s, 1)), (letters, arabic), "an unknown value changes nothing");
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["list"], json!({"bullet": "square", "number": "lowerLetters"}));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((back.para_at(0).list, back.para_at(1).list, back.para_at(2).list), (letters, arabic, arabic));
+    // Return at the end of a numbered item starts the next number.
+    s.execute("text.editRange", &json!({"id": id, "start": 13, "end": 13, "insert": "\nFour"})).unwrap();
+    assert_eq!(numbers(&s), ["a.", "2.", "3.", "4."]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // "none" turns the list off; the next numbered paragraph starts again at 1.
+    s.execute("text.setFormat", &json!({"number": "none", "start": 4, "end": 4})).unwrap();
+    assert_eq!(list(&s, 1), None);
+    assert_eq!(numbers(&s), ["a.", "1."]);
+    // A style that holds a numbered list sets it, a style captured from a numbered paragraph
+    // carries its list, and one captured from a paragraph without a list turns it off.
+    s.execute("paraStyle.new", &json!({"name": "Roman", "attrs": {"list": {"number": "upperRoman"}}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Roman", "id": id})).unwrap();
+    assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (roman, roman, roman));
+    assert_eq!(numbers(&s), ["I.", "II.", "III."]);
+    let plain = s.execute("text.create", &json!({"x": 10, "y": 300, "text": "Plain"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Plain", "id": plain})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Captured", "id": id})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Captured", "id": plain})).unwrap();
+    let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(plain)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!(t.para_at(0).list, roman);
+    s.execute("paraStyle.apply", &json!({"name": "Plain", "id": id})).unwrap();
+    assert_eq!((list(&s, 0), list(&s, 1), list(&s, 2)), (None, None, None));
+}
+
+/// `text.setFormat {startNumber}` gives the first numbered paragraph it touches a number, and the
+/// paragraphs after it count on from it; `restartNumbering` true gives it 1 and false takes the
+/// numbers away. Each change is one undo step, a call that changes nothing records none, and a
+/// bad value or both keys change nothing. The file keeps the number, Return and paragraph styles
+/// do not take it, a bulleted paragraph keeps none, and Convert to Text writes the numbers shown.
+#[test]
+fn a_numbered_paragraph_starts_at_a_given_number_or_restarts() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "text": "Intro\nOne\nTwo\nThree\nFour", "area": {"width": 300, "height": 200}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let starts = |s: &Session| text(s).paragraph_styles().iter().map(|p| p.list.and_then(|l| l.start)).collect::<Vec<_>>();
+    let numbers = |s: &Session| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let undo = |s: &Session| s.active().unwrap().history.undo.len();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    // A call over all the text gives the number to the first paragraph the same call numbers.
+    s.execute("text.setFormat", &json!({"start": 6, "end": 24, "number": "arabic", "startNumber": 5})).unwrap();
+    assert_eq!(starts(&s), [None, Some(5), None, None, None]);
+    assert_eq!(numbers(&s), ["5.", "6.", "7.", "8."]);
+    // On "Three": `restartNumbering` gives it 1, and "Four" counts on from it.
+    let steps = undo(&s);
+    s.execute("text.setFormat", &json!({"start": 14, "end": 14, "restartNumbering": true})).unwrap();
+    assert_eq!((numbers(&s), undo(&s)), (vec!["5.".to_string(), "6.".into(), "1.".into(), "2.".into()], steps + 1));
+    // The same number again, or a call on a paragraph in no list, changes nothing.
+    s.execute("text.setFormat", &json!({"start": 14, "end": 14, "startNumber": 1.0})).unwrap();
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "startNumber": 3})).unwrap();
+    assert_eq!((starts(&s), undo(&s)), (vec![None, Some(5), None, Some(1), None], steps + 1));
+    // Bad values and both keys at once are errors and change nothing.
+    for bad in [
+        json!({"startNumber": 0}),
+        json!({"startNumber": -2}),
+        json!({"startNumber": 2.5}),
+        json!({"startNumber": 1_000_000_000}),
+        json!({"startNumber": "5"}),
+        json!({"restartNumbering": "yes"}),
+        json!({"startNumber": 3, "restartNumbering": true}),
+    ] {
+        assert!(s.execute("text.setFormat", &bad).is_err(), "{bad}");
+    }
+    assert_eq!((starts(&s), undo(&s)), (vec![None, Some(5), None, Some(1), None], steps + 1));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(numbers(&s), ["5.", "6.", "7.", "8."], "one Undo takes the restart back");
+    s.execute("edit.redo", &json!({})).unwrap();
+    // The file keeps the numbers.
+    assert_eq!(serde_json::to_value(text(&s).para_at(1)).unwrap()["list"], json!({"bullet": "dot", "number": "arabic", "start": 5}));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!(back.paragraph_styles(), text(&s).paragraph_styles());
+    // Return at the end of "One" makes an item that counts on, without a number of its own.
+    s.execute("text.editRange", &json!({"id": id, "start": 9, "end": 9, "insert": "\nOne and a half"})).unwrap();
+    assert_eq!(numbers(&s), ["5.", "6.", "7.", "1.", "2."]);
+    assert_eq!(starts(&s), [None, Some(5), None, None, Some(1), None]);
+    // A paragraph style made from the paragraph does not keep its number, and a style's list
+    // with a number is an error.
+    s.execute("paraStyle.new", &json!({"name": "Item", "id": id, "start": 6, "end": 6})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Item", "id": id})).unwrap();
+    assert_eq!(starts(&s), [None; 6]);
+    assert_eq!(numbers(&s), ["1.", "2.", "3.", "4.", "5.", "6."]);
+    let given = json!({"name": "Given", "attrs": {"list": {"number": "arabic", "start": 4}}});
+    assert!(s.execute("paraStyle.new", &given).is_err());
+    // `restartNumbering` false takes every number the call touches away; a paragraph made bulleted
+    // keeps none.
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "startNumber": 7})).unwrap();
+    s.execute("text.setFormat", &json!({"start": 6, "end": 6, "startNumber": 3})).unwrap();
+    assert_eq!(starts(&s)[..2], [Some(7), Some(3)]);
+    s.execute("text.setFormat", &json!({"restartNumbering": false})).unwrap();
+    assert_eq!(starts(&s), [None; 6]);
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "startNumber": 7})).unwrap();
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "bullet": "dot"})).unwrap();
+    assert_eq!(text(&s).para_at(0).list, Some(ParaList::bulleted(Bullet::Dot)));
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "number": "upperRoman"})).unwrap();
+    assert_eq!(text(&s).para_at(0).list.and_then(|l| l.start), None, "numbered again, it counts on");
+    // Convert to Text writes the numbers the paragraphs showed.
+    s.execute("text.setFormat", &json!({"start": 0, "end": 0, "number": "arabic", "startNumber": 10})).unwrap();
+    s.execute("text.setFormat", &json!({"start": 30, "end": 30, "restartNumbering": true})).unwrap();
+    let shown = numbers(&s);
+    assert_eq!(shown, ["10.", "11.", "12.", "13.", "1.", "2."]);
+    s.execute("text.convertListToText", &json!({})).unwrap();
+    let written: Vec<String> = text(&s).plain_text().split('\n').map(|p| p.split('\t').next().unwrap_or("").to_string()).collect();
+    assert_eq!(written, shown);
+    assert_eq!(starts(&s), [None; 6]);
+    assert!(text(&s).paragraph_styles().iter().all(|p| p.list.is_none()));
+}
+
+/// In threaded type, a paragraph given a number in the first frame carries its count on through
+/// the later frames, and a paragraph given 1 in a later frame starts the count again there.
+#[test]
+fn a_given_number_carries_through_threaded_frames() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let numbers = |s: &Session, id: u64| {
+        let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let story = (1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+    let first = numbers(&s, a).len();
+    assert!((2..10).contains(&first), "both frames hold items: {first}");
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 0, "end": 0, "startNumber": 20})).unwrap();
+    let want: Vec<String> = (20..30).map(|n| format!("{n}.")).collect();
+    assert_eq!([numbers(&s, a), numbers(&s, b)].concat(), want);
+    // The first paragraph of the second frame given 1: the second frame counts from 1.
+    s.execute("text.setFormat", &json!({"ids": [b], "start": 0, "end": 0, "restartNumbering": true})).unwrap();
+    let want: Vec<String> = (20..20 + first).chain(1..=10 - first).map(|n| format!("{n}.")).collect();
+    assert_eq!([numbers(&s, a), numbers(&s, b)].concat(), want);
+    // Editing the first frame's number moves every later number on with it.
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 0, "end": 0, "startNumber": 2})).unwrap();
+    let want: Vec<String> = (2..2 + first).chain(1..=10 - first).map(|n| format!("{n}.")).collect();
+    assert_eq!([numbers(&s, a), numbers(&s, b)].concat(), want);
+}
+
+/// A number given in a threaded frame whose first paragraph continues from the frame before goes
+/// to the next numbered paragraph that begins in that frame, not to the item the earlier frame shows,
+/// and `restartNumbering` false there leaves that item's number alone.
+#[test]
+fn a_given_number_skips_the_paragraph_continued_from_the_frame_before() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let numbers = |s: &Session, id: u64| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let long = (1..=40).map(|i| format!("word{i}")).collect::<Vec<_>>().join(" ");
+    let story = format!("One\n{long}\nThree");
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 250})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+    assert!(text(&s, b).first_para_continues, "the second frame starts inside the long paragraph");
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "2.".into()], vec!["3.".to_string()]));
+    s.execute("text.setFormat", &json!({"ids": [b], "startNumber": 5})).unwrap();
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "2.".into()], vec!["5.".to_string()]));
+    // The long item, numbered in the first frame, keeps its number when the second frame's are taken away.
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 4, "end": 4, "startNumber": 8})).unwrap();
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "8.".into()], vec!["5.".to_string()]));
+    s.execute("text.setFormat", &json!({"ids": [b], "restartNumbering": false})).unwrap();
+    assert_eq!((numbers(&s, a), numbers(&s, b)), (vec!["1.".to_string(), "8.".into()], vec!["9.".to_string()]));
+}
+
+/// `startNumber` over several type objects goes to the first numbered paragraph with text among
+/// all of them, past an empty numbered object listed first; with no text anywhere it goes to the
+/// first numbered paragraph.
+#[test]
+fn a_given_number_goes_to_the_first_numbered_text_across_objects() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let make =
+        |s: &mut Session, y: u32, text: &str| s.execute("text.create", &json!({"x": 10, "y": y, "text": text})).unwrap()["id"].as_u64().unwrap();
+    let empty = make(&mut s, 10, "");
+    let full = make(&mut s, 60, "One\nTwo");
+    let start = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para_at(0).list.and_then(|l| l.start),
+        _ => panic!("text"),
+    };
+    s.execute("text.setFormat", &json!({"ids": [empty, full], "number": "arabic"})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [empty, full], "startNumber": 4})).unwrap();
+    assert_eq!((start(&s, empty), start(&s, full)), (None, Some(4)));
+    let other = make(&mut s, 120, "");
+    s.execute("text.setFormat", &json!({"ids": [other, empty], "number": "arabic"})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [other, empty], "startNumber": 6})).unwrap();
+    assert_eq!((start(&s, other), start(&s, empty)), (Some(6), None));
+}
+
+/// Bullets and Numbering… › Alignment: `text.setFormat {listAlign}` sets where the marker
+/// stands in the list paragraphs it touches, in one undo step, and refuses unknown values;
+/// a paragraph in no list gets no list from it. A list keeps its alignment when it changes
+/// between bullets and numbers, and a call that puts a paragraph in a list gives it the
+/// alignment too. The alignment is saved only when it is right, opens with the file, and
+/// paragraph styles carry it both ways.
+#[test]
+fn list_markers_are_aligned_per_paragraph_saved_and_styled() {
+    use vectorcraft_doc::text::{Bullet, ListAlign, NumberStyle, ParaList};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo\nThree", "area": {"width": 300, "height": 200}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let list = |s: &Session, i: usize| text(s).para_at(i).list;
+    let align = |s: &Session| (0..3).map(|i| list(s, i).map(|l| l.align)).collect::<Vec<_>>();
+    let (left, right) = (Some(ListAlign::Left), Some(ListAlign::Right));
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number", "start": 0, "end": 4})).unwrap();
+    assert_eq!(align(&s), [left, left, None]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"listAlign": "right", "start": 0, "end": 0})).unwrap();
+    assert_eq!(align(&s), [right, left, None]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(align(&s), [left, left, None]);
+    s.execute("text.setFormat", &json!({"listAlign": "right"})).unwrap();
+    assert_eq!(align(&s), [right, right, None], "the paragraph in no list stays out of one");
+    for bad in [json!({"listAlign": "center"}), json!({"listAlign": "Right"}), json!({"listAlign": 1}), json!({"listAlign": true})] {
+        assert!(s.execute("text.setFormat", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(align(&s), [right, right, None], "an unknown value changes nothing");
+    // Bullets and numbers keep it; a call that makes a list sets it there too.
+    s.execute("text.setFormat", &json!({"bullet": "square", "start": 0, "end": 0})).unwrap();
+    assert_eq!(list(&s, 0), Some(ParaList::bulleted(Bullet::Square).aligned(ListAlign::Right)));
+    s.execute("text.setFormat", &json!({"list": "bullet", "listAlign": "right", "start": 8, "end": 8})).unwrap();
+    assert_eq!(list(&s, 2), Some(ParaList::bulleted(Bullet::Dot).aligned(ListAlign::Right)));
+    s.execute("text.setFormat", &json!({"listAlign": "left", "start": 8, "end": 8})).unwrap();
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["list"], json!({"bullet": "square", "align": "right"}));
+    assert_eq!(serde_json::to_value(text(&s).para_at(2)).unwrap()["list"], json!({"bullet": "dot"}));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((back.para_at(0).list, back.para_at(1).list), (list(&s, 0), Some(ParaList::numbered(NumberStyle::Arabic).aligned(ListAlign::Right))));
+    // A list turned off and on again starts aligned left.
+    s.execute("text.setFormat", &json!({"list": "none", "start": 4, "end": 4})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number", "start": 4, "end": 4})).unwrap();
+    assert_eq!(align(&s)[1], left);
+    // A style captured from a list aligned right gives other lists that alignment, and one
+    // captured from a list aligned left takes it back.
+    let other = s.execute("text.create", &json!({"x": 10, "y": 300, "text": "Other"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setFormat", &json!({"ids": [other], "list": "number"})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Aligned left", "id": other})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Aligned right", "id": id})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Aligned right", "id": other})).unwrap();
+    let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(other)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!(t.para_at(0).list.map(|l| l.align), right);
+    s.execute("paraStyle.apply", &json!({"name": "Aligned left", "id": id})).unwrap();
+    assert_eq!(align(&s), [left, left, left]);
+}
+
+/// The text object `id`.
+fn text_at(s: &Session, id: u64) -> vectorcraft_doc::text::TextObject {
+    match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    }
+}
+
+/// How many list markers text object `id` draws.
+fn marker_count(s: &Session, id: u64) -> usize {
+    vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text_at(s, id)).markers.len()
+}
+
+/// The tab stops of paragraph `k` of text object `id`.
+fn tab_stops(s: &Session, id: u64, k: usize) -> Vec<(f64, vectorcraft_doc::TabAlign, String)> {
+    text_at(s, id).para_at(k).tabs.iter().map(|t| (t.position, t.align, t.leader.clone())).collect()
+}
+
+/// The glyphs the layout of type `id` draws, each with its glyph, where it is drawn and the
+/// transform it is drawn with (in thousandths), from the top line down and left to right.
+fn drawn_glyphs(s: &Session, id: u64) -> Vec<(u32, i64, i64, [i64; 6])> {
+    let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let milli = |v: f64| (v * 1000.0).round() as i64;
+    let mut v: Vec<(u32, i64, i64, [i64; 6])> = lay
+        .glyphs
+        .iter()
+        .filter(|g| !g.outline.elements().is_empty())
+        .map(|g| (g.gid, milli(g.origin.x), milli(g.origin.y), g.xf.as_coeffs().map(milli)))
+        .collect();
+    v.sort_by_key(|&(_, x, y, _)| (y, x));
+    v
+}
+
+/// Type › Bullets and Numbering › Convert to Text: `text.convertListToText` writes each list
+/// paragraph's marker before its text as characters in the marker's style, followed by a tab,
+/// turns the list off, and gives the paragraph a plain left tab stop at the left indent where
+/// the marker's tab went to it, so every glyph is drawn where it was: bullets in area type (a
+/// wrapped item, an empty item, a right-aligned stop at the indent and a stop before it, both
+/// with leaders), numbers narrower and wider than the hanging indent (one reaching a stop with
+/// a leader past it), and point and vertical type. A paragraph with a tab of its own keeps its
+/// stops past the indent. The characters can be styled and deleted, and one undo brings the
+/// lists back.
+#[test]
+fn convert_to_text_writes_the_markers_where_they_were_drawn() {
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let (text, markers, tabs) = (text_at, marker_count, tab_stops);
+    let long = "The quick brown fox jumps over the lazy dog and runs far away into the woods beyond the hill";
+    let id = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "text": format!("One\n{long}\n\nFour\nFive"), "area": {"width": 200, "height": 400}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let (four, five) = (long.len() + 6, long.len() + 11);
+    s.execute("text.setFormat", &json!({"ids": [id], "list": "bullet"})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "bullet": "square", "start": four, "end": four})).unwrap();
+    // A right-aligned stop with a leader at the fourth item's left indent, and a stop with a
+    // leader before the fifth item's: the bullets' tabs go to the indent and to that stop and
+    // draw no leader.
+    s.execute("text.tabs.set", &json!({"ids": [id], "start": four, "end": four, "stops": [{"position": 18, "align": "right", "leader": "."}]}))
+        .unwrap();
+    s.execute("text.tabs.set", &json!({"ids": [id], "start": five, "end": five, "stops": [{"position": 10, "leader": "."}]})).unwrap();
+    // The first character larger, raised and underlined: the bullet takes its size alone. The
+    // fourth item's first character is larger than the break before it.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 1, "size": 20, "baselineShift": 4, "underline": true})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": four, "end": four + 1, "size": 20})).unwrap();
+    let listed = text(&s, id);
+    let before = drawn_glyphs(&s, id);
+    assert_eq!(markers(&s, id), 4, "the empty item has no bullet");
+    let reply = s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+    let inserted = |at: usize| json!({"id": id, "at": at, "length": 4});
+    assert_eq!(reply, json!({"ids": [id], "converted": 5, "inserted": [inserted(0), inserted(4), inserted(four), inserted(five)]}));
+    assert_eq!(drawn_glyphs(&s, id), before, "every glyph is drawn where it was");
+    let t = text(&s, id);
+    assert_eq!(t.plain_text(), format!("\u{2022}\tOne\n\u{2022}\t{long}\n\n\u{25AA}\tFour\n\u{2022}\tFive"));
+    assert!((0..5).all(|k| t.para_at(k).list.is_none()), "no paragraph is in a list");
+    assert_eq!(markers(&s, id), 0);
+    let left = vectorcraft_doc::TabAlign::Left;
+    let plain_stop = |position| vec![(position, left, String::new())];
+    assert_eq!(
+        (tabs(&s, id, 0), tabs(&s, id, 1), tabs(&s, id, 2), tabs(&s, id, 3), tabs(&s, id, 4)),
+        (plain_stop(18.0), plain_stop(18.0), vec![], plain_stop(18.0), plain_stop(10.0)),
+        "a plain left stop at the left indent (in place of the right-aligned one), none in the empty item, and the stop the \
+             fifth item's tab went to without its leader"
+    );
+    let bullet = &t.runs[0];
+    assert_eq!(
+        (bullet.text.as_str(), bullet.style.size, bullet.style.baseline_shift, bullet.style.underline),
+        ("\u{2022}\t", 20.0, 0.0, false),
+        "the bullet has the first character's size without its baseline shift and underline"
+    );
+    // The characters are text: they take a style and can be deleted.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "size": 30})).unwrap();
+    assert_eq!(text(&s, id).runs[0].style.size, 30.0);
+    s.execute("text.editRange", &json!({"id": id, "start": 0, "end": 4, "insert": ""})).unwrap();
+    assert!(text(&s, id).plain_text().starts_with("One\n\u{2022}\t"));
+    for _ in 0..3 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    let back = text(&s, id);
+    assert_eq!(back.para_at(3).list, Some(ParaList::bulleted(Bullet::Square)));
+    assert_eq!((back.runs, back.para, back.paras), (listed.runs, listed.para, listed.paras), "one undo step");
+    assert_eq!(drawn_glyphs(&s, id), before);
+    // Numbers 1 to 9 at 20 pt are narrower than the hanging indent, 10 is wider and takes the
+    // text to the next default stop, and 11 to its stop at 72 pt, whose leader the number's tab
+    // draws neither before nor after.
+    let items = (1..=11).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+    let id = s.execute("text.create", &json!({"x": 300, "y": 10, "size": 20, "text": items, "area": {"width": 300, "height": 600}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
+    let eleven = 9 * 7 + 8;
+    s.execute("text.tabs.set", &json!({"ids": [id], "start": eleven, "end": eleven, "stops": [{"position": 72, "leader": "."}]})).unwrap();
+    let before = drawn_glyphs(&s, id);
+    s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+    assert_eq!(drawn_glyphs(&s, id), before, "numbers");
+    let expected = (1..=11).map(|i| format!("{i}.\tItem {i}")).collect::<Vec<_>>().join("\n");
+    assert_eq!(text(&s, id).plain_text(), expected);
+    assert_eq!((tabs(&s, id, 0), tabs(&s, id, 9), tabs(&s, id, 10)), (plain_stop(18.0), vec![], plain_stop(72.0)));
+    // A paragraph with a tab of its own keeps its stops past the left indent, which that tab
+    // can reach.
+    let id = s.execute("text.create", &json!({"x": 10, "y": 650, "size": 30, "text": "Item\tvalue"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
+    s.execute("text.tabs.set", &json!({"ids": [id], "stops": [{"position": 72, "leader": "."}, {"position": 200}]})).unwrap();
+    s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+    assert_eq!(text(&s, id).plain_text(), "1.\tItem\tvalue");
+    assert_eq!(tabs(&s, id, 0), [(72.0, left, ".".to_string()), (200.0, left, String::new())]);
+    // A 30 pt number's tab to a right-aligned stop aligns the whole paragraph there, trailing
+    // space included, and a converted tab aligns the rest of its line: a plain left stop where
+    // the number's tab ended keeps the text in place. A right-aligned stop before the left stop
+    // the number's tab reached, which the wrapped paragraph's width kept the number's tab from,
+    // would catch the converted tab, which measures only the first line: it goes. The lines are
+    // compared with the Single-line Composer, as a paragraph with a tab is broken line by line.
+    let right = vectorcraft_doc::TabAlign::Right;
+    for (text_in, width, stops, kept) in [
+        ("One ", 300, json!([{"position": 200, "align": "right"}]), vec![(200.0, right, String::new())]),
+        ("The quick brown fox jumps over the lazy dog", 230, json!([{"position": 100, "align": "right"}, {"position": 150}]), vec![]),
+    ] {
+        let id = s.execute("text.create", &json!({"x": 10, "y": 600, "size": 30, "text": text_in, "area": {"width": width, "height": 300}})).unwrap()
+            ["id"]
+            .as_u64()
+            .unwrap();
+        s.execute("text.setFormat", &json!({"ids": [id], "list": "number", "composer": "singleLine"})).unwrap();
+        s.execute("text.tabs.set", &json!({"ids": [id], "stops": stops})).unwrap();
+        let before = drawn_glyphs(&s, id);
+        s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+        assert_eq!(drawn_glyphs(&s, id), before, "{text_in:?}");
+        let after = tabs(&s, id, 0);
+        assert_eq!((after.first().map(|t| (t.1, t.2.as_str())), after.get(1..).map(<[_]>::to_vec)), (Some((left, "")), Some(kept)), "{text_in:?}");
+    }
+    // Overset items, which the layout leaves out, get the stop by the same rule: a 30 pt number is
+    // wider than the hanging indent, a 12 pt bullet is not.
+    for (size, list, text_after, stop) in
+        [(30, "number", "1.\tOne\n2.\tTwo", vec![]), (12, "bullet", "\u{2022}\tOne\n\u{2022}\tTwo", plain_stop(18.0))]
+    {
+        let id = s
+            .execute("text.create", &json!({"x": 10, "y": 500, "size": size, "text": "One\nTwo", "area": {"width": 200, "height": size + 10}}))
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        s.execute("text.setFormat", &json!({"ids": [id], "list": list})).unwrap();
+        assert_eq!(markers(&s, id), 1, "the second item is overset");
+        s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+        assert_eq!((text(&s, id).plain_text().as_str(), tabs(&s, id, 1)), (text_after, stop), "{size} pt");
+    }
+    point_and_vertical_type_convert(&mut s);
+}
+
+/// Point type and vertical type convert too, and type with no list paragraph has nothing to convert.
+fn point_and_vertical_type_convert(s: &mut Session) {
+    // Point type and vertical type.
+    for vertical in [false, true] {
+        let id = s.execute("text.create", &json!({"x": 400, "y": 700, "vertical": vertical, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
+        let before = drawn_glyphs(s, id);
+        s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+        assert_eq!(drawn_glyphs(s, id), before, "vertical {vertical}");
+        assert_eq!(text_at(s, id).plain_text(), "1.\tOne\n2.\tTwo");
+    }
+    // Type with no list paragraph: nothing to convert and no undo step.
+    let plain = s.execute("text.create", &json!({"x": 10, "y": 700, "text": "Plain"})).unwrap()["id"].as_u64().unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("text.convertListToText", &json!({"ids": [plain]})).unwrap(), json!({"ids": [], "converted": 0, "inserted": []}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// Convert to Text of a list whose markers are aligned right writes the same characters as for
+/// a list aligned left, the marker and then a tab, and gives the paragraphs the same tab stops:
+/// the text after the tab stays where it was, and the marker moves to the first line's start,
+/// where a list aligned left draws it. Numbers narrower than the hanging indent (their tab went
+/// to the left indent) and wider (their tab went to the next default stop), and bullets.
+#[test]
+fn convert_to_text_of_markers_aligned_right_keeps_the_text_in_place() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let text_glyphs = |s: &Session, id: u64| {
+        let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let milli = |v: f64| (v * 1000.0).round() as i64;
+        lay.glyphs
+            .iter()
+            .filter(|g| g.len > 0 && !g.outline.elements().is_empty())
+            .map(|g| (g.gid, milli(g.origin.x), milli(g.origin.y)))
+            .collect::<Vec<_>>()
+    };
+    let plain = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.plain_text(),
+        _ => panic!("text"),
+    };
+    let items = (1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+    for (list, converted) in [
+        ("number", (1..=10).map(|i| format!("{i}.\tItem {i}")).collect::<Vec<_>>().join("\n")),
+        ("bullet", (1..=10).map(|i| format!("\u{2022}\tItem {i}")).collect::<Vec<_>>().join("\n")),
+    ] {
+        let make = |s: &mut Session, align: &str| {
+            let id = s.execute("text.create", &json!({"x": 300, "y": 10, "size": 20, "text": items, "area": {"width": 300, "height": 600}})).unwrap()
+                ["id"]
+                .as_u64()
+                .unwrap();
+            s.execute("text.setFormat", &json!({"ids": [id], "list": list, "listAlign": align})).unwrap();
+            id
+        };
+        let (left, right) = (make(&mut s, "left"), make(&mut s, "right"));
+        let drawn_left = drawn_glyphs(&s, left);
+        let text_before = text_glyphs(&s, right);
+        assert_eq!(text_before, text_glyphs(&s, left), "{list}: the text starts at the same place with either alignment");
+        assert_ne!(drawn_glyphs(&s, right), drawn_left, "{list}: the markers aligned right are drawn elsewhere");
+        s.execute("text.convertListToText", &json!({"ids": [left, right]})).unwrap();
+        assert_eq!((plain(&s, left), plain(&s, right)), (converted.clone(), converted), "{list}: the marker, then a tab");
+        let after = text_glyphs(&s, right);
+        assert!(text_before.iter().all(|g| after.contains(g)), "{list}: the text stays where it was");
+        assert_eq!(drawn_glyphs(&s, right), drawn_left, "{list}: the markers start where a list aligned left draws them");
+        assert_eq!(drawn_glyphs(&s, left), drawn_left, "{list}: aligned left, every glyph stays");
+    }
+}
+
+/// A right-to-left list paragraph converted to text starts with the number, its period and a
+/// tab, which are read first: the line draws its glyphs in the order it drew them with the
+/// marker, the number at the right with its period at its left. Letters and roman numerals
+/// would make the paragraph run left to right, so the paragraph gets the direction it ran in;
+/// digits leave the direction unset.
+#[test]
+fn a_right_to_left_list_paragraph_converts_to_text_read_first() {
+    use vectorcraft_doc::ParaDirection;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    for (number, text, direction) in [
+        ("arabic", "1.\tשלום\n2.\tעולם", None),
+        ("upperLetters", "A.\tשלום\nB.\tעולם", Some(ParaDirection::RightToLeft)),
+        ("upperRoman", "I.\tשלום\nII.\tעולם", Some(ParaDirection::RightToLeft)),
+    ] {
+        let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "שלום\nעולם", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        s.execute("text.setFormat", &json!({"ids": [id], "number": number})).unwrap();
+        // `drawn_glyphs` lists the first line first, from left to right.
+        let order = |s: &Session| {
+            let glyphs = drawn_glyphs(s, id);
+            let top = glyphs.first().map_or(0, |g| g.2);
+            glyphs.into_iter().filter(|g| g.2 == top).map(|g| g.0).collect::<Vec<_>>()
+        };
+        let before = order(&s);
+        s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+        let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        assert_eq!(t.plain_text(), text);
+        assert!(t.para_at(0).list.is_none() && t.para_at(1).list.is_none());
+        let directions = (t.para_at(0).direction, t.para_at(1).direction);
+        assert_eq!(order(&s), before, "{number}: the first line's glyphs from left to right");
+        assert_eq!(directions, (direction, direction), "{number}");
+    }
+}
+
+/// Convert to Text in threaded type writes the numbers the story counted through its frames,
+/// and both frames draw every glyph where it was. A paragraph that continues into the next
+/// frame gets its number once, where it starts, also when only the later frame is named, and
+/// empty frames after a converted paragraph leave its list with it.
+#[test]
+fn threaded_numbers_convert_to_text_as_the_story_counted_them() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let plain = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.plain_text(),
+        _ => panic!("text"),
+    };
+    let numbers = |s: &Session, id: u64| {
+        let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let thread = |s: &mut Session, text: &str| {
+        let a =
+            s.execute("text.create", &json!({"x": 10, "y": 10, "text": text, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+        let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+        (a, b)
+    };
+    // Whole paragraphs: the first frame ends with a paragraph break.
+    let (a, b) = thread(&mut s, &(1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n"));
+    let first = numbers(&s, a).len();
+    assert!((2..10).contains(&first) && plain(&s, a).ends_with('\n'), "both frames hold items: {first}");
+    let before = (drawn_glyphs(&s, a), drawn_glyphs(&s, b));
+    let reply = s.execute("text.convertListToText", &json!({"ids": [a, b]})).unwrap();
+    assert_eq!(reply["converted"], 10, "each paragraph once");
+    assert_eq!((drawn_glyphs(&s, a), drawn_glyphs(&s, b)), before, "both frames");
+    let story = (1..=10).map(|i| format!("{i}.\tItem {i}")).collect::<Vec<_>>().join("\n");
+    assert_eq!(plain(&s, a) + &plain(&s, b), story);
+    assert!(plain(&s, b).starts_with(&format!("{n}.\tItem {n}", n = first + 1)));
+    // The empty part after the first frame's last break and the second frame's first item are
+    // one paragraph: a caret at the end of the first frame converts that item.
+    let (a, b) = thread(&mut s, &(1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n"));
+    let end = plain(&s, a).len();
+    let reply = s.execute("text.convertListToText", &json!({"ids": [a], "start": end, "end": end})).unwrap();
+    assert_eq!(reply["converted"], 1);
+    assert!(plain(&s, b).starts_with(&format!("{n}.\tItem {n}\nItem", n = first + 1)), "{}", plain(&s, b));
+    // A paragraph split between the frames, with only the second frame named.
+    let long = "The quick brown fox jumps over the lazy dog. ".repeat(4);
+    let (a, b) = thread(&mut s, &format!("One\nTwo\n{long}\nFour"));
+    assert!(!plain(&s, a).ends_with('\n'), "the third paragraph goes on in the second frame");
+    // A paragraph with a tab is broken line by line, so the lines are compared with the
+    // Single-line Composer, which breaks the listed paragraph the same way.
+    s.execute("text.setFormat", &json!({"ids": [a, b], "composer": "singleLine"})).unwrap();
+    let before = (drawn_glyphs(&s, a), drawn_glyphs(&s, b));
+    s.execute("text.convertListToText", &json!({"ids": [b]})).unwrap();
+    assert_eq!((drawn_glyphs(&s, a), drawn_glyphs(&s, b)), before, "both frames, with the paragraph split between them");
+    assert_eq!(plain(&s, a) + &plain(&s, b), format!("One\nTwo\n3.\t{long}\n4.\tFour"));
+    assert_eq!(numbers(&s, a), ["1.", "2."], "the paragraphs of the first frame alone stay in the list");
+    let Some(NodeKind::Text(second)) = s.doc().unwrap().doc.node(NodeId(b)).map(|n| &n.kind) else { panic!("text") };
+    assert!(second.para_at(0).list.is_none(), "the third paragraph's part in the second frame leaves the list too");
+    // One item that fits in the first of three frames: the two empty frames after it leave the
+    // list too, so the re-flowed thread draws no number before the converted one.
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "Item", "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    let c = s.execute("shape.rectangle", &json!({"x": 400, "y": 10, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b, c], "list": "number"})).unwrap();
+    assert_eq!((plain(&s, b), plain(&s, c), numbers(&s, a)), (String::new(), String::new(), vec!["1.".to_string()]));
+    assert_eq!(s.execute("text.convertListToText", &json!({"ids": [a]})).unwrap()["converted"], 1);
+    assert_eq!(plain(&s, a), "1.\tItem");
+    assert_eq!(numbers(&s, a), Vec::<String>::new(), "no number drawn before the converted one");
+    for id in [a, b, c] {
+        let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+        assert!(t.para_at(0).list.is_none(), "frame {id} leaves the list");
+    }
+    // An overset 30 pt number, wider than the hanging indent, in a last frame that starts
+    // inside a paragraph: its tab goes to the next stop, so it gets no stop at the left indent.
+    let a = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "size": 30, "text": format!("{long}\nTwo"), "area": {"width": 150, "height": 80}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 80})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+    let Some(NodeKind::Text(second)) = s.doc().unwrap().doc.node(NodeId(b)).map(|n| &n.kind) else { panic!("text") };
+    assert!(second.first_para_continues && second.plain_text().ends_with("\nTwo"), "{:?}", second.plain_text());
+    assert_eq!(numbers(&s, b).len(), 0, "the second item is overset");
+    s.execute("text.convertListToText", &json!({"ids": [b]})).unwrap();
+    let Some(NodeKind::Text(second)) = s.doc().unwrap().doc.node(NodeId(b)).map(|n| &n.kind) else { panic!("text") };
+    assert!(second.plain_text().ends_with("\n2.\tTwo"), "{:?}", second.plain_text());
+    assert!(second.para_at(1).tabs.is_empty(), "no stop at the left indent: {:?}", second.para_at(1).tabs);
+}
+
+/// `text.convertListToText` sent while the Type tool edits (as from MCP or the control channel)
+/// moves the tool's anchor and caret past the characters it inserts at or before them, so that
+/// neither lands inside a bullet. In threaded type, when the text before the caret moves to the
+/// frame before, the caret goes with its character into that frame, which becomes the
+/// selection.
+#[test]
+fn convert_to_text_moves_the_type_tools_selection() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let plain = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.plain_text(),
+        _ => panic!("text"),
+    };
+    let selection = |s: &Session| {
+        let o = s.tool_options();
+        (o["editing"].as_u64(), o["anchor"].as_u64(), o["caret"].as_u64())
+    };
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "list": "bullet"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.select_tool("type", Default::default()).unwrap();
+    // From after the O of One to after the T of Two.
+    s.set_tool_option("textSelection", &json!({"editing": id, "anchor": 1, "caret": 5}));
+    s.execute("text.convertListToText", &json!({})).unwrap();
+    let text = plain(&s, id);
+    assert_eq!(text, "\u{2022}\tOne\n\u{2022}\tTwo");
+    assert_eq!(selection(&s), (Some(id), Some(5), Some(13)), "the anchor after the O, the caret after the T");
+    assert!(text.is_char_boundary(5) && text.is_char_boundary(13));
+
+    let long = "The quick brown fox jumps over the lazy dog. ".repeat(4);
+    let a = s
+        .execute("text.create", &json!({"x": 10, "y": 10, "text": format!("One\nTwo\n{long}\nFour"), "area": {"width": 150, "height": 60}}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.select_tool("selection", Default::default()).unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+    assert!(plain(&s, b).starts_with("dog. "), "the second frame starts with the dog: {:?}", plain(&s, b));
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    s.select_tool("type", Default::default()).unwrap();
+    // The caret after the d of dog, at the start of the second frame.
+    s.set_tool_option("textSelection", &json!({"editing": b, "anchor": 1, "caret": 1}));
+    s.execute("text.convertListToText", &json!({"ids": [b]})).unwrap();
+    let first = plain(&s, a);
+    assert!(first.ends_with("lazy dog. "), "the dog moved to the first frame: {first:?}");
+    let after_d = (first.len() - "og. ".len()) as u64;
+    assert_eq!(selection(&s), (Some(a), Some(after_d), Some(after_d)), "the caret is after the d of dog in the first frame");
+    assert_eq!(s.active().unwrap().selection.objects, vec![NodeId(a)], "the first frame is selected");
+}
+
+/// Convert to Text of list paragraphs at deeper levels writes each level's own numbers, those
+/// a thread's earlier frames counted at each level included, and every glyph is drawn where it
+/// was: each converted paragraph's left indent takes its level's indent, with the plain left
+/// stop there.
+#[test]
+fn convert_to_text_keeps_deeper_list_levels_in_place() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let text = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let numbers = |s: &Session, id: u64| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s, id)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    let text_in = "One\nTwo\nThree\nFour\nFive";
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": text_in, "area": {"width": 400, "height": 400}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "listLevel": 2, "start": 4, "end": 9})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id], "listLevel": 3, "start": 14, "end": 14})).unwrap();
+    let before = drawn_glyphs(&s, id);
+    s.execute("text.convertListToText", &json!({"ids": [id]})).unwrap();
+    assert_eq!(drawn_glyphs(&s, id), before, "every glyph is drawn where it was");
+    let t = text(&s, id);
+    assert_eq!(t.plain_text(), "1.\tOne\n1.\tTwo\n2.\tThree\n1.\tFour\n2.\tFive");
+    let paras = (0..5)
+        .map(|k| {
+            let p = t.para_at(k);
+            (p.list.is_none(), p.left_indent, p.tabs.iter().map(|tab| tab.position).collect::<Vec<_>>())
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(paras, [18.0, 36.0, 36.0, 54.0, 18.0].map(|x| (true, x, vec![x])), "out of the list, at the level's indent");
+    // A thread whose second frame goes on with the numbers of level 2.
+    let items = std::iter::once("Head".to_string()).chain((1..=9).map(|i| format!("Item {i}"))).collect::<Vec<_>>().join("\n");
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 500, "text": items, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 500, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number", "listLevel": 2})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a], "listLevel": 1, "start": 0, "end": 0})).unwrap();
+    let first = numbers(&s, a).len();
+    assert!((3..10).contains(&first) && text(&s, a).plain_text().ends_with('\n'), "both frames hold items: {first}");
+    assert_eq!(numbers(&s, b).first(), Some(&format!("{first}.")), "the second frame counts level 2 on");
+    let before = (drawn_glyphs(&s, a), drawn_glyphs(&s, b));
+    s.execute("text.convertListToText", &json!({"ids": [a, b]})).unwrap();
+    assert_eq!((drawn_glyphs(&s, a), drawn_glyphs(&s, b)), before, "both frames");
+    let story = std::iter::once("1.\tHead".to_string()).chain((1..=9).map(|i| format!("{i}.\tItem {i}"))).collect::<Vec<_>>().join("\n");
+    assert_eq!(text(&s, a).plain_text() + &text(&s, b).plain_text(), story);
+}
+
+/// List levels: `text.setFormat {listLevel}` sets the level of the list paragraphs it touches
+/// as one undo step, from 1 to 9, and refuses other values; bullets and numbers keep it, a
+/// list turned off and on starts at level 1 again, each level counts its own numbers, and the
+/// level is saved past level 1, reopened and carried by paragraph styles.
+#[test]
+fn list_levels_are_set_per_paragraph_saved_and_styled() {
+    use vectorcraft_doc::text::{Bullet, NumberStyle, ParaList};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo\nThree\nFour", "area": {"width": 300, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    let levels = |s: &Session| (0..4).map(|i| text(s).para_at(i).list.map(|l| l.level)).collect::<Vec<_>>();
+    let numbers = |s: &Session| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(s)).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>()
+    };
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number", "start": 0, "end": 9})).unwrap();
+    assert_eq!(levels(&s), [Some(1), Some(1), Some(1), None]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"listLevel": 2, "start": 4, "end": 9})).unwrap();
+    assert_eq!(levels(&s), [Some(1), Some(2), Some(2), None]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(numbers(&s), ["1.", "1.", "2."]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(levels(&s), [Some(1), Some(1), Some(1), None]);
+    s.execute("text.setFormat", &json!({"listLevel": 2.0, "start": 4, "end": 4})).unwrap();
+    assert_eq!(levels(&s)[1], Some(2));
+    s.execute("text.setFormat", &json!({"listLevel": 9})).unwrap();
+    assert_eq!(levels(&s), [Some(9), Some(9), Some(9), None], "the paragraph in no list stays out of one");
+    let bad = [json!({"listLevel": 0}), json!({"listLevel": 10}), json!({"listLevel": 1.5}), json!({"listLevel": "2"}), json!({"listLevel": true})];
+    for p in bad {
+        assert!(s.execute("text.setFormat", &p).is_err(), "{p}");
+    }
+    let err = s.execute("text.setFormat", &json!({"listLevel": 10})).unwrap_err().to_string();
+    assert!(err.contains("`listLevel` must be a whole number between 1 and 9 (got 10)"), "{err}");
+    assert_eq!(levels(&s)[0], Some(9), "an unknown value changes nothing");
+    // A deeper paragraph counts from 1, and one back at a shallower level goes on.
+    s.execute("text.setFormat", &json!({"listLevel": 1, "start": 0, "end": 0})).unwrap();
+    s.execute("text.setFormat", &json!({"listLevel": 3, "start": 4, "end": 4})).unwrap();
+    s.execute("text.setFormat", &json!({"listLevel": 1, "start": 8, "end": 8})).unwrap();
+    assert_eq!(numbers(&s), ["1.", "1.", "2."]);
+    // Bullets and numbers keep the level; a call that makes a list sets it there too.
+    s.execute("text.setFormat", &json!({"bullet": "square", "start": 4, "end": 4})).unwrap();
+    assert_eq!(text(&s).para_at(1).list, Some(ParaList::bulleted(Bullet::Square).at_level(3)));
+    s.execute("text.setFormat", &json!({"list": "bullet", "listLevel": 4, "start": 14, "end": 14})).unwrap();
+    assert_eq!(text(&s).para_at(3).list, Some(ParaList::bulleted(Bullet::Dot).at_level(4)));
+    assert_eq!(serde_json::to_value(text(&s).para_at(1)).unwrap()["list"], json!({"bullet": "square", "level": 3}));
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["list"], json!({"bullet": "dot", "number": "arabic"}));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((0..4).map(|i| back.para_at(i).list).collect::<Vec<_>>(), (0..4).map(|i| text(&s).para_at(i).list).collect::<Vec<_>>());
+    // A list turned off and on again starts at level 1.
+    s.execute("text.setFormat", &json!({"list": "none", "start": 4, "end": 4})).unwrap();
+    s.execute("text.setFormat", &json!({"list": "number", "start": 4, "end": 4})).unwrap();
+    assert_eq!(text(&s).para_at(1).list, Some(ParaList::numbered(NumberStyle::Arabic)));
+    // A style captured from a paragraph at level 4 sets that level, and one captured at level 1
+    // takes it back.
+    s.execute("paraStyle.new", &json!({"name": "Level 4", "id": id, "start": 14, "end": 14})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Level 1", "id": id, "start": 0, "end": 0})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Level 4", "id": id, "start": 0, "end": 0})).unwrap();
+    assert_eq!(levels(&s)[0], Some(4));
+    s.execute("paraStyle.apply", &json!({"name": "Level 1", "id": id})).unwrap();
+    assert_eq!(levels(&s), [Some(1); 4]);
+}
+
+/// Type › Create Outlines makes a path of a list item's bullet as well as of its characters.
+#[test]
+fn create_outlines_makes_a_path_of_the_bullet() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let outlined = |s: &mut Session, list: bool| {
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "One"})).unwrap()["id"].as_u64().unwrap();
+        if list {
+            s.execute("text.setFormat", &json!({"ids": [id], "list": "bullet"})).unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        s.doc().unwrap().doc.node(NodeId(g)).unwrap().children().unwrap().len()
+    };
+    let plain = outlined(&mut s, false);
+    assert_eq!(outlined(&mut s, true), plain + 1, "one more path: the bullet");
+}
+
+/// Paragraph panel menu › Justification…: `text.setFormat` sets each paragraph's word and
+/// letter spacing, glyph scaling, Auto Leading and Single Word Justification, clamped to their
+/// ranges, in one undo step; Minimum ≤ Desired ≤ Maximum must hold or nothing changes. They
+/// are saved only when not the defaults, and paragraph styles carry them.
+#[test]
+fn justification_options_are_set_per_paragraph_and_saved_only_when_not_default() {
+    use vectorcraft_doc::{JustificationOptions, SingleWordJustify};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One\nTwo", "area": {"width": 200, "height": 100}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let paras = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (t.para_at(0).clone(), t.para_at(1).clone()),
+        _ => panic!("text"),
+    };
+    assert_eq!(paras(&s).0.justification, JustificationOptions::default());
+    assert!(serde_json::to_value(paras(&s).0).unwrap().get("justification").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute(
+        "text.setFormat",
+        &json!({
+            "wordSpacing": [60, 90, 2000], "letterSpacing": {"max": 10}, "glyphScaling": [95, 100, 105],
+            "autoLeading": 150, "singleWordJustification": "alignCenter", "start": 5, "end": 5
+        }),
+    )
+    .unwrap();
+    let want = JustificationOptions {
+        word_spacing: [60.0, 90.0, 1000.0],
+        letter_spacing: [0.0, 0.0, 10.0],
+        glyph_scaling: [95.0, 100.0, 105.0],
+        auto_leading: 150.0,
+        single_word: SingleWordJustify::AlignCenter,
+    };
+    let (first, second) = paras(&s);
+    assert_eq!((first.justification, &second.justification), (JustificationOptions::default(), &want), "only the paragraph the caret is in");
+    assert_eq!(serde_json::to_value(&second).unwrap()["justification"]["single_word"], "alignCenter");
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(serde_json::to_value(&second).unwrap()).unwrap();
+    assert_eq!(back.justification, want);
+    // Out of order: nothing changes, and the error names the setting.
+    let e = s.execute("text.setFormat", &json!({"wordSpacing": {"desired": 85}, "letterSpacing": {"min": 5}})).unwrap_err().to_string();
+    assert!(e.contains("letterSpacing"), "{e}");
+    assert_eq!(paras(&s).1.justification, want);
+    assert!(s.execute("text.setFormat", &json!({"glyphScaling": [100, 100]})).is_err());
+    assert!(s.execute("text.setFormat", &json!({"singleWordJustification": "spread"})).is_err());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paras(&s).1.justification, JustificationOptions::default());
+    // A paragraph style carries them; an older file's paragraph reads the defaults.
+    s.execute("paraStyle.new", &json!({"name": "Airy", "attrs": {"justification": {"auto_leading": 200.0}}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Airy", "id": id})).unwrap();
+    assert_eq!(paras(&s).0.justification, JustificationOptions { auto_leading: 200.0, ..JustificationOptions::default() });
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left", "hyphenate": true})).unwrap();
+    assert_eq!(old.justification, JustificationOptions::default());
+}
+
+/// #432: while the interface is in Japanese, new type (text.create, text.createInPath) starts
+/// with em box top-to-top leading and em box centre alignment, and new styles made from nothing
+/// carry them; params override; the values are journaled; imported text keeps the Roman
+/// baseline.
+#[test]
+fn new_type_takes_the_japanese_defaults_while_the_interface_is_japanese() {
+    use vectorcraft_doc::{CharAlign, LeadingModel};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let made = |s: &mut Session, cmd: &str, p: Value| -> (LeadingModel, CharAlign) {
+        let id = s.execute(cmd, &p).unwrap()["id"].as_u64().unwrap();
+        match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => (t.para.leading_model, t.runs[0].style.char_align),
+            _ => panic!("text"),
+        }
+    };
+    let roman = (LeadingModel::RomanBaseline, CharAlign::RomanBaseline);
+    let japanese = (LeadingModel::EmBoxTop, CharAlign::EmBoxCenter);
+    let point = json!({"x": 10, "y": 50, "text": "雅楽"});
+    assert!(!s.japanese_interface());
+    assert_eq!(made(&mut s, "text.create", point.clone()), roman, "headless, `auto`: the Roman defaults");
+    s.ui_language = Some("ja".into());
+    assert_eq!(made(&mut s, "text.create", point.clone()), japanese);
+    assert_eq!(made(&mut s, "text.create", json!({"x": 10, "y": 90, "text": "笙", "area": {"width": 100, "height": 50}})), japanese);
+    // Journaled: a replay in another language does the same.
+    let (_, logged) = s.journal.last().unwrap().clone();
+    assert_eq!((logged["leadingModel"].as_str(), logged["charAlign"].as_str()), (Some("emBoxTop"), Some("emBoxCenter")));
+    // Params override.
+    assert_eq!(
+        made(&mut s, "text.create", json!({"x": 10, "y": 120, "text": "a", "leadingModel": "romanBaseline", "charAlign": "romanBaseline"})),
+        roman
+    );
+    assert!(s.execute("text.create", &json!({"x": 0, "y": 0, "text": "a", "leadingModel": "middle"})).is_err());
+    // Area type in a path.
+    let path = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 100, "height": 80})).unwrap()["id"].clone();
+    assert_eq!(made(&mut s, "text.createInPath", json!({"path": path, "mode": "area", "text": "篳篥"})), japanese);
+    // A preference set to Japanese counts without a UI; another language doesn't.
+    s.ui_language = None;
+    s.prefs.interface_language = "ja".into();
+    assert_eq!(made(&mut s, "text.create", point.clone()), japanese);
+    s.ui_language = Some("en".into());
+    assert_eq!(made(&mut s, "text.create", point.clone()), roman);
+    // New styles made from nothing.
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.ui_language = Some("ja".into());
+    let style = |s: &mut Session, kind: &str| {
+        let name = s.execute(&format!("{kind}.new"), &json!({})).unwrap()["name"].as_str().unwrap().to_string();
+        let list = s.execute(&format!("{kind}.list"), &json!({})).unwrap();
+        list["styles"].as_array().unwrap().iter().find(|st| st["name"] == name.as_str()).unwrap()["attrs"].clone()
+    };
+    assert_eq!(style(&mut s, "paraStyle"), json!({"leading_model": "emBoxTop"}));
+    assert_eq!(style(&mut s, "charStyle"), json!({"charAlign": "emBoxCenter"}));
+    s.ui_language = Some("en".into());
+    assert_eq!(style(&mut s, "paraStyle"), json!({}));
+    // Imported text keeps the Roman baseline.
+    s.ui_language = Some("ja".into());
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><text x="10" y="50">雅楽</text></svg>"#;
+    s.execute("document.open", &json!({"name": "t.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    let mut found = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            found.push((t.para.leading_model, t.runs[0].style.char_align));
+        }
+    });
+    assert_eq!(found, [roman]);
+}
+
+#[test]
+fn leading_model_is_set_per_paragraph_and_saved_only_when_top_to_top() {
+    use vectorcraft_doc::LeadingModel;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    // Exercise ink bounds with bundled glyphs; Japanese outlines require optional craft-fonts.
+    let id =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "A\nB", "area": {"width": 200, "height": 100}})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert_eq!(text(&s).para.leading_model, LeadingModel::RomanBaseline);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    assert!(s.execute("text.setFormat", &json!({"leadingModel": "middle"})).is_err());
+    let before = text(&s).cached_bounds;
+    s.execute("text.setFormat", &json!({"leadingModel": "emBoxTop"})).unwrap();
+    let t = text(&s);
+    assert_eq!(t.para.leading_model, LeadingModel::EmBoxTop);
+    // The fallback used without craft-fonts has no glyph metrics to move the first line.
+    if !vectorcraft_text::CRAFT_FONTS.is_empty() {
+        assert_ne!(t.cached_bounds, before, "the first line moves up to the frame's top");
+    }
+    assert_eq!(serde_json::to_value(&t.para).unwrap()["leading_model"], "emBoxTop");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(serde_json::to_value(&text(&s).para).unwrap().get("leading_model").is_none());
+}
+
+#[test]
+fn character_alignment_is_a_character_attribute_saved_only_when_set() {
+    use vectorcraft_doc::CharAlign;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "雅楽"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert_eq!(runs(&s)[0].style.char_align, CharAlign::RomanBaseline);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("charAlign").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    assert!(s.execute("text.setFormat", &json!({"charAlign": "middle"})).is_err());
+    s.execute("text.setFormat", &json!({"charAlign": "emBoxCenter"})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.char_align == CharAlign::EmBoxCenter));
+    assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["charAlign"], "emBoxCenter");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(runs(&s)[0].style.char_align, CharAlign::RomanBaseline);
+    // Characters selected with the Type tool: only the range takes it (雅 is 3 bytes).
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "charAlign": "top"})).is_err());
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "charAlign": "emBoxTop"})).unwrap();
+    let aligns: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.char_align)).collect();
+    assert_eq!(aligns, [("雅".to_string(), CharAlign::RomanBaseline), ("楽".to_string(), CharAlign::EmBoxTop)]);
+    // The ideographic character face's top and bottom.
+    for (key, want) in [("icfTop", CharAlign::IcfTop), ("icfBottom", CharAlign::IcfBottom)] {
+        s.execute("text.setFormat", &json!({"charAlign": key})).unwrap();
+        assert!(runs(&s).iter().all(|r| r.style.char_align == want));
+        assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["charAlign"], key);
+    }
+}
+
+/// Character Direction (Character panel menu, Middle Eastern options): a character attribute
+/// that `text.setFormat` and `text.setRangeStyle` set in one undo step each, saved only when
+/// set and kept by a native save.
+#[test]
+fn character_direction_is_a_character_attribute_saved_only_when_set() {
+    use vectorcraft_doc::ParaDirection;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "שלום 21 10 2026"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let set = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.char_direction)).collect::<Vec<_>>();
+    assert_eq!(runs(&s)[0].style.char_direction, None);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("charDirection").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    for (key, want) in [("rightToLeft", Some(ParaDirection::RightToLeft)), ("leftToRight", Some(ParaDirection::LeftToRight)), ("default", None)] {
+        s.execute("text.setFormat", &json!({"charDirection": key})).unwrap();
+        assert!(runs(&s).iter().all(|r| r.style.char_direction == want));
+        let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+        assert_eq!(saved.get("charDirection").and_then(|v| v.as_str()), want.is_some().then_some(key));
+    }
+    let err = s.execute("text.setFormat", &json!({"charDirection": "up"})).unwrap_err().to_string();
+    assert!(err.contains("`charDirection` must be"), "{err}");
+    // Characters selected with the Type tool: only the range takes it (שלום and the space are 9 bytes).
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 9, "end": 19, "charDirection": "leftToRight"})).unwrap();
+    assert_eq!(set(&s), [("שלום ".to_string(), None), ("21 10 2026".to_string(), Some(ParaDirection::LeftToRight))]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.char_direction.is_none()));
+    s.execute("edit.redo", &json!({})).unwrap();
+    // Saved and reopened as it was.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.char_direction)).collect();
+    assert_eq!(reopened, set(&s));
+    // A character style captured from the characters carries it, Default included.
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["charDirection"], "leftToRight");
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style).get("charDirection"), Some(&serde_json::Value::Null));
+}
+
+/// The Character-menu switch is on for new and old text, and changing a selected range leaves
+/// its neighbors alone. The paragraph's Insert Kashidas length is a separate setting.
+#[test]
+fn character_kashidas_default_on_and_round_trip_by_range() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "كتب محمد"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(runs(&s)[0].style.kashidas);
+    let old = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(old.get("kashidas").is_none());
+    assert!(serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().kashidas);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 6, "kashidas": false})).unwrap();
+    assert_eq!(runs(&s).iter().map(|r| r.style.kashidas).collect::<Vec<_>>(), [true, false, true]);
+    let err = s.execute("text.setRangeStyle", &json!({"id": id, "kashidas": "off"})).unwrap_err().to_string();
+    assert!(err.contains("kashidas"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.kashidas));
+    s.execute("edit.redo", &json!({})).unwrap();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(), [true, false, true]);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"kashidas": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.kashidas));
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style)["kashidas"], true);
+}
+
+/// Proportional Metrics (#966): a character attribute, saved only when on.
+#[test]
+fn proportional_metrics_is_a_character_attribute_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "雅楽"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(!runs(&s)[0].style.proportional_metrics);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("proportionalMetrics").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"proportionalMetrics": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.proportional_metrics));
+    assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["proportionalMetrics"], true);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!runs(&s)[0].style.proportional_metrics);
+    // Characters selected with the Type tool: only the range takes it (雅 is 3 bytes).
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "proportionalMetrics": true})).unwrap();
+    let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.proportional_metrics)).collect();
+    assert_eq!(on, [("雅".to_string(), false), ("楽".to_string(), true)]);
+    // Styles written without it (documents from before it) read as off.
+    let old = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(old.get("proportionalMetrics").is_none());
+    assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().proportional_metrics);
+}
+
+/// H or V Style (`hkna`) and Roman Italics (`ital`, OpenType panel menu, East Asian options) are
+/// feature tags of the characters: set on a range and turned off again, kept by a character style
+/// and in a saved document, on or off only (`hkna=2` is refused and changes nothing).
+#[test]
+fn kana_style_and_roman_italics_are_character_features() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "かなAB"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.features.clone())).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    // か and な are 3 bytes each.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 6, "features": ["hkna"]})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 6, "end": 8, "featureChanges": ["ital"]})).unwrap();
+    assert_eq!(runs(&s), [("かな".to_string(), vec!["hkna".to_string()]), ("AB".to_string(), vec!["ital".to_string()])]);
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &saved.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs.iter().map(|r| r.style.features.clone()).collect::<Vec<_>>(), [vec!["hkna".to_string()], vec!["ital".to_string()]]);
+    let before = runs(&s);
+    for bad in [json!({"id": id, "features": ["hkna=2"]}), json!({"id": id, "featureChanges": ["ital=1"]})] {
+        let e = s.execute("text.setRangeStyle", &bad).unwrap_err().to_string();
+        assert!(e.contains("unknown OpenType feature"), "{e}");
+    }
+    assert_eq!(runs(&s), before);
+    s.execute("text.setRangeStyle", &json!({"id": id, "featureChanges": ["-hkna", "-ital"]})).unwrap();
+    assert!(runs(&s).iter().all(|(_, f)| f.is_empty()), "{:?}", runs(&s));
+    s.execute("charStyle.new", &json!({"name": "Kana", "attrs": {"features": ["hkna", "ital"]}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Kana", "id": id})).unwrap();
+    assert!(runs(&s).iter().all(|(_, f)| *f == ["hkna", "ital"]), "{:?}", runs(&s));
+    let e = s.execute("charStyle.new", &json!({"name": "Bad", "attrs": {"features": ["ital=2"]}})).unwrap_err().to_string();
+    assert!(e.contains("unknown OpenType feature `ital=2`"), "{e}");
+}
+
+/// Tate-chu-yoko (Character panel menu, East Asian options): a character attribute, saved only
+/// when on. Documents written before it read as off.
+#[test]
+fn tate_chu_yoko_is_a_character_attribute_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "2026年"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(!runs(&s)[0].style.tate_chu_yoko);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("tateChuYoko").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"tateChuYoko": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.tate_chu_yoko));
+    assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["tateChuYoko"], true);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!runs(&s)[0].style.tate_chu_yoko);
+    // The year only (2026 is 4 bytes); 年 stays unmarked.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 4, "tateChuYoko": true})).unwrap();
+    let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.tate_chu_yoko)).collect();
+    assert_eq!(on, [("2026".to_string(), true), ("年".to_string(), false)]);
+    let old = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert!(old.get("tateChuYoko").is_none());
+    assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().tate_chu_yoko);
+    s.execute("text.setFormat", &json!({"tateChuYoko": false})).unwrap();
+    assert!(runs(&s).iter().all(|r| !r.style.tate_chu_yoko));
+}
+
+/// Tate-chu-yoko Settings (Character panel menu): Up/Down and Left/Right are character attributes
+/// in points, 0 by default and saved only when not 0. Both commands set them without changing the
+/// Tate-chu-yoko mark, refuse a value that is not a number or lies outside -1296 to 1296, and a
+/// character style captured from the characters carries them.
+#[test]
+fn tate_chu_yoko_settings_are_character_attributes_saved_only_when_set() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "2026年"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let offsets = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.tcy_up_down, r.style.tcy_left_right)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("tcyUpDown").is_none() && saved.get("tcyLeftRight").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"tcyUpDown": 3.5, "tcyLeftRight": -2})).unwrap();
+    assert_eq!(offsets(&s), [("2026年".to_string(), 3.5, -2.0)]);
+    assert!(!runs(&s)[0].style.tate_chu_yoko, "the mark stays off");
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert_eq!((saved["tcyUpDown"].clone(), saved["tcyLeftRight"].clone()), (json!(3.5), json!(-2.0)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(offsets(&s), [("2026年".to_string(), 0.0, 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(offsets(&s), [("2026年".to_string(), 3.5, -2.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 4, "tateChuYoko": true, "tcyUpDown": -4})).unwrap();
+    assert_eq!(offsets(&s), [("2026".to_string(), -4.0, 0.0), ("年".to_string(), 0.0, 0.0)]);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 4, "tcyLeftRight": 1296})).unwrap();
+    assert_eq!(offsets(&s)[0], ("2026".to_string(), -4.0, 1296.0));
+    assert!(runs(&s)[0].style.tate_chu_yoko);
+    // Saved and reopened as they were.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.tcy_up_down, r.style.tcy_left_right)).collect();
+    assert_eq!(reopened, offsets(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[0].style);
+    assert_eq!((attrs["tcyUpDown"].clone(), attrs["tcyLeftRight"].clone()), (json!(-4.0), json!(1296.0)));
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["tcyUpDown"], json!(0.0));
+
+    let before = offsets(&s);
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"tcyUpDown": "3"}), "`tcyUpDown` must be a number"),
+        ("text.setFormat", json!({"tcyLeftRight": 1296.5}), "`tcyLeftRight` must be from -1296 to 1296"),
+        ("text.setRangeStyle", json!({"id": id, "tcyLeftRight": true}), "`tcyLeftRight` must be a number"),
+        ("text.setRangeStyle", json!({"id": id, "tcyUpDown": -2000}), "`tcyUpDown` must be from -1296 to 1296"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(offsets(&s), before);
+}
+
+/// Warichu and Warichu Settings (Character panel menu, East Asian options): character attributes
+/// saved only when they differ from their defaults (off, 2 lines, no gap, 50%, Auto). Both
+/// commands set them in one undo step, a call that changes nothing records none, a bad value is
+/// refused naming the key before anything changes, the file and character styles keep them, and
+/// SVG and PDF write type with warichu as outlines.
+#[test]
+fn warichu_is_a_character_attribute_set_saved_and_exported() {
+    use vectorcraft_doc::WarichuAlign;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "ab cdef g"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let settings = |s: &Session| {
+        runs(s)
+            .iter()
+            .map(|r| (r.text.clone(), r.style.warichu, r.style.warichu_lines, r.style.warichu_gap, r.style.warichu_scale, r.style.warichu_align))
+            .collect::<Vec<_>>()
+    };
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(["warichu", "warichuLines", "warichuGap", "warichuScale", "warichuAlign"].iter().all(|k| saved.get(*k).is_none()), "{saved}");
+    let plain_svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
+    let plain_pdf = vectorcraft_pdf::export(&s.doc().unwrap().doc, &vectorcraft_pdf::PdfOptions::uncompressed()).unwrap();
+    // Only text objects count: the file ID in the trailer and the XMP is base64 that changes each
+    // second and now and then spells `Tj` or `TJ`.
+    let text_ops = |pdf: &[u8]| String::from_utf8_lossy(pdf).lines().any(|l| l.starts_with("BT ") && (l.contains("Tj") || l.contains("TJ")));
+    assert!(plain_svg.contains("<text") && text_ops(&plain_pdf));
+
+    // text.setFormat with the values the characters already have changes nothing and records no
+    // undo step.
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"warichu": false, "warichuLines": 2, "warichuAlign": "auto"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    let p = json!({"id": id, "start": 3, "end": 7, "warichu": true, "warichuLines": 3, "warichuGap": 2.5, "warichuScale": 40, "warichuAlign": "justifyAll"});
+    s.execute("text.setRangeStyle", &p).unwrap();
+    let want = vec![
+        ("ab ".to_string(), false, 2, 0.0, 50.0, WarichuAlign::Auto),
+        ("cdef".to_string(), true, 3, 2.5, 40.0, WarichuAlign::JustifyAll),
+        (" g".to_string(), false, 2, 0.0, 50.0, WarichuAlign::Auto),
+    ];
+    assert_eq!(settings(&s), want);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let saved = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert_eq!(
+        [&saved["warichu"], &saved["warichuLines"], &saved["warichuGap"], &saved["warichuScale"], &saved["warichuAlign"]],
+        [&json!(true), &json!(3), &json!(2.5), &json!(40.0), &json!("justifyAll")]
+    );
+    // Saved and reopened as they were.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(
+        t.runs.iter().map(|r| (r.style.warichu, r.style.warichu_lines, r.style.warichu_align)).collect::<Vec<_>>(),
+        [(false, 2, WarichuAlign::Auto), (true, 3, WarichuAlign::JustifyAll), (false, 2, WarichuAlign::Auto)]
+    );
+    // A character style captured from the characters carries them.
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[1].style);
+    assert_eq!(
+        (attrs["warichu"].clone(), attrs["warichuLines"].clone(), attrs["warichuAlign"].clone()),
+        (json!(true), json!(3), json!("justifyAll"))
+    );
+    // Exports draw the stacked lines as outlines.
+    let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
+    assert!(!svg.contains("<text"), "{svg}");
+    let pdf = vectorcraft_pdf::export(&s.doc().unwrap().doc, &vectorcraft_pdf::PdfOptions::uncompressed()).unwrap();
+    assert!(!text_ops(&pdf));
+
+    // Undo takes the whole change back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(settings(&s).iter().all(|r| !r.1 && r.2 == 2));
+    s.execute("edit.redo", &json!({})).unwrap();
+
+    // text.setFormat sets the selected objects' characters.
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"warichuScale": 70})).unwrap();
+    assert!(settings(&s).iter().all(|r| r.4 == 70.0));
+
+    let before = settings(&s);
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"warichuLines": 7}), "`warichuLines` must be a whole number from 1 to 6"),
+        ("text.setFormat", json!({"warichuLines": 2.5}), "`warichuLines` must be a whole number from 1 to 6"),
+        ("text.setFormat", json!({"warichuScale": 5}), "`warichuScale` must be from 10 to 100"),
+        ("text.setFormat", json!({"warichuGap": -1}), "`warichuGap` must be from 0 to 100"),
+        ("text.setRangeStyle", json!({"id": id, "warichuGap": "2"}), "`warichuGap` must be a number"),
+        ("text.setRangeStyle", json!({"id": id, "warichu": "yes"}), "`warichu` must be true or false"),
+        (
+            "text.setRangeStyle",
+            json!({"id": id, "warichuAlign": "middle"}),
+            "`warichuAlign` must be one of \"auto\", \"left\", \"center\", \"right\", \"justifyLeft\", \"justifyCenter\", \"justifyRight\", \"justifyAll\"",
+        ),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(settings(&s), before);
+}
+
+/// Insert Aki Left and Right (Character panel, East Asian options): character attributes in
+/// thousandths of an em, 0 by default and saved only when not 0. Both commands set either side
+/// alone, keeping the other side of every run, in one undo step; a value that is not a number or
+/// lies outside 0 to 1000 is refused, naming the key, before anything changes; a character style
+/// captured from the characters carries them.
+#[test]
+fn insert_aki_is_a_character_attribute_set_one_side_at_a_time() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let aki = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.aki_left, r.style.aki_right)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("akiLeft").is_none() && saved.get("akiRight").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"akiLeft": 250})).unwrap();
+    assert_eq!(aki(&s), [("（日本）".to_string(), 250.0, 0.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(aki(&s), [("（日本）".to_string(), 0.0, 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(aki(&s), [("（日本）".to_string(), 250.0, 0.0)]);
+
+    // One side on part of the text: the runs keep their other side.
+    let paren = "（".len();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": paren, "akiRight": 500})).unwrap();
+    assert_eq!(aki(&s), [("（".to_string(), 250.0, 500.0), ("日本）".to_string(), 250.0, 0.0)]);
+    s.execute("text.setFormat", &json!({"akiLeft": 0})).unwrap();
+    assert_eq!(aki(&s), [("（".to_string(), 0.0, 500.0), ("日本）".to_string(), 0.0, 0.0)]);
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert_eq!((saved.get("akiLeft"), saved["akiRight"].clone()), (None, json!(500.0)));
+    // Saved and reopened as they were.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.aki_left, r.style.aki_right)).collect();
+    assert_eq!(reopened, aki(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[0].style);
+    assert_eq!((attrs["akiLeft"].clone(), attrs["akiRight"].clone()), (json!(0.0), json!(500.0)));
+
+    let before = aki(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"akiLeft": "250"}), "`akiLeft` must be a number"),
+        ("text.setFormat", json!({"akiRight": -1}), "`akiRight` must be from 0 to 1000"),
+        ("text.setFormat", json!({"akiLeft": 250, "akiRight": 1000.5}), "`akiRight` must be from 0 to 1000"),
+        ("text.setRangeStyle", json!({"id": id, "akiRight": true}), "`akiRight` must be a number"),
+        ("text.setRangeStyle", json!({"id": id, "start": 0, "end": paren, "akiLeft": 2000}), "`akiLeft` must be from 0 to 1000"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(aki(&s), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
+}
+
+/// Tsume (Character panel, East Asian options): a character attribute in percent, 0 by default
+/// and saved only when not 0. Both commands set it in one undo step, a call that gives the value
+/// the text already has records none, and a value that is not a number or lies outside 0 to 100 is
+/// refused, naming the key, before anything changes; a character style captured from the
+/// characters carries it.
+#[test]
+fn tsume_is_a_character_attribute() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let tsume = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.tsume)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("tsume").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"tsume": 50})).unwrap();
+    assert_eq!(tsume(&s), [("（日本）".to_string(), 50.0)]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"tsume": 50})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step without a change");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(tsume(&s), [("（日本）".to_string(), 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(tsume(&s), [("（日本）".to_string(), 50.0)]);
+
+    let paren = "（".len();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": paren, "tsume": 100})).unwrap();
+    assert_eq!(tsume(&s), [("（".to_string(), 100.0), ("日本）".to_string(), 50.0)]);
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert_eq!(saved["tsume"], json!(100.0));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.tsume)).collect();
+    assert_eq!(reopened, tsume(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[0].style);
+    assert_eq!(attrs["tsume"], json!(100.0));
+
+    let before = tsume(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"tsume": "50"}), "`tsume` must be a number"),
+        ("text.setFormat", json!({"tsume": -1}), "`tsume` must be from 0 to 100"),
+        ("text.setRangeStyle", json!({"id": id, "tsume": true}), "`tsume` must be a number"),
+        ("text.setRangeStyle", json!({"id": id, "start": 0, "end": paren, "tsume": 100.5}), "`tsume` must be from 0 to 100"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(tsume(&s), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
+}
+
+/// Adjust Horizontal and Vertical Diacritic Position (Character panel, Middle Eastern options):
+/// character attributes in thousandths of an em, 0 by default and saved only when not 0. Both
+/// commands set them in one undo step, setting one leaves the other, a call that gives the values
+/// the text already has records none, and a value that is not a number or lies outside -1000 to
+/// 1000 is refused, naming the key, before anything changes; the native file and a character style
+/// captured from the characters carry them.
+#[test]
+fn diacritic_positions_are_character_attributes() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "بَب"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let moved = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.diacritic_horizontal, r.style.diacritic_vertical)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("diacriticHorizontal").is_none() && saved.get("diacriticVertical").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"diacriticHorizontal": -150})).unwrap();
+    s.execute("text.setFormat", &json!({"diacriticVertical": 250})).unwrap();
+    assert_eq!(moved(&s), [("بَب".to_string(), -150.0, 250.0)], "setting one leaves the other");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"diacriticHorizontal": -150, "diacriticVertical": 250})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step without a change");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(moved(&s), [("بَب".to_string(), -150.0, 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+
+    let mark = "بَ".len();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": "ب".len(), "end": mark, "diacriticVertical": -1000})).unwrap();
+    assert_eq!(moved(&s), [("ب".to_string(), -150.0, 250.0), ("\u{064E}".to_string(), -150.0, -1000.0), ("ب".to_string(), -150.0, 250.0)]);
+    let saved = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert_eq!((saved["diacriticHorizontal"].clone(), saved["diacriticVertical"].clone()), (json!(-150.0), json!(-1000.0)));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.diacritic_horizontal, r.style.diacritic_vertical)).collect();
+    assert_eq!(reopened, moved(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[1].style);
+    assert_eq!((attrs["diacriticHorizontal"].clone(), attrs["diacriticVertical"].clone()), (json!(-150.0), json!(-1000.0)));
+
+    let before = moved(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"diacriticHorizontal": "50"}), "`diacriticHorizontal` must be a number"),
+        ("text.setFormat", json!({"diacriticVertical": 1000.5}), "`diacriticVertical` must be from -1000 to 1000"),
+        ("text.setRangeStyle", json!({"id": id, "diacriticVertical": true}), "`diacriticVertical` must be a number"),
+        (
+            "text.setRangeStyle",
+            json!({"id": id, "start": 0, "end": mark, "diacriticHorizontal": -1001}),
+            "`diacriticHorizontal` must be from -1000 to 1000",
+        ),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(moved(&s), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
+}
+
+/// Standard Vertical Roman Alignment (Character panel menu, East Asian options): a character
+/// attribute, off by default and saved only when on. Documents written before it read as off; a
+/// character style captured from the characters carries it.
+#[test]
+fn standard_vertical_roman_is_a_character_attribute_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "ABC年"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(!runs(&s)[0].style.standard_vertical_roman);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("standardVerticalRoman").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"standardVerticalRoman": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.standard_vertical_roman));
+    assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["standardVerticalRoman"], true);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!runs(&s)[0].style.standard_vertical_roman);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "standardVerticalRoman": true})).unwrap();
+    let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.standard_vertical_roman)).collect();
+    assert_eq!(on, [("ABC".to_string(), true), ("年".to_string(), false)]);
+    let old = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert!(old.get("standardVerticalRoman").is_none());
+    assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().standard_vertical_roman);
+    // Saved and reopened as it was.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.standard_vertical_roman)).collect();
+    assert_eq!(reopened, on);
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style)["standardVerticalRoman"], true);
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["standardVerticalRoman"], false);
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "standardVerticalRoman": "true"})).is_err());
+    s.execute("text.setFormat", &json!({"standardVerticalRoman": false})).unwrap();
+    assert!(runs(&s).iter().all(|r| !r.style.standard_vertical_roman));
+}
+
+/// The East Asian glyph form (Glyphs panel menu) is one character attribute, `glyphForm`: one
+/// form replaces another, "default" (Revert To Default Forms) takes it away, and it is saved
+/// only when set. A call that changes nothing records no undo step, an unknown form is refused,
+/// and character styles carry it.
+#[test]
+fn glyph_form_is_one_character_attribute_saved_only_when_set() {
+    use vectorcraft_doc::GlyphForm;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "亜唖芦"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let forms = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.glyph_form)).collect::<Vec<_>>();
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("glyphForm").is_none());
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "glyphForm": "jis78"})).unwrap();
+    assert_eq!(forms(&s), [("亜".into(), GlyphForm::Default), ("唖".into(), GlyphForm::Jis78), ("芦".into(), GlyphForm::Default)]);
+    assert_eq!(serde_json::to_value(&runs(&s)[1].style).unwrap()["glyphForm"], "jis78");
+    // Saved and reopened as it was.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs.iter().map(|r| (r.text.clone(), r.style.glyph_form)).collect::<Vec<_>>(), forms(&s));
+    // Another form replaces it: one form at a time.
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"glyphForm": "fullWidth"})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::FullWidth));
+    let n = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"glyphForm": "fullWidth"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), n, "nothing changed, no undo step");
+    for bad in [json!("jis2004"), json!(78), json!(true), json!("Traditional")] {
+        let e = s.execute("text.setFormat", &json!({"glyphForm": bad})).unwrap_err().to_string();
+        assert!(e.contains("`glyphForm` must be one of \"traditional\""), "{bad}: {e}");
+        assert!(s.execute("text.setRangeStyle", &json!({"id": id, "glyphForm": bad})).is_err(), "{bad}");
+    }
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::FullWidth), "a refused call changes nothing");
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style)["glyphForm"], "fullWidth");
+    s.execute("text.setFormat", &json!({"glyphForm": "default"})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::Default));
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("glyphForm").is_none());
+    // A character style carries the form.
+    s.execute("charStyle.new", &json!({"name": "Old forms", "attrs": {"glyphForm": "jis83"}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Old forms", "id": id})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::Jis83));
+    assert!(s.execute("charStyle.new", &json!({"name": "Bad", "attrs": {"glyphForm": "jis2004"}})).is_err());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::Default));
+}
+
+/// A glyph choice (`text.setGlyphAlternate`) would keep drawing its own glyph over a glyph form,
+/// so setting a form other than "default" takes it away, in `text.setRangeStyle` and in
+/// `text.setFormat`; "default" (Revert To Default Forms) and calls without `glyphForm` keep it.
+#[test]
+fn a_glyph_form_takes_away_the_characters_glyph_choice() {
+    use vectorcraft_doc::{GlyphChoice, GlyphForm};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "亜唖"})).unwrap()["id"].as_u64().unwrap();
+    let choice = GlyphChoice { ch: '唖', gid: 42, font: "Test-Regular".into(), version: "1".into() };
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(NodeId(id)).map(|n| &mut n.kind) {
+        vectorcraft_text::edit::style_range(&mut t.runs, 3, 6, |st| st.glyph_alternate = Some(choice.clone()));
+    }
+    let state = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.glyph_form, r.style.glyph_alternate.is_some())).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    s.execute("text.setRangeStyle", &json!({"id": id, "size": 30})).unwrap();
+    assert_eq!(state(&s), [("亜".into(), GlyphForm::Default, false), ("唖".into(), GlyphForm::Default, true)], "no glyphForm: kept");
+    s.execute("text.setRangeStyle", &json!({"id": id, "glyphForm": "default"})).unwrap();
+    assert_eq!(state(&s)[1], ("唖".into(), GlyphForm::Default, true), "default: kept");
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "glyphForm": "jis78"})).unwrap();
+    assert_eq!(state(&s), [("亜".into(), GlyphForm::Default, false), ("唖".into(), GlyphForm::Jis78, false)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(state(&s)[1], ("唖".into(), GlyphForm::Default, true), "one undo step brings both back");
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"glyphForm": "default"})).unwrap();
+    assert!(state(&s).iter().any(|r| r.2), "default: kept");
+    s.execute("text.setFormat", &json!({"glyphForm": "traditional"})).unwrap();
+    assert!(state(&s).iter().all(|r| r.1 == GlyphForm::Traditional && !r.2), "{:?}", state(&s));
+}
+
+/// No Break is a character attribute, saved only when on.
+#[test]
+fn no_break_is_a_character_attribute_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(!runs(&s)[0].style.no_break);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("noBreak").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"noBreak": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.no_break));
+    assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["noBreak"], true);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!runs(&s)[0].style.no_break);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 1, "noBreak": true})).unwrap();
+    let on: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.no_break)).collect();
+    assert_eq!(on, [("A".to_string(), true), ("b".to_string(), false)]);
+    let old = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert!(old.get("noBreak").is_none());
+    assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().no_break);
+    s.execute("text.setFormat", &json!({"noBreak": false})).unwrap();
+    assert!(runs(&s).iter().all(|r| !r.style.no_break));
+}
+
+/// Digits (Character panel menu, Middle Eastern options): a character attribute, saved only
+/// when set; the text keeps the digits that were typed.
+#[test]
+fn digits_are_a_character_attribute_saved_only_when_set() {
+    use vectorcraft_doc::Digits;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "صفحة 12"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert_eq!(runs(&s)[0].style.digits, Digits::Default);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("digits").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    for (key, want) in [("hindi", Digits::Hindi), ("farsi", Digits::Farsi), ("arabic", Digits::Arabic), ("default", Digits::Default)] {
+        s.execute("text.setFormat", &json!({"digits": key})).unwrap();
+        assert!(runs(&s).iter().all(|r| r.style.digits == want));
+        let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+        assert_eq!(saved.get("digits").and_then(|v| v.as_str()), (want != Digits::Default).then_some(key));
+        // The text is as typed: only the glyphs change.
+        assert_eq!(runs(&s).iter().map(|r| r.text.as_str()).collect::<String>(), "صفحة 12");
+    }
+    s.execute("text.setFormat", &json!({"digits": "hindi"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(runs(&s)[0].style.digits, Digits::Default);
+    let err = s.execute("text.setFormat", &json!({"digits": "roman"})).unwrap_err().to_string();
+    assert!(err.contains("`digits` must be"), "{err}");
+    // Characters selected with the Type tool: only the range takes it (صفحة is 8 bytes).
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 9, "end": 11, "digits": "farsi"})).unwrap();
+    let set: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.digits)).collect();
+    assert_eq!(set, [("صفحة ".to_string(), Digits::Default), ("12".to_string(), Digits::Farsi)]);
+}
+
+/// Font height reference (Character panel › Set Font Height Reference): a character attribute,
+/// saved only when not the em box; the type is laid out again at the em size it gives, so 20 pt
+/// type measuring a 0.7 em cap height grows by 1 / 0.7, and a leading step from Auto starts at
+/// 120% of that em size.
+#[test]
+fn font_height_reference_is_a_character_attribute_saved_only_when_not_the_em_box() {
+    use vectorcraft_doc::FontHeightReference as R;
+    use vectorcraft_text::test_fonts::{HEIGHT_CAP, HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id =
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hx Hx", "font": HEIGHT_FAMILY, "size": 20})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.clone(),
+        _ => panic!("text"),
+    };
+    let height = |s: &Session| text(s).cached_bounds.unwrap().height();
+    let em_box = height(&s);
+    assert_eq!(text(&s).runs[0].style.font_height_reference, R::EmBox);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    for (key, want) in [("capHeight", R::CapHeight), ("xHeight", R::XHeight), ("icfBox", R::IcfBox), ("emBox", R::EmBox)] {
+        s.execute("text.setFormat", &json!({"fontHeightReference": key})).unwrap();
+        assert!(text(&s).runs.iter().all(|r| r.style.font_height_reference == want && r.style.size == 20.0));
+        let saved = serde_json::to_value(&text(&s).runs[0].style).unwrap();
+        assert_eq!(saved.get("fontHeightReference").and_then(|v| v.as_str()), (want != R::EmBox).then_some(key));
+    }
+    s.execute("text.setFormat", &json!({"fontHeightReference": "capHeight"})).unwrap();
+    let grown = height(&s) / em_box;
+    assert!((grown - 1000.0 / f64::from(HEIGHT_CAP)).abs() < 1e-6, "{grown}");
+    // A leading step from Auto starts at the leading the lines are set with: 120% of the em size
+    // (the paragraph's Auto Leading).
+    s.execute("type.step", &json!({"attribute": "leading"})).unwrap();
+    let stepped = text(&s).runs[0].style.leading.unwrap();
+    assert!((stepped - (1.2 * 20.0 * 1000.0 / f64::from(HEIGHT_CAP) + 2.0)).abs() < 1e-9, "{stepped}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(text(&s).runs[0].style.font_height_reference, R::EmBox);
+    assert!((height(&s) - em_box).abs() < 1e-9);
+    let err = s.execute("text.setFormat", &json!({"fontHeightReference": "baseline"})).unwrap_err().to_string();
+    assert!(err.contains("`fontHeightReference` must be"), "{err}");
+    // Characters selected with the Type tool: only the range takes it.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 5, "fontHeightReference": "xHeight"})).unwrap();
+    let set: Vec<_> = text(&s).runs.iter().map(|r| (r.text.clone(), r.style.font_height_reference)).collect();
+    assert_eq!(set, [("Hx ".to_string(), R::EmBox), ("Hx".to_string(), R::XHeight)]);
+}
+
+/// A leading step from Auto starts at the leading each paragraph's lines are set with, its
+/// Auto Leading share of the em size: 20 pt type in paragraphs at 120% and 150% steps from 24 pt
+/// and from 30 pt.
+#[test]
+fn a_leading_step_from_auto_starts_at_each_paragraphs_auto_leading() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab\nCd", "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setFormat", &json!({"id": id, "start": 3, "end": 5, "autoLeading": 150})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("type.step", &json!({"attribute": "leading"})).unwrap();
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else {
+        panic!("text");
+    };
+    let leading: Vec<_> = t.runs.iter().map(|r| (r.text.as_str(), r.style.leading)).collect();
+    assert_eq!(leading, [("Ab\n", Some(26.0)), ("Cd", Some(32.0))]);
+}
+
+/// An inline graphic keeps its size whatever the font height reference, so a leading step from
+/// Auto starts at 120% of that size: 20 pt Cap Height type steps from 120% of 20 / 0.7 pt and
+/// the graphic in it from 24 pt.
+#[test]
+fn a_leading_step_from_auto_starts_at_an_inline_graphics_own_size() {
+    use vectorcraft_text::test_fonts::{HEIGHT_CAP, HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 300, "y": 300, "width": 10, "height": 10})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Dot"})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hx", "font": HEIGHT_FAMILY, "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.insertInline", &json!({"id": id, "at": 2, "symbol": "Dot"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"fontHeightReference": "capHeight"})).unwrap();
+    s.execute("type.step", &json!({"attribute": "leading"})).unwrap();
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else {
+        panic!("text");
+    };
+    let leading: Vec<_> = t.runs.iter().map(|r| (r.inline.is_some(), r.style.leading.unwrap())).collect();
+    let text = 1.2 * 20.0 * 1000.0 / f64::from(HEIGHT_CAP) + 2.0;
+    assert_eq!(leading.len(), 2, "{leading:?}");
+    assert!(leading.iter().all(|&(inline, l)| (l - if inline { 26.0 } else { text }).abs() < 1e-9), "{leading:?}");
+}
+
+/// The Indic digits (#4942): each set by its id through text.setFormat and text.setRangeStyle,
+/// saved under it, kept by save and reopen and by character styles; the text stays as typed.
+#[test]
+fn indic_digits_round_trip_through_the_commands_and_the_file() {
+    use vectorcraft_doc::Digits;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "page 12"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let indic = [
+        Digits::Devanagari,
+        Digits::Bengali,
+        Digits::Gurmukhi,
+        Digits::Gujarati,
+        Digits::Odia,
+        Digits::Tamil,
+        Digits::Telugu,
+        Digits::Kannada,
+        Digits::Malayalam,
+    ];
+    for d in indic {
+        s.execute("text.setFormat", &json!({"digits": d.id()})).unwrap();
+        assert!(runs(&s).iter().all(|r| r.style.digits == d), "{d:?}");
+        assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["digits"], d.id());
+        assert_eq!(runs(&s).iter().map(|r| r.text.as_str()).collect::<String>(), "page 12");
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+        assert!(t.runs.iter().all(|r| r.style.digits == d), "{d:?} after reopening");
+    }
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 5, "end": 7, "digits": "gujarati"})).unwrap();
+    let set: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.digits)).collect();
+    assert_eq!(set, [("page ".to_string(), Digits::Malayalam), ("12".to_string(), Digits::Gujarati)]);
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["digits"], "gujarati");
+    s.execute("charStyle.new", &json!({"name": "Tamil digits", "attrs": {"digits": "tamil"}})).unwrap();
+    let listed = s.execute("charStyle.list", &json!({})).unwrap();
+    let tamil = listed["styles"].as_array().unwrap().iter().find(|st| st["name"] == "Tamil digits").unwrap();
+    assert_eq!(tamil["attrs"]["digits"], "tamil");
+    for wrong in [json!("oriya"), json!("Devanagari"), json!(3)] {
+        let err = s.execute("text.setFormat", &json!({ "digits": wrong })).unwrap_err().to_string();
+        assert!(err.contains("`digits` must be one of") && err.contains("\"malayalam\""), "{err}");
+    }
+}
+
+/// Language (Character panel, #4946): a character attribute set by name or tag, saved as the tag
+/// only when set, kept by save and reopen and by character styles; new type takes the document's.
+#[test]
+fn language_is_a_character_attribute_saved_only_when_set() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "fi i fikir"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let set = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.language.clone())).collect::<Vec<_>>();
+    assert_eq!(runs(&s)[0].style.language, None);
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("language").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"language": "Turkish"})).unwrap();
+    assert_eq!(set(&s), [("fi i fikir".to_string(), Some("tr".to_string()))]);
+    assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["language"], "tr");
+    for wrong in [json!("Klingon"), json!(5)] {
+        let err = s.execute("text.setFormat", &json!({ "language": wrong })).unwrap_err().to_string();
+        assert!(err.contains("language"), "{err}");
+    }
+    // Characters selected with the Type tool: only the range takes it; the default is none.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 2, "language": "en-US"})).unwrap();
+    assert_eq!(set(&s), [("fi".to_string(), None), (" i fikir".to_string(), Some("tr".to_string()))]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(set(&s), [("fi i fikir".to_string(), Some("tr".to_string()))]);
+    s.execute("edit.redo", &json!({})).unwrap();
+    // Saved and reopened as it was.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.language.clone())).collect();
+    assert_eq!(reopened, set(&s));
+    // A character style captured from the characters carries it, the default included; one given
+    // a language by name stores its tag.
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["language"], "tr");
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style).get("language"), Some(&serde_json::Value::Null));
+    s.execute("charStyle.new", &json!({"name": "Marathi", "attrs": {"language": "Marathi"}})).unwrap();
+    let listed = s.execute("charStyle.list", &json!({})).unwrap();
+    let marathi = listed["styles"].as_array().unwrap().iter().find(|st| st["name"] == "Marathi").unwrap();
+    assert_eq!(marathi["attrs"]["language"], "mr");
+    assert!(s.execute("charStyle.new", &json!({"name": "Bad", "attrs": {"language": "Klingon"}})).is_err());
+    // New type in a Turkish document is in Turkish.
+    s.execute("document.setup", &json!({"language": "Turkish"})).unwrap();
+    let id2 = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "fikir"})).unwrap()["id"].as_u64().unwrap();
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id2)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs[0].style.language.as_deref(), Some("tr"));
+}
+
+/// Variable Font settings (Character panel › Variable Font): a character attribute, saved only
+/// when set, each value clamped to its axis's range, and cleared by another font or style.
+#[test]
+fn variable_font_settings_are_a_character_attribute_saved_only_when_set() {
+    let _fonts = crate::adding_fonts();
+    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY as FAMILY, two_axis_font};
+    vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "lIn lIn", "font": FAMILY, "size": 40})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let saved = |s: &Session| serde_json::to_value(&runs(s)[0].style).unwrap().get("fontAxes").cloned();
+    let width = |s: &Session| s.doc().unwrap().doc.bounds_of(&[NodeId(id)], false).unwrap().width();
+    assert_eq!(saved(&s), None);
+    let regular = width(&s);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"fontAxes": {"wght": 650}})).unwrap();
+    assert_eq!(saved(&s), Some(json!({"wght": 650.0})));
+    assert!(width(&s) > regular * 1.1, "the type is set heavier and wider: {regular} -> {}", width(&s));
+    // Past the axis's range: its maximum; an axis the font hasn't: left out; others kept.
+    s.execute("text.setFormat", &json!({"fontAxes": {"wght": 2000, "opsz": 12, "wdth": 80}})).unwrap();
+    assert_eq!(saved(&s), Some(json!({"wdth": 80.0, "wght": 700.0})));
+    // Null goes back to the style's own setting, and so does a value equal to it.
+    s.execute("text.setFormat", &json!({"fontAxes": {"wght": null}})).unwrap();
+    assert_eq!(saved(&s), Some(json!({"wdth": 80.0})));
+    s.execute("text.setFormat", &json!({"fontAxes": {"wdth": 100}})).unwrap();
+    assert_eq!(saved(&s), None);
+    assert!((width(&s) - regular).abs() < 1e-6);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(saved(&s), Some(json!({"wdth": 80.0})));
+    // Characters selected with the Type tool: only the range takes it.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 7, "fontAxes": {"wght": 550}})).unwrap();
+    let set: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.font_axes.clone())).collect();
+    let axes = |v: &[(&str, f64)]| v.iter().map(|(t, v)| (t.to_string(), *v)).collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(set, [("lIn ".to_string(), axes(&[("wdth", 80.0)])), ("lIn".to_string(), axes(&[("wdth", 80.0), ("wght", 550.0)]))]);
+    // A saved file keeps them.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs, runs(&s));
+    // Another style or font clears them: their settings were the old face's.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 7, "style": "Bold"})).unwrap();
+    assert_eq!(runs(&s).last().map(|r| (r.style.font_style.as_str(), r.style.font_axes.is_empty())), Some(("Bold", true)));
+    s.execute("text.setStyle", &json!({"style": "Bold"})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.font_axes.is_empty()));
+    s.execute("text.setFormat", &json!({"fontAxes": {"wdth": 75}})).unwrap();
+    s.execute("text.replaceFont", &json!({"from": {"family": FAMILY}, "to": {"family": "Source Sans 3"}})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.font_axes.is_empty()));
+    // A static font has no axes to set (Source Sans 3, not Inter: an installed Inter
+    // Variable would shadow the bundled static and give it axes).
+    s.execute("text.setFormat", &json!({"fontAxes": {"wght": 650}})).unwrap();
+    assert_eq!(saved(&s), None);
+    // A missing font keeps them as given, for when it is installed.
+    s.execute("text.setStyle", &json!({"font": "No Such Variable Sans"})).unwrap();
+    s.execute("text.setFormat", &json!({"fontAxes": {"wght": 2000}})).unwrap();
+    assert_eq!(saved(&s), Some(json!({"wght": 2000.0})));
+    for (bad, says) in
+        [(json!({"weight": 650}), "not an axis tag"), (json!({"wght": "heavy"}), "must be a number"), (json!(650), "must be an object")]
+    {
+        let err = s.execute("text.setFormat", &json!({"fontAxes": bad})).unwrap_err().to_string();
+        assert!(err.contains(says), "{err}");
+    }
+    // The axes and the setting of a style, as the sliders show them.
+    let list = s.execute("text.fontList", &json!({"family": FAMILY, "style": "Bold"})).unwrap();
+    assert_eq!(
+        list["axes"],
+        json!([
+            {"tag": "wght", "name": "Weight", "min": 400.0, "default": 400.0, "max": 700.0, "value": 700.0, "hidden": false},
+            {"tag": "wdth", "name": "Width", "min": 75.0, "default": 100.0, "max": 100.0, "value": 100.0, "hidden": false},
+        ])
+    );
+    assert_eq!(s.execute("text.fontList", &json!({"family": "Source Sans 3"})).unwrap()["axes"], json!([]));
+}
+
+#[test]
+fn new_type_is_composed_with_line_end_half_width_punctuation() {
+    use vectorcraft_doc::Mojikumi;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "雅楽。"})).unwrap()["id"].as_u64().unwrap();
+    let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para.clone(),
+        _ => panic!("text"),
+    };
+    assert_eq!(para(&s).mojikumi, Mojikumi::LineEndHalf);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    assert!(s.execute("text.setFormat", &json!({"mojikumi": "everything"})).is_err());
+    s.execute("text.setFormat", &json!({"mojikumi": "none"})).unwrap();
+    assert_eq!(para(&s).mojikumi, Mojikumi::None);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(para(&s).mojikumi, Mojikumi::LineEndHalf);
+    // Saved only when set; documents from before it read as None.
+    let json = serde_json::to_value(para(&s)).unwrap();
+    assert_eq!(json["mojikumi"], "lineEndHalf");
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert_eq!(old.mojikumi, Mojikumi::None);
+    assert!(serde_json::to_value(&old).unwrap().get("mojikumi").is_none());
+}
+
+/// `text.setFormat {mojikumi}` takes each predefined Mojikumi set as one undo step, refuses any
+/// other value without changing the type, and each set survives a native save and reopen and a
+/// paragraph style that captures it.
+#[test]
+fn every_predefined_mojikumi_set_is_set_saved_and_carried_by_styles() {
+    use vectorcraft_doc::Mojikumi;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "「雅楽」。"})).unwrap()["id"].as_u64().unwrap();
+    let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para.clone(),
+        _ => panic!("text"),
+    };
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let sets = [
+        ("yakumonoHankaku", Mojikumi::YakumonoHankaku),
+        ("gyomatsuYakumonoHankaku", Mojikumi::GyomatsuYakumonoHankaku),
+        ("gyomatsuYakumonoZenkaku", Mojikumi::GyomatsuYakumonoZenkaku),
+        ("yakumonoZenkaku", Mojikumi::YakumonoZenkaku),
+        ("none", Mojikumi::None),
+        ("lineEndHalf", Mojikumi::LineEndHalf),
+    ];
+    for (key, set) in sets {
+        s.execute("text.setFormat", &json!({"mojikumi": key})).unwrap();
+        assert_eq!(para(&s).mojikumi, set, "{key}");
+        let doc = s.doc().unwrap().doc.clone();
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+        match &back.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => assert_eq!(t.para.mojikumi, set, "{key} saved"),
+            _ => panic!("text"),
+        }
+        let style = format!("Spacing {key}");
+        s.execute("paraStyle.new", &json!({"name": style, "attrs": {"mojikumi": key}})).unwrap();
+        s.execute("text.setFormat", &json!({"mojikumi": if set == Mojikumi::None { "lineEndHalf" } else { "none" }})).unwrap();
+        s.execute("paraStyle.apply", &json!({"name": style, "id": id})).unwrap();
+        assert_eq!(para(&s).mojikumi, set, "{key} from a paragraph style");
+    }
+    // One undo step back to the set before.
+    s.execute("text.setFormat", &json!({"mojikumi": "yakumonoHankaku"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(para(&s).mojikumi, Mojikumi::LineEndHalf);
+    // A value that is no set, or not a string, is refused and leaves the type as it was.
+    s.execute("text.setFormat", &json!({"mojikumi": "gyomatsuYakumonoZenkaku"})).unwrap();
+    for bad in [json!("YakumonoHankaku"), json!("lineEnd"), json!(""), json!(1)] {
+        assert!(s.execute("text.setFormat", &json!({"mojikumi": bad, "leftIndent": 12})).is_err(), "{bad}");
+        let p = para(&s);
+        assert_eq!((p.mojikumi, p.left_indent), (Mojikumi::GyomatsuYakumonoZenkaku, 0.0), "{bad}");
+    }
+    // A null value leaves the set as it is.
+    s.execute("text.setFormat", &json!({"mojikumi": null, "leftIndent": 12})).unwrap();
+    let p = para(&s);
+    assert_eq!((p.mojikumi, p.left_indent), (Mojikumi::GyomatsuYakumonoZenkaku, 12.0));
+}
+
+#[test]
+fn vertical_point_type_keeps_its_anchor_on_the_column_centre_line() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 100, "y": 50, "text": "§§§§ abc"})).unwrap()["id"].as_u64().unwrap();
+    let bounds = |s: &Session| s.doc().unwrap().doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap();
+    let wide = bounds(&s);
+    assert!(wide.width() > wide.height());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("type.orientation.vertical", &json!({})).unwrap();
+    let tall = bounds(&s);
+    assert!(tall.height() > tall.width(), "{tall:?}");
+    assert!((tall.center().x - 100.0).abs() < 6.0, "the anchor stays on the column's centre line: {tall:?}");
+    // Vertical type set vertical again: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    s.execute("type.orientation.vertical", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
+    assert_eq!(bounds(&s), tall);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(bounds(&s), wide);
+    // Horizontal type set horizontal: no undo step either.
+    let n = s.doc().unwrap().history.undo.len();
+    s.execute("type.orientation.horizontal", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
+}
+
+#[test]
+fn area_options_columns_change_layout() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let text = "word ".repeat(80);
+    let id =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": text, "area": {"width": 300, "height": 120}})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let q = s.execute("text.areaOptions", &json!({})).unwrap();
+    assert_eq!((q["rows"].as_u64(), q["columns"].as_u64()), (Some(1), Some(1)));
+    let lay = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t),
+        _ => panic!(),
+    };
+    assert_eq!(lay(&s).frames.len(), 1);
+    let r = s.execute("text.areaOptions", &json!({"columns": 3, "gutter": 12, "inset": 4, "firstBaseline": "capHeight"})).unwrap();
+    assert_eq!(r["firstBaseline"], "capHeight");
+    let l = lay(&s);
+    assert_eq!(l.frames.len(), 3, "three column cells");
+    // Glyphs land in more than one column.
+    let xs: Vec<f64> = l.glyphs.iter().map(|g| g.origin.x).collect();
+    assert!(xs.iter().any(|x| *x > 110.0 + 10.0) && xs.iter().any(|x| *x < 100.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(lay(&s).frames.len(), 1);
+    assert!(s.execute("text.areaOptions", &json!({"firstBaseline": "nope"})).is_err());
+}
+
+/// First Baseline Em Box Height: set, reported and undone like the other kinds, with Min as the
+/// least distance; setting it again adds no undo step, and the refusal of an unknown kind lists it.
+#[test]
+fn area_options_set_the_em_box_height_first_baseline() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "word ".repeat(20), "area": {"width": 300, "height": 120}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let first = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines[0].first_baseline,
+        _ => panic!("area type"),
+    };
+    let ascent = first(&s);
+    let r = s.execute("text.areaOptions", &json!({"firstBaseline": "emBoxHeight"})).unwrap();
+    assert_eq!((r["firstBaseline"].as_str(), r["firstBaselineMin"].as_f64()), (Some("emBoxHeight"), Some(0.0)));
+    let em_box = first(&s);
+    assert!(em_box > 0.0 && (em_box - ascent).abs() > 0.1, "{em_box} {ascent}");
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("text.areaOptions", &json!({"firstBaseline": "emBoxHeight"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no change, no undo step");
+    // A Min nearer the top keeps the em box; one further down is the distance.
+    s.execute("text.areaOptions", &json!({"firstBaselineMin": em_box / 2.0})).unwrap();
+    assert!((first(&s) - em_box).abs() < 1e-9);
+    let r = s.execute("text.areaOptions", &json!({"firstBaselineMin": 30})).unwrap();
+    assert_eq!((r["firstBaseline"].as_str(), r["firstBaselineMin"].as_f64()), (Some("emBoxHeight"), Some(30.0)));
+    assert!((first(&s) - 30.0).abs() < 1e-9);
+    for _ in 0..3 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(s.execute("text.areaOptions", &json!({})).unwrap()["firstBaseline"], "ascent");
+    assert!((first(&s) - ascent).abs() < 1e-9);
+    let e = s.execute("text.areaOptions", &json!({"firstBaseline": "emBox"})).unwrap_err().to_string();
+    assert!(e.contains("emBoxHeight"), "{e}");
+    assert_eq!(s.execute("text.areaOptions", &json!({})).unwrap()["firstBaseline"], "ascent");
+}
+
+/// `rowGutter` sets a gutter between rows of its own, the reply passes it back, and a gutter
+/// given alone is the rows' and the columns' again.
+#[test]
+fn area_options_set_a_gutter_between_rows_of_its_own() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "word ".repeat(80), "area": {"width": 300, "height": 120}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    // Without one of its own, the rows' is the gutter, and passing the reply back keeps it unset.
+    let q = s.execute("text.areaOptions", &json!({})).unwrap();
+    assert_eq!((q["gutter"].as_f64(), q["rowGutter"].as_f64()), (Some(18.0), Some(18.0)));
+    s.execute("text.areaOptions", &q).unwrap();
+    // Both given: the rows keep theirs even at the old gutter's value.
+    let r = s.execute("text.areaOptions", &json!({"gutter": 10, "rowGutter": 18})).unwrap();
+    assert_eq!((r["gutter"].as_f64(), r["rowGutter"].as_f64()), (Some(10.0), Some(18.0)));
+    s.execute("text.areaOptions", &json!({"gutter": 18})).unwrap();
+    let r = s.execute("text.areaOptions", &json!({"rows": 2, "gutter": 12, "rowGutter": 30})).unwrap();
+    assert_eq!((r["gutter"].as_f64(), r["rowGutter"].as_f64()), (Some(12.0), Some(30.0)));
+    let area = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.clone(),
+        _ => panic!(),
+    };
+    assert_eq!(area(&s).row_gutter, Some(30.0));
+    // The reply passed back keeps it; out of range it is capped; the gutter's value is none of its own.
+    s.execute("text.areaOptions", &json!({"rowGutter": 12})).unwrap();
+    assert_eq!(area(&s).row_gutter, None);
+    s.execute("text.areaOptions", &json!({"rowGutter": 30})).unwrap();
+    s.execute("text.areaOptions", &r).unwrap();
+    assert_eq!(area(&s).row_gutter, Some(30.0));
+    s.execute("text.areaOptions", &json!({"rowGutter": -5})).unwrap();
+    assert_eq!(area(&s).row_gutter, Some(0.0));
+    s.execute("text.areaOptions", &json!({"gutter": 8})).unwrap();
+    assert_eq!((area(&s).gutter, area(&s).row_gutter), (8.0, None));
+    s.execute("text.areaOptions", &json!({"rowGutter": 30})).unwrap();
+    s.execute("text.areaOptions", &json!({"rowGutter": null})).unwrap();
+    assert_eq!(area(&s).row_gutter, None);
+}
+
+/// #3759: an option given for several area types goes onto each one's own options: the others
+/// stay as each had them, not copied from the first.
+#[test]
+fn area_options_for_several_frames_change_only_what_is_given() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let make = |s: &mut Session, x: f64| {
+        s.execute("text.create", &json!({"x": x, "y": 10, "text": "A", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (make(&mut s, 10.0), make(&mut s, 200.0));
+    s.execute("text.areaOptions", &json!({"ids": [a], "columns": 3, "gutter": 6})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [b], "inset": 4})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [a, b], "verticalAlign": "bottom"})).unwrap();
+    let area = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.clone(),
+        k => panic!("{k:?}"),
+    };
+    let (oa, ob) = (area(&s, a), area(&s, b));
+    assert_eq!((oa.vertical_align, ob.vertical_align), (vectorcraft_doc::VerticalAlign::Bottom, vectorcraft_doc::VerticalAlign::Bottom));
+    assert_eq!((oa.columns, oa.gutter, oa.inset), (3, 6.0, 0.0));
+    assert_eq!((ob.columns, ob.inset), (1, 4.0), "b keeps its own options");
+}
+
+/// `fitMinPercent` alone changes only the frames that shrink text to fit, each from its own
+/// setting (#3759).
+#[test]
+fn fit_min_percent_for_several_frames_keeps_each_frames_fit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let make = |s: &mut Session, x: f64| {
+        s.execute("text.create", &json!({"x": x, "y": 10, "text": "A", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (plain, shrink) = (make(&mut s, 10.0), make(&mut s, 200.0));
+    s.execute("text.areaOptions", &json!({"ids": [shrink], "fit": "shrinkText"})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [plain, shrink], "fitMinPercent": 30})).unwrap();
+    let fit = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.fit,
+        k => panic!("{k:?}"),
+    };
+    assert_eq!(fit(&s, plain), vectorcraft_doc::AreaFit::None, "the plain frame doesn't start shrinking");
+    assert_eq!(fit(&s, shrink), vectorcraft_doc::AreaFit::ShrinkText { min_percent: 30.0 });
+}
+
+/// #3565: `text.setPathHandle` moves a direction handle of type on a path's path, in document
+/// space, as `path.setHandle` moves a path's: a smooth anchor's other handle turns with it at
+/// its length, `independent` leaves it and makes the anchor a corner; one undo step.
+#[test]
+fn set_path_handle_reshapes_type_on_a_path() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    let path =
+        s.execute("path.create", &json!({"anchors": [{"x": 100, "y": 300, "in": [50, 300], "out": [150, 300]}, {"x": 400, "y": 300}]})).unwrap();
+    let text = s.execute("text.createInPath", &json!({"path": path["id"], "mode": "onPath", "text": "Along the curve"})).unwrap();
+    let id = NodeId(text["id"].as_u64().unwrap());
+    let first = |s: &Session| match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => *t.type_path().unwrap().subpaths[0].anchors.first().unwrap(),
+        _ => panic!("not text"),
+    };
+    let smooth = first(&s).kind == vectorcraft_geom::AnchorKind::Smooth;
+    s.execute("text.setPathHandle", &json!({"id": id.0, "anchor": 0, "which": "out", "x": 100, "y": 250})).unwrap();
+    let a = first(&s);
+    assert!((a.h_out.x - 100.0).abs() < 1e-6 && (a.h_out.y - 250.0).abs() < 1e-6, "{a:?}");
+    if smooth {
+        assert!((a.h_in.x - 100.0).abs() < 1e-6 && (a.h_in.y - 350.0).abs() < 1e-6, "smooth: the in handle turns with it at its length: {a:?}");
+    }
+    s.execute("text.setPathHandle", &json!({"id": id.0, "anchor": 0, "which": "in", "x": 60, "y": 300, "independent": true})).unwrap();
+    let b = first(&s);
+    assert_eq!(b.h_out, a.h_out, "independent: the other handle stays");
+    assert_eq!(b.kind, vectorcraft_geom::AnchorKind::Corner);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(first(&s), a, "one undo step each");
+    assert!(s.execute("text.setPathHandle", &json!({"id": id.0, "anchor": 9, "which": "out", "x": 0, "y": 0})).is_err(), "no such anchor");
+    assert!(s.execute("text.setPathHandle", &json!({"id": path["id"], "anchor": 0, "which": "out", "x": 0, "y": 0})).is_err(), "not type");
+}
+
+/// `text.setFormat` refuses a number or switch given as another type, naming the key, and
+/// changes nothing; null leaves the attribute as it is.
+#[test]
+fn set_format_refuses_a_param_of_the_wrong_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let state = |s: &Session| (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let before = state(&s);
+    for key in [
+        "baselineShift",
+        "hScale",
+        "vScale",
+        "rotation",
+        "leftIndent",
+        "rightIndent",
+        "firstLineIndent",
+        "spaceBefore",
+        "spaceAfter",
+        "wordsLongerThan",
+        "afterFirst",
+        "beforeLast",
+        "hyphenLimit",
+        "hyphenationZone",
+    ] {
+        for wrong in [json!("30"), json!(true), json!([30])] {
+            let err = s.execute("text.setFormat", &json!({ key: wrong })).unwrap_err().to_string();
+            assert!(err.contains(&format!("`{key}` must be a number, not {wrong}")), "{key}: {err}");
+        }
+    }
+    for key in ["underline", "allCaps", "hyphenate", "noBreak"] {
+        let err = s.execute("text.setFormat", &json!({ key: "true" })).unwrap_err().to_string();
+        assert!(err.contains(&format!("`{key}` must be true or false")), "{key}: {err}");
+    }
+    let err = s.execute("text.setFormat", &json!({"leftIndent": 30, "firstLineIndent": "12"})).unwrap_err().to_string();
+    assert!(err.contains("`firstLineIndent` must be a number"), "{err}");
+    assert!(state(&s) == before, "a refused call changes nothing and records no undo step");
+    s.execute("text.setFormat", &json!({"leftIndent": 30, "firstLineIndent": null})).unwrap();
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!((t.para_at(0).left_indent, t.para_at(0).first_line_indent), (30.0, 0.0));
+}
+
+/// `text.setFormat` reads a null value as one left out: a call whose attributes are all null has
+/// nothing to change, and records no edit, no undo step and no new revision.
+#[test]
+fn set_format_with_only_null_values_changes_nothing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.history.undo.len(), st.revision)
+    };
+    let before = state(&s);
+    for params in [
+        json!({"leftIndent": null}),
+        json!({"leftIndent": null, "firstLineIndent": null, "underline": null}),
+        json!({"kerning": null, "antiAlias": null, "list": null, "wordSpacing": null}),
+        json!({"mojikumi": null}),
+        json!({"kinsoku": null, "kinsokuType": null, "direction": null, "leadingModel": null}),
+        json!({"burasagari": null, "kashida": null, "singleWordJustification": null, "autoLeading": null}),
+        json!({"ids": [id], "start": 0, "end": 3, "spaceBefore": null}),
+    ] {
+        let err = s.execute("text.setFormat", &params).unwrap_err().to_string();
+        assert!(err.contains("nothing to change"), "{params}: {err}");
+        assert!(state(&s) == before, "{params}: no edit, no undo step and no new revision");
+    }
+    // A null beside a value leaves only its own attribute.
+    let para = |d: &vectorcraft_doc::Document| {
+        let NodeKind::Text(t) = &d.node(NodeId(id)).unwrap().kind else { panic!("text") };
+        (t.para_at(0).mojikumi, t.para_at(0).kinsoku)
+    };
+    let mojikumi = para(&before.0).0;
+    s.execute("text.setFormat", &json!({"mojikumi": null, "kinsoku": "soft"})).unwrap();
+    assert_eq!(para(&s.doc().unwrap().doc), (mojikumi, vectorcraft_doc::Kinsoku::Soft));
+    assert_eq!(s.doc().unwrap().history.undo.len(), before.1 + 1, "one undo step");
+}
+
+/// `text.setFormat` with the values the text already has succeeds and names its objects, but
+/// records no edit, no undo step and no new revision.
+#[test]
+fn set_format_with_the_current_values_records_nothing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.history.undo.len(), st.revision)
+    };
+    let before = state(&s);
+    let NodeKind::Text(t) = &before.0.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let hyphenate = t.para_at(0).hyphenate;
+    for params in [
+        json!({"leftIndent": 0, "firstLineIndent": 0}),
+        json!({"underline": false, "strikethrough": false, "hyphenate": hyphenate}),
+        json!({"ids": [id], "start": 0, "end": 3, "spaceBefore": 0, "spaceAfter": 0}),
+        json!({"ids": [id], "start": 4, "end": 7, "leftIndent": null, "rightIndent": 0}),
+    ] {
+        let out = s.execute("text.setFormat", &params).unwrap();
+        assert_eq!(out["ids"], json!([id]), "{params}");
+        assert!(state(&s) == before, "{params}: no edit, no undo step and no new revision");
+    }
+    // A call that changes a value is one undo step; the same call again records nothing.
+    s.execute("text.setFormat", &json!({"leftIndent": 24})).unwrap();
+    let changed = state(&s);
+    assert_eq!((changed.1, changed.2), (before.1 + 1, before.2 + 1), "one undo step and one revision");
+    s.execute("text.setFormat", &json!({"leftIndent": 24})).unwrap();
+    assert!(state(&s) == changed, "the same value again records nothing");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc == before.0, "one undo restores the text");
+    // The anti-aliasing method is compared the same way.
+    s.execute("text.setFormat", &json!({"antiAlias": "none"})).unwrap();
+    s.execute("text.setFormat", &json!({"antiAlias": "strong"})).unwrap();
+    let strong = state(&s);
+    assert!(strong.1 > before.1, "a new method is an undo step");
+    let NodeKind::Text(t) = &strong.0.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.anti_alias, vectorcraft_doc::text::TypeAntiAlias::Strong);
+    s.execute("text.setFormat", &json!({"antiAlias": "strong"})).unwrap();
+    assert!(state(&s) == strong, "the same method again records nothing");
+}

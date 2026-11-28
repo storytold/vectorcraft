@@ -16,10 +16,15 @@ pub trait ColorVisitor {
     fn color(&mut self, c: Color) -> Color;
     /// The key of embedded image `key` recoloured, `None` when it stays as it is.
     fn image(&mut self, key: &str) -> Option<String>;
+    /// Whether the pass recolors child `n` of a container: false leaves `n` and everything inside
+    /// it as they are.
+    fn enters(&mut self, _n: &Node) -> bool {
+        true
+    }
 }
 
-/// What a recolouring pass reaches: fills (with gradient-mesh points), strokes and the pixels of
-/// embedded images.
+/// What a recolouring pass reaches: fills (including colorized image fills and gradient-mesh
+/// points), strokes and the pixels of embedded images without a colorize paint.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Reach {
     pub fill: bool,
@@ -33,11 +38,18 @@ impl Reach {
 }
 
 /// Recolour `n` and everything inside it through `v`: the paints of its fills and strokes and of
-/// its text runs, its gradient-mesh points and an embedded image's pixels (linked images stay
-/// as they are). Members that change are replaced by copies; the others stay shared. Returns the
-/// number of paints, meshes and images that changed.
+/// its text runs, its gradient-mesh points and an embedded image's pixels (linked and colorized
+/// images keep their pixels). Members that change are replaced by copies; the others stay shared.
+/// Returns the number of paints, meshes and images that changed.
 pub fn recolor_node(n: &mut Node, reach: Reach, v: &mut dyn ColorVisitor) -> usize {
     let mut changed = 0;
+    let colorized = matches!(&n.kind, NodeKind::Image(_)) && n.extras().colorize.is_some();
+    if colorized
+        && reach.fill
+        && let Some(paint) = n.extras_mut().colorize.as_deref_mut()
+    {
+        changed += v.paint(paint) as usize;
+    }
     for it in &mut n.appearance.items {
         match it {
             AppearanceItem::Fill(l) if reach.fill => changed += v.paint(&mut l.paint) as usize,
@@ -67,7 +79,7 @@ pub fn recolor_node(n: &mut Node, reach: Reach, v: &mut dyn ColorVisitor) -> usi
         }
         // An image holding its own pixels is a glyph's (emoji in outlined type): it keeps its
         // colours, as the glyph does in type.
-        NodeKind::Image(im) if reach.images && im.link.is_none() && im.pixels.is_none() => {
+        NodeKind::Image(im) if reach.images && !colorized && im.link.is_none() && im.pixels.is_none() => {
             if let Some(k) = v.image(&im.key) {
                 im.key = k;
                 changed += 1;
@@ -75,6 +87,9 @@ pub fn recolor_node(n: &mut Node, reach: Reach, v: &mut dyn ColorVisitor) -> usi
         }
         _ => {
             for c in n.children_mut().into_iter().flatten() {
+                if !v.enters(c) {
+                    continue;
+                }
                 let mut m = (**c).clone();
                 let k = recolor_node(&mut m, reach, v);
                 if k > 0 {

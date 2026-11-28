@@ -1,0 +1,1421 @@
+//! The journal replays to the same document whenever it runs: values a command takes from the
+//! clock (File ▸ New's created date, a save's modified date) are recorded in its entry, and left out
+//! of recorded actions.
+
+use serde_json::json;
+
+use crate::*;
+
+fn created(s: &Session) -> Option<i64> {
+    s.doc().unwrap().doc.metadata.created
+}
+
+#[test]
+fn file_new_records_its_created_date_in_the_journal() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!(id, "file.new");
+    assert!(created(&s).is_some(), "a new document is dated now");
+    assert_eq!(p, json!({"width": 200, "height": 100, "created": created(&s)}));
+}
+
+#[test]
+fn file_new_takes_a_given_created_date() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": 1_000_000_000})).unwrap();
+    assert_eq!(created(&s), Some(1_000_000_000));
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    assert_eq!(created(&s), None);
+    // Given values are journaled as given.
+    assert_eq!(s.journal.last().unwrap().1, json!({"created": null}));
+    for bad in [json!("2026-01-01"), json!(1.5), json!(true)] {
+        assert!(s.execute("file.new", &json!({"created": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(s.documents().len(), 2, "a bad date makes no document");
+}
+
+#[test]
+fn replay_reproduces_the_created_date_of_an_earlier_run() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    // As if the original run happened long ago: a replay now must still land on its date.
+    s.journal.get_mut(0).unwrap().1["created"] = json!(1_234_567_890);
+    let mut r = Session::new();
+    for (id, p) in &s.journal {
+        r.execute(id, p).unwrap();
+    }
+    assert_eq!(created(&r), Some(1_234_567_890));
+    assert_eq!(r.doc().unwrap().doc.node_count(), s.doc().unwrap().doc.node_count());
+}
+
+#[test]
+fn recorded_actions_leave_out_replay_only_values() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200})).unwrap();
+    let steps = s.journal_for_action(0);
+    assert_eq!(steps.len(), s.journal.len());
+    // Playing the action later dates its new document then…
+    assert_eq!(steps[0], ("file.new".to_string(), json!({"width": 300, "height": 200})));
+    // …while values resolved from the preferences stay recorded.
+    let scale = steps.iter().find(|(id, _)| id == "object.scale").unwrap();
+    assert!(scale.1.get("strokes").is_some(), "{scale:?}");
+    assert_eq!(s.journal_for_action(1), s.journal.since(1).to_vec());
+}
+
+/// The artboard the app passes to Paste in Place, in Front and in Back, to Align to Artboard, to
+/// Distribute Objects and Distribute Spacing, to All on Active Artboard and to a batch (its active
+/// one) is journaled and left out of recorded actions, so a played action uses the artboard active
+/// when it plays.
+#[test]
+fn recorded_actions_leave_out_the_artboard_the_app_passes() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2, "created": null})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let start = s.journal.len();
+    let steps = [
+        ("edit.pasteInPlace", json!({"artboard": 1})),
+        ("edit.pasteInFront", json!({"artboard": 1})),
+        ("edit.pasteInBack", json!({"artboard": 1})),
+        ("select.allOnArtboard", json!({"artboard": 1})),
+        ("object.align", json!({"horizontal": "left", "to": "artboard", "artboard": 1})),
+        ("object.distribute", json!({"horizontal": "left", "to": "artboard", "artboard": 1})),
+        ("object.distributeSpacing", json!({"axis": "horizontal", "to": "artboard", "artboard": 1})),
+        ("command.batch", json!({"artboard": 1, "commands": [{"command": "select.allOnArtboard", "params": {}}]})),
+    ];
+    for (id, p) in &steps {
+        s.execute(id, p).unwrap();
+    }
+    assert!(s.journal.since(start).iter().all(|(_, p)| p["artboard"] == json!(1)), "the journal keeps it: {:?}", s.journal.since(start));
+    let action = s.journal_for_action(start);
+    assert_eq!(action.len(), steps.len());
+    for ((id, mut p), (step, recorded)) in steps.into_iter().zip(action) {
+        p.as_object_mut().unwrap().remove("artboard");
+        assert_eq!((step.as_str(), recorded), (id, p));
+    }
+}
+
+/// A batch passes its `artboard` (the app's active one) to each step that acts on the active
+/// artboard and names none, when the step runs: once a step deletes the last artboard, the new
+/// last one, and in a new document with fewer artboards, its last one. A step that names an
+/// artboard keeps it.
+#[test]
+fn a_batch_passes_its_artboard_to_each_step_when_it_runs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<_> = s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    let ids: Vec<u64> = boards
+        .iter()
+        .map(|b| {
+            s.execute("shape.rectangle", &json!({"x": b.x0 + 10.0, "y": b.y0 + 10.0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+        })
+        .collect();
+    let picked = |s: &Session| s.doc().unwrap().selection.objects.iter().map(|id| id.0).collect::<Vec<_>>();
+    let step = |command: &str, params: Value| json!({"command": command, "params": params});
+    let all_on_artboard = step("select.allOnArtboard", json!({}));
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [all_on_artboard]})).unwrap();
+    assert_eq!(picked(&s), [ids[2]], "the batch's artboard 3");
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [step("select.allOnArtboard", json!({"artboard": 0}))]})).unwrap();
+    assert_eq!(picked(&s), [ids[0]], "an artboard the step names is kept");
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [step("artboard.delete", json!({"index": 2})), all_on_artboard]})).unwrap();
+    assert_eq!(picked(&s), [ids[1]], "artboard 2, the last one once artboard 3 is deleted");
+    let new = step("file.new", json!({"width": 100, "height": 100}));
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [new, all_on_artboard]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 1, "in the new document");
+}
+
+/// A Paste in Place, in Front or in Back step that names `artboards` keeps them inside a batch
+/// given `artboard`, and pastes a copy on each; one that names neither takes the batch's artboard,
+/// unless the Artboard tool is chosen with several artboards selected: then it pastes on those.
+#[test]
+fn a_batch_keeps_the_artboards_a_paste_step_names() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<_> = s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    s.execute("shape.rectangle", &json!({"x": boards[0].x0 + 10.0, "y": boards[0].y0 + 10.0, "width": 20, "height": 20})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let step = |command: &str, params: Value| json!({"command": command, "params": params});
+    for id in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let origins = |r: &Value, s: &Session| {
+            let ids = r["results"][0]["ids"].as_array().unwrap().iter().map(|i| vectorcraft_doc::NodeId(i.as_u64().unwrap())).collect::<Vec<_>>();
+            ids.iter().map(|i| s.doc().unwrap().doc.bounds_of(&[*i], false).unwrap().origin().x).collect::<Vec<_>>()
+        };
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({"artboards": [0, 2]}))]})).unwrap();
+        assert_eq!(origins(&r, &s), [boards[0].x0 + 10.0, boards[2].x0 + 10.0], "{id}");
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({}))]})).unwrap();
+        assert_eq!(origins(&r, &s), [boards[1].x0 + 10.0], "{id}: the batch's artboard");
+    }
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([2, 0]));
+    for id in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({}))]})).unwrap();
+        let ids = r["results"][0]["ids"].as_array().unwrap().iter().map(|i| vectorcraft_doc::NodeId(i.as_u64().unwrap())).collect::<Vec<_>>();
+        let xs: Vec<f64> = ids.iter().map(|i| s.doc().unwrap().doc.bounds_of(&[*i], false).unwrap().origin().x).collect();
+        assert_eq!(xs, [boards[0].x0 + 10.0, boards[2].x0 + 10.0], "{id}: the Artboard tool's selection");
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({"artboard": 1}))]})).unwrap();
+        assert_eq!(r["results"][0]["ids"].as_array().map(Vec::len), Some(1), "{id}: a step's own `artboard` wins");
+    }
+}
+
+/// A batch passes its `artboard` to each Fit to Artwork Bounds and Fit to Selected Art step that
+/// names no `index`, as their `index` (past the document's last artboard, the last one), and a
+/// step's own `index` is kept. A recorded action leaves out the `index` or `indices` the app
+/// passes them, so the action resizes the artboard active when it plays.
+#[test]
+fn fit_steps_take_the_batchs_artboard_and_actions_leave_out_their_index() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    // Across the three artboards, so it is on each.
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 610, "height": 30})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let (was, art) = (boards(&s), vectorcraft_geom::Rect::new(10.0, 10.0, 620.0, 40.0));
+    let step = |command: &str, params: Value| json!({"command": command, "params": params});
+    s.execute("command.batch", &json!({"artboard": 9, "commands": [step("artboard.fitToArt", json!({}))]})).unwrap();
+    assert_eq!(boards(&s), [was[0], was[1], art], "artboard 3, the last one, for a batch's artboard past it");
+    s.execute("command.batch", &json!({"artboard": 1, "commands": [step("artboard.fitToSelection", json!({}))]})).unwrap();
+    assert_eq!(boards(&s), [was[0], art, art], "the batch's artboard 2");
+    s.execute("command.batch", &json!({"artboard": 2, "commands": [step("artboard.fitToArt", json!({"index": 0}))]})).unwrap();
+    assert_eq!(boards(&s)[0], art, "an index the step names is kept");
+    let start = s.journal.len();
+    s.execute("artboard.fitToArt", &json!({"index": 1})).unwrap();
+    s.execute("artboard.fitToArt", &json!({"indices": [1, 2]})).unwrap();
+    s.execute("artboard.fitToSelection", &json!({"index": 1})).unwrap();
+    let kept: Vec<Value> = s.journal.since(start).iter().map(|(_, p)| p.clone()).collect();
+    assert_eq!(kept, [json!({"index": 1}), json!({"indices": [1, 2]}), json!({"index": 1})], "the journal keeps them");
+    let action = s.journal_for_action(start);
+    let fit = |id: &str| (id.to_string(), json!({}));
+    assert_eq!(action, [fit("artboard.fitToArt"), fit("artboard.fitToArt"), fit("artboard.fitToSelection")]);
+}
+
+/// A document of three artboards with art of its own on each → its artboards before any fit.
+fn three_artboards_with_art(s: &mut Session) -> Vec<vectorcraft_geom::Rect> {
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3, "created": null})).unwrap();
+    for (x, h) in [(10, 30), (130, 20), (250, 40)] {
+        s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": h})).unwrap();
+    }
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect()
+}
+
+/// The artboards of [`three_artboards_with_art`], each fitted to its art.
+fn three_fitted_artboards() -> [vectorcraft_geom::Rect; 3] {
+    let rect = vectorcraft_geom::Rect::new;
+    [rect(10.0, 10.0, 30.0, 40.0), rect(130.0, 10.0, 150.0, 30.0), rect(250.0, 10.0, 270.0, 50.0)]
+}
+
+/// A Fit to Artwork Bounds step that names neither `index` nor `indices`, while the Artboard tool
+/// is chosen with several artboards selected, fits each of those (not the batch's artboard), as the
+/// command does on its own; a step's own `index` or `indices` wins, and with one artboard or none
+/// selected the step takes the batch's artboard.
+#[test]
+fn a_batch_fit_step_uses_the_artboard_tool_selection() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let fit = |params: Value| json!({"artboard": 1, "commands": [{"command": "artboard.fitToArt", "params": params}]});
+    let session = |picks: &Value| {
+        let mut s = Session::new();
+        let was = three_artboards_with_art(&mut s);
+        s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+        s.set_tool_option("selected", picks);
+        (s, was)
+    };
+    let (mut s, was) = session(&json!([2, 0]));
+    s.execute("command.batch", &fit(json!({}))).unwrap();
+    assert_eq!(boards(&s), [fitted[0], was[1], fitted[2]], "artboards 1 and 3, the selected ones, and not the batch's artboard 2");
+    let (mut s, was) = session(&json!([2, 0]));
+    s.execute("command.batch", &fit(json!({"index": 1}))).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], was[2]], "a step's own index");
+    let (mut s, was) = session(&json!([2, 0]));
+    s.execute("command.batch", &fit(json!({"indices": [1, 2]}))).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], fitted[2]], "a step's own indices");
+    for picks in [json!([2]), json!([])] {
+        let (mut s, was) = session(&picks);
+        s.execute("command.batch", &fit(json!({}))).unwrap();
+        assert_eq!(boards(&s), [was[0], fitted[1], was[2]], "the batch's artboard with {picks} selected");
+    }
+}
+
+/// The journal records the artboards a batch's Fit to Artwork Bounds step took from the Artboard
+/// tool, so a replay in a new session fits the same ones; an action leaves them out and fits the
+/// artboards selected when it plays.
+#[test]
+fn a_batch_fit_selection_replays_but_an_action_uses_the_current_selection() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let mut s = Session::new();
+    let was = three_artboards_with_art(&mut s);
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([0, 2]));
+    let start = s.journal.len();
+    let steps = json!([{"command": "artboard.fitToArt", "params": {}}]);
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [fitted[0], was[1], fitted[2]]);
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["commands"][0]["params"]), ("command.batch", &json!({"indices": [0, 2]})));
+    let r = replayed(&s);
+    assert_ne!(r.tool_id(), "artboard", "the new session's tool selects no artboards");
+    assert_eq!(boards(&r), boards(&s), "the replay fits the recorded artboards");
+    let action = s.journal_for_action(start);
+    assert_eq!(action, [("command.batch".to_string(), json!({"commands": steps}))]);
+    // Played on a fresh copy of the document with other artboards selected.
+    let mut a = Session::new();
+    three_artboards_with_art(&mut a);
+    a.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    a.set_tool_option("selected", &json!([1, 2]));
+    a.execute("command.batch", &json!({"artboard": 0, "commands": action[0].1["commands"]})).unwrap();
+    assert_eq!(boards(&a), [was[0], fitted[1], fitted[2]], "the action fits the artboards selected when it plays");
+}
+
+/// The journal records the `index` a batch's Fit to Artwork Bounds step took from the batch's
+/// `artboard`, or the command's default (the first artboard) when the batch names none, so a replay
+/// fits that artboard even when the Artboard tool then has several selected.
+#[test]
+fn a_batch_fit_step_records_the_batchs_artboard() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let steps = json!([{"command": "artboard.fitToArt", "params": {}}]);
+    for (batch, index, picks) in [(json!({"artboard": 1, "commands": steps}), 1, json!([0, 2])), (json!({"commands": steps}), 0, json!([1, 2]))] {
+        let mut s = Session::new();
+        let was = three_artboards_with_art(&mut s);
+        let start = s.journal.len();
+        s.execute("command.batch", &batch).unwrap();
+        let mut want = was.clone();
+        want[index] = fitted[index];
+        assert_eq!(boards(&s), want, "{batch}");
+        let (id, p) = s.journal.last().unwrap().clone();
+        assert_eq!((id.as_str(), &p["commands"][0]["params"]), ("command.batch", &json!({ "index": index })));
+        let mut r = Session::new();
+        for (n, (id, p)) in s.journal.iter().enumerate() {
+            if n == start {
+                r.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+                r.set_tool_option("selected", &picks);
+            }
+            r.execute(id, p).unwrap();
+        }
+        assert_eq!(boards(&r), want, "{batch}: the replay fits artboard {index}, not the selected ones");
+        assert_eq!(s.journal_for_action(start), [("command.batch".to_string(), json!({"commands": steps}))]);
+    }
+}
+
+/// A batch step with `"params": null` gets the Artboard tool's selected artboards, or else the
+/// batch's `artboard`, as a step without params does.
+#[test]
+fn a_batch_fit_step_with_null_params_gets_the_artboards() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let steps = json!([{"command": "artboard.fitToArt", "params": null}]);
+    let mut s = Session::new();
+    let was = three_artboards_with_art(&mut s);
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([2, 0]));
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [fitted[0], was[1], fitted[2]], "the selected artboards");
+    let (_, p) = s.journal.last().unwrap().clone();
+    assert_eq!(p["commands"][0]["params"], json!({"indices": [0, 2]}));
+    let mut s = Session::new();
+    three_artboards_with_art(&mut s);
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], was[2]], "the batch's artboard");
+}
+
+#[test]
+fn a_save_records_its_date_and_replays_it() {
+    let dir = vectorcraft_testkit::TempDir::new("journal-save");
+    let path = dir.join("a.vectorcraft").to_string_lossy().into_owned();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    let m = &s.doc().unwrap().doc.metadata;
+    assert!(m.modified.is_some() && m.created == m.modified, "a save dates a document without one");
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["modified"]), ("document.save", &json!(m.modified)));
+    // A given date is used as is; null leaves the dates alone.
+    s.execute("document.save", &json!({"path": path, "modified": 2_000_000_000})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.metadata.modified, Some(2_000_000_000));
+    s.execute("document.save", &json!({"path": path, "modified": null})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.metadata.modified, Some(2_000_000_000));
+    assert!(s.execute("document.save", &json!({"path": path, "modified": "today"})).is_err());
+    // Save As stamps the same way; Save a Copy leaves the document's dates (and records none).
+    s.execute("file.saveAs", &json!({"path": dir.join("b.vectorcraft").to_string_lossy(), "modified": 2_000_000_100})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["modified"], json!(2_000_000_100));
+    s.execute("file.saveCopy", &json!({"path": dir.join("c.vectorcraft").to_string_lossy()})).unwrap();
+    assert!(s.journal.last().unwrap().1.get("modified").is_none());
+    assert_eq!(s.doc().unwrap().doc.metadata.modified, Some(2_000_000_100));
+    // Replayed later, the saves stamp the recorded dates; an action stamps the time it plays.
+    let mut r = Session::new();
+    for (id, p) in &s.journal {
+        r.execute(id, p).unwrap();
+    }
+    assert_eq!(r.doc().unwrap().doc.metadata, s.doc().unwrap().doc.metadata);
+    assert!(s.journal_for_action(0).iter().all(|(_, p)| p.get("modified").is_none() && p.get("created").is_none()));
+}
+
+/// The document `s` ends on after replaying the journal of `s` in a new session.
+fn replayed(s: &Session) -> Session {
+    let mut r = Session::new();
+    for (id, p) in &s.journal {
+        r.execute(id, p).unwrap();
+    }
+    r
+}
+
+#[test]
+fn a_save_in_a_batch_records_its_date_and_replays_it() {
+    let dir = vectorcraft_testkit::TempDir::new("journal-batch");
+    let path = dir.join("a.vectorcraft").to_string_lossy().into_owned();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": 1_000_000_000})).unwrap();
+    let rect = json!({"x": 10, "y": 10, "width": 50, "height": 40});
+    let steps = json!([{"command": "shape.rectangle", "params": rect}, {"command": "document.save", "params": {"path": path}}]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    let modified = s.doc().unwrap().doc.metadata.modified;
+    assert!(modified.is_some(), "the save in the batch dates the document");
+    // The step's entry records the date it used; steps that take nothing from elsewhere stay as given.
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!(id, "command.batch");
+    assert_eq!(p["commands"][0], steps[0]);
+    assert_eq!(p["commands"][1]["params"], json!({"path": path, "modified": modified}));
+    // As if the original run happened at another time: the replay lands on the recorded date.
+    s.journal.last_mut().unwrap().1["commands"][1]["params"]["modified"] = json!(1_234_567_890);
+    let r = replayed(&s);
+    assert_eq!(r.doc().unwrap().doc.metadata.modified, Some(1_234_567_890));
+    assert_eq!(r.doc().unwrap().doc.metadata.created, Some(1_000_000_000));
+    assert_eq!(r.doc().unwrap().doc.node_count(), s.doc().unwrap().doc.node_count());
+    // An action leaves the step's date out, so playing it later dates the document then.
+    let action = s.journal_for_action(0);
+    assert_eq!(action[1].1["commands"][1]["params"], json!({ "path": path }));
+    assert_eq!(action[1].1["commands"][0], steps[0]);
+}
+
+#[test]
+fn a_batch_step_records_what_it_took_from_the_preferences() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.prefs.scale_strokes = true;
+    let steps = json!([
+        {"command": "shape.rectangle", "params": {"x": 10, "y": 10, "width": 50, "height": 40}},
+        {"command": "stroke.set", "params": {"weight": 2}},
+        {"command": "object.scale", "params": {"sx": 300}},
+    ]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    let p = &s.journal.last().unwrap().1;
+    assert_eq!(p["commands"][2]["params"], json!({"sx": 300, "strokes": true, "corners": false, "basis": "box"}));
+    // Replayed with other preferences, the scale still scales the stroke.
+    let r = replayed(&s);
+    assert!(!r.prefs.scale_strokes);
+    let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    assert_eq!(doc(&r), doc(&s));
+}
+
+/// A document of three artboards with a rectangle on the second, the Artboard tool chosen and that
+/// artboard selected → the journal's length, where the entries under test start.
+fn second_artboard_selected(s: &mut Session) -> usize {
+    s.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 300, "height": 100})).unwrap();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 100, "height": 300})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 1010, "y": 10, "width": 100, "height": 50})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 2})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([1]));
+    s.journal.len()
+}
+
+/// A new session's Artboard tool has nothing selected, so a replay of a command that took its
+/// artboards from the selection acts on the artboards it recorded, and an action does not keep them.
+#[test]
+fn artboard_commands_record_the_selected_artboards_for_a_replay_and_not_for_an_action() {
+    for (id, params, recorded, action) in [
+        ("artboard.switchOrientation", json!({}), json!({"selectedArtboards": [1], "scaleArt": false}), json!({"scaleArt": false})),
+        ("artboard.rename", json!({"name": "Back"}), json!({"name": "Back", "selectedArtboards": [1]}), json!({"name": "Back"})),
+        (
+            "artboard.duplicate",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+        (
+            "artboard.cut",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+        (
+            "artboard.copy",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+    ] {
+        let mut s = Session::new();
+        let start = second_artboard_selected(&mut s);
+        s.execute(id, &params).unwrap();
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), recorded), "{id}");
+        assert_eq!(s.journal_for_action(start), [(id.to_string(), action)], "{id}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+    }
+}
+
+/// A copy of the artboard the tool had selected replays as a copy of that artboard: what it pastes
+/// is the same.
+#[test]
+fn a_replayed_artboard_copy_pastes_the_selected_artboard() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    s.execute("artboard.copy", &json!({})).unwrap();
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4);
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+}
+
+/// The artboards a call names are recorded as given and stay in an action, and a batch step records
+/// the selected ones in its own params.
+#[test]
+fn artboard_commands_keep_a_named_artboard_and_note_a_batch_steps_artboards() {
+    let mut s = Session::new();
+    let start = second_artboard_selected(&mut s);
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1, json!({"index": 0, "scaleArt": false}));
+    s.execute("artboard.duplicate", &json!({"indices": [0]})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1, json!({"indices": [0], "art": true, "lockedAndHidden": false}));
+    let steps = json!([{"command": "artboard.switchOrientation", "params": {}}]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["commands"][0]["params"], json!({"selectedArtboards": [1], "scaleArt": false}));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+    let action = s.journal_for_action(start);
+    assert_eq!(action[0].1, json!({"index": 0, "scaleArt": false}));
+    assert_eq!(action[1].1, json!({"indices": [0], "art": true, "lockedAndHidden": false}));
+    assert_eq!(action[2].1["commands"][0]["params"], json!({"scaleArt": false}));
+}
+
+/// A recorded `selectedArtboards` goes ahead of the tool's selection, gives way to a named artboard,
+/// and is checked as `indices` is.
+#[test]
+fn artboard_commands_read_the_recorded_selected_artboards() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    let run = |s: &mut Session, p| s.execute("artboard.switchOrientation", &p).map(|r| r["switched"].clone());
+    assert_eq!(run(&mut s, json!({"selectedArtboards": [2]})).unwrap(), json!([2]));
+    assert_eq!(run(&mut s, json!({"selectedArtboards": [2], "index": 0})).unwrap(), json!([0]));
+    for bad in [json!([9]), json!([]), json!("1"), json!(null)] {
+        assert!(run(&mut s, json!({ "selectedArtboards": bad })).is_err(), "{bad}");
+    }
+}
+
+/// A Cut or Copy with the Artboard tool replays on the artboards it took in a new session, where
+/// another tool is chosen: with nothing selected there, and with an object selected that a Cut or
+/// Copy of objects would take. What it pastes is the same.
+#[test]
+fn edit_copy_and_cut_with_the_artboard_tool_replay_on_its_artboards() {
+    for id in ["edit.copy", "edit.cut"] {
+        for select in ["select.all", "select.none"] {
+            let mut s = Session::new();
+            second_artboard_selected(&mut s);
+            s.execute(select, &json!({})).unwrap();
+            s.execute(id, &json!({})).unwrap();
+            let boards = if id == "edit.cut" { 2 } else { 3 };
+            assert_eq!(s.doc().unwrap().doc.artboards.len(), boards, "{id} after {select}");
+            assert_eq!(documents(&replayed(&s)), documents(&s), "{id} after {select}");
+            let entry = s.journal.last().unwrap().clone();
+            s.execute("edit.paste", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc.artboards.len(), boards + 1, "{id} after {select}");
+            let r = replayed(&s);
+            assert_ne!(r.tool_id(), "artboard");
+            assert_eq!(documents(&r), documents(&s), "{id} after {select}");
+            assert_eq!(entry, (id.to_string(), json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false})), "{id} after {select}");
+        }
+    }
+}
+
+/// A Copy after a Paste takes the pasted artboards, which the Artboard tool selected, and so does its
+/// replay, though `edit.paste` selects nothing in a new session's tool.
+#[test]
+fn edit_copy_after_a_paste_with_the_artboard_tool_replays_on_the_pasted_artboards() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1, json!({"selectedArtboards": [3], "art": true, "lockedAndHidden": false}));
+    s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 5);
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+}
+
+/// A recorded action keeps `edit.copy` and `edit.cut` as given, so when it plays they follow the tool
+/// chosen then, and a batch step records and leaves out the same values. The locked-art preference
+/// that the Artboard tool's copy notes stays in the action.
+#[test]
+fn edit_copy_and_cut_with_the_artboard_tool_record_nothing_for_an_action() {
+    for id in ["edit.copy", "edit.cut"] {
+        let mut s = Session::new();
+        let start = second_artboard_selected(&mut s);
+        s.execute(id, &json!({})).unwrap();
+        let action = s.journal_for_action(start);
+        assert_eq!(action, [(id.to_string(), json!({"lockedAndHidden": false}))], "{id}");
+        let mut played = Session::new();
+        played.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+        played.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+        played.execute(id, &action[0].1).unwrap();
+        assert_eq!(played.doc().unwrap().doc.artboards.len(), 1, "{id}");
+        assert!(played.clipboard.artboards.is_empty(), "{id}");
+        assert_eq!(played.clipboard.nodes.len(), 1, "{id}");
+
+        let mut s = Session::new();
+        let start = second_artboard_selected(&mut s);
+        let steps = json!([{"command": id, "params": {}}, {"command": "edit.paste", "params": {}}]);
+        s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+        assert_eq!(
+            s.journal.last().unwrap().1["commands"][0]["params"],
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            "{id}"
+        );
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+        assert_eq!(s.journal_for_action(start)[0].1["commands"][0]["params"], json!({"lockedAndHidden": false}), "{id}");
+    }
+}
+
+/// Without the Artboard tool, Cut and Copy of objects record nothing more than they did.
+#[test]
+fn edit_copy_and_cut_of_objects_record_their_params_as_given() {
+    for id in ["edit.copy", "edit.cut"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+        s.execute(id, &json!({})).unwrap();
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), json!({})), "{id}");
+        assert!(s.clipboard.artboards.is_empty(), "{id}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+    }
+}
+
+/// A recorded `selectedArtboards` needs only a document and is checked as `indices` is, as are `art`
+/// and the rule that a cut leaves one artboard. A failed call changes neither the document nor the
+/// clipboard.
+#[test]
+fn edit_copy_and_cut_read_the_recorded_artboards() {
+    for id in ["edit.copy", "edit.cut"] {
+        assert!(matches!(Session::new().execute(id, &json!({"selectedArtboards": [0]})), Err(crate::EngineError::Disabled(..))));
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+        s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 300, "height": 100})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 1010, "y": 10, "width": 100, "height": 50})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        assert!(matches!(s.execute(id, &json!({})), Err(crate::EngineError::Disabled(..))), "{id}");
+        let before = documents(&s);
+        for (bad, want) in [
+            (json!({"selectedArtboards": [9]}), "no such artboard"),
+            (json!({"selectedArtboards": []}), "`selectedArtboards` must be a non-empty list of artboard indices"),
+            (json!({"selectedArtboards": "1"}), "`selectedArtboards` must be a list of artboard indices"),
+            (json!({"selectedArtboards": null}), "`selectedArtboards` must be a list of artboard indices"),
+            (json!({"selectedArtboards": [1, "0"]}), "`selectedArtboards` must contain whole numbers"),
+            (json!({"selectedArtboards": [1, -1]}), "`selectedArtboards` must contain whole numbers"),
+            (json!({"selectedArtboards": [1], "art": "yes"}), "`art` must be true or false"),
+        ] {
+            let err = s.execute(id, &bad).unwrap_err().to_string();
+            assert!(err.ends_with(want), "{id} {bad}: {err}");
+            assert!(err.contains(id) || want == "no such artboard", "{id} {bad}: {err}");
+            assert_eq!(documents(&s), before, "{id} {bad}");
+            assert!(s.clipboard.artboards.is_empty(), "{id} {bad}");
+        }
+        s.execute(id, &json!({"selectedArtboards": [1], "art": false})).unwrap();
+        assert_eq!(s.clipboard.artboards.len(), 1, "{id}");
+        assert!(s.clipboard.nodes.is_empty(), "{id}");
+        assert_eq!(s.journal.last().unwrap().1, json!({"selectedArtboards": [1], "art": false}), "{id}");
+        // Objects selected, `art` is still checked.
+        s.execute("select.all", &json!({})).unwrap();
+        let err = s.execute(id, &json!({"art": "yes"})).unwrap_err().to_string();
+        assert!(err.contains(id), "{id}: {err}");
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+    assert!(s.execute("edit.cut", &json!({"selectedArtboards": [0]})).is_err());
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 1);
+}
+
+/// `artboard.duplicate` and the cut and copy record the tool's Move/Copy Artwork option: replayed in
+/// a new session, where the option is on, the art stays behind as it did.
+#[test]
+fn artboard_commands_record_the_tools_move_art_option() {
+    for id in ["artboard.duplicate", "artboard.cut", "artboard.copy", "edit.cut", "edit.copy"] {
+        let mut s = Session::new();
+        second_artboard_selected(&mut s);
+        s.set_tool_option("moveArt", &json!(false));
+        s.execute(id, &json!({})).unwrap();
+        assert_eq!(s.journal.last().unwrap().1["art"], json!(false), "{id}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+    }
+}
+
+/// `artboard.switchOrientation` records the tool's Scale Artwork option: replayed in a new session,
+/// where it is off, the art scales as it did.
+#[test]
+fn artboard_switch_orientation_records_the_tools_scale_art_option() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    s.set_tool_option("scaleArt", &json!(true));
+    s.execute("artboard.switchOrientation", &json!({})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["scaleArt"], json!(true));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+}
+
+/// `artboard.switchOrientation` records whether locked and hidden art goes along: replayed in a new
+/// session, where the preference is off, the locked art scales as it did.
+#[test]
+fn artboard_switch_orientation_records_whether_locked_art_goes_along() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    let r = s.execute("shape.rectangle", &json!({"x": 1150, "y": 10, "width": 100, "height": 50})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [r["id"]], "locked": true})).unwrap();
+    s.prefs.move_locked_with_artboard = true;
+    s.set_tool_option("scaleArt", &json!(true));
+    s.execute("artboard.switchOrientation", &json!({})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["lockedAndHidden"], json!(true));
+    let r = replayed(&s);
+    assert!(!r.prefs.move_locked_with_artboard);
+    assert_eq!(documents(&r), documents(&s));
+    // The params' own values win over the preferences.
+    let mut t = Session::new();
+    second_artboard_selected(&mut t);
+    t.prefs.move_locked_with_artboard = true;
+    t.execute("artboard.switchOrientation", &json!({"scaleArt": true, "lockedAndHidden": false})).unwrap();
+    assert_eq!(t.journal.last().unwrap().1["lockedAndHidden"], json!(false));
+    assert!(t.execute("artboard.switchOrientation", &json!({"strokes": "yes"})).is_err());
+}
+
+/// Every open document of `s`, as JSON.
+fn documents(s: &Session) -> Vec<serde_json::Value> {
+    s.documents().iter().map(|d| serde_json::to_value(&*d.doc).unwrap()).collect()
+}
+
+fn rect_step(x: i32) -> serde_json::Value {
+    json!({"command": "shape.rectangle", "params": {"x": x, "y": 10, "width": 20, "height": 20}})
+}
+
+#[test]
+fn a_batch_that_opens_a_new_document_is_journaled_and_replays() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    let steps = json!([rect_step(10), {"command": "file.new", "params": {"width": 300, "height": 200}}, rect_step(50), rect_step(90)]);
+    s.execute("command.batch", &json!({"label": "Two documents", "commands": steps})).unwrap();
+    // The steps before the new document stay in the first one and the rest go in the new one: one
+    // undo step in each, nothing left in progress.
+    assert_eq!(s.documents().len(), 2);
+    assert_eq!(s.active_index(), Some(1));
+    for (st, objects) in s.documents().iter().zip([1, 2]) {
+        assert_eq!(st.doc.node_count(), 1 + objects);
+        assert_eq!(st.history.undo.iter().map(|h| h.label.as_str()).collect::<Vec<_>>(), ["Two documents"]);
+        assert!(st.interaction.is_none());
+    }
+    // The batch is journaled, with the new document's date, and replays to the same documents.
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!(id, "command.batch");
+    assert!(p["commands"][1]["params"]["created"].is_i64(), "{p}");
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+    // Undo in the new document takes its part of the batch back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.node_count(), 1);
+}
+
+#[test]
+fn a_failed_batch_closes_the_documents_it_opened_and_restores_the_ones_it_closed() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+    let (before, active, journal, next) = (documents(&s), s.active_index(), s.journal.len(), s.peek_untitled());
+    let steps = json!([
+        rect_step(10),
+        {"command": "file.close", "params": {}},
+        rect_step(30),
+        {"command": "file.new", "params": {}},
+        rect_step(50),
+        {"command": "no.such.command", "params": {}},
+    ]);
+    let e = s.execute("command.batch", &json!({ "commands": steps })).unwrap_err();
+    assert!(e.to_string().contains("batch step 5"), "{e}");
+    assert_eq!(documents(&s), before);
+    assert_eq!(s.active_index(), active);
+    assert_eq!(s.journal.len(), journal, "a failed batch isn't journaled");
+    assert_eq!(s.peek_untitled(), next, "the next new document keeps its name");
+    assert!(s.documents().iter().all(|d| d.interaction.is_none()));
+    assert_eq!(s.documents()[1].history.undo.len(), 1, "only the ellipse drawn before the batch");
+}
+
+#[test]
+fn a_failed_batch_brings_back_a_document_it_reverted() {
+    let dir = vectorcraft_testkit::TempDir::new("journal-batch");
+    let path = dir.join("revert.vectorcraft").to_string_lossy().into_owned();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("document.save", &json!({"path": path, "modified": null})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+    let (before, revision) = (documents(&s), s.doc().unwrap().revision);
+    let steps = json!([rect_step(10), {"command": "file.revert", "params": {}}, rect_step(30), {"command": "no.such.command"}]);
+    assert!(s.execute("command.batch", &json!({ "commands": steps })).is_err());
+    assert_eq!(documents(&s), before, "the unsaved ellipse is back");
+    let st = s.doc().unwrap();
+    assert_eq!(st.history.undo.len(), 1);
+    assert!(st.is_dirty() && st.interaction.is_none());
+    assert!(st.revision > revision, "the restored document redraws");
+}
+
+#[test]
+fn a_failed_batch_gives_back_the_highlighted_rows_and_the_current_layer() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    // A step that highlights the layer's row, then one that fails: the highlight goes back too.
+    let steps = json!([{"command": "layer.setCurrent", "params": {"id": layer.0}}, {"command": "no.such.command"}]);
+    assert!(s.execute("command.batch", &json!({ "commands": steps })).is_err());
+    assert!(s.doc().unwrap().layer_rows.is_empty(), "no row stays highlighted");
+    assert_eq!(s.doc().unwrap().active_layer, Some(layer));
+    // So Collect in New Layer acts on the drawn rectangle, as it does when the journal is replayed
+    // (a failed batch isn't journaled).
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 1, "height": 1})).unwrap();
+    s.execute("layer.collectInNew", &json!({})).unwrap();
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+}
+
+/// Canceling undo groups open in two documents undoes the edits of both and drops the entries of
+/// both from the journal, whichever document comes first in the list.
+#[test]
+fn canceling_undo_groups_in_two_documents_drops_the_edits_of_both_from_the_journal() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    let objects = |s: &Session| s.documents().iter().map(|d| d.doc.node_count()).collect::<Vec<_>>();
+    let before = objects(&s);
+    // The first document's group begins first, and the second document's group begins after it.
+    let journal = s.journal.len();
+    assert!(s.set_active(0));
+    s.begin_undo_group();
+    s.execute("shape.rectangle", &rect_step(10)["params"]).unwrap();
+    assert!(s.set_active(1));
+    s.begin_undo_group();
+    s.execute("shape.rectangle", &rect_step(50)["params"]).unwrap();
+    s.end_undo_group(true);
+    assert_eq!(objects(&s), before, "both documents' edits are undone");
+    assert_eq!(s.journal.len(), journal, "the journal holds neither group's edits");
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+
+    // The commands do the same: neither group's begin nor its edit stays in the journal.
+    let journal = s.journal.len();
+    for (id, p) in [
+        ("document.activate", json!({"index": 0})),
+        ("edit.undoGroup.begin", json!({})),
+        ("shape.rectangle", rect_step(10)["params"].clone()),
+        ("document.activate", json!({"index": 1})),
+        ("edit.undoGroup.begin", json!({})),
+        ("shape.rectangle", rect_step(50)["params"].clone()),
+        ("edit.undoGroup.end", json!({"cancel": true})),
+    ] {
+        s.execute(id, &p).unwrap();
+    }
+    assert_eq!(objects(&s), before);
+    let ids = s.journal.since(journal).iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>();
+    assert!(!ids.iter().any(|id| matches!(*id, "edit.undoGroup.begin" | "shape.rectangle")), "{ids:?}");
+    assert_eq!(ids.last(), Some(&"edit.undoGroup.end"));
+}
+
+/// A cancel drops only the canceled groups' own entries from the journal: an edit made in another
+/// document while a group was open stays in that document and in the journal.
+#[test]
+fn canceling_undo_groups_keeps_the_journal_entries_made_outside_them() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    let objects = |s: &Session| s.documents().iter().map(|d| d.doc.node_count()).collect::<Vec<_>>();
+    let before = objects(&s);
+    // The second document's rectangle at 30 is drawn between the two groups and belongs to neither.
+    for (id, p) in [
+        ("document.activate", json!({"index": 0})),
+        ("edit.undoGroup.begin", json!({})),
+        ("shape.rectangle", rect_step(10)["params"].clone()),
+        ("document.activate", json!({"index": 1})),
+        ("shape.rectangle", rect_step(30)["params"].clone()),
+        ("edit.undoGroup.begin", json!({})),
+        ("shape.rectangle", rect_step(50)["params"].clone()),
+        ("edit.undoGroup.end", json!({"cancel": true})),
+    ] {
+        s.execute(id, &p).unwrap();
+    }
+    assert_eq!(objects(&s), vec![before[0], before[1] + 1], "only the groups' edits are undone");
+    let ids = s.journal.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>();
+    assert_eq!(ids.iter().filter(|id| **id == "shape.rectangle").count(), 1, "{ids:?}");
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+
+    // With one group open, a rectangle drawn in the other document stays in the journal too. A live
+    // drag committed in the group goes with the group, and one committed in the other document stays.
+    let before = objects(&s);
+    let opacity = |s: &mut Session, opacity: i32| {
+        s.begin_interaction("Opacity").unwrap();
+        s.preview("transparency.set", &json!({ "opacity": opacity })).unwrap();
+        s.commit_interaction().unwrap();
+    };
+    for (id, p) in
+        [("document.activate", json!({"index": 0})), ("edit.undoGroup.begin", json!({})), ("shape.rectangle", rect_step(10)["params"].clone())]
+    {
+        s.execute(id, &p).unwrap();
+    }
+    opacity(&mut s, 50);
+    for (id, p) in [("document.activate", json!({"index": 1})), ("shape.rectangle", rect_step(70)["params"].clone())] {
+        s.execute(id, &p).unwrap();
+    }
+    opacity(&mut s, 40);
+    for (id, p) in [("document.activate", json!({"index": 0})), ("edit.undoGroup.end", json!({"cancel": true}))] {
+        s.execute(id, &p).unwrap();
+    }
+    assert_eq!(objects(&s), vec![before[0], before[1] + 1]);
+    let opacities = s.journal.iter().filter(|(id, _)| id == "transparency.set").map(|(_, p)| p["opacity"].clone()).collect::<Vec<_>>();
+    assert_eq!(opacities, vec![json!(40)]);
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+
+    // A batch that edits the group's document and then switches documents goes with the group, and
+    // only its switch stays, so the rectangle drawn after it replays in the second document.
+    let before = objects(&s);
+    let steps = json!([rect_step(90), {"command": "document.activate", "params": {"index": 1}}]);
+    for (id, p) in [
+        ("document.activate", json!({"index": 0})),
+        ("edit.undoGroup.begin", json!({})),
+        ("command.batch", json!({ "commands": steps })),
+        ("shape.rectangle", rect_step(110)["params"].clone()),
+        ("edit.undoGroup.end", json!({"cancel": true})),
+    ] {
+        s.execute(id, &p).unwrap();
+    }
+    assert_eq!(objects(&s), vec![before[0], before[1] + 1]);
+    assert!(!s.journal.iter().any(|(id, _)| id == "command.batch"));
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+
+    // So does a batch that opens the group itself before it switches documents.
+    let before = objects(&s);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let steps = json!([{"command": "edit.undoGroup.begin"}, rect_step(130), {"command": "document.activate", "params": {"index": 1}}]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    s.end_undo_group(true);
+    assert_eq!(objects(&s), before);
+    assert!(!s.journal.iter().any(|(id, _)| id == "command.batch"));
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+}
+
+/// A batch that edits the canceled group's document and then a document without a group keeps the
+/// steps outside the group in the journal, so a replay draws the edit the second document keeps.
+#[test]
+fn canceling_an_undo_group_keeps_a_batchs_steps_in_other_documents() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    let objects = |s: &Session| s.documents().iter().map(|d| d.doc.node_count()).collect::<Vec<_>>();
+    let before = objects(&s);
+    let steps = json!([rect_step(10), rect_step(20), {"command": "document.activate", "params": {"index": 1}}, rect_step(30)]);
+    for (id, p) in [
+        ("document.activate", json!({"index": 0})),
+        ("edit.undoGroup.begin", json!({})),
+        ("command.batch", json!({ "commands": steps })),
+        ("shape.rectangle", rect_step(50)["params"].clone()),
+        ("edit.undoGroup.end", json!({"cancel": true})),
+    ] {
+        s.execute(id, &p).unwrap();
+    }
+    assert_eq!(objects(&s), vec![before[0], before[1] + 2], "only the group's edits are undone");
+    let (_, batch) = s.journal.iter().find(|(id, _)| id == "command.batch").unwrap();
+    assert_eq!(batch["commands"], json!([steps[2], steps[3]]));
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+
+    // Undo scopes in two documents canceled one at a time: the second cancel finds its own step after
+    // the first one took a step out of the batch, and the third document's edit stays.
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    let before = objects(&s);
+    assert!(s.set_active(0));
+    let first = s.begin_undo_scope().unwrap();
+    assert!(s.set_active(1));
+    let second = s.begin_undo_scope().unwrap();
+    assert!(s.set_active(0));
+    let activate = |index: usize| json!({"command": "document.activate", "params": {"index": index}});
+    let steps = json!([rect_step(10), activate(1), rect_step(30), activate(2), rect_step(50)]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    s.end_undo_scope(first, true);
+    s.end_undo_scope(second, true);
+    assert_eq!(objects(&s), vec![before[0], before[1], before[2] + 1]);
+    let (_, batch) = s.journal.iter().rev().find(|(id, _)| id == "command.batch").unwrap();
+    assert_eq!(batch["commands"], json!([steps[1], steps[3], steps[4]]));
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+}
+
+/// The edits made in an undo group (a scrubbed numeric field, #400) are one undo step, journaled
+/// one by one; a cancelled group undoes them and leaves the journal as it was.
+#[test]
+fn an_undo_group_is_one_undo_step() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    let width = |s: &Session| s.transform_box(&s.doc().unwrap().selection.objects).unwrap().rect.width();
+    let undo_len = |s: &Session| s.doc().unwrap().history.undo.len();
+    let (undo, journal) = (undo_len(&s), s.journal.len());
+    s.begin_undo_group();
+    for w in [101, 102, 103] {
+        s.execute("object.setBounds", &json!({"width": w})).unwrap();
+    }
+    // A live drag committed in the group (the Transparency panel's opacity field) joins it too.
+    s.begin_interaction("Opacity").unwrap();
+    s.preview("transparency.set", &json!({"opacity": 50})).unwrap();
+    s.commit_interaction().unwrap();
+    s.end_undo_group(false);
+    assert!((width(&s) - 103.0).abs() < 1e-9);
+    assert_eq!(undo_len(&s), undo + 1, "one undo step");
+    assert_eq!(s.journal.len(), journal + 4, "each edit journaled");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!((width(&s) - 100.0).abs() < 1e-9, "undo takes the whole drag back");
+    assert_eq!(undo_len(&s), undo);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!((width(&s) - 103.0).abs() < 1e-9);
+
+    // Escape: back where it started, with no trace in the history or the journal.
+    let (undo, journal) = (undo_len(&s), s.journal.len());
+    s.begin_undo_group();
+    s.execute("object.setBounds", &json!({"width": 150})).unwrap();
+    s.execute("object.setBounds", &json!({"width": 160})).unwrap();
+    s.end_undo_group(true);
+    assert!((width(&s) - 103.0).abs() < 1e-9);
+    assert_eq!((undo_len(&s), s.journal.len()), (undo, journal));
+    // Closed: the next edits are steps of their own again.
+    s.execute("object.setBounds", &json!({"width": 110})).unwrap();
+    s.execute("object.setBounds", &json!({"width": 120})).unwrap();
+    assert_eq!(undo_len(&s), undo + 2);
+    // A group with no edits records nothing, and cancelling it undoes nothing.
+    s.begin_undo_group();
+    s.end_undo_group(true);
+    assert!((width(&s) - 120.0).abs() < 1e-9);
+    assert_eq!(undo_len(&s), undo + 2);
+}
+
+/// Between `edit.undoGroup.begin` and `edit.undoGroup.end`, each document created meanwhile opens an
+/// undo group with the begun group's name, also when no document was open at the begin: its edits
+/// are one undo step there, and a cancel undoes them and leaves the document open. A group opened
+/// without the command (a scrubbed field) and a begin that a failed batch rolled back open no group
+/// in a new document.
+#[test]
+fn an_undo_group_begun_by_command_opens_in_each_document_created_before_its_end() {
+    let mut s = Session::new();
+    let rect = json!({"x": 10, "y": 10, "width": 100, "height": 50});
+    let new = json!({"width": 400, "height": 300});
+    let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    s.execute("edit.undoGroup.begin", &json!({"label": "Job"})).unwrap();
+    for _ in 0..2 {
+        s.execute("file.new", &new).unwrap();
+        s.execute("shape.rectangle", &rect).unwrap();
+        s.execute("shape.ellipse", &rect).unwrap();
+    }
+    s.execute("edit.undoGroup.end", &json!({})).unwrap();
+    assert_eq!(labels(&s), ["Job"]);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(labels(&s), ["Job"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(objects(&s), 0, "one undo takes back both edits");
+
+    // Closed: the next document's edits are steps of their own.
+    s.execute("file.new", &new).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    assert_eq!(labels(&s).len(), 2);
+
+    // Canceled: the new document stays open without the group's edits, and the journal replays to it.
+    let count = s.documents().len();
+    s.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    s.execute("file.new", &new).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("edit.undoGroup.end", &json!({"cancel": true})).unwrap();
+    assert_eq!(s.documents().len(), count + 1);
+    assert_eq!((objects(&s), labels(&s).len()), (0, 0));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+
+    // A scrubbed field's group stays in its own document.
+    s.begin_undo_group();
+    s.execute("file.new", &new).unwrap();
+    assert!(s.doc().unwrap().undo_group.is_none());
+    s.end_undo_group(false);
+
+    // A group begun by command and closed with `end_undo_group` opens no group in a later document.
+    s.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    s.end_undo_group(false);
+    s.execute("file.new", &new).unwrap();
+    assert!(s.doc().unwrap().undo_group.is_none());
+
+    // A batch that begins a group and then fails leaves no group begun.
+    let steps = json!([{"command": "edit.undoGroup.begin"}, {"command": "no.such.command"}]);
+    assert!(s.execute("command.batch", &json!({ "commands": steps })).is_err());
+    s.execute("file.new", &new).unwrap();
+    assert!(s.doc().unwrap().undo_group.is_none());
+}
+
+/// Between `edit.undoGroup.begin` and `edit.undoGroup.end`, a command that creates a document and
+/// edits it (a `command.batch`) keeps its edits as an undo step of its own in that document, and the
+/// edits after it are the group's step. A cancel undoes only those, keeps the document and the
+/// command's edits, and the journal replays to the same documents.
+#[test]
+fn an_undo_group_leaves_out_the_edits_of_the_command_that_creates_its_document() {
+    let mut s = Session::new();
+    let rect = json!({"x": 10, "y": 10, "width": 100, "height": 50});
+    let batch = json!({"commands": [
+        {"command": "file.new", "params": {"width": 400, "height": 300}},
+        {"command": "shape.rectangle", "params": rect},
+    ]});
+    let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for cancel in [false, true] {
+        s.execute("edit.undoGroup.begin", &json!({"label": "Job"})).unwrap();
+        s.execute("command.batch", &batch).unwrap();
+        s.execute("shape.ellipse", &rect).unwrap();
+        s.execute("shape.ellipse", &rect).unwrap();
+        s.execute("edit.undoGroup.end", &json!({ "cancel": cancel })).unwrap();
+        let (objects, steps) = (objects(&s), labels(&s).len());
+        assert_eq!((objects, steps), if cancel { (1, 1) } else { (3, 2) }, "cancel: {cancel}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "cancel: {cancel}");
+    }
+    assert_eq!(s.documents().len(), 3);
+}
+
+/// Between `edit.undoGroup.begin` and `edit.undoGroup.end`, switching to a document that was open
+/// before the begin opens no group in it: each edit made there is an undo step of its own. The edits
+/// made in the document active at the begin, and in a document created meanwhile, stay one undo step
+/// each after a switch away and back, and the journal replays to the same documents.
+#[test]
+fn an_undo_group_begun_by_command_opens_no_group_in_a_document_switched_to() {
+    let mut s = Session::new();
+    let rect = json!({"x": 10, "y": 10, "width": 100, "height": 50});
+    let new = json!({"width": 400, "height": 300});
+    let labels = |s: &Session, i: usize| s.documents()[i].history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    s.execute("file.new", &new).unwrap();
+    s.execute("file.new", &new).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("edit.undoGroup.begin", &json!({"label": "Job"})).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    assert!(s.doc().unwrap().undo_group.is_none());
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("shape.ellipse", &rect).unwrap();
+    s.execute("file.new", &new).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("document.activate", &json!({"index": 2})).unwrap();
+    s.execute("shape.ellipse", &rect).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("shape.ellipse", &rect).unwrap();
+    s.execute("edit.undoGroup.end", &json!({})).unwrap();
+    assert_eq!((labels(&s, 0), labels(&s, 2)), (vec!["Job".to_string()], vec!["Job".to_string()]));
+    assert_eq!(labels(&s, 1).len(), 3, "{:?}", labels(&s, 1));
+    assert!(s.documents().iter().all(|d| d.undo_group.is_none()));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(objects(&s), 0, "one undo takes back both edits in the document active at the begin");
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(objects(&s), 2, "one undo takes back one edit in the document switched to");
+}
+
+/// `edit.undoGroup.begin`'s params text gives the undo step's default name next to `label`, and the
+/// clause on a document switched to says only that its edits stay steps of their own.
+#[test]
+fn the_undo_group_params_text_names_the_default_label_next_to_label() {
+    let params = cmd::find_command("edit.undoGroup.begin").unwrap().params;
+    assert!(params.contains("named `label` (else after its first edit); in a document"), "{params}");
+    assert!(params.contains("each edit stays its own undo step: for automation"), "{params}");
+}
+
+/// An undo scope ([`Session::begin_undo_scope`]) in a document without an open undo group opens
+/// one, and [`Session::end_undo_scope`] closes that group only, whichever document is active, and
+/// leaves another document's group open; canceled, it undoes only that group's edits and cuts the
+/// journal back to where the group began.
+#[test]
+fn an_undo_scope_closes_only_its_own_documents_group() {
+    let mut s = Session::new();
+    let rect = json!({"x": 10, "y": 10, "width": 100, "height": 50});
+    let objects = |d: &DocState| d.doc.layers[0].children().map_or(0, |c| c.len());
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.begin_undo_group();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let journal = s.journal.len();
+    let scope = s.begin_undo_scope().unwrap();
+    assert!(s.doc().unwrap().undo_group.is_some(), "the scope opens a group");
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.end_undo_scope(scope, true);
+    assert_eq!(objects(s.doc().unwrap()), 0, "canceled: the document's edits are undone");
+    assert_eq!(s.journal.len(), journal, "and dropped from the journal");
+    assert!(s.documents()[0].undo_group.is_some(), "the other document's group stays open");
+    assert_eq!(objects(&s.documents()[0]), 1, "with its edit");
+
+    let undo = s.doc().unwrap().history.undo.len();
+    let scope = s.begin_undo_scope().unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.set_active(0);
+    s.end_undo_scope(scope, false);
+    let second = &s.documents()[1];
+    assert_eq!(second.history.undo.len(), undo + 1, "closed: one undo step");
+    assert!(second.undo_group.is_none(), "closed while another document is active");
+    assert!(s.documents()[0].undo_group.is_some(), "the active document's group stays open");
+}
+
+/// An undo scope begun while the document's undo group is open joins the group: ended, its edits
+/// are part of the group's step and the group stays open; canceled, the document goes back to
+/// where it stood when the scope began, with the edits made in the group before it, the journal
+/// drops the scope's entries, and a step that the scope's first edit recorded goes too.
+#[test]
+fn an_undo_scope_in_an_open_group_takes_back_only_its_own_edits() {
+    let mut s = Session::new();
+    let rect = json!({"x": 10, "y": 10, "width": 100, "height": 50});
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let undo_len = |s: &Session| s.doc().unwrap().history.undo.len();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let undo = undo_len(&s);
+    s.begin_undo_group();
+    let journal = s.journal.len();
+    let scope = s.begin_undo_scope().unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.end_undo_scope(scope, true);
+    assert_eq!((objects(&s), undo_len(&s), s.journal.len()), (0, undo, journal), "the group had no step: none is left");
+    assert!(s.doc().unwrap().undo_group.is_some(), "the group stays open");
+
+    s.execute("shape.rectangle", &rect).unwrap();
+    let journal = s.journal.len();
+    let scope = s.begin_undo_scope().unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.end_undo_scope(scope, true);
+    assert_eq!((objects(&s), undo_len(&s), s.journal.len()), (1, undo + 1, journal), "the group's own edit stays");
+
+    let scope = s.begin_undo_scope().unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.end_undo_scope(scope, false);
+    assert_eq!((objects(&s), undo_len(&s)), (2, undo + 1), "ended: the edit joins the group's step");
+    assert!(s.doc().unwrap().undo_group.is_some(), "the group stays open");
+    s.end_undo_group(false);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(objects(&s), 0, "one undo takes back the group's edits");
+}
+
+/// A canceled undo scope that joined an open group forgets the journal entries it cut: when a command
+/// in another document takes the same entry number, a later cancel of the group keeps that entry, and
+/// the journal replays to the same documents.
+#[test]
+fn a_canceled_undo_scope_leaves_its_cut_entries_out_of_the_group() {
+    let mut s = Session::new();
+    let rect = json!({"x": 10, "y": 10, "width": 100, "height": 50});
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.begin_undo_group();
+    s.execute("shape.rectangle", &rect).unwrap();
+    let scope = s.begin_undo_scope().unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.end_undo_scope(scope, true);
+    let journal = s.journal.len();
+    // The switch takes the entry number the scope's edit had, and the rectangle in the second document follows it.
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("shape.rectangle", &rect).unwrap();
+    s.end_undo_group(true);
+    let objects = s.documents().iter().map(|d| d.doc.layers[0].children().map_or(0, |c| c.len())).collect::<Vec<_>>();
+    assert_eq!(objects, [0, 1]);
+    assert_eq!(s.journal.len(), journal + 1, "only the group's own edit leaves the journal");
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+}
+
+/// A move drag is named for what its last preview did: Alt pressed or released during the drag
+/// turns it into a copy or back (the Selection and Direct Selection tools).
+#[test]
+fn a_move_drag_is_named_for_whether_it_copied() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let last = |s: &Session| s.doc().unwrap().history.undo.last().map(|e| e.label.clone());
+    for (begin, copy, label) in [("Move", true, "Copy"), ("Copy", false, "Move"), ("Move", false, "Move")] {
+        s.begin_interaction(begin).unwrap();
+        s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 0], "copy": copy})).unwrap();
+        s.commit_interaction().unwrap();
+        assert_eq!(last(&s).as_deref(), Some(label), "begun as {begin}, copy: {copy}");
+    }
+}
+
+#[test]
+fn a_failed_preview_is_not_journaled_at_commit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    let journal = s.journal.len();
+
+    // Only a failing preview: committing records nothing.
+    s.begin_interaction("Bad").unwrap();
+    assert!(s.preview("no.such.command", &json!({})).is_err());
+    s.commit_interaction().unwrap();
+    assert_eq!(s.journal.len(), journal);
+
+    // A good preview followed by a failing one: the document is back at the snapshot, so the
+    // earlier preview is not journaled either.
+    s.begin_interaction("Opacity").unwrap();
+    s.preview("transparency.set", &json!({"opacity": 50})).unwrap();
+    assert!(s.preview("no.such.command", &json!({})).is_err());
+    s.commit_interaction().unwrap();
+    assert_eq!(s.journal.len(), journal);
+}
+
+/// `take_shape_drawn` is true once after a shape tool's drag is released, a shape command runs (alone
+/// or as a batch step), and false after a drag in progress, a canceled or failed one, a click (which
+/// opens the tool's dialog), other commands and saved steps that play.
+#[test]
+fn take_shape_drawn_follows_the_shapes_that_were_drawn() {
+    use vectorcraft_tools::{Action, PointerEvent, PointerKind};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    assert!(!s.take_shape_drawn(), "a new document draws no shape");
+    let v = crate::tooling::ViewInfo { smart_guides: false, ..Default::default() };
+    for (tool, kind) in [
+        ("rectangle", "Rectangle"),
+        ("roundedRectangle", "Rectangle"),
+        ("ellipse", "Ellipse"),
+        ("polygon", "Polygon"),
+        ("star", "Star"),
+        ("lineSegment", "Line"),
+    ] {
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 120.0, 110.0), v).unwrap();
+        assert!(!s.take_shape_drawn(), "{tool}: a drag in progress");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 130.0), v).unwrap();
+        assert!(s.take_shape_drawn(), "{tool} ({kind}): the released drag");
+        assert!(!s.take_shape_drawn(), "{tool}: once");
+        // Nothing selected, so the next press is not on the new shape's bounding box.
+        s.execute("select.none", &json!({})).unwrap();
+        // A click asks for the tool's dialog and draws nothing yet.
+        s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0), v).unwrap();
+        assert!(!s.take_shape_drawn(), "{tool}: a click");
+    }
+    // A canceled drag, and a drag whose preview failed.
+    let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
+    s.apply_actions(vec![Action::Begin("Rectangle".into()), Action::Preview("shape.rectangle".into(), rect.clone()), Action::Cancel]).unwrap();
+    assert!(!s.take_shape_drawn(), "a canceled drag");
+    let bad = json!({"x": 10, "y": 10, "width": "wide", "height": 30});
+    s.apply_actions(vec![Action::Begin("Rectangle".into()), Action::Preview("shape.rectangle".into(), bad.clone()), Action::Commit]).unwrap();
+    assert!(!s.take_shape_drawn(), "a failed drag");
+    // Commands: each shape command, a failed one, a batch with and without a shape, other edits.
+    for (id, p) in [
+        ("shape.rectangle", rect.clone()),
+        ("shape.ellipse", rect.clone()),
+        ("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 30})),
+        ("shape.star", json!({"cx": 100, "cy": 100, "radius1": 30, "radius2": 15, "points": 5})),
+        ("shape.line", json!({"x1": 0, "y1": 0, "x2": 50, "y2": 50})),
+    ] {
+        s.execute(id, &p).unwrap();
+        assert!(s.take_shape_drawn(), "{id}");
+    }
+    assert!(s.execute("shape.rectangle", &bad).is_err());
+    assert!(!s.take_shape_drawn(), "a failed command");
+    s.execute(
+        "command.batch",
+        &json!({"commands": [{"command": "shape.ellipse", "params": rect}, {"command": "object.move", "params": {"dx": 5, "dy": 0}}]}),
+    )
+    .unwrap();
+    assert!(s.take_shape_drawn(), "a batch that draws");
+    s.execute("command.batch", &json!({"commands": [{"command": "object.move", "params": {"dx": 5, "dy": 0}}]})).unwrap();
+    assert!(!s.take_shape_drawn(), "a batch that draws nothing");
+    s.execute("shape.rectangularGrid", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(!s.take_shape_drawn(), "other commands, undo and redo");
+    // Saved steps that play.
+    s.replay("shape.rectangle", &rect).unwrap();
+    s.replay(
+        "command.batch",
+        &json!({"commands": [{"command": "shape.star", "params": {"cx": 50, "cy": 50, "radius1": 20, "radius2": 10, "points": 5}}]}),
+    )
+    .unwrap();
+    assert!(!s.take_shape_drawn(), "saved steps");
+    // A script's commands.
+    let count = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let shapes = count(&s);
+    s.execute("script.run", &json!({"source": "vc.run('shape.rectangle', {x:100,y:0,width:5,height:5});", "name": "t.js"})).unwrap();
+    assert_eq!(count(&s), shapes + 1, "the script drew");
+    assert!(!s.take_shape_drawn(), "a script");
+}
+
+/// With the perspective grid shown and a plane active, a shape tool's drag journals
+/// `perspective.draw` naming the shape command: `take_shape_drawn` is true for a Rectangle drawn on
+/// the plane and for `perspective.draw` naming a shape command (alone or as a batch step), and false
+/// for one naming a shape outside [`crate::DRAWS_SHAPE`].
+#[test]
+fn take_shape_drawn_counts_shapes_drawn_in_perspective() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, _) = super::persp_select::persp_session();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "left"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.take_shape_drawn();
+    let v = crate::tooling::ViewInfo { smart_guides: false, ..Default::default() };
+    s.select_tool("rectangle", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 350.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 380.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 410.0), v).unwrap();
+    assert_eq!(s.journal.last().unwrap().0, "perspective.draw");
+    assert!(s.take_shape_drawn(), "a Rectangle drawn on the plane");
+    let rect = json!({"x": 260, "y": 360, "width": 30, "height": 30});
+    s.execute("perspective.draw", &json!({"command": "shape.rectangle", "params": rect})).unwrap();
+    assert!(s.take_shape_drawn(), "perspective.draw naming shape.rectangle");
+    s.execute("command.batch", &json!({"commands": [{"command": "perspective.draw", "params": {"command": "shape.ellipse", "params": rect}}]}))
+        .unwrap();
+    assert!(s.take_shape_drawn(), "a batch step drawing in perspective");
+    s.execute("perspective.draw", &json!({"command": "shape.flare", "params": {"cx": 300, "cy": 380, "diameter": 40}})).unwrap();
+    assert!(!s.take_shape_drawn(), "perspective.draw naming a flare");
+}
+
+/// Show on Shape Creation (`showOnShapeCreation`) is off until set, is set and read through
+/// `prefs.set` and `prefs.get`, refuses a value that is not a boolean, and is kept with the saved
+/// preferences.
+#[test]
+fn show_on_shape_creation_is_a_saved_preference() {
+    let mut s = Session::new();
+    assert!(!s.prefs.show_on_shape_creation);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showOnShapeCreation"})).unwrap(), json!(false));
+    s.execute("prefs.set", &json!({"key": "showOnShapeCreation", "value": true})).unwrap();
+    assert!(s.prefs.show_on_shape_creation);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showOnShapeCreation"})).unwrap(), json!(true));
+    assert!(s.execute("prefs.set", &json!({"key": "showOnShapeCreation", "value": "yes"})).is_err());
+    assert!(s.prefs.show_on_shape_creation, "a refused value changes nothing");
+    let saved = serde_json::to_value(&s.prefs).unwrap();
+    assert_eq!(saved["showOnShapeCreation"], json!(true));
+    let read: Prefs = serde_json::from_value(saved).unwrap();
+    assert!(read.show_on_shape_creation);
+}

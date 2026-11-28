@@ -1,36 +1,123 @@
 //! View → New View… / Edit Views…: saved views stored in the document; per-document view
-//! toggles (Show Transparency Grid).
+//! toggles (Show Transparency Grid); the Character panel's Snap to Glyph options; the Pixel
+//! Snapping Options.
 
 use serde_json::{Value, json};
+use vectorcraft_apischema::{Bound, Param, ParamSchema, Type, Writes};
 use vectorcraft_doc::SavedView;
 use vectorcraft_geom::Point;
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_req, finite_numbers, has_doc, str_param, switch_or};
 
-/// Illustrator keeps up to 25 views per document.
-pub const MAX_VIEWS: usize = 25;
+// The parameter schemas. Each command's params text is the text its schema writes
+// (`ParamSchema::params_text`), which a test in `crate::schemas` checks.
+
+static CAPS_LOCK: ParamSchema = ParamSchema::new(
+    &[Param::new("on", Type::Boolean).optional()],
+    "set or read the Caps Lock state the desktop app reports; while it is on, the drawing tools show the precise crosshair, and Use Precise Cursors keeps its saved value",
+)
+.returns("{on}")
+.writes(Writes::Session);
+
+static NEW_VIEW: ParamSchema = ParamSchema::new(
+    &[
+        Param::new("name", Type::String).default_note("the first free \"View N\"").null_omitted(),
+        Param::new("center", Type::Point),
+        Param::new("zoom", Type::Number { min: Some(Bound::Exclusive(0.0)), max: None, unit: None }).doc("1 = 100%"),
+        Param::new("rotation", Type::Number { min: None, max: None, unit: Some("deg") })
+            .defaults_to("0")
+            .doc("clockwise on screen, as view.rotate turns the view"),
+    ],
+    "save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once)",
+)
+.returns("{name, index}");
+
+/// One rename or delete of Edit Views….
+const VIEW_EDIT: &[Param] = &[
+    Param::new("name", Type::String),
+    Param::new("newName", Type::String).optional().null_omitted(),
+    Param::new("delete", Type::Boolean).optional().null_omitted(),
+];
+
+static EDIT_VIEWS: ParamSchema = ParamSchema::new(
+    &[
+        Param::new("name", Type::String).optional().null_omitted(),
+        Param::new("newName", Type::String).optional().null_omitted().doc("rename"),
+        Param::new("delete", Type::Boolean).optional().null_omitted(),
+        Param::new("edits", Type::Array(&Type::Object(VIEW_EDIT))).optional().null_omitted().doc("instead of name"),
+    ],
+    "rename or delete saved views, all in one undo step; names are those before the edit and must stay unique; no params → {views}",
+);
+
+static LIST_VIEWS: ParamSchema =
+    ParamSchema::new(&[], "").returns("{views: [{name, center, zoom, rotation (degrees clockwise)}]}").writes(Writes::Nothing);
+
+static TRANSPARENCY_GRID: ParamSchema = ParamSchema::new(
+    &[Param::new("on", Type::Boolean).default_note("toggle").null_omitted()],
+    "show the transparency grid behind the active document's artboards (each document has its own setting)",
+)
+.returns("{on}")
+.writes(Writes::Session);
+
+static GLYPH_SNAP: ParamSchema = ParamSchema::new(
+    &[
+        Param::new("baseline", Type::Boolean).optional(),
+        Param::new("xHeight", Type::Boolean).optional(),
+        Param::new("bounds", Type::Boolean).optional(),
+        Param::new("proximity", Type::Boolean).optional(),
+        Param::new("angular", Type::Boolean).optional(),
+        Param::new("anchors", Type::Boolean).optional(),
+    ],
+    "the Character panel's Snap to Glyph options, kept in the preferences (the glyphSnap group, all on by default): which guides View › Snap to Glyph gives: the baseline and x-height of a single line of type, Glyph Bounds (each glyph's edges), Proximity Guides (both edges of each character's width), Angular Guides (a glyph's slanted strokes, and every guide of rotated type) and the glyphs' anchor points; {} reads them",
+)
+.returns("the options")
+.writes(Writes::Preferences);
+
+static PIXEL_SNAP: ParamSchema = ParamSchema::new(
+    &[
+        Param::new("drawing", Type::Boolean).optional(),
+        Param::new("moving", Type::Boolean).optional(),
+        Param::new("scaling", Type::Boolean).optional(),
+    ],
+    "the Pixel Snapping Options, kept in the preferences (the pixelSnap group, all on by default): which edits View › Snap to Pixel lands on whole pixels: drawing (the points the drawing tools place, the rulers' origin and measured points), moving (the selection, its anchors and segments, artboards and ruler guides moved, and the Rotate, Reflect and Shear tools' drags) and scaling (the edges a bounding-box, Free Transform, artboard or slice handle drags, and the Scale tool's drag); an edit whose option is off snaps as it does with Snap to Pixel off; {} reads them",
+)
+.returns("the options")
+.writes(Writes::Preferences)
+.since(4);
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
+        cmd!(
+            query "view.capsLock",
+            "Caps Lock Cursor State",
+            [],
+            None,
+            "{on?: bool} set or read the Caps Lock state the desktop app reports; while it is on, the drawing tools show the precise crosshair, and Use Precise Cursors keeps its saved value → {on}",
+            always,
+            caps_lock,
+            schema: &CAPS_LOCK
+        ),
         cmd!(
             "view.saved.new",
             "New View…",
             ["View"],
             None,
-            "{name?, center: [x, y], zoom: (1 = 100%), rotation?: deg} save a view (the app fills in the current one) → {name, index}",
+            "{name?: string (default: the first free \"View N\"), center: [x, y], zoom: number > 0 (1 = 100%), rotation?: number deg (default: 0) (clockwise on screen, as view.rotate turns the view)} save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once) → {name, index}",
             has_doc,
-            new_view
+            new_view,
+            schema: &NEW_VIEW
         ),
         cmd!(
             "view.saved.edit",
             "Edit Views…",
             ["View"],
             None,
-            "{name, newName?, delete?: bool} rename or delete a saved view; no params → {views}",
-            has_doc,
-            edit_views
+            "{name?: string, newName?: string (rename), delete?: bool, edits?: [{name: string, newName?: string, delete?: bool}…] (instead of name)} rename or delete saved views, all in one undo step; names are those before the edit and must stay unique; no params → {views}",
+            has_views,
+            edit_views,
+            schema: &EDIT_VIEWS
         ),
-        cmd!(query "view.saved.list", "Saved Views", [], None, "{} → {views: [{name, center, zoom, rotation}]}", has_doc, list_views),
+        cmd!(query "view.saved.list", "Saved Views", [], None, "{} → {views: [{name, center, zoom, rotation (degrees clockwise)}]}", has_doc, list_views, schema: &LIST_VIEWS),
         cmd!(
             query "view.transparencyGrid",
             "Show Transparency Grid",
@@ -38,14 +125,52 @@ pub fn specs() -> Vec<CommandSpec> {
             Some("Cmd+Shift+D"),
             "{on?: bool (default: toggle)} show the transparency grid behind the active document's artboards (each document has its own setting) → {on}",
             has_doc,
-            transparency_grid
+            transparency_grid,
+            schema: &TRANSPARENCY_GRID
+        ),
+        cmd!(
+            query "view.snapToGlyph.options",
+            "Snap to Glyph Options",
+            [],
+            None,
+            "{baseline?: bool, xHeight?: bool, bounds?: bool, proximity?: bool, angular?: bool, anchors?: bool} the Character panel's Snap to Glyph options, kept in the preferences (the glyphSnap group, all on by default): which guides View › Snap to Glyph gives: the baseline and x-height of a single line of type, Glyph Bounds (each glyph's edges), Proximity Guides (both edges of each character's width), Angular Guides (a glyph's slanted strokes, and every guide of rotated type) and the glyphs' anchor points; {} reads them → the options",
+            always,
+            glyph_snap_options,
+            schema: &GLYPH_SNAP
+        ),
+        cmd!(
+            query "view.snapToPixel.options",
+            "Pixel Snapping Options",
+            [],
+            None,
+            "{drawing?: bool, moving?: bool, scaling?: bool} the Pixel Snapping Options, kept in the preferences (the pixelSnap group, all on by default): which edits View › Snap to Pixel lands on whole pixels: drawing (the points the drawing tools place, the rulers' origin and measured points), moving (the selection, its anchors and segments, artboards and ruler guides moved, and the Rotate, Reflect and Shear tools' drags) and scaling (the edges a bounding-box, Free Transform, artboard or slice handle drags, and the Scale tool's drag); an edit whose option is off snaps as it does with Snap to Pixel off; {} reads them → the options",
+            always,
+            pixel_snap_options,
+            schema: &PIXEL_SNAP
         ),
     ]
 }
 
+fn glyph_snap_options(s: &mut Session, p: &Value) -> Result<Value> {
+    s.prefs.glyph_snap = s.prefs.glyph_snap.merged(p).map_err(|e| bad("view.snapToGlyph.options", e))?;
+    Ok(json!(s.prefs.glyph_snap))
+}
+
+fn pixel_snap_options(s: &mut Session, p: &Value) -> Result<Value> {
+    s.prefs.pixel_snap = s.prefs.pixel_snap.merged(p).map_err(|e| bad("view.snapToPixel.options", e))?;
+    Ok(json!(s.prefs.pixel_snap))
+}
+
+fn caps_lock(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(on) = p.get("on") {
+        s.caps_lock = on.as_bool().ok_or_else(|| bad("view.capsLock", "on must be true or false"))?;
+    }
+    Ok(json!({ "on": s.caps_lock }))
+}
+
 fn transparency_grid(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
-    st.transparency_grid = p.get("on").and_then(Value::as_bool).unwrap_or(!st.transparency_grid);
+    st.transparency_grid = switch_or(p, "on", !st.transparency_grid, "view.transparencyGrid")?;
     Ok(json!({ "on": st.transparency_grid }))
 }
 
@@ -66,12 +191,12 @@ fn new_view(s: &mut Session, p: &Value) -> Result<Value> {
         None => 0.0,
     };
     let st = s.doc()?;
-    if st.doc.views.len() >= MAX_VIEWS {
-        return Err(bad(C, format!("a document keeps at most {MAX_VIEWS} views")));
+    if st.doc.views.len() >= SavedView::MAX {
+        return Err(bad(C, format!("a document keeps at most {} views", SavedView::MAX)));
     }
-    let name = match str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()) {
-        Some(n) => n.to_string(),
-        None => (1..).map(|i| format!("View {i}")).find(|n| !st.doc.views.iter().any(|v| &v.name == n)).unwrap_or_default(),
+    let name = match str_param(p, "name").and_then(SavedView::clean_name) {
+        Some(n) => n,
+        None => SavedView::default_name(&st.doc.views),
     };
     if st.doc.views.iter().any(|v| v.name == name) {
         return Err(bad(C, format!("a view named `{name}` exists")));
@@ -84,26 +209,60 @@ fn new_view(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "name": name, "index": index }))
 }
 
+/// Edit Views… needs a document with at least one saved view.
+fn has_views(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    if st.doc.views.is_empty() { Err("no saved views".into()) } else { Ok(()) }
+}
+
 fn edit_views(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "view.saved.edit";
-    let Some(name) = str_param(p, "name") else { return list_views(s, p) };
-    let i = s.doc()?.doc.views.iter().position(|v| v.name == name).ok_or_else(|| bad(C, format!("no view named `{name}`")))?;
-    if bool_or(p, "delete", false) {
-        s.edit("Delete View", |d, _| {
-            d.views.remove(i);
+    let (edits, one) = match p.get("edits").and_then(Value::as_array) {
+        Some(list) => (list.as_slice(), false),
+        None if str_param(p, "name").is_some() => (std::slice::from_ref(p), true),
+        None => return list_views(s, p),
+    };
+    let before = s.doc()?.doc.views.clone();
+    // Edits name the views as they are now, so they don't depend on each other's order.
+    let mut after: Vec<Option<SavedView>> = before.iter().cloned().map(Some).collect();
+    for e in edits {
+        let name = str_param(e, "name").ok_or_else(|| bad(C, "missing name"))?;
+        let i = before.iter().position(|v| v.name == name).ok_or_else(|| bad(C, format!("no view named `{name}`")))?;
+        let Some(slot) = after.get_mut(i) else { continue };
+        if bool_or(e, "delete", false) {
+            *slot = None;
+        } else if let Some(v) = slot {
+            v.name = str_param(e, "newName").and_then(SavedView::clean_name).ok_or_else(|| bad(C, "give newName or delete"))?;
+        }
+    }
+    let after: Vec<SavedView> = after.into_iter().flatten().collect();
+    let mut names = std::collections::HashSet::with_capacity(after.len());
+    for v in &after {
+        if !names.insert(v.name.as_str()) {
+            return Err(bad(C, format!("a view named `{}` exists", v.name)));
+        }
+    }
+    // One rename or delete keeps the name of its step; several are one Edit Views step.
+    let deleted = after.len() < before.len();
+    let label = if !one {
+        "Edit Views"
+    } else if deleted {
+        "Delete View"
+    } else {
+        "Rename View"
+    };
+    let result = match (one, deleted) {
+        (true, true) => json!({ "deleted": str_param(p, "name") }),
+        (true, false) => json!({ "name": str_param(p, "newName").and_then(SavedView::clean_name) }),
+        (false, _) => json!({ "views": after }),
+    };
+    if before != after {
+        s.edit(label, |d, _| {
+            d.views = after;
             Ok(())
         })?;
-        return Ok(json!({ "deleted": name }));
     }
-    let new = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(C, "give newName or delete"))?.to_string();
-    if s.doc()?.doc.views.iter().any(|v| v.name == new) {
-        return Err(bad(C, format!("a view named `{new}` exists")));
-    }
-    s.edit("Rename View", |d, _| {
-        d.views[i].name = new.clone();
-        Ok(())
-    })?;
-    Ok(json!({ "name": new }))
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -153,5 +312,174 @@ mod tests {
         // Views travel with the file.
         let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
         assert_eq!(vectorcraft_format::load(&bytes).unwrap().views[0].name, "Overview");
+    }
+
+    fn names(s: &mut Session) -> Vec<String> {
+        s.doc().unwrap().doc.views.iter().map(|v| v.name.clone()).collect()
+    }
+
+    fn session_with_views(names: &[&str]) -> Session {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        for (i, n) in names.iter().enumerate() {
+            s.execute("view.saved.new", &json!({"name": n, "center": [i, i], "zoom": 1 + i})).unwrap();
+        }
+        s
+    }
+
+    /// Two named views go out with the file and come back with their names, centres, zooms and
+    /// rotations, in order.
+    #[test]
+    fn saved_views_reopen_with_their_names_and_viewports() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        s.execute("view.saved.new", &json!({"name": "Overview", "center": [306, 396], "zoom": 0.5})).unwrap();
+        s.execute("view.saved.new", &json!({"name": "Logo detail", "center": [40.25, -12.5], "zoom": 8, "rotation": -30})).unwrap();
+        let saved = s.doc().unwrap().doc.views.clone();
+        let back = vectorcraft_format::load(&vectorcraft_format::save_file(&s.doc().unwrap().doc)).unwrap();
+        assert_eq!(back.views, saved);
+        assert_eq!((back.views[1].center.x, back.views[1].center.y, back.views[1].zoom, back.views[1].rotation), (40.25, -12.5, 8.0, -30.0));
+    }
+
+    /// Edit Views… applies its renames and deletes together, as one undo step, by the names the
+    /// views had before (so two can swap names); a shared or unknown name changes nothing.
+    #[test]
+    fn edit_views_applies_several_edits_as_one_step() {
+        let mut s = session_with_views(&["A", "B", "C"]);
+        let steps = s.doc().unwrap().history.undo.len();
+        let edits = json!({"edits": [
+            {"name": "A", "newName": "B"},
+            {"name": "B", "newName": " A "},
+            {"name": "C", "delete": true},
+        ]});
+        let r = s.execute("view.saved.edit", &edits).unwrap();
+        assert_eq!(r["views"].as_array().map(Vec::len), Some(2));
+        assert_eq!(names(&mut s), ["B", "A"]);
+        // The views keep their viewports under their new names.
+        assert_eq!(s.doc().unwrap().doc.views[0].zoom, 1.0);
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(names(&mut s), ["A", "B", "C"]);
+        for bad in [
+            json!({"edits": [{"name": "A", "newName": "C"}]}),
+            json!({"edits": [{"name": "A", "newName": "X"}, {"name": "B", "newName": "X"}]}),
+            json!({"edits": [{"name": "A", "delete": true}, {"name": "Nope", "delete": true}]}),
+            json!({"edits": [{"name": "A", "newName": "  "}]}),
+        ] {
+            assert!(s.execute("view.saved.edit", &bad).is_err(), "accepted {bad}");
+            assert_eq!(names(&mut s), ["A", "B", "C"]);
+        }
+    }
+
+    /// A document keeps at most 25 views; unnamed ones take the first free "View N", and names are
+    /// capped like other names the user gives.
+    #[test]
+    fn a_document_keeps_at_most_25_views() {
+        let all: Vec<String> = (0..25).map(|i| format!("V{i}")).collect();
+        let mut s = session_with_views(&all.iter().map(String::as_str).collect::<Vec<_>>());
+        assert!(s.execute("view.saved.new", &json!({"name": "One too many", "center": [0, 0], "zoom": 1})).is_err());
+        assert_eq!(s.doc().unwrap().doc.views.len(), 25);
+        s.execute("view.saved.edit", &json!({"name": "V0", "delete": true})).unwrap();
+        assert_eq!(s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": 1})).unwrap()["name"], "View 1");
+        s.execute("view.saved.edit", &json!({"name": "V1", "delete": true})).unwrap();
+        let long = "x".repeat(1000);
+        assert_eq!(s.execute("view.saved.new", &json!({"name": long, "center": [0, 0], "zoom": 1})).unwrap()["name"], "x".repeat(255));
+    }
+
+    /// Each command refuses a value its schema doesn't take with an error naming the parameter, and
+    /// leaves the document, its views, its undo history and the settings as they were.
+    #[test]
+    fn each_view_command_refuses_a_bad_value_naming_the_parameter() {
+        let mut s = session_with_views(&["A"]);
+        for (id, params, named) in [
+            ("view.capsLock", json!({"on": "yes"}), "`on`"),
+            ("view.capsLock", json!({"of": true}), "`of`"),
+            ("view.saved.new", json!({"center": [0, 0], "zoom": 0}), "`zoom`"),
+            ("view.saved.new", json!({"center": [0, "0"], "zoom": 1}), "`center`"),
+            ("view.saved.new", json!({"center": [0, 0], "zoom": 1, "rotation": "15"}), "`rotation`"),
+            ("view.saved.new", json!({"name": 5, "center": [0, 0], "zoom": 1}), "`name`"),
+            ("view.saved.new", json!({"zoom": 1}), "`center`"),
+            ("view.saved.edit", json!({"name": "A", "delete": "yes"}), "`delete`"),
+            ("view.saved.edit", json!({"name": "A", "newName": 7}), "`newName`"),
+            ("view.saved.edit", json!({"edits": [{"name": "A", "delete": 1}]}), "`edits[0].delete`"),
+            ("view.saved.edit", json!({"edits": [{"newName": "B"}]}), "`edits[0].name`"),
+            ("view.saved.edit", json!({"edits": "A"}), "`edits`"),
+            ("view.saved.list", json!({"all": true}), "`all`"),
+            ("view.transparencyGrid", json!({"on": 1}), "`on`"),
+            ("view.snapToGlyph.options", json!({"bounds": "off"}), "`bounds`"),
+            ("view.snapToPixel.options", json!({"moving": "off"}), "`moving`"),
+            ("view.snapToPixel.options", json!({"drawing": false, "rotating": false}), "`rotating`"),
+        ] {
+            let st = s.doc().unwrap();
+            let doc = (st.doc.views.clone(), st.history.undo.len(), st.is_dirty());
+            let (grid, caps, snap, pixel) = (st.transparency_grid, s.caps_lock, s.prefs.glyph_snap, s.prefs.pixel_snap);
+            let e = s.execute(id, &params).unwrap_err().to_string();
+            assert!(e.contains(id) && e.contains(named), "{id} {params}: {e}");
+            let st = s.doc().unwrap();
+            assert_eq!((&st.doc.views, st.history.undo.len(), st.is_dirty()), (&doc.0, doc.1, doc.2), "{id} {params}");
+            assert_eq!((st.transparency_grid, s.caps_lock, s.prefs.glyph_snap, s.prefs.pixel_snap), (grid, caps, snap, pixel), "{id} {params}");
+        }
+    }
+
+    /// A command run by another command's implementation has its params checked against its schema
+    /// too, with nothing changed when they are refused.
+    #[test]
+    fn a_raw_run_is_checked_against_the_schema() {
+        let mut s = session_with_views(&[]);
+        let e = super::super::menucmds::run_raw(&mut s, "view.saved.new", &json!({"center": [0, 0], "zoom": -1})).unwrap_err().to_string();
+        assert!(e.contains("view.saved.new") && e.contains("`zoom` must be a number > 0, not -1"), "{e}");
+        assert!(s.doc().unwrap().doc.views.is_empty());
+        assert!(s.doc().unwrap().history.undo.is_empty());
+        super::super::menucmds::run_raw(&mut s, "view.saved.new", &json!({"center": [0, 0], "zoom": 1})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.views.len(), 1);
+    }
+
+    /// An edit list with nothing in it and an edit that leaves a view as it is add no undo step;
+    /// names with path characters are only names; a key with one is refused and named.
+    #[test]
+    fn edit_views_edges() {
+        let mut s = session_with_views(&["a.b[0]", "plain"]);
+        let steps = s.doc().unwrap().history.undo.len();
+        assert_eq!(s.execute("view.saved.edit", &json!({"edits": []})).unwrap()["views"].as_array().map(Vec::len), Some(2));
+        s.execute("view.saved.edit", &json!({"name": "plain", "newName": "plain"})).unwrap();
+        s.execute("view.saved.edit", &json!({"edits": [{"name": "plain", "newName": "plain"}]})).unwrap();
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+        s.execute("view.saved.edit", &json!({"name": "a.b[0]", "newName": "c[1].d"})).unwrap();
+        assert_eq!(names(&mut s), ["c[1].d", "plain"]);
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+        let e = s.execute("view.saved.edit", &json!({"a.b": 1})).unwrap_err().to_string();
+        assert!(e.contains("`a.b`"), "{e}");
+        let e = s.execute("view.saved.edit", &json!({"edits": [{"name": "plain", "a.b": 1}]})).unwrap_err().to_string();
+        assert!(e.contains("`edits[0].a.b`; it takes: name, newName, delete"), "{e}");
+        // Repeated and unknown names keep the command's own errors.
+        let e = s.execute("view.saved.edit", &json!({"edits": [{"name": "plain", "newName": "c[1].d"}]})).unwrap_err().to_string();
+        assert!(e.contains("exists"), "{e}");
+        let e = s.execute("view.saved.edit", &json!({"name": "", "delete": true})).unwrap_err().to_string();
+        assert!(e.contains("no view named"), "{e}");
+    }
+
+    /// A refused call during a drag leaves the drag running and adds no undo step; canceling the
+    /// drag then leaves the history as it was.
+    #[test]
+    fn a_refused_call_leaves_an_interaction_alone() {
+        let mut s = session_with_views(&["A"]);
+        let steps = s.doc().unwrap().history.undo.len();
+        s.begin_interaction("Move").unwrap();
+        assert!(s.execute("view.saved.new", &json!({"name": 5, "center": [0, 0], "zoom": 1})).is_err());
+        assert!(s.doc().unwrap().interaction.is_some());
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+        s.cancel_interaction().unwrap();
+        assert!(s.doc().unwrap().interaction.is_none());
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+        assert_eq!(names(&mut s), ["A"]);
+    }
+
+    /// Edit Views… is off until the document has a view.
+    #[test]
+    fn edit_views_needs_a_saved_view() {
+        let mut s = session_with_views(&[]);
+        assert!(s.execute("view.saved.edit", &json!({})).is_err());
+        s.execute("view.saved.new", &json!({"name": "Only", "center": [0, 0], "zoom": 1})).unwrap();
+        assert_eq!(s.execute("view.saved.edit", &json!({})).unwrap()["views"][0]["name"], "Only");
     }
 }

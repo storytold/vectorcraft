@@ -1,0 +1,89 @@
+use super::{BidiInfo, Level, ParaDirection, Range, SGlyph};
+
+/// The bidirectional resolution (UAX #9) of paragraph `text`, its base direction `direction` or,
+/// without one, from its first strong character. `None` for the usual paragraph with nothing right
+/// to left in it (no right-to-left character or direction), which skips the algorithm.
+pub(crate) fn para_bidi(text: &str, direction: Option<ParaDirection>) -> Option<BidiInfo<'_>> {
+    let rtl_set = direction == Some(ParaDirection::RightToLeft);
+    if !rtl_set && !text.chars().any(starts_bidi) {
+        return None;
+    }
+    let level = direction.map(|d| if d == ParaDirection::RightToLeft { Level::rtl() } else { Level::ltr() });
+    Some(BidiInfo::new(text, level))
+}
+
+/// Whether character `c` makes [`para_bidi`] resolve a paragraph that holds it: a right-to-left
+/// letter, an Arabic number, or a right-to-left embedding, override or isolate.
+pub(crate) fn starts_bidi(c: char) -> bool {
+    use unicode_bidi::BidiClass::{AL, AN, FSI, R, RLE, RLI, RLO};
+    matches!(unicode_bidi::bidi_class(c), R | AL | AN | RLE | RLO | RLI | FSI)
+}
+
+/// [`para_bidi`] for a paragraph whose characters in `set` (byte ranges of `text`, in order and not
+/// overlapping, from [`Ctx::char_directions`]) have a Character Direction: each range is resolved
+/// as a Unicode bidi embedding, as if an LRE or RLE stood before it and a PDF after it (UAX #9 X2,
+/// X3, X7). The levels, classes and paragraphs come back for the bytes of `text`. The paragraph's own
+/// direction is unchanged: the first strong character is found inside embeddings too (P2).
+pub(crate) fn para_bidi_with<'a>(text: &'a str, direction: Option<ParaDirection>, set: &[(Range<usize>, ParaDirection)]) -> Option<BidiInfo<'a>> {
+    let plain = para_bidi(text, direction);
+    if set.is_empty() || (plain.is_none() && set.iter().all(|(_, d)| *d == ParaDirection::LeftToRight)) {
+        // A left-to-right embedding in left-to-right text takes an even level: its order is the same.
+        return plain;
+    }
+    // The text with the embedding controls, and where each byte of `text` is in it.
+    let mut marked = String::with_capacity(text.len() + set.len() * 6);
+    let mut at_byte: Vec<usize> = Vec::with_capacity(text.len());
+    let mut copy = |marked: &mut String, from: usize, to: usize| {
+        if let Some(s) = text.get(from..to) {
+            at_byte.extend(marked.len()..marked.len() + s.len());
+            marked.push_str(s);
+        }
+    };
+    let mut done = 0;
+    for (r, d) in set {
+        let (a, b) = (r.start.max(done).min(text.len()), r.end.min(text.len()));
+        if a >= b {
+            continue;
+        }
+        copy(&mut marked, done, a);
+        marked.push(if *d == ParaDirection::RightToLeft { '\u{202B}' } else { '\u{202A}' });
+        copy(&mut marked, a, b);
+        marked.push('\u{202C}');
+        done = b;
+    }
+    copy(&mut marked, done, text.len());
+    let level = direction.map(|d| if d == ParaDirection::RightToLeft { Level::rtl() } else { Level::ltr() });
+    let info = BidiInfo::new(&marked, level);
+    let back = |i: usize| at_byte.partition_point(|&m| m < i);
+    let paragraphs =
+        info.paragraphs.iter().map(|p| unicode_bidi::ParagraphInfo { range: back(p.range.start)..back(p.range.end), level: p.level }).collect();
+    Some(BidiInfo {
+        text,
+        original_classes: at_byte.iter().filter_map(|&i| info.original_classes.get(i).copied()).collect(),
+        levels: at_byte.iter().filter_map(|&i| info.levels.get(i).copied()).collect(),
+        paragraphs,
+    })
+}
+
+/// Does the paragraph run right to left ([`para_bidi`])?
+pub(crate) fn is_rtl(bidi: Option<&BidiInfo<'_>>) -> bool {
+    bidi.and_then(|b| b.paragraphs.first()).is_some_and(|p| p.level.is_rtl())
+}
+
+/// The visual order of a line's `glyphs` (indices into them), whole shaping clusters reordered
+/// (UAX #9 L1–L2) for the line `line` (bytes of the text) of the paragraph starting at byte
+/// `paragraph_start`; their own order when nothing is right to left (`bidi` None).
+pub(super) fn visual_order(bidi: Option<&BidiInfo<'_>>, paragraph_start: usize, line: Range<usize>, glyphs: &[SGlyph]) -> Vec<usize> {
+    let Some((bidi, para)) = bidi.filter(|b| b.has_rtl()).and_then(|b| Some((b, b.paragraphs.first()?))) else {
+        return (0..glyphs.len()).collect();
+    };
+    if glyphs.is_empty() {
+        return vec![];
+    }
+    let levels = bidi.reordered_levels(para, line.start.saturating_sub(paragraph_start)..line.end.saturating_sub(paragraph_start));
+    craft::font_catalog::visual_order(
+        glyphs.iter().map(|g| craft::font_catalog::VisualGlyph { byte: g.byte, len: g.len, level: g.level }),
+        paragraph_start,
+        &levels,
+    )
+}

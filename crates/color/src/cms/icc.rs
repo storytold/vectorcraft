@@ -34,6 +34,17 @@ type Xf = Option<Arc<TransformF32Executor>>;
 /// generation only lets the cache drop what reloads left behind.
 type DirectKey = (u64, u64, usize, bool);
 
+/// The transforms of [`IccProfile::to_same_model_of`]: into ProPhoto RGB's primaries with linear
+/// tone curves, where black-point compensation is a linear remap, and from there into the
+/// destination.
+struct SameModel {
+    into: Arc<TransformF32Executor>,
+    out_of: Arc<TransformF32Executor>,
+    /// The source's and the destination's black as luminance in the linear space (both 0 without
+    /// compensation).
+    black: [f32; 2],
+}
+
 /// A parsed ICC profile plus lazily-built transforms to/from sRGB.
 pub struct IccProfile {
     pub name: String,
@@ -49,6 +60,9 @@ pub struct IccProfile {
     /// Direct transforms into other RGB profiles ([`Self::to_rgb_of`]), by destination, intent
     /// and black-point compensation.
     direct: Mutex<Vec<(DirectKey, Option<Arc<Direct>>)>>,
+    /// Transforms into other profiles of the same model ([`Self::to_same_model_of`]), keyed as
+    /// [`Self::direct`] is.
+    same_model: Mutex<Vec<(DirectKey, Option<Arc<SameModel>>)>>,
 }
 
 /// A transform from one profile into an RGB profile without passing through sRGB: into the
@@ -99,12 +113,19 @@ impl IccProfile {
             to_srgb: Default::default(),
             from_srgb: Default::default(),
             direct: Mutex::new(Vec::new()),
+            same_model: Mutex::new(Vec::new()),
         })
     }
 
     pub fn from_bytes(name: Option<String>, bytes: &[u8]) -> Result<Self, CmsError> {
         if !localized_text_fits(bytes) {
             return Err(CmsError::BadProfile(format!("its localized names take more than {} KB", MAX_LOCALIZED_TEXT >> 10)));
+        }
+        if let Some(tag) = repeated_tag(bytes) {
+            return Err(CmsError::BadProfile(format!(
+                "its tag table lists the `{}` tag more than once",
+                String::from_utf8_lossy(&tag.to_be_bytes())
+            )));
         }
         let p = ColorProfile::new_from_slice(bytes).map_err(|e| CmsError::BadProfile(format!("{e:?}")))?;
         Ok(Self { source: bytes.to_vec(), ..Self::from_profile(name, p)? })
@@ -149,12 +170,36 @@ impl IccProfile {
 
     /// Device values (RGB / CMYK / Gray, 0..1) → sRGB.
     pub fn to_srgb(&self, v: &[f32], intent: Intent) -> Option<[f32; 3]> {
+        let mut src = [0.0f32; 4];
+        let channels = self.channels();
+        src.get_mut(..channels)?.iter_mut().zip(v.iter()).for_each(|(dst, value)| *dst = *value);
+        self.to_srgb_into(src.get(..channels)?, intent)
+    }
+
+    /// Convert an exact-width device pixel using the cached transform and stack storage.
+    pub fn to_srgb_into(&self, v: &[f32], intent: Intent) -> Option<[f32; 3]> {
+        if v.len() != self.channels() {
+            return None;
+        }
         let xf = self.to_xf(intent)?;
-        let mut src = v.to_vec();
-        src.resize(self.channels(), 0.0);
         let mut dst = [0.0f32; 3];
-        xf.transform(&src, &mut dst).ok()?;
+        xf.transform(v, &mut dst).ok()?;
         Some(dst.map(|x| x.clamp(0.0, 1.0)))
+    }
+
+    /// Device pixels `v` (RGB / CMYK / Gray, 0..1, the profile's channels a pixel, any number of
+    /// pixels) → sRGB in `dst` (three values a pixel), converted with `intent` in one pass of the
+    /// cached transform. `None` when `v` doesn't hold whole pixels, `dst` doesn't hold three values
+    /// for each, or no transform can be built.
+    pub fn to_srgb_pixels(&self, v: &[f32], dst: &mut [f32], intent: Intent) -> Option<()> {
+        let n = self.channels();
+        if !v.len().is_multiple_of(n) || dst.len() != v.len() / n * 3 {
+            return None;
+        }
+        let xf = self.to_xf(intent)?;
+        xf.transform(v, dst).ok()?;
+        dst.iter_mut().for_each(|x| *x = x.clamp(0.0, 1.0));
+        Some(())
     }
 
     /// sRGB → device values.
@@ -232,6 +277,69 @@ impl IccProfile {
             0.0
         };
         Some(Direct { to_linear, to_dest: Some(to_dest), black })
+    }
+
+    /// Device values of this profile → device values of `dest`, a profile of the same model,
+    /// converted with `intent` through ProPhoto RGB rather than sRGB, so colours outside sRGB
+    /// keep their place. With `bpc` (and an intent other than absolute), this profile's black
+    /// maps onto the destination's black (black-point compensation). `None` when `dest` is of
+    /// another model or no transform can be built.
+    pub fn to_same_model_of(&self, dest: &IccProfile, v: &[f32], intent: Intent, bpc: bool) -> Option<Vec<f32>> {
+        if dest.kind != self.kind || v.len() != self.channels() {
+            return None;
+        }
+        let bpc = bpc && intent != Intent::AbsoluteColorimetric;
+        let generation = profiles_generation();
+        let key = (dest.id, generation, intent_index(intent), bpc);
+        let t = {
+            let mut cache = self.same_model.lock().unwrap_or_else(|e| e.into_inner());
+            cache.retain(|(k, _)| k.1 == generation);
+            match cache.iter().find(|(k, _)| *k == key) {
+                Some((_, t)) => t.clone(),
+                None => {
+                    let t = self.build_same_model(dest, intent, bpc).map(Arc::new);
+                    cache.push((key, t.clone()));
+                    t
+                }
+            }
+        }?;
+        let mut lin = [0.0f32; 3];
+        t.into.transform(v, &mut lin).ok()?;
+        let [from, to] = t.black;
+        if from > 0.0 || to > 0.0 {
+            lin = lin.map(|x| to + (x - from) * (1.0 - to) / (1.0 - from));
+        }
+        let lin = lin.map(|x| x.clamp(0.0, 1.0));
+        let mut out = vec![0.0f32; dest.channels()];
+        t.out_of.transform(&lin, &mut out).ok()?;
+        Some(out.into_iter().map(|x| x.clamp(0.0, 1.0)).collect())
+    }
+
+    fn build_same_model(&self, dest: &IccProfile, intent: Intent, bpc: bool) -> Option<SameModel> {
+        let mut linear = rgb_space(super::PROPHOTO_RGB)?;
+        for trc in [&mut linear.red_trc, &mut linear.green_trc, &mut linear.blue_trc] {
+            *trc = Some(ToneReprCurve::Parametric(vec![1.0]));
+        }
+        linear.cicp = None;
+        let into = self.profile.create_transform_f32(self.layout(), &linear, Layout::Rgb, Self::opts(intent)).ok()?;
+        let out_of = linear.create_transform_f32(Layout::Rgb, &dest.profile, dest.layout(), Self::opts(intent)).ok()?;
+        let black = if bpc {
+            // Each profile's black: the darkest colour it reproduces, found as `build_direct`
+            // finds it, as luminance in the linear space.
+            let luminance = |p: &IccProfile, xf: &Arc<TransformF32Executor>| -> Option<f32> {
+                let inks = p.from_srgb([0.0; 3], Intent::RelativeColorimetric)?;
+                let mut lin = [0.0f32; 3];
+                xf.transform(&inks, &mut lin).ok()?;
+                let y = |c: &moxcms::Xyzd| c.y as f32;
+                let lum = lin[0] * y(&linear.red_colorant) + lin[1] * y(&linear.green_colorant) + lin[2] * y(&linear.blue_colorant);
+                Some(lum.clamp(0.0, 0.5))
+            };
+            let back = dest.profile.create_transform_f32(dest.layout(), &linear, Layout::Rgb, Self::opts(intent)).ok()?;
+            [luminance(self, &into)?, luminance(dest, &back)?]
+        } else {
+            [0.0; 2]
+        };
+        Some(SameModel { into, out_of, black })
     }
 
     /// Whether transforms can be built for this profile (checked at registration).
@@ -324,10 +432,17 @@ fn text_tag(s: &str) -> Option<ProfileText> {
     Some(ProfileText::Localizable(vec![LocalizableString::new("en".into(), "US".into(), s.into())]))
 }
 
+/// The copyright text of profiles made here: they carry no copyright claim.
+pub(super) const NO_COPYRIGHT: &str = "No copyright, use freely";
+
 /// Profiles made here carry their name and no copyright claim.
-fn labelled(mut p: ColorProfile, name: &str) -> ColorProfile {
+fn labelled(p: ColorProfile, name: &str) -> ColorProfile {
+    with_copyright(p, name, NO_COPYRIGHT)
+}
+
+fn with_copyright(mut p: ColorProfile, name: &str, copyright: &str) -> ColorProfile {
     p.description = text_tag(name);
-    p.copyright = text_tag("No copyright, use freely");
+    p.copyright = text_tag(copyright);
     p
 }
 
@@ -338,11 +453,21 @@ const B2A_GRID: usize = 17;
 const GAMUT_GRID: usize = 9;
 
 /// A CMYK output profile sampled from a conversion: `to_lab` (CMYK → media-relative Lab) in a
-/// 9⁴ table, `from_lab` (Lab → CMYK, gamut-mapped) in a 17³ table, Lab PCS (ICC v4 encoding).
+/// 9⁴ table, and Lab → CMYK in 17³ tables, Lab PCS (ICC v4 encoding): `mapped` (gamut-mapped,
+/// with black-point compensation) for the perceptual and saturation intents, `colorimetric` (the
+/// colorimetric inverse of `to_lab`) for the colorimetric intents and the gamut tag.
 /// It carries every tag ICC.1 requires of an output profile: the tables for all three intents
 /// and the gamut tag (Windows rejects a CMYK profile without them, so Photos couldn't show a CMYK
-/// TIFF that embedded one, #2707).
-pub(super) fn cmyk_profile(name: &str, to_lab: impl Fn([f32; 4]) -> lab::Lab, from_lab: impl Fn(lab::Lab) -> [f32; 4]) -> ColorProfile {
+/// TIFF that embedded one, #2707). The media white point is `paper` (absolute XYZ, D50), which
+/// the ICC-absolute colorimetric intent reproduces; the copyright tag holds `copyright`.
+pub(super) fn cmyk_profile(
+    name: &str,
+    paper: [f32; 3],
+    copyright: &str,
+    to_lab: impl Fn([f32; 4]) -> lab::Lab,
+    mapped: impl Fn(lab::Lab) -> [f32; 4],
+    colorimetric: impl Fn(lab::Lab) -> [f32; 4],
+) -> ColorProfile {
     let unit = |i: usize, n: usize| i as f32 / (n - 1) as f32;
     let q = |v: f32| (v.clamp(0.0, 1.0) * 65535.0).round() as u16;
     let mut a2b = Vec::with_capacity(A2B_GRID.pow(4) * 3);
@@ -351,17 +476,21 @@ pub(super) fn cmyk_profile(name: &str, to_lab: impl Fn([f32; 4]) -> lab::Lab, fr
         let l = to_lab(cmyk);
         a2b.extend([l.l / 100.0, (l.a + 128.0) / 255.0, (l.b + 128.0) / 255.0].map(q));
     }
-    let mut b2a = Vec::with_capacity(B2A_GRID.pow(3) * 4);
-    for i in 0..B2A_GRID.pow(3) {
-        let [l, a, b] = [2, 1, 0].map(|d| unit(i / B2A_GRID.pow(d) % B2A_GRID, B2A_GRID));
-        b2a.extend(from_lab(lab::Lab::new(l * 100.0, a * 255.0 - 128.0, b * 255.0 - 128.0)).map(q));
-    }
+    let b2a_of = |from_lab: &dyn Fn(lab::Lab) -> [f32; 4]| {
+        let mut b2a = Vec::with_capacity(B2A_GRID.pow(3) * 4);
+        for i in 0..B2A_GRID.pow(3) {
+            let [l, a, b] = [2, 1, 0].map(|d| unit(i / B2A_GRID.pow(d) % B2A_GRID, B2A_GRID));
+            b2a.extend(from_lab(lab::Lab::new(l * 100.0, a * 255.0 - 128.0, b * 255.0 - 128.0)).map(q));
+        }
+        b2a
+    };
+    let (b2a_mapped, b2a) = (b2a_of(&mapped), b2a_of(&colorimetric));
     // Gamut: 0 where a colour separates and comes back within a ΔE of 3, else out of gamut.
     let mut gamut = Vec::with_capacity(GAMUT_GRID.pow(3));
     for i in 0..GAMUT_GRID.pow(3) {
         let [l, a, b] = [2, 1, 0].map(|d| unit(i / GAMUT_GRID.pow(d) % GAMUT_GRID, GAMUT_GRID));
         let want = lab::Lab::new(l * 100.0, a * 255.0 - 128.0, b * 255.0 - 128.0);
-        gamut.push(if lab::delta_e2000(want, to_lab(from_lab(want))) <= 3.0 { 0 } else { u16::MAX });
+        gamut.push(if lab::delta_e2000(want, to_lab(colorimetric(want))) <= 3.0 { 0 } else { u16::MAX });
     }
     let identity = |n: usize| vec![ToneReprCurve::Parametric(vec![1.0]); n];
     let table = |inputs: usize, outputs: usize, grid: usize, clut: Vec<u16>| {
@@ -382,6 +511,7 @@ pub(super) fn cmyk_profile(name: &str, to_lab: impl Fn([f32; 4]) -> lab::Lab, fr
         })
     };
     let a2b = table(4, 3, A2B_GRID, a2b);
+    let b2a_mapped = table(3, 4, B2A_GRID, b2a_mapped);
     let b2a = table(3, 4, B2A_GRID, b2a);
     let gamut = table(3, 1, GAMUT_GRID, gamut);
     let mut p = ColorProfile::default();
@@ -390,15 +520,15 @@ pub(super) fn cmyk_profile(name: &str, to_lab: impl Fn([f32; 4]) -> lab::Lab, fr
     p.pcs = DataColorSpace::Lab;
     p.rendering_intent = RenderingIntent::RelativeColorimetric;
     p.white_point = moxcms::WHITE_POINT_D50.to_xyzd();
-    p.media_white_point = Some(p.white_point);
+    p.media_white_point = Some(moxcms::Xyzd::new(f64::from(paper[0]), f64::from(paper[1]), f64::from(paper[2])));
     p.lut_a_to_b_perceptual = Some(a2b.clone());
     p.lut_a_to_b_saturation = Some(a2b.clone());
     p.lut_a_to_b_colorimetric = Some(a2b);
-    p.lut_b_to_a_perceptual = Some(b2a.clone());
-    p.lut_b_to_a_saturation = Some(b2a.clone());
+    p.lut_b_to_a_perceptual = Some(b2a_mapped.clone());
+    p.lut_b_to_a_saturation = Some(b2a_mapped);
     p.lut_b_to_a_colorimetric = Some(b2a);
     p.gamut = Some(gamut);
-    labelled(p, name)
+    with_copyright(p, name, copyright)
 }
 
 /// The grey space of greyscale exports: sRGB's tone curve, D50 white.
@@ -406,6 +536,23 @@ pub(super) fn gray_profile(name: &str) -> ColorProfile {
     let mut p = ColorProfile::new_gray_with_gamma(2.2);
     p.gray_trc = ColorProfile::new_srgb().red_trc;
     labelled(p, name)
+}
+
+/// The first tag signature the tag table of ICC `bytes` lists twice, which the ICC
+/// specification forbids. moxcms parses every entry of the table, so a profile listing one
+/// description, copyright or table tag thousands of times, each pointing at the same large data,
+/// would decode and copy that data once per entry. A table it can't read is left to moxcms.
+pub(crate) fn repeated_tag(bytes: &[u8]) -> Option<u32> {
+    let be32 = |at: usize| bytes.get(at..at.checked_add(4)?).map(|v| u32::from_be_bytes([v[0], v[1], v[2], v[3]]));
+    let tags = be32(128)? as usize;
+    let mut seen = std::collections::HashSet::new();
+    for i in 0..tags {
+        let sig = be32(i.checked_mul(12)?.checked_add(132)?)?;
+        if !seen.insert(sig) {
+            return Some(sig);
+        }
+    }
+    None
 }
 
 /// Most bytes of UTF-16 the localized names (`mluc` tags) of a profile may take together.

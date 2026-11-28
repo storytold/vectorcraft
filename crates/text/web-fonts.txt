@@ -2,6 +2,8 @@
 # One face per line: when | family | style (family and style as in craft-fonts' fonts/manifest.txt).
 #   startup    = fetched before the app starts (fallbacks the first frame needs)
 #   background = fetched after the app starts (fonts users pick by name)
+#   demand     = fetched only when the interface language or the interface's own text needs one of
+#                the face's scripts (Korean, Hindi)
 # Read by build.rs (the WEB_FONTS table) and `cargo xtask web-fonts` (copies the files, a Trunk hook).
 startup | Noto Sans Arabic | Regular
 startup | Noto Sans Thai | Regular
@@ -36,3 +38,5 @@ background | Reem Kufi | Regular
 background | Aref Ruqaa | Regular
 background | Aref Ruqaa | Bold
 background | Gulzar | Regular
+demand | NanumGothic | Regular
+demand | Noto Sans Devanagari | Regular

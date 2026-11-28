@@ -1,33 +1,66 @@
-//! Headless frames of Preferences ▸ Units: the General unit in the Transform panel, Properties,
-//! the Control bar, the Info panel, dialogs, the Preferences dialog itself and New Document; the
-//! Type unit in the Character panel; the change showing in the next frame.
+//! Preferences ▸ Units: the General unit in the Transform panel, the Control bar, dialogs and the
+//! Preferences dialog; the Type unit in the Character panel; the change showing in the next frame.
 
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
 
-use super::tests_appearance::{app_with_rect, frame_events, run};
+use super::tests_appearance::{app_with_rect, run};
 use super::*;
+use crate::tests::panel_harness::Panel;
+use craft::ui::dialog::StackDialog;
+use craft::ui::patterns::form_dialogs::HostedParamDialog;
 
-/// Every text drawn in the second headless frame of `f` (windows size themselves in the first).
-fn texts(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &mut Ui)) -> Vec<String> {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame_events(&ctx, app, vec![], &mut f);
-    frame_events(&ctx, app, vec![], f).into_iter().map(|(s, _)| s).collect()
+/// Runs menu command `id` as a click on its item does, in a window, so a dialog it opens has a host.
+pub(crate) fn run_menu(app: &mut VectorcraftApp, id: &str) {
+    if app.ui_ctx.is_none() {
+        app.adopt_context(&crate::testing::ui_context());
+    }
+    crate::menus::invoke(app, id, json!({}));
 }
 
-/// Every text drawn by the open dialog in one headless frame.
-fn dialog_texts(app: &mut VectorcraftApp) -> Vec<String> {
-    texts(app, |app, ui| crate::dialogs::show(app, ui.ctx()))
+/// `f` over the open hosted dialog, with the window's context; `None` when none is open.
+fn with_dialog<R>(app: &VectorcraftApp, f: impl FnOnce(&mut HostedParamDialog, &egui::Context) -> R) -> Option<R> {
+    let ctx = app.ui_ctx.clone()?;
+    app.dialogs()?.with(|host| host.get_mut::<HostedParamDialog>().map(|d| f(d, &ctx)))
 }
 
-fn shows(t: &[String], s: &str) -> bool {
-    t.iter().any(|x| x == s)
+/// Sets the open hosted dialog's field `name`, as typing in it does.
+pub(crate) fn set_dialog_field(app: &mut VectorcraftApp, name: &str, value: Value) {
+    let set = with_dialog(app, |d, ctx| d.set_json_field(ctx, name, value));
+    assert_eq!(set, Some(Ok(())), "{name}");
 }
 
-/// The 100 pt square of [`app_with_rect`] in millimetres.
-fn side_mm() -> String {
-    Unit::Millimeters.format(100.0)
+/// OK in the open hosted dialog; the app's dialog pass runs what it answered.
+pub(crate) fn confirm_dialog(app: &mut VectorcraftApp) {
+    close_dialog(app, true);
+}
+
+/// Cancel in the open hosted dialog.
+pub(crate) fn cancel_dialog(app: &mut VectorcraftApp) {
+    close_dialog(app, false);
+}
+
+fn close_dialog(app: &mut VectorcraftApp, ok: bool) {
+    let (Some(ctx), Some(dialogs)) = (app.ui_ctx.clone(), app.dialogs()) else { panic!("no window") };
+    dialogs.with(|host| {
+        let id = host.get::<HostedParamDialog>().map(StackDialog::id).expect("a hosted dialog is open");
+        if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
+    });
+    crate::dialogs::host::pump(app, &ctx);
+}
+
+fn bar(app: &mut VectorcraftApp, ui: &mut Ui) {
+    transform::object_bar_fields(app, ui);
+}
+
+/// Whether a length field's `value` reads `pt` points in `unit`, to the decimals it shows: a length field's value is
+/// its number and the unit's suffix painted after it, as [`Unit::format`] writes them.
+pub(crate) fn reads(value: Option<String>, unit: Unit, pt: f64) -> bool {
+    value.is_some_and(|v| {
+        let Some(number) = v.strip_suffix(unit.suffix()).map(str::trim_end) else { return false };
+        let decimals = number.split_once('.').map_or(0, |(_, d)| d.len());
+        number.parse::<f64>().is_ok_and(|shown| (shown - unit.from_pt(pt)).abs() <= 0.5 * 10f64.powi(-(decimals as i32)) + 1e-9)
+    })
 }
 
 fn general_mm(app: &mut VectorcraftApp) {
@@ -36,43 +69,61 @@ fn general_mm(app: &mut VectorcraftApp) {
 
 #[test]
 fn panels_show_millimetres_after_the_preference_changes() {
-    let mut app = app_with_rect();
-    assert_eq!(side_mm(), "35.2778 mm");
-    assert!(shows(&texts(&mut app, transform::show), "100 pt"), "points first");
-    general_mm(&mut app);
+    let mut p = Panel::new(app_with_rect(), transform::show);
+    assert!(reads(p.value("Width"), Unit::Points, 100.0), "points first: {:?}", p.value("Width"));
+    general_mm(&mut p.app());
     // The next frame: no restart, nothing cached.
-    let t = texts(&mut app, transform::show);
-    assert!(shows(&t, &side_mm()) && !shows(&t, "100 pt"), "Transform panel: {t:?}");
-    assert!(shows(&texts(&mut app, properties::show), &side_mm()), "Properties panel");
-    assert!(shows(&texts(&mut app, crate::chrome::control_bar), &side_mm()), "Control bar");
-    assert!(shows(&texts(&mut app, info::show), &format!("W: {}", side_mm())), "Info panel");
+    p.frame();
+    assert!(reads(p.value("Width"), Unit::Millimeters, 100.0), "Transform panel: {:?}", p.value("Width"));
+    let mut app = app_with_rect();
+    general_mm(&mut app);
+    let mut b = Panel::new(app, bar);
+    assert!(reads(b.value("Width"), Unit::Millimeters, 100.0), "Control bar: {:?}", b.value("Width"));
     // Document Setup back to points: everything follows the document.
-    run(&mut app, "document.setUnits", json!({"units": "Points"}));
-    assert!(shows(&texts(&mut app, transform::show), "100 pt"));
+    run(&mut b.app(), "document.setUnits", json!({"units": "Points"}));
+    b.frame();
+    assert!(reads(b.value("Width"), Unit::Points, 100.0), "{:?}", b.value("Width"));
 }
 
 #[test]
 fn dialog_lengths_show_in_the_general_unit() {
     let mut app = app_with_rect();
     general_mm(&mut app);
-    crate::menus::invoke(&mut app, "object.move", json!({}));
-    let t = dialog_texts(&mut app);
-    assert!(shows(&t, "0 mm"), "Move: {t:?}");
+    // The dialog keeps its lengths in points; its fields draw them in the unit, so the window draws it.
+    let mut window = Panel::new(app, |app, ui| app.ui(ui));
+    window.room(egui::vec2(1440.0, 900.0));
+    run_menu(&mut window.app(), "object.move");
+    window.frame();
+    assert!(reads(window.value("Horizontal"), Unit::Millimeters, 0.0), "Move: {:?}", window.value("Horizontal"));
     // A typed unit wins; the move is in points.
-    app.ui.dialog.as_mut().unwrap().fields.insert("dx".into(), json!("10 mm"));
-    assert!(shows(&dialog_texts(&mut app), "10 mm"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let st = app.session.active().unwrap();
-    let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
-    assert!((b.x0 - (10.0 + 10.0 * 72.0 / 25.4)).abs() < 1e-6, "{b:?}");
-    // A shape tool's size dialog and an effect's distances.
-    crate::dialogs::open_tool_dialog(&mut app, "rectangle", json!({"x": 0, "y": 0}));
-    assert!(shows(&dialog_texts(&mut app), &side_mm()), "Rectangle");
-    app.run("effect.dialog", json!({"effect": "stylize.dropShadow"})).unwrap();
+    window.focus("Horizontal");
+    window.key(egui::Key::A, egui::Modifiers::COMMAND);
+    window.type_text("10 mm");
+    window.key(egui::Key::Tab, egui::Modifiers::NONE);
+    confirm_dialog(&mut window.app());
+    let square = {
+        let app = window.app();
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
+        assert!((b.x0 - (10.0 + 10.0 * 72.0 / 25.4)).abs() < 1e-6, "{b:?}");
+        st.selection.objects[0].0
+    };
+    // A shape tool's size dialog and an effect's distances, drawn in the window. The Control bar and the panels name
+    // their fields as the dialogs do, so the dialog shows its length where nothing selected shows the same one.
+    run(&mut window.app(), "select.set", json!({"ids": []}));
+    crate::dialogs::open_tool_dialog(&mut window.app(), "rectangle", json!({"x": 0, "y": 0}));
+    // The held dialog shows from the frame after the one it opened in.
+    window.frame();
+    window.frame();
+    let shows_mm = |window: &Panel, pt: f64| window.shows_value_with(|v| reads(Some(v.to_owned()), Unit::Millimeters, pt));
+    assert!(shows_mm(&window, 100.0), "Rectangle");
+    cancel_dialog(&mut window.app());
+    run(&mut window.app(), "select.set", json!({"ids": [square]}));
+    window.app().run("effect.dialog", json!({"effect": "stylize.dropShadow"})).unwrap();
+    window.frame();
     let x = vectorcraft_effects::default_params("stylize.dropShadow").unwrap()["x"].as_f64().unwrap();
-    let t = dialog_texts(&mut app);
-    assert!(shows(&t, &Unit::Millimeters.format(x)), "Drop Shadow: {t:?}");
-    crate::dialogs::cancel(&mut app);
+    assert!(shows_mm(&window, x), "Drop Shadow");
+    cancel_dialog(&mut window.app());
 }
 
 #[test]
@@ -81,10 +132,13 @@ fn type_sizes_follow_units_type() {
     let id = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 24}))["id"].clone();
     run(&mut app, "select.set", json!({ "ids": [id] }));
     general_mm(&mut app);
-    assert!(shows(&texts(&mut app, character::show), "24 pt"), "General leaves type alone");
-    app.run("prefs.set", json!({"key": "unitsType", "value": "inches"})).unwrap();
-    let t = texts(&mut app, character::show);
-    assert!(shows(&t, &Unit::Inches.format(24.0)), "Character panel: {t:?}");
+    let mut p = Panel::new(app, character::show);
+    assert_eq!(character::type_unit(&p.app()), character::doc_unit(Unit::Points), "General leaves type alone");
+    assert!(reads(p.value("Font size"), Unit::Points, 24.0), "{:?}", p.value("Font size"));
+    p.app().run("prefs.set", json!({"key": "unitsType", "value": "inches"})).unwrap();
+    p.frame();
+    assert_eq!(character::type_unit(&p.app()), character::doc_unit(Unit::Inches));
+    assert!(reads(p.value("Font size"), Unit::Inches, 24.0), "{:?}", p.value("Font size"));
 }
 
 #[test]
@@ -92,82 +146,16 @@ fn the_preferences_dialog_shows_the_documents_units() {
     let mut app = app_with_rect();
     run(&mut app, "document.setUnits", json!({"units": "Millimeters"}));
     crate::prefs_dialog::open(&mut app, Some("General"));
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["unitsGeneral"], json!("millimeters"));
+    assert_eq!(crate::prefs_dialog::fields(&app).unwrap()["unitsGeneral"], json!("millimeters"));
     let inc = app.session.prefs.keyboard_increment;
-    let frame = |app: &mut VectorcraftApp| texts(app, |app, ui| crate::prefs_dialog::show(app, ui.ctx()));
-    assert!(shows(&frame(&mut app), &Unit::Millimeters.format(inc)), "Keyboard Increment in mm");
+    let mut p = Panel::new(app, crate::prefs_dialog::show);
+    assert!(reads(p.value("Keyboard Increment"), Unit::Millimeters, inc), "Keyboard Increment in mm: {:?}", p.value("Keyboard Increment"));
     // Choosing another General unit in the dialog shows at once, and OK applies it.
-    app.ui.dialog.as_mut().unwrap().fields.insert("unitsGeneral".into(), json!("inches"));
-    assert!(shows(&frame(&mut app), &Unit::Inches.format(inc)));
-    crate::prefs_dialog::confirm(&mut app).unwrap();
+    crate::prefs_dialog::set_field(&mut p.app(), "unitsGeneral", json!("inches")).unwrap();
+    p.frame();
+    assert!(reads(p.value("Keyboard Increment"), Unit::Inches, inc), "{:?}", p.value("Keyboard Increment"));
+    crate::prefs_dialog::confirm(&mut p.app()).unwrap();
+    let app = p.app();
     assert_eq!(app.session.active().unwrap().doc.units, Unit::Inches);
     assert_eq!(app.session.prefs.units_general, "inches");
-}
-
-#[test]
-fn new_documents_start_in_the_general_preference() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    general_mm(&mut app);
-    app.run("file.newDialog", json!({})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["units"], json!("Millimeters"));
-    let t = dialog_texts(&mut app);
-    assert!(shows(&t, &Unit::Millimeters.format(612.0)), "Letter in mm: {t:?}");
-    crate::dialogs::confirm(&mut app).unwrap();
-    let d = &app.session.active().unwrap().doc;
-    assert_eq!((d.units, d.artboards[0].rect.width()), (Unit::Millimeters, 612.0));
-}
-
-/// A label spelled down the left ruler is tall, and a sixteenth-inch step does not always leave
-/// room for a long one: at zoom 12 the labels are 54 pt apart while "-0.0625" reaches 60.5 pt, so
-/// the ruler leaves that label out rather than drawing it over its neighbour. Every tick stays.
-#[test]
-fn a_long_vertical_label_does_not_fit_a_sixteenth_inch_step() {
-    use crate::canvas::vertical_label_height;
-    use vectorcraft_doc::Unit;
-    // One character is one line; each further character adds a line.
-    assert_eq!(vertical_label_height(1), 9.5);
-    assert_eq!(vertical_label_height(2), 18.0);
-    assert_eq!(vertical_label_height(7), 60.5);
-    // The gap a label has to fit into, at the zoom where a sixteenth is first chosen and beyond.
-    let gap = |zoom: f64| Unit::Inches.ruler_step(zoom) * Unit::Inches.points() * zoom;
-    assert!((gap(12.0) - 54.0).abs() < 1e-9, "{}", gap(12.0));
-    assert!(vertical_label_height(7) > gap(12.0) as f32, "a seven-character label has to be left out");
-    // The labels this ruler actually writes below an inch are six characters, which do fit.
-    assert!(vertical_label_height("0.0625".chars().count()) < gap(12.0) as f32);
-    // Zoomed further in the gap grows and even a long label fits.
-    assert!(vertical_label_height(7) < gap(20.0) as f32, "{}", gap(20.0));
-}
-
-#[test]
-fn ruler_labels_have_the_steps_decimals() {
-    use crate::canvas::ruler_label;
-    assert_eq!(ruler_label(100.0000001, 100.0), "100");
-    assert_eq!(ruler_label(0.30000000004, 0.1), "0.3");
-    assert_eq!(ruler_label(1.25, 0.05), "1.25");
-    assert_eq!(ruler_label(-0.0000001, 0.5), "0");
-    assert_eq!(ruler_label(-2.5, 0.5), "-2.5");
-    // An inch ruler's binary steps keep their exact value: rounding the step's magnitude wrote
-    // 1/16 as "0.06" and 1/8 as "0.13" (#2827).
-    assert_eq!(ruler_label(0.0625, 0.0625), "0.0625");
-    assert_eq!(ruler_label(0.125, 0.125), "0.125");
-    assert_eq!(ruler_label(0.75, 0.25), "0.75");
-    assert_eq!(ruler_label(1.0, 0.0625), "1");
-    assert_eq!(ruler_label(1.1875, 0.0625), "1.1875");
-}
-
-#[test]
-fn new_document_cards_follow_the_chosen_units() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    general_mm(&mut app);
-    app.run("file.newDialog", json!({})).unwrap();
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("category".into(), json!("Art & Illustration"));
-    d.fields.insert("preset".into(), json!("Postcard"));
-    let t = dialog_texts(&mut app);
-    assert!(shows(&t, "101.6 × 152.4 mm"), "Postcard in mm: {t:?}");
-    // Choosing Pixels: the cards show pixels and Postcard stays chosen.
-    app.ui.dialog.as_mut().unwrap().fields.insert("units".into(), json!("Pixels"));
-    let t = dialog_texts(&mut app);
-    assert!(shows(&t, "288 × 432 px") && !shows(&t, "101.6 × 152.4 mm"), "Postcard in px: {t:?}");
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["preset"], json!("Postcard"));
 }

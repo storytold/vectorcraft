@@ -40,7 +40,21 @@ pub(super) fn squared(mask: &[bool], w: usize, h: usize) -> Option<Vec<f32>> {
     if mask.len() != size || mask.iter().enumerate().any(|(i, &on)| on && (i < w || i >= size - w || i % w == 0 || i % w + 1 == w)) {
         return None;
     }
-    let mut grid: Vec<f64> = mask.iter().map(|&on| if on { FAR } else { 0.0 }).collect();
+    two_passes(mask.iter().map(|&on| if on { FAR } else { 0.0 }).collect(), w, h)
+}
+
+/// Squared distances from each pixel of a validated crop to the nearest `seeds` pixel (a very large
+/// value everywhere when there is none).
+pub(super) fn to_seeds(seeds: &[bool], w: usize, h: usize) -> Option<Vec<f32>> {
+    let size = super::crop_size(w, h)?;
+    if seeds.len() != size {
+        return None;
+    }
+    two_passes(seeds.iter().map(|&seed| if seed { 0.0 } else { FAR }).collect(), w, h)
+}
+
+/// The column pass and then the row pass over `grid` (0 at a seed, `FAR` elsewhere).
+fn two_passes(mut grid: Vec<f64>, w: usize, h: usize) -> Option<Vec<f32>> {
     let n = w.max(h);
     let (mut f, mut d, mut envelope) = (vec![0.0; n], vec![0.0; n], Vec::with_capacity(n));
     for x in 0..w {
@@ -95,6 +109,38 @@ mod tests {
                 assert_eq!(actual, expected, "case {case}, pixel {i}");
             }
         }
+    }
+
+    #[test]
+    fn distances_to_seeds_equal_brute_force() {
+        let mut seed = 7u64;
+        let mut rnd = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            (seed >> 33) as usize
+        };
+        for case in 0..100 {
+            let (w, h) = (3 + rnd() % 20, 3 + rnd() % 20);
+            let seeds: Vec<bool> = (0..w * h).map(|_| rnd() % 9 == 0).collect();
+            let d = to_seeds(&seeds, w, h).unwrap();
+            for (i, &actual) in d.iter().enumerate() {
+                let expected = seeds
+                    .iter()
+                    .enumerate()
+                    .filter(|&(_, &s)| s)
+                    .map(|(j, _)| {
+                        let dx = (i % w).abs_diff(j % w);
+                        let dy = (i / w).abs_diff(j / w);
+                        (dx * dx + dy * dy) as f32
+                    })
+                    .min_by(f32::total_cmp);
+                match expected {
+                    Some(e) => assert_eq!(actual, e, "case {case}, pixel {i}"),
+                    None => assert!(actual > 1e18, "case {case}: no seed, pixel {i} at {actual}"),
+                }
+            }
+        }
+        assert!(to_seeds(&[true; 8], 3, 3).is_none());
+        assert!(to_seeds(&[], 2, 2).is_none());
     }
 
     #[test]

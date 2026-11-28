@@ -1,0 +1,239 @@
+use super::attributes::ObjectAttributes;
+use super::kind::NodeKind;
+use super::live_shape::LiveShape;
+use super::opacity::OpacityMask;
+use super::{Node, PathData};
+use vectorcraft_geom::Point;
+
+/// The parts of a [`Node`] that few objects have: kept out of line, so that the nodes without
+/// them stay small ([`Node::extras`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NodeExtras {
+    /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
+    pub mask: Option<Box<OpacityMask>>,
+    /// Image Trace object: `{preset, params, view?, split?}` it was traced with (the Image Trace
+    /// panel shows them; `view` is its [`crate::TraceView`] id, absent for the tracing result, and
+    /// `split` the Split view's divider, [`crate::TraceView::split_of`]).
+    pub trace: Option<Box<serde_json::Value>>,
+    /// Object → Text Wrap: area type below this object (in the same layer) flows around it.
+    pub wrap: Option<crate::text::TextWrap>,
+    /// Graph object: the group's children are generated from this spec (Object → Graph).
+    pub graph: Option<Box<crate::graph::GraphSpec>>,
+    /// Index of the graph series this generated group belongs to. Axes, the legend and other
+    /// children leave it unset, so a series named "Legend" or "Axes" is not mistaken for them.
+    pub series_index: Option<u32>,
+    /// The group holds the glyph outlines of type. Geometry effects that reshape it move and scale
+    /// the placed gradients in it with the outlines.
+    pub type_outlines: bool,
+    /// An image drawn without smoothing: each pixel of the picture takes the color of the image
+    /// pixel nearest to it (an envelope's distorted image with Envelope Options › Anti-Alias off).
+    pub pixelated: bool,
+    /// Editable Shaper composition; the original art is retained in its source child.
+    pub shaper: Option<Box<crate::shaper::ShaperSpec>>,
+    /// The [`crate::GraphicStyle::id`] last applied to this object. It stays linked while it keeps
+    /// that style's look: editing its appearance or transparency breaks the link.
+    pub graphic_style: Option<u32>,
+    /// Attributes panel: centre point display, image map, URL and note (`None`: all defaults).
+    pub attrs: Option<Box<ObjectAttributes>>,
+    /// Object → Slice → Make: the object is an object slice (its slice follows its bounds) with
+    /// these options.
+    pub slice: Option<Box<crate::SliceOptions>>,
+    /// Object › Perspective: the perspective grid plane the object is attached to.
+    pub perspective: Option<Box<crate::PerspectiveAttachment>>,
+    /// Dimension object: the live measurement it draws; its ordinary group children hold its
+    /// exportable appearance (Object › Dimensions, the Dimension tool).
+    pub dimension: Option<Box<crate::dimension::Dimension>>,
+    /// Flare object: the settings its group was drawn with (the Flare tool); its ordinary group
+    /// children hold its art.
+    pub flare: Option<Box<crate::flare::FlareSpec>>,
+    /// Object › Intertwine: as a member of an Intertwine group, the area (document coordinates,
+    /// filled non-zero) where this object is drawn over the group's other members.
+    pub intertwine: Option<Box<PathData>>,
+    /// Object › Intertwine: as a member of an Intertwine group, the areas (document coordinates,
+    /// filled non-zero) where this object is drawn over members that are themselves drawn over
+    /// others there. Item `k` is the area of tier `k + 2`; [`NodeExtras::intertwine`] is tier 1
+    /// (see [`crate::intertwine`]).
+    pub intertwine_tiers: Vec<PathData>,
+    /// Live Paint group: its Gap Options (Object › Live Paint › Gap Options; `None`: the defaults).
+    pub live_paint_gaps: Option<Box<crate::live_paint::GapOptions>>,
+    /// Object › Objects on Path: the group's path and the objects attached to it (see
+    /// [`crate::objects_on_path`]).
+    pub objects_on_path: Option<Box<crate::objects_on_path::ObjectsOnPath>>,
+    /// A grayscale or 1-bit image's fill color (`paint.setFill` on the image): a solid paint that
+    /// colorizes it. Each pixel is drawn in this color, as opaque as the pixel is dark, so white
+    /// pixels are transparent. `None`: the image shows its own pixels.
+    pub colorize: Option<Box<vectorcraft_color::Paint>>,
+    /// Attributes panel › Overprint Fill on a colorized image: its color prints over the inks
+    /// below instead of knocking them out. It counts only while [`Self::colorize`] is set
+    /// ([`crate::Node::colorize_overprints`]).
+    pub colorize_overprint: bool,
+    /// Pathfinder panel › Make Compound Shape: this group is a compound shape
+    /// ([`Node::is_compound_shape`], [`crate::compound_shape`]).
+    pub compound_shape: bool,
+    /// As a member of a compound shape, how this object combines with the members below it.
+    pub shape_mode: crate::ShapeMode,
+    /// As an instance of a dynamic symbol, its own appearance changes to objects of the symbol's
+    /// art (see [`crate::symbol_overrides`]); empty for none.
+    pub symbol_overrides: Vec<crate::SymbolOverride>,
+    /// As an envelope with margins in Edit Contents, the margins its strokes gave when Edit Contents
+    /// began ([`crate::live::EnvelopeOptions::bounds_margin`]).
+    pub envelope_edit_margin: Option<[f32; 4]>,
+    /// Transform panel › Align to Pixel Grid: the path's or compound path's horizontal and vertical
+    /// segments stay on the pixel grid when it is transformed.
+    pub pixel_aligned: bool,
+    /// Image Tools › Color Mask: the colors an image hides while its pixels stay as they are
+    /// ([`crate::color_mask`]).
+    pub color_mask: Option<Box<crate::color_mask::ColorMask>>,
+    /// A piece of an image a raster mesh warp cut up ([`crate::live::mesh_warp_image`]): in a
+    /// knockout group its knockout shape is the whole area of its triangle, not only where the
+    /// image is opaque ([`Node::knockout_outline`]).
+    pub warp_piece: bool,
+    /// A group of the pieces a clipping path's fills and strokes draw once their geometry effects
+    /// are applied, one path or compound path per fill and stroke: as the clipping path of a clip group it paints
+    /// those pieces as the path paints its fills and strokes ([`Node::clip_paint`]).
+    pub clip_pieces: bool,
+    /// As an image after Perspective Distort or Free Distort, where its pixel rectangle's corners
+    /// (top left, top right, bottom right, bottom left in pixel space) stand on the page when they
+    /// do not make a parallelogram, which its transform alone could place ([`crate::image_quad`]).
+    pub image_quad: Option<Box<[Point; 4]>>,
+    /// Generated art object: the generator plug-in and parameters its group's children were drawn
+    /// with (`plugin.generate`); its ordinary group children hold its art ([`crate::generated`]).
+    pub generated: Option<Box<crate::generated::GeneratedArt>>,
+}
+
+/// No extras: what [`Node::extras`] gives for a node without any.
+pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
+    mask: None,
+    trace: None,
+    wrap: None,
+    graph: None,
+    series_index: None,
+    type_outlines: false,
+    pixelated: false,
+    shaper: None,
+    graphic_style: None,
+    attrs: None,
+    slice: None,
+    perspective: None,
+    dimension: None,
+    flare: None,
+    intertwine: None,
+    intertwine_tiers: Vec::new(),
+    live_paint_gaps: None,
+    objects_on_path: None,
+    colorize: None,
+    colorize_overprint: false,
+    compound_shape: false,
+    shape_mode: crate::ShapeMode::Add,
+    symbol_overrides: Vec::new(),
+    envelope_edit_margin: None,
+    pixel_aligned: false,
+    color_mask: None,
+    warp_piece: false,
+    clip_pieces: false,
+    image_quad: None,
+    generated: None,
+};
+
+/// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal
+/// none.
+#[derive(Clone, Debug, Default)]
+pub struct Extras(pub(crate) Option<Box<NodeExtras>>);
+
+impl Extras {
+    fn get(&self) -> &NodeExtras {
+        self.0.as_deref().unwrap_or(&NO_EXTRAS)
+    }
+}
+
+impl PartialEq for Extras {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (Some(a), Some(b)) => a == b,
+            _ => self.get() == other.get(),
+        }
+    }
+}
+
+impl Node {
+    /// The rarely set parts of this node (all unset when it has none).
+    #[inline]
+    pub fn extras(&self) -> &NodeExtras {
+        self.extras.get()
+    }
+
+    /// The rarely set parts of this node, to change: when the change is done (the guard dropped),
+    /// extras that were set are allocated and extras left all unset are let go. Setting one to
+    /// `None` on a node without extras allocates nothing.
+    #[inline]
+    pub fn extras_mut(&mut self) -> ExtrasMut<'_> {
+        ExtrasMut { slot: &mut self.extras.0, local: NodeExtras::default() }
+    }
+
+    /// The rarely set parts of this node, if it has any: to change what is there in place.
+    #[inline]
+    pub fn extras_if_any(&mut self) -> Option<&mut NodeExtras> {
+        self.extras.0.as_deref_mut()
+    }
+
+    /// The live shape of a path object, if it is one.
+    pub fn live_shape(&self) -> Option<&LiveShape> {
+        match &self.kind {
+            NodeKind::Path { live, .. } => live.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// The live shape of a path object, if it is one, to change.
+    pub fn live_shape_mut(&mut self) -> Option<&mut LiveShape> {
+        match &mut self.kind {
+            NodeKind::Path { live, .. } => live.as_deref_mut(),
+            _ => None,
+        }
+    }
+
+    /// This node with opacity mask `mask` (or none).
+    pub fn with_mask(mut self, mask: Option<Box<OpacityMask>>) -> Self {
+        self.extras_mut().mask = mask;
+        self
+    }
+
+    /// The extras, if this node has them allocated (for [`crate::mem`]'s estimate).
+    pub(crate) fn extras_box(&self) -> Option<&NodeExtras> {
+        self.extras.0.as_deref()
+    }
+}
+
+/// [`Node::extras_mut`]: the node's extras while they change.
+pub struct ExtrasMut<'a> {
+    slot: &'a mut Option<Box<NodeExtras>>,
+    /// Stands for the extras of a node without any, boxed into it when dropped if one was set.
+    local: NodeExtras,
+}
+
+impl std::ops::Deref for ExtrasMut<'_> {
+    type Target = NodeExtras;
+    fn deref(&self) -> &NodeExtras {
+        self.slot.as_deref().unwrap_or(&self.local)
+    }
+}
+
+impl std::ops::DerefMut for ExtrasMut<'_> {
+    fn deref_mut(&mut self) -> &mut NodeExtras {
+        match self.slot.as_deref_mut() {
+            Some(e) => e,
+            None => &mut self.local,
+        }
+    }
+}
+
+impl Drop for ExtrasMut<'_> {
+    fn drop(&mut self) {
+        match self.slot.as_deref() {
+            Some(e) if *e == NO_EXTRAS => *self.slot = None,
+            Some(_) => {}
+            None if self.local != NO_EXTRAS => *self.slot = Some(Box::new(std::mem::take(&mut self.local))),
+            None => {}
+        }
+    }
+}

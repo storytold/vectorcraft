@@ -1,0 +1,1508 @@
+use super::dynamic::{fit_overrides, type_id, type_param};
+use super::symbolism::{Grid, Mean, Method, Sides, look, mean, method_param, natural_side, record_set_density, spacing, spray_modes, wrap_angle};
+use super::{
+    Affine, AppearanceItem, Arc, CURRENT_SYMBOL, Color, Document, EngineError, FillLayer, HALF, Node, NodeId, NodeKind, Paint, Point, Result,
+    SIZES_KEY, Session, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration, Value, Vec2, bad, brush, color_param, ids_json, json,
+    name_param, number_or, ok, remove_each, roots, selection_art, separate, set_unknown, str_param, switch_or,
+};
+
+// ---------- symbols ----------
+
+pub(crate) fn natural_size(d: &Document, name: &str) -> (f64, f64) {
+    stored_natural_size(d, name).unwrap_or((2.0 * HALF, 2.0 * HALF))
+}
+
+/// The natural size `d` records for symbol `name` (`None` when it records none).
+pub(crate) fn stored_natural_size(d: &Document, name: &str) -> Option<(f64, f64)> {
+    d.unknown.get(SIZES_KEY).and_then(|m| m.get(name)).and_then(|v| Some((v.get(0)?.as_f64()?, v.get(1)?.as_f64()?)))
+}
+
+pub(crate) fn set_natural_size(d: &mut Document, name: &str, size: Option<(f64, f64)>) {
+    let m = d.unknown.entry(SIZES_KEY.to_string()).or_insert_with(|| json!({}));
+    if let Some(o) = m.as_object_mut() {
+        match size {
+            Some((w, h)) => o.insert(name.into(), json!([w, h])),
+            None => o.remove(name),
+        };
+    }
+}
+
+/// Instance transform for a symbol of natural size `(w, h)` whose registration point is at `at`.
+pub(crate) fn place_xf(at: Point, (w, h): (f64, f64), reg: SymbolRegistration) -> Affine {
+    let c = at - reg.offset_from_center(w, h);
+    Affine::translate(c.to_vec2()) * Affine::scale_non_uniform(w / (2.0 * HALF), h / (2.0 * HALF))
+}
+
+/// Where a placed symbol instance goes in the active document, worked out before the edit from
+/// the drawing mode, the selection and the layer new art goes into.
+pub(crate) struct Placement {
+    parent: Option<NodeId>,
+    behind: bool,
+    anchor: Option<NodeId>,
+}
+
+impl Placement {
+    /// On top of the layer new art goes into; in Draw Behind, directly below the bottommost
+    /// selected object (beside the compound path that holds it), or at the bottom of that layer
+    /// when nothing is selected. An error when that layer is locked or hidden.
+    pub(crate) fn of(s: &Session) -> Result<Self> {
+        let st = s.doc()?;
+        let parent = st.target_parent()?;
+        let behind = s.draw_mode == crate::DrawMode::Behind;
+        let compound_of = |id: NodeId| st.doc.parent_of(id).filter(|p| st.doc.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
+        let anchor = behind.then(|| st.selection.in_paint_order(&st.doc).first().copied()).flatten().map(|id| compound_of(id).unwrap_or(id));
+        Ok(Self { parent, behind, anchor })
+    }
+
+    /// Inserts instance `n` where this placement puts it. In a clip group or a clipping layer the
+    /// clipping path stays at the bottom.
+    pub(crate) fn insert(&self, d: &mut Document, n: Node) -> Result<NodeId> {
+        let (parent, index) = match (self.behind, self.anchor.and_then(|a| d.position(a))) {
+            (false, _) => return Ok(d.insert(self.parent, usize::MAX, n)?),
+            (true, Some((par, i, _))) => (par, i),
+            (true, None) => (self.parent, 0),
+        };
+        let floor = usize::from(parent.and_then(|p| d.node(p)).is_some_and(Node::clips));
+        Ok(d.insert(parent, index.max(floor), n)?)
+    }
+}
+
+fn registration_param(p: &Value, cmd: &str) -> Result<Option<SymbolRegistration>> {
+    match p.get("registration") {
+        None => Ok(None),
+        Some(v) => v.as_u64().and_then(SymbolRegistration::from_u64).map(Some).ok_or_else(|| bad(cmd, "registration must be 0..8")),
+    }
+}
+
+fn export_type_param(p: &Value, cmd: &str) -> Result<Option<SymbolExportType>> {
+    match str_param(p, "exportType") {
+        None => Ok(None),
+        Some(s) => SymbolExportType::from_id(s).map(Some).ok_or_else(|| bad(cmd, format!("exportType must be movieClip or graphic, not `{s}`"))),
+    }
+}
+
+/// `nineSlice` (bool) and `nineSliceGuides` ([left, top, right, bottom] fractions of the natural
+/// size, below 0 or above 1 for a guide outside the art): `None` leaves the symbol alone,
+/// `Some(None)` turns 9-slice off, `Some(Some(g))` turns it on with guides `g` (the symbol's
+/// current ones, else a quarter in from each edge, when none are given).
+fn nine_slice_param(p: &Value, cmd: &str, current: Option<SymbolNineSlice>) -> Result<Option<Option<SymbolNineSlice>>> {
+    let on = match p.get("nineSlice") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_bool().ok_or_else(|| bad(cmd, "nineSlice must be true or false"))?),
+    };
+    let guides = match p.get("nineSliceGuides") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(SymbolNineSlice::from_value(v).ok_or_else(|| {
+            bad(cmd, "nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1")
+        })?),
+    };
+    Ok(match (on, guides) {
+        (Some(false), _) => Some(None),
+        (None, None) => None,
+        (_, Some(g)) => Some(Some(g)),
+        (Some(true), None) => Some(Some(current.unwrap_or_default())),
+    })
+}
+
+/// `alignToPixelGrid` (Symbol Options › Align to Pixel Grid): `None` when it is not given; any
+/// value other than true or false, null included, is an error.
+fn pixel_grid_param(p: &Value, cmd: &str) -> Result<Option<bool>> {
+    match p.get("alignToPixelGrid") {
+        None => Ok(None),
+        Some(v) => v.as_bool().map(Some).ok_or_else(|| bad(cmd, "alignToPixelGrid must be true or false")),
+    }
+}
+
+fn nine_slice_json(d: &Document, name: &str) -> Value {
+    d.symbol_nine_slice(name).map_or(Value::Null, SymbolNineSlice::to_value)
+}
+
+fn rename_natural_size(d: &mut Document, from: &str, to: &str) {
+    if from == to {
+        return;
+    }
+    let size = d.unknown.get(SIZES_KEY).and_then(|m| m.get(from)).cloned();
+    set_natural_size(d, from, None);
+    if let Some(v) = size
+        && let (Some(w), Some(h)) = (v.get(0).and_then(Value::as_f64), v.get(1).and_then(Value::as_f64))
+    {
+        set_natural_size(d, to, Some((w, h)));
+    }
+}
+
+/// Normalise art for a symbol definition: returns (art, natural size, centre in the document).
+pub(crate) fn normalize(mut art: Node) -> Result<(Node, (f64, f64), Point)> {
+    let b = art.geometric_bounds().ok_or_else(|| EngineError::Other("the art has no bounds".into()))?;
+    let (w, h) = (b.width().max(1.0), b.height().max(1.0));
+    let c = b.center();
+    let n = Affine::scale_non_uniform(2.0 * HALF / w, 2.0 * HALF / h) * Affine::translate(-c.to_vec2());
+    art.transform(n, false);
+    Ok((art, (w, h), c))
+}
+
+fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
+    let mut v = vec![];
+    d.walk(|n| {
+        if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+            && name.is_none_or(|x| x == symbol)
+        {
+            v.push(n.id);
+        }
+    });
+    v
+}
+
+/// The symbol instances in `nodes` and inside them, each once, in the order a walk of each node in
+/// turn first reaches them.
+fn instances_in<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> Vec<NodeId> {
+    let (mut v, mut seen) = (vec![], std::collections::HashSet::new());
+    for n in nodes {
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::SymbolInstance { .. }) && seen.insert(c.id) {
+                v.push(c.id);
+            }
+        });
+    }
+    v
+}
+
+/// The symbols an instance in `n` (its opacity masks included) places, pushed onto `out`.
+fn art_symbols(n: &Node, out: &mut Vec<String>) {
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+        if let NodeKind::SymbolInstance { symbol, .. } = &m.kind {
+            out.push(symbol.clone());
+        }
+        // A graphic on a 3D object draws its symbol's art too.
+        out.extend(vectorcraft_render::effects::graphic_symbols(m));
+    });
+}
+
+/// Select All Unused (#4918): the symbols nothing places. Instances in the art (opacity masks
+/// included), graph designs, pattern tiles and the tiles that pattern editing's Cancel puts back,
+/// and the art of the document's brushes count, and so do the instances in the art of every symbol
+/// a counted instance places. A symbol placed only inside an unused symbol is unused too.
+pub(super) fn symbol_unused(s: &mut Session, _: &Value) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let mut todo = vec![];
+    let lib = brush::library(d);
+    let patterns = d.patterns.iter().chain(d.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()));
+    let trees = d.layers.iter().map(|l| &**l).chain(d.graph_designs.iter().map(|g| &*g.art));
+    trees.chain(patterns.flat_map(|p| p.art.iter().map(|n| &**n))).chain(lib.iter().flat_map(|b| b.art())).for_each(|n| art_symbols(n, &mut todo));
+    // A graphic in a graphic style draws its symbol's art wherever the style is applied.
+    todo.extend(d.graphic_styles.iter().flat_map(|g| vectorcraft_render::effects::appearance_graphic_symbols(&g.appearance)));
+    let mut used = std::collections::BTreeSet::new();
+    while let Some(name) = todo.pop() {
+        if !used.contains(&name) {
+            d.symbols.iter().filter(|sym| sym.name == name).for_each(|sym| art_symbols(&sym.art, &mut todo));
+            used.insert(name);
+        }
+    }
+    let names: Vec<&str> = d.symbols.iter().map(|sym| sym.name.as_str()).filter(|n| !used.contains(*n)).collect();
+    Ok(json!({ "names": names }))
+}
+
+/// `symbol.sortByName`: the symbols in name order, ignoring case; a stable sort, so names that
+/// differ only in case keep their order. The current symbol is stored by name first, so a document
+/// whose current symbol is its first one keeps that symbol current. Nothing is changed, and no undo
+/// step is added, when the symbols are already in order.
+pub(super) fn symbol_sort(s: &mut Session, _: &Value) -> Result<Value> {
+    let key = |sym: &Symbol| sym.name.to_lowercase();
+    let d = &s.doc()?.doc;
+    if d.symbols.is_sorted_by_key(key) {
+        return ok();
+    }
+    let current = current_symbol(d);
+    s.edit("Sort by Name", |d, _| {
+        if let Some(name) = current {
+            d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
+        }
+        d.symbols.sort_by_cached_key(key);
+        Ok(())
+    })?;
+    ok()
+}
+
+/// The Symbols panel's current symbol, as `symbol.list` answers it: the stored current symbol
+/// while `d` has a symbol of that name, else the first symbol; `None` when `d` has no symbols.
+pub fn current_symbol(d: &Document) -> Option<String> {
+    d.unknown
+        .get(CURRENT_SYMBOL)
+        .and_then(Value::as_str)
+        .filter(|n| d.symbols.iter().any(|s| s.name == *n))
+        .or_else(|| d.symbols.first().map(|s| s.name.as_str()))
+        .map(str::to_string)
+}
+
+pub(super) fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let list: Vec<Value> = d
+        .symbols
+        .iter()
+        .map(|sym| {
+            let (w, h) = natural_size(d, &sym.name);
+            json!({
+                "name": sym.name,
+                "instances": instances_of(d, Some(&sym.name)).len(),
+                "size": [w, h],
+                "registration": d.symbol_registration(&sym.name).0,
+                "exportType": d.symbol_export_type(&sym.name).id(),
+                "nineSlice": nine_slice_json(d, &sym.name),
+                "type": type_id(sym.dynamic),
+                "alignToPixelGrid": d.symbol_pixel_aligned(&sym.name),
+            })
+        })
+        .collect();
+    Ok(json!({ "symbols": list, "current": current_symbol(d) }))
+}
+
+/// Store `art` ([`normalize`]d, of natural size `size`) as symbol `name`, which becomes the
+/// current symbol.
+pub(crate) fn store_symbol(d: &mut Document, art: &Node, name: &str, size: (f64, f64)) {
+    let art = d.reid(art);
+    d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    set_natural_size(d, name, Some(size));
+    d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
+}
+
+/// Replace the root nodes `ids` with one instance of symbol `name` (already stored) placed by
+/// `xf`. Frames of threaded text among them leave their threads with the text they show. Returns
+/// the instance's id.
+pub(crate) fn instance_in_place(d: &mut Document, ids: &[NodeId], name: &str, xf: Affine) -> Result<NodeId> {
+    let threaded = crate::cmd::threads::frames(d);
+    let id = replace_with_instance(d, ids, name, xf)?;
+    crate::cmd::threads::leave_threads(d, &threaded);
+    Ok(id)
+}
+
+/// Replace the root nodes `ids` with one instance of `name` (art already stored). Returns the id.
+fn replace_with_instance(d: &mut Document, ids: &[NodeId], name: &str, xf: Affine) -> Result<NodeId> {
+    let top = *ids.last().ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    if separate(d, ids) {
+        let id = d.alloc_id();
+        return Ok(d.wrap(ids, |_| Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf }))?);
+    }
+    let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
+    let id = d.alloc_id();
+    d.insert(par, idx + 1, Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf }))?;
+    for r in ids {
+        d.remove(*r)?;
+    }
+    Ok(id)
+}
+
+pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.new";
+    let ids = roots(s, p)?;
+    let mut art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    crate::cmd::threads::keep_shown_text(&s.doc()?.doc, &mut art);
+    let (art, size, c) = normalize(art)?;
+    let name = s.doc()?.doc.unique_symbol_name(str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).unwrap_or("New Symbol"));
+    let reg = registration_param(p, C)?.unwrap_or(SymbolRegistration::CENTER);
+    let export = export_type_param(p, C)?.unwrap_or_default();
+    let nine = nine_slice_param(p, C, None)?.flatten();
+    let dynamic = type_param(p, C)?.unwrap_or(false);
+    let pixel = pixel_grid_param(p, C)?.unwrap_or(false);
+    // `keepArt` leaves the art as ordinary art instead of replacing it with an instance.
+    let keep_art = switch_or(p, "keepArt", false, C)?;
+    let iso = s.doc()?.isolation;
+    // Keep the art where it was: the geometric centre stays at `c`, whatever the registration is.
+    let place = place_xf(c + reg.offset_from_center(size.0, size.1), size, reg);
+    let id = s.edit("New Symbol", |d, sel| {
+        store_symbol(d, &art, &name, size);
+        if let Some(sym) = d.symbols.iter_mut().find(|x| x.name == name) {
+            sym.dynamic = dynamic;
+        }
+        d.set_symbol_registration(&name, reg);
+        d.set_symbol_export_type(&name, export);
+        d.set_symbol_nine_slice(&name, nine);
+        d.set_symbol_pixel_aligned(&name, pixel);
+        if keep_art {
+            // The art stays where it is and stays selected, apart from art that is hidden or
+            // locked, in a hidden or locked group or layer, or on a locked artboard.
+            let locks = d.locked_artboards();
+            sel.set(ids.iter().copied().filter(|i| crate::cmd::select::is_selectable(d, iso, &locks, *i)));
+            return Ok(None);
+        }
+        let id = instance_in_place(d, &ids, &name, place)?;
+        sel.set([id]);
+        Ok(Some(id))
+    })?;
+    Ok(json!({
+        "name": name,
+        "id": id.map(|i| i.0),
+        "registration": reg.0,
+        "exportType": export.id(),
+        "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value),
+        "type": type_id(dynamic),
+        "alignToPixelGrid": pixel,
+    }))
+}
+
+pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.options";
+    let name = resolve_symbol(&s.doc()?.doc, p, C)?;
+    let export = export_type_param(p, C)?;
+    let reg = registration_param(p, C)?;
+    let nine = nine_slice_param(p, C, s.doc()?.doc.symbol_nine_slice(&name))?;
+    let dynamic = type_param(p, C)?;
+    let pixel = pixel_grid_param(p, C)?;
+    let new_name = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+    if new_name.is_none() && export.is_none() && reg.is_none() && nine.is_none() && dynamic.is_none() {
+        match pixel {
+            None => return Err(bad(C, "pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid")),
+            // Align to Pixel Grid alone, already as asked: nothing changes and no undo step is added.
+            Some(on) if on == s.doc()?.doc.symbol_pixel_aligned(&name) => return Ok(options_json(&s.doc()?.doc, &name)),
+            Some(_) => {}
+        }
+    }
+    if let Some(ref n) = new_name
+        && n != &name
+        && s.doc()?.doc.symbols.iter().any(|x| x.name == *n)
+    {
+        return Err(bad(C, format!("a symbol named `{n}` already exists")));
+    }
+    let final_name = new_name.clone().unwrap_or_else(|| name.clone());
+    s.edit("Symbol Options", |d, _| {
+        if let Some(ref n) = new_name
+            && n != &name
+        {
+            if let Some(sym) = d.symbols.iter_mut().find(|x| x.name == name) {
+                sym.name = n.clone();
+            }
+            for id in instances_of(d, Some(&name)) {
+                if let Some(NodeKind::SymbolInstance { symbol, .. }) = d.node_mut(id).map(|node| &mut node.kind) {
+                    *symbol = n.clone();
+                }
+            }
+            // The graphics mapped onto 3D objects follow the new name: in the layers, the art of
+            // symbols, patterns, graph designs and brushes, their opacity masks, and graphic styles.
+            let patterns = d.patterns.iter_mut().chain(d.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()));
+            let trees = d
+                .layers
+                .iter_mut()
+                .chain(d.symbols.iter_mut().map(|sym| &mut sym.art))
+                .chain(d.graph_designs.iter_mut().map(|g| &mut g.art))
+                .chain(patterns.flat_map(|p| p.art.iter_mut()));
+            for art in trees.filter(|art| vectorcraft_render::effects::names_graphic_symbol(art, &name)) {
+                vectorcraft_render::effects::rename_graphic_symbol_in(Arc::make_mut(art), &name, n);
+            }
+            let styled = |g: &vectorcraft_doc::GraphicStyle| vectorcraft_render::effects::appearance_graphic_symbols(&g.appearance).contains(&name);
+            if d.graphic_styles.iter().any(styled) {
+                for style in d.graphic_styles.iter_mut() {
+                    vectorcraft_render::effects::rename_appearance_graphic_symbol(&mut style.appearance, &name, n);
+                }
+            }
+            // The brush library is stored again only when a brush's art changed.
+            let mut lib = brush::library(d);
+            let mut brushes = false;
+            for art in lib.iter_mut().flat_map(|b| b.art_mut()) {
+                brushes |= vectorcraft_render::effects::rename_graphic_symbol_in(art, &name, n);
+            }
+            if brushes {
+                brush::store(d, &lib);
+            }
+            rename_natural_size(d, &name, n);
+            d.rename_symbol_registration(&name, n);
+            d.rename_symbol_export_type(&name, n);
+            d.rename_symbol_nine_slice(&name, n);
+            d.rename_symbol_pixel_aligned(&name, n);
+            if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
+                d.unknown.insert(CURRENT_SYMBOL.into(), json!(n));
+            }
+            // Symbol editing mode follows the new name, and so does its layer.
+            if let Some(e) = d.symbol_edit.as_mut().filter(|e| e.symbol == name) {
+                e.symbol = n.clone();
+                let layer = e.layer;
+                if let Some(l) = d.node_mut(layer) {
+                    l.name = Some(n.clone());
+                }
+            }
+        }
+        if let Some(r) = reg {
+            d.set_symbol_registration(&final_name, r);
+        }
+        if let Some(kind) = export {
+            d.set_symbol_export_type(&final_name, kind);
+        }
+        if let Some(g) = nine {
+            d.set_symbol_nine_slice(&final_name, g);
+        }
+        if let Some(dynamic) = dynamic
+            && let Some(sym) = d.symbols.iter_mut().find(|x| x.name == final_name)
+        {
+            // A static symbol's instances drop their own appearance changes.
+            sym.dynamic = dynamic;
+            fit_overrides(d, &instances_of(d, Some(&final_name)));
+        }
+        // Turning it on snaps the art and the instances at actual size when the edit ends
+        // (`object::refresh_pixel_aligned`).
+        if let Some(on) = pixel {
+            d.set_symbol_pixel_aligned(&final_name, on);
+        }
+        Ok(())
+    })?;
+    Ok(options_json(&s.doc()?.doc, &final_name))
+}
+
+/// What `symbol.options` answers for symbol `name`.
+fn options_json(d: &Document, name: &str) -> Value {
+    json!({
+        "name": name,
+        "registration": d.symbol_registration(name).0,
+        "exportType": d.symbol_export_type(name).id(),
+        "nineSlice": nine_slice_json(d, name),
+        "type": type_id(d.symbols.iter().any(|x| x.name == name && x.dynamic)),
+        "alignToPixelGrid": d.symbol_pixel_aligned(name),
+    })
+}
+
+fn resolve_symbol(d: &Document, p: &Value, cmd: &str) -> Result<String> {
+    match str_param(p, "name") {
+        Some(n) if d.symbols.iter().any(|s| s.name == n) => Ok(n.to_string()),
+        Some(n) => Err(bad(cmd, format!("no symbol named `{n}`"))),
+        None => current_symbol(d).ok_or_else(|| EngineError::Other("the document has no symbols".into())),
+    }
+}
+
+pub(super) fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let name = resolve_symbol(d, p, "symbol.place")?;
+    let centre = d.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
+    let at = Point::new(number_or(p, "x", centre.x, "symbol.place")?, number_or(p, "y", centre.y, "symbol.place")?);
+    let size = natural_size(d, &name);
+    let reg = d.symbol_registration(&name);
+    let spot = Placement::of(s)?;
+    let id = s.edit("Place Symbol Instance", |d, sel| {
+        let id = d.alloc_id();
+        spot.insert(d, Node::new(id, NodeKind::SymbolInstance { symbol: name.clone(), xf: place_xf(at, size, reg) }))?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0 }))
+}
+
+/// The plain art of instance `inst` in document space (fresh ids), with the instance's own
+/// appearance changes to a dynamic symbol's art when `own`, placed through its symbol's 9-slice
+/// guides when it has them. The art's bounding boxes turn with the instance's own box, so after
+/// Reset Bounding Box they stand as the instance's box does. The instance's opacity mask goes on
+/// the art, or on a group around it when the art has a mask of its own; a group added around the
+/// art takes the instance's box angle.
+fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
+    let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
+    let sym = d.symbols.iter().find(|s| &s.name == symbol)?;
+    let mut art = if own { vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst) } else { (*sym.art).clone() };
+    if let Some((color, amount)) = brush::stain(inst) {
+        brush::tint_node(&mut art, &color, amount);
+    }
+    let mut art = d.place_symbol_art(symbol, &art, *xf)?;
+    let turn = vectorcraft_doc::orient::placed_turn(inst.bbox_angle, *xf);
+    if turn != 0.0 {
+        art.turn_boxes(turn);
+    }
+    let mut art = d.reid(&art);
+    if inst.opacity < 1.0 || inst.blend != vectorcraft_color::BlendMode::Normal {
+        if !matches!(art.kind, NodeKind::Group { .. }) {
+            let id = d.alloc_id();
+            art = Node::group(id, vec![Arc::new(art)]);
+            art.bbox_angle = inst.bbox_angle;
+        }
+        art.opacity *= inst.opacity;
+        art.blend = inst.blend;
+    }
+    if let Some(mask) = &inst.extras().mask {
+        if art.extras().mask.is_some() {
+            let id = d.alloc_id();
+            art = Node::group(id, vec![Arc::new(art)]);
+            art.bbox_angle = inst.bbox_angle;
+        }
+        art.extras_mut().mask = Some(mask.clone());
+    }
+    Some(art)
+}
+
+/// The most objects [`expanded_instance`] makes of instance `inst` in `d` (`own` as there): its
+/// symbol's object count with the art of its opacity masks, or
+/// [`vectorcraft_doc::NineSliceMap::most_placed`] when it is placed through 9-slice guides, plus
+/// the group that opacity, a blending mode or the instance's opacity mask adds, plus the art of
+/// the instance's opacity mask. 0 for any other object.
+fn expanded_bound(d: &Document, inst: &Node, own: bool) -> u64 {
+    let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return 0 };
+    let Some(sym) = d.symbols.iter().find(|s| &s.name == symbol) else { return 0 };
+    let dynamic = own && !inst.extras().symbol_overrides.is_empty();
+    let most = match d.symbol_slice_map(symbol, *xf) {
+        Some(m) if dynamic => m.most_placed(&vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst), d),
+        Some(m) => m.most_placed(&sym.art, d),
+        None if dynamic => vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst).count_with_masks() as u64,
+        None => sym.art.count_with_masks() as u64,
+    };
+    let mask = inst.extras().mask.as_ref().map_or(0, |m| m.art.count_with_masks() as u64);
+    most.saturating_add(1).saturating_add(mask)
+}
+
+/// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). A hidden or
+/// locked instance's art stays hidden or locked. Returns each replaced instance's id with its art's
+/// id. Fails before any edit when the instances together would make more than
+/// [`MAX_EXPAND_NODES`] objects.
+fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<(NodeId, NodeId)>> {
+    let total = ids.iter().filter_map(|id| d.node(*id)).fold(0u64, |sum, n| sum.saturating_add(expanded_bound(d, n, own)));
+    if total > MAX_EXPAND_NODES as u64 {
+        return Err(EngineError::Other("Too many pieces to make at once".into()));
+    }
+    let mut out = vec![];
+    for id in ids {
+        let Some(inst) = d.node(*id).cloned() else { continue };
+        let Some(mut art) = expanded_instance(d, &inst, own) else { continue };
+        let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
+        art.visible &= inst.visible;
+        art.locked |= inst.locked;
+        let aid = art.id;
+        d.remove(*id)?;
+        d.insert(par, idx, art)?;
+        out.push((*id, aid));
+    }
+    Ok(out)
+}
+
+/// Object › Expand: the symbol instances under `roots` of `d` ([`expandable_instances`]) replaced
+/// by their art, as Break Link places it, each keeping the instance's id and place. The instances
+/// that art holds stay instances. A hidden or locked instance's art stays hidden or locked. When
+/// the instances together would make more than [`MAX_EXPAND_NODES`] objects, all of them stay
+/// instances. Returns whether any instance was expanded.
+pub(crate) fn expand_instances_under(d: &mut Document, roots: &[NodeId]) -> Result<bool> {
+    let ids = expandable_instances(d, roots);
+    let total = ids.iter().filter_map(|id| d.node(*id)).fold(0u64, |sum, n| sum.saturating_add(expanded_bound(d, n, true)));
+    if total > MAX_EXPAND_NODES as u64 {
+        return Ok(false);
+    }
+    let mut any = false;
+    for id in ids {
+        let Some(inst) = d.node(id).cloned() else { continue };
+        let Some(mut art) = expanded_instance(d, &inst, true) else { continue };
+        let (par, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
+        art.id = id;
+        art.visible &= inst.visible;
+        art.locked |= inst.locked;
+        d.remove(id)?;
+        d.insert(par, idx, art)?;
+        any = true;
+    }
+    Ok(any)
+}
+
+/// The symbol instances under `roots` of `d` that Object › Expand turns into their art: those
+/// without effects (Expand Appearance bakes the others), with no effects on their fills and
+/// strokes, not in perspective, and whose symbol `d` holds. The instances in blends, repeats and
+/// Intertwine groups are left to Expand, which turns those into plain groups.
+pub(crate) fn expandable_instances(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    fn collect(d: &Document, n: &Node, out: &mut Vec<NodeId>) {
+        match &n.kind {
+            NodeKind::SymbolInstance { symbol, .. } => {
+                if n.appearance.effects.is_empty()
+                    && n.appearance.items.iter().all(|i| i.effects().is_empty())
+                    && n.projection().is_none()
+                    && d.symbols.iter().any(|s| &s.name == symbol)
+                {
+                    out.push(n.id);
+                }
+            }
+            NodeKind::Blend { .. } | NodeKind::Repeat(_) | NodeKind::Intertwine { .. } => {}
+            _ => {
+                for c in n.children().into_iter().flatten() {
+                    collect(d, c, out);
+                }
+            }
+        }
+    }
+    let mut out = vec![];
+    for n in roots.iter().filter_map(|r| d.node(*r)) {
+        collect(d, n, &mut out);
+    }
+    out
+}
+
+/// How many objects [`break_links`] and [`expand_instances_under`] may make at once.
+const MAX_EXPAND_NODES: usize = 1_000_000;
+
+pub(super) fn selected_instances(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    let d = &s.doc()?.doc;
+    let mut out = vec![];
+    for id in roots(s, p)? {
+        if let Some(n) = d.node(id) {
+            n.walk(&mut |c| {
+                if matches!(c.kind, NodeKind::SymbolInstance { .. }) {
+                    out.push(c.id);
+                }
+            });
+        }
+    }
+    Ok(out)
+}
+
+pub(super) fn symbol_break_link(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = selected_instances(s, p)?;
+    if ids.is_empty() {
+        return Err(EngineError::Other("no symbol instances selected".into()));
+    }
+    let iso = s.doc()?.isolation;
+    let out = s.edit("Break Link to Symbol", |d, sel| {
+        let fresh = d.new_art.get();
+        let made = break_links(d, &ids, true)?;
+        // Art that is hidden or locked, or in a hidden or locked group or layer, is left out of the
+        // selection, as is art on a locked artboard unless the instance it replaces was new art.
+        let locks = d.locked_artboards();
+        sel.set(made.iter().filter_map(|(inst, art)| {
+            let keep = if fresh.contains(inst) {
+                crate::cmd::select::is_selectable_on_any_artboard(d, iso, *art)
+            } else {
+                crate::cmd::select::is_selectable(d, iso, &locks, *art)
+            };
+            keep.then_some(*art)
+        }));
+        Ok(made.into_iter().map(|(_, art)| art).collect::<Vec<_>>())
+    })?;
+    Ok(json!({ "ids": ids_json(&out) }))
+}
+
+pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.update";
+    let name = name_param(p, C)?.to_string();
+    if !s.doc()?.doc.symbols.iter().any(|x| x.name == name) {
+        return Err(bad(C, format!("no symbol named `{name}`")));
+    }
+    // Redefining the symbol being edited leaves symbol editing mode in the same step.
+    let session = s.doc()?.doc.symbol_edit.clone().filter(|e| e.symbol == name);
+    // `keepArt` leaves the art as ordinary art instead of replacing it with an instance.
+    let keep_art = switch_or(p, "keepArt", false, C)?;
+    if session.is_some() {
+        crate::cmd::settle_interaction(s)?;
+        s.end_text_edit();
+    }
+    let ids = roots(s, p)?;
+    // The art on the editing layer can't redefine it: the symbol would hold an instance of itself.
+    if let Some(se) = &session {
+        let d = &s.doc()?.doc;
+        if ids.iter().any(|i| d.ancestry(*i).is_some_and(|a| a.contains(&se.layer))) {
+            return Err(EngineError::Other("a symbol can't hold an instance of itself".into()));
+        }
+    }
+    let mut art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    // Nor can art that holds an instance of it, directly or through the symbols it nests.
+    if crate::cmd::symboledit::holds_symbol(&s.doc()?.doc, &art, &name, &mut Default::default()) {
+        return Err(EngineError::Other("a symbol can't hold an instance of itself".into()));
+    }
+    crate::cmd::threads::keep_shown_text(&s.doc()?.doc, &mut art);
+    let (art, size, c) = normalize(art)?;
+    let old = natural_size(&s.doc()?.doc, &name);
+    let editing = session.is_some();
+    // The isolation the kept art is selected in: the one from before symbol editing mode when
+    // the step leaves it.
+    let iso = match &session {
+        Some(se) => se.back_isolation,
+        None => s.doc()?.isolation,
+    };
+    let id = s.edit("Redefine Symbol", |d, sel| {
+        if editing {
+            crate::cmd::symboledit::finish(d, sel);
+        }
+        let art = d.reid(&art);
+        if let Some(sym) = d.symbols.iter_mut().find(|x| x.name == name) {
+            sym.art = Arc::new(art);
+        }
+        set_natural_size(d, &name, Some(size));
+        let fix = Affine::scale_non_uniform(size.0 / old.0, size.1 / old.1);
+        let instances = instances_of(d, Some(&name));
+        for i in &instances {
+            if let Some(NodeKind::SymbolInstance { xf, .. }) = d.node_mut(*i).map(|n| &mut n.kind) {
+                *xf *= fix;
+            }
+        }
+        // Each instance keeps its appearance changes to the objects the new art still has.
+        fit_overrides(d, &instances);
+        if keep_art {
+            // The art stays where it is and stays selected, apart from art that is hidden or
+            // locked, in a hidden or locked group or layer, or on a locked artboard.
+            let locks = d.locked_artboards();
+            sel.set(ids.iter().copied().filter(|i| crate::cmd::select::is_selectable(d, iso, &locks, *i)));
+            return Ok(None);
+        }
+        let reg = d.symbol_registration(&name);
+        let id = instance_in_place(d, &ids, &name, place_xf(c + reg.offset_from_center(size.0, size.1), size, reg))?;
+        sel.set([id]);
+        Ok(Some(id))
+    })?;
+    if let Some(se) = &session {
+        crate::cmd::symboledit::leave_editing(s, se)?;
+    }
+    Ok(json!({ "name": name, "id": id.map(|i| i.0) }))
+}
+
+/// How many levels of nested instances Delete Symbol expands before it gives up.
+const MAX_DELETE_ROUNDS: usize = 256;
+
+pub(super) fn symbol_delete(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.delete";
+    // `names` deletes several symbols in one undo step (the Symbols panel's Select All Unused, #4918).
+    let names: Vec<String> = match p.get("names") {
+        Some(v) => {
+            let a = v.as_array().ok_or_else(|| bad(C, "names must be an array of symbol names"))?;
+            let mut names = Vec::with_capacity(a.len());
+            for n in a {
+                let n = n.as_str().ok_or_else(|| bad(C, "names must be an array of symbol names"))?;
+                if !names.iter().any(|x: &String| x == n) {
+                    names.push(n.to_string());
+                }
+            }
+            if names.is_empty() {
+                return Err(bad(C, "names is empty"));
+            }
+            names
+        }
+        None => vec![name_param(p, C)?.to_string()],
+    };
+    let d = &s.doc()?.doc;
+    if let Some(name) = names.iter().find(|n| !d.symbols.iter().any(|x| &x.name == *n)) {
+        return Err(bad(C, format!("no symbol named `{name}`")));
+    }
+    let expand = switch_or(p, "expandInstances", true, C)?;
+    // Deleting the symbol being edited leaves symbol editing mode in the same step.
+    let session = s.doc()?.doc.symbol_edit.clone().filter(|e| names.contains(&e.symbol));
+    let editing = session.is_some();
+    if editing {
+        crate::cmd::settle_interaction(s)?;
+        s.end_text_edit();
+    }
+    let label = if names.len() == 1 { "Delete Symbol" } else { "Delete Symbols" };
+    s.edit(label, |d, sel| {
+        if editing {
+            crate::cmd::symboledit::finish(d, sel);
+        }
+        // Every instance goes before any definition, whatever the order of `names`: expanding an
+        // instance of one symbol can bring out instances of another being deleted (nested in its
+        // art), which expand in turn while their definitions are still there. Each round expands
+        // one level of nesting, so the rounds are capped.
+        let of_names = |d: &Document| {
+            let mut v = vec![];
+            d.walk(|n| {
+                if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+                    && names.contains(symbol)
+                {
+                    v.push(n.id);
+                }
+            });
+            v
+        };
+        for _ in 0..=MAX_DELETE_ROUNDS {
+            let inst = of_names(d);
+            if inst.is_empty() {
+                break;
+            }
+            if expand {
+                break_links(d, &inst, true)?;
+            } else {
+                remove_each(d, &inst)?;
+            }
+        }
+        if !of_names(d).is_empty() {
+            return Err(EngineError::Other("the symbols are nested too deeply to expand their instances".into()));
+        }
+        for name in &names {
+            d.symbols.retain(|x| &x.name != name);
+            set_natural_size(d, name, None);
+            d.set_symbol_registration(name, SymbolRegistration::CENTER);
+            d.clear_symbol_export_type(name);
+            d.set_symbol_nine_slice(name, None);
+            d.set_symbol_pixel_aligned(name, false);
+            if d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str) == Some(name.as_str()) {
+                d.unknown.remove(CURRENT_SYMBOL);
+            }
+        }
+        Ok(())
+    })?;
+    if let Some(se) = &session {
+        crate::cmd::symboledit::leave_editing(s, se)?;
+    }
+    ok()
+}
+
+pub(super) fn symbol_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.duplicate";
+    let name = name_param(p, C)?.to_string();
+    let d = &s.doc()?.doc;
+    let sym = d.symbols.iter().find(|x| x.name == name).cloned().ok_or_else(|| bad(C, format!("no symbol named `{name}`")))?;
+    let given = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty());
+    let new = d.unique_symbol_name(&given.map_or_else(|| format!("{} copy", name.trim()), str::to_string));
+    let size = natural_size(d, &name);
+    let reg = d.symbol_registration(&name);
+    let export = d.symbol_export_type(&name);
+    let nine = d.symbol_nine_slice(&name);
+    let pixel = d.symbol_pixel_aligned(&name);
+    s.edit("Duplicate Symbol", |d, _| {
+        let art = d.reid(&sym.art);
+        d.symbols.push(Symbol { dynamic: sym.dynamic, name: new.clone(), art: Arc::new(art) });
+        set_natural_size(d, &new, Some(size));
+        d.set_symbol_registration(&new, reg);
+        d.set_symbol_export_type(&new, export);
+        d.set_symbol_nine_slice(&new, nine);
+        d.set_symbol_pixel_aligned(&new, pixel);
+        Ok(())
+    })?;
+    Ok(json!({ "name": new, "registration": reg.0, "exportType": export.id(), "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value) }))
+}
+
+pub(super) fn symbol_replace(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.replace";
+    let name = name_param(p, C)?.to_string();
+    if !s.doc()?.doc.symbols.iter().any(|x| x.name == name) {
+        return Err(bad(C, format!("no symbol named `{name}`")));
+    }
+    let ids = selected_instances(s, p)?;
+    if ids.is_empty() {
+        return Err(EngineError::Other("no symbol instances selected".into()));
+    }
+    s.edit("Replace Symbol", |d, _| {
+        let new = natural_size(d, &name);
+        for id in &ids {
+            let (old, other) = match d.node(*id).map(|n| &n.kind) {
+                Some(NodeKind::SymbolInstance { symbol, .. }) => (natural_size(d, symbol), *symbol != name),
+                _ => continue,
+            };
+            let Some(n) = d.node_mut(*id) else { continue };
+            if let NodeKind::SymbolInstance { symbol, xf } = &mut n.kind {
+                *symbol = name.clone();
+                *xf *= Affine::scale_non_uniform(new.0 / old.0, new.1 / old.1);
+            }
+            // An override's path names an object of the old symbol's art.
+            if other && !n.extras().symbol_overrides.is_empty() {
+                n.extras_mut().symbol_overrides.clear();
+            }
+        }
+        fit_overrides(d, &ids);
+        Ok(())
+    })?;
+    Ok(json!({ "ids": ids_json(&ids) }))
+}
+
+/// How far a transform coefficient may be from Reset Transformation's for the instance to count as
+/// already reset.
+const RESET_TOLERANCE: f64 = 1e-9;
+
+/// The transform Reset Transformation gives instance `n` of the document of `boxes`: its symbol's
+/// own scale, without rotation, shear or reflection, with the center of its art's bounding box
+/// where it is. `None` when [`reset_transformation_changes`] is false for `n`.
+fn reset_transformation(boxes: &vectorcraft_doc::SymbolBoxes, n: &Node) -> Option<Affine> {
+    let d = boxes.document();
+    if !reset_transformation_changes(d, n) {
+        return None;
+    }
+    let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return None };
+    let scale = d.symbol_natural_xf(symbol);
+    // The art's box in symbol space (the ±HALF square when the art cannot be measured): its
+    // center keeps its place on the page.
+    let art = boxes.art_bounds(symbol).unwrap_or_else(|| vectorcraft_geom::Rect::new(-HALF, -HALF, HALF, HALF));
+    let center = xf.transform_rect_bbox(art).center();
+    Some(Affine::translate(center - scale * art.center()) * scale)
+}
+
+/// Does Reset Transformation change `n`? True for an instance of a symbol `d` holds, not in
+/// perspective, whose scale, rotation, shear or reflection differs from the symbol's own scale
+/// (its stored natural size, or the art unscaled when that size is not positive and finite).
+/// It does not measure the art.
+pub fn reset_transformation_changes(d: &Document, n: &Node) -> bool {
+    let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return false };
+    if n.extras().perspective.is_some() || !d.symbols.iter().any(|s| s.name == *symbol) {
+        return false;
+    }
+    let natural = d.symbol_natural_xf(symbol).as_coeffs();
+    xf.as_coeffs()[..4].iter().zip(&natural[..4]).any(|(a, b)| (a - b).abs() > RESET_TOLERANCE)
+}
+
+pub(super) fn symbol_instance_reset_transform(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = selected_instances(s, p)?;
+    if ids.is_empty() {
+        return Err(EngineError::Other("no symbol instances selected".into()));
+    }
+    let d = &s.doc()?.doc;
+    let boxes = d.symbol_boxes();
+    let changes: Vec<(NodeId, Affine)> = ids.iter().filter_map(|id| Some((*id, reset_transformation(&boxes, d.node(*id)?)?))).collect();
+    if !changes.is_empty() {
+        s.edit("Reset Transformation", |d, _| {
+            for (id, new) in &changes {
+                if let Some(NodeKind::SymbolInstance { xf, .. }) = d.node_mut(*id).map(|n| &mut n.kind) {
+                    *xf = *new;
+                }
+            }
+            Ok(())
+        })?;
+    }
+    let changed: Vec<NodeId> = changes.iter().map(|(id, _)| *id).collect();
+    Ok(json!({ "ids": ids_json(&changed) }))
+}
+
+pub(super) fn symbol_set_current(s: &mut Session, p: &Value) -> Result<Value> {
+    let name = resolve_symbol(&s.doc()?.doc, p, "symbol.setCurrent")?;
+    set_unknown(s, CURRENT_SYMBOL, Some(json!(name)))?;
+    ok()
+}
+
+pub(super) fn symbol_select_instances(s: &mut Session, p: &Value) -> Result<Value> {
+    let name = resolve_symbol(&s.doc()?.doc, p, "symbol.selectInstances")?;
+    let ids = instances_of(&s.doc()?.doc, Some(&name));
+    let n = ids.len();
+    s.select(|_, sel| sel.set(ids))?;
+    Ok(json!({ "count": n }))
+}
+
+// ---------- symbolism tools ----------
+
+fn points(p: &Value, cmd: &str) -> Result<Vec<Point>> {
+    Ok(samples(p, cmd)?.into_iter().map(|(q, _)| q).collect())
+}
+
+/// The stroke's points, each with its pen pressure: the third number of `[x, y, pressure]`, kept
+/// within 0..1, and 1 for a point that gives none (or null). A pressure that isn't a number is an
+/// error.
+fn samples(p: &Value, cmd: &str) -> Result<Vec<(Point, f64)>> {
+    let a = p.get("points").and_then(Value::as_array).ok_or_else(|| bad(cmd, "missing points [[x,y]…]"))?;
+    let mut v = Vec::with_capacity(a.len());
+    for q in a {
+        // The pressure is checked first: a point skipped for its coordinates still has a bad one refused.
+        let pressure = match q.get(2) {
+            None | Some(Value::Null) => 1.0,
+            Some(f) => f.as_f64().filter(|f| f.is_finite()).ok_or_else(|| bad(cmd, format!("a point's pressure must be a number, not {f}")))?,
+        };
+        let (Some(x), Some(y)) = (q.get(0).and_then(Value::as_f64), q.get(1).and_then(Value::as_f64)) else { continue };
+        v.push((Point::new(x, y), pressure.clamp(0.0, 1.0)));
+    }
+    if v.is_empty() || v.iter().any(|(q, _)| !q.x.is_finite() || !q.y.is_finite()) {
+        return Err(bad(cmd, "points must be finite [x,y] pairs"));
+    }
+    Ok(v)
+}
+
+/// The fill of the graphic style `p` names with `style`, else (no name, or one the document has no
+/// style for, such as the Symbol Styler's style from another document) of the document's first
+/// style after the default one.
+fn style_paint(d: &Document, p: &Value) -> Option<Paint> {
+    str_param(p, "style")
+        .and_then(|n| d.graphic_styles.iter().find(|g| g.name == n))
+        .or(d.graphic_styles.get(1))
+        .or(d.graphic_styles.first())
+        .map(|g| g.appearance.fill_paint())
+}
+
+/// Deterministic per-point jitter in [-1, 1]² (so previews re-applied on the snapshot agree).
+pub(super) fn jitter(i: usize, q: Point) -> (f64, f64, f64) {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325 ^ i as u64;
+    for v in [(q.x * 16.0).round() as i64 as u64, (q.y * 16.0).round() as i64 as u64] {
+        h ^= v;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        h ^= h >> 29;
+    }
+    let f = |k: u32| ((h.rotate_left(k * 21) & 0xffff) as f64 / 65535.0) * 2.0 - 1.0;
+    (f(0), f(1), f(2))
+}
+
+/// Whether `n` is a symbol set: the group the Symbol Sprayer sprays instances into.
+pub fn is_symbol_set(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Group { clip: false, .. }) && n.name.as_deref() == Some("Symbol Set")
+}
+
+pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.spray";
+    let pts = points(p, C)?;
+    let st = s.doc()?;
+    let name = resolve_symbol(&st.doc, p, C)?;
+    let radius = number_or(p, "radius", 40.0, C)?.clamp(1.0, 2000.0);
+    let density = number_or(p, "density", 5.0, C)?.clamp(1.0, 10.0);
+    let scale = number_or(p, "scale", 1.0, C)?.clamp(0.01, 100.0);
+    let alt = switch_or(p, "alt", false, C)?;
+    let modes = spray_modes(p, C)?;
+    crate::cmd::paint::check_keep_model(p, C)?;
+    let stain = match color_param(p, "color", C)? {
+        Some(c) => crate::cmd::paint::new_color(s, p, c),
+        None => s.paint.fill.color().unwrap_or(Color::BLACK),
+    };
+    if let Some(v) = p.get("style").filter(|v| !v.is_string()) {
+        return Err(bad(C, format!("`style` must be a graphic style's name, not {v}")));
+    }
+    let style = style_paint(&st.doc, p);
+    // Style: User Defined uses the style `style` names, so one the document does not have is an error.
+    if let Some(n) = str_param(p, "style").filter(|n| !modes.style && !st.doc.graphic_styles.iter().any(|g| g.name == *n)) {
+        return Err(bad(C, format!("unknown graphic style `{n}`")));
+    }
+    let size = natural_size(&st.doc, &name);
+    let set = st.selection.objects.first().copied().filter(|id| st.selection.len() == 1 && st.doc.node(*id).is_some_and(is_symbol_set));
+    // Only a new Symbol Set needs a layer that takes new art.
+    let parent = if alt || set.is_some() { st.insertion_parent() } else { st.target_parent()? };
+    if alt {
+        // Remove instances of this symbol under the brush (within the set, or anywhere).
+        let d = &st.doc;
+        let scope: Vec<NodeId> = match set {
+            Some(g) => d.node(g).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id).collect()).unwrap_or_default(),
+            None => instances_of(d, Some(&name)),
+        };
+        let doomed: Vec<NodeId> = scope
+            .into_iter()
+            .filter(|id| {
+                d.node(*id).is_some_and(|n| {
+                    matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if *symbol == name)
+                        && n.geometric_bounds().is_some_and(|b| pts.iter().any(|q| q.distance(b.center()) <= radius))
+                })
+            })
+            .collect();
+        let n = doomed.len();
+        if n > 0 {
+            s.edit("Symbol Sprayer", |d, _| remove_each(d, &doomed))?;
+        }
+        return Ok(json!({ "count": n }));
+    }
+    let side = natural_side(&st.doc, &name);
+    // The symbol's longest side as drawn at its own size: its art's, when it has no recorded size.
+    let recorded = stored_natural_size(&st.doc, &name).filter(|(w, h)| w.is_finite() && h.is_finite() && *w > 0.0 && *h > 0.0);
+    let extent = match recorded {
+        Some((w, h)) => w.max(h),
+        None => {
+            let art = st.doc.symbol_art_bounds(&name).map(|r| r.width().max(r.height()));
+            art.filter(|e| e.is_finite() && *e > 0.0).unwrap_or(size.0.max(size.1))
+        }
+    };
+    // The scale a new instance is placed at, before the User Defined size jitter. Size: Average is
+    // the mean size on the page under the brush, of any symbol, or the symbol's own size with none
+    // there (not `scale`).
+    let placed_scale = |near: Option<&Mean>| {
+        if modes.size { near.map(|m| m.size / side).filter(|k| k.is_finite() && *k > 0.0).unwrap_or(1.0) } else { scale }
+    };
+    // The instances the selected set has, for the values a new one takes as their average.
+    let existing = set.filter(|_| modes.any_average()).map(|g| {
+        let d = &st.doc;
+        let mut sides = Sides::new();
+        let looks = d.node(g).and_then(|n| n.children()).into_iter().flatten().filter_map(|c| look(d, c, &mut sides)).collect();
+        Grid::new(looks, radius)
+    });
+    // Each instance to add: where, the mean of the set's instances under the brush there, and the
+    // direction of the stroke there (None while the pointer has not moved).
+    let mut placed: Vec<(Point, Option<Mean>, Option<Vec2>)> = vec![];
+    for (i, q) in pts.iter().enumerate() {
+        let (jx, jy, _) = jitter(i, *q);
+        let c = Point::new(q.x + jx * radius * 0.5, q.y + jy * radius * 0.5);
+        let near = existing.as_ref().and_then(|g| g.mean(*q, radius, modes.scrunch));
+        // Keep instances at least this far apart along the stroke (denser = closer), by the size
+        // the instance is placed at.
+        let min_gap = extent * placed_scale(near.as_ref()) * spacing(density);
+        // Scrunch: Average spaces new instances as the ones under the brush are spaced.
+        let gap = near.as_ref().and_then(|m| m.gap).filter(|_| modes.scrunch).unwrap_or(min_gap);
+        if placed.last().is_some_and(|(l, ..)| l.distance(c) < gap) && i > 0 {
+            continue;
+        }
+        let along = pts.get(i + 1).unwrap_or(q).to_vec2() - pts.get(i.saturating_sub(1)).unwrap_or(q).to_vec2();
+        placed.push((c, near, (along.hypot() > 1e-9).then_some(along)));
+    }
+    let count = placed.len();
+    let reg = s.doc()?.doc.symbol_registration(&name);
+    let id = s.edit("Symbol Sprayer", |d, sel| {
+        let mut nodes = vec![];
+        for (i, (c, near, along)) in placed.iter().enumerate() {
+            let (_, _, js) = jitter(i + 7, *c);
+            let near = near.as_ref();
+            // User Defined: the symbol's own size, turned the way the stroke runs, opaque, stained
+            // with the fill color and given the style, each in full. Size: Average has no size jitter.
+            let k = if modes.size { placed_scale(near) } else { scale * (1.0 + js * 0.1) };
+            let angle = if modes.spin { near.map_or(0.0, |m| m.angle) } else { along.map_or(0.0, |v| v.atan2()) };
+            let turn = Affine::translate(c.to_vec2()) * Affine::rotate(angle) * Affine::translate(-c.to_vec2());
+            let id = d.alloc_id();
+            let mut n = Node::new(id, NodeKind::SymbolInstance { symbol: name.clone(), xf: turn * place_xf(*c, size, reg) * Affine::scale(k) });
+            if modes.screen
+                && let Some(m) = near
+            {
+                n.opacity = (m.opacity as f32).clamp(0.0, 1.0);
+            }
+            // The stain and the style are both the instance's fill: the style, set last, replaces
+            // the stain, an averaged one too when the instances under the brush have a fill.
+            let averaged = near.filter(|m| m.amount > 0.0).and_then(|m| Some((m.paint.clone()?, m.amount as f32)));
+            let mut fill = if modes.stain { averaged.clone() } else { Some((Paint::solid(stain), 1.0)) };
+            if modes.style {
+                fill = averaged.or(fill);
+            } else if let Some(paint) = style.as_ref().filter(|p| !matches!(p, Paint::None)) {
+                // A style without a fill (the default style) gives none.
+                fill = Some((paint.clone(), 1.0));
+            }
+            if let Some((paint, amount)) = fill {
+                let mut f = FillLayer::new(paint);
+                f.opacity = amount.clamp(0.0, 1.0);
+                n.appearance.items.insert(0, AppearanceItem::Fill(f));
+            }
+            nodes.push(n);
+        }
+        let gid = match set {
+            Some(g) => {
+                for n in nodes {
+                    d.insert(Some(g), usize::MAX, n)?;
+                }
+                g
+            }
+            None => {
+                let gid = d.alloc_id();
+                let mut g = Node::group(gid, nodes.into_iter().map(Arc::new).collect());
+                g.name = Some("Symbol Set".into());
+                d.insert(parent, usize::MAX, g)?;
+                gid
+            }
+        };
+        // A new set has the density it is sprayed at; more instances sprayed into a set leave the
+        // density the set has.
+        if set.is_none() {
+            record_set_density(d, &[gid], density);
+        }
+        sel.set([gid]);
+        Ok(gid)
+    })?;
+    Ok(json!({ "id": id.0, "count": count }))
+}
+
+pub(super) fn instance_center(n: &Node) -> Option<Point> {
+    match &n.kind {
+        NodeKind::SymbolInstance { xf, .. } => Some(*xf * Point::ZERO),
+        _ => None,
+    }
+}
+
+pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.adjust";
+    let tool = str_param(p, "tool").ok_or_else(|| bad(C, "missing `tool`"))?.to_string();
+    if !["shift", "scrunch", "size", "spin", "stain", "screen", "style"].contains(&tool.as_str()) {
+        return Err(bad(C, format!("unknown tool `{tool}`")));
+    }
+    crate::cmd::paint::check_keep_model(p, C)?;
+    let pts = samples(p, C)?;
+    let radius = number_or(p, "radius", 40.0, C)?.clamp(1.0, 2000.0);
+    let intensity = number_or(p, "intensity", 5.0, C)?.clamp(1.0, 10.0) / 10.0;
+    let alt = switch_or(p, "alt", false, C)?;
+    let use_pressure = switch_or(p, "usePressure", false, C)?;
+    let proportional = switch_or(p, "proportional", true, C)?;
+    let affects_density = switch_or(p, "affectsDensity", false, C)?;
+    let shift = switch_or(p, "shift", false, C)?;
+    // The Symbol Shifter has no Method.
+    let method = if tool == "shift" { method_param(p, C).map(|_| Method::UserDefined)? } else { method_param(p, C)? };
+    // Refused while an object of a dynamic instance's art is selected: the instance stays as it is.
+    crate::cmd::edit::refuse_symbol_part(s)?;
+    let st = s.doc()?;
+    let color = match color_param(p, "color", C)? {
+        Some(c) => crate::cmd::paint::new_color(s, p, c),
+        None => s.paint.fill.color().unwrap_or(Color::BLACK),
+    };
+    let style_paint = style_paint(&st.doc, p);
+    let candidates: Vec<NodeId> = {
+        let d = &st.doc;
+        let mut v =
+            if st.selection.is_empty() { instances_of(d, None) } else { instances_in(st.selection.objects.iter().filter_map(|id| d.node(*id))) };
+        let editable = d.editable();
+        v.retain(|id| editable(*id));
+        v
+    };
+    let label = match tool.as_str() {
+        "shift" => "Symbol Shifter",
+        "scrunch" => "Symbol Scruncher",
+        "size" => "Symbol Sizer",
+        "spin" => "Symbol Spinner",
+        "stain" => "Symbol Stainer",
+        "screen" => "Symbol Screener",
+        _ => "Symbol Styler",
+    };
+    // Random: each instance's share of the tool's change, from none of it to twice it, the same
+    // for the whole stroke (and for every preview of it).
+    let first = pts.first().map_or(Point::ZERO, |(q, _)| *q);
+    let share = |id: NodeId| if method == Method::Random { jitter(id.0 as usize, first).0 + 1.0 } else { 1.0 };
+    // Shift with the Symbol Shifter: the instances under the brush come one place forward among
+    // their siblings (with `alt`, go one place backward), once for the whole stroke.
+    if tool == "shift" && shift {
+        let count = crate::cmd::colorcmds::edit_if_changed(s, label, |_, d| {
+            let under: std::collections::HashSet<NodeId> = candidates
+                .iter()
+                .copied()
+                .filter(|id| {
+                    d.node(*id).and_then(instance_center).is_some_and(|c| {
+                        pts.iter().any(|(q, pressure)| (if use_pressure { *pressure } else { intensity }) > 0.0 && c.distance(*q) < radius)
+                    })
+                })
+                .collect();
+            let moved = restack(d, &under, alt)?;
+            Ok((moved, moved > 0))
+        })?;
+        return Ok(json!({ "count": count }));
+    }
+    // Shift with the Symbol Stainer or the Symbol Styler: the paint an instance's stain or style
+    // moves toward, and the share of the brush's strength it moves by. Shift with the Symbol Sizer
+    // keeps the instances where they are, Resizing Affects Density included.
+    let recolor = match tool.as_str() {
+        "stain" if shift => Some((Paint::solid(color), 0.15)),
+        "style" if shift => Some((style_paint.clone().unwrap_or(Paint::solid(color)), 1.0)),
+        _ => None,
+    };
+    let spread = affects_density && !shift;
+    // No undo step when no instance changes (none under the brush, or Average with each at the mean).
+    let count = crate::cmd::colorcmds::edit_if_changed(s, label, |orig, d| {
+        let mut touched = std::collections::BTreeSet::new();
+        let mut sides = Sides::new();
+        for (j, (q, pressure)) in pts.iter().enumerate() {
+            let delta = j.checked_sub(1).and_then(|i| pts.get(i)).map_or(Vec2::ZERO, |(prev, _)| *q - *prev);
+            // Use Pressure Pen: the pen's pressure at the point is the intensity there.
+            let strength = if use_pressure { *pressure } else { intensity };
+            // Average: the mean of the instances under the brush, as they are at this point.
+            let target = (method == Method::Average)
+                .then(|| {
+                    let under = |n: &&Node| instance_center(n).is_some_and(|c| c.distance(*q) <= radius);
+                    let looks: Vec<_> = candidates.iter().filter_map(|id| d.node(*id).filter(under).and_then(|n| look(d, n, &mut sides))).collect();
+                    mean(&looks.iter().collect::<Vec<_>>(), *q, false)
+                })
+                .flatten();
+            for id in &candidates {
+                let Some(c) = d.node(*id).and_then(instance_center) else { continue };
+                let dist = c.distance(*q);
+                if dist > radius {
+                    continue;
+                }
+                let w = strength * (1.0 - dist / radius).max(0.0);
+                if w <= 0.0 {
+                    continue;
+                }
+                // Shift with the Symbol Stainer or the Symbol Styler: the instance keeps the amount
+                // of its stain or style, and its paint moves toward the color or the style. An
+                // instance without one, or without a size, is left as it is.
+                if let Some((to, step)) = &recolor {
+                    let fill = d.node(*id).and_then(|n| look(d, n, &mut sides)).and_then(|l| l.fill);
+                    touched.extend(recolor_keeping_amount(d, *id, fill, to, step * w).then_some(*id));
+                    continue;
+                }
+                // Average needs the instance's own values, so it leaves an instance without a size
+                // as it is; the other methods change it as before.
+                // The instance's own values are read for Average only.
+                let own = (method == Method::Average).then(|| d.node(*id).and_then(|n| look(d, n, &mut sides))).flatten();
+                let avg = match (method, &target, own) {
+                    (Method::Average, Some(t), Some(cur)) => Some((t, cur)),
+                    // No mean under the brush (every instance there without a size), or none of
+                    // its own.
+                    (Method::Average, ..) => continue,
+                    _ => None,
+                };
+                // Average leaves an instance that already has the mean as it is.
+                let at_mean = avg.as_ref().is_some_and(|(t, cur)| match tool.as_str() {
+                    "scrunch" => {
+                        let out = (c - t.middle).hypot();
+                        out <= 1e-9 || (t.reach - out).abs() < 1e-9
+                    }
+                    "size" => (t.size / cur.size - 1.0).abs() < 1e-9,
+                    "spin" => wrap_angle(t.angle - cur.angle).abs() < 1e-9,
+                    "stain" | "style" => {
+                        (t.amount - cur.fill.as_ref().map_or(0.0, |f| f.1)).abs() < 1e-6 && (cur.fill.is_some() || t.paint.is_none())
+                    }
+                    "screen" => (t.opacity - cur.opacity).abs() < 1e-6,
+                    _ => false,
+                });
+                if at_mean {
+                    continue;
+                }
+                let Some(n) = d.node_mut(*id) else { continue };
+                // Counted only when it changes: Random can give an instance no share of the change.
+                let before = n.clone();
+                let about = |m: Affine| Affine::translate(c.to_vec2()) * m * Affine::translate(-c.to_vec2());
+                let share = share(*id);
+                match tool.as_str() {
+                    "shift" => n.transform(Affine::translate(delta * w.min(1.0)), false),
+                    "scrunch" => {
+                        let v = match &avg {
+                            // Toward the instances' mean distance from their middle.
+                            Some((t, _)) => {
+                                let out = c - t.middle;
+                                if out.hypot() > 1e-9 { out * ((t.reach - out.hypot()) / out.hypot() * w.min(1.0)) } else { Vec2::ZERO }
+                            }
+                            None => (*q - c) * (0.15 * w * share) * if alt { -1.0 } else { 1.0 },
+                        };
+                        n.transform(Affine::translate(v), false);
+                    }
+                    "size" => {
+                        let k = match &avg {
+                            Some((t, cur)) => (t.size / cur.size).powf(w.min(1.0)),
+                            None => (1.0 + 0.08 * w).powf(if alt { -share } else { share }),
+                        };
+                        // Without Proportional Resizing a drag resizes along its own direction: a
+                        // level drag the width, an upright one the height. A click resizes both.
+                        // The first point of a drag takes the direction to the second.
+                        let along = if j > 0 { delta } else { pts.get(1).map_or(Vec2::ZERO, |(next, _)| *next - *q) };
+                        let (kx, ky) = if proportional || avg.is_some() || along.hypot() <= 1e-9 {
+                            (k, k)
+                        } else {
+                            let level = along.x.abs() / (along.x.abs() + along.y.abs());
+                            (k.powf(2.0 * level), k.powf(2.0 * (1.0 - level)))
+                        };
+                        n.transform(about(Affine::scale_non_uniform(kx, ky)), false);
+                        // Resizing Affects Density: instances move away from the brush's center as
+                        // they grow and toward it as they shrink. Shift keeps the instances where
+                        // they are, so the set's density stays as it was.
+                        if spread {
+                            n.transform(Affine::translate((c - *q) * ((kx * ky).sqrt() - 1.0)), false);
+                        }
+                    }
+                    "spin" => {
+                        let a = match (&avg, method) {
+                            (Some((t, cur)), _) => wrap_angle(t.angle - cur.angle) * w.min(1.0),
+                            // A turn either way, whichever way the drag runs.
+                            (None, Method::Random) => 0.1 * w * (share - 1.0),
+                            // Turn towards the drag direction; a click spins a little.
+                            (None, _) if delta.hypot() > 1e-9 => (c - *q).cross(delta).signum() * 0.1 * w,
+                            (None, _) => 0.05 * w,
+                        };
+                        n.transform(about(Affine::rotate(if alt && avg.is_none() { -a } else { a })), false);
+                    }
+                    "stain" | "style" => {
+                        let paint = if tool == "style" { style_paint.clone().unwrap_or(Paint::solid(color)) } else { Paint::solid(color) };
+                        let (paint, o) = match &avg {
+                            // Toward the mean amount, keeping the stain or style the instance has
+                            // (one at no opacity is none).
+                            Some((t, look)) => {
+                                let (own, cur) = look.fill.clone().filter(|(_, o)| *o > 0.0).map_or((None, 0.0), |(p, o)| (Some(p), o));
+                                (own.or(t.paint.clone()).unwrap_or(paint), (cur + (t.amount - cur) * w.min(1.0)) as f32)
+                            }
+                            // Alt with the Symbol Styler removes the instance's appearance.
+                            None if tool == "style" && alt => {
+                                n.appearance.items.clear();
+                                (paint, 0.0)
+                            }
+                            None => {
+                                let cur = n.appearance.fill().filter(|f| f.paint == paint).map(|f| f.opacity).unwrap_or(0.0);
+                                // The style goes on gradually, by the brush's strength there: in
+                                // full at the center at full intensity or pressure.
+                                let step = match (tool.as_str(), method) {
+                                    ("style", Method::Random) => (w * share / 2.0) as f32,
+                                    ("style", _) => w as f32,
+                                    _ => (0.15 * w * share) as f32,
+                                };
+                                (paint, if alt { cur - step } else { cur + step })
+                            }
+                        };
+                        n.appearance.items.retain(|i| !matches!(i, AppearanceItem::Fill(_)));
+                        if o > 0.0 {
+                            let mut f = FillLayer::new(paint);
+                            f.opacity = o.min(1.0);
+                            n.appearance.items.insert(0, AppearanceItem::Fill(f));
+                        }
+                    }
+                    _ => {
+                        let step = (0.1 * w * share) as f32;
+                        n.opacity = match &avg {
+                            // The mean may be below the 5% the Screener otherwise stops at.
+                            Some((t, _)) => (n.opacity + ((t.opacity - f64::from(n.opacity)) * w.min(1.0)) as f32).clamp(0.0, 1.0),
+                            None if alt => (n.opacity + step).min(1.0),
+                            None => (n.opacity - step).max(0.05),
+                        };
+                    }
+                }
+                if *n != before {
+                    touched.insert(*id);
+                }
+            }
+        }
+        // An instance the stroke moved away and back again, or reached but left as it was (at a
+        // limit already), is not counted.
+        touched.retain(|id| d.node(*id) != orig.node(*id));
+        Ok((touched.len(), !touched.is_empty()))
+    })?;
+    Ok(json!({ "count": count }))
+}
+
+/// Move the paint of instance `id`'s stain or style (`fill`, its topmost fill with the amount)
+/// toward `to` by `t`. The fill keeps its amount and everything else it has, and the instance's
+/// other appearance items stay as they are. A paint with no form between it and `to` (a solid
+/// color and a pattern, say) takes `to` at once, so repeated strokes below half strength still
+/// reach it. An instance without a stain or style, or one whose paint does not change, is left as
+/// it is. Returns whether it changed.
+fn recolor_keeping_amount(d: &mut Document, id: NodeId, fill: Option<(Paint, f64)>, to: &Paint, t: f64) -> bool {
+    use vectorcraft_doc::blend::lerp_paint;
+    let Some((own, _)) = fill.filter(|(_, o)| *o > 0.0) else { return false };
+    let t = t.clamp(0.0, 1.0) as f32;
+    let mut paint = lerp_paint(&own, to, t);
+    // `lerp_paint` switches such a pair halfway, so just below half it still gives `own`.
+    if paint == own && t > 0.0 && lerp_paint(&own, to, 0.49) == own {
+        paint = to.clone();
+    }
+    if paint == own {
+        return false;
+    }
+    let Some(f) = d.node_mut(id).and_then(|n| n.appearance.fill_mut()) else { return false };
+    f.paint = paint;
+    true
+}
+
+/// Bring each of `ids` one place forward among its siblings past a sibling that is not one of them
+/// (`back`: one place backward). Ones already in front of (behind) every other sibling stay, and
+/// so do the clipping path of a clip group and the ruler guides above a layer's art. Returns how
+/// many moved.
+fn restack(d: &mut Document, ids: &std::collections::HashSet<NodeId>, back: bool) -> Result<usize> {
+    let parents: std::collections::BTreeSet<Option<NodeId>> = ids.iter().map(|id| d.parent_of(*id)).collect();
+    let mut moved = 0;
+    for par in parents {
+        let floor = usize::from(par.and_then(|p| d.node(p)).is_some_and(Node::clips));
+        let ch = d.children_mut(par)?;
+        let len = Node::guide_run_start(ch);
+        if len <= floor + 1 {
+            continue;
+        }
+        let picked = |n: &Arc<Node>| ids.contains(&n.id);
+        if back {
+            for i in floor + 1..len {
+                if picked(&ch[i]) && !picked(&ch[i - 1]) {
+                    ch.swap(i - 1, i);
+                    moved += 1;
+                }
+            }
+        } else {
+            for i in (floor..len - 1).rev() {
+                if picked(&ch[i]) && !picked(&ch[i + 1]) {
+                    ch.swap(i, i + 1);
+                    moved += 1;
+                }
+            }
+        }
+    }
+    Ok(moved)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn instance(id: u64) -> Arc<Node> {
+        Arc::new(Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY }))
+    }
+
+    /// The instances come out in the order a search of the list built so far gives: nested
+    /// groups, a group listed twice, a member listed after its group and one listed before it.
+    #[test]
+    fn instances_in_matches_searching_the_list_so_far() {
+        let groups: Vec<Node> = (0..40u64)
+            .map(|g| {
+                let base = g * 100;
+                let mut children: Vec<Arc<Node>> = (0..40).map(|i| instance(base + i)).collect();
+                let inner = (40..50).map(|i| instance(base + i)).collect();
+                children.insert(20, Arc::new(Node::group(NodeId(base + 90), inner)));
+                children.push(Arc::new(Node::group(NodeId(base + 91), vec![])));
+                Node::group(NodeId(base + 99), children)
+            })
+            .collect();
+        let early = Node::new(NodeId(1_245), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+        let late = Node::new(NodeId(305), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+        let nodes: Vec<&Node> = std::iter::once(&early).chain(&groups).chain([&groups[0], &late, &groups[7]]).collect();
+        let mut searched = vec![];
+        for n in &nodes {
+            n.walk(&mut |c| {
+                if matches!(c.kind, NodeKind::SymbolInstance { .. }) && !searched.contains(&c.id) {
+                    searched.push(c.id);
+                }
+            });
+        }
+        let found = instances_in(nodes.iter().copied());
+        assert_eq!(found, searched);
+        assert_eq!(found.len(), 2_000);
+        assert_eq!(found[0], NodeId(1_245));
+        assert!(instances_in([]).is_empty());
+    }
+}

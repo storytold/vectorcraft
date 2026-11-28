@@ -52,6 +52,38 @@ pub fn select(s: &mut Session, ids: &[NodeId]) {
     exec(s, "select.set", json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}));
 }
 
+/// Place `png` as `cut.png` with `params` (`file.place`'s, besides `name` and `dataBase64`), then
+/// cut the placed image's pixel data short right after its first `IDAT` chunk's type, as a
+/// document saved with a damaged image holds it: the header still reads, but the renderer can't
+/// decode the image and draws nothing. Place refuses such a file, so tests cut a placed one. The
+/// image is stored under the key of its new bytes. → `file.place`'s reply.
+pub fn place_cut_png(s: &mut Session, png: &[u8], params: Value) -> Value {
+    let mut p = json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(png)});
+    if let (Some(o), Value::Object(extra)) = (p.as_object_mut(), params) {
+        o.extend(extra);
+    }
+    let r = exec(s, "file.place", p);
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let doc = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let Some(NodeKind::Image(im)) = doc.node(id).map(|n| &n.kind) else { panic!("{id:?} is not an image") };
+    let old = im.key.clone();
+    let mut bytes = doc.images[&old].bytes.to_vec();
+    let idat = bytes.windows(4).position(|w| w == b"IDAT").unwrap();
+    bytes.truncate(idat + 8);
+    let cut = vectorcraft_doc::ImageBlob::new("image/png", bytes);
+    let key = cut.content_key();
+    doc.images.insert(key.clone(), cut);
+    if let Some(Node { kind: NodeKind::Image(im), .. }) = doc.node_mut(id) {
+        im.key = key;
+    }
+    let mut shown = false;
+    doc.visit_images(|_, im| shown |= im.key == old);
+    if !shown {
+        doc.images.remove(&old);
+    }
+    r
+}
+
 /// The three standard fixture states for sweeping commands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fixture {
@@ -231,20 +263,20 @@ impl DocBuilder {
     }
 }
 
-/// All non-layer nodes of a document in paint order.
+/// All nodes of a document other than layers and ruler guides, in paint order.
 pub fn art_nodes(doc: &Document) -> Vec<&Node> {
     let mut v = Vec::new();
     doc.walk(|n| {
-        if !n.is_layer() {
+        if !n.is_layer() && !n.is_ruler_guide() {
             v.push(n)
         }
     });
     v
 }
 
-/// Ids of the top-level art (direct children of layers), bottom first.
+/// Ids of the top-level art (direct children of layers other than ruler guides), bottom first.
 pub fn top_level_ids(doc: &Document) -> Vec<NodeId> {
-    doc.layers.iter().flat_map(|l| l.children().into_iter().flatten().map(|n| n.id)).collect()
+    doc.layers.iter().flat_map(|l| l.children().into_iter().flatten().filter(|n| !n.is_ruler_guide()).map(|n| n.id)).collect()
 }
 
 /// Every node id (layers included), paint order.

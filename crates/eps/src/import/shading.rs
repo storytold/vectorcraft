@@ -22,6 +22,9 @@ const FUNCTION_GRID: u32 = 16;
 const MAX_SAMPLES: usize = 1 << 24;
 /// Most outputs (colour components) a sampled function has.
 const MAX_OUTPUTS: usize = 32;
+/// Most samples one value of a sampled function is interpolated from: inputs past it take the
+/// nearest sample.
+const MAX_TAPS: usize = 256;
 /// Work one patch costs against the operation budget.
 const PATCH_OPS: u64 = 64;
 
@@ -312,8 +315,8 @@ impl Interp<'_> {
         Ok(Some(out))
     }
 
-    /// A sampled function (type 0) at `x`: the samples around it, interpolated linearly for
-    /// one input, the nearest one for more.
+    /// A sampled function (type 0) at `x`: the samples around it, interpolated (multilinearly,
+    /// or by cubics for `Order 3`).
     pub(super) fn sampled(&mut self, f: &DictRef, x: &[f64]) -> Res<Vec<f64>> {
         let get = |k: &str| f.borrow().get(&Key::name(k)).cloned();
         let nums =
@@ -335,6 +338,8 @@ impl Interp<'_> {
             Some(Obj::File { stream, .. }) => self.peek_all(&stream)?,
             _ => return ps_err("typecheck", "DataSource"),
         };
+        // Copying the samples is work too: a shading evaluates its function once for each stop.
+        self.spend((bytes.len() / 256) as u64)?;
         let (encode, decode) = (nums("Encode"), nums("Decode"));
         let max = ((1u64 << bps) - 1) as f64;
         let sample = |index: usize, j: usize| -> f64 {
@@ -360,17 +365,68 @@ impl Interp<'_> {
             let e = if b != a { e0 + (xi - a) * (e1 - e0) / (b - a) } else { e0 };
             pos.push(clamp_between(e, 0.0, s - 1.0));
         }
-        if let ([p], Some(s)) = (pos.as_slice(), size.first()) {
-            let (lo, hi) = (p.floor() as usize, (p.ceil() as usize).min(*s as usize - 1));
-            let t = p - p.floor();
-            return Ok((0..outs).map(|j| sample(lo, j) * (1.0 - t) + sample(hi, j) * t).collect());
-        }
-        let mut index = 0;
-        let mut stride = 1;
+        // The samples each input reads and their weights: the two around it (linear), or the
+        // four around it for `Order 3` (cubic). The result is their tensor product.
+        let cubic = get("Order").and_then(|o| o.as_num()) == Some(3.0);
+        let mut taps: Vec<Vec<(usize, f64)>> = Vec::with_capacity(m);
+        let mut combos = 1usize;
         for (i, p) in pos.iter().enumerate() {
-            index += p.round() as usize * stride;
-            stride *= size.get(i).copied().unwrap_or(1.0) as usize;
+            let last = size.get(i).copied().unwrap_or(1.0) as usize - 1;
+            let lo = p.floor() as usize;
+            let t = p - p.floor();
+            let at = |k: isize| (lo as isize + k).clamp(0, last as isize) as usize;
+            let w: Vec<(usize, f64)> = if t == 0.0 || last == 0 {
+                vec![(lo.min(last), 1.0)]
+            } else if cubic && combos.saturating_mul(4) <= MAX_TAPS {
+                catmull_rom(t).into_iter().zip(-1..=2).map(|(w, k)| (at(k), w)).collect()
+            } else if combos.saturating_mul(2) <= MAX_TAPS {
+                vec![(at(0), 1.0 - t), (at(1), t)]
+            } else {
+                // Too many inputs between samples to interpolate them all: the nearest (a
+                // fractional `Size` can put it past the last sample).
+                vec![((p.round() as usize).min(last), 1.0)]
+            };
+            combos = combos.saturating_mul(w.len());
+            taps.push(w);
         }
-        Ok((0..outs).map(|j| sample(index, j)).collect())
+        // Each combination of taps reads one sample of every output.
+        self.spend(combos.saturating_mul(outs) as u64)?;
+        let mut out = vec![0.0; outs];
+        let mut digits = vec![0usize; m];
+        loop {
+            let (mut index, mut stride, mut weight) = (0usize, 1usize, 1.0);
+            for (i, (tap, d)) in taps.iter().zip(&digits).enumerate() {
+                let (k, w) = tap.get(*d).copied().unwrap_or((0, 0.0));
+                index += k * stride;
+                weight *= w;
+                stride *= size.get(i).copied().unwrap_or(1.0) as usize;
+            }
+            if weight != 0.0 {
+                for (j, o) in out.iter_mut().enumerate() {
+                    *o += weight * sample(index, j);
+                }
+            }
+            // The next combination, the first input varying fastest.
+            let Some(i) = digits.iter().zip(&taps).position(|(d, t)| d + 1 < t.len()) else { break };
+            for d in digits.iter_mut().take(i) {
+                *d = 0;
+            }
+            if let Some(d) = digits.get_mut(i) {
+                *d += 1;
+            }
+        }
+        // A cubic overshoots between samples of different slopes: kept in the range.
+        Ok(out
+            .into_iter()
+            .enumerate()
+            .map(|(j, v)| clamp_between(v, range.get(2 * j).copied().unwrap_or(0.0), range.get(2 * j + 1).copied().unwrap_or(1.0)))
+            .collect())
     }
+}
+
+/// The weights of the four samples around a point `t` of the way from the second to the third:
+/// the Catmull-Rom cubic, which passes through every sample with the slope of its neighbours.
+fn catmull_rom(t: f64) -> [f64; 4] {
+    let (t2, t3) = (t * t, t * t * t);
+    [(-t3 + 2.0 * t2 - t) / 2.0, (3.0 * t3 - 5.0 * t2 + 2.0) / 2.0, (-3.0 * t3 + 4.0 * t2 + t) / 2.0, (t3 - t2) / 2.0]
 }

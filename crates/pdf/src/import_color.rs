@@ -11,12 +11,12 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Debug, Write as _};
 
-use craft_pdf::interpret::Function;
-use craft_pdf::interpret::color::ColorSpace;
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::array::FlexArrayIter;
-use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, Stream};
-use craft_pdf::syntax::reader::{Reader, ReaderExt};
+use craft::pdf::interpret::Function;
+use craft::pdf::interpret::color::ColorSpace;
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::array::FlexArrayIter;
+use craft::pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, Stream};
+use craft::pdf::syntax::reader::{Reader, ReaderExt};
 use smallvec::SmallVec;
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, Paint, Swatch};
@@ -170,7 +170,7 @@ impl<'p> Colors<'p> {
 
     /// A solid color in its own model; `None`: use its RGB. `inks`: the colorant names of the
     /// space the page's walk found it painted in ([`Colors::space_of`]).
-    pub fn solid(&mut self, c: &craft_pdf::interpret::color::Color, inks: Option<&[String]>) -> Option<Native> {
+    pub fn solid(&mut self, c: &craft::pdf::interpret::color::Color, inks: Option<&[String]>) -> Option<Native> {
         let mapped = debug_text(c).and_then(|t| {
             let (space, comps) = split_color(&t)?;
             let space = self.space_of(space, comps.len(), inks);
@@ -239,6 +239,18 @@ impl<'p> Colors<'p> {
         }
     }
 
+    /// The space of colour space array `a` (`[/Separation name alt tint]` or `[/DeviceN …]`, such
+    /// as an image's) among the file's: matched by its kind, its colorant names and its tint
+    /// transform, not by the page's walk. `None` for another array.
+    pub fn array_space(&mut self, a: &Array<'_>) -> Option<Space> {
+        self.scan();
+        let mut it = a.flex_iter();
+        let (device_n, names) = ink_names(&mut it)?;
+        it.next::<Object<'_>>()?;
+        let key = debug_text(&Function::new(&it.next::<Object<'_>>()?)?)?;
+        self.spaces.iter().position(|s| s.device_n == device_n && s.names == names && s.key == key).map(Space::Inks)
+    }
+
     /// Whether a space of inks `names` has the kind, colorant count and tint transform of a space
     /// of other inks. [`Colors::space_of`] tells such spaces apart only by the names from the
     /// page's walk.
@@ -301,6 +313,9 @@ impl<'p> Colors<'p> {
         let process = cmyk.iter().any(|v| *v > 0.0);
         let (c, t) = match (ink, first_ink) {
             (Some(_), _) if several || process => {
+                // The color can't link to one swatch, but each ink it paints with is still a
+                // spot swatch.
+                self.mark_inks(Space::Inks(space), comps);
                 self.mixed = true;
                 return None;
             }
@@ -317,6 +332,59 @@ impl<'p> Colors<'p> {
                 Some(Native { color: ink.color.tinted(t), link: Some((ink.name.clone(), t)) })
             }
             _ => Some(Native { color: Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(t), link: Some((REGISTRATION.to_string(), t)) }),
+        }
+    }
+
+    /// A gradient stop's colour that paints one spot ink together with process plates (a
+    /// DeviceN colour of an ink and process colorants): the ink's swatch (marked used), its tint
+    /// and the process plates (C, M, Y, K). `None` for any other colour ([`Colors::native`] takes
+    /// it).
+    pub fn ink_with_plates(&mut self, space: Space, comps: &[f32]) -> Option<(String, f32, [f32; 4])> {
+        let Space::Inks(i) = space else { return None };
+        let colorants = &self.spaces.get(i)?.colorants;
+        let mut cmyk = [0.0f32; 4];
+        let mut ink = None;
+        for (c, t) in colorants.iter().zip(comps) {
+            let t = round3(t.clamp(0.0, 1.0));
+            match *c {
+                Colorant::Unknown => return None,
+                Colorant::None => {}
+                Colorant::Process(ch) => {
+                    if let Some(v) = cmyk.get_mut(ch) {
+                        *v = v.max(t);
+                    }
+                }
+                // A second ink (or every plate) painting too can't be one stop.
+                Colorant::Ink(_) | Colorant::All if t > 0.0 && ink.is_some() => return None,
+                Colorant::All if t > 0.0 => return None,
+                Colorant::Ink(k) if t > 0.0 => ink = Some((k, t)),
+                Colorant::Ink(_) | Colorant::All => {}
+            }
+        }
+        let (k, t) = ink?;
+        if cmyk.iter().all(|v| *v <= 0.0) {
+            return None;
+        }
+        let ink = self.inks.get_mut(k)?;
+        ink.used = true;
+        Some((ink.name.clone(), t, cmyk))
+    }
+
+    /// Mark each ink that components `comps` of `space` paint with (a tint above 0) as used, so it
+    /// becomes a spot swatch; nothing for a space with a colorant that can't be read.
+    pub fn mark_inks(&mut self, space: Space, comps: &[f32]) {
+        let Space::Inks(i) = space else { return };
+        let Some(s) = self.spaces.get(i) else { return };
+        if s.colorants.iter().any(|c| matches!(c, Colorant::Unknown)) {
+            return;
+        }
+        for (c, t) in s.colorants.iter().zip(comps) {
+            if let Colorant::Ink(k) = *c
+                && round3(t.clamp(0.0, 1.0)) > 0.0
+                && let Some(ink) = self.inks.get_mut(k)
+            {
+                ink.used = true;
+            }
         }
     }
 
@@ -503,7 +571,7 @@ fn lab_profile(profile: &Stream<'_>) -> bool {
     let mut head = vec![];
     match profile.filters().as_slice() {
         [] => head.extend(raw.iter().take(20)),
-        [craft_pdf::syntax::Filter::FlateDecode] => {
+        [craft::pdf::syntax::Filter::FlateDecode] => {
             let _ = flate2::read::ZlibDecoder::new(&*raw).take(20).read_to_end(&mut head); // a damaged profile reads as not Lab
         }
         _ => return false,

@@ -15,14 +15,18 @@ pub const MAX_SEGMENT_PAIRS: usize = 1 << 22;
 /// Fenwick tree of counts over its slots.
 struct Counts(Vec<isize>);
 
-// `isolate_lowest_one` is still unstable in Rust 1.96, and the workspace builds on 1.95 (rust-version).
-#[allow(clippy::manual_isolate_lowest_one)]
+#[inline]
+fn fenwick_step(i: usize) -> usize {
+    // Same as `i.isolate_lowest_one()`; that API is still unstable on the workspace MSRV.
+    1 << i.trailing_zeros()
+}
+
 impl Counts {
     fn add(&mut self, slot: usize, d: isize) {
         let mut i = slot + 1;
         while let Some(c) = self.0.get_mut(i) {
             *c += d;
-            i += i & i.wrapping_neg();
+            i += fenwick_step(i);
         }
     }
 
@@ -31,7 +35,7 @@ impl Counts {
         let (mut i, mut s) = (end.min(self.0.len().saturating_sub(1)), 0);
         while i > 0 {
             s += self.0.get(i).copied().unwrap_or(0);
-            i -= i & i.wrapping_neg();
+            i -= fenwick_step(i);
         }
         s
     }
@@ -78,10 +82,15 @@ pub(crate) fn overlaps_within(boxes: &[Rect], cap: usize) -> bool {
     true
 }
 
+/// Can a planar map be built of `paths` within `cap` segment pairs?
+pub(crate) fn sweep_fits_within<'a>(paths: impl IntoIterator<Item = &'a BezPath>, cap: usize) -> bool {
+    let boxes: Vec<Rect> = paths.into_iter().flat_map(|p| p.segments().map(|s| s.bounding_box())).collect();
+    overlaps_within(&boxes, cap)
+}
+
 /// Can a planar map be built of `paths` within [`MAX_SEGMENT_PAIRS`]?
 pub(crate) fn sweep_fits<'a>(paths: impl IntoIterator<Item = &'a BezPath>) -> bool {
-    let boxes: Vec<Rect> = paths.into_iter().flat_map(|p| p.segments().map(|s| s.bounding_box())).collect();
-    overlaps_within(&boxes, MAX_SEGMENT_PAIRS)
+    sweep_fits_within(paths, MAX_SEGMENT_PAIRS)
 }
 
 #[cfg(test)]

@@ -22,8 +22,9 @@ mod prompts;
 mod resources;
 mod server;
 mod tools;
+mod ui_catalog;
 
-pub use backend::{Backend, Remote};
+pub use backend::{Backend, Remote, control_token};
 pub use headless::Headless;
 pub use prompts::{PROMPTS, PromptArg, PromptDef};
 pub use resources::{DOC_JSON_URI, DOC_URI, TEMPLATES};
@@ -35,37 +36,3 @@ pub const DEFAULT_ADDR: &str = "127.0.0.1:7979";
 
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod tests_batchdraw;
-#[cfg(test)]
-mod tests_concurrency;
-#[cfg(test)]
-mod tests_conventions;
-#[cfg(test)]
-mod tests_distortkeys;
-#[cfg(test)]
-mod tests_drawopts;
-#[cfg(test)]
-mod tests_exportas;
-#[cfg(test)]
-mod tests_fileio;
-#[cfg(test)]
-mod tests_freeform;
-#[cfg(test)]
-mod tests_gradient;
-#[cfg(test)]
-mod tests_limits;
-#[cfg(test)]
-mod tests_links;
-#[cfg(test)]
-mod tests_liquify;
-#[cfg(test)]
-mod tests_pen;
-#[cfg(test)]
-mod tests_persp;
-#[cfg(test)]
-mod tests_place;
-#[cfg(test)]
-mod tests_protocol;
-#[cfg(test)]
-mod tests_svg;

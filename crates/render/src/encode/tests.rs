@@ -32,7 +32,25 @@ fn noise(w: u32, h: u32, opaque: bool) -> Vec<u8> {
 }
 
 fn decode(png: &[u8]) -> Vec<u8> {
-    image::load_from_memory_with_format(png, image::ImageFormat::Png).expect("decodes").to_rgba8().into_raw()
+    craft_image_codecs::decode_as(craft_image_codecs::Format::Png, png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .expect("decodes")
+        .to_rgba8()
+        .into_raw()
 }
 
 #[test]
@@ -67,6 +85,63 @@ fn png_refuses_a_buffer_of_the_wrong_size() {
     assert!(encode(&[], 0, 0, &PngOptions::default()).is_err());
 }
 
+/// Object › Rasterize's Grayscale and Bitmap images (#6969): a grey PNG of one channel when
+/// opaque and grey and alpha otherwise; Bitmap's black and white as a 1-bit TIFF when opaque,
+/// else as a grey PNG with alpha. Odd widths keep each row on a byte.
+#[test]
+fn gray_and_bilevel_images_store_gray() {
+    let header = |file: &[u8]| (file[24], file[25]);
+    let gray = |file: &[u8]| {
+        craft_image_codecs::decode(file)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_luma_alpha8()
+            .into_raw()
+    };
+    // 3 × 2, premultiplied: black, red, light grey; white, mid grey, almost black.
+    let mut img = Rendered {
+        width: 3,
+        height: 2,
+        pixels: [[0, 0, 0], [255, 0, 0], [200; 3], [255; 3], [128; 3], [127; 3]].iter().flat_map(|&[r, g, b]| [r, g, b, 255]).collect(),
+    };
+    let levels: Vec<u8> = [0u8, 54, 200, 255, 128, 127].iter().flat_map(|&g| [g, 255]).collect();
+    let file = img.to_gray_png().unwrap();
+    assert_eq!(header(&file), (8, 0), "8-bit grey");
+    assert_eq!(gray(&file), levels);
+    let (mime, file) = img.to_bilevel(150.0).unwrap();
+    assert_eq!(mime, "image/tiff");
+    let tiff = craft_tiff::Tiff::parse(&file).unwrap();
+    let ifd = &tiff.ifds[0];
+    assert_eq!(ifd.u16(craft_tiff::tags::SAMPLES_PER_PIXEL), Some(1));
+    assert_eq!(ifd.value(craft_tiff::tags::BITS_PER_SAMPLE).unwrap().to_u64_vec(), vec![1]);
+    let bw: Vec<u8> = [0u8, 0, 255, 255, 255, 0].iter().flat_map(|&g| [g, 255]).collect();
+    assert_eq!(gray(&file), bw, "from 128 up is white");
+    // Half-covered white over the light grey; a clear pixel is white.
+    img.pixels[8..12].copy_from_slice(&[100, 100, 100, 100]);
+    img.pixels[20..24].copy_from_slice(&[0; 4]);
+    let file = img.to_gray_png().unwrap();
+    assert_eq!(header(&file), (8, 4), "grey and alpha");
+    assert_eq!(gray(&file), [0, 255, 54, 255, 255, 100, 255, 255, 128, 255, 255, 0]);
+    let (mime, file) = img.to_bilevel(150.0).unwrap();
+    assert_eq!((mime, header(&file)), ("image/png", (8, 4)), "no 1-bit grey with alpha");
+    assert_eq!(gray(&file), [0, 255, 0, 255, 255, 100, 255, 255, 255, 255, 255, 0], "still black and white");
+    assert!(super::png::encode_gray(&levels[..10], 3, 2, &PngOptions::default()).is_err());
+}
+
 /// A 40×30 pt document with a black circle off the pixel grid.
 fn circle_doc() -> Document {
     let mut d = Document::new(40.0, 30.0);
@@ -79,7 +154,24 @@ fn circle_doc() -> Document {
 
 fn export(d: &Document, format: RasterFormat, o: &RasterExportOptions) -> image::RgbaImage {
     let bytes = Renderer::new().export_region(d, d.artboards[0].rect, format, o).unwrap();
-    image::load_from_memory(&bytes).unwrap().to_rgba8()
+    craft_image_codecs::decode(&bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
 }
 
 #[test]
@@ -110,6 +202,84 @@ fn backgrounds_are_opaque_or_transparent() {
     assert_eq!(webp.get_pixel(0, 0).0, [0, 0, 0, 255]);
 }
 
+/// The chunk types of RIFF WebP file `file`, in order.
+fn webp_chunks(file: &[u8]) -> Vec<[u8; 4]> {
+    assert_eq!((&file[..4], &file[8..12]), (&b"RIFF"[..], &b"WEBP"[..]));
+    let mut chunks = Vec::new();
+    let mut at = 12;
+    while at + 8 <= file.len() {
+        let len = u32::from_le_bytes([file[at + 4], file[at + 5], file[at + 6], file[at + 7]]) as usize;
+        chunks.push([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+        at += 8 + len + len % 2;
+    }
+    chunks
+}
+
+/// Lossy WebP is a `VP8 ` picture; transparent pixels stay transparent through an `ALPH` chunk
+/// in a `VP8X` file, and opaque art stays opaque.
+#[test]
+fn lossy_webp_keeps_transparent_pixels_transparent() {
+    let d = circle_doc();
+    let lossless = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::WebP, &RasterExportOptions::default()).unwrap();
+    assert_eq!(webp_chunks(&lossless), [*b"VP8L"], "lossless by default");
+    let o = RasterExportOptions { webp_lossless: false, quality: 75, ..Default::default() };
+    let file = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::WebP, &o).unwrap();
+    assert_eq!(webp_chunks(&file), [*b"VP8X", *b"ALPH", *b"VP8 "]);
+    let img = export(&d, RasterFormat::WebP, &o);
+    assert_eq!(img.dimensions(), (40, 30));
+    assert_eq!(img.get_pixel(0, 0)[3], 0, "a corner outside the circle");
+    let middle = img.get_pixel(20, 15);
+    assert!(middle[3] == 255 && middle[0] < 24, "{middle:?}");
+    // Opaque art on a background is a plain `VP8 ` file.
+    let opaque = RasterExportOptions { background: Some([255; 3]), ..o };
+    let file = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::WebP, &opaque).unwrap();
+    assert_eq!(webp_chunks(&file), [*b"VP8 "]);
+}
+
+/// A lossy frame's tag (RFC 6386 §9.1) holds its first partition's size in 19 bits. A frame whose
+/// size field is at that limit may hold a larger partition, so it is refused; frames below it
+/// decode with another decoder at every quality, a 1 × 1 image and transparent pixels included.
+#[test]
+fn lossy_webp_refuses_a_first_partition_at_the_size_limit() {
+    let circle = circle_doc();
+    let dot = Document::new(1.0, 1.0);
+    for (d, background) in [(&circle, None), (&circle, Some([255; 3])), (&dot, Some([40, 80, 120]))] {
+        for quality in [0, 50, 100] {
+            let o = RasterExportOptions { webp_lossless: false, quality, background, ..Default::default() };
+            let mut file = Renderer::new().export_region(d, d.artboards[0].rect, RasterFormat::WebP, &o).unwrap();
+            let decoded = image::load_from_memory_with_format(&file, image::ImageFormat::WebP).unwrap();
+            let rect = d.artboards[0].rect;
+            assert_eq!((decoded.width(), decoded.height()), (rect.width() as u32, rect.height() as u32), "quality {quality}");
+            assert!(!vp8_partition_at_limit(&file), "quality {quality}");
+            let vp8 = chunk_offset(&file, b"VP8 ") + 8;
+            let tag = u32::from(file[vp8]) | (u32::from(file[vp8 + 1]) << 8) | (u32::from(file[vp8 + 2]) << 16);
+            let len = u32::from_le_bytes(file[vp8 - 4..vp8].try_into().unwrap());
+            assert_eq!((tag & 1, &file[vp8 + 3..vp8 + 6]), (0, &[0x9d, 0x01, 0x2a][..]), "a key frame with its start code");
+            assert!((tag >> 5) + 10 <= len, "the first partition fits in the chunk");
+            // The size field at its limit.
+            let at_limit = (tag & 0x1f) | (VP8_FIRST_PARTITION_LIMIT << 5);
+            file[vp8..vp8 + 3].copy_from_slice(&at_limit.to_le_bytes()[..3]);
+            assert!(vp8_partition_at_limit(&file), "quality {quality}");
+        }
+    }
+    let lossless = Renderer::new().export_region(&circle, circle.artboards[0].rect, RasterFormat::WebP, &RasterExportOptions::default()).unwrap();
+    assert!(!vp8_partition_at_limit(&lossless));
+    // Cut short or with a chunk length past the end, the scan stops without a frame.
+    for bad in [&b"RIFF\0\0\0\0WEBP"[..], b"RIFF\0\0\0\0WEBPVP8 ", b"RIFF\0\0\0\0WEBPXXXX\xff\xff\xff\xffVP8 \x04\0\0\0\xff\xff\xff\0", b""] {
+        assert!(!vp8_partition_at_limit(bad), "{bad:?}");
+    }
+}
+
+/// The offset of the first chunk of type `ty` in RIFF WebP `file`.
+fn chunk_offset(file: &[u8], ty: &[u8; 4]) -> usize {
+    let mut at = 12;
+    while &file[at..at + 4] != ty {
+        let len = u32::from_le_bytes(file[at + 4..at + 8].try_into().unwrap()) as usize;
+        at += 8 + len + len % 2;
+    }
+    at
+}
+
 /// #787: translucent art over opaque art (or a background) stays exactly opaque, its anti-aliased
 /// edges too, so the file is written as RGB.
 #[test]
@@ -138,7 +308,24 @@ fn translucent_edges_over_opaque_art_stay_opaque() {
         (&d, RasterExportOptions { ppi: 72.0 * 0.3515625, ..Default::default() }),
     ] {
         let png = Renderer::new().export_region(doc, doc.artboards[0].rect, RasterFormat::Png, &o).unwrap();
-        let img = image::load_from_memory(&png).unwrap().to_rgba8();
+        let img = craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         let below: Vec<_> = img.pixels().filter(|p| p[3] < 255).collect();
         assert!(below.is_empty(), "ppi {}: {} pixels below alpha 255, e.g. {:?}", o.ppi, below.len(), below.first());
         assert_eq!(png[25], 2, "IHDR colour type: RGB");
@@ -236,7 +423,7 @@ fn art_bounds_take_in_the_effects_in_a_symbols_art() {
     let mut art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), black);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Box".into(), art: std::sync::Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Box".into(), art: std::sync::Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     let xf = vectorcraft_geom::Affine::translate((20.0, 20.0));
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Box".into(), xf })).unwrap();

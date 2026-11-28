@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build and package VectorCraft for FreeBSD:
 #
-#   $DIST/vectorcraft-<version>-freebsd-x86_64.tar.gz   a /usr/local-style tree:
-#       vectorcraft-<version>-freebsd-x86_64/{bin, share/applications, share/icons, share/mime,
+#   $DIST/vectorcraft-<version>-freebsd-<arch>.tar.gz   a /usr/local-style tree:
+#       vectorcraft-<version>-freebsd-<arch>/{bin, share/applications, share/icons, share/mime,
 #       share/metainfo, share/doc/vectorcraft}
 #
 # Install by copying the tree's contents into /usr/local, e.g.
@@ -29,18 +29,27 @@ done
 
 # FreeBSD calls x86_64 "amd64"; release names use the Rust/Linux spelling.
 case "$(uname -m)" in
-  amd64 | x86_64) ARCH=x86_64 ;;
-  arm64 | aarch64) ARCH=aarch64 ;;
+  amd64 | x86_64) HOST_ARCH=x86_64 ;;
+  arm64 | aarch64) HOST_ARCH=aarch64 ;;
   *) echo "unsupported architecture $(uname -m)" >&2; exit 2 ;;
 esac
+# The release workflow cross-compiles aarch64 on x86_64 by setting CARGO_BUILD_TARGET; the arch follows the target.
+ARCH="$HOST_ARCH"
+BIN="$CARGO_TARGET_DIR/release"
+if [[ -n "${CARGO_BUILD_TARGET:-}" ]]; then
+  case "$CARGO_BUILD_TARGET" in
+    aarch64-unknown-freebsd) ARCH=aarch64 ;;
+    *) ARCH=x86_64 ;;
+  esac
+  BIN="$CARGO_TARGET_DIR/$CARGO_BUILD_TARGET/release"
+fi
 BASENAME="vectorcraft-$VERSION-freebsd-$ARCH"
 
 echo "==> VectorCraft $VERSION for FreeBSD $ARCH"
 
 if [[ "$SKIP_BUILD" = 0 ]]; then
-  (cd "$ROOT" && cargo build --release --locked -p vectorcraft -p vectorcraft-cli)
+  (cd "$ROOT" && cargo build --release --locked -p vectorcraft -p vectorcraft-cli ${CARGO_BUILD_TARGET:+--target "$CARGO_BUILD_TARGET"})
 fi
-BIN="$CARGO_TARGET_DIR/release"
 WORK="$CARGO_TARGET_DIR/freebsd-package"
 STAGE="$WORK/$BASENAME"
 rm -rf "$WORK"
@@ -65,6 +74,7 @@ done
 tar -C "$WORK" -czf "$DIST/$BASENAME.tar.gz" "$BASENAME"
 echo "wrote $DIST/$BASENAME.tar.gz"
 
-"$STAGE/bin/vectorcraft-cli" --version
+# A cross-built binary can't run on this host.
+if [[ "$ARCH" = "$HOST_ARCH" ]]; then "$STAGE/bin/vectorcraft-cli" --version; fi
 echo "==> done"
 ls -lh "$DIST"

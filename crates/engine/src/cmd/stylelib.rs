@@ -14,9 +14,10 @@ use vectorcraft_doc::style_libs::{self, STYLE_LIBRARIES, STYLES_EXT, builtin_sty
 use vectorcraft_doc::{Document, GraphicStyle, PatternDef, StyleLibrary};
 
 use super::menucmds::squash;
-use super::swatch::str_list;
-use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
-use super::*;
+use super::swatchlib::{
+    FileData, LibraryFile, LibraryInfo, concealed_library_id, concealed_library_ids, names_param, shown_id, shown_library_id, stem,
+};
+use super::{CommandSpec, Result, Session, always, bad, checked_ids_param, cmd, has_doc, str_param, switch_or, text_param, unique_name};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -61,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Library…",
             ["Window", "Graphic Style Libraries"],
             None,
-            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcstyles library, or the graphic styles of any document VectorCraft opens (see document.formats), for the library panel (Window → Graphic Style Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library) → {library: id, name, count}",
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcstyles library, or the graphic styles of any document VectorCraft opens (see document.formats), for the library panel (Window → Graphic Style Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library; a .ai or EPS style painting with one of the file's gradients by name takes it at the style's angle, fitted to each object it is applied to, VectorCraft's own placement) → {library: id, name, count}",
             always,
             load
         ),
@@ -95,6 +96,9 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<StyleLibrary>
     if let Some(found) = s.style_libraries.get(key) {
         return Some(found);
     }
+    if let Some(found) = concealed_library_id(s, key).and_then(|id| s.style_libraries.get(&id)) {
+        return Some(found);
+    }
     if let Some(b) = STYLE_LIBRARIES.iter().find(|b| b.id == key) {
         return Some((builtin_info(b), builtin_style_library(key)?));
     }
@@ -109,20 +113,22 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     s.style_libraries.rescan();
+    let concealed = concealed_library_ids(s, []);
     let libs: Vec<Value> = libraries(s)
         .into_iter()
         .map(|l| {
             let count = library(s, &l.id).map_or(0, |(_, lib)| lib.len());
-            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": s.style_libraries.path(&l.id)})
+            let (id, path) = (shown_id(&concealed, &l.id), s.style_libraries.shown_path(&l.id));
+            json!({"id": id, "name": l.name, "category": l.category, "count": count, "path": path})
         })
         .collect();
-    Ok(json!({ "libraries": libs, "userFolder": s.style_libraries.user_dir() }))
+    Ok(json!({ "libraries": libs, "userFolder": s.style_libraries.shown_user_dir() }))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
     let (info, lib) = library_param(s, p, "graphicStyle.library")?;
     let styles: Vec<Value> = lib.styles.iter().map(super::style::style_json).collect();
-    Ok(json!({"id": info.id, "name": info.name, "category": info.category, "styles": styles}))
+    Ok(json!({"id": shown_library_id(s, &info.id), "name": info.name, "category": info.category, "styles": styles}))
 }
 
 /// Pattern `name` of `lib` in `d`: the document's own when it has the same pattern (under any
@@ -154,8 +160,17 @@ fn adopt(d: &mut Document, lib: &StyleLibrary, g: &GraphicStyle, renamed: &mut H
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graphicStyle.addFromLibrary";
     let (info, lib) = library_param(s, p, C)?;
-    let mut names = str_list(p, "names");
-    names.extend(str_param(p, "name").map(str::to_string));
+    let (apply, add) = (switch_or(p, "apply", false, C)?, switch_or(p, "add", false, C)?);
+    let ids_given = p.get("ids").is_some_and(|v| !v.is_null());
+    if ids_given {
+        checked_ids_param(s, p, "ids", C)?;
+    }
+    if apply {
+        // Objects that can't take a style are refused before any style is added.
+        super::appearance::edit_targets(s, &if ids_given { json!({"ids": p["ids"]}) } else { json!({}) }, C)?;
+    }
+    let mut names = names_param(p, C)?;
+    names.extend(text_param(p, "name", C)?.map(str::to_string));
     if let Some(n) = names.iter().find(|n| lib.style(n).is_none()) {
         return Err(bad(C, format!("no graphic style `{n}` in `{}`", lib.name)));
     }
@@ -186,15 +201,16 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let doc_name = |lib_name: &str| added.iter().find(|(l, _)| l == lib_name).map_or_else(|| lib_name.to_string(), |(_, n)| n.clone());
     let mut out = json!({
-        "library": info.id,
+        "library": shown_library_id(s, &info.id),
         "added": added.iter().map(|(_, n)| n).collect::<Vec<_>>(),
         "existing": existing.iter().map(|g| &g.name).collect::<Vec<_>>(),
     });
     let first = picked.first().map(|g| doc_name(&g.name));
-    let targets = p.get("ids").is_some() || !super::appearance::appearance_targets(s, &json!({}))?.is_empty();
-    if let Some(name) = first.filter(|_| bool_or(p, "apply", false) && targets) {
-        let mut params = json!({"name": name, "add": bool_or(p, "add", false)});
-        if let Some(ids) = p.get("ids") {
+    let ids = p.get("ids").filter(|v| !v.is_null());
+    let targets = ids.is_some() || !super::appearance::appearance_targets(s, &json!({}))?.is_empty();
+    if let Some(name) = first.filter(|_| apply && targets) {
+        let mut params = json!({"name": name, "add": add});
+        if let Some(ids) = ids {
             params["ids"] = ids.clone();
         }
         s.execute("graphicStyle.apply", &params)?;
@@ -208,8 +224,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
 fn save(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graphicStyle.saveLibrary";
     let st = s.doc()?;
-    let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
-    let lib = StyleLibrary::from_document(&st.doc, &str_list(p, "names"), name).map_err(|e| bad(C, e))?;
+    let name = text_param(p, "name", C)?.map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
+    let names = names_param(p, C)?;
+    let lib = StyleLibrary::from_document(&st.doc, &names, name).map_err(|e| bad(C, e))?;
     let mut out = json!({ "count": lib.len() });
     s.style_libraries.write(p, &lib.name, STYLES_EXT, FileData::Text(style_libs::write(&lib)), &mut out, C)?;
     Ok(out)
@@ -230,5 +247,5 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     })?;
-    Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len()}))
 }

@@ -2,7 +2,7 @@
 
 **Status (2026-10-25, shared-docking reconciliation):** the published qualification remains checkpoint `83d6dd2d6603845978f949523e6da2b4945dcffb`, tested with post-PR-4113 `main` `6e7854967d6b8a094bfed809643bd957aa3ba66f` and the two `Id::unique` edits at `crates/ui-egui/src/dialogs/recolor.rs:384,725`; managed job `egui037-vector-postmerge-ci-20261025-1381` passed all 12 mandatory CI stages for that working tree, and publication commit `1072d0e263623882da68d8115934630abbef33ae` records it in PR #4173. The reviewed recolor code is already in `main`: `HEAD` and `origin/main` resolve the same blob `6050af15a3bf7b9a056df6dff347bda7690ad251` for that file.
 
-This checkout, at documentation-only follow-up `12fee85c9cbf9f7f1609a53bc67327b12e4f4dd1` (`M14: distinguish qualification from publication`), is locally reconciling upstream `main` `714434527e1a3e03c4b49096e30dd92b258aab50` (PR #4135: panels on craft-ui's shared docking, floating panels in OS windows). The four conflicted files were resolved by taking upstream's `dock.rs`, `panel_docking.rs` and `panel_docking_tests.rs` and deleting `floating.rs`; `git diff` against `714434527…` is empty for those three files, and no `crate::floating` or `mod floating` path remains. Managed CI job 1422 passed all 12 mandatory stages on the pre-merge tree (`12fee85c9…`); managed job `egui037-vector-combined-ci1443` subsequently passed all 12 mandatory CI stages on the combined working tree, including WASM. Independent integration reviews accepted the conflict resolutions and shared-library pins. This qualification covers the executable source and lockfile; the qualification prose was updated afterward to record that result. Native/platform GUI and IME workflows, final packages and paired app performance remain open.
+This checkout, at documentation-only follow-up `12fee85c9cbf9f7f1609a53bc67327b12e4f4dd1` (`M14: distinguish qualification from publication`), is locally reconciling upstream `main` `714434527e1a3e03c4b49096e30dd92b258aab50` (PR #4135: panels on craft-ui's shared docking, floating panels in OS windows). The four conflicted files were resolved by taking upstream's `dock.rs`, `panel_docking.rs` and `panel_docking/tests.rs` and deleting `floating.rs`; `git diff` against `714434527…` is empty for those three files, and no `crate::floating` or `mod floating` path remains. Managed CI job 1422 passed all 12 mandatory stages on the pre-merge tree (`12fee85c9…`); managed job `egui037-vector-combined-ci1443` subsequently passed all 12 mandatory CI stages on the combined working tree, including WASM. Independent integration reviews accepted the conflict resolutions and shared-library pins. This qualification covers the executable source and lockfile; the qualification prose was updated afterward to record that result. Native/platform GUI and IME workflows, final packages and paired app performance remain open.
 
 **Historical status (superseded, not current acceptance):** the earlier reconciliation against `main` `8bf090b25389b48aa6f9d7415de57c9ce7ccf8cb` and managed job `egui037-vectorcraft-artboard-green-ci-20261025-0589` recorded 10,197 passing test executions, zero failures and 14 ignored, including the artboard-name geometry regression, input/IME fixtures, no-bundled-font checks and the web app build. The 0.36.2 lock table and the plan-time local craft-libs/CL-2F statements below are historical planning state. Current dependency pins (read from this checkout's `Cargo.toml` and `Cargo.lock` on 2026-10-25): `egui`, `eframe`, `egui-winit`, `egui-wgpu`, `egui_glow`, `egui_extras`, `egui_kittest`, `epaint`, `emath`, `ecolor`, `epaint_default_fonts` are `0.37.0` from `storytold/egui` rev `6d518fc799681571963842f95b55a6b68431b15a`; `egui_system_font_provider` has an unused patch at that same revision and is not in the resolved dependency graph; `winit` is `0.30.13` from `storytold/winit` rev `a517b3846ee8457d84ee4975110bfda6797c44dc`; `wgpu` is `30.0.1`; `kittest` is `0.5.0`; `accesskit`/`accesskit_winit` are `0.25.1`/`0.34.1`; `craft-ui`, `craft-window`, `craft-keymap`, `craft-print`, `craft-pdf` and `craft-docpath` use published `storytold/craft-libs` rev `a0916808f7d78bed8c7b90cdf937176015454a7f`, as do the `hayro-*` and `krilla` patches.
 
@@ -35,7 +35,7 @@ This subsection records the current code after PR #4135; §§2–5 below remain 
 - **Desktop versus web/Wayland:** on the desktop, floating panels open in OS windows of their own through craft-ui's target-gated `native-windows` feature (`crates/ui-egui/Cargo.toml`, `crates/ui-egui/src/panel_docking.rs` module docs, `apps/vectorcraft/src/main.rs::native_input_hook`). On the web and on Wayland they float inside the app window (`panel_docking.rs`; `docs/control-protocol.md`).
 - **Removed app-side floating:** `crates/ui-egui/src/floating.rs` is deleted. `dock.rs` is now 137 lines and holds `panel_body` plus two scroll-bar tests; `panel_docking.rs` draws the canvas and panels through `craft_ui::docking::DockArea`, with the session-only `Runtime`, `inspect`, `hit_rects`, `known` and `valid`. The old `apply_pending_dock_width`, `cancel_legacy_drag`, `seed_dock_panel_width`, `note_dock_width`, `legacy_dock_default_width`, `shared_dock_default_width` and `dock_width_pending` symbols are gone. `tools_float.rs` keeps the Tools panel's own move state.
 - **Dock-width persistence:** `UiState::dock_width` is the app-owned preference. `panel_docking::main_width` clamps it into the default layout, `default_flags`/`Transaction::commit` writes a resized width back, `workspaces::Workspace` captures and applies it (test `saved_workspaces_restore_dock_width`), and `layout_migration` carries it across older preference files. No `PanelState` seeding is used for dock width.
-- **Tests:** `panel_docking_tests.rs` covers pointer/keyboard docking; `panel_docking_native_tests.rs` covers desktop OS windows (keyboard, drops, modal focus and `ui.docking` hit-rect filtering); `layout_migration_tests.rs` covers conversion of layouts saved before the canvas joined the shared dock; `dock.rs` retains two scroll-bar accessibility tests; `workspaces.rs` covers saved-width restore. These test surfaces are included in the combined-tree CI qualification recorded above; native GUI workflows remain a separate open gate.
+- **Tests:** `panel_docking/tests.rs` covers pointer/keyboard docking; `panel_docking/native_tests.rs` covers desktop OS windows (keyboard, drops, modal focus and `ui.docking` hit-rect filtering); `layout_migration/tests.rs` covers conversion of layouts saved before the canvas joined the shared dock; `dock.rs` retains two scroll-bar accessibility tests; `workspaces.rs` covers saved-width restore. These test surfaces are included in the combined-tree CI qualification recorded above; native GUI workflows remain a separate open gate.
 
 This plan is deliberately app-specific. The suite-wide dependency order and shared acceptance contract are in the
 local planning draft `craft-libs/docs/egui-037-suite-rollout.md` (not yet published at the time of writing); this
@@ -167,11 +167,6 @@ Root workspace (`Cargo.toml`):
   `6d518fc7…`, `winit` to `storytold/winit` rev `a517b384…`, and `hayro-*`/`krilla` to craft-libs rev
   `a0916808…`. The hayro/krilla patches are unrelated to egui and must remain unless a separate comparison proves
   replacement.
-- `vendor/windows-link` is the only vendored package. `vendor/windows-link/VECTORCRAFT-PATCH.md` records the
-  provenance (Microsoft windows-link 0.2.1, crates.io, MIT OR Apache-2.0), the sole change (`CoTaskMemFree` from
-  `ole32.dll` on the Windows 7 target), and the removal condition. It is applied only by
-  `packaging/windows/windows7.ps1` through `--config "patch.crates-io.windows-link.path='vendor/windows-link'"`.
-  **Keep it.** Do not add a root path patch for it, and re-run the Windows 7 packaging check after the egui bump.
 - Nested workspaces: `crates/affinity/fuzz` (libfuzzer only; no egui) and `crates/plugins/example` (wasm plug-in
   example; no egui). `crates/plugins/example/Cargo.lock` is separate and must not acquire egui.
 - `crates/affinity/fuzz` has no lockfile in the checkout. Do not create one merely for this migration.
@@ -181,7 +176,7 @@ Manifests that participate in the egui graph (the table records the plan-time de
 | Manifest | Plan-time UI declaration | Required change |
 |---|---|---|
 | `crates/ui-egui/Cargo.toml` | `egui` workspace + `bytemuck`; `egui_extras`; dev `egui_kittest` `wgpu`,`snapshot` | `egui` must also enable `default_fonts` for library tests/embedders and for downstream kittest tests, which do not inherit kittest's own dev-dependency fonts; `egui_extras`/`egui_kittest` to 0.37; no feature rename assumed |
-| `apps/vectorcraft/Cargo.toml` | `eframe` features `default_fonts`, `wayland`, `x11`; default features `wgpu`, `accessibility`; `windows7 = ["eframe/glow"]`; direct `winit 0.30` | add **`eframe/clipboard`**; keep `links` off (existing native `open_url` service); keep `system_fonts` off; retain winit feature set |
+| `apps/vectorcraft/Cargo.toml` | `eframe` features `default_fonts`, `wayland`, `x11`; default features `wgpu`, `accessibility`; direct `winit 0.30` | add **`eframe/clipboard`**; keep `links` off (existing native `open_url` service); keep `system_fonts` off; retain winit feature set |
 | `apps/vectorcraft-web/Cargo.toml` | wasm `eframe` features `default_fonts`, `wgpu`, `accesskit` | keep; add `clipboard` only if the chosen eframe 0.37 web path needs the feature (the web clipboard code is not gated by it, but test it); web `open_url` is handled by the web runner |
 | `craft-ui` / `craft-window` pins | 0.36-era craft-libs revisions | final L2 craft-libs revision on `3832c47…` with workspace `egui = "0.37"` and the CL-2F capture helper |
 | `Cargo.lock` | one coherent 0.36 graph | one coherent 0.37 graph; no second `egui`, `eframe`, `egui-winit`, `egui-wgpu`, `epaint`/`emath`/`ecolor`, or `winit`; external `kittest`/`accesskit*` are separate audited registry identities |
@@ -196,7 +191,7 @@ never against a candidate, an intermediate fork stage or a provisional craft-lib
 
 | Target | Path | Current role |
 |---|---|---|
-| `vectorcraft` binary | `apps/vectorcraft/src/main.rs` | Native eframe/wgpu app, control server, macOS menu, Linux stylus/XWayland, Windows stylus, printing, Windows 7 glow fallback |
+| `vectorcraft` binary | `apps/vectorcraft/src/main.rs` | Native eframe/wgpu app, control server, macOS menu, Linux stylus/XWayland, Windows stylus, printing |
 | `vectorcraft-web` binary | `apps/vectorcraft-web/src/main.rs`, `web.rs` | wasm eframe web runner, WebGPU/WebGL2, DOM paste/drop, `window.vectorcraft` control API |
 | `vectorcraft-cli` binary | `apps/vectorcraft-cli/src/main.rs`, `perf.rs` | Headless run/convert/bench/perf and MCP stdio |
 | `vectorcraft-ui-egui` library | `crates/ui-egui/src/lib.rs` | All frontend state, panels, dialogs, canvas, control methods, i18n, clipboard, fonts, workers |
@@ -271,7 +266,7 @@ numbers will drift; symbols are authoritative.
 | `WidgetType` is now a deprecated alias for `accesskit::Role`, and variants were renamed | Historical anchors `chrome.rs:640`, `dock.rs:122`, `edit_toolbar.rs:533`, `panel_docking.rs:1241`, `widgets.rs:192/1535/1536/2487`; symbols are authoritative, not these line positions | 54 `WidgetType` call sites at planning time; the current tree has none | Map per §3.2 to the renamed `Role` variants. Do not hide all roles behind `Role::Unknown`. |
 | `Id` is not an `IdSalt` | `dialogs/layer_options.rs:129/130`, `menus.rs:3482/3484` | `Atom::custom(chip, …)`; `Panel::right(Id::new(...))`; `ComboBox::from_id_salt(id)` | `IdSalt::new(...)` only for a parameter typed exactly `IdSalt` (`Atom::custom`); pass the original source to `impl AsIdSalt` APIs (`Panel`, `ComboBox`, `ScrollArea`, `make_persistent_id`). `Id::unique(...)` for root ids. Never pass an `Id` as a salt. |
 | `WidgetInfo.typ` removed | `dialogs/tests_warp.rs:509` | one test | Use `info.role`. |
-| `scroll_area::State.offset` private | `font_menu.rs:507`, `panels/layers.rs:650`, `tests_numfields.rs:614` | 3 sites | Use the public `offset()` method. |
+| `scroll_area::State.offset` private | `font_menu.rs:507`, `panels/layers.rs:650`, `tests/numfields.rs:614` | 3 sites | Use the public `offset()` method. |
 | `FontsView.fonts` private | `i18n/tests.rs:1606/1628` | 2 test sites | Use `definitions()`, `families()`, `characters(&family)` public API. |
 | `egui::UserData` removed | `lib.rs:1032` | screenshot queue | Replace with per-request `ScreenshotCallback`. |
 | `Event::Screenshot` removed | `lib.rs:1052` | screenshot collector | Replace with callback completion channels. |
@@ -424,8 +419,7 @@ Required design (shared weak completion slot, per the suite capture contract):
 
 Required design:
 
-- Add `eframe/clipboard` to the native eframe features (unconditionally, so `--no-default-features --features
-  windows7` keeps it). Keep the app's `SystemClipboard` as the multi-format owner for Copy/Cut (SVG/PDF/PNG/text)
+- Add `eframe/clipboard` to the native eframe features (unconditionally). Keep the app's `SystemClipboard` as the multi-format owner for Copy/Cut (SVG/PDF/PNG/text)
   and for image/PDF/EPS/SVG paste.
 - Consume `Event::PasteImage` in `shortcuts::handle` rather than letting it reach a `TextEdit` or the Type tool:
   - with a `system_clipboard`, treat it as the textless paste signal and let `adopt_system_clipboard` read the
@@ -639,7 +633,6 @@ Source-grounded from the 0.37 changelog and code, with tests rather than assumpt
 - default style tweaks (roomier buttons, larger corners); app sets most tokens but screenshots will move.
 - text tessellation (#8731) and DX12 FXC shader compile (#8736) are upstream reports, not reproduced here. Measure
   our own fixtures before changing anything; preserve Repeat/MirroredRepeat semantics and color emoji.
-- `eframe` now falls back to a compatibility-profile OpenGL context; Windows 7/glow path must be re-tested.
 - #8748 (hidden-parent deferred children) concerns child/deferred viewports. P7c owns the hidden-parent/child fix
   and its regression. VectorCraft has no child viewport, so it verifies only the root window's
   occluded/minimized logic-only path and that any `Area`/`Window` owned by the root does not assume a parent
@@ -674,8 +667,7 @@ One coherent 0.37 family:
 ```
 eframe 0.37 ─┬─ egui 0.37 ── epaint/emath/ecolor/epaint_default_fonts 0.37
              ├─ egui-winit 0.37 ── winit 0.30.13 (approved storytold fork)
-             ├─ egui-wgpu 0.37 ── wgpu 30.0.x
-             └─ egui_glow 0.37 (windows7)
+             └─ egui-wgpu 0.37 ── wgpu 30.0.x
 egui_extras 0.37
 egui_kittest 0.37 ── kittest 0.5.0 (registry)
 craft-ui (final craft-libs rev) ── egui 0.37
@@ -683,7 +675,7 @@ craft-window (final craft-libs rev) ── egui 0.37
 ```
 
 - **Required-used fork-source IDs** (each must appear once from the D1b revision): `egui`, `eframe`, `egui-winit`,
-  `egui-wgpu`, `egui_glow` (`windows7` target only), `egui_extras`, `epaint`, `emath`, `ecolor`,
+  `egui-wgpu`, `egui_extras`, `epaint`, `emath`, `ecolor`,
   `epaint_default_fonts`, `egui_kittest`.
 - **Optional or forbidden-if-present IDs:** `egui_demo_lib`, `egui_inspection`, `egui_system_font_provider` (only
   with the disabled `system_fonts` feature) and `egui_demo_app` (workspace-only binary). Absence is a pass; if one
@@ -704,8 +696,7 @@ craft-window (final craft-libs rev) ── egui 0.37
   dependencies from `craft-ui`/`craft-window` resolve to the same source. A dependency's `[patch]` section is
   ignored by the consumer.
 - Do not use a branch or a machine-local path in publication. The winit fork's own patch is not inherited.
-- Keep `vendor/windows-link` and its separate Windows 7 packaging check, and keep the existing hayro/krilla root
-  patches and PDF fixes. These are unrelated to the egui graph and must not be removed, folded into the fork pin, or
+- Keep the existing hayro/krilla root patches and PDF fixes. These are unrelated to the egui graph and must not be removed, folded into the fork pin, or
   blanket-deleted with PdfCraft's vendors. Do not add `vendor` copies of egui/winit for VectorCraft.
 - Add `cargo xtask ui-deps` (modelled on `xtask/src/pdf_deps.rs`) that runs `cargo metadata --locked` and checks a
   canonical ledger of every package ID and source: required-used fork IDs, optional IDs with an `absent` or
@@ -851,7 +842,7 @@ deadlines and background scheduling. Keep egui's `i.time` for UI animation/gestu
 - Panel order remains app bar / control bar / status+hint / toolbar / dock / central canvas / floating / dialogs.
   The new `Panel` id-salt behavior must not change the order or clip; assert `response.rect`, `ui.clip_rect()` and
   hit positions after resize/DPI changes.
-- VectorCraft does not call `show_viewport_deferred` itself. The only child native viewports are the desktop floating-panel windows that craft-ui's `native-windows` feature creates; the web and Wayland stay in one window. Floating windows' controls are excluded from `ui.docking`'s `hitRects` and from control-channel pointer input (`panel_docking_native_tests.rs`, `docs/control-protocol.md`). Retest screenshot/root behavior for the main viewport with the native child windows present; still test two queued screenshot requests (issued one at a time) and hidden-window paint because the callback contract is new.
+- VectorCraft does not call `show_viewport_deferred` itself. The only child native viewports are the desktop floating-panel windows that craft-ui's `native-windows` feature creates; the web and Wayland stay in one window. Floating windows' controls are excluded from `ui.docking`'s `hitRects` and from control-channel pointer input (`panel_docking/native_tests.rs`, `docs/control-protocol.md`). Retest screenshot/root behavior for the main viewport with the native child windows present; still test two queued screenshot requests (issued one at a time) and hidden-window paint because the callback contract is new.
 - Docking/floating use `craft_ui::docking`; the app `floating` module is deleted. `panel_docking::Runtime` keeps only session-only space/raise/focus state, and `panel_docking::valid`/`known` plus `Permissions` preserve the layout model and the `MoveFloating` group permission checks.
 - Test: panels open/close/reorder, dock width restore, floating panel drag/dock, popup/flyout focus, window resize
   and 1x/1.5x/2x scale; screenshots and geometry agree.
@@ -1015,17 +1006,17 @@ Start with the tests that already encode behaviour:
 | Area | Existing tests/files | What to add |
 |---|---|---|
 | Whole-window frame | `crates/ui-egui/src/graphics.rs` `frame`, texture tests | tick/ui split, multi-pass, hidden paint, texture counts |
-| Panels/dock | `panel_docking_tests.rs` (pointer/keyboard docking), `panel_docking_native_tests.rs` (desktop OS windows), `layout_migration_tests.rs` (older layouts), `dock.rs` (2 scroll-bar tests), `workspaces.rs` (saved dock width) | dock width restore, panel order/clip, 1x/1.5x/2x, floating, native-window focus/keyboard/drops, layout conversion |
+| Panels/dock | `panel_docking/tests.rs` (pointer/keyboard docking), `panel_docking/native_tests.rs` (desktop OS windows), `layout_migration/tests.rs` (older layouts), `dock.rs` (2 scroll-bar tests), `workspaces.rs` (saved dock width) | dock width restore, panel order/clip, 1x/1.5x/2x, floating, native-window focus/keyboard/drops, layout conversion |
 | Tabs/menus | `panels/tabs.rs` tests, `menus.rs` | keyboard/accessibility tree, menu geometry |
-| Fields | `tests_numfields.rs`, `widgets.rs` tests | wheel, focus, names, roles, click-away selection |
-| Canvas | `canvas.rs` tests, `tests_rotateview.rs`, `tests_scrub.rs` | wheel source, zoom/pan, multi-pass, IME |
+| Fields | `tests/numfields.rs`, `widgets.rs` tests | wheel, focus, names, roles, click-away selection |
+| Canvas | `canvas.rs` tests, `tests/rotateview.rs`, `tests/scrub.rs` | wheel source, zoom/pan, multi-pass, IME |
 | Dialogs | `dialogs/tests*.rs`, `dialogs/modal.rs` | sizing pass, names, focus, screen height |
-| Clipboard | `tests_sysclip*.rs`, `tests_clipboard.rs`, `tests_pastechords.rs` | eframe clipboard feature, PasteImage, PRIMARY with per-seat keyboard and pointer serials |
-| Saving/recovery | `tests_save.rs`, `tests_svgsave.rs`, `tests_recovery.rs` | save/reopen after migration, autosave under logic-only |
-| Native menu | `tests_nativemenu.rs` | host-iteration count once, not per pass, menu sync |
-| Automation | `tests_automation.rs`, `control_server.rs` tests | screenshot callback routing, timeout, hidden paint |
+| Clipboard | `tests/sysclip*.rs`, `tests/clipboard.rs`, `tests/pastechords.rs` | eframe clipboard feature, PasteImage, PRIMARY with per-seat keyboard and pointer serials |
+| Saving/recovery | `tests/save.rs`, `tests/svgsave.rs`, `tests/recovery.rs` | save/reopen after migration, autosave under logic-only |
+| Native menu | `tests/nativemenu.rs` | host-iteration count once, not per pass, menu sync |
+| Automation | `tests/automation.rs`, `control_server.rs` tests | screenshot callback routing, timeout, hidden paint |
 
-Add a `tests_lifecycle.rs` (new) covering:
+Add a `tests/lifecycle.rs` (new) covering:
 
 - The test driver calls `raw_input_hook`/`begin_host_iteration` once, then `run_ui(|ui| { tick(ui.ctx()); ui(ui) })`
   for a full frame, and `run_logic(|ctx| tick(ctx))` for a logic-only frame — the host's actual order.
@@ -1041,7 +1032,7 @@ Add a `tests_lifecycle.rs` (new) covering:
   and monotonic time, not a layout-pass index.
 - Baseline driver uses 0.36.2 `logic`/`ui` (no `tick`) and produces the same lifecycle/pass count record.
 
-Add a `tests_screenshots.rs` (new) covering:
+Add a `tests/screenshots.rs` (new) covering:
 
 - one request → exactly one reply and one file;
 - two requests → distinct images/paths, exactly two replies;
@@ -1105,8 +1096,6 @@ Add accessibility tests in the existing `role_and_state` style and via kittest:
   pass. The existing unsafe `mac_window::center_buttons` may be replaceable by 0.37's
   `Frame::set_traffic_lights_position`, but do not adopt that without macOS evidence; keep the existing code and
   test it on real hardware later.
-- **Windows 7:** compile/package only under `packaging/windows/windows7.ps1 -Test`; no support claim without a real
-  Windows 7 run. The `vendor/windows-link` patch remains.
 - **Windows ARM64 and FreeBSD:** keep the existing `.github/workflows/windows-arm64.yml` and `freebsd.yml` checks:
   compile/package and the smoke they actually run. Do not treat a cross/QEMU build as GUI, IME, clipboard or GPU
   evidence; record those rows as unavailable unless a real machine is used.
@@ -1342,22 +1331,19 @@ These are not “future work”; they block calling the migration done:
    and isolate it from performance comparisons (§6.2). Recheck if main advanced further.
 9. **macOS evidence.** No macOS host/display is available here. Keyboard layouts, IME (including press-and-hold),
    Metal/GL, native pickers, termination and traffic-light positioning remain an explicit release gate.
-10. **Windows 7.** 0.37 + glow + clipboard + the separate `vendor/windows-link` packaging patch must
-    compile/package and be smoke-tested; no support claim from a modern runner alone. Keep the hayro/krilla PDF
-    patches independent.
-11. **Performance.** Paired control at `4a7cba0…` and candidate with the same engine delta, plus a stock-0.37.0
+10. **Performance.** Paired control at `4a7cba0…` and candidate with the same engine delta, plus a stock-0.37.0
     arm in the first report and every investigated regression, using the shared sample floors and the 5%
     median / 10% p95 / 5% RSS gates. Upstream #8731, #8736 and #8512 are reports, not results; do not claim a
     regression or a fix without ours.
-12. **Dependency identities.** Enumerate every fork-family package at one storytold source; audit external
+11. **Dependency identities.** Enumerate every fork-family package at one storytold source; audit external
     `kittest`/`accesskit*` as compatible registry identities, not egui-git crates. Skrifa/harfrust/glifo duplicates
     are expected; measure binary size and confirm no public type crossing. A new `egui`/winit duplicate is a hard
     failure.
-13. **Role semantics.** Review the `SelectableLabel → Button`, `Checkbox → CheckBox`, `CollapsingHeader →
+12. **Role semantics.** Review the `SelectableLabel → Button`, `Checkbox → CheckBox`, `CollapsingHeader →
     DisclosureTriangle` and `Other → Unknown` mappings against actual screen-reader semantics, not just compile.
-14. **Wayland/X11/GPU backend.** The host has an i915 render device but no inherited display session; a managed
+13. **Wayland/X11/GPU backend.** The host has an i915 render device but no inherited display session; a managed
     Linux job must qualify the actual compositor/backend/DPI. Availability is not a qualified result.
-15. **Web.** A wasm `check` is not a browser workflow; headless Chrome WebGPU/WebGL2, paste/drop, save/download and
+14. **Web.** A wasm `check` is not a browser workflow; headless Chrome WebGPU/WebGL2, paste/drop, save/download and
     screenshots are required.
 
 **Done means:** one coherent 0.37 graph; `cargo xtask ci` and `ui-deps` pass from a clean checkout; lifecycle
@@ -1391,7 +1377,7 @@ Every finding in `plan-reviews/vectorcraft-v2.md` is closed below by source-grou
 
 | # | Finding | Disposition |
 |---|---|---|
-| 1 | No stock-0.37.0 control arm | **Accepted and fixed.** Stock 0.37.0 (`841a328b`) is a measured arm in the first baseline report and every investigated regression, with the same environment and a pinned minimal adapter where fork-only code cannot compile; retained even when app acceptance pairs 0.36 with the candidate. §5.3, §6.2, §7.1 V1, §8.11. |
+| 1 | No stock-0.37.0 control arm | **Accepted and fixed.** Stock 0.37.0 (`841a328b`) is a measured arm in the first baseline report and every investigated regression, with the same environment and a pinned minimal adapter where fork-only code cannot compile; retained even when app acceptance pairs 0.36 with the candidate. §5.3, §6.2, §7.1 V1, §8.10. |
 | 2 | Capture admission and geometry under-specified; 64 MiB too small | **Accepted and fixed.** Adopted the shared 4 requests / 128 MiB per image / 256 MiB aggregate defaults (stricter only if the documented intended surface fits), checked bytes reserved before issue, no eviction; records logical/screen bounds, viewport, DPI/zoom and surface epoch at issuance and rejects/retries any change before save, including change-back, then verifies scale/aspect. §3.5, §4.4, §5.2, §8.5. |
 | 3 | W27 old-epoch invalidation missing | **Accepted and fixed.** Old-epoch `done` is rejected and invalidates that epoch, never edits the new owner; current-epoch mismatch applies incoming once and defers outgoing. §3.9, §4.6, §5.6, §5.7. |
 | 4 | P7c ownership of #8763/#8748 absent | **Accepted and fixed.** P7c owns both fixes and their pointer/keyboard and hidden-parent regressions; D1b includes P7c, V2 depends on it, and an app workaround needs equivalent tests plus a removal condition. §3.11, §7.1, §8.1. |

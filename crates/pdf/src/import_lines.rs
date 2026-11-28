@@ -7,14 +7,14 @@
 //! - area type comes as a line of point type per line, each wrapped line ending in a space. Lines
 //!   in a row sharing a left edge, font, size and leading (and paragraph spacing) are one area
 //!   type object again, aligned left or justified, where laying its text out in the frame breaks
-//!   it where the file does: else, as where its font isn't installed, they stay lines.
+//!   it where the file does; otherwise they stay lines. Carried fonts are used for this check.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use kurbo::{Point, Rect, Shape};
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{AppearanceItem, CharStyle, Justify, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{AppearanceItem, CharStyle, FileFont, FileFonts, Justify, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::shapes;
 
 use crate::import_text::{LineFacts, median};
@@ -153,6 +153,10 @@ fn block(nodes: &[Arc<Node>], lines: &HashMap<NodeId, LineFacts>) -> (usize, Opt
 /// the file's widths are rounded, or it moved a glyph a hair (`TJ`).
 const EVEN_TRACKING: f64 = 10.0;
 
+/// How far the tracking of a wrapped line's spaces may stray (thousandths of an em, a fiftieth of
+/// an em) and still be one value: each space the file draws beside a wider gap is tracked apart.
+const SPACE_TRACKING_TOLERANCE: f64 = 20.0;
+
 /// A line's spacing: the tracking after its letters, and how much more its spaces take (word
 /// spacing, `Tw`; `None` when it has none). `None` when its letters are tracked apart (set by
 /// hand), or its spaces more than `slack` apart.
@@ -194,7 +198,7 @@ fn area_type(nodes: &[Arc<Node>], lines: &HashMap<NodeId, LineFacts>, b: &Block)
     // type's own.
     // A wrapped line's spaces may each be tracked apart, within a fiftieth of an em of each other.
     let spacings: Vec<(f64, Option<f64>)> =
-        texts.iter().map(|(t, f)| line_spacing(t, if f.wraps { 20.0 } else { EVEN_TRACKING })).collect::<Option<_>>()?;
+        texts.iter().map(|(t, f)| line_spacing(t, if f.wraps { SPACE_TRACKING_TOLERANCE } else { EVEN_TRACKING })).collect::<Option<_>>()?;
     let trackings: Vec<f64> = spacings.iter().map(|(t, _)| *t).collect();
     let words: Vec<Option<f64>> = spacings.iter().map(|(_, w)| *w).collect();
     let wrapped: Vec<f64> = texts.iter().filter(|(_, f)| f.wraps).map(|(_, f)| f.length).collect();
@@ -254,6 +258,30 @@ fn laid_out(texts: &[(&TextObject, &LineFacts)], b: &Block, justify: Justify, wi
     }
     let mut t = (*first).clone();
     t.runs = runs;
+    // The fonts the file carries that draw the lines draw them as one object too.
+    let mut fonts: Vec<FileFont> = vec![];
+    for f in texts.iter().flat_map(|(t, _)| t.file_fonts_in_use()) {
+        if !fonts.contains(f) {
+            fonts.push(f.clone());
+        }
+    }
+    t.file_fonts = (!fonts.is_empty()).then(|| {
+        let resources = fonts
+            .iter()
+            .take(vectorcraft_doc::text::MAX_FILE_FONTS)
+            .filter_map(|font| {
+                texts
+                    .iter()
+                    .find_map(|(line, _)| {
+                        line.file_fonts_in_use().iter().any(|f| f.key == font.key).then(|| line.file_fonts.as_ref()?.face(&font.key)).flatten()
+                    })
+                    .map(|face| (font.key.clone(), face))
+            })
+            .collect();
+        let mut kept = FileFonts::new(fonts, &t.plain_text());
+        kept.bind(resources);
+        Box::new(kept)
+    });
     t.para.justify = justify;
     t.para.space_before = b.space;
     let last = b.ys.last().copied()?;

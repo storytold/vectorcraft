@@ -83,19 +83,24 @@ pub fn to_transparent(ix: &mut Indexed, mapped: impl Fn(usize) -> bool) -> Vec<O
 
 /// Lossy GIF compression: a pixel takes the entry of the pixel left of it when that entry is
 /// within `amount` (0–100) of its own colour in `rgba` (the straight pixels it was reduced from).
-/// Longer runs of one index compress better in a GIF, at the cost of some noise.
-pub fn lossy(ix: &mut Indexed, rgba: &[u8], amount: u8) {
+/// Longer runs of one index compress better in a GIF, at the cost of some noise. No pixel moves
+/// into or out of the transparent entry or an entry in `fixed`.
+pub fn lossy(ix: &mut Indexed, rgba: &[u8], amount: u8, fixed: &[u8]) {
     let w = ix.width as usize;
     if amount == 0 || w == 0 || rgba.len() != ix.indices.len() * 4 {
         return;
     }
     // Up to 64 levels apart in each channel at 100.
     let limit = (f32::from(amount.min(100)) / 100.0 * 64.0).powi(2) * 3.0;
+    let mut held = [false; 256];
+    for i in fixed.iter().chain(&ix.transparent) {
+        held[usize::from(*i)] = true;
+    }
     let px = rgba.as_chunks::<4>().0;
     for (row, src) in ix.indices.chunks_mut(w).zip(px.chunks(w)) {
         for x in 1..row.len() {
             let (prev, cur) = (row[x - 1], row[x]);
-            if prev == cur || ix.transparent.is_some_and(|t| t == prev || t == cur) {
+            if prev == cur || held[usize::from(prev)] || held[usize::from(cur)] {
                 continue;
             }
             let (Some(c), Some(p)) = (src.get(x), ix.palette.get(prev as usize)) else { continue };

@@ -1,0 +1,586 @@
+use super::envelope::{EnvelopeOptions, PreserveShape, expand_envelope};
+use super::mesh::GradientMesh;
+use super::warp::map_nonlinear;
+use super::{
+    Affine, Appearance, AppearanceItem, Arc, Color, FillLayer, ImageObject, Node, NodeId, NodeKind, Paint, PathData, Point, Rect, SubPath, Vec2,
+    blend_expand,
+};
+
+/// Optional hook that converts nodes the pure evaluation can't map (text) to outlines.
+pub type Outliner<'a> = Option<&'a dyn Fn(&Node) -> Option<Node>>;
+
+/// Distort Pattern Fills: the tiles pattern swatch `name` painted with placement `xf` lays over
+/// `region` (see [`crate::PatternDef::instances_in`]); `None` without such a swatch.
+pub type PatternTiles<'a> = &'a dyn Fn(&str, Affine, Rect) -> Option<Vec<Node>>;
+
+/// What live evaluation asks of the crates above this one (`vectorcraft-effects` supplies them).
+#[derive(Clone, Copy, Default)]
+pub struct Hooks<'a> {
+    /// Type as its glyph outlines, a symbol instance as its art (see [`Outliner`]).
+    pub outline: Outliner<'a>,
+    /// Distort Appearance: a path's strokes and geometry effects baked into filled art (`None`
+    /// when it has none to bake).
+    pub appearance: Outliner<'a>,
+    /// Distort Appearance for the pieces of type's glyph outlines: their geometry effects baked
+    /// as [`Hooks::appearance`] bakes them, their strokes left as strokes, which then paint along
+    /// the bent outlines at their own weight (#6644). `None` when a piece has nothing to bake, and
+    /// without this hook nothing in type's outlines is baked.
+    pub type_appearance: Outliner<'a>,
+    /// Distort Pattern Fills: the tiles a pattern fill lays (see [`PatternTiles`]).
+    pub pattern: Option<PatternTiles<'a>>,
+    /// The document whose symbols' art counts toward the instance budget of a Repeat of their
+    /// instances ([`crate::RepeatSpec::expand`]).
+    pub symbols: Option<&'a crate::Document>,
+}
+
+impl<'a> From<Outliner<'a>> for Hooks<'a> {
+    fn from(outline: Outliner<'a>) -> Self {
+        Self { outline, ..Default::default() }
+    }
+}
+
+/// The affine map that best matches `f` near `p` (finite differences with step `eps`).
+pub fn affine_near(f: &dyn Fn(Point) -> Point, p: Point, eps: f64) -> Affine {
+    let o = f(p);
+    let ex = (f(p + Vec2::new(eps, 0.0)) - f(p - Vec2::new(eps, 0.0))) / (2.0 * eps);
+    let ey = (f(p + Vec2::new(0.0, eps)) - f(p - Vec2::new(0.0, eps))) / (2.0 * eps);
+    let lin = Affine::new([ex.x, ex.y, ey.x, ey.y, 0.0, 0.0]);
+    Affine::translate(o.to_vec2()) * lin * Affine::translate(-p.to_vec2())
+}
+
+/// How deep hooks may nest art inside art (symbols in symbols, envelopes in envelopes) before
+/// the rest is left as it is: a file can make a symbol contain itself.
+const MAX_HOOK_DEPTH: u32 = 16;
+
+/// How an envelope pushes art through its point map.
+#[derive(Clone, Copy)]
+pub(super) struct Warper<'a> {
+    pub(super) f: &'a dyn Fn(Point) -> Point,
+    /// Longest piece a segment is cut into before mapping.
+    pub(super) piece: f64,
+    /// Finite-difference step for the local affine maps gradients follow.
+    pub(super) eps: f64,
+    /// Rows and columns of the pieces an image is cut into.
+    pub(super) cells: usize,
+    pub(super) hooks: Hooks<'a>,
+    pub(super) options: EnvelopeOptions,
+    /// How many hooks the art being mapped came through.
+    pub(super) depth: u32,
+    /// Are groups marked as type's glyph outlines ([`crate::NodeExtras::type_outlines`]) in the art
+    /// being mapped type that live evaluation outlined: the type of the envelope's contents, or of
+    /// a live object in them, such as an envelope inside the envelope? Their strokes then paint
+    /// along the bent outlines at their own weight (#6644). Groups so marked in the contents as
+    /// they are, art an earlier Expand made of type, are plain art.
+    pub(super) type_outlines: bool,
+}
+
+impl Warper<'_> {
+    /// This warper one hook deeper (`None` past [`MAX_HOOK_DEPTH`]).
+    fn deeper(&self) -> Option<Self> {
+        (self.depth < MAX_HOOK_DEPTH).then_some(Self { depth: self.depth + 1, ..*self })
+    }
+}
+
+/// `to` (art standing in for `from`: its outlines, its art) with `from`'s name, transparency,
+/// opacity mask and effects.
+fn carry_look(from: &Node, mut to: Node) -> Node {
+    to.name = from.name.clone();
+    to.opacity = from.opacity;
+    to.blend = from.blend;
+    to.isolate = from.isolate;
+    to.knockout = from.knockout;
+    to.knockout_shape = from.knockout_shape;
+    to.extras_mut().mask = from.extras().mask.clone();
+    to.appearance.effects = from.appearance.effects.clone();
+    to
+}
+
+pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
+    let deeper = w.deeper();
+    // Distort Appearance: strokes and geometry effects bend with the art.
+    if w.options.distort_appearance
+        && let Some(d) = &deeper
+        && let Some(o) = w.hooks.appearance.and_then(|h| h(n))
+    {
+        return map_node(&o, d);
+    }
+    // Distort Pattern Fills: the tiles bend with the art (not the patterns inside them).
+    if w.options.patterns()
+        && let Some(d) = &deeper
+        && let Some(o) = w.hooks.pattern.and_then(|p| pattern_art(n, p))
+    {
+        let inner = Warper { options: EnvelopeOptions { distort_pattern_fills: false, ..d.options }, ..*d };
+        return map_node(&o, &inner);
+    }
+    let mut out = n.clone();
+    // Distort Linear Gradients: the gradient vectors follow the warp where they sit.
+    if w.options.gradients()
+        && let Some(b) = n.geometric_bounds()
+    {
+        out.appearance.warp_linear_gradients(b, &|p| affine_near(w.f, p, w.eps));
+    }
+    // A linked opacity mask bends with the object it masks; an unlinked one stays where it is.
+    if let Some(m) = out.extras_if_any().and_then(|e| e.mask.as_mut()).filter(|m| m.linked) {
+        m.art = Arc::new(map_node(&m.art, w));
+    }
+    match &mut out.kind {
+        NodeKind::Path { path, live, .. } => {
+            *path = map_nonlinear(path, w.piece, w.f);
+            *live = None;
+        }
+        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+            // Type's glyph outlines: with Distort Appearance too, their strokes paint along the
+            // bent outlines at their own weight, as `.ai` files draw them (#6644). Their pieces are
+            // baked by `type_appearance`, which keeps strokes as strokes; their geometry effects,
+            // gradients and pattern fills follow the options as a path's do. The group's opacity
+            // mask, mapped above, bends as other art does.
+            let typed = Warper { hooks: Hooks { appearance: w.hooks.type_appearance, ..w.hooks }, ..*w };
+            let w = if w.type_outlines && n.extras().type_outlines { &typed } else { w };
+            for c in children.iter_mut() {
+                *c = Arc::new(map_node(c, w));
+            }
+        }
+        NodeKind::Mesh(m) => m.map(w.f),
+        NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Intertwine { .. } => {
+            if let Some(d) = &deeper {
+                // The type's outlines in its art are type (an envelope inside the envelope, #6644).
+                return map_node(&expanded_group_hooks(n, w.hooks), &Warper { type_outlines: true, ..*d });
+            }
+        }
+        NodeKind::Text(_) | NodeKind::SymbolInstance { .. } => {
+            if let Some(d) = &deeper
+                && let Some(o) = w.hooks.outline.and_then(|h| h(n))
+            {
+                // Type's outlines are type (#6644, the group arm above).
+                let d = Warper { type_outlines: d.type_outlines || matches!(n.kind, NodeKind::Text(_)), ..*d };
+                return map_node(&carry_look(n, o), &d);
+            }
+        }
+        NodeKind::Image(im) => {
+            let im = im.clone();
+            return warp_image(&out, &im, w);
+        }
+        // Its art is plain, so it warps at this depth.
+        NodeKind::PlacedDocument(_) => return map_node(&expanded_group_hooks(n, w.hooks), w),
+        // A ruler guide has no shape to warp.
+        NodeKind::RulerGuide { .. } => {}
+    }
+    out
+}
+
+/// The affine map taking triangle `s` to triangle `d` (`None` when `s` is degenerate).
+fn affine_between(s: [Point; 3], d: [Point; 3]) -> Option<Affine> {
+    let basis = |p: [Point; 3]| Affine::new([p[1].x - p[0].x, p[1].y - p[0].y, p[2].x - p[0].x, p[2].y - p[0].y, p[0].x, p[0].y]);
+    let bs = basis(s);
+    if bs.determinant().abs() < 1e-12 {
+        return None;
+    }
+    let a = basis(d) * bs.inverse();
+    a.is_finite().then_some(a)
+}
+
+/// Image `n` (`im`) pushed through the envelope's warp as a raster mesh warp ([`mesh_warp_image`]
+/// with `w.cells` cells, Preserve Shape Using Transparency and Anti-Alias as the envelope's
+/// options say).
+fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
+    let k = w.cells.max(1);
+    // An image an inner envelope already cut into pieces is cut again here, so the pieces count
+    // against [`MAX_GENERATED`]. Past it, the image is left out.
+    if !Generating::charge(mesh_warp_cost(k)) {
+        let mut g = n.clone();
+        g.kind = NodeKind::Group { children: vec![], clip: false };
+        return g;
+    }
+    mesh_warp_image(n, im, w.f, k, !w.options.anti_alias, w.options.preserve_shape == PreserveShape::Transparency)
+}
+
+/// How many objects [`mesh_warp_image`] makes of one image with `cells` rows and columns: two
+/// triangles a cell, three objects each.
+pub fn mesh_warp_cost(cells: usize) -> usize {
+    let k = cells.max(1);
+    k.saturating_mul(k).saturating_mul(6)
+}
+
+/// Image `n` (`im`) pushed through point map `f` as a raster mesh warp: its frame cut into
+/// `cells`² cells of two triangles, each a clip group showing the image under the affine map
+/// that takes the triangle where `f` takes its corners (with `masked`, the image masked by the
+/// triangle instead; with `pixelated`, drawn without smoothing). Each piece reaches a little past
+/// its edges (at most half a point) so neighbors overlap and no seams show. Each piece keeps the
+/// color `n` colorizes a grayscale image with, and `n`'s color mask. The result is a group with `n`'s id, name,
+/// transparency, opacity mask and appearance. It is a knockout group and each piece is a
+/// [`crate::NodeExtras::warp_piece`], so where pieces overlap only the top one draws and a
+/// partly transparent image keeps its own alpha there. More cells than [`MAX_GENERATED`] objects
+/// allow make an empty group.
+pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, cells: usize, pixelated: bool, masked: bool) -> Node {
+    mesh_warp_image_with(n, im, f, cells, pixelated, masked, None)
+}
+
+/// [`mesh_warp_image`], each piece reaching `overlap` points past its edges when given.
+pub(crate) fn mesh_warp_image_with(
+    n: &Node,
+    im: &ImageObject,
+    f: &dyn Fn(Point) -> Point,
+    cells: usize,
+    pixelated: bool,
+    masked: bool,
+    overlap: Option<f64>,
+) -> Node {
+    let k = cells.max(1);
+    let mut g = n.clone();
+    g.kind = NodeKind::Group { children: vec![], clip: false };
+    g.knockout = crate::Knockout::On;
+    if let Some(e) = g.extras_if_any() {
+        e.colorize = None;
+        e.colorize_overprint = false;
+        e.image_quad = None;
+    }
+    if mesh_warp_cost(k) > MAX_GENERATED {
+        return g;
+    }
+    // A grayscale image's fill color colorizes each piece, overprinting as the image's does; the
+    // group of pieces takes none.
+    let (colorize, colorize_overprint) = (n.extras().colorize.clone(), n.extras().colorize_overprint);
+    // Each piece shows what the image shows: its color mask's masked pixels.
+    let color_mask = n.extras().color_mask.clone();
+    let (pw, ph) = (im.width as f64, im.height as f64);
+    let at = |i: usize, j: usize| Point::new(pw * i as f64 / k as f64, ph * j as f64 / k as f64);
+    // A distorted image's pixels reach the page through its projective map.
+    let to_page = n.image_map().filter(|_| n.is_distorted_image());
+    let place = |p: Point| to_page.and_then(|m| m.apply(p)).unwrap_or(im.xf * p);
+    let mut pieces = Vec::with_capacity(2 * k * k);
+    for j in 0..k {
+        for i in 0..k {
+            let s = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
+            let d = s.map(|p| f(place(p)));
+            for t in [[0, 1, 2], [0, 2, 3]] {
+                let (st, dt) = (t.map(|v| s[v]), t.map(|v| d[v]));
+                let Some(xf) = affine_between(st, dt) else { continue };
+                let c = Point::new((dt[0].x + dt[1].x + dt[2].x) / 3.0, (dt[0].y + dt[1].y + dt[2].y) / 3.0);
+                let tri: Vec<Point> = match overlap {
+                    Some(g) => grown_triangle(dt, g),
+                    None => {
+                        let grow = (dt[0].distance(dt[1]).max(dt[1].distance(dt[2])) * 0.02).min(0.5);
+                        dt.iter()
+                            .map(|p| {
+                                let v = *p - c;
+                                let len = v.hypot();
+                                if len > 1e-12 { *p + v * (grow / len) } else { *p }
+                            })
+                            .collect()
+                    }
+                };
+                let shape = PathData::single(SubPath::polyline(&tri, true));
+                let mut image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
+                image.extras_mut().pixelated = pixelated;
+                image.extras_mut().colorize = colorize.clone();
+                image.extras_mut().colorize_overprint = colorize_overprint;
+                image.extras_mut().color_mask = color_mask.clone();
+                if masked {
+                    // Preserve Shape Using Transparency: the triangle is the piece's alpha (a
+                    // white opacity mask) instead of its clipping path.
+                    let white = Node::path(n.id, shape, Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
+                    let mut piece = image.with_mask(Some(Box::new(crate::OpacityMask::new(white, true))));
+                    piece.extras_mut().warp_piece = true;
+                    pieces.push(Arc::new(piece));
+                    continue;
+                }
+                let mut clip = Node::path(n.id, shape, Appearance::default());
+                if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+                    *clipping = true;
+                }
+                let mut piece = Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true });
+                piece.extras_mut().warp_piece = true;
+                pieces.push(Arc::new(piece));
+            }
+        }
+    }
+    g.kind = NodeKind::Group { children: pieces, clip: false };
+    g
+}
+
+/// Triangle `t` with each side moved `g` outward: `t` scaled about its incenter. A corner moves
+/// at most 8 `g`, so a very thin triangle's sides move less than `g`.
+fn grown_triangle(t: [Point; 3], g: f64) -> Vec<Point> {
+    let side = |i: usize| t[(i + 1) % 3].distance(t[(i + 2) % 3]);
+    let (a, b, c) = (side(0), side(1), side(2));
+    let perimeter = a + b + c;
+    let area = ((t[1] - t[0]).cross(t[2] - t[0]) / 2.0).abs();
+    if !(perimeter > 1e-12 && area > 0.0 && g.is_finite() && g > 0.0) {
+        return t.to_vec();
+    }
+    let center = Point::new((a * t[0].x + b * t[1].x + c * t[2].x) / perimeter, (a * t[0].y + b * t[1].y + c * t[2].y) / perimeter);
+    let r = 2.0 * area / perimeter;
+    let far = t.iter().map(|p| p.distance(center)).fold(0.0, f64::max);
+    let grow = (g / r).min(8.0 * g / far.max(1e-12));
+    t.iter().map(|p| center + (*p - center) * (1.0 + grow)).collect()
+}
+
+/// Distort Pattern Fills: path or compound path `n` with each visible pattern fill turned into the
+/// tiles it paints in a clip group shaped like `n` (with the fill's opacity and blend mode), its
+/// other fills and strokes on copies of it, in paint order, under `n`'s transparency. `None`
+/// without a pattern fill whose definition `pattern` finds.
+fn pattern_art(n: &Node, tiles: PatternTiles) -> Option<Node> {
+    let (path, rule, _) = crate::blend::node_path(n)?;
+    let pattern_fill = |i: &AppearanceItem| matches!(i, AppearanceItem::Fill(f) if f.visible && matches!(f.paint, Paint::Pattern { .. }));
+    if !n.appearance.items.iter().any(pattern_fill) {
+        return None;
+    }
+    let bounds = path.bounds()?;
+    let def = |i: &AppearanceItem| match i {
+        AppearanceItem::Fill(f) if f.visible => match &f.paint {
+            Paint::Pattern { pattern: name, xf } => tiles(name, *xf, bounds).map(|t| (t, f.opacity, f.blend)),
+            _ => None,
+        },
+        _ => None,
+    };
+    let plain = |items: Vec<AppearanceItem>| {
+        let mut p = Node {
+            appearance: Appearance { items, ..Default::default() }.into(),
+            opacity: 1.0,
+            blend: Default::default(),
+            isolate: false,
+            knockout: Default::default(),
+            knockout_shape: false,
+            name: None,
+            ..n.clone()
+        };
+        p.extras_mut().mask = None;
+        Arc::new(p)
+    };
+    let mut pieces = vec![];
+    let mut rest = vec![];
+    for i in &n.appearance.items {
+        let Some((tiles, opacity, blend)) = def(i) else {
+            rest.push(i.clone());
+            continue;
+        };
+        if !rest.is_empty() {
+            pieces.push(plain(std::mem::take(&mut rest)));
+        }
+        let mut clip = Node::path(n.id, path.clone(), Appearance::default());
+        if let NodeKind::Path { clipping, rule: r, .. } = &mut clip.kind {
+            (*clipping, *r) = (true, rule);
+        }
+        let children = std::iter::once(clip).chain(tiles).map(Arc::new).collect();
+        let mut g = Node::new(n.id, NodeKind::Group { children, clip: true });
+        g.opacity = opacity;
+        g.blend = blend;
+        pieces.push(Arc::new(g));
+    }
+    if !rest.is_empty() {
+        pieces.push(plain(rest));
+    }
+    Some(Node {
+        kind: NodeKind::Group { children: pieces, clip: false },
+        appearance: Appearance { effects: n.appearance.effects.clone(), ..Default::default() }.into(),
+        ..n.clone()
+    })
+}
+
+// =====================================================================================
+// Expansion
+// =====================================================================================
+
+/// Is this one of the live kinds?
+pub fn is_live(n: &Node) -> bool {
+    matches!(
+        n.kind,
+        NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. }
+    )
+}
+
+/// Is this drawn and written as evaluated art: a live object ([`is_live`]) or a distorted image
+/// ([`Node::image_quad`]), whose art is [`crate::image_quad::distorted_art`]. Effects and
+/// container paint treat a distorted image as an image, not as live art.
+pub fn is_drawn_live(n: &Node) -> bool {
+    is_live(n) || n.is_distorted_image()
+}
+
+/// Mesh tessellation as flat-filled paths (no stroke): each patch cut `n`×`n`, its quads joined
+/// where the colour hardly changes ([`GradientMesh::pieces`]).
+pub fn mesh_quad_nodes(m: &GradientMesh, n: usize) -> Vec<Node> {
+    m.pieces(n)
+        .into_iter()
+        .map(|q| {
+            let mut ap = Appearance::default();
+            let mut fl = FillLayer::new(Paint::solid(q.color));
+            fl.opacity = q.opacity;
+            ap.items.push(AppearanceItem::Fill(fl));
+            Node::path(NodeId(0), PathData::single(SubPath::polyline(&q.pts, true)), ap)
+        })
+        .collect()
+}
+
+/// One level of evaluation of a live object (non-live nodes return themselves). Blend steps and
+/// envelope results may still contain live objects (e.g. a blend of two meshes).
+pub fn expand_live(n: &Node) -> Vec<Node> {
+    expand_live_with(n, None)
+}
+
+pub fn expand_live_with(n: &Node, outline: Outliner) -> Vec<Node> {
+    expand_live_hooks(n, outline.into())
+}
+
+/// [`expand_live_with`] with everything an envelope can ask of the crates above (see [`Hooks`]).
+pub fn expand_live_hooks(n: &Node, hooks: Hooks) -> Vec<Node> {
+    let _generating = Generating::enter();
+    match &n.kind {
+        NodeKind::Blend { children, spec } => blend_expand(children, spec),
+        NodeKind::Envelope { content, kind, fidelity, options, frame, .. } => expand_envelope(content, kind, *fidelity, *options, **frame, hooks),
+        NodeKind::Mesh(m) => mesh_quad_nodes(m, 8),
+        NodeKind::Repeat(r) => r.expand(hooks.symbols),
+        NodeKind::PlacedDocument(p) => p.art(n),
+        NodeKind::Intertwine { children } => crate::intertwine::expand(children),
+        NodeKind::Image(_) => vec![crate::image_quad::distorted_art(n).unwrap_or_else(|| n.clone())],
+        _ => vec![n.clone()],
+    }
+}
+
+/// A live object evaluated into a plain group (keeping the object's id, name and transparency).
+pub fn expanded_group(n: &Node, outline: Outliner) -> Node {
+    expanded_group_hooks(n, outline.into())
+}
+
+/// [`expanded_group`] with [`Hooks`].
+pub fn expanded_group_hooks(n: &Node, hooks: Hooks) -> Node {
+    let _generating = Generating::enter();
+    let children = expand_live_hooks(n, hooks).into_iter().map(Arc::new).collect();
+    let mut g = Node::new(n.id, NodeKind::Group { children, clip: false });
+    g.name = n.name.clone();
+    g.visible = n.visible;
+    g.locked = n.locked;
+    g.opacity = n.opacity;
+    g.blend = n.blend;
+    g.isolate = n.isolate;
+    g.knockout = n.knockout;
+    // Knocking out opaque blend steps changes nothing: don't make the outputs work for it.
+    if matches!(n.kind, NodeKind::Blend { .. }) && g.knockout == crate::Knockout::On && !crate::blend::knockout_shows(&g) {
+        g.knockout = crate::Knockout::Off;
+    }
+    g.knockout_shape = n.knockout_shape;
+    g.extras_mut().mask = n.extras().mask.clone();
+    g
+}
+
+/// Recursively replace every live object in `n` by plain geometry (for exporters).
+pub fn expand_deep(n: &Node, outline: Outliner) -> Node {
+    expand_deep_hooks(n, outline.into())
+}
+
+/// [`expand_deep`] with [`Hooks`]. The objects live art makes here count against one
+/// [`MAX_GENERATED`] ([`Generating`]): blends of blends kept their inner blends live, and each
+/// copy expanded on its own, so step counts capped one by one multiplied. Past it, live art
+/// expands to nothing.
+pub fn expand_deep_hooks(n: &Node, hooks: Hooks) -> Node {
+    let _generating = Generating::enter();
+    let mut out = if is_drawn_live(n) {
+        let g = expanded_group_hooks(n, hooks);
+        if !Generating::charge(g.count()) {
+            return Node::new(n.id, NodeKind::Group { children: vec![], clip: false });
+        }
+        g
+    } else {
+        n.clone()
+    };
+    if let Some(ch) = out.children_mut() {
+        for c in ch.iter_mut() {
+            // A distorted image with fills, strokes or effects of its own stays an image: whoever
+            // draws the art draws it with them, as it draws a distorted image anywhere else.
+            if c.is_distorted_image() && !(c.appearance.items.is_empty() && c.appearance.effects.is_empty()) {
+                continue;
+            }
+            if subtree_has_drawn_live(c) {
+                *c = Arc::new(expand_deep_hooks(c, hooks));
+            }
+        }
+    }
+    out
+}
+
+/// Most objects one evaluation of live art (an expansion, an envelope's mapping and everything
+/// inside them) may make.
+pub const MAX_GENERATED: usize = 4_000_000;
+
+std::thread_local! {
+    /// What is left of [`MAX_GENERATED`] for the evaluation running on this thread; `None` outside
+    /// one.
+    static GENERATED_LEFT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
+/// The outermost live evaluation on this thread: it starts [`GENERATED_LEFT`] and ends it.
+struct Generating(bool);
+
+impl Generating {
+    fn enter() -> Self {
+        let outermost = GENERATED_LEFT.get().is_none();
+        if outermost {
+            GENERATED_LEFT.set(Some(MAX_GENERATED));
+        }
+        Self(outermost)
+    }
+
+    /// Spend `n` objects; `false` (and nothing left) when there aren't that many.
+    fn charge(n: usize) -> bool {
+        match GENERATED_LEFT.get() {
+            None => true,
+            Some(left) => {
+                GENERATED_LEFT.set(Some(left.saturating_sub(n)));
+                n <= left
+            }
+        }
+    }
+}
+
+impl Drop for Generating {
+    fn drop(&mut self) {
+        if self.0 {
+            GENERATED_LEFT.set(None);
+        }
+    }
+}
+
+/// Does `n` or any descendant need live evaluation?
+pub fn subtree_has_live(n: &Node) -> bool {
+    let mut any = false;
+    n.walk(&mut |c| any |= is_live(c));
+    any
+}
+
+/// Does `n` or any descendant draw as evaluated art ([`is_drawn_live`])?
+fn subtree_has_drawn_live(n: &Node) -> bool {
+    let mut any = false;
+    n.walk(&mut |c| any |= is_drawn_live(c));
+    any
+}
+
+/// Largest stroke outset in a subtree (for visual bounds of envelopes, blends and repeats, and the
+/// reach of symbol art), type's character strokes included as type's own visual bounds measure them
+/// ([`crate::TextObject::char_stroke_outset`]): in an envelope they paint at their own weight
+/// around the bent glyphs, past its grid where the glyphs reach its edge (#6644). With
+/// `symbols`, the outsets in the art of the symbols its instances show count too
+/// ([`crate::symbols::ArtBox::reach`]), grown by [`crate::SymbolBoxes::brush_pad`]. In boxes made
+/// by [`crate::SymbolBoxes::without_art_strokes`], the outsets in the art do not count, and the pad
+/// does.
+pub(crate) fn max_outset(nodes: &[Arc<Node>], symbols: Option<&crate::SymbolBoxes>) -> f64 {
+    let mut o = 0.0f64;
+    for n in nodes {
+        n.walk(&mut |c| {
+            o = o.max(c.appearance.outset());
+            if let NodeKind::Text(t) = &c.kind {
+                o = o.max(t.char_stroke_outset());
+            }
+            if let (Some(s), NodeKind::SymbolInstance { symbol, .. }) = (symbols, &c.kind)
+                && let Some(art) = s.art(symbol)
+            {
+                let reach = if s.art_strokes() { art.reach } else { 0.0 };
+                o = o.max(reach + s.brush_pad(symbol));
+            }
+        });
+    }
+    o
+}

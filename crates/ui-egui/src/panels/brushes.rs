@@ -2,108 +2,273 @@
 //! applies it to the selected paths (and makes it the Paintbrush's current brush); double-clicking
 //! one opens its Brush Options. Shift-click selects a range of brushes, Cmd/Ctrl-click adds or
 //! removes one, and the panel menu's Select All Unused selects the brushes no stroke paints with,
-//! for Delete Brush and Duplicate Brush.
+//! for Delete Brush and Duplicate Brush. A scatter, art or pattern brush dragged onto an empty part
+//! of the canvas places a copy of its art there, and art from the canvas Alt-dragged (Option-dragged
+//! on macOS) onto such a brush replaces its art. Brush libraries open in library panels
+//! ([`BrushLibraries`]).
 
+use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
 
-use egui::{Sense, Ui, vec2};
+use craft::behavior::{EditEvent, GesturePhase, IconId, Selection, SelectionChange, SelectionModel as _};
+use craft::ui::contract::{
+    Bind, DropAt, DropPlace, Entry, ListDrag, MemoProps, PopupKind, Props as _, ReorderMove, SelectMode, Show as _, ShowContainer as _, Sizing,
+    Trigger,
+};
+use craft::ui::display::Divider;
+use craft::ui::layout_components::Stack;
+use craft::ui::menu::{Menu, MenuItem, PanelRow};
+use craft::ui::patterns::presets::{
+    CellShape, PresetBrowser, PresetDrop, PresetEvent, PresetFns, PresetReorder, PresetRow, PresetRowMenu, PresetSource, PresetState, PresetView,
+};
+use craft::ui::primitives::{
+    ContentPainterCx, IconSpec, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
+};
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::sections::{DropAction, FooterAction, FooterBar, FooterOutput};
+use craft::ui::style::DataColor;
+use craft::ui::tile_grid::GroupHeads;
+use egui::{Rect, Ui};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Appearance, Document, Node, PressureProfile, color::Color, color::Paint};
+use vectorcraft_brush::Brush;
+use vectorcraft_doc::{AngleProfile, Appearance, Document, Node, PressureProfile, color::Color, color::Paint};
+use vectorcraft_engine::DocState;
+use vectorcraft_engine::cmd::brushlib::{self, BrushLibrary};
+use vectorcraft_engine::cmd::clipboard::{ArtResources, art_resources};
+use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 
-use super::{first_selected, pstate, set_pstate};
+use super::first_node;
+use super::library_panel::{self, LibraryKey, LibraryKind, LibraryRef, Row};
+use super::memo::Memo;
 use crate::VectorcraftApp;
 use crate::dialogs::brush_options;
-use crate::theme::Tokens;
-use crate::widgets::{self, PanelDrag, menu_item};
+use crate::graphics::doc_image;
+use crate::menus::{Sep, c, cp, sub};
+use crate::panel_drag::PanelDrag;
 
 const KINDS: [(&str, &str); 5] =
     [("calligraphic", "Calligraphic"), ("scatter", "Scatter"), ("art", "Art"), ("bristle", "Bristle"), ("pattern", "Pattern")];
 
-/// (name, type) of every brush in the active document's library.
-pub fn brushes(app: &mut VectorcraftApp) -> (Vec<(String, String)>, Option<String>) {
-    let Ok(v) = app.run("brush.list", json!({})) else { return (vec![], None) };
-    let list = v["brushes"]
-        .as_array()
-        .map(|a| a.iter().map(|b| (b["name"].as_str().unwrap_or("").to_string(), b["type"].as_str().unwrap_or("").to_string())).collect())
-        .unwrap_or_default();
-    (list, v["current"].as_str().map(str::to_string))
+/// (name, type) of every brush in the active document's library, and the current brush.
+pub fn brushes(app: &VectorcraftApp) -> (Vec<(String, String)>, Option<String>) {
+    let Some(st) = app.session.active() else { return (vec![], None) };
+    let list = document_brushes(st).iter().map(|b| (b.name.clone(), b.ty.to_string())).collect();
+    (list, vectorcraft_brush::current(&st.doc))
 }
 
-/// A stroke preview for brush definition `def`, rendered at `size` and cached by the definition's
-/// JSON. The stroke goes from light to heavy pen pressure and back, so pressure-sensitive brushes
-/// show how they vary.
-fn preview(ui: &Ui, def: &Value, size: egui::Vec2) -> Option<egui::TextureHandle> {
-    widgets::doc_preview(ui, &format!("brush:{def}"), size, |w, h| {
-        let mut doc = Document::new(w, h);
-        doc.unknown.insert("brushes".into(), json!([def]));
-        let name = def["name"].as_str()?.to_string();
-        let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
-        let st = ap.stroke_mut()?;
-        st.brush = Some(name);
-        st.pressure = Some(PressureProfile::sample());
-        // A gentle S-curve across the swatch.
-        let mut bp = vectorcraft_geom::BezPath::new();
-        let (x0, x1) = (h * 0.5, w - h * 0.5);
-        bp.move_to((x0, h * 0.5));
-        bp.curve_to((x0 + (x1 - x0) * 0.35, h * 0.1), (x0 + (x1 - x0) * 0.65, h * 0.9), (x1, h * 0.5));
-        let id = doc.alloc_id();
-        let l = doc.layers[0].id;
-        doc.insert(Some(l), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), ap)).ok()?;
-        Some(doc)
-    })
+/// A brush as the panels show it: its definition (as `brush.get` gives it, which a drag carries)
+/// and the key its stroke preview is cached by ([`preview_key`]), worked out once per document
+/// version or library ([`document_brushes`], [`BrushLibraries`]).
+pub(crate) struct Shown {
+    pub(crate) name: String,
+    pub(crate) ty: &'static str,
+    pub(crate) def: Value,
+    key: u64,
+    /// Keeps the art and images `key` counts by address from being reused.
+    _deps: ArtResources,
 }
 
-/// The stroke preview of brush definition `def` on white in `r` (the chip a dragged brush shows at
-/// the pointer).
-pub(crate) fn chip(ui: &Ui, r: egui::Rect, def: &Value) {
-    ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
-    if let Some(tex) = preview(ui, def, r.size()) {
-        ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+impl Shown {
+    fn of(doc: &Document, b: &Brush) -> Self {
+        let def = serde_json::to_value(b).unwrap_or_default();
+        let (key, deps) = preview_key(doc, &def, b.art());
+        Self { name: b.name.clone(), ty: b.kind.type_id(), def, key, _deps: deps }
     }
 }
 
+/// The brushes of the document version `st` shows, each worked out once while that version is
+/// active: a frame of the Brushes panel serialises and hashes none.
+pub(crate) fn document_brushes(st: &DocState) -> Rc<Vec<Shown>> {
+    thread_local! {
+        static MEMO: RefCell<Memo<Document, Vec<Shown>>> = RefCell::new(Memo::default());
+    }
+    MEMO.with(|m| m.borrow_mut().get(&st.doc, st.revision, || vectorcraft_brush::library(&st.doc).iter().map(|b| Shown::of(&st.doc, b)).collect()))
+}
+
+/// The brushes of `shown` by name: of two with one name, the first, the one a stroke that names
+/// it draws with and `brush.get` gives.
+fn by_name(shown: &[Shown]) -> HashMap<&str, &Shown> {
+    let mut map = HashMap::new();
+    for b in shown {
+        map.entry(b.name.as_str()).or_insert(b);
+    }
+    map
+}
+
+/// The cache key of the stroke preview of brush definition `def` in `doc` (`art`: its art): the
+/// definition and every resource of `doc` the art uses ([`art_resources`]: patterns with their
+/// options, symbols, swatches and colour groups, gradients, images, styles…), so the preview
+/// renders again when one of those changes and stays cached when anything else does. With what
+/// keeps the key's addresses from being reused.
+fn preview_key(doc: &Document, def: &Value, art: Vec<&Node>) -> (u64, ArtResources) {
+    use std::hash::{Hash, Hasher};
+    #[cfg(test)]
+    counters::KEYED.with(|k| k.set(k.get() + 1));
+    let deps = art_resources(doc, art);
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    def.to_string().hash(&mut h);
+    deps.key.hash(&mut h);
+    (h.finish(), deps)
+}
+
+/// The thumbnail store every stroke preview is kept in: the panel's, the library panels' and Brush Options'.
+const THUMBS: &str = "vectorcraft.brushes";
+
+/// A stroke preview in the thumbnail store: the [`preview_key`] of the brush with the resources it renders with, and
+/// the cell's width over its height in thousandths.
+// PLAN: the contract's `BrushThumb { key }` lacks the cell's shape: a `ThumbRequest` gives only the longest side, and
+// the stroke runs across the cell's own shape (a 64:28 tile, Brush Options' wide strip), so the shape is in the key.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct BrushThumb {
+    key: u64,
+    aspect: u32,
+}
+
+impl BrushThumb {
+    fn of(key: u64, rect: Rect) -> Self {
+        let aspect = (rect.width() / rect.height().max(1.0) * 1000.0).round().clamp(1.0, 64_000.0);
+        // `clamp` passes NaN through; the cast makes it 0 and `max` keeps the shape usable.
+        Self { key, aspect: (aspect as u32).max(1) }
+    }
+}
+
+/// Renders the stroke preview of brush definition `def` with the resources of `doc` ([`preview_doc`]).
+struct BrushPictures<'a> {
+    doc: &'a Document,
+    def: &'a Value,
+}
+
+impl ThumbSource<BrushThumb> for BrushPictures<'_> {
+    fn revision(&self, thumb: &BrushThumb, _: &ThumbRequest) -> Revision {
+        Revision::new(thumb.key)
+    }
+
+    fn render(&self, thumb: &BrushThumb, request: &ThumbRequest) -> ThumbRender {
+        #[cfg(test)]
+        counters::RENDERED.with(|r| r.set(r.get() + 1));
+        let side = request.side as f32;
+        let aspect = thumb.aspect as f32 / 1000.0;
+        let (w, h) = if aspect >= 1.0 { (side, side / aspect) } else { (side * aspect, side) };
+        match doc_image([w.round().max(1.0) as usize, h.round().max(1.0) as usize], |w, h| preview_doc(self.doc, self.def, w, h)) {
+            Some(image) => ThumbRender::Ready(image),
+            None => ThumbRender::Blank,
+        }
+    }
+}
+
+/// The stroke preview of brush definition `def` (with the resources of `doc`), stored by `key` ([`preview_key`]), on
+/// white paper in `rect`.
+fn paint_picture(cx: &ContentPainterCx, rect: Rect, doc: &Document, def: &Value, key: u64) {
+    let ctx = cx.painter.ctx();
+    let thumbs = Thumbnails::<BrushThumb>::in_context(ctx, THUMBS, ThumbnailOptions::new());
+    let request = ThumbRequest::for_cell(rect.width().max(rect.height()), ctx.pixels_per_point());
+    let state = thumbs.state(ctx, &BrushPictures { doc, def }, &BrushThumb::of(key, rect), &request, Priority::VISIBLE);
+    thumbs.paint(cx, rect, &state, &ThumbPaint::default().paper(DataColor::new(egui::Color32::WHITE)));
+}
+
+/// The stroke preview of brush `shown` of `doc` (a document or a brush library's) in `rect`: the panels' rows and
+/// tiles.
+pub(crate) fn paint_brush(cx: &ContentPainterCx, rect: Rect, doc: &Document, shown: &Shown) {
+    paint_picture(cx, rect, doc, &shown.def, shown.key);
+}
+
+/// The stroke preview of a brush the fields of Brush Options describe (`def`), with the resources of `doc` (none
+/// without a document), in `rect`: its key is worked out again only when the definition or the document changes, not
+/// every pass.
+pub(crate) fn paint_definition(cx: &ContentPainterCx, rect: Rect, doc: Option<&Document>, def: &Value) {
+    type Last = (usize, Value, u64, ArtResources);
+    thread_local! {
+        static LAST: RefCell<Option<Last>> = const { RefCell::new(None) };
+        static BLANK: Document = Document::new(1.0, 1.0);
+    }
+    BLANK.with(|blank| {
+        let doc = doc.unwrap_or(blank);
+        // shortcut: the document is known by its address, so one freed and another allocated at that address between
+        // two passes keeps the old key until the definition changes; upgrade when the painter can hold the version.
+        let at = std::ptr::from_ref(doc).addr();
+        let key = LAST.with(|l| l.borrow().as_ref().filter(|l| l.0 == at && l.1 == *def).map(|l| l.2)).unwrap_or_else(|| {
+            let brush = Brush::from_json(def.clone()).ok();
+            let (key, deps) = preview_key(doc, def, brush.as_ref().map(Brush::art).unwrap_or_default());
+            LAST.with(|l| *l.borrow_mut() = Some((at, def.clone(), key, deps)));
+            key
+        });
+        paint_picture(cx, rect, doc, def, key);
+    });
+}
+
+/// What a stroke preview of brush definition `def`, `w` × `h` pt, renders: a copy of `resources`
+/// (a document whose patterns, symbols, swatches and images the brush art may use) without its art,
+/// and a stroke painted with the brush across it. The stroke goes from light to heavy pen pressure
+/// and back, from an upright pen to one lying flat and back, once round every bearing and barrel
+/// rotation, and from one end of an airbrush pen's finger wheel to the other and back, so brushes
+/// that vary with the pen show how they vary.
+fn preview_doc(resources: &Document, def: &Value, w: f64, h: f64) -> Option<Document> {
+    let mut doc = resources.clone();
+    let layer = doc.alloc_id();
+    doc.layers = vec![Arc::new(Node::layer(layer, "Preview", vectorcraft_doc::LayerColor::Preset(0)))];
+    doc.unknown.insert(vectorcraft_brush::DOC_KEY.into(), json!([def]));
+    let name = def["name"].as_str()?.to_string();
+    let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    let st = ap.stroke_mut()?;
+    st.brush = Some(name);
+    st.pressure = Some(PressureProfile::sample());
+    st.tilt = Some(PressureProfile::sample());
+    st.bearing = Some(AngleProfile::sample());
+    st.rotation = Some(AngleProfile::sample());
+    st.wheel = Some(PressureProfile::sample());
+    // A gentle S-curve across the swatch (square tiles keep a quarter of it either side).
+    let mut bp = vectorcraft_geom::BezPath::new();
+    let margin = (h * 0.5).min(w * 0.25);
+    let (x0, x1) = (margin, w - margin);
+    bp.move_to((x0, h * 0.5));
+    bp.curve_to((x0 + (x1 - x0) * 0.35, h * 0.1), (x0 + (x1 - x0) * 0.65, h * 0.9), (x1, h * 0.5));
+    let id = doc.alloc_id();
+    doc.insert(Some(layer), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), ap)).ok()?;
+    Some(doc)
+}
+
 fn selected_brush(app: &VectorcraftApp) -> Option<String> {
-    first_selected(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
+    first_node(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
 }
 
 /// What the panel's last click was made with: the document, its selected objects and the current
 /// brush.
-type ClickKey = (u64, Vec<u64>, Option<String>);
+pub(crate) type ClickKey = (u64, Vec<u64>, Option<String>);
 
 fn click_key(app: &VectorcraftApp, current: Option<&str>) -> Option<ClickKey> {
     app.session.active().map(|st| (st.uid, st.selection.objects.iter().map(|id| id.0).collect(), current.map(str::to_string)))
 }
 
-/// Whether the panel's last click was made with the document, objects and current brush active
-/// now. Panel state `br-selected` holds the multi-selection and the key of that click.
-fn same_click(app: &VectorcraftApp, ctx: &egui::Context, current: Option<&str>) -> bool {
-    let (_, key): (Option<Vec<String>>, Option<ClickKey>) = pstate(ctx, "br-selected");
-    key.is_some() && key == click_key(app, current)
-}
-
-/// The brushes that Shift-clicks, Cmd/Ctrl-clicks and Select All Unused selected, of those in
-/// `list`. It is `None` after a plain click, once none of its brushes is left, and once another
-/// document, other objects or another current brush is active, which also clears it and the key
-/// of the last click; `Some` of an empty list after Cmd/Ctrl-clicks deselected every brush or
-/// Select All Unused found none.
-fn multi(app: &VectorcraftApp, ctx: &egui::Context, list: &[(String, String)], current: Option<&str>) -> Option<Vec<String>> {
-    if !same_click(app, ctx, current) {
-        set_pstate(ctx, "br-selected", (None::<Vec<String>>, None::<ClickKey>));
+/// The brushes that Shift-clicks, Cmd/Ctrl-clicks, a secondary click and Select All Unused selected
+/// (`app.ui.brush_selection`), of those in `list`. It is `None` after a plain click, once none of its brushes is
+/// left, and once another document, other objects or another current brush is active than the click was made with;
+/// `Some` of an empty selection after Cmd/Ctrl-clicks deselected every brush or Select All Unused found none.
+fn picked(app: &VectorcraftApp, list: &[(String, String)], current: Option<&str>) -> Option<Selection<String>> {
+    let (key, sel) = app.ui.brush_selection.as_ref()?;
+    if click_key(app, current).as_ref() != Some(key) {
         return None;
     }
-    let (names, _): (Option<Vec<String>>, Option<ClickKey>) = pstate(ctx, "br-selected");
-    let names = names?;
-    if names.is_empty() {
-        return Some(names);
+    if sel.items.is_empty() {
+        return Some(sel.clone());
     }
-    let kept: Vec<String> = names.into_iter().filter(|n| list.iter().any(|b| &b.0 == n)).collect();
-    (!kept.is_empty()).then_some(kept)
+    let listed = |name: &String| list.iter().any(|b| &b.0 == name);
+    let items: Vec<String> = sel.items.iter().filter(|n| listed(n)).cloned().collect();
+    (!items.is_empty()).then(|| Selection::new(items, sel.lead.clone().filter(listed), sel.anchor.clone().filter(listed)))
 }
 
-/// The brushes Delete Brush and Duplicate Brush act on: the multi-selection, else the selected
-/// path's brush, else the current one.
-fn targets(app: &VectorcraftApp, ctx: &egui::Context, list: &[(String, String)], current: Option<&str>) -> Vec<String> {
-    multi(app, ctx, list, current).unwrap_or_else(|| selected_brush(app).or(current.map(str::to_string)).into_iter().collect())
+/// Stores `sel` as the panel's multi-selection, made with the document, objects and current brush active now.
+fn store_selection(app: &mut VectorcraftApp, sel: Selection<String>) {
+    let current = brushes(app).1;
+    app.ui.brush_selection = click_key(app, current.as_deref()).map(|key| (key, sel));
+}
+
+/// The brushes Delete Brush and Duplicate Brush act on, which the panel shows selected: the multi-selection, else
+/// the selected path's brush, else the current one.
+fn targets(app: &VectorcraftApp, list: &[(String, String)], current: Option<&str>) -> Vec<String> {
+    picked(app, list, current).map_or_else(|| selected_brush(app).or(current.map(str::to_string)).into_iter().collect(), |sel| sel.items)
 }
 
 /// Runs `brush.delete` or `brush.duplicate` on `names`.
@@ -115,659 +280,714 @@ fn run_on(app: &mut VectorcraftApp, id: &str, names: &[String]) {
     app.run(id, p).ok();
 }
 
-/// The names in `list` in the order the panel shows them: by type in [`KINDS`] order, without the
-/// hidden types.
-fn shown<'a>(list: &'a [(String, String)], hidden: &[String]) -> Vec<&'a str> {
-    let kinds = KINDS.iter().filter(|(ty, _)| !hidden.iter().any(|h| h == ty));
-    kinds.flat_map(|(ty, _)| list.iter().filter(move |b| b.1 == *ty).map(|b| b.0.as_str())).collect()
-}
-
-/// A brush dragged over the tile or row `resp` of brush `name`, the `i`th brush of type `ty`
-/// (`list`: rows stack downwards), lands before or after it by the pointer's half; a bar marks the
-/// slot when the dragged brush is of type `ty` too (`types`: the (name, type) of every brush).
-/// Released there, it sets `moved` to the `brush.move` params, which refuse a brush of another type.
-fn reorder_drop(
-    ui: &Ui,
-    resp: &egui::Response,
-    types: &[(String, String)],
-    (name, ty, i): (&str, &str, usize),
-    list: bool,
-    moved: &mut Option<Value>,
-) {
-    let Some(drag) = resp.dnd_hover_payload::<PanelDrag>() else { return };
-    let PanelDrag::Brush { name: moving, .. } = &*drag else { return };
-    if moving == name {
-        // Dropped on itself: it stays where it is.
-        resp.dnd_release_payload::<PanelDrag>();
+/// Delete `names` after asking: Yes or No when none of them is in use, else Remove Strokes or
+/// Cancel. With `now` (Alt-click on the bottom button), brushes that are not in use go at once.
+fn delete(app: &mut VectorcraftApp, names: &[String], now: bool) {
+    let Some(used) = crate::dialogs::brush_delete::used(app, names) else {
+        return;
+    };
+    if now && !used {
+        run_on(app, "brush.delete", names);
         return;
     }
-    let r = resp.rect;
-    let at = ui.input(|i| i.pointer.interact_pos()).unwrap_or(r.center());
-    let after = if list { at.y > r.center().y } else { at.x > r.center().x };
-    if types.iter().any(|b| &b.0 == moving && b.1 == ty) {
-        let accent = egui::Stroke::new(2.0, Tokens::get(ui.ctx()).accent);
-        if list {
-            let y = if after { r.bottom() } else { r.top() };
-            ui.painter().line_segment([egui::pos2(r.left(), y), egui::pos2(r.right(), y)], accent);
-        } else {
-            let x = if after { r.right() + 1.5 } else { r.left() - 1.5 };
-            ui.painter().line_segment([egui::pos2(x, r.top()), egui::pos2(x, r.bottom())], accent);
-        }
-    }
-    if resp.dnd_release_payload::<PanelDrag>().is_some() {
-        *moved = Some(json!({ "name": moving, "to": i + usize::from(after), "type": ty }));
+    let params = match names {
+        [name] => json!({ "name": name }),
+        _ => json!({ "names": names }),
+    };
+    crate::dialogs::brush_delete::ask(app, params, used);
+}
+
+/// The Brushes panel's view choices for the session (`UiState::brushes_view`).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct BrushesView {
+    /// List View; Thumbnail View when off.
+    pub list: bool,
+    /// The brush types (`KINDS` ids) the menu hid.
+    pub hidden: Vec<String>,
+}
+
+/// A row of the Brushes panel: brush `name` of the document `doc` (its uid), or with `group` the rule over the brushes
+/// of type `name`. A brush may be named like a type, so the flag keeps a brush's key apart from its group's.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, MemoProps)]
+pub(crate) struct BrushKey {
+    /// The uid of the document whose brush it is: a drag from another document's panel names another brush.
+    pub doc: u64,
+    /// The brush's name, or the group's type.
+    pub name: String,
+    /// Whether the row is a type's group.
+    pub group: bool,
+}
+
+impl BrushKey {
+    fn brush(doc: u64, name: &str) -> Self {
+        Self { doc, name: name.to_string(), group: false }
     }
 }
 
+/// The panel's rows: a group per shown type in [`KINDS`] order, without the `hidden` types, each over its brushes of
+/// `shown` in library order. Of two brushes with one name only the first, the one a stroke that names it draws with,
+/// has a row, so row keys stay unique.
+fn rows(doc: u64, shown: &[Shown], hidden: &[String]) -> Vec<PresetRow<BrushKey>> {
+    let first = by_name(shown);
+    let mut rows = Vec::new();
+    for (ty, label) in KINDS.iter().filter(|(ty, _)| !hidden.iter().any(|h| h == ty)) {
+        let of_type: Vec<&Shown> = shown.iter().filter(|b| b.ty == *ty && first.get(b.name.as_str()).is_some_and(|f| std::ptr::eq(*f, *b))).collect();
+        if of_type.is_empty() {
+            continue;
+        }
+        rows.push(PresetRow::group(BrushKey { doc, name: ty.to_string(), group: true }, tl!(label), 0));
+        rows.extend(of_type.into_iter().map(|b| PresetRow::item(BrushKey::brush(doc, &b.name), b.name.clone(), 1)));
+    }
+    rows
+}
+
+/// What the panel's rows, its reorder rule and its stroke previews read: the brushes of one version of a document,
+/// without the `hidden` types.
+#[derive(MemoProps)]
+struct BrushSource<'a> {
+    uid: u64,
+    revision: u64,
+    #[memo_props(covered_by = "revision", reason = "a document version's brushes and resources are fixed")]
+    doc: Option<&'a Document>,
+    #[memo_props(covered_by = "revision", reason = "worked out once from the document version")]
+    shown: &'a [Shown],
+    hidden: Vec<String>,
+}
+
+/// The panel's presets: [`rows`]; a brush moves only among those of its type, and paints its stroke preview.
+fn brush_source(inputs: BrushSource<'_>) -> PresetSource<'_, BrushKey> {
+    let fns = PresetFns::<BrushSource<'_>, BrushKey>::new(|s, _| rows(s.uid, s.shown, &s.hidden))
+        .accepts(|s, drag, over, _| {
+            let first = by_name(s.shown);
+            over.and_then(|over| type_of(&first, over)).is_some_and(|ty| type_of(&first, &drag.grabbed) == Some(ty))
+        })
+        .thumb(|s, cx, rect, info| {
+            // The first brush of a name is the one its row stands for, as `by_name` keeps it.
+            if let (Some(doc), false, Some(b)) = (s.doc, info.key.group, s.shown.iter().find(|b| b.name == info.key.name)) {
+                paint_brush(cx, rect, doc, b);
+            }
+        });
+    PresetSource::new(inputs, fns)
+}
+
+/// The type of the brush or group row `key` (`first`: the brushes by name).
+fn type_of<'a>(first: &HashMap<&str, &'a Shown>, key: &'a BrushKey) -> Option<&'a str> {
+    if key.group { Some(key.name.as_str()) } else { first.get(key.name.as_str()).map(|b| b.ty) }
+}
+
+/// Whether art dropped on brush `ty` can replace its art: scatter, art and pattern brushes have art.
+fn takes_art(ty: &str) -> bool {
+    matches!(ty, "scatter" | "art" | "pattern")
+}
+
+/// The ids of art dragged from the displayed drawing.
+fn art_of(payload: &PanelDrag, uid: u64, reverts: u64) -> Option<Vec<u64>> {
+    payload.artwork_for(uid, reverts).map(|ids| ids.iter().map(|id| id.0).collect())
+}
+
+/// The library and name of a brush dragged out of a brush library panel; a folder or another kind's item is none.
+fn library_brush(drag: &ListDrag<LibraryKey>) -> Option<(&str, &str)> {
+    let key = &drag.grabbed;
+    let (kind, id) = library_panel::parse(&key.panel)?;
+    (kind.kind == BrushLibraries::KIND && !key.folder).then_some((id, key.name.as_str()))
+}
+
+/// Where the move `mv` of the browser's rows puts its grabbed brush of type `ty`: the index among the brushes of that
+/// type (itself included) of the brush it lands before, or past the last of them. `mv.to` counts the rows left once
+/// every moved row is out (`first`: the brushes by name).
+fn type_index(rows: &[PresetRow<BrushKey>], first: &HashMap<&str, &Shown>, mv: &ReorderMove<BrushKey>, ty: &str) -> usize {
+    let of_type = |key: &BrushKey| !key.group && type_of(first, key) == Some(ty);
+    let same: Vec<&BrushKey> = rows.iter().map(|row| &row.key).filter(|key| of_type(key)).collect();
+    let before = rows.iter().map(|row| &row.key).filter(|key| !mv.keys.contains(key)).nth(mv.to);
+    before.filter(|key| of_type(key)).and_then(|key| same.iter().position(|k| *k == key)).unwrap_or(same.len())
+}
+
+/// The brushes an item menu row acts on for `target`: the multi-selection when the target is one of several selected,
+/// else the target.
+fn item_targets(target: &BrushKey, multi: Option<&Selection<String>>) -> Vec<String> {
+    match multi {
+        Some(sel) if sel.items.len() > 1 && sel.items.contains(&target.name) => sel.items.clone(),
+        _ => vec![target.name.clone()],
+    }
+}
+
+/// The rows of brush `target`'s menu: Brush Options…, Duplicate Brush and Delete Brush, or Duplicate Brushes and
+/// Delete Brushes when it is one of several selected (`multi`). Delete is off when it would leave no brush (`list`:
+/// the (name, type) of every brush).
+fn item_menu(target: &BrushKey, multi: Option<&Selection<String>>, list: &[(String, String)]) -> Vec<Entry<String>> {
+    if target.group {
+        return Vec::new();
+    }
+    let targets = item_targets(target, multi);
+    let exist = targets.iter().all(|n| list.iter().any(|b| &b.0 == n));
+    let can_delete = exist && targets.len() < list.len() && list.len() > 1;
+    let row = |command: &str, label: &'static str, on: bool| Entry::new(command.to_string(), label).enabled(on);
+    if targets.len() > 1 {
+        vec![row(ITEM_DUPLICATE, tl!("Duplicate Brushes"), exist), row(ITEM_DELETE, tl!("Delete Brushes"), can_delete)]
+    } else {
+        vec![
+            row(ITEM_OPTIONS, tl!("Brush Options…"), exist),
+            row(ITEM_DUPLICATE, tl!("Duplicate Brush"), exist),
+            row(ITEM_DELETE, tl!("Delete Brush"), can_delete),
+        ]
+    }
+}
+
+/// The commands of the item menu's rows.
+const ITEM_OPTIONS: &str = "options";
+const ITEM_DUPLICATE: &str = "duplicate";
+const ITEM_DELETE: &str = "delete";
+
+/// Runs the item menu's row `command` for `target`.
+fn item_command(app: &mut VectorcraftApp, target: &BrushKey, command: &str, multi: Option<&Selection<String>>) {
+    let targets = item_targets(target, multi);
+    let done = match command {
+        ITEM_OPTIONS => app.run("ui.brushOptions", json!({ "name": target.name })),
+        ITEM_DUPLICATE => match targets.as_slice() {
+            [name] => app.run("brush.duplicate", json!({ "name": name })),
+            _ => app.run("brush.duplicate", json!({ "names": targets })),
+        },
+        ITEM_DELETE => {
+            delete(app, &targets, true);
+            Ok(Value::Null)
+        }
+        _ => Ok(Value::Null),
+    };
+    if let Err(e) = done {
+        app.status(e);
+    }
+}
+
+/// The footer's actions, in the order [`FooterBar::actions`] is given them: the first three at the start edge, Delete
+/// at the end edge with New before it.
+const LIBRARY: usize = 0;
+const REMOVE: usize = 1;
+const EXPAND: usize = 2;
+const DELETE: usize = 3;
+const NEW: usize = 4;
+
+/// Which footer actions are on.
+#[derive(Clone, Copy)]
+struct FooterOn {
+    libraries_open: bool,
+    brushed: bool,
+    document: bool,
+    targets: bool,
+}
+
+/// The footer: Libraries (its menu), Remove Brush Stroke and Expand Brush Strokes, then New Brush and Delete Brush.
+fn footer(app: &mut VectorcraftApp, ui: &mut Ui, on: FooterOn) -> FooterOutput {
+    let action = |icon: &'static str, label: &'static str| FooterAction::new(IconSpec::svg(IconId::new(icon)), label);
+    let actions = [
+        action("library", BrushLibraries::MENU).popup(PopupKind::Menu).pressed(on.libraries_open),
+        action("dc-remove-brush", tl!("Remove Brush Stroke")).enabled(on.brushed),
+        action("dc-options", tl!("Expand Brush Strokes")).enabled(on.brushed),
+        action("trash-2", tl!("Delete Brush")).enabled(on.targets),
+        // New Brush asks for the type, then opens that type's Brush Options.
+        action("dc-new-item", tl!("New Brush")).enabled(on.document),
+    ];
+    let out = FooterBar::actions(actions).at_start(EXPAND + 1).show_footer(ui);
+    if let Some(opener) = out.responses.get(LIBRARY) {
+        let _ = Menu::new(BrushLibraries::MENU)
+            .opened_by(opener, Trigger::Press)
+            .show(ui, |ui, _| library_panel::library_menu::<BrushLibraries>(app, ui));
+    }
+    out
+}
+
+/// Runs the footer action the user picked; Delete Brush with Alt (Option on macOS) at the release deletes brushes no
+/// stroke uses at once.
+fn run_footer(app: &mut VectorcraftApp, out: &FooterOutput, targets: &[String]) {
+    let done = match out.picked {
+        Some(REMOVE) => app.run("brush.remove", json!({})),
+        Some(EXPAND) => app.run("object.expandBrush", json!({})),
+        Some(NEW) => app.run("ui.newBrush", json!({})),
+        Some(DELETE) => {
+            delete(app, targets, out.mods.alt);
+            Ok(Value::Null)
+        }
+        _ => Ok(Value::Null),
+    };
+    if let Err(e) = done {
+        app.status(e);
+    }
+}
+
+/// A plain pick of brush `name` applies it to the selected objects, else makes it the current brush, and ends the
+/// multi-selection.
+fn pick(app: &mut VectorcraftApp, name: &str) {
+    let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
+    let id = if has_sel { "brush.apply" } else { "brush.setCurrent" };
+    if let Err(e) = app.run(id, json!({ "name": name })) {
+        app.status(e);
+    }
+    app.ui.brush_selection = None;
+}
+
+/// The names of the brushes of `sel` of the document `doc`, with its lead and anchor.
+fn names_of(sel: &Selection<BrushKey>, doc: u64) -> Selection<String> {
+    let name = |key: &BrushKey| (!key.group && key.doc == doc).then(|| key.name.clone());
+    Selection::new(sel.items.iter().filter_map(name).collect(), sel.lead.as_ref().and_then(name), sel.anchor.as_ref().and_then(name))
+}
+
+/// The keys of the brushes `sel` names in the document `doc`.
+fn keys_of(sel: &Selection<String>, doc: u64) -> Selection<BrushKey> {
+    let key = |name: &String| BrushKey::brush(doc, name);
+    Selection::new(sel.items.iter().map(key).collect(), sel.lead.as_ref().map(key), sel.anchor.as_ref().map(key))
+}
+
+/// The Brushes panel: the document's brushes, by type between rules, over the footer's actions. A plain click applies
+/// a brush or makes it current, a double click opens its Brush Options, Shift and Cmd/Ctrl clicks select several for
+/// Delete and Duplicate, a drag moves a brush among those of its type, art dropped on the list opens New Brush for it
+/// (with Alt on a scatter, art or pattern brush it replaces that brush's art), and a library brush dropped on it is
+/// added.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
     let (list, current) = brushes(app);
+    let doc = app.session.active().map(|st| st.doc.clone());
+    let (uid, revision, reverts) = app.session.active().map_or((0, 0, 0), |st| (st.uid, st.revision, st.reverts));
+    let memo = app.session.active().map(document_brushes).unwrap_or_default();
+    let first = by_name(&memo);
+    let multi = picked(app, &list, current.as_deref());
+    // Read as `picked` reads it: another document, other objects, another current brush or no brush left ends the
+    // selection for good, so selecting the first art again does not bring it back.
+    match &multi {
+        Some(sel) if app.ui.brush_selection.as_ref().is_some_and(|(_, held)| held == sel) => {}
+        Some(sel) => store_selection(app, sel.clone()),
+        None => app.ui.brush_selection = None,
+    }
     let sel_brush = selected_brush(app);
-    let mut multi = multi(app, ui.ctx(), &list, current.as_deref());
-    let list_view: bool = pstate(ui.ctx(), "br-list");
-    let hidden: Vec<String> = pstate(ui.ctx(), "br-hidden");
-    let defs: HashMap<String, Value> =
-        list.iter().filter_map(|(n, _)| app.run("brush.get", json!({"name": n})).ok().map(|v| (n.clone(), v))).collect();
-    let mut clicked: Option<(String, egui::Modifiers)> = None;
-    let mut options: Option<String> = None;
-    let mut moved: Option<Value> = None;
-    let list_rect = widgets::list_box(ui, |ui| {
-        ui.set_min_height(110.0);
-        ui.set_width(ui.available_width());
-        if list.is_empty() {
-            super::empty_state(ui, "paintbrush", tl!("No brushes"), tl!("Select art and use New Brush to make one."));
-            return ui.min_rect();
-        }
-        for (ty, _) in KINDS {
-            if hidden.iter().any(|h| h == ty) {
-                continue;
-            }
-            let group: Vec<&(String, String)> = list.iter().filter(|b| b.1 == ty).collect();
-            if group.is_empty() {
-                continue;
-            }
-            let row = |ui: &mut Ui, name: &str, size: egui::Vec2, label: bool| -> egui::Response {
-                let (r, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
-                // Dragged onto a path, the brush is applied to it.
-                widgets::drag_source(ui, &resp, || PanelDrag::Brush { name: name.to_string(), def: defs.get(name).cloned().unwrap_or_default() });
-                let on = match &multi {
-                    Some(multi) => multi.iter().any(|m| m == name),
-                    None => sel_brush.as_deref() == Some(name) || (sel_brush.is_none() && current.as_deref() == Some(name)),
-                };
-                if on {
-                    ui.painter().rect_filled(r, 0.0, t.row_selected);
-                } else if resp.hovered() {
-                    ui.painter().rect_filled(r, 0.0, t.hover);
-                }
-                let pw = if label { 72.0 } else { size.x - 4.0 };
-                let pr = egui::Rect::from_min_size(r.left_top() + vec2(2.0, 2.0), vec2(pw, size.y - 4.0));
-                ui.painter().rect_filled(pr, 0.0, egui::Color32::WHITE);
-                if let Some(def) = defs.get(name)
-                    && let Some(tex) = preview(ui, def, pr.size())
-                {
-                    ui.painter().image(tex.id(), pr, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
-                }
-                if label {
-                    ui.painter().text(
-                        r.left_center() + vec2(pw + 10.0, 0.0),
-                        egui::Align2::LEFT_CENTER,
-                        name,
-                        egui::FontId::proportional(12.5),
-                        t.text,
-                    );
-                }
-                resp.on_hover_text(name)
-            };
-            // A click applies or selects the brush; the second click of a double-click opens its
-            // options.
-            let mut pick = |resp: egui::Response, name: &String| {
-                if resp.double_clicked() {
-                    options = Some(name.clone());
-                } else if resp.clicked() {
-                    clicked = Some((name.clone(), resp.ctx.input(|i| i.modifiers)));
-                }
-            };
-            if list_view {
-                for (i, (name, _)) in group.into_iter().enumerate() {
-                    let resp = row(ui, name, vec2(ui.available_width(), 26.0), true);
-                    reorder_drop(ui, &resp, &list, (name, ty, i), true, &mut moved);
-                    pick(resp, name);
-                }
-            } else {
-                ui.horizontal_wrapped(|ui| {
-                    for (i, (name, _)) in group.into_iter().enumerate() {
-                        let resp = row(ui, name, vec2(64.0, 28.0), false);
-                        reorder_drop(ui, &resp, &list, (name, ty, i), false, &mut moved);
-                        pick(resp, name);
-                    }
-                });
-            }
-            ui.separator();
-        }
-        ui.min_rect()
+    let highlighted = sel_brush.clone().or_else(|| current.clone());
+    let given = match &multi {
+        Some(sel) => keys_of(sel, uid),
+        None => highlighted.as_deref().map(|name| Selection::single(BrushKey::brush(uid, name))).unwrap_or_default(),
+    };
+    let hidden = app.ui.brushes_view.hidden.clone();
+    let view = if app.ui.brushes_view.list { PresetView::List } else { PresetView::Grid };
+    let targets = targets(app, &list, current.as_deref());
+    let on = FooterOn {
+        libraries_open: library_panel::any_open::<BrushLibraries>(&app.ui),
+        brushed: sel_brush.is_some(),
+        document: doc.is_some(),
+        targets: !targets.is_empty(),
+    };
+    let ctx = ui.ctx().clone();
+    let (doc, first, multi_ref, list_ref) = (doc.as_deref(), &first, multi.as_ref(), list.as_slice());
+    let source = brush_source(BrushSource { uid, revision, doc, shown: &memo, hidden: hidden.clone() });
+    let browser = |ui: &mut Ui| {
+        let mut state = PresetState::new();
+        let ctx = ctx.clone();
+        // Art from this document's canvas, released over a brush with art while Alt (Option on macOS) is held, takes
+        // its art; without Alt it falls to the list, which opens New Brush. The pick's modifiers are the release's in
+        // the pass that drops and the held ones in a rerun pass, which takes no drop.
+        let art_onto = PresetDrop::new::<PanelDrag>(DropPlace::Onto, move |payload: &PanelDrag, at: &DropAt<BrushKey>| {
+            let DropAt::Onto(key) = at else { return false };
+            payload.artwork_for(uid, reverts).is_some()
+                && !key.group
+                && type_of(first, key).is_some_and(takes_art)
+                && craft::ui::runtime::pointer::frame(&ctx).pick_mods.alt
+        });
+        let empty = format!("{}\n{}", tl!("No brushes"), tl!("Select art and use New Brush to make one."));
+        PresetBrowser::new(tl!("Brushes"), Bind::bound(&mut state), &source)
+            .group_heads(GroupHeads::Rule)
+            .cell_shape(CellShape::ratio(64, 28))
+            .view_lock(view)
+            .select(SelectMode::Multi)
+            .selection(Bind::given(given.clone()))
+            .row_menu(PresetRowMenu::Host)
+            .row_items(move |key: &BrushKey| item_menu(key, multi_ref, list_ref))
+            .reorder(PresetReorder::items())
+            .takes_drop(art_onto)
+            .empty(empty)
+            .show(ui)
+            .events
+    };
+    let mut footed = None;
+    let shown = Stack::new().label(tl!("Brushes")).fill().footer(|ui, _| footed = Some(footer(app, ui, on))).show(ui, |ui, _| {
+        let library = DropAction::<ListDrag<LibraryKey>>::new(|drag| library_brush(drag).is_some()).sizing(Sizing::Fill).show(ui, |ui, _| {
+            let art = DropAction::<PanelDrag>::new(move |payload| payload.artwork_for(uid, reverts).is_some())
+                .sizing(Sizing::Fill)
+                .show(ui, |ui, _| browser(ui));
+            (art.output.dropped, art.inner.unwrap_or_default())
+        });
+        (library.output.dropped, library.inner.unwrap_or_default())
     });
-    // Art dragged off the canvas and dropped on the list opens New Brush for that art, as the New
-    // Brush button opens it for the selection.
-    let zone = ui.interact(list_rect, ui.scope_id().with("brushes-drop"), Sense::hover());
-    if let Some(ids) = widgets::art_drop(ui, &zone)
+    let (library_drop, (art_drop, events)) = shown.inner.unwrap_or_default();
+
+    let picked_now = events.iter().any(|event| matches!(event, PresetEvent::Select { .. }));
+    let mut sel = given;
+    for event in events {
+        match event {
+            PresetEvent::Select { key, .. } if !key.group => pick(app, &key.name),
+            // A plain pick is the `Select` of the same pass; Shift and Cmd/Ctrl picks only select.
+            PresetEvent::Selection(change) if !picked_now => {
+                sel.apply(change.clone());
+                // A secondary press on a brush not selected reports it set alone before its menu opens (a Cmd/Ctrl
+                // click toggles instead): it becomes the current brush, and the menu acts on it.
+                if let SelectionChange::Set(keys) = &change
+                    && let [key] = keys.as_slice()
+                    && !key.group
+                    && highlighted.as_deref() != Some(key.name.as_str())
+                    && let Err(e) = app.run("brush.setCurrent", json!({ "name": key.name }))
+                {
+                    app.status(e);
+                }
+                store_selection(app, names_of(&sel, uid));
+            }
+            PresetEvent::Activate { key, .. } => {
+                if let Err(e) = app.run("ui.brushOptions", json!({ "name": key.name })) {
+                    app.status(e);
+                }
+            }
+            PresetEvent::Menu { target, command, .. } => item_command(app, &target, &command, multi.as_ref()),
+            PresetEvent::Reorder(edit) => move_brush(app, &rows(uid, &memo, &hidden), first, &edit),
+            PresetEvent::Dropped { at, payload, .. } => {
+                if let (DropAt::Onto(key), Some(ids)) = (&at, payload.get::<PanelDrag>().and_then(|p| art_of(p, uid, reverts))) {
+                    crate::dialogs::brush_replace_art::replace(app, &key.name, &ids);
+                }
+            }
+            _ => {}
+        }
+    }
+    // Art dropped on the list opens New Brush for that art, as the New Brush button opens it for the selection.
+    if let Some(ids) = art_drop.as_ref().and_then(|p| art_of(p, uid, reverts))
         && let Err(e) = app.run("ui.newBrush", json!({ "ids": ids }))
     {
         app.status(e);
     }
-    // A brush dragged within the list moves among the brushes of its type.
-    if let Some(p) = moved
-        && let Err(e) = app.run("brush.move", p)
-    {
+    if let Some((library, name)) = library_drop.as_ref().and_then(library_brush) {
+        add(app, json!({"library": library, "name": name}));
+    }
+    if let Some(out) = footed {
+        run_footer(app, &out, &targets);
+    }
+}
+
+/// `brush.move` for the brush a committed reorder grabbed: one brush moves, among those of its type.
+fn move_brush(app: &mut VectorcraftApp, rows: &[PresetRow<BrushKey>], first: &HashMap<&str, &Shown>, edit: &EditEvent<ReorderMove<BrushKey>>) {
+    if !matches!(edit.phase(), Some(GesturePhase::Commit) | None) {
+        return;
+    }
+    let Some(mv) = edit.value() else { return };
+    let Some(ty) = type_of(first, &mv.key).filter(|_| !mv.key.group) else { return };
+    let to = type_index(rows, first, mv, ty);
+    if let Err(e) = app.run("brush.move", json!({ "name": mv.key.name, "to": to, "type": ty })) {
         app.status(e);
     }
-    let highlighted = sel_brush.clone().or(current.clone());
-    match clicked {
-        // Shift and Cmd/Ctrl only select, as in the Swatches panel: they start from the
-        // multi-selection, else from the highlighted brush.
-        Some((name, m)) if m.shift || m.command => {
-            let order = shown(&list, &hidden);
-            // A range starts from the last brush clicked without Shift while the same document,
-            // art and current brush are active, else from the highlighted brush.
-            let anchor: String = pstate(ui.ctx(), "br-anchor");
-            if !same_click(app, ui.ctx(), current.as_deref()) || !order.contains(&anchor.as_str()) {
-                set_pstate(ui.ctx(), "br-anchor", highlighted.clone().unwrap_or_default());
-            }
-            let from = multi.unwrap_or_else(|| highlighted.iter().cloned().collect());
-            let sel = super::swatches::click_selection(ui, "br-anchor", from, &order, &name, m);
-            set_pstate(ui.ctx(), "br-selected", (Some(sel.clone()), click_key(app, current.as_deref())));
-            multi = Some(sel);
+}
+
+/// The panel menu's own rows, which no catalog command names.
+const DUPLICATE: &str = "ui.brushes.duplicate";
+const DELETE_BRUSH: &str = "ui.brushes.delete";
+const SELECT_UNUSED: &str = "ui.brushes.selectUnused";
+/// `ui.brushes.show.<type>`: shows or hides the brushes of a type.
+const SHOW: &str = "ui.brushes.show.";
+const THUMBNAIL_VIEW: &str = "ui.brushes.thumbnailView";
+const LIST_VIEW: &str = "ui.brushes.listView";
+const SAVE_LIBRARY: &str = "ui.brushes.saveLibrary";
+
+/// The types the menu's New Calligraphic Brush and New Bristle Brush make at once, without their Brush Options, and
+/// those the New … Brush from Selection rows make from the selected art.
+const NEW_AT_ONCE: [&str; 2] = ["calligraphic", "bristle"];
+const NEW_FROM_SELECTION: [&str; 3] = ["art", "scatter", "pattern"];
+
+fn new_brush(ty: &str) -> CommandRef {
+    CommandRef::with_params("brush.new", json!({ "type": ty }))
+}
+
+fn show_kind(ty: &str) -> CommandRef {
+    CommandRef::new(format!("{SHOW}{ty}"))
+}
+
+/// The panel menu's rows, in the panel's order.
+pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    let row = |id: &str| PanelRow::Command(CommandRef::new(id));
+    let mut rows = vec![row("ui.newBrush")];
+    rows.extend(NEW_AT_ONCE.into_iter().chain(NEW_FROM_SELECTION).map(|ty| PanelRow::Command(new_brush(ty))));
+    rows.extend([
+        row(DUPLICATE),
+        row(DELETE_BRUSH),
+        row("brush.remove"),
+        row("object.expandBrush"),
+        // On the selected path's brush, else the current one.
+        row("ui.brushOptions"),
+        // The selected brushed paths' own settings: the brush stays as it is.
+        row("ui.brushObjectOptions"),
+        PanelRow::Separator,
+        // Selects the brushes no stroke paints with, for Delete Brush and Duplicate Brush.
+        row(SELECT_UNUSED),
+        PanelRow::Separator,
+    ]);
+    rows.extend(KINDS.iter().map(|(ty, _)| PanelRow::Command(show_kind(ty))));
+    rows.extend([
+        PanelRow::Separator,
+        row(THUMBNAIL_VIEW),
+        row(LIST_VIEW),
+        PanelRow::Separator,
+        PanelRow::Submenu(tl!("Open Brush Library").into(), library_panel::library_rows::<BrushLibraries>(app)),
+        row(SAVE_LIBRARY),
+    ]);
+    rows
+}
+
+/// The enabled and checked states of the panel menu's rows.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    let (list, current) = brushes(app);
+    let document = app.session.active().is_some();
+    let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
+    let brushed = selected_brush(app).is_some();
+    let targets = !targets(app, &list, current.as_deref()).is_empty();
+    let on = |on: bool| CommandState::new().enabled(on);
+    let new = CommandRef::new("ui.newBrush");
+    // Dimmed with no document, saying why as the menus do.
+    let reason = (!document).then(|| crate::menus::model::off_reason(app, &new, crate::i18n::t("New Brush…")));
+    states.set(new, reason.into_iter().fold(on(document), CommandState::hint));
+    for ty in NEW_AT_ONCE {
+        states.set(new_brush(ty), on(true));
+    }
+    for ty in NEW_FROM_SELECTION {
+        states.set(new_brush(ty), on(has_sel));
+    }
+    states.set(CommandRef::new(DUPLICATE), on(targets));
+    states.set(CommandRef::new(DELETE_BRUSH), on(targets));
+    states.set(CommandRef::new("brush.remove"), on(brushed));
+    states.set(CommandRef::new("object.expandBrush"), on(brushed));
+    states.set(CommandRef::new("ui.brushOptions"), on(brush_options::available(app)));
+    states.set(CommandRef::new("ui.brushObjectOptions"), on(brush_options::object_available(app)));
+    states.set(CommandRef::new(SELECT_UNUSED), on(document));
+    let view = &app.ui.brushes_view;
+    for (ty, _) in KINDS {
+        states.set(show_kind(ty), on(true).checked(!view.hidden.iter().any(|h| h == ty)));
+    }
+    states.set(CommandRef::new(THUMBNAIL_VIEW), on(true).checked(!view.list));
+    states.set(CommandRef::new(LIST_VIEW), on(true).checked(view.list));
+    states.set(CommandRef::new(SAVE_LIBRARY), on(!list.is_empty()));
+}
+
+/// Runs the panel menu's own row `id`; `None` for an id that is not one of them.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    let (list, current) = brushes(app);
+    let targets = targets(app, &list, current.as_deref());
+    match id {
+        DUPLICATE => run_on(app, "brush.duplicate", &targets),
+        DELETE_BRUSH => delete(app, &targets, false),
+        SELECT_UNUSED => {
+            let found = match app.run("brush.unused", json!({})) {
+                Ok(found) => found,
+                Err(e) => return Some(Err(e)),
+            };
+            let names: Vec<String> = serde_json::from_value(found["names"].clone()).unwrap_or_default();
+            store_selection(app, Selection::new(names, None, None));
         }
-        Some((name, _)) => {
-            set_pstate(ui.ctx(), "br-anchor", name.clone());
-            multi = None;
-            let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
-            if has_sel {
-                app.run("brush.apply", json!({"name": name})).ok();
+        THUMBNAIL_VIEW | LIST_VIEW => app.ui.brushes_view.list = id == LIST_VIEW,
+        SAVE_LIBRARY => save_library(app, targets),
+        _ => {
+            let ty = id.strip_prefix(SHOW).filter(|ty| KINDS.iter().any(|(kind, _)| kind == ty))?;
+            let hidden = &mut app.ui.brushes_view.hidden;
+            if hidden.iter().any(|h| h == ty) {
+                hidden.retain(|h| h != ty);
             } else {
-                app.run("brush.setCurrent", json!({"name": name})).ok();
+                hidden.push(ty.to_string());
             }
-            let now = brushes(app).1;
-            set_pstate(ui.ctx(), "br-selected", (None::<Vec<String>>, click_key(app, now.as_deref())));
         }
-        None => {}
     }
-    if let Some(name) = options
-        && let Err(e) = app.run("ui.brushOptions", json!({ "name": name }))
-    {
+    Some(Ok(Value::Null))
+}
+
+/// Save Brush Library… for the document's brushes (`names`: those selected in the panel).
+fn save_library(app: &mut VectorcraftApp, names: Vec<String>) {
+    if let Err(e) = app.run("ui.saveBrushLibrary", json!({ "names": names })) {
         app.status(e);
     }
-    let has_brush = sel_brush.is_some();
-    let targets = multi.unwrap_or_else(|| highlighted.into_iter().collect());
-    let has_doc = app.session.active().is_some();
-    widgets::bottom_bar(ui, |ui| {
-        widgets::icon_button_enabled(ui, "library", tl!("Brush Libraries (on the roadmap)"), false, false, 24.0);
-        if widgets::icon_button_enabled(ui, "dc-remove-brush", tl!("Remove Brush Stroke"), false, has_brush, 24.0).clicked() {
-            app.run("brush.remove", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "dc-options", tl!("Expand Brush Strokes"), false, has_brush, 24.0).clicked() {
-            app.run("object.expandBrush", json!({})).ok();
-        }
-        ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        // New Brush asks for the type, then opens that type's Brush Options.
-        if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Brush"), false, has_doc, 24.0).clicked()
-            && let Err(e) = app.run("ui.newBrush", json!({}))
+}
+
+// ---------- libraries ----------
+
+/// A brush of a library as the library panel shows it.
+pub(crate) struct LibBrush {
+    lib: Arc<BrushLibrary>,
+    index: usize,
+    /// Its definition and preview key, with the library's resources.
+    shown: Shown,
+}
+
+impl LibBrush {
+    fn name(&self) -> &str {
+        &self.shown.name
+    }
+}
+
+/// The brushes of library `lib` as its panel shows them, worked out once per library: a frame of
+/// the panel serialises and hashes none.
+pub(crate) fn library_brushes(lib: &Arc<BrushLibrary>) -> Rc<Vec<LibBrush>> {
+    thread_local! {
+        static MEMO: RefCell<Memo<BrushLibrary, Vec<LibBrush>>> = RefCell::new(Memo::default());
+    }
+    MEMO.with(|m| {
+        m.borrow_mut().get(lib, 0, || {
+            lib.brushes.iter().enumerate().map(|(index, b)| LibBrush { lib: lib.clone(), index, shown: Shown::of(&lib.doc, b) }).collect()
+        })
+    })
+}
+
+/// Brush libraries in library panels (engine: `brush.libraries`, `brush.addFromLibrary`…).
+pub(crate) struct BrushLibraries;
+
+impl LibraryKind for BrushLibraries {
+    const KIND: &'static str = "brushes";
+    const OPEN: &'static str = "window.brushLibrary";
+    const LIST: &'static str = "brush.libraries";
+    const LOAD: &'static str = "brush.loadLibrary";
+    const MENU: &'static str = "Brush Libraries Menu";
+    const ADD: &'static str = "Add to Brushes";
+    /// Stroke previews need room to show the brush.
+    const VIEW: super::swatches::View = super::swatches::View::LargeThumb;
+    type Lib = Rc<Vec<LibBrush>>;
+    type Item = LibBrush;
+    type Thumbs = ();
+
+    fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
+        let libs = brushlib::libraries(&app.session).into_iter();
+        libs.map(|l| LibraryRef { submenu: library_panel::submenu(l.category), id: l.id, name: l.name }).collect()
+    }
+    fn get(app: &VectorcraftApp, id: &str) -> Option<(String, Self::Lib)> {
+        let (info, lib) = brushlib::library(&app.session, id)?;
+        Some((info.name, library_brushes(&lib)))
+    }
+    fn find(app: &VectorcraftApp, key: &str) -> library_panel::Found {
+        brushlib::library(&app.session, key).map(|(info, lib)| (info.id, info.name, lib.len()))
+    }
+    fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
+        app.session.brush_libraries.path(id).map(str::to_string)
+    }
+    fn rows<'a>(lib: &'a Self::Lib, _id: &str) -> Vec<Row<'a, LibBrush>> {
+        lib.iter().map(|b| Row { name: b.name(), item: Some(b) }).collect()
+    }
+    /// A built-in library's brush in the UI language; a User Defined or loaded library's brush as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id)).into()
+    }
+    /// The brush's row, named in the UI language; Find matches the shown name and the name as stored.
+    fn row(id: &str, b: &LibBrush, label: &str) -> PresetRow<LibraryKey> {
+        let key = LibraryKey { panel: library_panel::panel_id(Self::KIND, id), name: b.name().to_string(), folder: false };
+        let mut row = PresetRow::item(key, label, 0).tooltip(Self::describe(b));
+        row.search_name = Some(b.name().to_string());
+        row
+    }
+    fn thumbs(_: &VectorcraftApp, _: &Self::Lib) {}
+    /// The brush's stroke preview, drawn with the library's resources.
+    fn thumb(_: &(), cx: &ContentPainterCx, rect: Rect, b: &LibBrush) {
+        paint_brush(cx, rect, &b.lib.doc, &b.shown);
+    }
+    /// Its type.
+    fn describe(b: &LibBrush) -> String {
+        b.lib.brushes.get(b.index).map_or_else(String::new, |x| tl!(x.kind.label()).to_string())
+    }
+    /// Adds the brush to the document's Brushes as the current brush, and applies it to the
+    /// selected paths, as clicking a brush of the Brushes panel does.
+    fn click(app: &mut VectorcraftApp, _: &Ui, id: &str, name: &str) {
+        let apply = app.session.active().is_some_and(|d| !d.selection.is_empty());
+        add(app, json!({"library": id, "name": name, "apply": apply}));
+    }
+    fn add(app: &mut VectorcraftApp, id: &str, names: Vec<String>) {
+        add(app, json!({"library": id, "names": names}));
+    }
+    /// Dragged onto a path, the brush is added and applied to it; onto the Brushes panel, added.
+    fn drags() -> bool {
+        true
+    }
+    fn menu_tail(app: &mut VectorcraftApp, ui: &mut Ui) {
+        Divider::horizontal().show(ui);
+        // As a command, so its file dialog, shown off the UI thread, loads the library when it
+        // answers.
+        if MenuItem::new(tl!("Other Library…")).show(ui).ran
+            && let Err(e) = app.run("window.brushLibrary.other", json!({}))
         {
             app.status(e);
         }
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Brush"), false, !targets.is_empty(), 24.0).clicked() {
-            run_on(app, "brush.delete", &targets);
+        if MenuItem::new(tl!("Save Brushes…")).enabled(has_brushes(app)).show(ui).ran {
+            let (list, current) = brushes(app);
+            let names = targets(app, &list, current.as_deref());
+            save_library(app, names);
         }
-    });
+    }
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let sel = selected_brush(app);
-    let (list, current) = brushes(app);
-    let targets = targets(app, ui.ctx(), &list, current.as_deref());
-    let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
-    if menu_item(ui, tl!("New Brush…"), app.session.active().is_some(), false)
-        && let Err(e) = app.run("ui.newBrush", json!({}))
-    {
+/// Run `brush.addFromLibrary` with `p`; a failure goes to the status bar.
+fn add(app: &mut VectorcraftApp, p: Value) {
+    if let Err(e) = app.run("brush.addFromLibrary", p) {
         app.status(e);
     }
-    // The types' own items make a brush at once, without its Brush Options.
-    for (label, ty) in [(tl!("New Calligraphic Brush"), "calligraphic"), (tl!("New Bristle Brush"), "bristle")] {
-        if menu_item(ui, label, true, false) {
-            app.run("brush.new", json!({"type": ty})).ok();
-        }
-    }
-    for (label, ty) in [
-        (tl!("New Art Brush from Selection"), "art"),
-        (tl!("New Scatter Brush from Selection"), "scatter"),
-        (tl!("New Pattern Brush from Selection"), "pattern"),
-    ] {
-        if menu_item(ui, label, has_sel, false) {
-            app.run("brush.new", json!({"type": ty})).ok();
-        }
-    }
-    if menu_item(ui, tl!("Duplicate Brush"), !targets.is_empty(), false) {
-        run_on(app, "brush.duplicate", &targets);
-    }
-    if menu_item(ui, tl!("Delete Brush"), !targets.is_empty(), false) {
-        run_on(app, "brush.delete", &targets);
-    }
-    if menu_item(ui, tl!("Remove Brush Stroke"), sel.is_some(), false) {
-        app.run("brush.remove", json!({})).ok();
-    }
-    if menu_item(ui, tl!("Expand Brush Strokes"), sel.is_some(), false) {
-        app.run("object.expandBrush", json!({})).ok();
-    }
-    // On the selected path's brush, else the current one.
-    if menu_item(ui, tl!("Brush Options…"), brush_options::available(app), false)
-        && let Err(e) = app.run("ui.brushOptions", json!({}))
-    {
-        app.status(e);
-    }
-    ui.separator();
-    // Selects the brushes no stroke paints with, for Delete Brush and Duplicate Brush.
-    if menu_item(ui, tl!("Select All Unused"), app.session.active().is_some(), false)
-        && let Ok(r) = app.run("brush.unused", json!({}))
-    {
-        let names: Vec<String> = serde_json::from_value(r["names"].clone()).unwrap_or_default();
-        set_pstate(ui.ctx(), "br-selected", (Some(names), click_key(app, current.as_deref())));
-    }
-    ui.separator();
-    let mut hidden: Vec<String> = pstate(ui.ctx(), "br-hidden");
-    for (ty, label) in KINDS {
-        let shown = !hidden.iter().any(|h| h == ty);
-        if menu_item(ui, &crate::i18n::fmt(tl!("Show {kind} Brushes"), &[("kind", tl!(label))]), true, shown) {
-            if shown {
-                hidden.push(ty.to_string());
-            } else {
-                hidden.retain(|h| h != ty);
-            }
-            set_pstate(ui.ctx(), "br-hidden", hidden.clone());
-        }
-    }
-    ui.separator();
-    let list: bool = pstate(ui.ctx(), "br-list");
-    if menu_item(ui, tl!("Thumbnail View"), true, !list) {
-        set_pstate(ui.ctx(), "br-list", false);
-    }
-    if menu_item(ui, tl!("List View"), true, list) {
-        set_pstate(ui.ctx(), "br-list", true);
+}
+
+/// Has the active document brushes to save? (Its stored library isn't parsed: a document without
+/// one has the default brushes.)
+pub(crate) fn has_brushes(app: &VectorcraftApp) -> bool {
+    let stored = |d: &Document| d.unknown.get(vectorcraft_brush::DOC_KEY).map(|v| v.as_array().is_some_and(|a| !a.is_empty()));
+    app.session.active().is_some_and(|st| stored(&st.doc).unwrap_or(true))
+}
+
+/// `window.brushLibrary {library}`: open a brush library in its own panel (`library` null closes
+/// every brush library panel).
+pub(crate) fn open_library(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    library_panel::open_command::<BrushLibraries>(app, p)
+}
+
+/// `brush.loadLibrary` params, then open the library in its panel.
+pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    let r = app.run("brush.loadLibrary", params)?;
+    open_library(app, &json!({ "library": r["library"] }))
+}
+
+/// Other Library…: load the brushes of the document at `path`, else of one picked in an open
+/// dialog.
+pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
+    let filters = library_panel::library_pick_filters(BrushLibraries::KIND);
+    library_panel::pick_library_file(app, path, filters, load_library)
+}
+
+/// The id prefix of the Window → Brush Libraries → User Defined slots.
+pub(crate) const USER_SLOT: &str = "window.userBrushLibrary";
+
+/// The User Defined library slot `id` (`window.userBrushLibrary3`) stands for.
+pub(crate) fn user_library(app: &VectorcraftApp, id: &str) -> Option<LibraryInfo> {
+    library_panel::user_slot(id, USER_SLOT, brushlib::libraries(&app.session))
+}
+
+/// Window → Brush Libraries.
+pub(crate) fn window_menu() -> Vec<crate::menus::Node> {
+    const SLOTS: [&str; 10] = [
+        "window.userBrushLibrary1",
+        "window.userBrushLibrary2",
+        "window.userBrushLibrary3",
+        "window.userBrushLibrary4",
+        "window.userBrushLibrary5",
+        "window.userBrushLibrary6",
+        "window.userBrushLibrary7",
+        "window.userBrushLibrary8",
+        "window.userBrushLibrary9",
+        "window.userBrushLibrary10",
+    ];
+    let open = |b: &'static brushlib::BuiltinBrushLibrary| cp(b.name, BrushLibraries::OPEN, json!({ "library": b.id }));
+    let mut items: Vec<crate::menus::Node> = brushlib::BUILTIN.iter().map(open).collect();
+    items.extend([
+        Sep,
+        sub("User Defined", SLOTS.iter().map(|&id| c("User Library", id)).collect()),
+        Sep,
+        c("Other Library…", "window.brushLibrary.other"),
+        c("Save Brushes…", "ui.saveBrushLibrary"),
+    ]);
+    items
+}
+
+/// Brush definitions serialised and preview keys hashed, and stroke previews rendered, on this test thread.
+#[cfg(test)]
+pub(crate) mod counters {
+    thread_local! {
+        pub(crate) static KEYED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        pub(crate) static RENDERED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use egui::{Pos2, Rect, pos2};
-    use vectorcraft_doc::NodeId;
-    use vectorcraft_engine::Session;
-
-    use super::*;
-
-    /// One headless frame of the panel, 236 pt wide as in the dock.
-    fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) {
-        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 600.0))), events, ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
-        out.textures_delta.clear();
-    }
-
-    fn button(at: Pos2, pressed: bool) -> egui::Event {
-        egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
-    }
-
-    /// One frame of `draw` at `time` with `modifiers` held, its output kept.
-    fn frame_with(
-        ctx: &egui::Context,
-        app: &mut VectorcraftApp,
-        events: Vec<egui::Event>,
-        modifiers: egui::Modifiers,
-        time: f64,
-        draw: fn(&mut VectorcraftApp, &mut Ui),
-    ) -> egui::FullOutput {
-        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 600.0)));
-        let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
-        let raw = egui::RawInput { screen_rect, time: Some(time), events, ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
-        out.textures_delta.clear();
-        out
-    }
-
-    /// A click at `at` with `modifiers` held, in a frame of `draw` at `time`.
-    fn click(ctx: &egui::Context, app: &mut VectorcraftApp, at: Pos2, modifiers: egui::Modifiers, time: f64, draw: fn(&mut VectorcraftApp, &mut Ui)) {
-        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
-        frame_with(ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers, time, draw);
-    }
-
-    /// The accessibility nodes of `out` that take a click, with their rectangles, top to bottom
-    /// and then left to right.
-    fn clickable(out: &egui::FullOutput) -> Vec<(Option<String>, Rect)> {
-        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-        let mut v: Vec<(Option<String>, Rect)> = nodes
-            .iter()
-            .filter(|(_, n)| n.supports_action(egui::accesskit::Action::Click))
-            .filter_map(|(_, n)| {
-                let b = n.bounds()?;
-                Some((n.label().map(|l| l.trim().to_string()), Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))))
-            })
-            .collect();
-        v.sort_by(|a, b| a.1.min.y.total_cmp(&b.1.min.y).then(a.1.min.x.total_cmp(&b.1.min.x)));
-        v
-    }
-
-    /// #852: double-clicking a brush opens its Brush Options; OK changes the brush (and strokes
-    /// painted with it). A single click only applies the brush.
-    #[test]
-    fn double_clicking_a_brush_opens_its_options() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        let ctx = egui::Context::default();
-        let clicks = |at: Pos2, n: usize| -> Vec<egui::Event> {
-            std::iter::once(egui::Event::PointerMoved(at)).chain((0..n).flat_map(|_| [button(at, true), button(at, false)])).collect()
-        };
-        let at_time = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
-            let raw = egui::RawInput {
-                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 600.0))),
-                time: Some(time),
-                events,
-                ..Default::default()
-            };
-            ctx.run_ui(raw, |ui| show(app, ui)).textures_delta.clear();
-        };
-        at_time(&mut app, 0.0, vec![]);
-        let (list, _) = brushes(&mut app);
-        let first = list[0].0.clone();
-        assert_eq!(list[0].1, "calligraphic");
-        // The first tile, clicked once: it becomes current, no dialog.
-        let tile = pos2(36.0, 16.0);
-        at_time(&mut app, 1.0, clicks(tile, 1));
-        assert!(app.ui.dialog.is_none());
-        assert_eq!(brushes(&mut app).1.as_deref(), Some(first.as_str()));
-        // Double-clicked: Calligraphic Brush Options on that brush.
-        at_time(&mut app, 3.0, clicks(tile, 2));
-        let d = app.ui.dialog.as_mut().expect("Brush Options opened");
-        assert_eq!((d.kind.as_str(), d.str("name"), d.str("sizeMode")), (crate::dialogs::brush_options::KIND, first.clone(), "fixed".into()));
-        d.fields.insert("sizeMode".into(), json!("pressure"));
-        d.fields.insert("sizeVariation".into(), json!(2));
-        d.fields.insert("name".into(), json!("Pressure Round"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        let def = app.run("brush.get", json!({"name": "Pressure Round"})).unwrap();
-        assert_eq!((def["modes"].clone(), def["variation"][2].clone()), (json!(["fixed", "fixed", "pressure"]), json!(2.0)));
-        assert_eq!(brushes(&mut app).1.as_deref(), Some("Pressure Round"), "renamed, still current");
-    }
-
-    /// The New Brush button and the panel menu's New Brush… open New Brush, with nothing selected
-    /// too, and make no brush.
-    #[test]
-    fn the_new_brush_button_and_menu_item_open_new_brush() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let before = names(&mut app);
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 0.0, show);
-        let new = clickable(&out).into_iter().find(|(l, _)| l.as_deref() == Some("New Brush")).expect("a New Brush button").1.center();
-        click(&ctx, &mut app, new, egui::Modifiers::NONE, 1.0, show);
-        let kind = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.kind.clone());
-        assert_eq!(kind(&app).as_deref(), Some(crate::dialogs::new_brush::KIND));
-        app.ui.dialog = None;
-        menu_click(&ctx, &mut app, "New Brush…", 2.0);
-        assert_eq!(kind(&app).as_deref(), Some(crate::dialogs::new_brush::KIND));
-        assert_eq!(names(&mut app), before);
-    }
-
-    /// The rectangles `out` fills with the selected-row color.
-    fn lit(ctx: &egui::Context, out: &egui::FullOutput) -> Vec<Rect> {
-        let t = Tokens::get(ctx);
-        out.shapes
-            .iter()
-            .filter_map(|c| match &c.shape {
-                egui::Shape::Rect(r) if r.fill == t.row_selected => Some(r.rect),
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn brush_of(app: &VectorcraftApp, id: NodeId) -> Option<String> {
-        app.session.active().unwrap().doc.node(id).unwrap().appearance.stroke().and_then(|s| s.brush.clone())
-    }
-
-    fn names(app: &mut VectorcraftApp) -> Vec<String> {
-        brushes(app).0.into_iter().map(|b| b.0).collect()
-    }
-
-    /// Click the panel menu's item `label` (frames at `time`, `time + 0.5`).
-    fn menu_click(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, time: f64) {
-        let out = frame_with(ctx, app, vec![], egui::Modifiers::NONE, time, menu);
-        let at = clickable(&out).into_iter().find(|(l, _)| l.as_deref() == Some(label)).unwrap_or_else(|| panic!("no `{label}`")).1.center();
-        click(ctx, app, at, egui::Modifiers::NONE, time + 0.5, menu);
-    }
-
-    /// The first three brushes (the Calligraphic ones): a click on the first applies it to the
-    /// selected rectangle, and then a Shift-click on the third selects all three without applying
-    /// the third.
-    fn select_three(ctx: &egui::Context, app: &mut VectorcraftApp, rect: NodeId) -> (Vec<String>, Vec<Rect>) {
-        let out = frame_with(ctx, app, vec![], egui::Modifiers::NONE, 0.0, show);
-        let tiles: Vec<Rect> = clickable(&out).into_iter().map(|c| c.1).filter(|r| r.width() == 64.0).take(3).collect();
-        let (list, _) = brushes(app);
-        assert!(list[..3].iter().all(|b| b.1 == "calligraphic"), "{list:?}");
-        let three: Vec<String> = list[..3].iter().map(|b| b.0.clone()).collect();
-        click(ctx, app, tiles[0].center(), egui::Modifiers::NONE, 1.0, show);
-        assert_eq!(brush_of(app, rect).as_deref(), Some(three[0].as_str()));
-        click(ctx, app, tiles[2].center(), egui::Modifiers::SHIFT, 2.0, show);
-        assert_eq!(brush_of(app, rect).as_deref(), Some(three[0].as_str()), "a Shift-click only selects");
-        (three, tiles)
-    }
-
-    /// Shift-click selects a range of brushes and Cmd/Ctrl-click adds or removes one; the panel
-    /// highlights them, and Duplicate Brush and Delete Brush act on all of them in one undo step.
-    #[test]
-    fn shift_and_command_clicks_select_brushes_for_delete_and_duplicate() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        let rect = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap());
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let (three, tiles) = select_three(&ctx, &mut app, rect);
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 2.5, show);
-        let lit_tiles = |out: &egui::FullOutput| -> Vec<usize> { (0..3).filter(|i| lit(&ctx, out).contains(&tiles[*i])).collect() };
-        assert_eq!(lit_tiles(&out), [0, 1, 2]);
-        // Cmd/Ctrl-click takes the second out again.
-        click(&ctx, &mut app, tiles[1].center(), egui::Modifiers::COMMAND, 3.0, show);
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 3.5, show);
-        assert_eq!(lit_tiles(&out), [0, 2]);
-        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-        let before = (names(&mut app), undo(&app));
-        menu_click(&ctx, &mut app, "Duplicate Brush", 4.0);
-        let copies = [format!("{} copy", three[0]), format!("{} copy", three[2])];
-        assert_eq!(names(&mut app)[before.0.len()..], copies);
-        assert_eq!(undo(&app), before.1 + 1);
-        // The bottom bar's last button, Delete Brush.
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 5.0, show);
-        let trash = clickable(&out).last().unwrap().1.center();
-        click(&ctx, &mut app, trash, egui::Modifiers::NONE, 6.0, show);
-        let left = names(&mut app);
-        assert!(!left.contains(&three[0]) && !left.contains(&three[2]) && left.contains(&three[1]), "{left:?}");
-        assert!(copies.iter().all(|c| left.contains(c)), "{left:?}");
-        assert_eq!(brush_of(&app, rect), None);
-        assert_eq!(undo(&app), before.1 + 2);
-    }
-
-    /// Selecting other art ends the multi-selection: selecting the first art again does not bring
-    /// it back, and with a path stroked with another brush selected, the panel highlights that
-    /// brush and Delete Brush deletes it alone.
-    #[test]
-    fn selecting_other_art_ends_the_brush_multi_selection() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        let rect = |app: &mut VectorcraftApp, x: f64| {
-            NodeId(app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap())
-        };
-        let a = rect(&mut app, 10.0);
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let (three, tiles) = select_three(&ctx, &mut app, a);
-        let lit_tiles = |out: &egui::FullOutput| -> Vec<usize> { (0..3).filter(|i| lit(&ctx, out).contains(&tiles[*i])).collect() };
-        // A path without a brush, then the first one again: the current brush is highlighted.
-        rect(&mut app, 60.0);
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 3.0, show);
-        assert_eq!(lit_tiles(&out), [0]);
-        app.run("select.set", json!({"ids": [a.0]})).unwrap();
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 3.5, show);
-        assert_eq!(lit_tiles(&out), [0]);
-        // A path stroked with the second brush.
-        let c = rect(&mut app, 110.0);
-        app.run("brush.apply", json!({"name": three[1]})).unwrap();
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 4.0, show);
-        assert_eq!(lit_tiles(&out), [1]);
-        menu_click(&ctx, &mut app, "Delete Brush", 5.0);
-        let left = names(&mut app);
-        assert!(left.contains(&three[0]) && !left.contains(&three[1]) && left.contains(&three[2]), "{left:?}");
-        assert_eq!((brush_of(&app, a).as_deref(), brush_of(&app, c)), (Some(three[0].as_str()), None));
-    }
-
-    /// After other art is selected, a Shift-click selects the range from that art's brush, not from
-    /// the brush clicked before.
-    #[test]
-    fn a_shift_click_after_selecting_other_art_starts_from_its_brush() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 0.0, show);
-        let tiles: Vec<Rect> = clickable(&out).into_iter().map(|c| c.1).filter(|r| r.width() == 64.0).take(3).collect();
-        let (list, _) = brushes(&mut app);
-        click(&ctx, &mut app, tiles[0].center(), egui::Modifiers::NONE, 1.0, show);
-        app.run("shape.rectangle", json!({"x": 100, "y": 10, "width": 50, "height": 40})).unwrap();
-        app.run("brush.apply", json!({"name": list[2].0})).unwrap();
-        click(&ctx, &mut app, tiles[1].center(), egui::Modifiers::SHIFT, 2.0, show);
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 2.5, show);
-        assert_eq!(lit(&ctx, &out).iter().filter(|r| tiles.contains(r)).collect::<Vec<_>>(), [&tiles[1], &tiles[2]]);
-    }
-
-    /// Cmd/Ctrl-clicks can deselect every brush: none is highlighted, and Delete Brush and
-    /// Duplicate Brush are off.
-    #[test]
-    fn command_clicks_deselect_every_brush() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        let a = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap());
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let (_, tiles) = select_three(&ctx, &mut app, a);
-        for (i, tile) in tiles.iter().enumerate() {
-            click(&ctx, &mut app, tile.center(), egui::Modifiers::COMMAND, 3.0 + i as f64, show);
-        }
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 7.0, show);
-        assert!(!lit(&ctx, &out).iter().any(|r| tiles.contains(r)));
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 8.0, menu);
-        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-        for label in ["Duplicate Brush", "Delete Brush"] {
-            let item = nodes.iter().find(|(_, n)| n.label().map(str::trim) == Some(label)).unwrap_or_else(|| panic!("no `{label}`"));
-            assert!(item.1.is_disabled(), "{label}");
-        }
-    }
-
-    /// Select All Unused in the panel menu highlights every brush but the one the rectangle is
-    /// painted with, and Delete Brush then deletes all of them.
-    #[test]
-    fn select_all_unused_selects_the_brushes_no_stroke_paints_with() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        let (list, _) = brushes(&mut app);
-        let a = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap());
-        app.run("brush.apply", json!({"name": list[1].0})).unwrap();
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        menu_click(&ctx, &mut app, "Select All Unused", 1.0);
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 2.0, show);
-        let tiles: Vec<Rect> = clickable(&out).into_iter().map(|c| c.1).filter(|r| r.width() == 64.0).collect();
-        assert_eq!(tiles.len(), list.len());
-        let on: Vec<usize> = (0..tiles.len()).filter(|i| lit(&ctx, &out).contains(&tiles[*i])).collect();
-        assert_eq!(on, (0..tiles.len()).filter(|i| *i != 1).collect::<Vec<_>>());
-        menu_click(&ctx, &mut app, "Delete Brush", 3.0);
-        assert_eq!(names(&mut app), [list[1].0.clone()]);
-        assert_eq!(brush_of(&app, a), Some(list[1].0.clone()));
-    }
-
-    #[test]
-    fn art_dropped_on_the_panel_becomes_an_art_brush_and_a_brush_drags_out() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
-        let ctx = egui::Context::default();
-        frame(&ctx, &mut app, vec![]);
-        let (before, _) = brushes(&mut app);
-        // Art dragged off the canvas and released over the list.
-        let over = pos2(100.0, 60.0);
-        egui::DragAndDrop::set_payload(&ctx, PanelDrag::Art(vec![NodeId(id)]));
-        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(over), button(over, false)]);
-        // New Brush opens on Art for the dropped art, and OK twice makes the brush.
-        let d = app.ui.dialog.as_ref().expect("New Brush opened");
-        assert_eq!((d.kind.as_str(), d.str("type"), d.fields.get("__ids")), (crate::dialogs::new_brush::KIND, "art".into(), Some(&json!([id]))));
-        assert_eq!(brushes(&mut app).0, before);
-        crate::dialogs::confirm(&mut app).unwrap();
-        crate::dialogs::confirm(&mut app).unwrap();
-        let (after, _) = brushes(&mut app);
-        assert_eq!(after.len(), before.len() + 1);
-        let new: Vec<_> = after.iter().filter(|b| !before.contains(b)).collect();
-        assert!(matches!(new.as_slice(), [(_, ty)] if ty == "art"), "{new:?}");
-        // Dragging the first tile out of the panel carries that brush.
-        frame(&ctx, &mut app, vec![]);
-        let tile = pos2(36.0, 16.0);
-        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
-        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
-        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        let drag = egui::DragAndDrop::payload::<PanelDrag>(&ctx);
-        assert!(matches!(drag.as_deref(), Some(PanelDrag::Brush { name, def }) if *name == after[0].0 && def["name"] == json!(name)), "{drag:?}");
-    }
-
-    /// A brush dragged onto the left half of another brush of its type goes before it, with a bar
-    /// marking the slot while it is held there, as one undo step; dropped on a brush of another
-    /// type, it stays where it is and the status bar says why.
-    #[test]
-    fn a_brush_dragged_onto_another_of_its_type_moves_before_it() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let out = frame_with(&ctx, &mut app, vec![], egui::Modifiers::NONE, 0.0, show);
-        let tiles: Vec<Rect> = clickable(&out).into_iter().map(|c| c.1).filter(|r| r.width() == 64.0).collect();
-        let (list, _) = brushes(&mut app);
-        let order: Vec<String> = shown(&list, &[]).into_iter().map(str::to_string).collect();
-        assert_eq!(order[..4], ["3 pt. Round", "6 pt. Flat", "10 pt. Oval", "Dots"]);
-        let accent = Tokens::get(&ctx).accent;
-        let bars = |out: &egui::FullOutput| -> Vec<f32> {
-            let lines = out.shapes.iter().filter_map(|c| match &c.shape {
-                egui::Shape::LineSegment { points, stroke } if stroke.color == accent => Some(points[0].x),
-                _ => None,
-            });
-            lines.collect()
-        };
-        // Press on a tile, drag it to `to`, hold it there for a frame (its output returned) and release.
-        let drag = |app: &mut VectorcraftApp, from: Pos2, to: Pos2, time: f64| -> egui::FullOutput {
-            frame_with(&ctx, app, vec![egui::Event::PointerMoved(from), button(from, true)], egui::Modifiers::NONE, time, show);
-            frame_with(&ctx, app, vec![egui::Event::PointerMoved(from + vec2(20.0, 0.0))], egui::Modifiers::NONE, time + 0.1, show);
-            frame_with(&ctx, app, vec![egui::Event::PointerMoved(to)], egui::Modifiers::NONE, time + 0.2, show);
-            let held = frame_with(&ctx, app, vec![], egui::Modifiers::NONE, time + 0.3, show);
-            frame_with(&ctx, app, vec![button(to, false)], egui::Modifiers::NONE, time + 0.4, show);
-            held
-        };
-        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-        let steps = undo(&app);
-        let calligraphic =
-            |app: &mut VectorcraftApp| -> Vec<String> { brushes(app).0.into_iter().filter(|b| b.1 == "calligraphic").map(|b| b.0).collect() };
-        // "10 pt. Oval" onto the left half of "3 pt. Round".
-        let held = drag(&mut app, tiles[2].center(), tiles[0].center() - vec2(16.0, 0.0), 1.0);
-        assert_eq!(bars(&held), [tiles[0].left() - 1.5]);
-        assert_eq!(calligraphic(&mut app), ["10 pt. Oval", "3 pt. Round", "6 pt. Flat"]);
-        assert_eq!(undo(&app), steps + 1);
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(calligraphic(&mut app), ["3 pt. Round", "6 pt. Flat", "10 pt. Oval"]);
-        // "3 pt. Round" onto "Dots", a scatter brush: no bar, and nothing moves.
-        let held = drag(&mut app, tiles[0].center(), tiles[3].center(), 3.0);
-        assert!(bars(&held).is_empty(), "{:?}", bars(&held));
-        assert_eq!(brushes(&mut app).0, list);
-        assert_eq!(undo(&app), steps);
-        assert!(app.ui.status.contains("brushes move only within their type"), "{}", app.ui.status);
-    }
-}
+mod tests;

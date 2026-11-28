@@ -20,12 +20,12 @@ use std::io::BufRead;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cancel::CancelToken;
 
-use crate::server::{INVALID_REQUEST, MAX_LINE_BYTES, PARSE_ERROR, SERVER_BUSY, error, error_with, read_line_capped};
+use crate::server::{Clock, INVALID_REQUEST, MAX_LINE_BYTES, PARSE_ERROR, SERVER_BUSY, error, error_with, read_line_capped};
 
 /// Most lines waiting for the engine. Past this the reader waits (it still reads nothing else).
 pub(crate) const MAX_QUEUED: usize = 64;
@@ -55,7 +55,8 @@ struct Running {
     method: String,
     token: CancelToken,
     label: String,
-    since: Instant,
+    /// When it started, on [`Shared`]'s clock.
+    since: Duration,
 }
 
 #[derive(Default)]
@@ -66,6 +67,9 @@ struct State {
     eof: bool,
     /// The output failed: nobody reads replies any more.
     closed: bool,
+    /// How often the reader found [`MAX_QUEUED`] lines queued and waited for room.
+    #[cfg(test)]
+    waits_for_room: usize,
 }
 
 /// What the reader and the engine thread share.
@@ -75,6 +79,7 @@ pub(crate) struct Shared {
     /// Whether the client speaks the `2026-07-28` revision, for results answered by the reader.
     pub(crate) modern: Arc<AtomicBool>,
     busy_after: Duration,
+    clock: Clock,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -83,8 +88,8 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Shared {
-    pub(crate) fn new(modern: Arc<AtomicBool>, busy_after: Duration) -> Self {
-        Self { state: Mutex::new(State::default()), wake: Condvar::new(), modern, busy_after }
+    pub(crate) fn new(modern: Arc<AtomicBool>, busy_after: Duration, clock: Clock) -> Self {
+        Self { state: Mutex::new(State::default()), wake: Condvar::new(), modern, busy_after, clock }
     }
 
     /// The next job, or `None` once the transport is done and the queue empty (or the output
@@ -102,7 +107,7 @@ impl Shared {
                         method: m.method.clone(),
                         token: m.token.clone(),
                         label: m.label.clone(),
-                        since: Instant::now(),
+                        since: (self.clock)(),
                     });
                 }
                 // The reader may be waiting for room.
@@ -145,10 +150,15 @@ impl Shared {
     /// pipelined neighbour fail).
     fn long_running(&self, st: &State) -> Option<Value> {
         let r = st.running.as_ref()?;
-        let secs = r.since.elapsed();
-        (secs >= self.busy_after).then(|| json!({"running": r.label, "requestId": r.key, "seconds": secs.as_secs()}))
+        let secs = (self.clock)().saturating_sub(r.since);
+        // A long id isn't repeated: every busy reply would carry it twice.
+        let key = r.key.as_deref().filter(|k| k.len() <= MAX_ECHOED_ID);
+        (secs >= self.busy_after).then(|| json!({"running": r.label, "requestId": key, "seconds": secs.as_secs()}))
     }
 }
+
+/// The longest running request id a busy reply repeats (as JSON, quotes included).
+const MAX_ECHOED_ID: usize = 256;
 
 /// The id of a request message: `Some` when `msg` is a JSON-RPC 2.0 request with a usable id.
 fn request_id(msg: &Value) -> Option<&Value> {
@@ -231,6 +241,11 @@ fn submit_canned(shared: &Shared, out: &SyncSender<String>, reply: String) {
         if st.queue.len() < MAX_QUEUED {
             break;
         }
+        #[cfg(test)]
+        {
+            st.waits_for_room += 1;
+            shared.wake.notify_all();
+        }
         // Wake now and then: the call ahead may turn long-running while the queue is full.
         st = shared.wake.wait_timeout(st, Duration::from_millis(50)).unwrap_or_else(PoisonError::into_inner).0;
     }
@@ -284,6 +299,11 @@ fn intake(shared: &Shared, out: &SyncSender<String>, line: &str) {
         if st.queue.len() < MAX_QUEUED {
             break;
         }
+        #[cfg(test)]
+        {
+            st.waits_for_room += 1;
+            shared.wake.notify_all();
+        }
         // Wake now and then: the call that fills the queue may be the one that turns it away.
         st = shared.wake.wait_timeout(st, Duration::from_millis(50)).unwrap_or_else(PoisonError::into_inner).0;
     }
@@ -326,20 +346,20 @@ mod tests {
     #[test]
     fn parse_errors_wait_for_room_in_the_queue() {
         // No call has run past the busy limit, so the replies queue rather than go out at once.
-        let shared = Shared::new(Arc::new(AtomicBool::new(false)), Duration::from_secs(60));
+        let shared = Shared::new(Arc::new(AtomicBool::new(false)), Duration::from_secs(60), Arc::new(|| Duration::ZERO));
         let (out, _replies) = std::sync::mpsc::sync_channel(1);
         let lines = 3 * MAX_QUEUED;
         let input = "not json\n".repeat(lines);
         std::thread::scope(|scope| {
             let reader = scope.spawn(|| read_loop(&shared, &out, input.as_bytes()));
-            // Nothing takes jobs off the queue yet, so the reader stops at the limit.
-            let end = Instant::now() + Duration::from_secs(10);
-            while !reader.is_finished() && lock(&shared.state).queue.len() < MAX_QUEUED && Instant::now() < end {
-                std::thread::sleep(Duration::from_millis(5));
+            // Nothing takes jobs off the queue yet, so the reader stops at the limit and waits.
+            let mut st = lock(&shared.state);
+            while st.waits_for_room == 0 && !st.eof {
+                st = shared.wake.wait(st).unwrap_or_else(PoisonError::into_inner);
             }
-            std::thread::sleep(Duration::from_millis(100));
-            let queued = lock(&shared.state).queue.len();
-            assert!(queued <= MAX_QUEUED, "{queued} lines queued, more than {MAX_QUEUED}");
+            let queued = st.queue.len();
+            assert_eq!(queued, MAX_QUEUED, "the reader waited with {queued} lines queued, not {MAX_QUEUED}");
+            drop(st);
             // Once the engine takes jobs, every line is answered with its parse error.
             let mut answered = 0;
             while let Some(job) = shared.next() {

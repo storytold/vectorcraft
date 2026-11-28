@@ -1,0 +1,949 @@
+use super::*;
+
+/// A node writes its rarely set parts among the others, in the file's field order, and reads
+/// them back into its extras; a node without any keeps none.
+#[test]
+fn extras_are_written_flat_in_order() {
+    let mut n = Node::path(NodeId(7), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
+    n.name = Some("n".into());
+    n.knockout_shape = true;
+    n.bbox_angle = 30.0;
+    {
+        let mut e = n.extras_mut();
+        e.mask = Some(Box::new(OpacityMask::new(Node::group(NodeId(8), vec![]), true)));
+        e.trace = Some(Box::new(serde_json::json!({"preset": "p"})));
+        e.series_index = Some(2);
+        e.type_outlines = true;
+        e.graphic_style = Some(3);
+        e.attrs = Some(Box::default());
+        e.slice = Some(Box::default());
+        e.perspective = Some(Box::new(crate::PerspectiveAttachment::new("left", 1.0)));
+        e.live_paint_gaps = Some(Box::default());
+        e.compound_shape = true;
+        e.shape_mode = crate::ShapeMode::Exclude;
+        e.envelope_edit_margin = Some([0.5, 0.5, 0.25, 0.25]);
+        e.pixel_aligned = true;
+        e.warp_piece = true;
+        e.clip_pieces = true;
+    }
+    /// The top-level keys of a JSON object, in the order written.
+    struct Keys(Vec<String>);
+    impl<'de> Deserialize<'de> for Keys {
+        fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = Keys;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    f.write_str("an object")
+                }
+                fn visit_map<A: serde::de::MapAccess<'de>>(self, mut a: A) -> Result<Keys, A::Error> {
+                    let mut out = vec![];
+                    while let Some(k) = a.next_key::<String>()? {
+                        a.next_value::<serde::de::IgnoredAny>()?;
+                        out.push(k);
+                    }
+                    Ok(Keys(out))
+                }
+            }
+            d.deserialize_map(V)
+        }
+    }
+    let text = serde_json::to_string(&n).unwrap();
+    let keys = serde_json::from_str::<Keys>(&text).unwrap().0;
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let order = [
+        "id",
+        "name",
+        "knockout_shape",
+        "appearance",
+        "mask",
+        "trace",
+        "series_index",
+        "type_outlines",
+        "kind",
+        "graphic_style",
+        "attrs",
+        "slice",
+        "bbox_angle",
+        "perspective",
+        "live_paint_gaps",
+        "compound_shape",
+        "shape_mode",
+        "envelope_edit_margin",
+        "pixel_aligned",
+        "warp_piece",
+        "clip_pieces",
+    ];
+    assert_eq!(keys, order);
+    assert_eq!(v["shape_mode"], "exclude");
+    assert_eq!(v["pixel_aligned"], true);
+    assert_eq!(v["warp_piece"], true);
+    assert_eq!(v["clip_pieces"], true);
+    assert_eq!(serde_json::from_value::<Node>(v).unwrap(), n);
+    let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
+    let back: Node = serde_json::from_value(serde_json::to_value(&plain).unwrap()).unwrap();
+    assert!(back.extras_box().is_none());
+    // Clearing the last extra lets them go; clearing one a node doesn't have allocates none.
+    n.extras_mut().mask = None;
+    assert!(n.extras_box().is_some());
+    *n.extras_mut() = NodeExtras::default();
+    assert!(n.extras_box().is_none());
+    n.extras_mut().mask = None;
+    assert!(n.extras_box().is_none());
+    assert_eq!(n.extras(), &NodeExtras::default());
+}
+
+#[test]
+fn rect_live_shape_roundtrip() {
+    let l = LiveShape::Rectangle {
+        w: 10.0,
+        h: 20.0,
+        radii: [0.0; 4],
+        kinds: Default::default(),
+        radii_relative: false,
+        xf: Affine::translate((5.0, 5.0)),
+    };
+    assert_eq!(l.to_path().bounds(), Some(Rect::new(5.0, 5.0, 15.0, 25.0)));
+    assert_eq!(l.label(), "Rectangle");
+}
+
+#[test]
+fn corner_kinds_save_only_when_some_corner_isnt_round() {
+    let mut l = LiveShape::Rectangle {
+        w: 100.0,
+        h: 50.0,
+        radii: [0.0, 10.0, 0.0, 0.0],
+        kinds: Default::default(),
+        radii_relative: false,
+        xf: Affine::IDENTITY,
+    };
+    // Older files read as round.
+    let json = serde_json::to_value(&l).unwrap();
+    assert!(json.get("kinds").is_none(), "{json}");
+    assert_eq!(serde_json::from_value::<LiveShape>(json).unwrap(), l);
+    if let LiveShape::Rectangle { kinds, .. } = &mut l {
+        kinds[1] = CornerKind::Chamfer;
+    }
+    let json = serde_json::to_value(&l).unwrap();
+    assert_eq!(json["kinds"], serde_json::json!(["round", "chamfer", "round", "round"]));
+    assert_eq!(serde_json::from_value::<LiveShape>(json).unwrap(), l);
+    // Polygons saved before Live Corners cut theirs read as sharp; a live path round-trips.
+    let p: LiveShape = serde_json::from_value(serde_json::json!({"shape": "polygon", "radius": 10.0, "sides": 5, "xf": [1, 0, 0, 1, 0, 0]})).unwrap();
+    assert_eq!(p, LiveShape::Polygon { radius: 10.0, sides: 5, xf: Affine::IDENTITY, radii: vec![], kinds: vec![], radii_relative: false });
+    let star = shapes::star(Point::new(0.0, 0.0), 20.0, 10.0, 5, 0.0);
+    let path = LiveShape::Path { base: star, radii: vec![2.0; 10], kinds: vec![], radii_relative: false };
+    let json = serde_json::to_value(&path).unwrap();
+    assert_eq!((json["shape"].as_str(), json.get("kinds")), (Some("path"), None));
+    assert_eq!(serde_json::from_value::<LiveShape>(json).unwrap(), path);
+    assert_eq!(path.label(), "Path");
+}
+
+/// A polygon read from a file has 3 to 1000 sides, as the commands give it: selecting one
+/// with four billion made its outline and corner lists allocate tens of gigabytes.
+#[test]
+fn a_polygon_from_a_file_has_3_to_1000_sides() {
+    let read = |sides: u32| {
+        let json = serde_json::json!({"shape": "polygon", "radius": 10.0, "sides": sides, "xf": [1, 0, 0, 1, 0, 0]});
+        serde_json::from_value::<LiveShape>(json).unwrap()
+    };
+    let sides_of = |l: &LiveShape| match l {
+        LiveShape::Polygon { sides, .. } => *sides,
+        _ => panic!("not a polygon: {l:?}"),
+    };
+    let huge = read(4_000_000_000);
+    assert_eq!([0, 5, 1000].map(|n| sides_of(&read(n))), [3, 5, 1000]);
+    assert_eq!(sides_of(&huge), 1000);
+    assert_eq!(huge.polygon_outline().anchor_count(), 1000);
+}
+
+#[test]
+fn a_polygon_reports_and_takes_its_radius_angle_and_equal_sides() {
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
+    // A hexagon of radius 10 at (50, 50), drawn 2× and turned 30° clockwise on the page.
+    let xf = Affine::translate((50.0, 50.0)) * Affine::rotate(30f64.to_radians()) * Affine::scale(2.0);
+    let mut p = LiveShape::Polygon { radius: 10.0, sides: 6, xf, radii: vec![], kinds: vec![], radii_relative: false };
+    assert!(close(p.polygon_radius().unwrap(), 20.0) && close(p.polygon_angle().unwrap(), 330.0) && p.polygon_sides_equal());
+    p.set_polygon_angle(45.0);
+    assert!(close(p.polygon_angle().unwrap(), 45.0));
+    let centre = p.to_path().bounds().unwrap().center();
+    assert!(close(centre.x, 50.0) && close(centre.y, 50.0), "turned about its centre: {centre:?}");
+    p.set_polygon_radius(30.0);
+    assert!(close(p.polygon_radius().unwrap(), 30.0));
+    // A hexagon's side is as long as its radius.
+    assert!(close(p.polygon_radius_for_side(12.0).unwrap(), 12.0));
+    // Stretched, its sides differ; Make Sides Equal keeps its centre, angle and mean radius.
+    p.transform(Affine::scale_non_uniform(2.0, 1.0));
+    assert!(!p.polygon_sides_equal());
+    let (r, a) = (p.polygon_radius().unwrap(), p.polygon_angle().unwrap());
+    p.make_sides_equal();
+    assert!(p.polygon_sides_equal() && close(p.polygon_radius().unwrap(), r) && close(p.polygon_angle().unwrap(), a));
+    let LiveShape::Polygon { xf, .. } = &p else { panic!("polygon") };
+    assert_eq!(*xf * Point::ZERO, Point::new(100.0, 50.0));
+    // Other shapes have none of it.
+    let e = LiveShape::Ellipse { w: 1.0, h: 1.0, pie: (0.0, 360.0), xf: Affine::IDENTITY };
+    assert_eq!((e.polygon_radius(), e.polygon_angle()), (None, None));
+}
+
+/// A very large angle turns a rectangle to that angle modulo 360, whatever angle it had before.
+#[test]
+fn a_shape_takes_a_very_large_angle() {
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let want = 1e20f64.rem_euclid(360.0);
+    for turned in [0.0, 90.0] {
+        let xf = Affine::translate((50.0, 50.0)) * Affine::rotate(-f64::to_radians(turned));
+        let mut r = LiveShape::Rectangle { w: 100.0, h: 50.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf };
+        assert!(close(r.shape_angle().unwrap(), turned), "{:?}", r.shape_angle());
+        r.set_shape_angle(1e20);
+        assert!(close(r.shape_angle().unwrap(), want), "from {turned}°: {:?}, not {want}", r.shape_angle());
+    }
+}
+
+/// A node holding a live rectangle (`w` × `h`, all radii `r`, placed by `xf`) and its path.
+fn live_rect(w: f64, h: f64, r: f64, xf: Affine) -> Node {
+    let live = LiveShape::Rectangle { w, h, radii: [r; 4], kinds: Default::default(), radii_relative: false, xf };
+    let mut n = Node::path(NodeId(1), live.to_path(), Appearance::default_art());
+    if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+        *slot = Some(Box::new(live));
+    }
+    n
+}
+
+fn live_of(n: &Node) -> (f64, f64, [f64; 4], Affine) {
+    let NodeKind::Path { live: Some(l), .. } = &n.kind else { panic!("not a live shape") };
+    let LiveShape::Rectangle { w, h, radii, xf, .. } = &**l else { panic!("not a live rectangle") };
+    (*w, *h, *radii, *xf)
+}
+
+fn near(a: f64, b: f64) -> bool {
+    (a - b).abs() < 1e-9
+}
+
+fn near_xf(a: Affine, b: Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(x, y)| near(*x, y))
+}
+
+/// Size and radius of a live rectangle, within rounding.
+fn assert_live(n: &Node, w: f64, h: f64, r: f64) {
+    let (lw, lh, radii, _) = live_of(n);
+    assert!(near(lw, w) && near(lh, h) && radii.iter().all(|x| near(*x, r)), "{lw} × {lh} r {radii:?}, want {w} × {h} r {r}");
+}
+
+/// Each corner arc of a rounded rectangle's path, mapped by `back` (to undo a rotation),
+/// spans `r` along x and y: the corner is a circular arc of radius `r`.
+fn assert_round_corners(n: &Node, back: Affine, r: f64) {
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("not a path") };
+    let a: Vec<Point> = path.subpaths[0].anchors.iter().map(|a| back * a.p).collect();
+    assert_eq!(a.len(), 8, "a rounded rectangle");
+    // Anchors 1→2, 3→4, 5→6 and 7→0 are the arcs.
+    for (i, j) in [(1, 2), (3, 4), (5, 6), (7, 0)] {
+        let (x, y) = ((a[j].x - a[i].x).abs(), (a[j].y - a[i].y).abs());
+        assert!(near(x, r) && near(y, r), "corner spans {x} × {y}, want {r} × {r}");
+    }
+}
+
+const KEEP_CORNERS: Scaling =
+    Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: true, patterns: false, keep_fit_when_flat: false };
+
+#[test]
+fn uneven_scales_keep_live_corners_circular() {
+    // A 100 pt rounded square at (10, 10) stretched to 300 × 100 (#291).
+    let mut n = live_rect(100.0, 100.0, 20.0, Affine::translate((10.0, 10.0)));
+    let stretch = Affine::translate((10.0, 10.0)) * Affine::scale_non_uniform(3.0, 1.0) * Affine::translate((-10.0, -10.0));
+    n.transform(stretch, KEEP_CORNERS);
+    assert_live(&n, 300.0, 100.0, 20.0);
+    assert!(near_xf(live_of(&n).3, Affine::translate((10.0, 10.0))), "the scale went into the size");
+    let b = n.geometric_bounds().unwrap();
+    assert!(near(b.x0, 10.0) && near(b.y0, 10.0) && near(b.x1, 310.0) && near(b.y1, 110.0), "{b:?}");
+    assert_round_corners(&n, Affine::IDENTITY, 20.0);
+    // Scale Corners on: the radius scales by the mean scale, still circular.
+    let mut n = live_rect(100.0, 100.0, 20.0, Affine::IDENTITY);
+    n.transform(Affine::scale_non_uniform(4.0, 1.0), Scaling::default());
+    assert_live(&n, 400.0, 100.0, 40.0);
+    assert_round_corners(&n, Affine::IDENTITY, 40.0);
+    // Squashed below the radius, the short sides are fully round; stretched back, it returns.
+    n.transform(Affine::scale_non_uniform(1.0, 0.5), KEEP_CORNERS);
+    assert_round_corners(&n, Affine::IDENTITY, 25.0);
+    n.transform(Affine::scale_non_uniform(1.0, 2.0), KEEP_CORNERS);
+    assert_round_corners(&n, Affine::IDENTITY, 40.0);
+}
+
+/// Objects attached to a rounded rectangle that keeps its corners when scaled stay where the scale
+/// takes them on the regenerated path, which is not twice as long when twice the size.
+#[test]
+fn objects_on_a_live_rectangle_follow_its_regenerated_path() {
+    use crate::objects_on_path::{CENTER, ObjectsOnPath, stops};
+    let path = live_rect(100.0, 100.0, 20.0, Affine::IDENTITY);
+    let objects: Vec<Node> =
+        (2..5).map(|i| Node::path(NodeId(i), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Default::default())).collect();
+    let members: Vec<&Node> = objects.iter().collect();
+    let rec = ObjectsOnPath { spacing: Some(20.0), start: 10.0, ..ObjectsOnPath::new(NodeId(1), &members, CENTER, 0.0) };
+    let mut children = vec![Arc::new(path)];
+    children.extend(objects.iter().cloned().map(Arc::new));
+    let mut g = Node::new(NodeId(9), NodeKind::Group { children, clip: false });
+    g.extras_mut().objects_on_path = Some(Box::new(rec));
+    let path_of = |g: &Node| g.children().and_then(|c| c.first()).and_then(|p| p.path_data().cloned()).unwrap();
+    let rec_of = |g: &Node| g.extras().objects_on_path.as_deref().cloned().unwrap();
+    let r = rec_of(&g);
+    let before = stops(&path_of(&g), 3, r.spacing, r.start).unwrap();
+    let a = Affine::scale(2.0);
+    g.transform(a, KEEP_CORNERS);
+    assert_round_corners(&g.children().unwrap()[0], Affine::IDENTITY, 20.0);
+    let r = rec_of(&g);
+    let after = stops(&path_of(&g), 3, r.spacing, r.start).unwrap();
+    for ((p, _), (q, _)) in before.iter().zip(&after) {
+        assert!((a * *p).distance(*q) < 1e-6, "{p:?} went to {q:?}: {r:?}");
+    }
+}
+
+#[test]
+fn rotated_and_reflected_live_rectangles_scale_along_their_own_sides() {
+    let place = Affine::translate((200.0, 100.0)) * Affine::rotate(30f64.to_radians());
+    let mut n = live_rect(100.0, 50.0, 10.0, place);
+    // Stretched along its own width, as a bounding-box drag of a rotated shape does.
+    n.transform(place * Affine::scale_non_uniform(2.0, 1.0) * place.inverse(), KEEP_CORNERS);
+    assert_live(&n, 200.0, 50.0, 10.0);
+    assert!(near_xf(live_of(&n).3, place));
+    assert_round_corners(&n, place.inverse(), 10.0);
+    // A reflection stays in `xf`; the corners stay as they were.
+    n.transform(Affine::scale_non_uniform(-1.0, 1.0), KEEP_CORNERS);
+    assert_live(&n, 200.0, 50.0, 10.0);
+    let xf = live_of(&n).3;
+    assert!(near(xf.determinant(), -1.0));
+    assert_round_corners(&n, xf.inverse(), 10.0);
+}
+
+#[test]
+fn shears_and_moves_keep_the_old_transform() {
+    // Scaling a rotated rectangle along the page axes shears it: `xf` takes it all, as before.
+    let rot = Affine::rotate(30f64.to_radians());
+    let mut n = live_rect(100.0, 50.0, 10.0, rot);
+    let before = n.clone();
+    let a = Affine::scale_non_uniform(2.0, 1.0);
+    n.transform(a, Scaling::default());
+    assert_eq!(live_of(&n), (100.0, 50.0, [10.0; 4], a * rot));
+    let (NodeKind::Path { path, .. }, NodeKind::Path { path: old, .. }) = (&n.kind, &before.kind) else { panic!() };
+    assert_eq!(*path, old.transformed(a));
+    // A file saved with an uneven scale in `xf` keeps its exact geometry when moved...
+    let legacy = Affine::translate((5.0, 5.0)) * Affine::scale_non_uniform(2.0, 1.0);
+    let mut n = live_rect(100.0, 100.0, 20.0, legacy);
+    n.transform(Affine::translate((10.0, 0.0)), KEEP_CORNERS);
+    assert_eq!(live_of(&n), (100.0, 100.0, [20.0; 4], Affine::translate((10.0, 0.0)) * legacy));
+    // ...and once scaled, has document units and circular corners of its mean radius.
+    n.transform(Affine::scale(2.0), Scaling::default());
+    assert_live(&n, 400.0, 200.0, 20.0 * 2f64.sqrt() * 2.0);
+    assert!(near(live_of(&n).3.determinant(), 1.0));
+    assert_round_corners(&n, Affine::IDENTITY, 20.0 * 2f64.sqrt() * 2.0);
+}
+
+/// A rectangle saved with an uneven scale in `xf` (before #291) has elliptical corners; Live
+/// Corners see and edit it in document units, with circular corners (#442).
+#[test]
+fn a_scale_left_in_the_transform_folds_into_the_size() {
+    let legacy = Affine::translate((5.0, 5.0)) * Affine::scale_non_uniform(4.0, 1.0);
+    let n = live_rect(50.0, 80.0, 20.0, legacy);
+    let NodeKind::Path { live: Some(live), .. } = &n.kind else { panic!("not live") };
+    let folded = live.folded();
+    assert_eq!(live_of(&n).3, legacy, "folded() leaves the shape alone");
+    let LiveShape::Rectangle { w, h, radii, xf, .. } = &folded else { panic!("not a rectangle") };
+    // Drawn 200 × 80 with 80 × 20 corners; folded, the corners are circles of the mean radius.
+    assert!(near(*w, 200.0) && near(*h, 80.0) && radii.iter().all(|r| near(*r, 40.0)), "{w} × {h} r {radii:?}");
+    assert!(near_xf(*xf, Affine::translate((5.0, 5.0))));
+    let (a, b) = (folded.to_path().bounds().unwrap(), live.to_path().bounds().unwrap());
+    assert!(near(a.x0, b.x0) && near(a.y0, b.y0) && near(a.x1, b.x1) && near(a.y1, b.y1), "same place and size: {a:?} {b:?}");
+    let corners = crate::LiveCorners::of(&n).unwrap();
+    assert_eq!(corners.style(&corners.all()).0, Some(40.0), "the radius in document units");
+    // Nothing to fold: a moved, rotated or reflected rectangle and a sheared one stay as they are.
+    let place = Affine::translate((5.0, 5.0)) * Affine::rotate(0.5) * Affine::scale_non_uniform(-1.0, 1.0);
+    let shear = Affine::new([1.0, 0.0, 0.5, 1.0, 0.0, 0.0]);
+    for xf in [place, shear] {
+        let mut l = live_rect(100.0, 160.0, 20.0, xf);
+        let NodeKind::Path { live: Some(live), .. } = &mut l.kind else { panic!("not live") };
+        assert!(!live.fold_scale());
+        assert_eq!(live_of(&l), (100.0, 160.0, [20.0; 4], xf));
+    }
+}
+
+#[test]
+fn default_transparency() {
+    let p = || Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    assert!(p().has_default_transparency());
+    let tweaks: [fn(&mut Node); 7] = [
+        |n| n.opacity = 0.5,
+        |n| n.blend = BlendMode::Multiply,
+        |n| n.isolate = true,
+        |n| n.knockout = Knockout::On,
+        |n| n.knockout = Knockout::Off,
+        |n| n.knockout_shape = true,
+        |n| n.extras_mut().mask = Some(Box::new(OpacityMask::new(n.clone(), true))),
+    ];
+    for tweak in tweaks {
+        let mut n = p();
+        tweak(&mut n);
+        assert!(!n.has_default_transparency(), "{n:?}");
+    }
+}
+
+#[test]
+fn transform_group_recurses() {
+    let p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let mut g = Node::group(NodeId(1), vec![Arc::new(p)]);
+    g.transform(Affine::scale(2.0), true);
+    assert_eq!(g.geometric_bounds(), Some(Rect::new(0.0, 0.0, 20.0, 20.0)));
+    let child = &g.children().unwrap()[0];
+    assert_eq!(child.appearance.stroke_width(), 2.0);
+}
+
+/// A symbol instance in perspective keeps its picture moved by a transform, and loses its
+/// projection when no invertible map of finite numbers draws the moved picture.
+#[test]
+fn a_projection_follows_the_transform_or_is_removed() {
+    use vectorcraft_geom::{Homography, Point};
+    let instance = |h: Homography| {
+        let mut n = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::IDENTITY });
+        n.extras_mut().perspective =
+            Some(Box::new(crate::PerspectiveAttachment { projection: Some(h.to_array()), ..crate::PerspectiveAttachment::new("left", 0.0) }));
+        n
+    };
+    let projection = |n: &Node| n.extras().perspective.as_deref().and_then(|p| p.projection);
+    // A move by 10 scaled by 1e307: moved by a scale by 10, the product overflows unless scaled down.
+    let big = Homography([[1e307, 0.0, 1e308], [0.0, 1e307, 0.0], [0.0, 0.0, 1e307]]);
+    let mut n = instance(big);
+    n.transform(Affine::scale(10.0), false);
+    let p = Point::new(3.0, 7.0);
+    assert!(n.projection().unwrap().apply(p).unwrap().distance(Point::new(103.0, 7.0)) < 1e-9);
+    // A move by 1e200 moved by a scale by 1e150 sends every point to about (1e350, 0).
+    let far = Homography([[1.0, 0.0, 1e200], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]);
+    let mut n = instance(far);
+    n.transform(Affine::scale(1e150), false);
+    assert_eq!(projection(&n), None);
+    // A transform that is not invertible leaves the projection as it is, at any scale.
+    let mut n = instance(far);
+    n.transform(Affine::scale(0.0), false);
+    assert_eq!(projection(&n), Some(far.to_array()));
+    let mut n = instance(far);
+    n.transform(Affine::new([1e-8, 2e-8, 2e-8, 4e-8, 0.0, 0.0]), false);
+    assert_eq!(projection(&n), Some(far.to_array()));
+    // A scale by 1e-8 is invertible: a move by 10 becomes a move by 1e-7.
+    let ten = Homography::from_affine(Affine::translate((10.0, 0.0)));
+    let mut n = instance(ten);
+    n.transform(Affine::scale(1e-8), false);
+    let q = n.projection().unwrap().apply(Point::new(3e-8, 7e-8)).unwrap();
+    assert!(q.distance(Point::new(1.3e-7, 7e-8)) < 1e-20, "{q:?}");
+}
+
+#[test]
+fn unplaced_gradients_pin_only_when_a_refit_would_differ() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
+    let grad = || Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+    let fresh = || Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), Appearance::basic(grad(), grad(), 2.0));
+    let geoms = |n: &Node| match (n.appearance.fill_paint(), n.appearance.stroke_paint()) {
+        (Paint::Gradient(f), Paint::Gradient(s)) => (f.geom, s.geom),
+        _ => panic!("gradient fill and stroke"),
+    };
+    let mut n = fresh();
+    n.transform(Affine::translate((10.0, 5.0)) * Affine::scale(2.0), true);
+    assert_eq!(geoms(&n), (None, None), "moves and uniform scales keep refitting");
+    let mut n = fresh();
+    n.transform(Affine::rotate(std::f64::consts::FRAC_PI_2), false);
+    let (f, s) = geoms(&n);
+    // Fitted on the old bounds (strokes on the stroke-inflated box), then rotated: vertical.
+    let mut want = GradientGeom::fit(GradientKind::Linear, Rect::new(0.0, 0.0, 100.0, 50.0), 0.0);
+    want.transform(Affine::rotate(std::f64::consts::FRAC_PI_2), GradientKind::Linear);
+    let f = f.unwrap();
+    assert!(f.start.distance(want.start) < 1e-9 && f.end.distance(want.end) < 1e-9, "{f:?}");
+    assert!((s.unwrap().length() - 102.0).abs() < 1e-9);
+}
+
+#[test]
+fn display_names() {
+    let p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    assert_eq!(p.display_name(), "<Path>");
+    let l = Node::layer(NodeId(1), "Layer 1", LayerColor::Preset(0));
+    assert_eq!(l.display_name(), "Layer 1");
+}
+
+#[test]
+fn visual_bounds_include_stroke() {
+    let mut p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    p.appearance.stroke_mut().unwrap().join = crate::appearance::LineJoin::Round;
+    assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
+}
+
+/// A lone anchor 20 points right of a stroked square widens the path's geometric box, and its
+/// visual box only where the stroke draws it: as the dot of a round or projecting cap on a closed
+/// subpath. An open lone anchor, or a closed one under a butt cap, draws nothing.
+#[test]
+fn a_lone_anchor_widens_the_visual_box_only_where_its_cap_draws_a_dot() {
+    use crate::appearance::LineCap;
+    use vectorcraft_geom::{Point, SubPath};
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    let node = |closed: bool, cap: LineCap| {
+        let mut subpaths = square.subpaths.clone();
+        subpaths.push(SubPath::polyline(&[Point::new(30.0, 5.0)], closed));
+        let mut p = Node::path(NodeId(2), PathData::new(subpaths), Appearance::default_art());
+        let s = p.appearance.stroke_mut().unwrap();
+        (s.cap, s.join) = (cap, crate::appearance::LineJoin::Round);
+        p
+    };
+    for closed in [false, true] {
+        for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+            let p = node(closed, cap);
+            let geometric = p.geometric_bounds().unwrap();
+            let visual = p.visual_bounds().unwrap();
+            assert!(geometric.x1 >= 30.0, "{closed} {cap:?}: the geometric box {geometric:?} leaves out the lone anchor");
+            let dot = closed && cap != LineCap::Butt;
+            assert_eq!(visual.x1 > 30.0, dot, "{closed} {cap:?}: the visual box {visual:?}");
+            assert!(dot || visual.x1 < 11.0, "{closed} {cap:?}: the visual box {visual:?} reaches toward the lone anchor");
+        }
+    }
+}
+
+/// The dot a round or projecting cap draws for a closed lone anchor reaches half the stroke's
+/// width round the anchor under every join, miter and bevel joins included, which measure the
+/// stroke along its segments.
+#[test]
+fn a_lone_anchors_dot_reaches_half_the_stroke_width_under_every_join() {
+    use crate::appearance::{LineCap, LineJoin};
+    use vectorcraft_geom::{Point, SubPath};
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    for join in [LineJoin::Miter, LineJoin::Bevel, LineJoin::Round] {
+        for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+            let mut subpaths = square.subpaths.clone();
+            subpaths.push(SubPath::polyline(&[Point::new(30.0, 5.0)], true));
+            let mut p = Node::path(NodeId(2), PathData::new(subpaths), Appearance::default_art());
+            let s = p.appearance.stroke_mut().unwrap();
+            (s.cap, s.join, s.width) = (cap, join, 4.0);
+            let visual = p.visual_bounds().unwrap();
+            if cap == LineCap::Butt {
+                assert!(visual.x1 < 13.0, "{join:?} {cap:?}: the visual box {visual:?} reaches toward a lone anchor that draws nothing");
+            } else {
+                assert!(visual.x1 >= 32.0 - 1e-9 && visual.y1 >= 10.0, "{join:?} {cap:?}: the visual box {visual:?} leaves out the dot's reach");
+            }
+        }
+    }
+}
+
+/// A group's box from its members' boxes grows by the group's own strokes, leaves out members
+/// without a box, and is `None` when none has one.
+#[test]
+fn visual_of_members_unions_the_members_and_grows_by_the_group_stroke() {
+    let mut g = Node::group(NodeId(1), vec![]);
+    g.appearance = Appearance::default_art().into();
+    let (a, b) = (Rect::new(0.0, 0.0, 10.0, 10.0), Rect::new(20.0, 5.0, 30.0, 8.0));
+    let o = g.appearance.outset();
+    assert!(o > 0.0);
+    assert_eq!(g.visual_of_members([Some(a), None, Some(b)].into_iter()), Some(Rect::new(0.0, 0.0, 30.0, 10.0).inflate(o, o)));
+    assert_eq!(g.visual_of_members([None, None].into_iter()), None);
+    assert_eq!(g.visual_of_members([].into_iter()), None);
+}
+
+/// A group's or layer's own miter-joined stroke is measured along its members' shapes, as a
+/// path's is: a 10 pt stroke round a square reaches 5 pt past it, not the 50 pt a miter spike
+/// could reach, through nested groups and in a turned frame too. It paints nothing round a hidden
+/// member or an image.
+#[test]
+fn a_containers_own_miter_stroke_is_measured_along_its_members() {
+    use vectorcraft_color::{Color, Paint};
+    let path = |id, r: Rect| Arc::new(Node::path(NodeId(id), shapes::rectangle(r), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0)));
+    let stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 10.0);
+    assert_eq!(stroke.outset(), 50.0, "a 10 pt miter-joined stroke can reach 50 pt");
+    let stroked = |mut n: Node| {
+        n.appearance = stroke.clone().into();
+        n
+    };
+    let square = Rect::new(100.0, 100.0, 200.0, 200.0);
+    let around = Some(Rect::new(95.0, 95.0, 205.0, 205.0));
+    assert_eq!(stroked(Node::group(NodeId(1), vec![path(2, square)])).visual_bounds(), around, "a group");
+    let nested = Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(3), vec![path(2, square)]))]);
+    assert_eq!(stroked(nested.clone()).visual_bounds(), around, "a nested group");
+    // Measured in a turned frame, as a box square to a turned selection is.
+    let turned = stroked(nested).bounds_in(&crate::Document::new(400.0, 400.0).symbol_boxes(), Affine::rotate(std::f64::consts::FRAC_PI_2), true);
+    let want = Rect::new(-205.0, 95.0, -95.0, 205.0);
+    assert!(
+        turned.is_some_and(|b| (b.x0 - want.x0).abs() + (b.y0 - want.y0).abs() + (b.x1 - want.x1).abs() + (b.y1 - want.y1).abs() < 1e-9),
+        "{turned:?}"
+    );
+    let mut layer = Node::layer(NodeId(1), "Layer 1", LayerColor::Preset(0));
+    if let NodeKind::Layer { children, .. } = &mut layer.kind {
+        children.push(path(2, square));
+    }
+    assert_eq!(stroked(layer).visual_bounds(), around, "a layer");
+    let mut hidden = (*path(3, Rect::new(100.0, 300.0, 200.0, 400.0))).clone();
+    hidden.visible = false;
+    let image = ImageObject {
+        key: "k".into(),
+        width: 10,
+        height: 10,
+        xf: Affine::translate((500.0, 100.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let kids = vec![path(2, square), Arc::new(hidden), Arc::new(Node::new(NodeId(4), NodeKind::Image(Box::new(image))))];
+    assert_eq!(stroked(Node::group(NodeId(1), kids)).visual_bounds(), Some(Rect::new(95.0, 95.0, 510.0, 400.0)), "a hidden member and an image");
+}
+
+/// Type's visual bounds grow by how far its character strokes paint past the glyphs: half the
+/// weight centred, the whole weight outside, nothing inside; scaled with the type.
+#[test]
+fn type_visual_bounds_grow_with_the_character_stroke() {
+    use crate::appearance::StrokeAlign;
+    use crate::text::{CharStyle, TextObject};
+    let style = CharStyle { stroke: vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), stroke_width: 4.0, ..Default::default() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(0.0, 0.0), "Ab", style);
+    t.xf = Affine::scale(2.0) * t.xf;
+    let node = |t: &TextObject| Node::new(NodeId(1), NodeKind::Text(Box::new(t.clone())));
+    let g = node(&t).geometric_bounds().unwrap();
+    for (align, grow) in [(StrokeAlign::Center, 4.0), (StrokeAlign::Outside, 8.0), (StrokeAlign::Inside, 0.0)] {
+        t.runs[0].style.stroke_align = align;
+        assert_eq!(node(&t).visual_bounds(), Some(g.inflate(grow, grow)), "{align:?}");
+    }
+    t.runs[0].style.stroke = vectorcraft_color::Paint::None;
+    assert_eq!(node(&t).visual_bounds(), Some(g), "no stroke, no growth");
+}
+
+/// A group holding a path, a compound, an image and a nested group, as a file writes it.
+fn nested_group() -> Node {
+    let path = |id| Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let image = ImageObject { key: "k".into(), width: 2, height: 3, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    let inner = Node::new(NodeId(5), NodeKind::Group { children: vec![Arc::new(path(6))], clip: true });
+    let compound = Node::new(NodeId(3), NodeKind::Compound { children: vec![Arc::new(path(4))], rule: FillRule::EvenOdd });
+    let kids = vec![Arc::new(path(2)), Arc::new(compound), Arc::new(Node::new(NodeId(7), NodeKind::Image(Box::new(image)))), Arc::new(inner)];
+    Node::new(NodeId(1), NodeKind::Group { children: kids, clip: false })
+}
+
+#[test]
+fn kinds_read_back_with_type_first_or_anywhere() {
+    let n = nested_group();
+    let json = serde_json::to_string(&n).unwrap();
+    assert!(json.contains(r#""kind":{"type":"group","children":["#), "written with `type` first: {json}");
+    assert_eq!(serde_json::from_str::<Node>(&json).unwrap(), n);
+    // Through a JSON value, whose keys are sorted: `type` comes after `children`.
+    let v = serde_json::to_value(&n).unwrap();
+    assert_eq!(serde_json::from_value::<Node>(v.clone()).unwrap(), n);
+    assert_eq!(serde_json::from_str::<Node>(&v.to_string()).unwrap(), n);
+    // `type` last, in the middle, and keys a newer version added (ignored, as before).
+    let kind = r#"{"children":[],"x":{"deep":[1,2]},"clip":true,"type":"group"}"#;
+    assert_eq!(serde_json::from_str::<NodeKind>(kind).unwrap(), NodeKind::Group { children: vec![], clip: true });
+    let kind = r#"{"symbol":"S","type":"symbolinstance","later":1,"xf":[1,0,0,1,5,6]}"#;
+    assert_eq!(serde_json::from_str::<NodeKind>(kind).unwrap(), NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((5.0, 6.0)) });
+    let kind = r#"{"width":2,"type":"image","key":"k","height":3,"xf":[1,0,0,1,0,0]}"#;
+    assert!(matches!(serde_json::from_str::<NodeKind>(kind).unwrap(), NodeKind::Image(i) if i.key == "k" && i.height == 3));
+    // Defaults as before.
+    let NodeKind::Layer { printable, preview, template, .. } =
+        serde_json::from_str(r#"{"type":"layer","color":{"Preset":0},"children":[]}"#).unwrap()
+    else {
+        panic!("a layer")
+    };
+    assert!(printable && preview && !template);
+}
+
+#[test]
+fn bad_kinds_are_errors() {
+    for bad in [r#"{"children":[]}"#, r#"{"type":"nothing"}"#, r#"{"type":"group"}"#, r#"{"type":3,"children":[]}"#, r#"[]"#, r#""group""#] {
+        assert!(serde_json::from_str::<NodeKind>(bad).is_err(), "{bad}");
+    }
+}
+
+/// #3587: [`with_node_budget`] counts every object read, nested ones included, refuses the one past
+/// it with a message naming the budget, and is gone once its reading is done.
+#[test]
+fn objects_are_read_within_the_node_budget() {
+    let group = Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(2), vec![])), Arc::new(Node::group(NodeId(3), vec![]))]);
+    let json = serde_json::to_string(&group).unwrap();
+    let read = || serde_json::from_str::<Node>(&json);
+    assert_eq!(with_node_budget(3, read).unwrap(), group, "three objects fit a budget of three");
+    let why = with_node_budget(2, read).unwrap_err().to_string();
+    assert!(why.contains("more than 2 objects"), "{why}");
+    assert_eq!(read().unwrap(), group, "no budget outside a read");
+    // A budget left by a read that failed doesn't carry over to the next one.
+    assert!(with_node_budget(1, read).is_err());
+    assert!(with_node_budget(3, read).is_ok());
+}
+
+/// An Intertwine member's areas of tier 2 and up are written and read back, and each one counts
+/// against [`with_node_budget`] as an object does, so a file of many empty areas is refused.
+#[test]
+fn intertwine_tiers_are_read_within_the_node_budget() {
+    let mut n = Node::group(NodeId(1), vec![]);
+    let area = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+    n.extras_mut().intertwine_tiers = vec![PathData::default(), area];
+    let json = serde_json::to_string(&n).unwrap();
+    assert!(json.contains("\"intertwine_tiers\""), "{json}");
+    let read = || serde_json::from_str::<Node>(&json);
+    assert_eq!(with_node_budget(3, read).unwrap(), n, "the object and its two areas fit a budget of three");
+    let why = with_node_budget(2, read).unwrap_err().to_string();
+    assert!(why.contains("more than 2 objects"), "{why}");
+    let plain = serde_json::to_string(&Node::group(NodeId(1), vec![])).unwrap();
+    assert!(!plain.contains("intertwine_tiers"), "an object without tiers writes none: {plain}");
+}
+
+/// #3587: fields read before an object's `type` are buffered value by value within
+/// [`with_buffered_value_budget`], each counted once: a group read back from the buffer buffers
+/// its own fields again without counting them twice. VectorCraft writes `type` first, which
+/// buffers nothing.
+#[test]
+fn fields_before_the_type_are_buffered_within_the_value_budget() {
+    let reordered = r#"{"id":1,"kind":{"children":[{"id":2,"kind":{"children":[],"type":"group"}}],"type":"group"}}"#;
+    let read = |json: &str| serde_json::from_str::<Node>(json);
+    // The children's array, the inner object, its id, its kind, the kind's empty children and
+    // its type: six values.
+    assert!(with_buffered_value_budget(6, || read(reordered)).is_ok());
+    let why = with_buffered_value_budget(5, || read(reordered)).unwrap_err().to_string();
+    assert!(why.contains("more than 5 values before its type"), "{why}");
+    let written = serde_json::to_string(&Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(2), vec![]))])).unwrap();
+    assert!(with_buffered_value_budget(0, || read(&written)).is_ok(), "a saved object buffers nothing: {written}");
+    assert!(read(reordered).is_ok(), "no budget outside a read");
+}
+
+/// A compound path's path is its members' paths one after another, open and closed, empty
+/// members and single anchors included.
+#[test]
+fn compound_stroke_path_is_its_members_in_order() {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let open = PathData::single(SubPath::new([(0.0, 0.0), (5.0, 1.0), (9.0, 7.0)].map(|(x, y)| Anchor::corner(Point::new(x, y))).to_vec(), false));
+    let lone = PathData::single(SubPath::new(vec![Anchor::corner(Point::new(3.0, 3.0))], false));
+    let members =
+        [shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), open, PathData::default(), lone, shapes::ellipse(Rect::new(10.0, 10.0, 20.0, 16.0))];
+    let mut expected = vectorcraft_geom::BezPath::new();
+    for pd in &members {
+        expected.extend(pd.to_bezpath());
+    }
+    let children = members.iter().enumerate().map(|(i, pd)| Arc::new(Node::path(NodeId(i as u64 + 1), pd.clone(), Appearance::default()))).collect();
+    let n = Node::new(NodeId(99), NodeKind::Compound { children, rule: vectorcraft_geom::FillRule::EvenOdd });
+    let bp = n.stroke_path().unwrap();
+    assert_eq!(bp.elements(), expected.elements());
+    assert!(!bp.elements().is_empty());
+}
+
+/// The sublayers in [`guide_layers`]'s chain, each inside the one before.
+const GUIDE_CHAIN: u64 = 30;
+
+/// How many children the layers of [`guide_layers`] hold: the layer's 6, 1 in the sublayer
+/// without a guide, 2 at each of the two places the shared sublayer lies, the innermost
+/// sublayer's 2 and 3 in each sublayer around it.
+const GUIDE_LAYER_CHILDREN: usize = 6 + 1 + 2 * 2 + 2 + (GUIDE_CHAIN as usize - 1) * 3;
+
+/// How many ruler guides the layers of [`guide_layers`] hold: one in each sublayer of the chain,
+/// one at each place the shared sublayer lies and the layer's own.
+const GUIDE_LAYER_GUIDES: usize = GUIDE_CHAIN as usize + 2 + 1;
+
+/// A layer holding, in order: [`GUIDE_CHAIN`] sublayers, each inside the one before and holding an
+/// object and a ruler guide; a sublayer with an object only; a sublayer with an object and a
+/// guide; an object; that last sublayer again; and a guide. Guides differ in direction, artboard
+/// and lock. Returns the layer, the sublayer without a guide and the one that lies twice.
+fn guide_layers() -> (Node, Arc<Node>, Arc<Node>) {
+    let rect = |id| Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art()));
+    let guide = |id: u64| {
+        let kind = NodeKind::RulerGuide { vertical: id.is_multiple_of(2), pos: id as f64, artboard: id.is_multiple_of(3).then_some(7) };
+        let mut g = Node::new(NodeId(id), kind);
+        g.locked = id.is_multiple_of(5);
+        Arc::new(g)
+    };
+    let sublayer = |id, children: Vec<Arc<Node>>| {
+        let mut l = Node::layer(NodeId(id), "Sub", LayerColor::Preset(1));
+        if let Some(ch) = l.children_mut() {
+            *ch = children;
+        }
+        Arc::new(l)
+    };
+    let mut chain = sublayer(100, vec![rect(150), guide(200)]);
+    for depth in 1..GUIDE_CHAIN {
+        chain = sublayer(100 + depth, vec![rect(600 + depth), chain, guide(300 + depth)]);
+    }
+    let still = sublayer(500, vec![rect(501)]);
+    let twice = sublayer(510, vec![rect(511), guide(512)]);
+    let mut layer = Node::layer(NodeId(1), "Layer", LayerColor::Preset(0));
+    if let Some(ch) = layer.children_mut() {
+        *ch = vec![chain, Arc::clone(&still), Arc::clone(&twice), rect(2), Arc::clone(&twice), guide(3)];
+    }
+    (layer, still, twice)
+}
+
+/// Whether `a` and `b` hold the same children, none of them copied.
+fn same_children(a: &Node, b: &Node) -> bool {
+    let (a, b) = (a.children().unwrap(), b.children().unwrap());
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| Arc::ptr_eq(a, b))
+}
+
+/// Stripping the ruler guides of a layer looks at each child of the layer and of its sublayers
+/// once, however deep the sublayers nest. The art and its order stay, a sublayer without a guide is
+/// not copied, and a copy of the layer held elsewhere keeps its guides.
+#[test]
+fn stripping_ruler_guides_looks_at_each_child_of_nested_layers_once() {
+    use std::cell::Cell;
+    let (whole, still, twice) = guide_layers();
+    let ids = |n: &Node| {
+        let mut out = vec![];
+        n.walk(&mut |c| out.push(c.id));
+        out
+    };
+    let mut art = vec![];
+    whole.walk(&mut |c| {
+        if !c.is_ruler_guide() {
+            art.push(c.id);
+        }
+    });
+    assert_eq!(ids(&whole).len(), art.len() + GUIDE_LAYER_GUIDES);
+
+    let mut n = whole.clone();
+    let looked = Cell::new(0_usize);
+    let pick = |c: &Node| {
+        looked.set(looked.get() + 1);
+        c.is_ruler_guide()
+    };
+    let held = super::ops::held_guides(&n, &pick).unwrap();
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "each child of the layers is looked at once");
+    super::ops::strip_held(&mut n, held);
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "removing looks at nothing again");
+    assert_eq!(ids(&n), art, "the art stays, in its order");
+    let ch = n.children().unwrap();
+    assert!(Arc::ptr_eq(&ch[1], &still), "a sublayer without a guide is not copied");
+    assert!(Arc::ptr_eq(&ch[3], &whole.children().unwrap()[3]), "an object is not copied");
+    assert!(!Arc::ptr_eq(&ch[2], &twice) && !Arc::ptr_eq(&ch[4], &twice) && !Arc::ptr_eq(&ch[2], &ch[4]));
+    assert_eq!(
+        (ch[2].children().map(Vec::len), ch[4].children().map(Vec::len)),
+        (Some(1), Some(1)),
+        "a sublayer lying twice is stripped at both places"
+    );
+    // The copies held elsewhere (an undo step's, say) keep their guides.
+    assert_eq!(twice.children().map(Vec::len), Some(2));
+    assert_eq!(ids(&whole).len(), art.len() + GUIDE_LAYER_GUIDES);
+
+    // The method strips the same guides.
+    let mut same = whole.clone();
+    same.strip_ruler_guides();
+    assert_eq!(same, n);
+    assert!(Arc::ptr_eq(&same.children().unwrap()[1], &still));
+    // With no guide left there is nothing to remove, and nothing is copied.
+    let before = n.clone();
+    n.strip_ruler_guides();
+    assert!(same_children(&n, &before));
+    let mut empty = Node::layer(NodeId(900), "Empty", LayerColor::Preset(0));
+    empty.strip_ruler_guides();
+    assert_eq!(empty.children().map(Vec::len), Some(0));
+    // Only a layer holds ruler guides: a group is left as it is, on its own and in a layer.
+    let mut group = Node::group(NodeId(901), vec![Arc::clone(&twice)]);
+    assert!(super::ops::held_guides(&group, &Node::is_ruler_guide).is_none());
+    group.strip_ruler_guides();
+    assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
+    let group = Arc::new(group);
+    let mut around = Node::layer(NodeId(902), "Around", LayerColor::Preset(0));
+    around.children_mut().unwrap().push(Arc::clone(&group));
+    around.strip_ruler_guides();
+    assert!(Arc::ptr_eq(&around.children().unwrap()[0], &group));
+}
+
+/// Changing the positions of the ruler guides of a layer looks at each child of the layer and of
+/// its sublayers once, however deep the sublayers nest. Each guide is changed once, in the order
+/// the guides lie in, and keeps everything else about it; the art is unchanged, a sublayer without
+/// a guide is not copied, and a copy of the layer held elsewhere keeps its positions.
+#[test]
+fn mapping_ruler_guide_positions_looks_at_each_child_of_nested_layers_once() {
+    use std::cell::Cell;
+    let (whole, still, twice) = guide_layers();
+    let mut lines = vec![];
+    whole.walk(&mut |c| {
+        if let NodeKind::RulerGuide { vertical, pos, .. } = c.kind {
+            lines.push((vertical, pos));
+        }
+    });
+    assert_eq!(lines.len(), GUIDE_LAYER_GUIDES);
+    assert!(lines.iter().any(|l| l.0) && lines.iter().any(|l| !l.0), "guides in both directions");
+
+    let mut n = whole.clone();
+    let looked = Cell::new(0_usize);
+    let pick = |c: &Node| {
+        looked.set(looked.get() + 1);
+        c.is_ruler_guide()
+    };
+    let held = super::ops::held_guides(&n, &pick).unwrap();
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "each child of the layers is looked at once");
+    let mut seen = vec![];
+    super::ops::map_held(&mut n, held, &mut |vertical, pos| {
+        seen.push((vertical, *pos));
+        *pos = *pos * 2.0 + 1.0;
+    });
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "changing looks at nothing again");
+    assert_eq!(seen, lines, "each guide once, in the order the guides lie in");
+
+    // The same nodes in the same order: a guide differs in its position alone, and the art not
+    // at all.
+    let (mut was, mut now) = (vec![], vec![]);
+    whole.walk(&mut |c| was.push(c));
+    n.walk(&mut |c| now.push(c));
+    assert_eq!(was.len(), now.len());
+    for (a, b) in was.into_iter().zip(now) {
+        if a.is_layer() {
+            assert_eq!((b.id, b.is_layer(), b.children().map(Vec::len)), (a.id, true, a.children().map(Vec::len)));
+            continue;
+        }
+        let mut want = a.clone();
+        if let NodeKind::RulerGuide { pos, .. } = &mut want.kind {
+            *pos = *pos * 2.0 + 1.0;
+        }
+        assert_eq!(b, &want);
+    }
+    let ch = n.children().unwrap();
+    assert!(Arc::ptr_eq(&ch[1], &still), "a sublayer without a guide is not copied");
+    assert!(Arc::ptr_eq(&ch[3], &whole.children().unwrap()[3]), "an object is not copied");
+    assert!(!Arc::ptr_eq(&ch[2], &twice) && !Arc::ptr_eq(&ch[4], &twice) && !Arc::ptr_eq(&ch[2], &ch[4]));
+    // The copy held elsewhere keeps its position.
+    assert!(matches!(twice.children().unwrap()[1].kind, NodeKind::RulerGuide { pos, .. } if pos == 512.0));
+
+    // The method changes the same guides, each once.
+    let mut same = whole.clone();
+    let mut calls = 0;
+    same.map_ruler_guide_positions(&mut |_, pos| {
+        calls += 1;
+        *pos = *pos * 2.0 + 1.0;
+    });
+    assert_eq!((calls, &same), (GUIDE_LAYER_GUIDES, &n));
+    assert!(Arc::ptr_eq(&same.children().unwrap()[1], &still));
+    // A function that leaves the positions as they are is still called on each guide.
+    let mut kept = whole.clone();
+    let mut calls = 0;
+    kept.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    assert_eq!((calls, &kept), (GUIDE_LAYER_GUIDES, &whole));
+    // A layer without a guide, an empty layer and a group: nothing to change, nothing copied.
+    let mut bare = whole.clone();
+    bare.strip_ruler_guides();
+    let before = bare.clone();
+    let mut calls = 0;
+    bare.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    assert!(same_children(&bare, &before));
+    let mut empty = Node::layer(NodeId(900), "Empty", LayerColor::Preset(0));
+    empty.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    let mut group = Node::group(NodeId(901), vec![Arc::clone(&twice)]);
+    group.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
+    assert_eq!(calls, 0);
+}
+
+/// `try_walk` visits in `walk`'s order and visits nothing after the node that breaks it: not its
+/// children, its later siblings or its ancestors' later siblings.
+#[test]
+fn try_walk_ends_at_the_break() {
+    use std::ops::ControlFlow;
+    let leaf = |id| Arc::new(Node::group(NodeId(id), vec![]));
+    let inner = Node::group(NodeId(2), vec![leaf(3), leaf(4), leaf(5)]);
+    let root = Node::group(NodeId(1), vec![Arc::new(inner), leaf(6), leaf(7)]);
+    let mut all = vec![];
+    root.walk(&mut |n| all.push(n.id));
+    let mut seen = vec![];
+    assert_eq!(
+        root.try_walk(&mut |n| {
+            seen.push(n.id);
+            ControlFlow::<()>::Continue(())
+        }),
+        ControlFlow::Continue(())
+    );
+    assert_eq!(seen, all, "without a break it visits what walk visits, in the same order");
+    seen.clear();
+    let flow = root.try_walk(&mut |n| {
+        seen.push(n.id);
+        if n.id == NodeId(3) { ControlFlow::Break(n.id) } else { ControlFlow::Continue(()) }
+    });
+    assert_eq!(flow, ControlFlow::Break(NodeId(3)));
+    assert_eq!(seen, [NodeId(1), NodeId(2), NodeId(3)]);
+}

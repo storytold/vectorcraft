@@ -13,6 +13,7 @@
 mod calli;
 mod colorize;
 mod defaults;
+pub mod stored_art;
 pub mod track;
 mod warp;
 
@@ -159,6 +160,24 @@ impl Calligraphic {
     pub fn uses_pressure(&self) -> bool {
         self.modes().contains(&Variation::Pressure)
     }
+    /// Does the pen (its pressure, tilt, bearing, rotation or wheel) change the nib?
+    pub fn uses_pen(&self) -> bool {
+        self.modes().iter().any(|m| m.follows_pen())
+    }
+    /// Value `i` (0 angle, 1 roundness, 2 size) moved by `by`: the angle turns round past ±180°,
+    /// roundness and size stay within their [`Self::RANGES`]. A result that is not a number is
+    /// `value`, kept within its range.
+    pub fn moved(i: usize, value: f64, by: f64) -> f64 {
+        let (lo, hi) = Self::RANGES.get(i).copied().unwrap_or((f64::MIN, f64::MAX));
+        let x = value + by;
+        if !x.is_finite() {
+            value.clamp(lo, hi)
+        } else if i == 0 {
+            vectorcraft_geom::normalize_deg(x)
+        } else {
+            x.clamp(lo, hi)
+        }
+    }
 }
 
 /// How a Calligraphic brush's angle, roundness or size varies (Brush Options). Saved by name: new
@@ -174,16 +193,44 @@ pub enum Variation {
     /// From the value less the variation at the lightest pen pressure to the value plus the
     /// variation at the heaviest.
     Pressure,
+    /// From the value less the variation with the pen lying flat to the value plus the variation
+    /// with it upright.
+    Tilt,
+    /// The value plus the variation times the pen's bearing over 180°: the bearing is which way the
+    /// pen leans, counter-clockwise on the page from leaning to the right (0°) round to ±180°.
+    Bearing,
+    /// The value plus the variation times the pen barrel's rotation over 180°, counter-clockwise
+    /// from where the pen reports 0° round to ±180°.
+    Rotation,
+    /// From the value less the variation with an airbrush pen's finger wheel at one end of its
+    /// travel to the value plus the variation at the other (the value itself half way).
+    StylusWheel,
 }
 
 impl Variation {
-    pub const ALL: [Variation; 3] = [Variation::Fixed, Variation::Random, Variation::Pressure];
+    pub const ALL: [Variation; 7] =
+        [Variation::Fixed, Variation::Random, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel];
+    /// The modes Brush Options offers for a value other than a size (a Calligraphic brush's Angle
+    /// and Roundness, a Scatter brush's Spacing, Scatter and Rotation): all but
+    /// [`Variation::StylusWheel`], which drives a Calligraphic or Scatter brush's Size and an Art
+    /// brush's Width.
+    pub const OTHER: [Variation; 6] =
+        [Variation::Fixed, Variation::Random, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation];
+    /// The modes Brush Options offers for a size (`true`: [`Self::ALL`]) or another value
+    /// ([`Self::OTHER`]).
+    pub fn offered(size: bool) -> &'static [Variation] {
+        if size { &Self::ALL } else { &Self::OTHER }
+    }
     /// The name brush definitions use.
     pub fn id(self) -> &'static str {
         match self {
             Variation::Fixed => "fixed",
             Variation::Random => "random",
             Variation::Pressure => "pressure",
+            Variation::Tilt => "tilt",
+            Variation::Bearing => "bearing",
+            Variation::Rotation => "rotation",
+            Variation::StylusWheel => "stylusWheel",
         }
     }
     pub fn label(self) -> &'static str {
@@ -191,10 +238,67 @@ impl Variation {
             Variation::Fixed => "Fixed",
             Variation::Random => "Random",
             Variation::Pressure => "Pressure",
+            Variation::Tilt => "Tilt",
+            Variation::Bearing => "Bearing",
+            Variation::Rotation => "Rotation",
+            Variation::StylusWheel => "Stylus Wheel",
         }
     }
     pub fn parse(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|v| v.id() == id)
+    }
+    /// Does the value follow something the pen records along a stroke (Pressure, Tilt, Bearing,
+    /// Rotation, Stylus Wheel)?
+    pub fn follows_pen(self) -> bool {
+        matches!(self, Variation::Pressure | Variation::Tilt | Variation::Bearing | Variation::Rotation | Variation::StylusWheel)
+    }
+}
+
+/// What the pen recorded at one point of a stroke, each as the 0..1 that [`Variation`]'s pen modes
+/// read: 0 gives the value less the variation (a Scatter brush's first value), 1 the value plus it
+/// (the second value), and ½ the value itself, as a stroke without that recording does.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct PenAt {
+    /// The pressure, lightest 0.
+    pressure: f64,
+    /// 1 upright, 0 lying flat.
+    tilt: f64,
+    /// ½ plus the bearing over 360°.
+    bearing: f64,
+    /// ½ plus the counter-clockwise barrel rotation over 360°.
+    rotation: f64,
+    /// Where the airbrush finger wheel was set, 0 at one end of its travel to 1 at the other.
+    wheel: f64,
+}
+
+impl PenAt {
+    /// Every input at `c`.
+    pub(crate) fn uniform(c: f64) -> Self {
+        Self { pressure: c, tilt: c, bearing: c, rotation: c, wheel: c }
+    }
+    /// What `stroke` recorded at `f` (the fraction of its path's length).
+    pub(crate) fn of(stroke: &StrokeLayer, f: f64) -> Self {
+        let mid = vectorcraft_doc::PressureProfile::MID;
+        let turn = |p: Option<&vectorcraft_doc::AngleProfile>| 0.5 + p.map_or(0.0, |p| p.at(f)) / 360.0;
+        Self {
+            pressure: stroke.pressure.as_ref().map_or(mid, |p| p.at(f)),
+            tilt: 1.0 - stroke.tilt.as_ref().map_or(mid, |p| p.at(f)),
+            bearing: turn(stroke.bearing.as_ref()),
+            rotation: turn(stroke.rotation.as_ref()),
+            wheel: stroke.wheel.as_ref().map_or(mid, |p| p.at(f)),
+        }
+    }
+    /// The 0..1 a value on `mode` takes, or `None` for a mode that doesn't follow the pen.
+    pub(crate) fn control(&self, mode: Variation) -> Option<f64> {
+        let c = match mode {
+            Variation::Fixed | Variation::Random => return None,
+            Variation::Pressure => self.pressure,
+            Variation::Tilt => self.tilt,
+            Variation::Bearing => self.bearing,
+            Variation::Rotation => self.rotation,
+            Variation::StylusWheel => self.wheel,
+        };
+        Some(if c.is_finite() { c.clamp(0.0, 1.0) } else { 0.5 })
     }
 }
 
@@ -205,7 +309,7 @@ pub struct Scatter {
     pub art: Node,
     /// Size range in percent of the art.
     pub size: (f64, f64),
-    /// Spacing range in percent of the (scaled) art width.
+    /// Spacing range in percent of the (scaled) art width, its strokes included.
     pub spacing: (f64, f64),
     /// Perpendicular offset range in percent of the (scaled) art height.
     pub scatter: (f64, f64),
@@ -214,10 +318,35 @@ pub struct Scatter {
     /// Rotation relative to the path direction (else to the page).
     pub rotation_relative_to_path: bool,
     pub colorization: Colorization,
+    /// Hue jitter in degrees, 0 to 180: each copy turns the hue of the solid colors it draws, after
+    /// the colorization, by its own amount between −`hue_jitter` and `hue_jitter`. The stroke's
+    /// path and the brush name fix the amounts, so a stroke draws the same colors every time.
+    /// 0 (brushes saved before there was hue jitter) leaves the colors as they are.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub hue_jitter: f64,
+    /// Saturation jitter in percent, 0 to 100: each copy moves the saturation of the solid colors it
+    /// draws, after the colorization and the hue jitter, by its own amount between
+    /// −`saturation_jitter` and `saturation_jitter` percentage points, keeping their hue and
+    /// brightness. The stroke's path and the brush name fix the amounts, so a stroke draws the same
+    /// colors every time. 0 (brushes saved before there was saturation jitter) leaves the colors as
+    /// they are.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub saturation_jitter: f64,
+    /// Brightness jitter in percent, 0 to 100: each copy moves the brightness of the solid colors
+    /// it draws, after the colorization and the hue and saturation jitter, by its own amount
+    /// between −`brightness_jitter` and `brightness_jitter` percentage points, keeping their hue
+    /// and saturation. White, black and grays move too. The stroke's path and the brush name fix
+    /// the amounts, so a stroke draws the same colors every time. 0 (brushes saved before there
+    /// was brightness jitter) leaves the colors as they are.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub brightness_jitter: f64,
     /// How size, spacing, scatter and rotation vary between their two values: Fixed takes the
     /// first, Random any value between them, Pressure the first at the lightest pen pressure and
-    /// the second at the heaviest. `None` (brushes saved before there were modes): Random where
-    /// the two differ, else Fixed — see [`Scatter::modes`].
+    /// the second at the heaviest, Tilt the first with the pen lying flat and the second upright,
+    /// Bearing and Rotation the first at −180° and the second at 180° (half way at 0°), and Stylus
+    /// Wheel (the size's only) the first at one end of an airbrush pen's finger wheel and the
+    /// second at the other. `None` (brushes saved before there were modes): Random where the two
+    /// differ, else Fixed (see [`Scatter::modes`]).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modes: Option<[Variation; 4]>,
 }
@@ -232,6 +361,9 @@ impl Default for Scatter {
             rotation: (0.0, 0.0),
             rotation_relative_to_path: false,
             colorization: Colorization::None,
+            hue_jitter: 0.0,
+            saturation_jitter: 0.0,
+            brightness_jitter: 0.0,
             modes: None,
         }
     }
@@ -240,6 +372,12 @@ impl Default for Scatter {
 impl Scatter {
     /// The ranges of size (%), spacing (%), scatter (%) and rotation (°).
     pub const RANGES: [(f64, f64); 4] = [(1.0, 10000.0), (1.0, 10000.0), (-1000.0, 1000.0), (-180.0, 180.0)];
+    /// The range of [`Scatter::hue_jitter`] (°).
+    pub const HUE_JITTER_RANGE: (f64, f64) = (0.0, 180.0);
+    /// The range of [`Scatter::saturation_jitter`] (%).
+    pub const SATURATION_JITTER_RANGE: (f64, f64) = (0.0, 100.0);
+    /// The range of [`Scatter::brightness_jitter`] (%).
+    pub const BRIGHTNESS_JITTER_RANGE: (f64, f64) = (0.0, 100.0);
 
     /// Size, spacing, scatter and rotation, each as its (first, second) values.
     pub fn values(&self) -> [(f64, f64); 4] {
@@ -266,7 +404,8 @@ pub enum Direction {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "mode")]
 pub enum ArtScale {
-    /// Keep the art's proportions (length follows the path; width scales with it).
+    /// Keep the art's proportions (length follows the path; width scales with it, times the
+    /// stroke weight and the brush width).
     Proportional,
     /// Stretch the art to the path length.
     #[default]
@@ -285,11 +424,15 @@ pub struct ArtBrush {
     pub scale: ArtScale,
     /// Width in percent.
     pub width: f64,
-    /// How the width varies along a stroke: `None` (Fixed) always `width`; Pressure goes from
-    /// `width` at the lightest pen pressure to [`Self::width_max`] at the heaviest.
+    /// How the width varies along a stroke: `None` (Fixed) always `width`; a mode that follows the
+    /// pen goes from `width` to [`Self::width_max`] over the ranges [`Variation`] gives: Pressure
+    /// from the lightest pressure to the heaviest, Tilt from the pen lying flat to upright, Bearing
+    /// and Rotation from −180° to 180° (half way at 0°), Stylus Wheel from one end of an airbrush
+    /// pen's finger wheel to the other.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width_mode: Option<Variation>,
-    /// The width at the heaviest pen pressure (%), for Pressure (`width` without one).
+    /// The second width (%) of a mode that follows the pen: at the heaviest pressure, upright, at
+    /// 180° or at the wheel's far end (`width` without one).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width_max: Option<f64>,
     pub flip_along: bool,
@@ -303,11 +446,11 @@ impl ArtBrush {
     /// The range of the width (%).
     pub const WIDTH_RANGE: (f64, f64) = (1.0, 1000.0);
 
-    /// The widths (%) at the lightest and the heaviest pen pressure: `width` for both unless the
-    /// width follows the pressure.
+    /// The widths (%) where the pen reads 0 and 1 for the width's mode (the lightest and the
+    /// heaviest pressure, for Pressure): `width` for both unless the width follows the pen.
     pub fn width_range(&self) -> (f64, f64) {
         match self.width_mode {
-            Some(Variation::Pressure) => (self.width, self.width_max.unwrap_or(self.width)),
+            Some(m) if m.follows_pen() => (self.width, self.width_max.unwrap_or(self.width)),
             _ => (self.width, self.width),
         }
     }
@@ -343,21 +486,100 @@ pub enum PatternFit {
     Approximate,
 }
 
+/// What a pattern brush draws at a kind of corner it has no corner art for: no tile, or a tile
+/// made from the side tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CornerSource {
+    /// No corner tile: the side tiles run up to the corner.
+    None,
+    /// One side tile stretched around the corner and centered on it.
+    AutoCentered,
+    /// A side tile on each side reaching into the corner, stretched so the two meet on the
+    /// corner's diagonal.
+    AutoBetween,
+    /// A side tile on each side cut on the corner's diagonal, the two meeting like a mitered frame.
+    AutoSliced,
+    /// A side tile on each side running past the corner, the two overlapping there.
+    AutoOverlap,
+}
+
+impl CornerSource {
+    pub const ALL: [CornerSource; 5] =
+        [CornerSource::None, CornerSource::AutoCentered, CornerSource::AutoBetween, CornerSource::AutoSliced, CornerSource::AutoOverlap];
+
+    /// The id in a brush definition and in `brush.options` params.
+    pub fn id(self) -> &'static str {
+        match self {
+            CornerSource::None => "none",
+            CornerSource::AutoCentered => "autoCentered",
+            CornerSource::AutoBetween => "autoBetween",
+            CornerSource::AutoSliced => "autoSliced",
+            CornerSource::AutoOverlap => "autoOverlap",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<CornerSource> {
+        CornerSource::ALL.into_iter().find(|a| a.id() == s)
+    }
+}
+
 /// Pattern brush: tiles repeated along the path, with corner and end tiles.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PatternBrush {
     pub side: Node,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side_swatch: Option<String>,
+    /// Art for the corners where the path turns towards the side tile's top (`-y`); `inner_corner`
+    /// is the art for the corners where it turns the other way. Both are drawn as the corner that
+    /// joins a side tile on its right to one below it, and each corner tile is turned so that
+    /// those two arms meet the sides.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outer_corner: Option<Node>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer_corner_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer_corner_swatch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inner_corner: Option<Node>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inner_corner_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inner_corner_swatch: Option<String>,
+    /// What the outer corners take when there is no `outer_corner` art. Without art or a source,
+    /// they take the `inner_corner` art.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outer_source: Option<CornerSource>,
+    /// What the inner corners take when there is no `inner_corner` art. Without art or a source,
+    /// they take the `outer_corner` art.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inner_source: Option<CornerSource>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start: Option<Node>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_swatch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end: Option<Node>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_swatch: Option<String>,
     /// Scale in percent.
     pub scale: f64,
+    /// How the scale varies along a stroke: `None` (Fixed) always `scale`; a mode that follows the
+    /// pen goes from `scale` to [`Self::scale_max`] over the ranges [`Variation`] gives, as an Art
+    /// brush's width does ([`ArtBrush::width_mode`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale_mode: Option<Variation>,
+    /// The second scale (%) of a mode that follows the pen: at the heaviest pressure, upright, at
+    /// 180° or at the wheel's far end (`scale` without one).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale_max: Option<f64>,
     /// Space between tiles in percent of the tile width.
     pub spacing: f64,
     pub fit: PatternFit,
@@ -370,17 +592,40 @@ impl PatternBrush {
     /// The ranges of the scale and of the spacing (%).
     pub const SCALE_RANGE: (f64, f64) = (1.0, 10000.0);
     pub const SPACING_RANGE: (f64, f64) = (0.0, 10000.0);
+
+    /// The scales (%) where the pen reads 0 and 1 for the scale's mode (the lightest and the
+    /// heaviest pressure, for Pressure): `scale` for both unless the scale follows the pen.
+    pub fn scale_range(&self) -> (f64, f64) {
+        match self.scale_mode {
+            Some(m) if m.follows_pen() => (self.scale, self.scale_max.unwrap_or(self.scale)),
+            _ => (self.scale, self.scale),
+        }
+    }
 }
 
 impl Default for PatternBrush {
     fn default() -> Self {
         Self {
             side: defaults::stitch_tile(),
+            side_frame: None,
+            side_swatch: None,
             outer_corner: None,
+            outer_corner_frame: None,
+            outer_corner_swatch: None,
             inner_corner: None,
+            inner_corner_frame: None,
+            inner_corner_swatch: None,
+            outer_source: None,
+            inner_source: None,
             start: None,
+            start_frame: None,
+            start_swatch: None,
             end: None,
+            end_frame: None,
+            end_swatch: None,
             scale: 100.0,
+            scale_mode: None,
+            scale_max: None,
             spacing: 0.0,
             fit: PatternFit::Stretch,
             flip_along: false,
@@ -452,6 +697,18 @@ fn within_pair((a, b): (f64, f64), range: (f64, f64), fallback: f64) -> (f64, f6
     (within(a, range, fallback), within(b, range, fallback))
 }
 
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+fn valid_tile_frame(frame: Rect) -> bool {
+    [frame.x0, frame.y0, frame.x1, frame.y1].into_iter().all(f64::is_finite)
+        && frame.width().is_finite()
+        && frame.height().is_finite()
+        && frame.width() > 1e-9
+        && frame.height() > 1e-9
+}
+
 impl Colorization {
     /// A Hue Shift key colour that isn't a colour (components out of reach) becomes black.
     fn sanitize(&mut self) {
@@ -472,6 +729,18 @@ impl Brush {
             BrushKind::Pattern(p) => {
                 std::iter::once(&p.side).chain([&p.outer_corner, &p.inner_corner, &p.start, &p.end].into_iter().flatten()).collect()
             }
+            BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => vec![],
+        }
+    }
+
+    /// [`Brush::art`], to change (relink the resources it uses).
+    pub fn art_mut(&mut self) -> Vec<&mut Node> {
+        match &mut self.kind {
+            BrushKind::Scatter(s) => vec![&mut s.art],
+            BrushKind::Art(a) => vec![&mut a.art],
+            BrushKind::Pattern(p) => std::iter::once(&mut p.side)
+                .chain([&mut p.outer_corner, &mut p.inner_corner, &mut p.start, &mut p.end].into_iter().flatten())
+                .collect(),
             BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => vec![],
         }
     }
@@ -522,12 +791,15 @@ impl Brush {
                 s.spacing = within_pair(s.spacing, spacing, d.spacing.0);
                 s.scatter = within_pair(s.scatter, scatter, 0.0);
                 s.rotation = within_pair(s.rotation, rotation, 0.0);
+                s.hue_jitter = within(s.hue_jitter, Scatter::HUE_JITTER_RANGE, 0.0);
+                s.saturation_jitter = within(s.saturation_jitter, Scatter::SATURATION_JITTER_RANGE, 0.0);
+                s.brightness_jitter = within(s.brightness_jitter, Scatter::BRIGHTNESS_JITTER_RANGE, 0.0);
                 s.colorization.sanitize();
             }
             BrushKind::Art(a) => {
                 a.width = within(a.width, ArtBrush::WIDTH_RANGE, 100.0);
-                // The width follows the pen's pressure or stays fixed.
-                if a.width_mode != Some(Variation::Pressure) {
+                // The width follows the pen (its pressure, tilt, bearing, rotation or wheel) or stays fixed.
+                if !a.width_mode.is_some_and(Variation::follows_pen) {
                     a.width_mode = None;
                 }
                 a.width_max = a.width_max.map(|w| within(w, ArtBrush::WIDTH_RANGE, a.width));
@@ -539,7 +811,17 @@ impl Brush {
             }
             BrushKind::Pattern(p) => {
                 p.scale = within(p.scale, PatternBrush::SCALE_RANGE, 100.0);
+                // The scale follows the pen (its pressure, tilt, bearing, rotation or wheel) or stays fixed.
+                if !p.scale_mode.is_some_and(Variation::follows_pen) {
+                    p.scale_mode = None;
+                }
+                p.scale_max = p.scale_max.map(|s| within(s, PatternBrush::SCALE_RANGE, p.scale));
                 p.spacing = within(p.spacing, PatternBrush::SPACING_RANGE, 0.0);
+                for frame in [&mut p.side_frame, &mut p.outer_corner_frame, &mut p.inner_corner_frame, &mut p.start_frame, &mut p.end_frame] {
+                    if frame.is_some_and(|f| !valid_tile_frame(f)) {
+                        *frame = None;
+                    }
+                }
                 p.colorization.sanitize();
             }
             BrushKind::Bristle(b) => {
@@ -556,6 +838,251 @@ impl Brush {
     }
 }
 
+// ---------- stroke options ----------
+
+/// The Scatter brush fields a stroke can set for itself ([`BrushKind::stroke_option_keys`]).
+#[derive(Serialize, Deserialize)]
+struct ScatterOptions {
+    size: (f64, f64),
+    spacing: (f64, f64),
+    scatter: (f64, f64),
+    rotation: (f64, f64),
+    modes: Option<[Variation; 4]>,
+    rotation_relative_to_path: bool,
+    colorization: Colorization,
+    hue_jitter: f64,
+    saturation_jitter: f64,
+    brightness_jitter: f64,
+}
+
+/// The Art brush fields a stroke can set for itself.
+#[derive(Serialize, Deserialize)]
+struct ArtOptions {
+    width: f64,
+    width_mode: Option<Variation>,
+    width_max: Option<f64>,
+    flip_along: bool,
+    flip_across: bool,
+    overlap: bool,
+    colorization: Colorization,
+}
+
+/// The Pattern brush fields a stroke can set for itself.
+#[derive(Serialize, Deserialize)]
+struct PatternOptions {
+    scale: f64,
+    scale_mode: Option<Variation>,
+    scale_max: Option<f64>,
+    spacing: f64,
+    fit: PatternFit,
+    flip_along: bool,
+    flip_across: bool,
+    colorization: Colorization,
+}
+
+impl BrushKind {
+    /// The definition fields, by their `brush.options` names, that one stroke can set for itself
+    /// (the Brushes panel's Options of Selected Object, [`StrokeLayer::brush_options`]). A Bristle
+    /// brush has none.
+    pub fn stroke_option_keys(&self) -> &'static [&'static str] {
+        match self {
+            BrushKind::Calligraphic(_) => &["angle", "roundness", "size", "variation", "modes"],
+            BrushKind::Scatter(_) => &[
+                "size",
+                "spacing",
+                "scatter",
+                "rotation",
+                "modes",
+                "rotation_relative_to_path",
+                "colorization",
+                "hue_jitter",
+                "saturation_jitter",
+                "brightness_jitter",
+            ],
+            BrushKind::Art(_) => &["width", "width_mode", "width_max", "flip_along", "flip_across", "overlap", "colorization"],
+            BrushKind::Pattern(_) => &["scale", "scale_mode", "scale_max", "spacing", "fit", "flip_along", "flip_across", "colorization"],
+            BrushKind::Bristle(_) => &[],
+        }
+    }
+
+    /// The values of [`Self::stroke_option_keys`], as a JSON object. Calligraphic modes left to the
+    /// values are a `null` `modes`, so a stroke that sets them so keeps that setting.
+    fn option_values(&self) -> serde_json::Value {
+        let v = match self {
+            BrushKind::Calligraphic(c) => serde_json::to_value(c).map(|mut v| {
+                if let Some(o) = v.as_object_mut() {
+                    o.entry("modes").or_insert(serde_json::Value::Null);
+                }
+                v
+            }),
+            BrushKind::Scatter(s) => serde_json::to_value(ScatterOptions {
+                size: s.size,
+                spacing: s.spacing,
+                scatter: s.scatter,
+                rotation: s.rotation,
+                modes: s.modes,
+                rotation_relative_to_path: s.rotation_relative_to_path,
+                colorization: s.colorization,
+                hue_jitter: s.hue_jitter,
+                saturation_jitter: s.saturation_jitter,
+                brightness_jitter: s.brightness_jitter,
+            }),
+            BrushKind::Art(a) => serde_json::to_value(ArtOptions {
+                width: a.width,
+                width_mode: a.width_mode,
+                width_max: a.width_max,
+                flip_along: a.flip_along,
+                flip_across: a.flip_across,
+                overlap: a.overlap,
+                colorization: a.colorization,
+            }),
+            BrushKind::Pattern(p) => serde_json::to_value(PatternOptions {
+                scale: p.scale,
+                scale_mode: p.scale_mode,
+                scale_max: p.scale_max,
+                spacing: p.spacing,
+                fit: p.fit,
+                flip_along: p.flip_along,
+                flip_across: p.flip_across,
+                colorization: p.colorization,
+            }),
+            BrushKind::Bristle(_) => Ok(serde_json::Value::Object(serde_json::Map::new())),
+        };
+        v.unwrap_or_default()
+    }
+
+    /// Set the values of [`Self::stroke_option_keys`] from `v` (as [`Self::option_values`] gives
+    /// them). An error when a value is of the wrong kind.
+    fn set_option_values(&mut self, v: serde_json::Value) -> Result<(), serde_json::Error> {
+        match self {
+            BrushKind::Calligraphic(c) => *c = serde_json::from_value(v)?,
+            BrushKind::Scatter(s) => {
+                let o: ScatterOptions = serde_json::from_value(v)?;
+                (s.size, s.spacing, s.scatter, s.rotation, s.modes) = (o.size, o.spacing, o.scatter, o.rotation, o.modes);
+                (s.rotation_relative_to_path, s.colorization) = (o.rotation_relative_to_path, o.colorization);
+                (s.hue_jitter, s.saturation_jitter, s.brightness_jitter) = (o.hue_jitter, o.saturation_jitter, o.brightness_jitter);
+            }
+            BrushKind::Art(a) => {
+                let o: ArtOptions = serde_json::from_value(v)?;
+                (a.width, a.width_mode, a.width_max, a.flip_along, a.flip_across) = (o.width, o.width_mode, o.width_max, o.flip_along, o.flip_across);
+                (a.overlap, a.colorization) = (o.overlap, o.colorization);
+            }
+            BrushKind::Pattern(p) => {
+                let o: PatternOptions = serde_json::from_value(v)?;
+                (p.scale, p.scale_mode, p.scale_max, p.spacing) = (o.scale, o.scale_mode, o.scale_max, o.spacing);
+                (p.fit, p.flip_along, p.flip_across, p.colorization) = (o.fit, o.flip_along, o.flip_across, o.colorization);
+            }
+            BrushKind::Bristle(_) => {}
+        }
+        Ok(())
+    }
+}
+
+/// Stroke option value `new` with each `null` item of an array taken from the same place in
+/// `current`, an array of the same length: a stroke option that changes some items of a range or a
+/// list of modes and keeps the others ([`Brush::with_stroke_options`]). Any other `new` is given as
+/// it is.
+pub fn keep_items(new: &serde_json::Value, current: &serde_json::Value) -> serde_json::Value {
+    match (new, current) {
+        (serde_json::Value::Array(n), serde_json::Value::Array(c)) if n.len() == c.len() => {
+            serde_json::Value::Array(n.iter().zip(c).map(|(n, c)| if n.is_null() { c.clone() } else { n.clone() }).collect())
+        }
+        _ => new.clone(),
+    }
+}
+
+impl Brush {
+    /// The brush as a stroke whose own settings are `options` draws it: each field of
+    /// [`BrushKind::stroke_option_keys`] in `options` replaces the brush's value (a `colorization`
+    /// object changes only the fields it gives), and the values are kept within their ranges
+    /// ([`Brush::sanitize`]). A `null` item of an array keeps the brush's item there
+    /// ([`keep_items`]). Fields the type does not take are passed over. An error when a value is of
+    /// the wrong kind.
+    pub fn with_stroke_options(&self, options: &serde_json::Map<String, serde_json::Value>) -> Result<Brush, String> {
+        let keys = self.kind.stroke_option_keys();
+        let mut values = self.kind.option_values();
+        let Some(o) = values.as_object_mut() else { return Ok(self.clone()) };
+        for (k, v) in options {
+            if !keys.contains(&k.as_str()) {
+                continue;
+            }
+            match (o.get_mut(k).and_then(serde_json::Value::as_object_mut), v.as_object()) {
+                (Some(inner), Some(fields)) if k == "colorization" => {
+                    for (f, fv) in fields {
+                        inner.insert(f.clone(), fv.clone());
+                    }
+                }
+                // Set below, once the values the modes may follow are in.
+                _ if k == "modes" => {}
+                _ => {
+                    let current = o.get(k).cloned().unwrap_or_default();
+                    o.insert(k.clone(), keep_items(v, &current));
+                }
+            }
+        }
+        // A Hue Shift without a key takes the art's main color, as `Brush::from_json` gives it.
+        if let Some(c) = o.get_mut("colorization").and_then(serde_json::Value::as_object_mut)
+            && c.get("method").and_then(serde_json::Value::as_str) == Some("hueShift")
+            && c.get("key").is_none_or(serde_json::Value::is_null)
+        {
+            let key = art_colors(self.art()).first().copied().unwrap_or(vectorcraft_color::Color::BLACK);
+            c.insert("key".into(), serde_json::to_value(key).map_err(|e| e.to_string())?);
+        }
+        let mut b = self.clone();
+        b.kind.set_option_values(values.clone()).map_err(|e| e.to_string())?;
+        if let Some(m) = options.get("modes")
+            && keys.contains(&"modes")
+        {
+            // A null item keeps the mode the brush with the other settings has: modes it leaves to
+            // its values follow the stroke's values, as they are kept within their ranges. Modes
+            // equal to those are left as the brush has them, so they keep following the values.
+            b.sanitize();
+            let current = match &b.kind {
+                BrushKind::Calligraphic(c) => serde_json::to_value(c.modes()).unwrap_or_default(),
+                BrushKind::Scatter(s) => serde_json::to_value(s.modes()).unwrap_or_default(),
+                _ => serde_json::Value::Null,
+            };
+            let modes = keep_items(m, &current);
+            if modes != current {
+                if let Some(o) = values.as_object_mut() {
+                    o.insert("modes".into(), modes);
+                }
+                b = self.clone();
+                b.kind.set_option_values(values).map_err(|e| e.to_string())?;
+            }
+        }
+        b.sanitize();
+        Ok(b)
+    }
+
+    /// The stroke options of `options` that make the brush draw differently: each field of
+    /// [`BrushKind::stroke_option_keys`] whose value, after [`Self::with_stroke_options`], differs
+    /// from the brush's own, with that value (kept within its range). An error for a field the
+    /// type does not take and for a value of the wrong kind.
+    pub fn stroke_options_that_differ(
+        &self,
+        options: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+        let keys = self.kind.stroke_option_keys();
+        if let Some(k) = options.keys().find(|k| !keys.contains(&k.as_str())) {
+            return Err(if keys.is_empty() {
+                format!("a {} brush has no options of its own on a stroke", self.kind.label().to_lowercase())
+            } else {
+                format!("a {} brush's stroke options do not include `{k}` (they are {})", self.kind.label().to_lowercase(), keys.join(", "))
+            });
+        }
+        let edited = self.with_stroke_options(options)?.kind.option_values();
+        let own = self.kind.option_values();
+        Ok(keys
+            .iter()
+            .filter_map(|k| {
+                let v = edited.get(*k)?;
+                (own.get(*k) != Some(v)).then(|| ((*k).to_string(), v.clone()))
+            })
+            .collect())
+    }
+}
+
 // ---------- library ----------
 
 /// The brush library of `doc`: its stored brushes, or the defaults when it has none.
@@ -567,14 +1094,51 @@ pub fn library(doc: &Document) -> Vec<Brush> {
 }
 
 /// Parse a stored library value (malformed entries are skipped, values kept within their
-/// ranges; see [`Brush::from_json`]).
+/// ranges; see [`Brush::from_json`]). A name that repeats is kept by its first brush, and each
+/// later brush of that name is numbered ([`number_repeated_names`]).
 pub fn parse_library(v: &serde_json::Value) -> Vec<Brush> {
-    v.as_array().map(|a| a.iter().filter_map(|b| Brush::from_json(b.clone()).ok()).collect()).unwrap_or_default()
+    let mut lib: Vec<Brush> = v.as_array().map(|a| a.iter().filter_map(|b| Brush::from_json(b.clone()).ok()).collect()).unwrap_or_default();
+    number_repeated_names(&mut lib);
+    lib
 }
 
-/// Store `lib` as the document's brush library.
+/// Renames the second and later brushes of each repeated name in `lib` to the first "Name 2",
+/// "Name 3"… that no brush in `lib` has. The first brush of a name keeps it, so a stroke that names
+/// it draws the brush [`find`] gave it before.
+fn number_repeated_names(lib: &mut [Brush]) {
+    let mut seen = std::collections::HashSet::new();
+    if lib.iter().all(|b| seen.insert(b.name.as_str())) {
+        return;
+    }
+    let mut taken: std::collections::HashSet<String> = lib.iter().map(|b| b.name.clone()).collect();
+    let mut kept = std::collections::HashSet::new();
+    // The next number to try for each repeated name, so the brushes of one name try each number
+    // once between them.
+    let mut next: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    for b in lib.iter_mut() {
+        if kept.insert(b.name.clone()) {
+            continue;
+        }
+        let from = next.entry(b.name.clone()).or_insert(2);
+        // `taken` is finite, so one of the numbers is free.
+        if let Some((i, name)) = (*from..).map(|i| (i, format!("{} {i}", b.name))).find(|(_, n)| !taken.contains(n)) {
+            *from = i.saturating_add(1);
+            taken.insert(name.clone());
+            kept.insert(name.clone());
+            b.name = name;
+        }
+    }
+}
+
+/// Store `lib` as the document's brush library. When the art of a brush holds images or placed
+/// documents, each object in that art whose id is 0 or repeats another object's is given a new
+/// id ([`stored_art::StoredArt::persist_ids`]), so the Links panel lists it by the same id until it
+/// changes.
 pub fn store(doc: &mut Document, lib: &[Brush]) {
     doc.unknown.insert(DOC_KEY.into(), serde_json::to_value(lib).unwrap_or_default());
+    if lib.iter().any(|b| b.art().into_iter().any(stored_art::holds_files)) {
+        stored_art::StoredArt::persist_ids(doc);
+    }
 }
 
 /// Find a brush by name.
@@ -593,10 +1157,9 @@ pub fn unique_name(lib: &[Brush], base: &str) -> String {
         return base.to_string();
     }
     // At most `lib.len()` names are taken, so one of the first `lib.len() + 1` candidates is free.
-    (2..=lib.len() + 2)
-        .map(|i| format!("{base} {i}"))
-        .find(|n| !lib.iter().any(|b| &b.name == n))
-        .unwrap_or_else(|| format!("{base} {}", lib.len() + 2))
+    // Each is looked up in a set: scanning the library per candidate is quadratic in its size.
+    let taken: std::collections::HashSet<&str> = lib.iter().map(|b| b.name.as_str()).collect();
+    (2..=lib.len() + 2).map(|i| format!("{base} {i}")).find(|n| !taken.contains(n.as_str())).unwrap_or_else(|| format!("{base} {}", lib.len() + 2))
 }
 
 // ---------- geometry ----------
@@ -609,19 +1172,45 @@ fn tolerance(scale: f64) -> f64 {
 /// Filled art for one brushed stroke along `bp`, in `doc`. Pieces are in document space with id
 /// 0, and never draw a brushed stroke (so they never recurse): their own strokes carry no brush,
 /// and what they draw by name that would draw one is left out ([`leave_out_brushed`]).
-/// Stroke-level opacity/blend are the caller's job (`StrokeLayer::opacity`).
+/// Stroke-level opacity/blend are the caller's job (`StrokeLayer::opacity`). The stroke's own
+/// brush settings ([`StrokeLayer::brush_options`]) replace the brush's values
+/// ([`Brush::with_stroke_options`]); settings that do not read draw the brush as it is.
 pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &StrokeLayer) -> Vec<Node> {
+    let edited;
+    let brush = if stroke.brush_options.is_empty() {
+        brush
+    } else {
+        match brush.with_stroke_options(&stroke.brush_options) {
+            Ok(b) => {
+                edited = b;
+                &edited
+            }
+            Err(_) => brush,
+        }
+    };
     let w = if stroke.width > 0.0 { stroke.width } else { 1.0 };
     let mut out = match &brush.kind {
         BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, stroke, &brush.name),
-        BrushKind::Bristle(b) => calli::bristle(b, bp, w, &stroke.paint, &brush.name),
-        BrushKind::Art(a) => warp::art(a, bp, w, stroke.pressure.as_ref()),
-        BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke.pressure.as_ref(), &brush.name),
-        BrushKind::Pattern(p) => warp::pattern(p, bp, w),
+        BrushKind::Bristle(b) => calli::bristle(b, bp, w, stroke, &brush.name),
+        BrushKind::Art(a) => warp::art(a, bp, w, stroke),
+        BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke, &brush.name),
+        BrushKind::Pattern(p) => warp::pattern(p, bp, w, stroke),
     };
     let colorization = brush.kind.colorization();
     for n in &mut out {
         colorize(n, colorization, &stroke.paint);
+    }
+    // One piece per copy, in the order the copies run along the path.
+    if let BrushKind::Scatter(s) = &brush.kind {
+        if s.hue_jitter > 0.0 {
+            colorize::jitter_hues(&mut out, s.hue_jitter, track::seed_of(bp, &brush.name));
+        }
+        if s.saturation_jitter > 0.0 {
+            colorize::jitter_saturations(&mut out, s.saturation_jitter, track::seed_of(bp, &brush.name));
+        }
+        if s.brightness_jitter > 0.0 {
+            colorize::jitter_brightnesses(&mut out, s.brightness_jitter, track::seed_of(bp, &brush.name));
+        }
     }
     leave_out_brushed(doc, &mut out, &mut Known::new());
     out
@@ -661,9 +1250,15 @@ fn draws_brushed(doc: &Document, def: Named<'_>, known: &mut Known) -> bool {
     };
     // Without recursion, each one looked at once: they may use one another without end.
     let (mut seen, mut stack) = (std::collections::HashSet::from([key.clone()]), art(def));
+    // A brush name the library lacks draws a plain stroke ([`node_pieces`]), which runs no brush.
+    let mut names: Option<std::collections::HashSet<String>> = None;
+    let mut resolves = |n: &Node| {
+        let names = names.get_or_insert_with(|| library(doc).into_iter().map(|b| b.name).collect());
+        n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && s.brush.as_ref().is_some_and(|b| names.contains(b))))
+    };
     let mut answer = false;
     while let Some(n) = stack.pop() {
-        if has_brush(n) {
+        if has_brush(n) && resolves(n) {
             answer = true;
             break;
         }
@@ -696,7 +1291,16 @@ fn leave_out_brushed(doc: &Document, nodes: &mut Vec<Node>, known: &mut Known) {
                 walk(doc, Arc::make_mut(c), known);
             }
         }
-        if n.extras().mask.is_some()
+        // A mask's art is drawn too. Its root is filtered like any other node: a symbol instance
+        // there that draws a brushed stroke would run the brush again from inside the mask, so the
+        // mask goes, as such an instance goes from the pieces and their children.
+        let rejected_root = matches!(
+            n.extras().mask.as_ref().map(|m| &m.art.kind),
+            Some(NodeKind::SymbolInstance { symbol, .. }) if draws_brushed(doc, (false, symbol.as_str()), known)
+        );
+        if rejected_root {
+            n.extras_mut().mask = None;
+        } else if n.extras().mask.is_some()
             && let Some(mask) = n.extras_mut().mask.as_mut()
         {
             walk(doc, Arc::make_mut(&mut mask.art), known);
@@ -758,6 +1362,41 @@ pub fn node_bezpath(n: &Node) -> Option<BezPath> {
 /// Does `n` have a stroke with a brush?
 pub fn has_brush(n: &Node) -> bool {
     n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some() && s.visible))
+}
+
+/// Does `stroke` draw with a brush of `lib` (the document's [`library`])? [`stroke_pieces`] sizes
+/// brush art from the brush and the stroke weight and does not read the stroke's width profile, so
+/// the profile does not change what such a stroke draws. A stroke without a brush, or one that
+/// names a brush `lib` lacks, draws a plain stroke, which follows the profile.
+pub fn keeps_brush_size(lib: &[Brush], stroke: &StrokeLayer) -> bool {
+    stroke.brush.as_deref().is_some_and(|name| lib.iter().any(|b| b.name == name))
+}
+
+/// How far brush art can paint past the visual box of `n`: `16 × w + 8`, where `w` is the widest
+/// stroke of `n` (at least 1), when `n` has a visible brushed stroke with a paint; 0 when it has
+/// none, as a brushed stroke without a paint draws no brush art. This is the room the renderer and
+/// the exports leave for brush art when they cull.
+pub fn reach(n: &Node) -> f64 {
+    let paints = |i: &AppearanceItem| matches!(i, AppearanceItem::Stroke(s) if s.visible && s.brush.is_some() && !s.paint.is_none());
+    if !n.appearance.items.iter().any(paints) {
+        return 0.0;
+    }
+    let w = n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.width) } else { None }).fold(1.0, f64::max);
+    16.0 * w + 8.0
+}
+
+/// The largest [`reach`] of `n` and of the objects in it: the members of its groups, layers and
+/// live objects. Of a group or layer with a clipping path only the clipping path counts, as the
+/// clip keeps its members' brush art inside it. A compound path counts its own strokes only, as
+/// it is painted with its own appearance and not its paths'. Symbol art is not looked into
+/// ([`vectorcraft_doc::SymbolBoxes::with_brush_art`] measures it).
+pub fn reach_within(n: &Node) -> f64 {
+    let members = match &n.kind {
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => children.get(..1).unwrap_or_default(),
+        NodeKind::Compound { .. } => &[],
+        _ => n.children().map_or(&[][..], |c| &c[..]),
+    };
+    members.iter().map(|c| reach_within(c)).fold(reach(n), f64::max)
 }
 
 /// Expand a brushed path: a group of [the path with its fills and unbrushed strokes (if any

@@ -1,5 +1,6 @@
 //! TIFF, BMP and Targa export through `document.export`: the options reach the files, impossible
-//! ones are refused, and the files open again; Targa files open and place.
+//! ones are refused, and the files open again; Targa files, and BMP and PNG files by their other
+//! extensions, open and place.
 
 use serde_json::{Value, json};
 
@@ -201,6 +202,52 @@ fn targa_files_open_and_place() {
     }
     let targa = ("Targa", &["tga", "vda", "icb", "vst"][..]);
     assert!(open_filters().any(|f| f == targa) && place_filters().any(|f| f == targa));
+}
+
+/// BMP files named `.dib` or `.rle` (an RLE8 bitmap) and PNG files named `.pns` open and place as
+/// BMP and PNG, in any case; the dialogs and a drop on the window take them by their extension, and
+/// the desktop packaging doesn't associate them.
+#[test]
+fn dib_rle_and_pns_files_open_and_place() {
+    let mut s = session();
+    let b64 = vectorcraft_format::base64_encode;
+    let bmp = export(&mut s, json!({"format": "bmp"}));
+    let rle = export(&mut s, json!({"format": "bmp", "depth": 8, "rle": true}));
+    assert_eq!(u32::from_le_bytes(rle[30..34].try_into().unwrap()), 1, "RLE8");
+    let png = export(&mut s, json!({"format": "png"}));
+    for (name, bytes, id) in [
+        ("art.dib", &bmp, "bmp"),
+        ("ART.DIB", &bmp, "bmp"),
+        ("art.rle", &rle, "bmp"),
+        ("Art.RLE", &rle, "bmp"),
+        ("art.pns", &png, "png"),
+        ("ART.PNS", &png, "png"),
+    ] {
+        assert_eq!(readable_format_for_name(name).map(|f| f.id), Some(id), "{name}");
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": b64(bytes)})).unwrap();
+        assert_eq!((&r["format"], &r["warnings"]), (&json!(id), &json!([])), "{name}: {r}");
+        assert_eq!(stored_pixels(&s).dimensions(), (60, 40), "{name}");
+        s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+        let r = s.execute("file.place", &json!({"name": name, "dataBase64": b64(bytes)})).unwrap();
+        assert_eq!((&r["format"], r["ids"].as_array().map(Vec::len)), (&json!(id), Some(1)), "{name}: {r}");
+        let black = stored_pixels(&s).get_pixel(40, 20).0;
+        assert!(black[3] == 255 && black[..3].iter().all(|c| *c < 80), "{name}: {black:?}");
+    }
+    // The dialogs list the extensions; the desktop packaging doesn't associate them.
+    for e in ["dib", "rle", "pns"] {
+        assert!(OPEN_EXTS.contains(&e) && PLACE_EXTS.contains(&e) && UNASSOCIATED_EXTS.contains(&e), "{e}");
+    }
+    let (bitmap, png) = (("BMP", &["bmp", "dib", "rle"][..]), ("PNG", &["png", "pns"][..]));
+    assert!(open_filters().any(|f| f == bitmap) && place_filters().any(|f| f == bitmap));
+    assert!(open_filters().any(|f| f == png) && place_filters().any(|f| f == png));
+    // Exports still write `.png` and `.bmp` only: an export to one of the other names is refused
+    // as before, and save panels don't offer them.
+    let named: Vec<&str> = export_extensions().into_iter().filter(|e| ["bmp", "dib", "rle", "png", "pns"].contains(e)).collect();
+    assert_eq!(named, ["png", "bmp"]);
+    for name in ["x.dib", "x.rle", "x.pns"] {
+        assert!(format_for_name(name).is_none() && writable_format(None, Some(name)).is_err(), "{name}");
+        assert!(s.execute("document.export", &json!({"path": name})).is_err(), "{name}");
+    }
 }
 
 /// Targa pixels in every layout: run-length encoded rows stored top down (as the `image` crate

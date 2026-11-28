@@ -7,25 +7,42 @@
 //! command (or a text field its own undo). A few chords never reach a page at all (Safari's
 //! `Cmd+L`, Chrome's `Cmd+T`, `Cmd+W` and `Cmd+N`): the browser keeps those.
 
+use craft::keymap::Chord;
+// PLAN: assumed path `craft::ui::runtime::commands` for the ui contract's `commands` module.
+#[cfg(target_arch = "wasm32")]
+use craft::ui::runtime::commands;
 use egui::{Key, Modifiers};
 
-/// Whether the browser's own action for a key press is cancelled. `key` is the event's `key` (the
-/// character typed), `code` its `code` (the key's position), `modifiers` as eframe reports them,
-/// and `alt_graph` whether AltGr is held.
+/// The chord of a key press the browser's own action may be cancelled for. `key` is the event's
+/// `key` (the character typed), `code` its `code` (the key's position), `modifiers` as eframe
+/// reports them, and `alt_graph` whether AltGr is held.
 ///
 /// Only Cmd and Ctrl presses: a plain or Shift press types (cancelling it would drop the
 /// character it types), and so does AltGr, which Windows reports as Ctrl and Alt held. Cut, Copy
 /// and Paste (with any other modifiers) are left to the browser, whose clipboard events carry
 /// their text, and Reload too, as eframe leaves them.
-pub(crate) fn kept_from_browser(key: &str, code: &str, modifiers: Modifiers, alt_graph: bool) -> bool {
+pub(crate) fn browser_chord(key: &str, code: &str, modifiers: Modifiers, alt_graph: bool) -> Option<Chord> {
     if !(modifiers.ctrl || modifiers.mac_cmd) || alt_graph {
-        return false;
+        return None;
     }
-    if matches!(Key::from_name(key).or(Key::from_name(code)), Some(Key::C | Key::V | Key::X | Key::R)) {
-        return false;
+    let key = Key::from_name(key).or(Key::from_name(code))?;
+    if matches!(key, Key::C | Key::V | Key::X | Key::R) {
+        return None;
     }
-    vectorcraft_ui_egui::shortcuts::runs_a_shortcut(key, code, modifiers)
+    vectorcraft_ui_egui::keymap::chord_of_press(key, modifiers, vectorcraft_ui_egui::keymap::platform())
 }
+
+/// Whether the browser's own action for a key press is cancelled: the keymap in effect, the
+/// user's shortcuts included, binds its chord. Before the first frame nothing is bound.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn kept_from_browser(ctx: &egui::Context, key: &str, code: &str, modifiers: Modifiers, alt_graph: bool) -> bool {
+    browser_chord(key, code, modifiers, alt_graph).is_some_and(|chord| commands::holder(ctx, &chord).is_some())
+}
+
+/// The egui context of the running app; empty until the first start fills it, and filled again by
+/// every restart after the graphics were lost.
+#[cfg(target_arch = "wasm32")]
+pub(crate) type ContextSlot = std::rc::Rc<std::cell::RefCell<Option<egui::Context>>>;
 
 /// The modifiers of a key event as eframe reports them to egui (its `modifiers_from_kb_event`).
 #[cfg(target_arch = "wasm32")]
@@ -50,17 +67,19 @@ fn to_the_app(e: &web_sys::KeyboardEvent) -> bool {
 }
 
 /// Cancel the page's default action for [`kept_from_browser`] presses, before eframe's listener
-/// sees the event (it doesn't stop it).
+/// sees the event (it doesn't stop it). The framework cancels no browser default itself, so this
+/// listener stays; it reads the context from `ctx` because it is installed before the first frame.
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn keep_app_keys() {
+pub(crate) fn keep_app_keys(ctx: ContextSlot) {
     use wasm_bindgen::JsCast as _;
     let Some(window) = web_sys::window() else { return };
-    let on_key = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(|e: web_sys::KeyboardEvent| {
+    let on_key = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
         // An IME's keys are its own until it commits.
         if e.is_composing() || !to_the_app(&e) {
             return;
         }
-        if kept_from_browser(&e.key(), &e.code(), modifiers(&e), e.get_modifier_state("AltGraph")) {
+        let Some(ctx) = ctx.borrow().clone() else { return };
+        if kept_from_browser(&ctx, &e.key(), &e.code(), modifiers(&e), e.get_modifier_state("AltGraph")) {
             e.prevent_default();
         }
     });
@@ -74,6 +93,7 @@ pub(crate) fn keep_app_keys() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use craft::keymap::{Key as ChordKey, Mods};
 
     /// Cmd as egui reports it on this platform: the Command key on macOS, Ctrl elsewhere.
     fn cmd() -> Modifiers {
@@ -82,15 +102,15 @@ mod tests {
 
     #[test]
     fn the_keymaps_chords_are_kept_from_the_browser() {
-        for (key, code, mods) in [
-            ("=", "Equal", cmd()),
-            ("-", "Minus", cmd()),
-            ("0", "Digit0", cmd()),
-            ("z", "KeyZ", cmd()),
-            ("Z", "KeyZ", cmd() | Modifiers::SHIFT),
-            ("[", "BracketLeft", cmd()),
+        for (key, code, mods, want) in [
+            ("=", "Equal", cmd(), Chord::new(Mods::CMD, ChordKey::Equals)),
+            ("-", "Minus", cmd(), Chord::parse("Cmd+-").unwrap()),
+            ("0", "Digit0", cmd(), Chord::parse("Cmd+0").unwrap()),
+            ("z", "KeyZ", cmd(), Chord::parse("Cmd+Z").unwrap()),
+            ("Z", "KeyZ", cmd() | Modifiers::SHIFT, Chord::parse("Cmd+Shift+Z").unwrap()),
+            ("[", "BracketLeft", cmd(), Chord::parse("Cmd+[").unwrap()),
         ] {
-            assert!(kept_from_browser(key, code, mods, false), "{key} ({code}) {mods:?}");
+            assert_eq!(browser_chord(key, code, mods, false), Some(want), "{key} ({code}) {mods:?}");
         }
     }
 
@@ -108,11 +128,11 @@ mod tests {
             ("V", "KeyV", cmd() | Modifiers::SHIFT),
             ("r", "KeyR", cmd()),
         ] {
-            assert!(!kept_from_browser(key, code, mods, false), "{key} ({code}) {mods:?}");
+            assert!(browser_chord(key, code, mods, false).is_none(), "{key} ({code}) {mods:?}");
         }
         // AltGr+Z types ż on a Polish layout, reported as Ctrl and Alt held on Windows.
         let ctrl_alt = Modifiers::CTRL | Modifiers::COMMAND | Modifiers::ALT;
-        assert!(!kept_from_browser("ż", "KeyZ", ctrl_alt, true));
-        assert!(!kept_from_browser("}", "Digit0", ctrl_alt, true));
+        assert!(browser_chord("ż", "KeyZ", ctrl_alt, true).is_none());
+        assert!(browser_chord("}", "Digit0", ctrl_alt, true).is_none());
     }
 }

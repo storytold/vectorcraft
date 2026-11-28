@@ -1,0 +1,437 @@
+use std::collections::HashSet;
+
+use super::geometry::region_pixels;
+use super::{Arc, NodeId, Rect, encode, proof};
+
+/// Largest raster an export may ask [`Renderer::render_region`] for, per side. The CPU rasteriser
+/// addresses at most `u16::MAX` pixels per side (and panics at that edge).
+pub const MAX_RASTER_SIDE: u32 = 32_768;
+
+/// Largest side of a render context the renderer makes. The CPU rasteriser keeps pixel positions
+/// in `u16` and overflows near `u16::MAX` (its tile and bucket arithmetic rounds past it), so
+/// contexts stay within the side raster exports are limited to.
+pub(crate) const MAX_CONTEXT_SIDE: u32 = MAX_RASTER_SIDE;
+
+/// Largest raster an export may ask for in total (16384², 1 GiB of RGBA pixels).
+pub const MAX_RASTER_PIXELS: u64 = 1 << 28;
+
+/// Pixel size of `region` rendered at `scale` (as [`Renderer::render_region`] rounds it), or an error
+/// when it exceeds [`MAX_RASTER_SIDE`] / [`MAX_RASTER_PIXELS`]. Raster exports check this first,
+/// because the renderer can only clamp (wrong picture) or fail (abort) at those sizes.
+pub fn raster_size(region: Rect, scale: f64) -> Result<(u32, u32), String> {
+    if !(scale.is_finite() && scale > 0.0) {
+        return Err(format!("invalid scale {scale}"));
+    }
+    let (w, h) = region_pixels(region, scale);
+    if !(w <= MAX_RASTER_SIDE && h <= MAX_RASTER_SIDE && u64::from(w) * u64::from(h) <= MAX_RASTER_PIXELS) {
+        return Err(format!(
+            "the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {} megapixels: lower the scale or resolution",
+            MAX_RASTER_PIXELS / 1_000_000
+        ));
+    }
+    Ok((w, h))
+}
+
+/// Rendering options.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RenderOptions {
+    /// Outline (wireframe) view: 1 px black paths, no paint.
+    pub outline: bool,
+    /// Pasteboard color behind everything (straight-alpha RGBA8); `None` = transparent.
+    pub background: Option<[u8; 4]>,
+    /// Draw artboards as white rectangles (screen view). Export sets this to false.
+    pub artboards: bool,
+    /// Objects not to draw (e.g. the layers and fold lines the Fold Preview's print leaves out).
+    pub hidden: HashSet<NodeId>,
+    /// Draw the layers as their Layer Options show them on screen: Preview off in outline, Dim
+    /// Images fading their images (a template layer's too), a template in Preview in Outline view.
+    pub dim_templates: bool,
+    /// Soft proof / separations preview (see [`proof`]).
+    pub proof: Option<proof::ProofSetup>,
+    /// Overprint Preview (see [`proof`] for what overprints).
+    pub overprint_preview: bool,
+    /// Trim View: clip the artwork to the artboards (nothing on the pasteboard is drawn).
+    pub trim: bool,
+    /// Leave template layers and guides out (exports and thumbnails: they're aids to drawing, not
+    /// artwork).
+    pub skip_templates: bool,
+    /// View › Hide Template: template layers left out of the screen view (guides stay).
+    pub hide_templates: bool,
+    /// View › Hide Guides: paths made into guides left out of the screen view. Exports use
+    /// `skip_templates`, which independently leaves both templates and guides out.
+    pub hide_guides: bool,
+    /// Pattern editing mode's tile edge and swatch bounds colour (Object → Pattern → Tile Edge
+    /// Color), RGB.
+    pub tile_edge: [u8; 3],
+    /// Colour and style of the paths made into guides (Preferences › Guides & Grid, as the ruler
+    /// guides the UI draws): RGB, and whether they are dotted.
+    pub guide: ([u8; 3], bool),
+    /// View Opacity Mask (Alt-click the mask thumbnail): instead of the artwork, show this object's
+    /// opacity mask alone as its coverage in greyscale (white = opaque, black = transparent).
+    pub mask_view: Option<NodeId>,
+    /// Screen view: highlight substituted fonts and glyphs, as Preferences › Type and Document
+    /// Setup ask.
+    pub highlight_substitutions: bool,
+    /// Screen view: Preferences › Type › Highlight Substituted Fonts. Pink behind text drawn in a
+    /// substitute for a missing font, in every document (on by default).
+    pub highlight_substituted_fonts: bool,
+    /// Screen view: Preferences › Type › Highlight Alternate Glyphs. Pink behind glyphs OpenType
+    /// features substituted (ligatures, contextual forms), not Document Setup's missing-glyph
+    /// highlights.
+    pub highlight_alternate_glyphs: bool,
+    /// Edge smoothing (raster export option).
+    pub anti_alias: AntiAlias,
+    /// Screen view: placed documents draw from cached bitmaps made in the background (see
+    /// [`placed_document`]); off, they draw exactly, read when needed.
+    pub progressive_placed: bool,
+    /// Screen view: Image Trace objects draw as their View asks (outlines, the source image…);
+    /// off, they draw their tracing result, as exports and printing do.
+    pub trace_views: bool,
+    /// Screen view with `trace_views` on: the Image Trace objects drawn with the Source Image view
+    /// for this render only, whatever View they have (the Image Trace panel's eye button, while it
+    /// is held down).
+    pub trace_source: Option<Arc<Vec<NodeId>>>,
+    /// Images are sampled smoothly when scaled or rotated; off, each pixel takes its nearest image
+    /// pixel (Pixel Preview with File Handling › Display Bitmaps as Anti-aliased Images off).
+    pub smooth_images: bool,
+    /// Screen view in isolation mode: the isolated group or layer. Everything around it draws
+    /// dimmed ([`ISOLATION_DIM`]).
+    pub isolated: Option<NodeId>,
+    /// Composite in floating point (exports): translucent art over opaque art comes out exactly
+    /// opaque, where 8-bit compositing leaves alpha 254 on some anti-aliased edges (#787). Off,
+    /// the faster 8-bit pipeline (the canvas).
+    pub precise: bool,
+    /// Exports: Art Optimized edges are supersampled ([`supersample_factor`]): the art is drawn
+    /// with hard edges at several times the size and averaged down, so shapes that meet edge to
+    /// edge leave no seam of the background between them (#983). Off, edges are smoothed shape by
+    /// shape (the canvas).
+    pub supersample: bool,
+    /// Screen views: an image drawn at half its size or smaller samples a copy shrunk by halves
+    /// (box-filtered from the full image, kept with the decoded images), so the full image needn't
+    /// stay in memory or be sampled. Off, images always sample their full pixels (exports).
+    pub image_mips: bool,
+    /// Screen views: an image whose pixels can't be decoded draws as a light gray box crossed
+    /// from corner to corner. Off, it draws nothing (exports, which report it instead).
+    pub mark_undecoded_images: bool,
+    /// Screen views that must render quickly (the canvas's low-resolution fill): an image object
+    /// draws from pixels the shared store already holds for it: the mip
+    /// [`RenderOptions::image_mips`] would draw if the store holds it, else the nearest finer one,
+    /// else the nearest coarser one. An image object the store holds no pixels of draws as a
+    /// light gray box, not crossed, unless the store notes it as undecodable: then it draws as it
+    /// does with this option off ([`RenderOptions::mark_undecoded_images`]). No image object is decoded and
+    /// no mip of one is made. Off, image objects are decoded as they are drawn.
+    pub kept_images_only: bool,
+    /// Screen views while an interaction is in progress (a drag, a dialog's preview): an object
+    /// whose content only moved since an earlier frame draws its cached drop shadows, outer glows
+    /// and filtered content from the rasters made then, at the nearest whole pixel, without
+    /// running the effects again (see `fx`). Off, no raster made that way, or made over one, is
+    /// drawn: the effects run again.
+    pub interacting: bool,
+    /// Screen views during a tool's drag on the canvas: the renderer draws filtered content within
+    /// `fx::DRAG_PIXEL_BUDGET` pixels, at a lower resolution where it would need more, unless it
+    /// can draw the content from a raster kept from an earlier frame. With [`Renderer::threads`]
+    /// above 0 it does the same for drop shadows, outer glows and inner glows. No raster made that
+    /// way is kept (see `fx`). Off, they render as in a still frame.
+    pub dragging: bool,
+    /// Appearance of Black's Rich Black: pure CMYK black (black ink alone at 100%) shows as RGB
+    /// black. Off, it shows through the CMYK profile, a dark grey, as other colours do.
+    pub rich_black: bool,
+    /// Dashed strokes draw as solid lines, without their dashes (the Navigator's Draw Dashed Lines
+    /// as Solid Lines). Off, they draw their dashes.
+    pub solid_dashes: bool,
+}
+
+/// The opacity of the art around an isolated group or layer.
+pub const ISOLATION_DIM: f32 = 0.5;
+
+/// How edges are rasterized (raster export option).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AntiAlias {
+    /// Hard edges: a pixel is painted when a path, text or image covers at least half of it.
+    /// Raster effects (blur, shadows, glows) and pattern tiles stay smooth.
+    None,
+    /// Smooth edges everywhere.
+    #[default]
+    Art,
+    /// Smooth edges with type snapped to the pixel grid (see `TextLayout::snap_to_pixels`):
+    /// crisper small text.
+    Type,
+}
+
+impl AntiAlias {
+    pub const ALL: [Self; 3] = [Self::None, Self::Art, Self::Type];
+
+    /// The id used in command params (`none`, `art`, `type`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Art => "art",
+            Self::Type => "type",
+        }
+    }
+
+    /// The mode an id names (any case).
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|a| a.id().eq_ignore_ascii_case(id))
+    }
+
+    /// The name shown in options dialogs.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Art => "Art Optimized",
+            Self::Type => "Type Optimized",
+        }
+    }
+
+    /// vello's aliasing threshold: paint a pixel only above half coverage when edges are hard.
+    pub(crate) fn threshold(self) -> Option<u8> {
+        (self == Self::None).then_some(127)
+    }
+}
+
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self {
+            outline: false,
+            background: None,
+            artboards: false,
+            hidden: HashSet::new(),
+            dim_templates: true,
+            proof: None,
+            overprint_preview: false,
+            trim: false,
+            skip_templates: false,
+            hide_templates: false,
+            hide_guides: false,
+            tile_edge: vectorcraft_doc::LAYER_COLORS[0].1,
+            guide: ([0x4a, 0xd8, 0xff], false),
+            mask_view: None,
+            highlight_substitutions: false,
+            highlight_substituted_fonts: true,
+            highlight_alternate_glyphs: false,
+            anti_alias: AntiAlias::Art,
+            progressive_placed: false,
+            trace_views: false,
+            trace_source: None,
+            smooth_images: true,
+            isolated: None,
+            precise: false,
+            supersample: false,
+            image_mips: false,
+            mark_undecoded_images: false,
+            kept_images_only: false,
+            interacting: false,
+            dragging: false,
+            rich_black: false,
+            solid_dashes: false,
+        }
+    }
+}
+
+/// The most pixels a supersampled render draws (the frame and its compositing buffers hold a few
+/// times this many bytes).
+const MAX_SUPERSAMPLED_PIXELS: u64 = 40_000_000;
+
+/// How many times wider and taller a `w`×`h` render is drawn when supersampled: 4, or less where
+/// that would pass [`MAX_SUPERSAMPLED_PIXELS`] or the renderer's 65,535-pixel side; `None` when not
+/// even twice fits (the edges are then smoothed shape by shape).
+pub fn supersample_factor(w: u32, h: u32) -> Option<u32> {
+    (2..=4u32).rev().find(|k| {
+        let (sw, sh) = (u64::from(w) * u64::from(*k), u64::from(h) * u64::from(*k));
+        sw <= u64::from(MAX_CONTEXT_SIDE) && sh <= u64::from(MAX_CONTEXT_SIDE) && sw * sh <= MAX_SUPERSAMPLED_PIXELS
+    })
+}
+
+/// Average each `k`×`k` block of `src` (`w`×`h` pixels of 4 premultiplied bytes) into one pixel.
+pub(crate) fn downsample(src: &[u8], w: usize, h: usize, k: usize) -> Vec<u8> {
+    let (ow, oh) = (w / k.max(1), h / k.max(1));
+    let n = (k * k).max(1) as u32;
+    let mut out = vec![0u8; ow * oh * 4];
+    for (o, px) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        let (ox, oy) = (o % ow.max(1), o / ow.max(1));
+        let mut acc = [0u32; 4];
+        for y in oy * k..(oy + 1) * k {
+            let row = y * w + ox * k;
+            for p in src.get(row * 4..(row + k) * 4).unwrap_or_default().as_chunks::<4>().0 {
+                for (a, v) in acc.iter_mut().zip(p) {
+                    *a += u32::from(*v);
+                }
+            }
+        }
+        for (d, a) in px.iter_mut().zip(acc) {
+            *d = ((a + n / 2) / n).min(255) as u8;
+        }
+    }
+    out
+}
+
+/// For each of `to` pixels spread over `from` (both above 0), the `from` pixels under it and the
+/// share of it each covers (summing to 1).
+fn area_spans(from: usize, to: usize) -> Vec<Vec<(usize, f64)>> {
+    let step = from as f64 / to as f64;
+    (0..to)
+        .map(|i| {
+            let (start, end) = ((i * from) as f64 / to as f64, ((i + 1) * from) as f64 / to as f64);
+            let first = start.floor() as usize;
+            let last = (end.ceil() as usize).max(first + 1).min(from);
+            (first..last)
+                .filter_map(|j| {
+                    let cover = end.min((j + 1) as f64) - start.max(j as f64);
+                    (cover > 0.0).then_some((j, cover / step))
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// A rendered image (premultiplied RGBA8, row-major).
+pub struct Rendered {
+    pub width: u32,
+    pub height: u32,
+    pub pixels: Vec<u8>,
+}
+
+impl Rendered {
+    /// Un-premultiplied RGBA8 copy.
+    pub fn to_straight(&self) -> Vec<u8> {
+        let mut out = self.pixels.clone();
+        for px in out.as_chunks_mut::<4>().0 {
+            let a = px[3] as u32;
+            if a != 0 && a != 255 {
+                for c in &mut px[..3] {
+                    *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+                }
+            }
+        }
+        out
+    }
+    /// This image at `width`×`height` pixels: each new pixel is the average of the area of this one
+    /// under it, the pixels at its edges weighted by how much of them it covers. Colors are averaged
+    /// premultiplied, so transparent pixels add no color. At the same size it is a copy. An error
+    /// when a side is 0 or the pixel buffer doesn't match the image size.
+    pub fn area_resized(&self, width: u32, height: u32) -> Result<Rendered, String> {
+        let (sw, sh) = (self.width as usize, self.height as usize);
+        if sw.checked_mul(sh).and_then(|n| n.checked_mul(4)) != Some(self.pixels.len()) {
+            return Err("the pixel buffer doesn't match the image size".into());
+        }
+        if sw == 0 || sh == 0 || width == 0 || height == 0 {
+            return Err(format!("a {sw} × {sh} image can't be resized to {width} × {height} pixels"));
+        }
+        if (width, height) == (self.width, self.height) {
+            return Ok(Rendered { width, height, pixels: self.pixels.clone() });
+        }
+        let (dw, dh) = (width as usize, height as usize);
+        let len = dw.checked_mul(dh).and_then(|n| n.checked_mul(4)).ok_or_else(|| format!("a {width} × {height} image is too large"))?;
+        let mut pixels = Vec::new();
+        pixels.try_reserve_exact(len).map_err(|e| format!("a {width} × {height} image: {e}"))?;
+        let (cols, rows) = (area_spans(sw, dw), area_spans(sh, dh));
+        let src: Vec<&[[u8; 4]]> = self.pixels.as_chunks::<4>().0.chunks_exact(sw).collect();
+        let mut acc = vec![[0f64; 4]; dw];
+        for row in &rows {
+            acc.fill([0.0; 4]);
+            for &(y, wy) in row {
+                let Some(line) = src.get(y) else { continue };
+                for (a, col) in acc.iter_mut().zip(&cols) {
+                    for &(x, wx) in col {
+                        if let Some(px) = line.get(x) {
+                            let w = wy * wx;
+                            for (s, v) in a.iter_mut().zip(px) {
+                                *s += w * f64::from(*v);
+                            }
+                        }
+                    }
+                }
+            }
+            for a in &acc {
+                pixels.extend(a.map(|v| v.round().clamp(0.0, 255.0) as u8));
+            }
+        }
+        Ok(Rendered { width, height, pixels })
+    }
+    /// Encode as PNG without metadata (thumbnails, screenshots, embedded rasters; exports use
+    /// [`encode`]).
+    pub fn to_png(&self) -> Result<Vec<u8>, String> {
+        let img = craft_image_codecs::Image::from_raw(
+            self.width,
+            self.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            self.to_straight(),
+        )
+        .map_err(|e| format!("PNG encoding failed: {e}"))?;
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map_err(|e| format!("PNG encoding failed: {e}"))
+    }
+    /// Each pixel's grey level and alpha: the Rec. 709 luma of its straight colour, with `bilevel`
+    /// black below 128 and white from there up. A clear pixel is white: no ink where a fill
+    /// colour colorizes the image.
+    fn gray_alpha(&self, bilevel: bool) -> Vec<u8> {
+        let straight = self.to_straight();
+        let px = straight.as_chunks::<4>().0;
+        px.iter()
+            .flat_map(|&[r, g, b, a]| {
+                let y = (0.2126 * f32::from(r) + 0.7152 * f32::from(g) + 0.0722 * f32::from(b)).round().clamp(0.0, 255.0) as u8;
+                let y = if a == 0 || (bilevel && y >= 128) {
+                    255
+                } else if bilevel {
+                    0
+                } else {
+                    y
+                };
+                [y, a]
+            })
+            .collect()
+    }
+    /// Encode as a greyscale PNG without metadata (Object › Rasterize's Grayscale colour model):
+    /// grey levels ([`Self::gray_alpha`]), with alpha only when some pixel isn't opaque.
+    pub fn to_gray_png(&self) -> Result<Vec<u8>, String> {
+        encode::png::encode_gray(&self.gray_alpha(false), self.width, self.height, &encode::png::PngOptions::default())
+    }
+    /// Encode in black and white (Object › Rasterize's Bitmap colour model): a 1-bit TIFF at `ppi`
+    /// when every pixel is opaque, else a grey PNG with alpha of only black and white (one-bit grey
+    /// with alpha is no format readers take). Returns the media type and the file.
+    pub fn to_bilevel(&self, ppi: f64) -> Result<(&'static str, Vec<u8>), String> {
+        let gray_alpha = self.gray_alpha(true);
+        let px = gray_alpha.as_chunks::<2>().0;
+        if !px.iter().all(|p| p[1] == 255) {
+            return Ok(("image/png", encode::png::encode_gray(&gray_alpha, self.width, self.height, &encode::png::PngOptions::default())?));
+        }
+        // WhiteIsZero: a set bit is black. Each row starts on a byte.
+        let mut bits = Vec::with_capacity(px.len() / 8 + self.height as usize);
+        for row in px.chunks(self.width.max(1) as usize) {
+            bits.extend(row.chunks(8).map(|byte| byte.iter().enumerate().fold(0u8, |b, (i, p)| b | u8::from(p[0] == 0) << (7 - i))));
+        }
+        let image = encode::tiff::Image {
+            width: self.width,
+            height: self.height,
+            data: &bits,
+            photometric: encode::tiff::Photometric::WhiteIsZero,
+            samples: 1,
+            bits: 1,
+            alpha: false,
+        };
+        let layout =
+            encode::tiff::Layout { byte_order: encode::tiff::ByteOrder::Little, compression: encode::tiff::Compression::PackBits, ppi, icc: None };
+        Ok(("image/tiff", encode::tiff::write(&image, &layout)?))
+    }
+    /// Encode as JPEG (flattened on white) at `quality` 1..=100.
+    pub fn to_jpeg(&self, quality: u8) -> Result<Vec<u8>, String> {
+        encode::jpeg(self, quality, None)
+    }
+    /// Encode as lossless WebP.
+    pub fn to_webp(&self) -> Result<Vec<u8>, String> {
+        encode::webp(self, None)
+    }
+    /// Straight-alpha RGBA at (x, y).
+    pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {
+        let i = ((y * self.width + x) * 4) as usize;
+        let p = &self.pixels[i..i + 4];
+        let a = p[3] as u32;
+        if a == 0 {
+            return [0, 0, 0, 0];
+        }
+        let un = |c: u8| ((c as u32 * 255 + a / 2) / a).min(255) as u8;
+        [un(p[0]), un(p[1]), un(p[2]), p[3]]
+    }
+}

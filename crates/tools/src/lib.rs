@@ -7,11 +7,15 @@
 //! by the control channel and MCP, and keeps tools testable without a UI.
 #![forbid(unsafe_code)]
 
+pub mod addons;
 pub mod bbox;
+pub mod blendwidget;
 pub mod builder;
 pub mod catalog;
+pub mod circle;
 pub mod corners;
 pub mod cropimage;
+pub mod curvature_circle;
 pub mod cut;
 pub mod dimension;
 pub mod direct;
@@ -23,23 +27,30 @@ pub mod intertwine;
 pub mod meshblend;
 pub mod meshedit;
 pub mod mirror;
+pub mod nineslice;
 pub mod objects_on_path;
+pub mod option_check;
 pub mod params;
 pub mod pathtype;
 pub mod pen;
 pub mod pie;
 pub mod place;
 pub mod printtiling;
+pub mod quickpen;
 pub mod repeat_grid;
+pub mod repeat_radial;
 pub mod rulerguide;
 pub mod select;
 pub mod settings;
 pub mod shape;
 pub mod shaperwidget;
+pub mod sidewidget;
 pub mod slice;
 pub mod symbolism;
 pub mod text;
+pub mod three_point_arc;
 pub mod touchtype;
+pub mod trace_split;
 pub mod typewidget;
 pub mod xform;
 
@@ -51,407 +62,32 @@ use vectorcraft_geom::{BezPath, Point, Rect, Vec2};
 
 pub use catalog::{TOOL_GROUPS, ToolInfo, tool_info};
 
-/// Modifier keys.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Mods {
-    #[serde(default)]
-    pub shift: bool,
-    /// Option on macOS.
-    #[serde(default)]
-    pub alt: bool,
-    /// Command on macOS, Ctrl elsewhere.
-    #[serde(default)]
-    pub cmd: bool,
-    #[serde(default)]
-    pub ctrl: bool,
-    #[serde(default)]
-    pub space: bool,
-}
+mod context;
+mod cursor;
+mod input;
+mod readout;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PointerKind {
-    /// Button pressed.
-    Down,
-    /// Moved with the button held.
-    Drag,
-    /// Button released.
-    Up,
-    /// Moved with no button (hover).
-    Move,
-    DoubleClick,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct PointerEvent {
-    pub kind: PointerKind,
-    /// Document coordinates.
-    pub pos: Point,
-    #[serde(default)]
-    pub mods: Mods,
-    #[serde(default = "one")]
-    pub pressure: f32,
-}
-
-fn one() -> f32 {
-    1.0
-}
-
-impl PointerEvent {
-    pub fn new(kind: PointerKind, x: f64, y: f64) -> Self {
-        Self { kind, pos: Point::new(x, y), mods: Mods::default(), pressure: 1.0 }
-    }
-    pub fn with_mods(mut self, m: Mods) -> Self {
-        self.mods = m;
-        self
-    }
-    /// The pen `pressure` of a pointer event given as JSON (control channel, MCP): 0..1, default 1.
-    pub fn json_pressure(e: &Value) -> f32 {
-        e.get("pressure").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(1.0, |f| f.clamp(0.0, 1.0) as f32)
-    }
-    /// How long the pointer then holds still, in seconds, from a JSON pointer event's `holdMs`
-    /// (0..60000; default 0): the time [`Tool::tick`] gets.
-    pub fn json_hold(e: &Value) -> f64 {
-        e.get("holdMs").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(0.0, |ms| ms.clamp(0.0, 60_000.0) / 1000.0)
-    }
-}
-
-/// Keys tools care about.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ToolKey {
-    Enter,
-    Escape,
-    Backspace,
-    Delete,
-    Up,
-    Down,
-    Left,
-    Right,
-    /// Illustrator: ↑/↓ while drawing a polygon/star change sides/points; `[`/`]` change sizes.
-    BracketLeft,
-    BracketRight,
-    Tab,
-    Home,
-    End,
-    /// A digit key 0–9 (5 while dragging with the Perspective Selection tool moves perpendicular
-    /// to the plane).
-    Digit(u8),
-    /// A letter key a–z, lowercase (E while dragging a Selection or Group Selection marquee makes it
-    /// select only the objects entirely inside it, and E again switches it back).
-    Letter(char),
-}
-
-/// What a tool asks the engine to do.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Action {
-    /// Start an interaction (snapshot the document). The label becomes the undo name.
-    Begin(String),
-    /// Replace the current preview with this command, applied to the snapshot.
-    Preview(String, Value),
-    /// Finish the interaction: keep the last preview as one undo step.
-    Commit,
-    /// Abort the interaction: restore the snapshot.
-    Cancel,
-    /// Execute a command immediately (its own undo step, if it edits).
-    Exec(String, Value),
-    /// Ask the UI to open a dialog (e.g. click with the Rectangle tool → size dialog).
-    Dialog(String, Value),
-    /// Switch to another tool (e.g. after placing a text frame).
-    SwitchTool(String),
-    /// Call the tool's `notify` after the preceding actions ran (e.g. to pick up a created object).
-    Notify(String),
-}
-
-/// Paint defaults for new art (the fill/stroke proxy) and the rest of the new-art template.
-#[derive(Clone, Debug, PartialEq)]
-pub struct PaintDefaults {
-    pub fill: Paint,
-    pub stroke: Paint,
-    pub stroke_width: f64,
-    /// The appearance new art takes (stroke options, more fills and strokes, effects), its top
-    /// fill and stroke repainted with `fill`, `stroke` and `stroke_width`; `None`: one plain fill
-    /// and stroke. Its placed gradients are relative to the unit box.
-    pub appearance: Option<vectorcraft_doc::Appearance>,
-    /// New art's opacity and blend mode.
-    pub opacity: f32,
-    pub blend: vectorcraft_color::BlendMode,
-    /// The graphic style the template came from (by name): new art is linked to it.
-    pub style: Option<String>,
-    /// The template is the last selection's appearance (New Art Has Basic Appearance off): with
-    /// the option on again, new art takes only its basic fill and stroke.
-    pub inherited: bool,
-}
-
-impl Default for PaintDefaults {
-    /// White fill, 1 pt black stroke, nothing else.
-    fn default() -> Self {
-        Self {
-            fill: Paint::solid(vectorcraft_color::Color::WHITE),
-            stroke: Paint::solid(vectorcraft_color::Color::BLACK),
-            stroke_width: 1.0,
-            appearance: None,
-            opacity: 1.0,
-            blend: Default::default(),
-            style: None,
-            inherited: false,
-        }
-    }
-}
-
-/// The document window on screen, in document coordinates: widgets that stay put on screen (the
-/// Plane Switching Widget) are placed with it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ScreenFrame {
-    /// The window's top-left corner.
-    pub origin: Point,
-    /// One screen pixel to the right and one down.
-    pub right: Vec2,
-    pub down: Vec2,
-    /// The window's size in screen pixels.
-    pub size: (f64, f64),
-}
-
-impl ScreenFrame {
-    /// The document point `x`, `y` screen pixels from the window's top-left corner.
-    pub fn at(&self, x: f64, y: f64) -> Point {
-        self.origin + self.right * x + self.down * y
-    }
-    /// Where the document point `p` is, in screen pixels from the window's top-left corner (the
-    /// inverse of [`Self::at`]); none for a degenerate frame.
-    pub fn to_screen(&self, p: Point) -> Option<(f64, f64)> {
-        let (r, d, v) = (self.right, self.down, p - self.origin);
-        let det = r.x * d.y - d.x * r.y;
-        (det.is_finite() && det.abs() > 1e-12).then(|| ((v.x * d.y - d.x * v.y) / det, (r.x * v.y - v.x * r.y) / det))
-    }
-}
-
-/// Read-only context a tool sees.
-pub struct ToolContext<'a> {
-    pub doc: &'a Document,
-    /// The rulers' zero point with the view's active artboard (see
-    /// [`Document::ruler_origin_for`]): where ruler ticks and measured positions count from.
-    pub ruler_origin: Point,
-    /// Which open document `doc` is (its process-unique id) and its revision, which moves with
-    /// every change of the document or the selection: what a tool keeps between pointer events
-    /// for the document as it is (the snap targets of hovering) is keyed on it.
-    pub revision: (u64, u64),
-    pub selection: &'a Selection,
-    /// Screen pixels per document point.
-    pub zoom: f64,
-    pub isolation: Option<NodeId>,
-    pub paint: &'a PaintDefaults,
-    pub outline: bool,
-    pub smart_guides: bool,
-    /// View → Show Guides with Lock Guides off: the selection tools pick and drag ruler guides.
-    pub guides: bool,
-    pub snap_to_grid: bool,
-    /// Bounding box shown (View → Show/Hide Bounding Box).
-    pub show_bbox: bool,
-    /// View → Snap to Pixel.
-    pub snap_to_pixel: bool,
-    /// View → Snap to Point: with Smart Guides off, dragged selections, drawn points and picked
-    /// points (a transform's reference point) land on anchors and ruler guides within
-    /// [`Self::snap_tolerance`].
-    pub snap_to_point: bool,
-    /// View → Snapping → Snap to Tangent: with Smart Guides on, a line drawn
-    /// from an anchor lands where it touches a nearby curve.
-    pub snap_tangent: bool,
-    /// View → Snapping → Snap to Perpendicular: likewise where it meets a nearby segment square.
-    pub snap_perpendicular: bool,
-    /// View → Snap to Glyph: drawn points snap to live-text baselines and glyph bounds (with Smart Guides).
-    pub snap_to_glyph: bool,
-    /// View → Show Corner Widget: paths show draggable Live Corners widgets in their corners.
-    pub corner_widgets: bool,
-    /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
-    pub fill_active: bool,
-    /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator.
-    pub gradient_stop: Option<usize>,
-    /// The Appearance panel's active fill/stroke (paint-order index into the first selected
-    /// object's stack); paint tools show and edit that item.
-    pub appearance_item: Option<usize>,
-    /// General → Constrain Angle (degrees): Shift constrains drags to 45° steps from it.
-    pub constrain_angle: f64,
-    /// General → Keyboard Increment: arrow-key nudges in document units (Shift multiplies by 10).
-    pub keyboard_increment: f64,
-    /// The selected freeform gradient point (`paint.freeform.selectPoint`), marked on the
-    /// freeform annotator.
-    pub freeform_point: Option<usize>,
-    /// Eyedropper Options' raster sample size: the pixels square averaged when the Eyedropper
-    /// samples an image (1, 3 or 5).
-    pub raster_sample: u32,
-    /// General → Use Preview Bounds: the bounding box measures visual bounds (strokes included).
-    pub preview_bounds: bool,
-    /// The session's memo of the selection tools' measurements for the document as it is
-    /// ([`select::PreviewMemo`]); without one they measure on every call.
-    pub preview_memo: Option<&'a select::PreviewMemo>,
-    /// Units ▸ General: the unit measurement labels show lengths in.
-    pub unit: Unit,
-    /// Units ▸ Stroke: the unit measurement labels show stroke widths in.
-    pub stroke_unit: Unit,
-    /// Clipboard Handling → When pasting text: Keep Plain Text. Text pasted while typing takes
-    /// the style at the caret, even the text the Type tool copied with its formatting.
-    pub paste_plain_text: bool,
-    /// View → Hide Slices: the Slice Selection tool can't pick hidden slices.
-    pub slices_hidden: bool,
-    /// View → Lock Slices: the Slice Selection tool leaves locked slices alone.
-    pub slices_locked: bool,
-    /// General → Disable Auto Add/Delete is off: the Pen adds an anchor on a selected path's
-    /// segment and deletes one of its anchors.
-    pub auto_add_delete: bool,
-    /// Selection & Anchor Display → Tolerance: how near (screen pixels) a click must be to a path
-    /// or an anchor to pick it.
-    pub selection_tolerance: f64,
-    /// Selection & Anchor Display → Size (1–7, default 3): how big anchors and handles are drawn.
-    pub anchor_size: u32,
-    /// Selection & Anchor Display → Object Selection by Path Only: a click inside a filled path
-    /// doesn't pick it, only one on its path does.
-    pub path_only: bool,
-    /// Type → Type Object Selection by Path Only: type is picked on its type path only (point
-    /// type's baseline, area type's frame, type on a path's path), not anywhere in its bounds.
-    pub type_path_only: bool,
-    /// General → Double Click To Isolate: a double-click on a group with the Selection tool
-    /// isolates it.
-    pub double_click_isolate: bool,
-    /// Selection & Anchor Display → Command Click to Select Objects Behind: Cmd/Ctrl-click with the
-    /// Selection tool selects the object under the selected one, the next click the one under
-    /// that.
-    pub select_behind: bool,
-    /// Selection & Anchor Display → Highlight anchors on mouse over: Direct Selection marks the
-    /// anchor under the pointer.
-    pub highlight_anchors: bool,
-    /// Selection & Anchor Display → Snap to Point (screen pixels): how near an anchor or a ruler
-    /// guide pulls the pointer while View → Snap to Point is on.
-    pub snap_tolerance: f64,
-    /// Selection & Anchor Display → Show handles when multiple anchors are selected: off, Direct
-    /// Selection shows and drags handles only while a single anchor is selected.
-    pub handles_multiple: bool,
-    /// Selection & Anchor Display → Hide Corner Widget for angles greater than (degrees): corners
-    /// wider than this show no Live Corners widget.
-    pub corner_widget_max_angle: f64,
-    /// Selection & Anchor Display → Move Locked and Hidden Artwork with Artboard.
-    pub move_locked_with_artboard: bool,
-    /// Selection & Anchor Display → Enable Rubber Band for Pen Tool: the Pen previews the next
-    /// segment to the pointer.
-    pub pen_rubber_band: bool,
-    /// Selection & Anchor Display → Enable Rubber Band for Curvature Tool.
-    pub curvature_rubber_band: bool,
-    /// Type → Fill New Type Objects With Placeholder Text: type the Type tools place starts with
-    /// placeholder text, selected.
-    pub placeholder_text: bool,
-    /// Smart Guides → Color: the smart guides' lines and labels (RGB).
-    pub smart_guide_color: [u8; 3],
-    /// Smart Guides → Alignment Guides: the lines along the edges and centres the art lines up
-    /// with show. Off, the art still snaps into line.
-    pub alignment_guides: bool,
-    /// Smart Guides → Anchor/Path Labels: the "anchor", "center", "path"… labels show.
-    pub anchor_path_labels: bool,
-    /// Smart Guides → Measurement Labels: the size and offset readouts while drawing and moving.
-    pub measurement_labels: bool,
-    /// Smart Guides → Transform Tools: the readouts while scaling, rotating and shearing.
-    pub transform_tools_guides: bool,
-    /// Smart Guides → Spacing Guides: a moved selection snaps to spacing equal to the gap between
-    /// two other objects in its row or column, or evenly between its two neighbours, and the
-    /// equal gaps show.
-    pub spacing_guides: bool,
-    /// Smart Guides → Invoke Distance Guides: with the Selection tool, Alt/Option held over another
-    /// object shows how far the selection is from it, and over an empty part of an artboard how
-    /// far it is from the artboard's edges ([`guides::distance_guides`]).
-    pub distance_guides: bool,
-    /// Smart Guides → Snapping Tolerance (screen pixels): how near a smart guide target pulls the
-    /// pointer, a dragged edge or a drawn point.
-    pub snapping_tolerance: f64,
-    /// Smart Guides → Construction Guides: the angles (degrees, counter-clockwise from the x axis
-    /// as seen on the page) of the lines through the point a drawn point leaves from, onto which a
-    /// point near one lands ([`guides::construction_angles`]); none with the option off.
-    pub construction_angles: &'static [f64],
-    /// The document window (none headless): screen-fixed widgets sit in it.
-    pub screen: Option<ScreenFrame>,
-    /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
-    pub plane_widget: Option<distort::perspective::widget::WidgetCorner>,
-}
-
-impl ToolContext<'_> {
-    /// Tolerance in document units for `px` screen pixels.
-    pub fn tol(&self, px: f64) -> f64 {
-        px / self.zoom.max(1e-9)
-    }
-    /// How far the view is turned (Rotate View), in degrees clockwise on screen; 0 without a
-    /// window.
-    pub fn view_angle(&self) -> f64 {
-        // `right` is one screen pixel to the right, in document units.
-        self.screen.map(|s| (-s.right.y).atan2(s.right.x).to_degrees()).filter(|a| a.is_finite()).unwrap_or(0.0)
-    }
-    /// How near (document units) a smart guide target pulls: Smart Guides → Snapping Tolerance.
-    pub fn snap_tol(&self) -> f64 {
-        self.tol(self.snapping_tolerance)
-    }
-    /// A length as measurement labels show it, in the General unit (`12.50 mm`).
-    pub fn len(&self, v: f64) -> String {
-        self.unit.readout(v)
-    }
-    /// A size label: `W: …` over `H: …`.
-    pub fn size_label(&self, w: f64, h: f64) -> String {
-        format!("W: {}\nH: {}", self.len(w), self.len(h))
-    }
-    /// Star tool drag: outer (R1) and inner (R2) radii from the centre to the pointer.
-    pub fn star_radii_label(&self, outer: f64, inner: f64) -> String {
-        format!("R1: {}\nR2: {}", self.len(outer), self.len(inner))
-    }
-    /// A move label: `dX: …` over `dY: …`.
-    pub fn offset_label(&self, dx: f64, dy: f64) -> String {
-        format!("dX: {}\ndY: {}", self.len(dx), self.len(dy))
-    }
-    /// A segment label while drawing: distance, angle and offsets between two points.
-    pub fn segment_measure_label(&self, a: Point, b: Point) -> String {
-        let (dist, ang, dx, dy) = xform::measure(a, b);
-        format!("D: {}\nAngle: {ang:.1}°\n{}", self.len(dist), self.offset_label(dx, dy))
-    }
-    /// What Snap to Grid snaps to: the grid's subdivisions (or its lines without any).
-    pub fn grid_step(&self) -> f64 {
-        self.doc.grid.spacing / self.doc.grid.subdivisions.max(1) as f64
-    }
-    /// The selection tolerance in document units ([`Self::selection_tolerance`]).
-    pub fn pick_tol(&self) -> f64 {
-        self.tol(self.selection_tolerance)
-    }
-    /// How near (document units) a press picks an anchor or a direction handle's end: the
-    /// selection tolerance, but at least 2 px past the drawn point, so a point is easy to catch
-    /// and wins over the segments through it, which are tested after it (#593).
-    pub fn point_tol(&self) -> f64 {
-        // Anchors are drawn 5 px wide at the default Size 3, a pixel more or less per step.
-        let half = (5.0 + f64::from(self.anchor_size.clamp(1, 7)) - 3.0) / 2.0;
-        self.tol(self.selection_tolerance.max(half + 2.0))
-    }
-    pub fn hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
-        vectorcraft_doc::hit::HitOptions {
-            tol: self.pick_tol(),
-            outline: self.outline,
-            path_only: self.path_only,
-            type_path_only: self.type_path_only,
-            scope: self.isolation,
-            skip_guides: !self.guides,
-            clip_outlines: false,
-        }
-    }
-
-    /// [`Self::hit_options`] for the selection tools (Selection, Direct Selection, Group
-    /// Selection): a clipping path is also hit on its outline ([`HitOptions::clip_outlines`]).
-    /// Only for what a press or a hover selects: a double-click, loaded text or a guide's release
-    /// acts on what is drawn and takes [`Self::hit_options`].
-    ///
-    /// [`HitOptions::clip_outlines`]: vectorcraft_doc::hit::HitOptions::clip_outlines
-    pub fn selection_hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
-        vectorcraft_doc::hit::HitOptions { clip_outlines: true, ..self.hit_options() }
-    }
-}
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext, ordinary_isolation};
+pub use cursor::Cursor;
+pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
+pub use readout::Readout;
 
 /// Visual feedback drawn by the UI in screen space (coordinates here are document space).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Overlay {
     /// Marquee / rubber band rectangle.
     Marquee(Rect),
+    /// Selection-tool marquee, with its effective rule and pointer position for feedback.
+    SelectionMarquee { rect: Rect, enclosed: bool, pointer: Point },
     /// A path preview (e.g. pen rubber band) in a colour (RGB).
     Path { path: BezPath, color: [u8; 3], width: f32, dashed: bool },
+    /// A path preview that later calls return again, as the same shared `path`, for as long as it
+    /// does not change (the settled outline of a long Blob Brush or Eraser drag, the pieces of a long
+    /// drag's line). The host can keep what it built to draw it while `path` is the same allocation.
+    /// With `dash`, it is dashed as a dashed [`Overlay::Path`] is, from `dash` document units along
+    /// the dash pattern: the pieces of one line, each starting where the one before it ends, dash
+    /// as the whole line does.
+    SharedPath { path: std::sync::Arc<BezPath>, color: [u8; 3], width: f32, dash: Option<f64> },
     /// A line segment (smart guide, handle line).
     Line { a: Point, b: Point, color: [u8; 3], dashed: bool },
     /// An anchor square: filled = selected.
@@ -473,310 +109,10 @@ pub enum Overlay {
     Swatch { p: Point, color: [u8; 4], selected: bool },
     /// A hairline in a translucent colour (perspective gridlines), RGBA.
     GridLine { a: Point, b: Point, color: [u8; 4] },
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Cursor {
-    #[default]
-    Arrow,
-    ArrowHollow,
-    /// Direct Selection over an anchor of a path that isn't selected: the white arrow with a
-    /// hollow square.
-    DirectAnchor,
-    /// Direct Selection over an anchor of a selected path: the white arrow with a filled square.
-    DirectAnchorSelected,
-    /// Over a segment a drag reshapes (Direct Selection, the Anchor Point tool, the Pen with Alt):
-    /// an arrowhead with a small curve between two anchor marks.
-    ReshapeSegment,
-    /// The Group Selection tool, and Direct Selection with Alt held: the white arrow with a plus.
-    GroupSelection,
-    /// Alt-dragging a copy with the Selection or Direct Selection tool: a double arrowhead.
-    SelectionCopy,
-    Move,
-    Crosshair,
-    ResizeH,
-    ResizeV,
-    ResizeNwSe,
-    ResizeNeSw,
-    /// Free Transform with Cmd/Ctrl over the top or bottom side, where a drag shears the object
-    /// sideways: two arrows side by side, pointing opposite ways along that side.
-    ShearH,
-    /// Free Transform with Cmd/Ctrl over the left or right side, where a drag shears the object up
-    /// or down: the ShearH arrows turned upright.
-    ShearV,
-    Rotate,
-    /// The rotate cursor beside a bounding box, bowed toward the pointer's side of the box: off
-    /// its centre in direction `0..8` (0 straight up, then clockwise in 45° steps). Its arc wraps
-    /// the corner it is at, so at the top right it opens toward the bottom left. Make it with
-    /// [`Cursor::rotate_about`].
-    RotateToward(u8),
-    /// Over a Live Corners widget (drag to round the corners).
-    CornerRadius,
-    /// The Pen with the new-path asterisk: a click starts a new path.
-    Pen,
-    /// The Pen without a badge, while a path is being drawn: a click adds its next anchor.
-    PenDrawing,
-    PenAdd,
-    PenDelete,
-    PenClose,
-    PenContinue,
-    /// The Anchor Point tool, and the Pen with Alt held (which lends its gestures): a caret, its tip
-    /// on the anchor it converts.
-    AnchorPoint,
-    /// The Curvature tool: the pen nib with a curve badge.
-    Curvature,
-    /// While drawing, over an end of another open path (a click joins the two).
-    PenJoin,
-    /// Over the last anchor of the path being drawn: a click retracts its outgoing handle.
-    PenConvert,
-    Text,
-    Hand,
-    HandGrab,
-    ZoomIn,
-    ZoomOut,
-    Eyedropper,
-    NotAllowed,
-    /// A long operation (opening a file, a background save or export): the OS wait cursor.
-    Busy,
-    /// Over the gradient annotator's bar: a click adds a stop.
-    AddStop,
-    /// A gradient stop dragged off the bar: releasing deletes it.
-    RemoveStop,
-    /// The Slice tool: a crosshair with a blade.
-    Slice,
-    /// The Slice Selection tool: the arrow with a slice badge.
-    SliceSelect,
-    /// The Width tool away from strokes.
-    Width,
-    /// The Width tool over a stroke: a drag adds a width point.
-    WidthAdd,
-    /// The Width tool over a width point or a handle end: a drag moves or widens it.
-    WidthPoint,
-    /// The Blend tool away from art: a crosshair with a hollow square.
-    Blend,
-    /// The Blend tool over an object it can blend: a crosshair with a filled square.
-    BlendObject,
-    /// The Blend tool over an anchor point (the blend starts there): a crosshair with a target.
-    BlendAnchor,
-    /// The Objects on Path tool over a path the selected objects can attach to (a click attaches
-    /// them).
-    ObjectsOnPath,
-    /// Over a bracket of selected type on a path (a drag moves it): the arrow with a bracket.
-    PathBracket,
-    /// Over the type widget of selected type (a double-click converts point type to area type and
-    /// back): the arrow with a type badge.
-    TypeWidget,
-    /// The Selection tool loaded with the text of area type or type on a path by a click on its out
-    /// or in port (a click threads it into a path or a new frame, a drag draws the new frame).
-    LoadedText,
-    /// The Shape Builder: a crosshair with a plus (merge mode)...
-    ShapeBuilder,
-    /// ...or, with Alt held, a minus (erase mode).
-    ShapeBuilderErase,
-    /// The Lasso tool.
-    Lasso,
-    /// The Magic Wand tool.
-    MagicWand,
-    /// The Pencil tool.
-    Pencil,
-    /// The Pencil tool before a press that draws a new freehand path: the pointer is not over a
-    /// selected path that the press would continue or redraw. A crosshair with a small star.
-    PencilNew,
-    /// The Pencil tool with Alt pressed after the drag starts and Alt key toggles to Smooth Tool off:
-    /// releasing the mouse button with Alt still held closes the path. A drag started with Shift or
-    /// Alt held draws an open straight line instead. Also while a freehand stroke is drawn back near
-    /// its start, where releasing the mouse button closes the path. A crosshair with a ring.
-    PencilClose,
-    /// The Pencil tool before a press that draws a straight line (Shift or Alt held). A crosshair with a
-    /// short straight line.
-    PencilStraight,
-    /// The Pencil tool before a press that draws a straight line (Shift or Alt held), over an end of
-    /// a selected open path: the line continues the path from that end. A crosshair with a short
-    /// straight line leaving a square end point.
-    PencilContinue,
-    /// The Paintbrush tool.
-    Paintbrush,
-    /// The Paintbrush tool with Alt held: releasing the mouse button with Alt still held closes
-    /// the path. Also while a stroke is drawn back near its start, where releasing the mouse button
-    /// closes the path. A crosshair with a ring.
-    PaintbrushClose,
-    /// The Blob Brush tool.
-    BlobBrush,
-    /// The Eraser tool.
-    Eraser,
-    /// The Smooth tool.
-    Smooth,
-    /// The Path Eraser tool.
-    PathEraser,
-    /// The Join tool.
-    Join,
-    /// The Knife tool.
-    Knife,
-    /// The Shaper tool.
-    Shaper,
-    /// The Live Paint Bucket.
-    LivePaintBucket,
-    /// The Measure tool.
-    Measure,
-    /// The Print Tiling tool.
-    PrintTiling,
-    /// The Symbol Sprayer tool.
-    SymbolSprayer,
-    /// The Symbol Shifter tool.
-    SymbolShifter,
-    /// The Symbol Scruncher tool.
-    SymbolScruncher,
-    /// The Symbol Sizer tool.
-    SymbolSizer,
-    /// The Symbol Spinner tool.
-    SymbolSpinner,
-    /// The Symbol Stainer tool.
-    SymbolStainer,
-    /// The Symbol Screener tool.
-    SymbolScreener,
-    /// The Symbol Styler tool.
-    SymbolStyler,
-    /// The vertical type tools: a turned I-beam.
-    TypeVertical,
-    /// The Scissors over a path segment (a click splits the path there)...
-    Scissors,
-    /// ...or away from every segment (a click does nothing).
-    ScissorsNotAllowed,
-    /// The Mesh tool off a mesh point: a click adds one.
-    MeshAdd,
-    /// Puppet Warp over the selection's mesh where a pin can go: a click adds one.
-    PuppetPin,
-}
-
-impl Cursor {
-    /// The rotate cursor for the pointer at `p` turning art about `center`: [`Cursor::RotateToward`]
-    /// the pointer's side of it, or the plain [`Cursor::Rotate`] on the centre itself.
-    pub fn rotate_about(center: Point, p: Point) -> Self {
-        let d = p - center;
-        if !(d.x.is_finite() && d.y.is_finite()) || d.hypot() < 1e-9 {
-            return Cursor::Rotate;
-        }
-        // y points down the page: atan2(x, -y) is 0 straight up and grows clockwise.
-        let octant = (d.x.atan2(-d.y) / std::f64::consts::FRAC_PI_4).round() as i64;
-        Cursor::RotateToward(octant.rem_euclid(8) as u8)
-    }
-
-    /// [`Cursor::rotate_about`] in a view turned `view` degrees clockwise
-    /// ([`ToolContext::view_angle`]): the pointer's side of `center` as it shows on screen. The
-    /// pointer's direction turns with the view before it rounds to the nearest 45°.
-    pub fn rotate_about_in_view(center: Point, p: Point, view: f64) -> Self {
-        let (sn, cs) = if view.is_finite() { view.to_radians().sin_cos() } else { (0.0, 1.0) };
-        let d = p - center;
-        // y points down the page, so this turns `d` clockwise on the page.
-        Cursor::rotate_about(center, center + Vec2::new(d.x * cs - d.y * sn, d.x * sn + d.y * cs))
-    }
-
-    /// The cursor as it shows in a view turned `deg` degrees clockwise (Rotate View): the resize
-    /// cursors and [`Cursor::RotateToward`] turn with the view to the nearest 45°, and every other
-    /// cursor stays as it is.
-    pub fn turned(self, deg: f64) -> Self {
-        const RESIZE: [Cursor; 4] = [Cursor::ResizeH, Cursor::ResizeNeSw, Cursor::ResizeV, Cursor::ResizeNwSe];
-        let k = if deg.is_finite() { (deg / 45.0).round() as i64 } else { 0 };
-        match self {
-            Cursor::RotateToward(o) => Cursor::RotateToward((i64::from(o) + k).rem_euclid(8) as u8),
-            c => match RESIZE.iter().position(|r| *r == c) {
-                Some(i) => RESIZE.get((i as i64 - k).rem_euclid(4) as usize).copied().unwrap_or(c),
-                None => c,
-            },
-        }
-    }
-
-    /// General › Use Precise Cursors: the drawing tools' pointers (the Pen's in every state, the
-    /// Anchor Point and Curvature tools', the Eyedropper's, the Slice and Blend tools') become a plain crosshair at the hotspot.
-    pub fn precise(self) -> Self {
-        match self {
-            Cursor::Pen
-            | Cursor::PenDrawing
-            | Cursor::PenAdd
-            | Cursor::PenDelete
-            | Cursor::PenClose
-            | Cursor::PenContinue
-            | Cursor::PenJoin
-            | Cursor::PenConvert
-            | Cursor::AnchorPoint
-            | Cursor::Curvature
-            | Cursor::Eyedropper
-            | Cursor::Slice
-            | Cursor::Blend
-            | Cursor::BlendObject
-            | Cursor::BlendAnchor
-            | Cursor::ShapeBuilder
-            | Cursor::ShapeBuilderErase
-            | Cursor::Lasso
-            | Cursor::MagicWand
-            | Cursor::Pencil
-            | Cursor::PencilNew
-            | Cursor::PencilClose
-            | Cursor::PencilStraight
-            | Cursor::PencilContinue
-            | Cursor::Paintbrush
-            | Cursor::PaintbrushClose
-            | Cursor::BlobBrush
-            | Cursor::Eraser
-            | Cursor::Smooth
-            | Cursor::PathEraser
-            | Cursor::Join
-            | Cursor::Knife
-            | Cursor::Shaper
-            | Cursor::LivePaintBucket
-            | Cursor::Measure
-            | Cursor::PrintTiling
-            | Cursor::SymbolSprayer
-            | Cursor::SymbolShifter
-            | Cursor::SymbolScruncher
-            | Cursor::SymbolSizer
-            | Cursor::SymbolSpinner
-            | Cursor::SymbolStainer
-            | Cursor::SymbolScreener
-            | Cursor::SymbolStyler
-            | Cursor::Scissors
-            | Cursor::MeshAdd
-            | Cursor::PuppetPin => Cursor::Crosshair,
-            c => c,
-        }
-    }
-
-    /// The cursor this one borrows until it's drawn: the generic crosshair for the
-    /// tools, the I-beam for vertical type, the Pen's add cursor for the Mesh tool and Puppet
-    /// Warp, not-allowed for the Scissors away from a path. `None` for a cursor with a look of
-    /// its own.
-    pub fn stand_in(self) -> Option<Self> {
-        match self {
-            Cursor::Lasso
-            | Cursor::MagicWand
-            | Cursor::Pencil
-            | Cursor::Paintbrush
-            | Cursor::BlobBrush
-            | Cursor::Eraser
-            | Cursor::Smooth
-            | Cursor::PathEraser
-            | Cursor::Join
-            | Cursor::Knife
-            | Cursor::Shaper
-            | Cursor::LivePaintBucket
-            | Cursor::Measure
-            | Cursor::ObjectsOnPath
-            | Cursor::PrintTiling
-            | Cursor::SymbolSprayer
-            | Cursor::SymbolShifter
-            | Cursor::SymbolScruncher
-            | Cursor::SymbolSizer
-            | Cursor::SymbolSpinner
-            | Cursor::SymbolStainer
-            | Cursor::SymbolScreener
-            | Cursor::SymbolStyler
-            | Cursor::Scissors => Some(Cursor::Crosshair),
-            Cursor::TypeVertical => Some(Cursor::Text),
-            Cursor::MeshAdd | Cursor::PuppetPin => Some(Cursor::PenAdd),
-            Cursor::ScissorsNotAllowed => Some(Cursor::NotAllowed),
-            _ => None,
-        }
-    }
+    /// Hover text for the disc of `radius` (document units) around `center`: while the pointer
+    /// rests there and nothing is being dragged, the UI shows `text`, an English UI string it
+    /// translates, as a tooltip. Nothing is drawn for it.
+    HoverText { center: Point, radius: f64, text: &'static str },
 }
 
 /// What an IME's "delete the text around the cursor" counts: UTF-8 bytes (winit's raw
@@ -787,24 +123,6 @@ pub enum SurroundingUnit {
     Chars,
 }
 
-/// The committed logical text around an IME cursor, or the documented reason it is unavailable.
-///
-/// This type stays free of any UI dependency: offsets are UTF-8 bytes into `text`, `cursor` is the
-/// primary selection end and `anchor` the other (so `cursor > anchor` is a reversed selection).
-/// `text` is already bounded to the caller's request and has the pre-edit removed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ImeSurrounding {
-    Available { text: String, cursor: usize, anchor: usize },
-    Unavailable(&'static str),
-}
-
-impl Default for ImeSurrounding {
-    /// Report surrounding text as unavailable because no document is active.
-    fn default() -> Self {
-        Self::Unavailable("no document is active")
-    }
-}
-
 /// A tool state machine.
 pub trait Tool: Send {
     fn id(&self) -> &'static str;
@@ -812,8 +130,20 @@ pub trait Tool: Send {
     fn key(&mut self, _cx: &ToolContext, _key: ToolKey, _mods: Mods) -> Vec<Action> {
         vec![]
     }
+    /// The press in progress is dropped (a long touch, a canceled touch, a second finger): the
+    /// engine has undone its interaction and sends a release after this. By default the tool takes
+    /// Escape, as during a drag.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.key(cx, ToolKey::Escape, Mods::default())
+    }
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         vec![]
+    }
+    /// Did the last [`Tool::overlays`] leave part of its overlays for later calls (the outline of a
+    /// long Blob Brush or Eraser drag, the band of a long smoothing drag outlined again after a
+    /// zoom change)? The host then draws again on the next frame, even when the pointer holds still.
+    fn overlays_pending(&self) -> bool {
+        false
     }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
         Cursor::Arrow
@@ -823,13 +153,43 @@ pub trait Tool: Send {
         Value::Null
     }
     fn set_option(&mut self, _key: &str, _value: &Value) {}
+    /// Whether [`Self::set_option`] takes `value` for option `key` as it is: an error names an
+    /// option the tool doesn't have, a value of the wrong type or a number out of range
+    /// (`tool.setOption` checks every option it is given with this before it sets any). A tool
+    /// without options takes none.
+    fn check_option(&self, key: &str, _value: &Value) -> Result<(), String> {
+        Err(option_check::unknown(key))
+    }
+    /// Whether [`Self::set_option`] takes all of `values`, set together in one call: by default
+    /// each one checked on its own with [`Self::check_option`].
+    fn check_options(&self, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+        values.iter().try_for_each(|(k, v)| self.check_option(k, v))
+    }
     /// Is an interaction in progress (drag, open pen path)?
     fn busy(&self) -> bool {
         false
     }
     /// Is a drag moving, scaling or rotating the selection (the canvas then hides the bounding box,
-    /// so only the art is seen going with the pointer)?
+    /// so only the art is seen going with the pointer, except during a handle resize, and during a
+    /// move with General › Show Bounding Box While Moving and Drawing on)?
     fn transforming(&self) -> bool {
+        false
+    }
+    /// Is the transforming drag a resize by a bounding-box handle? The canvas then keeps drawing
+    /// the bounding box at the changing bounds.
+    fn resizing(&self) -> bool {
+        false
+    }
+    /// Is the transforming drag a move of the selection (an Alt-drag copy included)? With General ›
+    /// Show Bounding Box While Moving and Drawing on, the canvas then draws the bounding box where
+    /// the drag has moved the selection.
+    fn moving(&self) -> bool {
+        false
+    }
+    /// Is a drag drawing a new shape that the tool shows the bounding box of once drawn? With
+    /// General › Show Bounding Box While Moving and Drawing on, the canvas then draws the box around
+    /// the shape as it is drawn.
+    fn drawing_boxed(&self) -> bool {
         false
     }
     /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool
@@ -837,25 +197,34 @@ pub trait Tool: Send {
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
         false
     }
+    /// [`Self::claims_key`] for a press with `mods` held. By default the modifiers do not matter;
+    /// a tool that takes a key only without modifiers leaves the modified presses to the shortcuts.
+    fn claims_key_with(&self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> bool {
+        self.claims_key(cx, key)
+    }
+    /// Has the tool started something that Escape ends while no button is pressed (a path being
+    /// drawn, the Blend tool's first pick)? That Escape ends nothing else, such as isolation mode or
+    /// a rotated view.
+    fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
+        false
+    }
+    /// The point a path the tool is drawing goes on from, and the direction the path arrives there
+    /// in (none for a path of one point), while the tool draws one: the Quick Pen toolbar sits
+    /// beside it.
+    fn drawing_end(&self, _cx: &ToolContext) -> Option<(Point, Option<Vec2>)> {
+        None
+    }
     /// Does the tool want typed text (Type tool editing)? Single-key shortcuts are suppressed.
     fn wants_text(&self) -> bool {
         false
     }
+    /// The tool a gradient stop's one-shot pick switches back to after its click (the Eyedropper
+    /// armed by the Gradient panel's eyedropper); None when no such pick is armed.
+    fn returns_to(&self) -> Option<&str> {
+        None
+    }
     fn text_input(&mut self, _cx: &ToolContext, _s: &str) -> Vec<Action> {
         vec![]
-    }
-    /// Would [`Tool::text_input`] insert `text` exactly as given? False when it filters control
-    /// characters, normalizes newlines, applies Typographer's Quotes or otherwise rewrites the
-    /// insertion. An IME commit the application rewrites is an application edit: its receipt must
-    /// be `Other`, never `InputMethod`.
-    fn text_input_is_verbatim(&self, _cx: &ToolContext, _text: &str) -> bool {
-        true
-    }
-    /// Does the tool's open typing session still match the document? False when an external edit
-    /// replaced the text under it: the next IME commit starts a fresh session, which is an
-    /// application-side reset, not an accepted IME insertion.
-    fn ime_session_matches_document(&self, _cx: &ToolContext) -> bool {
-        true
     }
     /// IME composition (marked text) for the tool that wants text: `text` replaces the previous
     /// marked text (or the selection); an empty `text` ends the composition. `active_chars` is the
@@ -878,13 +247,6 @@ pub trait Tool: Send {
     fn ime_target(&self, _cx: &ToolContext) -> Option<(u64, u64, u64)> {
         None
     }
-    /// The committed logical text around the IME cursor, with UTF-8 byte offsets (`cursor` is the
-    /// primary end, `anchor` the other): the source for an outgoing surrounding-text payload
-    /// (egui's E21b). Pre-edit text is excluded and the offsets are remapped into the remaining
-    /// text; at most `max_bytes` bytes are copied (a wider selection is explicitly unavailable).
-    fn ime_surrounding(&self, _cx: &ToolContext, _max_bytes: usize) -> ImeSurrounding {
-        ImeSurrounding::Unavailable("the active tool has no IME text context")
-    }
     /// Is uncommitted IME text being shown? Keys, shortcuts and Undo wait while it is.
     fn composing(&self) -> bool {
         false
@@ -905,8 +267,26 @@ pub trait Tool: Send {
     fn wants_rehover(&self) -> bool {
         false
     }
+    /// The object a click at `p` with `mods` would act on, which Smart Guides › Object
+    /// Highlighting outlines while the pointer rests there (the Eyedropper's source). None when a
+    /// click there acts on no object, or the tool does not name one.
+    fn hover_object(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Option<NodeId> {
+        None
+    }
+    /// What the Info panel shows for the tool as it is now: the drag in progress (a move of the
+    /// selection, a gradient vector, a handle the Pen pulls out, a Scale, Rotate, Reflect or Shear
+    /// tool drag), or the Paintbrush's brush. None for a tool with nothing of its own to show.
+    fn readout(&self, _cx: &ToolContext) -> Option<Readout> {
+        None
+    }
     /// Called when the user switches away (finish pending work).
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
+    /// The tool, already active, is chosen again (its toolbar button, its shortcut, `tool.select`).
+    /// Most tools keep their state; the Blend tool finishes the blend it is adding to, and the Pen
+    /// ends the path it is drawing.
+    fn chosen_again(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
     /// A command from outside the tool ran (a menu, a panel, an agent): finish work it ended (the
@@ -914,6 +294,13 @@ pub trait Tool: Send {
     fn after_command(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
+    /// The undo history moved outside the tool (an edit, Undo or Redo the tool did not make), or
+    /// another document became active. The Blend tool drops its first pick and stops adding to the
+    /// blend it just made.
+    fn history_moved(&mut self) {}
+    /// A press on the canvas did not reach the tool: it went to the view tools (held Space, the
+    /// middle button), or with Cmd/Ctrl held to the selection tool the session lends. The Live Paint Bucket counts it among the clicks a triple-click compares.
+    fn press_elsewhere(&mut self) {}
     /// Time passes while the pointer button is held (`dt` seconds since the last tick, whether or
     /// not the pointer moved): tools that keep working while the brush holds still (Twirl, Pucker,
     /// Bloat) act on it. The host supplies the time, so tests and agents drive it exactly.
@@ -932,20 +319,46 @@ pub trait Tool: Send {
     fn wants_samples(&self) -> bool {
         false
     }
+    /// Does a stroke the tool draws now vary with an airbrush pen's finger wheel (a brush or tip
+    /// with Stylus Wheel variation)? A host that has to open a tablet interface of its own to read
+    /// the wheel opens it only while this is so.
+    fn reads_wheel(&self, _cx: &ToolContext) -> bool {
+        false
+    }
     /// Is the tool waiting for work it runs on another thread (the planar map of a large selection
-    /// for the Shape Builder and the Live Paint Bucket)? It highlights no region under the pointer
-    /// until the work is done. While this holds, the desktop app calls [`Tool::poll`] each frame,
-    /// and hosts without frames call it with `wait` after a [`PointerKind::Move`].
+    /// for the Shape Builder and the Live Paint Bucket, a Shape Builder merge of one)? It
+    /// highlights nothing under the pointer until a map is done. While this holds, the desktop app
+    /// calls [`Tool::poll`] each frame, and hosts without frames call it with `wait` after each
+    /// pointer event.
     fn waiting(&self) -> bool {
         false
     }
-    /// Checks on the work [`Tool::waiting`] reports, waiting for it to finish with `wait`. Once it
-    /// is done, the tool shows the highlight under the pointer where it last moved.
-    fn poll(&mut self, _cx: &ToolContext, _wait: bool) {}
+    /// Is the tool computing an edit on another thread, which [`Tool::poll`] applies once it is
+    /// done (a Shape Builder merge of a large selection)?
+    fn editing(&self) -> bool {
+        false
+    }
+    /// Checks on the work [`Tool::waiting`] reports, waiting for it to finish with `wait`. Once a
+    /// map is done, the tool shows the highlight under the pointer where it last moved; once an
+    /// edit is done, the actions returned apply it.
+    fn poll(&mut self, _cx: &ToolContext, _wait: bool) -> Vec<Action> {
+        vec![]
+    }
+    /// Waits for the edit [`Tool::editing`] reports and returns the actions that apply it, before
+    /// a command runs on the document; none when the document's revision or the selection changed
+    /// since the gesture.
+    fn finish_edit(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
     /// The Shape Builder's planar map of the selection, with the outline edges, and the gap it
     /// closes, when the tool has one. `shapeBuilder.merge` uses it in place of a map of its own
     /// when the map's inputs are the merge's inputs.
     fn shape_builder_map(&self) -> Option<(std::sync::Arc<builder::BuilderMap>, f64)> {
+        None
+    }
+    /// The Shape Builder merge the tool computed on another thread for its last gesture, which
+    /// `shapeBuilder.merge` takes when it would compute the same ([`builder::PreparedMerge`]).
+    fn shape_builder_merge(&self) -> Option<std::sync::Arc<builder::PreparedMerge>> {
         None
     }
 }
@@ -960,8 +373,12 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "dimension" => Box::new(dimension::DimensionTool::default()),
         "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath" => Box::new(text::TypeTool::new(id)),
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
+        circle::ID => Box::new(circle::CircleTool::default()),
+        curvature_circle::ID => Box::new(curvature_circle::CurvatureCircleTool::default()),
+        quickpen::ID => Box::new(quickpen::QuickPenTool::default()),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
+        three_point_arc::ID => Box::new(three_point_arc::ThreePointArcTool::default()),
         other => symbolism::create(other)
             .or_else(|| builder::create(other))
             .or_else(|| draw2::create(other))
@@ -976,6 +393,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
             .or_else(|| intertwine::create(other))
             .or_else(|| objects_on_path::create(other))
             .or_else(|| touchtype::create(other))
+            .or_else(|| addons::create(other))
             .unwrap_or_else(|| Box::new(NoopTool(tool_info(other).map(|t| t.id).unwrap_or("selection")))),
     }
 }
@@ -999,7 +417,7 @@ pub(crate) const MAX_STROKE_SAMPLES: usize = 100_000;
 /// `n / PREVIEW_ALL_UNTIL` samples. Each preview carries every sample so far, so previewing at
 /// every sample cost the square of the stroke's length (a gesture of many drags sent at once
 /// spent seconds); this way it is about `PREVIEW_ALL_UNTIL` per sample.
-const PREVIEW_ALL_UNTIL: usize = 1000;
+pub(crate) const PREVIEW_ALL_UNTIL: usize = 1000;
 
 /// Whether a drag that made the stroke `n` samples long previews it ([`PREVIEW_ALL_UNTIL`]).
 pub(crate) fn previews_at(n: usize) -> bool {
@@ -1024,6 +442,28 @@ pub(crate) mod testutil {
         (d, id)
     }
 
+    /// A live 100 × 100 rectangle at (100, 100)–(200, 200) with no paint: its centre point
+    /// (Attributes › Show Center) is at (150, 150), and a press in the middle of it hits no art.
+    pub fn doc_with_live_rect() -> (Document, NodeId) {
+        use vectorcraft_doc::{LiveShape, NodeKind};
+        let shape = LiveShape::Rectangle {
+            w: 100.0,
+            h: 100.0,
+            radii: [0.0; 4],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+        };
+        let mut d = Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
+        (d, id)
+    }
+
     /// [`doc_with_rect`] plus a clip group: a filled 200 × 200 square (350, 350)–(550, 550)
     /// clipped to an unpainted rectangle (400, 400)–(500, 500), so the art lies over the mask's
     /// edges. The group, the clipping path and the art.
@@ -1040,6 +480,36 @@ pub(crate) mod testutil {
             Node::new(g, vectorcraft_doc::NodeKind::Group { children: vec![std::sync::Arc::new(path), std::sync::Arc::new(picture)], clip: true });
         d.insert(Some(l), 1, group).unwrap();
         (d, g, clip, art)
+    }
+
+    /// A document with the rectangle of [`doc_with_rect`] and a clip group whose clipping path,
+    /// (400, 400)–(500, 500), has a live effect that moves the region it clips to 100 pt right
+    /// (registered with [`vectorcraft_doc::hit::set_clip_region`]), over art at (420, 420)–(480, 480),
+    /// inside the clipping path's own shape and outside the moved region: the document, the clip
+    /// group and the art.
+    pub fn doc_with_moved_clip_region() -> (Document, NodeId, NodeId) {
+        fn moved(clip: &Node) -> Option<Option<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)>> {
+            let mut moves = false;
+            clip.walk(&mut |n| moves |= n.appearance.effects.iter().any(|e| e.visible && e.id == "test.move"));
+            if !moves {
+                return None;
+            }
+            Some(vectorcraft_doc::hit::clip_regions(clip).into_iter().next().map(|(mut bp, rule)| {
+                bp.apply_affine(vectorcraft_geom::Affine::translate((100.0, 0.0)));
+                (bp, rule)
+            }))
+        }
+        vectorcraft_doc::hit::set_clip_region(moved);
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let (g, clip, art) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let mut path = Node::path(clip, shapes::rectangle(Rect::new(400.0, 400.0, 500.0, 500.0)), Default::default());
+        path.appearance.effects.push(vectorcraft_doc::Effect { id: "test.move".into(), params: serde_json::json!({}), visible: true });
+        let picture = Node::path(art, shapes::rectangle(Rect::new(420.0, 420.0, 480.0, 480.0)), Appearance::default_art());
+        let group =
+            Node::new(g, vectorcraft_doc::NodeKind::Group { children: vec![std::sync::Arc::new(path), std::sync::Arc::new(picture)], clip: true });
+        d.insert(Some(l), 1, group).unwrap();
+        (d, g, art)
     }
 
     /// A new layer of `d`, above the others, with the unpainted rectangle `mask` as its clipping
@@ -1122,6 +592,26 @@ pub(crate) mod testutil {
         PaintDefaults::default()
     }
 
+    /// With the Selection tool, a widget pressed at `at` and dragged to `q`, then released at `r`, is
+    /// dragged to `r` before the drag ends: the release keeps what a drag to `r` shows. Switching
+    /// tools during the drag cancels it, and the release after it commits nothing.
+    pub fn check_widget_release_and_tool_switch(cx: &ToolContext, at: Point, q: Point, r: Point) {
+        let pressed = || {
+            let mut t = crate::select::SelectionTool::default();
+            t.pointer(cx, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+            assert!(!t.pointer(cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y)).is_empty(), "the drag to {q:?} changes the widget");
+            t
+        };
+        let mut want = pressed().pointer(cx, &PointerEvent::new(PointerKind::Drag, r.x, r.y));
+        assert!(!want.is_empty(), "the drag to {r:?} changes the widget");
+        want.push(Action::Commit);
+        assert_eq!(pressed().pointer(cx, &PointerEvent::new(PointerKind::Up, r.x, r.y)), want, "released at {r:?}");
+        let mut t = pressed();
+        assert_eq!(t.deactivate(cx), vec![Action::Cancel], "a tool switch cancels the drag");
+        assert!(!t.busy() && !t.transforming());
+        assert!(t.pointer(cx, &PointerEvent::new(PointerKind::Up, q.x, q.y)).is_empty(), "the release commits nothing");
+    }
+
     /// An 800 × 600 window on a view at 100% turned `deg` degrees clockwise (Rotate View): at 90°
     /// one pixel right on screen is one point up the page.
     pub fn turned_view(deg: f64) -> Option<ScreenFrame> {
@@ -1136,6 +626,7 @@ pub(crate) mod testutil {
             revision: (0, 0),
             selection: s,
             zoom: 1.0,
+            marquee_mode: MarqueeMode::Touching,
             isolation: None,
             paint: p,
             outline: false,
@@ -1144,23 +635,29 @@ pub(crate) mod testutil {
             snap_to_grid: false,
             show_bbox: true,
             snap_to_pixel: false,
+            pixel_snap: crate::PixelSnap::default(),
             snap_to_point: true,
             snap_tangent: true,
             snap_perpendicular: true,
             snap_to_glyph: false,
+            glyph_snap: GlyphSnap::default(),
             corner_widgets: true,
+            shape_widgets: true,
             fill_active: true,
             gradient_stop: None,
+            tool_paints: false,
             appearance_item: None,
             constrain_angle: 0.0,
             keyboard_increment: 1.0,
             freeform_point: None,
             raster_sample: 1,
             preview_bounds: false,
+            glyph_bounds: false,
             preview_memo: None,
             unit: Unit::Points,
             stroke_unit: Unit::Points,
             paste_plain_text: false,
+            typed_from_keyboard: false,
             slices_hidden: false,
             slices_locked: false,
             auto_add_delete: true,
@@ -1169,7 +666,9 @@ pub(crate) mod testutil {
             path_only: false,
             type_path_only: false,
             double_click_isolate: true,
+            double_click_adds_anchor: false,
             select_behind: true,
+            behind_armed: false,
             highlight_anchors: true,
             snap_tolerance: 2.0,
             handles_multiple: true,
@@ -1178,6 +677,7 @@ pub(crate) mod testutil {
             pen_rubber_band: true,
             curvature_rubber_band: true,
             placeholder_text: false,
+            typed_lists: true,
             smart_guide_color: guides::MAGENTA,
             alignment_guides: true,
             anchor_path_labels: true,
@@ -1185,13 +685,38 @@ pub(crate) mod testutil {
             transform_tools_guides: true,
             spacing_guides: true,
             distance_guides: true,
+            snap_to_last_location: false,
             snapping_tolerance: 4.0,
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,
             plane_widget: Some(Default::default()),
+            plane_targets: distort::perspective::widget::PlaneTargets::ALL,
+            precise_cursors: false,
+            global_edit: &[],
+            interaction_doc: None,
         }
     }
+
+    /// Held for reading by tests that count the layouts the Type tool keeps, and for writing by
+    /// tests that change what layout reads (fonts, hyphenation exceptions): tests run in parallel,
+    /// and a count must not include a refresh another test caused.
+    static LAYOUT_INPUTS: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+    /// Catalogs the installed fonts, then also holds back the font changes other tests make without
+    /// [`changing_layout_inputs`] (a system font loaded for a character no loaded font covers, a
+    /// rescan) until it is dropped.
+    pub fn steady_layout_inputs() -> (std::sync::RwLockReadGuard<'static, ()>, vectorcraft_text::test_fonts::SteadyFonts) {
+        let inputs = LAYOUT_INPUTS.read().unwrap_or_else(|e| e.into_inner());
+        (inputs, vectorcraft_text::test_fonts::steady_fonts(vectorcraft_text::FontDb::global()))
+    }
+
+    pub fn changing_layout_inputs() -> std::sync::RwLockWriteGuard<'static, ()> {
+        LAYOUT_INPUTS.write().unwrap_or_else(|e| e.into_inner())
+    }
 }
+
+#[cfg(test)]
+mod widget_order_tests;
 
 #[cfg(test)]
 mod cursor_tests {
@@ -1207,10 +732,20 @@ mod cursor_tests {
     /// Use Precise Cursors turns it into the crosshair.
     #[test]
     fn drawing_tools_show_their_own_cursor() {
-        let (d, _) = doc_with_rect();
+        let (d, rect) = doc_with_rect();
         let away = Point::new(400.0, 400.0);
+        // The Smooth tool shows its own cursor only with a selected path (Not Allowed without one).
+        let mut selected = Selection::default();
+        selected.set([rect]);
+        let paint = paint();
+        let cursor_of = |id: &str| match id {
+            "smooth" => create(id).cursor(&cx(&d, &selected, &paint), away, Mods::default()),
+            _ => cursor_at(id, &d, away),
+        };
         for (id, c) in [
             ("lasso", Cursor::Lasso),
+            (addons::enclosing_lasso::ID, Cursor::Lasso),
+            (addons::polygonal_lasso::ID, Cursor::Lasso),
             ("magicWand", Cursor::MagicWand),
             ("paintbrush", Cursor::Paintbrush),
             ("blobBrush", Cursor::BlobBrush),
@@ -1219,6 +754,7 @@ mod cursor_tests {
             ("pathEraser", Cursor::PathEraser),
             ("join", Cursor::Join),
             ("knife", Cursor::Knife),
+            (addons::trim::ID, Cursor::Knife),
             ("shaper", Cursor::Shaper),
             ("livePaintBucket", Cursor::LivePaintBucket),
             ("measure", Cursor::Measure),
@@ -1233,14 +769,24 @@ mod cursor_tests {
             ("symbolStyler", Cursor::SymbolStyler),
             ("mesh", Cursor::MeshAdd),
         ] {
-            assert_eq!(cursor_at(id, &d, away), c, "{id}");
+            assert_eq!(cursor_of(id), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
-            assert_eq!(c.stand_in(), Some(if id == "mesh" { Cursor::PenAdd } else { Cursor::Crosshair }), "{id}");
+            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
+            // Live Paint Bucket's bucket and the Knife's knife are drawn.
+            let stand_in = match id {
+                "mesh" => Some(Cursor::PenAdd),
+                "blobBrush" | "eraser" | "livePaintBucket" | "knife" | addons::trim::ID => None,
+                _ => Some(Cursor::Crosshair),
+            };
+            assert_eq!(c.stand_in(), stand_in, "{id}");
         }
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.
         assert_eq!(cursor_at("pencil", &d, away), Cursor::PencilNew);
-        assert_eq!(Cursor::PencilNew.precise(), Cursor::Crosshair);
+        // Its badged cursors too: Use Precise Cursors shows the plain crosshair.
+        for c in [Cursor::PencilNew, Cursor::PencilClose, Cursor::PencilStraight, Cursor::PencilContinue, Cursor::PaintbrushClose] {
+            assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+        }
         assert_eq!(Cursor::PencilNew.stand_in(), None);
         assert_eq!(Cursor::Pencil.precise(), Cursor::Crosshair);
         assert_eq!(Cursor::Pencil.stand_in(), Some(Cursor::Crosshair));

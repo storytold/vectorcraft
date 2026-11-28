@@ -18,30 +18,11 @@ use md5::Md5;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 
 use crate::lab_spot::{find, rfind, xref_offset};
-use crate::settings::choice;
-use crate::{Changes, Compatibility, PdfError, PdfSettings, Printing, SecuritySettings, Standard};
+use crate::{Compatibility, Encryption, PdfError, PdfSettings, SecuritySettings};
 
-choice! {
-    /// The encryption algorithm, which follows the PDF version (Compatibility).
-    Encryption {
-        Rc440 = "rc440", "40-bit RC4";
-        Rc4 = "rc4", "128-bit RC4";
-        Aes128 = "aes128", "128-bit AES";
-        Aes256 = "aes256", "256-bit AES";
-    } default Aes256
-}
+mod lexer;
 
-impl Encryption {
-    /// The algorithm a file of PDF version `c` is encrypted with.
-    pub fn for_compatibility(c: Compatibility) -> Self {
-        match c {
-            Compatibility::Pdf13 => Self::Rc440,
-            Compatibility::Pdf14 | Compatibility::Pdf15 => Self::Rc4,
-            Compatibility::Pdf16 => Self::Aes128,
-            Compatibility::Pdf17 | Compatibility::Pdf20 => Self::Aes256,
-        }
-    }
-}
+pub(crate) use lexer::{Lexer, Obj, Spanned, Tok, int, is_white};
 
 /// The standard security handler revision written for PDF version `c`: 3 (RC4, metadata always
 /// encrypted), 4 (crypt filters: RC4 or AES-128) or 6 (AES-256).
@@ -52,114 +33,6 @@ fn revision(c: Compatibility) -> u8 {
         Compatibility::Pdf15 | Compatibility::Pdf16 => 4,
         Compatibility::Pdf17 | Compatibility::Pdf20 => 6,
     }
-}
-
-/// The longest password (in bytes) revisions 2–4 use: longer ones are cut to this.
-const MAX_LEGACY_PASSWORD: usize = 32;
-/// The longest password (UTF-8 bytes) revision 6 uses.
-const MAX_PASSWORD: usize = 127;
-
-impl SecuritySettings {
-    /// A password is set: the file is encrypted.
-    pub fn protected(&self) -> bool {
-        !self.open_password.is_empty() || !self.permissions_password.is_empty()
-    }
-
-    /// Some permission is withheld (only a permissions password applies them).
-    pub fn restricts(&self) -> bool {
-        self.printing != Printing::High || self.changes != Changes::Any || !self.copy || !self.screen_reader
-    }
-
-    /// The encryption dictionary's `P` entry: the permission bits (1-based bit numbers of the PDF
-    /// reference's user access permissions). Everything is allowed without a permissions password.
-    pub fn permission_bits(&self) -> i32 {
-        if self.permissions_password.is_empty() {
-            return !3;
-        }
-        let bit = |n: u32| 1u32 << (n - 1);
-        // Bits 1–2 are clear; the reserved bits 7–8 and 13–32 are set.
-        let mut p = 0xFFFF_F0C0u32;
-        p |= match self.printing {
-            Printing::None => 0,
-            Printing::Low => bit(3),
-            Printing::High => bit(3) | bit(12),
-        };
-        p |= match self.changes {
-            Changes::None => 0,
-            Changes::Pages => bit(11),
-            Changes::Forms => bit(9),
-            Changes::Comments => bit(6) | bit(9),
-            Changes::Any => bit(4) | bit(6) | bit(9) | bit(11),
-        };
-        if self.copy {
-            p |= bit(5);
-        }
-        // Content copied may always be read out by screen readers.
-        if self.copy || self.screen_reader {
-            p |= bit(10);
-        }
-        p as i32
-    }
-
-    /// Refuse passwords the file can't carry: with a PDF standard (PDF/A and PDF/X forbid
-    /// encryption), two equal passwords, or passwords the algorithm of `c` can't take.
-    pub(crate) fn check(&self, standard: Standard, c: Compatibility) -> Result<(), PdfError> {
-        if !self.protected() {
-            return Ok(());
-        }
-        if standard != Standard::None {
-            return Err(PdfError::BadSetting(format!(
-                "{} files can't be password-protected: remove the passwords or choose no standard",
-                standard.label()
-            )));
-        }
-        // Revision 2 has one printing bit: it can't say "low resolution only".
-        if revision(c) == 2 && self.printing == Printing::Low && !self.permissions_password.is_empty() {
-            return Err(PdfError::BadSetting(format!(
-                "{} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing",
-                c.label()
-            )));
-        }
-        if self.open_password == self.permissions_password {
-            return Err(PdfError::BadSetting("the open and permissions passwords must differ".into()));
-        }
-        for pw in [&self.open_password, &self.permissions_password] {
-            if revision(c) < 6 {
-                if !pw.is_ascii() || pw.len() > MAX_LEGACY_PASSWORD {
-                    return Err(PdfError::BadSetting(format!(
-                        "{} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)",
-                        c.label()
-                    )));
-                }
-            } else if pw.len() > MAX_PASSWORD {
-                return Err(PdfError::BadSetting(format!("passwords can have up to {MAX_PASSWORD} bytes")));
-            }
-        }
-        Ok(())
-    }
-}
-
-impl PdfSettings {
-    /// The algorithm the file is encrypted with; `None` without a password.
-    pub fn encryption(&self) -> Option<Encryption> {
-        self.security.protected().then(|| Encryption::for_compatibility(self.compatibility))
-    }
-}
-
-/// The security options that are accepted but have no effect, one warning each.
-pub(crate) fn warnings(set: &PdfSettings) -> Vec<String> {
-    let s = &set.security;
-    let mut out = vec![];
-    if s.protected() && s.plaintext_metadata && revision(set.compatibility) <= 3 {
-        out.push(format!("{} encryption covers the metadata too: plaintext metadata needs PDF 1.5 or later", set.compatibility.label()));
-    }
-    if s.protected() && set.compatibility == Compatibility::Pdf13 {
-        out.push(format!(
-            "{} encrypts with a 40-bit key, which can be searched in minutes: choose PDF 1.6 or later for stronger protection",
-            set.compatibility.label()
-        ));
-    }
-    out
 }
 
 // ---------- cryptography ----------
@@ -296,20 +169,18 @@ struct Entropy {
 }
 
 impl Entropy {
-    /// Seeded with the process's random hash keys (none on the web), the time and `material`.
-    fn new(material: &[&[u8]]) -> Self {
-        use std::hash::BuildHasher;
-        let state = std::hash::RandomState::new();
+    /// Seeded from the OS random source, with the time and `material` mixed in.
+    fn new(material: &[&[u8]]) -> Result<Self, PdfError> {
+        let mut os = [0u8; 32];
+        getrandom::fill(&mut os).map_err(|e| failed(&format!("no random numbers ({e})")))?;
         let mut h = Sha256::new();
-        for i in 0u8..4 {
-            h.update(state.hash_one(i).to_le_bytes());
-        }
+        h.update(os);
         h.update(vectorcraft_doc::metadata::now_unix().unwrap_or_default().to_le_bytes());
         for m in material {
             h.update((m.len() as u64).to_le_bytes());
             h.update(m);
         }
-        Self { seed: h.finalize().into(), counter: 0 }
+        Ok(Self { seed: h.finalize().into(), counter: 0 })
     }
 
     fn bytes<const N: usize>(&mut self) -> [u8; N] {
@@ -446,343 +317,6 @@ fn owner_key(owner: &[u8], r: u8, n: usize) -> Vec<u8> {
         }
     }
     h.get(..n).unwrap_or(&h).to_vec()
-}
-
-// ---------- PDF syntax ----------
-
-pub(crate) fn is_white(b: u8) -> bool {
-    matches!(b, 0 | 9 | 10 | 12 | 13 | 32)
-}
-
-fn is_regular(b: u8) -> bool {
-    !is_white(b) && !b"()<>[]{}/%".contains(&b)
-}
-
-#[derive(Debug)]
-pub(crate) enum Tok<'a> {
-    DictOpen,
-    DictClose,
-    ArrayOpen,
-    ArrayClose,
-    Name(&'a [u8]),
-    Str(Vec<u8>),
-    /// Numbers and keywords (`true`, `R`, `obj`, `stream`…).
-    Word(&'a [u8]),
-}
-
-/// A token with its byte span.
-pub(crate) type Spanned<'a> = (Tok<'a>, usize, usize);
-
-/// Deepest nesting of arrays and dictionaries read.
-const MAX_DEPTH: usize = 64;
-
-/// A parsed object, with what encryption needs: the strings and dictionaries with their spans.
-#[derive(Debug)]
-pub(crate) enum Obj<'a> {
-    /// `start` is where `<<` is, `end` just after `>>`.
-    Dict {
-        entries: Vec<(&'a [u8], Obj<'a>)>,
-        start: usize,
-        end: usize,
-    },
-    Array(Vec<Obj<'a>>),
-    Str {
-        bytes: Vec<u8>,
-        start: usize,
-        end: usize,
-    },
-    Name(&'a [u8]),
-    Int {
-        value: i64,
-        start: usize,
-        end: usize,
-    },
-    Ref(u32, u16),
-    /// Reals, booleans, null.
-    Other,
-}
-
-impl<'a> Obj<'a> {
-    pub(crate) fn get(&self, key: &[u8]) -> Option<&Obj<'a>> {
-        match self {
-            Self::Dict { entries, .. } => entries.iter().find(|(k, _)| *k == key).map(|(_, v)| v),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn name(&self, key: &[u8]) -> Option<&'a [u8]> {
-        match self.get(key)? {
-            Self::Name(n) => Some(n),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn int(&self, key: &[u8]) -> Option<i64> {
-        match self.get(key)? {
-            Self::Int { value, .. } => Some(*value),
-            _ => None,
-        }
-    }
-
-    fn string(&self, key: &[u8]) -> Option<&[u8]> {
-        match self.get(key)? {
-            Self::Str { bytes, .. } => Some(bytes),
-            _ => None,
-        }
-    }
-
-    /// The first string of the array at `key` (a file's ID).
-    fn first_string(&self, key: &[u8]) -> Option<&[u8]> {
-        match self.get(key)? {
-            Self::Array(items) => items.iter().find_map(|i| match i {
-                Self::Str { bytes, .. } => Some(bytes.as_slice()),
-                _ => None,
-            }),
-            _ => None,
-        }
-    }
-
-    /// Every string in this object, in file order.
-    fn strings<'s>(&'s self, out: &mut Vec<&'s Obj<'a>>) {
-        match self {
-            Self::Str { .. } => out.push(self),
-            Self::Dict { entries, .. } => entries.iter().for_each(|(_, v)| v.strings(out)),
-            Self::Array(items) => items.iter().for_each(|v| v.strings(out)),
-            _ => {}
-        }
-    }
-}
-
-pub(crate) fn int(w: &[u8]) -> Option<i64> {
-    std::str::from_utf8(w).ok()?.parse().ok()
-}
-
-#[derive(Clone)]
-pub(crate) struct Lexer<'a> {
-    buf: &'a [u8],
-    pos: usize,
-}
-
-impl<'a> Lexer<'a> {
-    pub(crate) fn at(buf: &'a [u8], pos: usize) -> Self {
-        Self { buf, pos }
-    }
-
-    fn peek_byte(&self, ahead: usize) -> Option<u8> {
-        self.buf.get(self.pos + ahead).copied()
-    }
-
-    fn skip_space(&mut self) {
-        while let Some(b) = self.peek_byte(0) {
-            if is_white(b) {
-                self.pos += 1;
-            } else if b == b'%' {
-                while self.peek_byte(0).is_some_and(|b| b != b'\n' && b != b'\r') {
-                    self.pos += 1;
-                }
-            } else {
-                break;
-            }
-        }
-    }
-
-    pub(crate) fn next(&mut self) -> Option<Spanned<'a>> {
-        self.skip_space();
-        let start = self.pos;
-        let b = self.peek_byte(0)?;
-        let tok = match (b, self.peek_byte(1)) {
-            (b'<', Some(b'<')) => {
-                self.pos += 2;
-                Tok::DictOpen
-            }
-            (b'>', Some(b'>')) => {
-                self.pos += 2;
-                Tok::DictClose
-            }
-            (b'<', _) => Tok::Str(self.hex()?),
-            (b'(', _) => Tok::Str(self.literal()?),
-            (b'[', _) => {
-                self.pos += 1;
-                Tok::ArrayOpen
-            }
-            (b']', _) => {
-                self.pos += 1;
-                Tok::ArrayClose
-            }
-            (b'/', _) => {
-                self.pos += 1;
-                self.word();
-                Tok::Name(self.buf.get(start + 1..self.pos)?)
-            }
-            _ if !is_regular(b) => {
-                // A stray delimiter.
-                self.pos += 1;
-                Tok::Word(self.buf.get(start..self.pos)?)
-            }
-            _ => {
-                self.word();
-                Tok::Word(self.buf.get(start..self.pos)?)
-            }
-        };
-        Some((tok, start, self.pos))
-    }
-
-    fn word(&mut self) {
-        while self.peek_byte(0).is_some_and(is_regular) {
-            self.pos += 1;
-        }
-    }
-
-    fn hex(&mut self) -> Option<Vec<u8>> {
-        self.pos += 1;
-        let (mut out, mut high) = (vec![], None);
-        loop {
-            let b = self.peek_byte(0)?;
-            self.pos += 1;
-            if b == b'>' {
-                out.extend(high.map(|h: u8| h << 4));
-                return Some(out);
-            }
-            if is_white(b) {
-                continue;
-            }
-            let v = char::from(b).to_digit(16)? as u8;
-            match high.take() {
-                Some(h) => out.push(h << 4 | v),
-                None => high = Some(v),
-            }
-        }
-    }
-
-    fn literal(&mut self) -> Option<Vec<u8>> {
-        self.pos += 1;
-        let (mut out, mut depth) = (vec![], 1u32);
-        loop {
-            let b = self.peek_byte(0)?;
-            self.pos += 1;
-            match b {
-                b'\\' => {
-                    let e = self.peek_byte(0)?;
-                    self.pos += 1;
-                    match e {
-                        b'n' => out.push(b'\n'),
-                        b'r' => out.push(b'\r'),
-                        b't' => out.push(b'\t'),
-                        b'b' => out.push(8),
-                        b'f' => out.push(12),
-                        // A backslash before an end of line continues the string.
-                        b'\r' => {
-                            if self.peek_byte(0) == Some(b'\n') {
-                                self.pos += 1;
-                            }
-                        }
-                        b'\n' => {}
-                        b'0'..=b'7' => {
-                            let mut v = u32::from(e - b'0');
-                            for _ in 0..2 {
-                                match self.peek_byte(0) {
-                                    Some(d @ b'0'..=b'7') => {
-                                        v = v * 8 + u32::from(d - b'0');
-                                        self.pos += 1;
-                                    }
-                                    _ => break,
-                                }
-                            }
-                            out.push((v & 0xFF) as u8);
-                        }
-                        // `\(`, `\)`, `\\`; other escapes stand for the character.
-                        _ => out.push(e),
-                    }
-                }
-                b'(' => {
-                    depth += 1;
-                    out.push(b);
-                }
-                b')' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        return Some(out);
-                    }
-                    out.push(b);
-                }
-                // Ends of lines read as `\n`.
-                b'\r' => {
-                    if self.peek_byte(0) == Some(b'\n') {
-                        self.pos += 1;
-                    }
-                    out.push(b'\n');
-                }
-                _ => out.push(b),
-            }
-        }
-    }
-
-    /// One object (a reference `n g R` reads as one).
-    pub(crate) fn object(&mut self, depth: usize) -> Option<Obj<'a>> {
-        if depth > MAX_DEPTH {
-            return None;
-        }
-        let (tok, start, end) = self.next()?;
-        Some(match tok {
-            Tok::DictOpen => {
-                let mut entries = vec![];
-                loop {
-                    let mut look = self.clone();
-                    match look.next()? {
-                        (Tok::DictClose, _, end) => {
-                            *self = look;
-                            return Some(Obj::Dict { entries, start, end });
-                        }
-                        (Tok::Name(k), ..) => {
-                            *self = look;
-                            entries.push((k, self.object(depth + 1)?));
-                        }
-                        _ => return None,
-                    }
-                }
-            }
-            Tok::ArrayOpen => {
-                let mut items = vec![];
-                loop {
-                    let mut look = self.clone();
-                    if matches!(look.next()?, (Tok::ArrayClose, ..)) {
-                        *self = look;
-                        return Some(Obj::Array(items));
-                    }
-                    items.push(self.object(depth + 1)?);
-                }
-            }
-            Tok::Str(bytes) => Obj::Str { bytes, start, end },
-            Tok::Name(n) => Obj::Name(n),
-            Tok::Word(w) => match int(w) {
-                Some(value) => {
-                    let mut look = self.clone();
-                    match (look.next(), look.next()) {
-                        (Some((Tok::Word(g), ..)), Some((Tok::Word(b"R"), ..))) => {
-                            match (u32::try_from(value), int(g).and_then(|g| u16::try_from(g).ok())) {
-                                (Ok(n), Some(g)) => {
-                                    *self = look;
-                                    Obj::Ref(n, g)
-                                }
-                                _ => Obj::Int { value, start, end },
-                            }
-                        }
-                        _ => Obj::Int { value, start, end },
-                    }
-                }
-                None => Obj::Other,
-            },
-            Tok::DictClose | Tok::ArrayClose => return None,
-        })
-    }
-
-    /// The header `num generation obj` of an indirect object.
-    pub(crate) fn header(&mut self) -> Option<(u32, u16)> {
-        let (Some((Tok::Word(n), ..)), Some((Tok::Word(g), ..)), Some((Tok::Word(b"obj"), ..))) = (self.next(), self.next(), self.next()) else {
-            return None;
-        };
-        Some((u32::try_from(int(n)?).ok()?, u16::try_from(int(g)?).ok()?))
-    }
 }
 
 // ---------- encrypting a written file ----------
@@ -931,7 +465,7 @@ pub(crate) fn protect_keeping(pdf: Vec<u8>, set: &PdfSettings) -> Result<(Vec<u8
         Some(Obj::Ref(n, _)) => Some(*n),
         _ => None,
     };
-    let mut rng = Entropy::new(&[sec.open_password.as_bytes(), sec.permissions_password.as_bytes(), &pdf]);
+    let mut rng = Entropy::new(&[sec.open_password.as_bytes(), sec.permissions_password.as_bytes(), &pdf])?;
     let (id, new_id) = match trailer.first_string(b"ID") {
         Some(id) => (id.to_vec(), None),
         None => {
