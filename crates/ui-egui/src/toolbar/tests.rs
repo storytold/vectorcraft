@@ -473,3 +473,192 @@ fn a_tool_card_shows_what_the_tool_does_and_what_its_keys_do() {
     app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
     assert!(!card::Cards::new(&app).has(&"selection".to_string()), "tool tips off: no card");
 }
+
+/// The real Tools dock column; distinguishes its footer Search from the app bar's Search.
+fn review_8758_panel(app: &VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
+    let report = crate::panel_docking::inspect(app, ctx);
+    let columns = report["columns"].as_array().expect("dock columns");
+    let r = &columns.iter().find(|column| column["panel"] == "tools").expect("the Tools column")["rect"];
+    egui::Rect::from_min_size(
+        egui::pos2(r[0].as_f64().unwrap() as f32, r[1].as_f64().unwrap() as f32),
+        egui::vec2(r[2].as_f64().unwrap() as f32, r[3].as_f64().unwrap() as f32),
+    )
+}
+
+fn review_8758_button<'a>(app: &VectorcraftApp, ctx: &egui::Context, nodes: &'a [Node], label: &str) -> &'a Node {
+    let panel = review_8758_panel(app, ctx);
+    nodes
+        .iter()
+        .find(|n| n.role() == Role::Button && n.label() == Some(label) && bounds(n).is_some_and(|r| panel.contains_rect(r)))
+        .unwrap_or_else(|| panic!("Tools footer button {label:?} is drawn"))
+}
+
+fn review_8758_query(nodes: &[Node]) -> &str {
+    nodes
+        .iter()
+        .find(|n| n.role() == Role::TextInput && n.label() == Some("Search commands"))
+        .and_then(Node::value)
+        .expect("the native palette's query field")
+}
+
+fn review_8758_unchanged_content(app: &VectorcraftApp) -> Value {
+    let st = app.session.active().unwrap();
+    json!({"document": &*st.doc, "selection": format!("{:?}", st.selection),
+        "undo": st.history.undo.len(), "redo": st.history.redo.len(), "slots": slots(app)})
+}
+
+/// Paint the native tooltip over whole app frames, keeping the same window and dock measurements.
+fn review_8758_hovered_texts(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, at: Pos2) -> Vec<String> {
+    fn texts(shape: &egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(text) => out.push(text.galley.text().to_string()),
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| texts(shape, out)),
+            _ => {}
+        }
+    }
+    let mut shown = vec![];
+    for i in 0..20 {
+        let events = match i {
+            0 => vec![Event::PointerGone],
+            1 => vec![Event::PointerMoved(at)],
+            _ => vec![],
+        };
+        let out = crate::testing::app_frame(
+            app,
+            ctx,
+            egui::RawInput {
+                time: Some(t0 + f64::from(i) * 0.1),
+                events,
+                screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 1400.0))),
+                ..Default::default()
+            },
+        );
+        out.shapes.iter().for_each(|shape| texts(&shape.shape, &mut shown));
+    }
+    shown
+}
+
+fn review_8758_edit_control(app: &mut VectorcraftApp, ctx: &egui::Context, nodes: &[Node]) {
+    let edit = bounds(review_8758_button(app, ctx, nodes, "Edit Toolbar")).unwrap();
+    let panel = review_8758_panel(app, ctx);
+    let before = slots(app);
+    let nodes = click(app, ctx, 1.0, edit.center(), 1400.0);
+    assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.is_none(), "Edit opens the Tools customization drawer");
+    let drawer = nodes
+        .iter()
+        .find(|n| n.role() == Role::Dialog && n.label() == Some("Edit Toolbar"))
+        .and_then(bounds)
+        .expect("the native customization drawer is drawn");
+    // Main anchors its native drawer to the rail's canvas side; the footer button remains its focus opener.
+    assert!(
+        drawer.left() >= panel.right() - 1.0 && drawer.top() < panel.bottom() && drawer.bottom() > panel.top(),
+        "the customization drawer remains beside its Tools rail: {drawer:?}, {panel:?}"
+    );
+    assert!(nodes.iter().any(|n| n.label() == Some("All Tools")), "the customization list is present");
+    assert_eq!(slots(app), before, "opening customization does not change tool membership");
+    assert!(before.iter().any(|(_, tools)| tools.contains(&"rectangle")));
+    app.run("toolbar.removeTool", json!({"tool": "rectangle"})).unwrap();
+    assert!(!slots(app).iter().any(|(_, tools)| tools.contains(&"rectangle")), "customization still edits the toolbar");
+    // Use the native close control, which returns focus to this footer's Edit button.
+    let close = named_rect(&nodes, "Close");
+    click(app, ctx, 2.0, close.center(), 1400.0);
+    assert!(!app.ui.tools_drawer);
+    let key = |pressed| Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
+    frame(app, ctx, 2.2, vec![key(true), key(false)], 1400.0);
+    settled(app, ctx, 2.3, 1400.0);
+    assert!(app.ui.tools_drawer, "focus returns to Edit: Enter reopens its customization drawer");
+    app.run("window.editToolbar", json!({})).unwrap();
+    settled(app, ctx, 2.6, 1400.0);
+}
+
+fn review_8758_layout(double: bool) {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = app_with(300, 300);
+    app.run("window.toolbarColumns", json!({"double": double})).unwrap();
+    let ctx = reader();
+    let nodes = settled(&mut app, &ctx, 0.0, 1400.0);
+    review_8758_edit_control(&mut app, &ctx, &nodes);
+    let nodes = settled(&mut app, &ctx, 3.0, 1400.0);
+    let search = bounds(review_8758_button(&app, &ctx, &nodes, "Search commands")).unwrap();
+    let edit = bounds(review_8758_button(&app, &ctx, &nodes, "Edit Toolbar")).unwrap();
+    let panel = review_8758_panel(&app, &ctx);
+    assert!(panel.contains_rect(search) && panel.contains_rect(edit), "both controls fit the actual Tools panel");
+    assert!(search.bottom() <= 1400.0 && edit.bottom() <= 1400.0, "both controls fit the window");
+    if double {
+        assert!(search.right() <= edit.left() && (search.center().y - edit.center().y).abs() < 0.01, "Search left of Edit on one row");
+    } else {
+        assert!(
+            search.bottom() <= edit.top() && (search.center().x - edit.center().x).abs() < 0.01,
+            "one column keeps both controls in a fitted stack"
+        );
+    }
+    let chord = crate::menus::shortcut_of(&app, "help.commandPalette").expect("the native Search command has its current shortcut");
+    let expected = craft::ui::contract::tooltip::with_chord("Search commands, tools, panels and effects", &chord, crate::keymap::platform());
+    let tips = review_8758_hovered_texts(&mut app, &ctx, 4.0, search.center());
+    assert!(tips.iter().any(|tip| tip == &expected), "the native Search tooltip includes its command shortcut: {tips:?}");
+    let before = review_8758_unchanged_content(&app);
+    let tool = app.session.tool_id().to_string();
+    click(&mut app, &ctx, 8.0, search.center(), 1400.0);
+    let nodes = frame(&mut app, &ctx, 9.0, vec![Event::Text("old query".into())], 1400.0);
+    assert_eq!(review_8758_query(&nodes), "old query", "the opened native search has keyboard focus");
+    app.run("help.commandPalette", json!({})).unwrap();
+    settled(&mut app, &ctx, 10.0, 1400.0);
+    let nodes = click(&mut app, &ctx, 11.0, search.center(), 1400.0);
+    assert!(app.ui.palette_open, "the actual footer button opens the existing command palette");
+    assert!(review_8758_query(&nodes).is_empty(), "the native palette opens with a fresh query");
+    let nodes = frame(&mut app, &ctx, 12.0, vec![Event::Text("focused".into())], 1400.0);
+    assert_eq!(review_8758_query(&nodes), "focused", "reopening gives the search field keyboard focus");
+    assert!(!app.ui.tools_drawer, "Search is distinct from Edit Toolbar");
+    assert_eq!(review_8758_unchanged_content(&app), before, "Search changes no document, history, selection or toolbar membership");
+    assert_eq!(app.session.tool_id(), tool);
+}
+
+#[test]
+fn review_8758_toolbar_search_fits_beside_edit_and_opens_the_existing_palette() {
+    for double in [true, false] {
+        review_8758_layout(double);
+    }
+}
+
+#[test]
+fn review_8758_toolbar_search_accepts_a_tool_query_and_is_disabled_over_a_dialog() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = app_with(300, 300);
+    let ctx = reader();
+    let nodes = settled(&mut app, &ctx, 0.0, 1400.0);
+    let search = bounds(review_8758_button(&app, &ctx, &nodes, "Search commands")).unwrap();
+    let before = review_8758_unchanged_content(&app);
+    click(&mut app, &ctx, 0.2, search.center(), 1400.0);
+    assert!(app.ui.palette_open);
+    let nodes = frame(&mut app, &ctx, 0.4, vec![Event::Text("Scissors".into())], 1400.0);
+    assert_eq!(review_8758_query(&nodes), "Scissors", "the actual focused query field receives typing");
+    let nodes = settled(&mut app, &ctx, 0.5, 1400.0);
+    let tool = nodes
+        .iter()
+        .find(|n| n.role() == Role::ListBoxOption && n.label().is_some_and(|label| label.starts_with("Scissors")))
+        .expect("the native palette lists the matching Scissors tool");
+    assert!(!tool.is_disabled());
+    click(&mut app, &ctx, 0.7, bounds(tool).unwrap().center(), 1400.0);
+    assert_eq!(app.session.tool_id(), "scissors", "activating the real result chooses the tool");
+    assert!(!app.ui.palette_open, "a pick closes the palette");
+    assert_eq!(app.ui.recent_commands.first().map(|command| command.key_text().into_owned()), Some("tool:scissors".to_string()));
+    assert_eq!(review_8758_unchanged_content(&app), before, "choosing a tool changes no artwork/history or toolbar membership");
+
+    // Current main owns query state inside CommandPalette and resets it on opening. A blocked footer press must not
+    // open that component at all, invoke a command, steal focus or change the existing real dialog's fields.
+    open_options(&mut app, "lineSegment").unwrap();
+    let nodes = settled(&mut app, &ctx, 1.0, 1400.0);
+    let dialog = tool_dialog(&app).expect("the real Tool Options dialog");
+    let focus = craft::ui::runtime::focus::focused_rec(&ctx);
+    let runs = app.run_count;
+    let recent = app.ui.recent_commands.clone();
+    let search = review_8758_button(&app, &ctx, &nodes, "Search commands");
+    assert!(search.is_disabled(), "screen readers find Search disabled while a modal window is open");
+    click(&mut app, &ctx, 1.2, bounds(search).unwrap().center(), 1400.0);
+    assert!(!app.ui.palette_open, "the disabled footer cannot open Search over a dialog");
+    assert_eq!(app.run_count, runs, "the disabled footer does not invoke the palette command");
+    assert_eq!(craft::ui::runtime::focus::focused_rec(&ctx), focus, "the existing modal keeps focus");
+    assert_eq!(app.ui.recent_commands, recent);
+    assert_eq!(tool_dialog(&app), Some(dialog));
+    assert_eq!(review_8758_unchanged_content(&app), before);
+}

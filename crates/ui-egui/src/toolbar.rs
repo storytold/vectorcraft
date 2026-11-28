@@ -2,8 +2,8 @@
 //! Draw, Modify, Type, Navigate, Color). Window → Toolbars → Advanced shows every tool group; the
 //! double arrow at the top (or Window → Toolbars → Double Column, `window.toolbarColumns`) lays the
 //! tools out in one or two columns.
-//! Bottom: fill/stroke proxy, colour/gradient/none, drawing modes, screen mode; the rail's own Edit
-//! Toolbar button opens the All Tools drawer (`edit_toolbar`).
+//! Bottom: fill/stroke proxy, colour/gradient/none, drawing modes, screen mode, Search and Edit
+//! Toolbar. Edit opens the native All Tools drawer (`edit_toolbar`).
 //!
 //! The dock draws the rail ([`rail_view`]) for the Tools panel, for each toolbar made with New
 //! Toolbar and for each group torn off either of them (a `strip:` panel).
@@ -21,7 +21,7 @@ use craft::ui::contract::{Bind, BodyCx, Entry, Gap, Props as _, Show as _, ShowC
 use craft::ui::display::Divider;
 use craft::ui::docking::{DockGrid, GroupAt};
 use craft::ui::form::Field;
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::pickers::{Anchor9, ReferencePointLook, Select};
 use craft::ui::rails::{LastUsed, RailDensity, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
 use craft::ui::runtime::commands::{self, CommandRef};
@@ -253,12 +253,13 @@ fn strip_tools(app: &VectorcraftApp, parent: &Owner, first: &str) -> Vec<&'stati
     groups_of(app, parent).into_iter().find(|g| g.first().is_some_and(|f| *f == first)).unwrap_or_default()
 }
 
-/// The dock grid of the rail panel `owner`: a cell for each of its slots and its Edit Toolbar button. Its rail draws at
-/// the chrome's density, so the dock resolves the grid's steps in its own.
+/// The dock grid of the rail panel `owner`: a cell for each tool slot and a custom toolbar's Edit Toolbar button.
+/// The Tools panel keeps its actions in the host footer. The rail draws at the chrome's density.
 pub(crate) fn dock_grid(app: &VectorcraftApp, owner: &Owner) -> DockGrid {
     let cells = match owner {
         Owner::Strip(parent, first) => strip_tools(app, parent, first).len(),
-        _ => groups_of(app, owner).len() + 1,
+        Owner::Tools => groups_of(app, owner).len(),
+        Owner::Toolbar(_) => groups_of(app, owner).len() + 1,
     };
     DockGrid::rail(cells).density(rail_density(app, owner))
 }
@@ -409,7 +410,10 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
         rail = rail.captions();
     }
     if own_bar {
-        rail = rail.tear_off().edit_toolbar(tl!("Edit Toolbar"));
+        rail = rail.tear_off();
+        if !tools_panel {
+            rail = rail.edit_toolbar(tl!("Edit Toolbar"));
+        }
     }
     if editing(app, &owner) {
         rail = rail.editing();
@@ -419,9 +423,11 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
         _ => None,
     };
     let measured = matches!(at, GroupAt::Measure(_));
+    let mut tools_edit = None;
     let footer = |ui: &mut Ui, footer: RailFooter| {
         if tools_panel {
             bottom_controls(app, ui, footer);
+            tools_edit = search_and_edit_buttons(app, ui, footer);
         } else if let Some(id) = bar {
             crate::custom_toolbars::add_menu(app, ui, id, footer, measured);
         }
@@ -430,7 +436,11 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
         GroupAt::Measure(width) => return rail.measure_rail(ui, width, footer).y,
         GroupAt::Show(rect) => rect,
     };
-    let out = rail.show_rail(ui, footer);
+    let mut out = rail.show_rail(ui, footer);
+    if tools_panel {
+        // The native footer opener follows the same drawer, focus and customization path.
+        out.edit_toolbar = tools_edit;
+    }
     if let Some(tool) = out.select.as_deref().filter(|tool| *tool != app.session.tool_id()) {
         // Not an error to report: a tool the command refuses stays unselected.
         app.run("tool.select", json!({ "tool": tool })).ok();
@@ -827,5 +837,33 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub(crate) mod card;
+/// Search and Edit Toolbar share a row in a wide rail; a narrow rail keeps Edit Toolbar last.
+fn search_and_edit_buttons(app: &VectorcraftApp, ui: &mut Ui, footer: RailFooter) -> Option<egui::Response> {
+    let enabled = !crate::panel_docking::modal_window_up(app);
+    let mut edit = None;
+    let buttons = |ui: &mut Ui, _: &mut BodyCx<'_>| {
+        IconButton::command(IconId::new("search"), "help.commandPalette")
+            .label(tl!("Search commands"))
+            .tooltip(tl!("Search commands, tools, panels and effects"))
+            .selected(app.ui.palette_open)
+            .enabled(enabled)
+            .show(ui);
+        edit = Some(
+            IconButton::new(IconId::new("more"))
+                .label(tl!("Edit Toolbar"))
+                .selected(editing(app, &Owner::Tools))
+                .enabled(crate::menus::enabled(app, "window.editToolbar"))
+                .show(ui)
+                .response,
+        );
+    };
+    if footer.columns > 1 {
+        Row::new().gap(Gap::Tight).id_salt("tools-footer-actions").show(ui, buttons);
+    } else {
+        Stack::new().gap(Gap::Tight).id_salt("tools-footer-actions").show(ui, buttons);
+    }
+    edit
+}
+
 #[cfg(test)]
 pub(crate) mod tests;
