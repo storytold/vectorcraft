@@ -74,6 +74,7 @@ pub mod javascript_files;
 pub mod justification;
 pub mod kinsoku_sets;
 pub(crate) mod layer_color;
+pub mod layer_names;
 pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;

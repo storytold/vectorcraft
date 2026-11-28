@@ -124,6 +124,8 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 ## Progress log
 
+- 2026-11-28: Layers panel › Name Layers with AI… (desktop): names layers and groups from one preview each through a configured Ollama vision server (plain http only on loopback, https otherwise), with Play/Pause, editable review, Apply Ready Names in one undo step (`layer.applyNames`) and in-session continuation; `layer.namingCandidates` lists the targets. See [docs/ai-layer-naming.md](docs/ai-layer-naming.md). Headline numbers unchanged.
+
 - 2026-11-20: Color conversion indexes global swatch bases and linked-paint lookups (#8804); scores, estimates and measured budgets unchanged.
 
 - 2026-11-18: Built-in symbol library Media Controls: adds a seventh procedural symbol library (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu) containing six original vector symbols (Play, Pause, Stop, Skip Next, Shuffle, Repeat) generated in code without default 9-slice guides (part of Gap 5). Headline numbers unchanged.

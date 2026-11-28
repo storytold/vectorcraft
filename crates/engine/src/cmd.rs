@@ -51,6 +51,7 @@ mod interactivity;
 mod intertwine;
 pub mod kinsokusets;
 pub(crate) mod layer;
+mod layernames;
 mod layerpanel;
 pub mod library;
 pub mod linkfiles;
@@ -323,6 +324,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(opacitymask::specs());
         v.extend(layer::specs());
         v.extend(layerpanel::specs());
+        v.extend(layernames::specs());
         v.extend(draw2::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());

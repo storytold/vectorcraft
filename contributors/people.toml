@@ -124,7 +124,9 @@ display_name = "Marco Arnulfo"
 sync_github_name = false
 
 [people.theromis]
-sync_github_name = true
+real_name = "Roman Vasilyev"
+display_name = "theromis"
+sync_github_name = false
 
 [people.dennismutuku2005]
 sync_github_name = true

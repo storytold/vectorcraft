@@ -175,6 +175,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         super::document_setup::pump,
         super::file_info::pump,
         super::package::pump,
+        super::layer_names::pump,
         super::layer_options::pump,
         super::artboard_options::pump,
         super::rearrange_artboards::pump,

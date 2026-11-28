@@ -1271,6 +1271,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{names: [two or more styles]} open Graphic Style Options (dialog `graphicStyleOptions`, field `name`) to name the style OK merges from them (graphicStyle.merge)",
     ),
     (
+        "ui.nameLayers",
+        "Name Layers with AI…",
+        "",
+        "{} open AI naming settings and editable review (dialog `layerNames`); Play sends one preview per group to the configured Ollama server (plain http only on loopback, https otherwise); Apply Ready Names runs layer.applyNames in one undo step; an error in the web build",
+    ),
+    (
         "ui.layerOptions",
         "Options for Selection…",
         "",

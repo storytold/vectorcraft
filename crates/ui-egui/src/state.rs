@@ -998,6 +998,12 @@ pub struct UiState {
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
+    /// Last AI layer naming settings other than the shared Ollama connection (scope and depth).
+    #[serde(default, skip_serializing_if = "Value::is_null")]
+    pub layer_naming_settings: Value,
+    /// Ollama server, vision model and name language, shared by the AI dialogs.
+    #[serde(default, skip_serializing_if = "Value::is_null")]
+    pub ollama_settings: Value,
     /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines) and
     /// the panel menu's View Artboard Contents Only.
     #[serde(default)]
@@ -1585,6 +1591,8 @@ impl Default for UiState {
             trace_hold_source: None,
             trace_ignore_sampler: None,
             layers_panel: Default::default(),
+            layer_naming_settings: Value::Null,
+            ollama_settings: Value::Null,
             navigator_panel: Default::default(),
             attributes_panel: Default::default(),
             layers_ui: Default::default(),

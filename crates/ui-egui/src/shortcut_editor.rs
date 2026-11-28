@@ -481,6 +481,7 @@ const GROUPS: &[(&str, &str)] = &[
     ("ui.loadCharStyles", "Window › Character Styles"),
     ("ui.loadParaStyles", "Window › Paragraph Styles"),
     ("ui.missingFontsDialog", "Type"),
+    ("ui.nameLayers", "Window › Layers"),
     ("ui.newArtboard", "Window › Artboards"),
     ("ui.newBrush", "Window › Brushes"),
     ("ui.newCharStyle", "Window › Character Styles"),

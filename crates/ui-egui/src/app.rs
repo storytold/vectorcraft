@@ -263,6 +263,8 @@ impl VectorcraftApp {
             bullets_preview: Default::default(),
             pending_paste: None,
             link_asks: None,
+            naming_checkpoint: None,
+            naming_job: None,
             ime_marked: None,
             ime_context: Default::default(),
             prefs_changed: false,

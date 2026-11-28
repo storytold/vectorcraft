@@ -54,6 +54,7 @@ pub mod io;
 pub mod keymap;
 pub mod layout_migration;
 pub mod menus;
+mod ollama;
 pub mod opening;
 mod original_editor;
 pub mod os_window;
@@ -326,6 +327,10 @@ pub struct VectorcraftApp {
     pub(crate) pending_paste: Option<dialogs::profile_mismatch::PasteAsk>,
     /// The missing links' questions, while they are asked.
     pub(crate) link_asks: Option<dialogs::missing_links::LinkAsk>,
+    /// The AI layer naming dialog's fields kept for this session, so a paused or closed run resumes on the same document revision.
+    pub(crate) naming_checkpoint: Option<serde_json::Map<String, serde_json::Value>>,
+    /// The running AI layer naming worker.
+    pub(crate) naming_job: Option<dialogs::layer_names::Job>,
     /// The marked text the system IME last sent (`None` once it commits or clears). When the Type
     /// tool stops composing on its own (a click, a tool switch), the IME is told to drop it.
     pub(crate) ime_marked: Option<String>,

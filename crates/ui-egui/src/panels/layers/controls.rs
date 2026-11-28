@@ -106,6 +106,7 @@ fn items(app: &VectorcraftApp) -> Vec<Item> {
         // The rows listed, so no highlighted row outside the isolated art is copied.
         command("layer.duplicate", json!({ "ids": ids }), tl!("Duplicate Selection"), duplicate_ok),
         command("ui.layerDelete", json!({}), tl!("Delete Selection"), !targets.is_empty()),
+        command("ui.nameLayers", json!({}), tl!("Name Layers with AI…"), !cfg!(target_arch = "wasm32")),
         command("ui.layerOptions", json!({}), tl!("Options for Selection…"), !targets.is_empty()),
         Item::Separator,
         command("layer.clippingMask.toggle", json!({}), tl!("Make/Release Clipping Mask"), true),
