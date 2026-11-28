@@ -442,6 +442,21 @@ pub(crate) mod testutil {
         (d, id)
     }
 
+    /// #8531: 21 polygons of 1000 sides at (40, 30)–(80, 70), 21,000 anchors (more than the
+    /// snap targets gather), drawn first, and over them a rectangle (200, 100)–(400, 300): the
+    /// document and the rectangle.
+    pub fn doc_with_rect_over_many_anchors() -> (Document, NodeId) {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        for i in 0..21 {
+            let id = d.alloc_id();
+            d.insert(Some(l), i, Node::path(id, shapes::polygon(Point::new(60.0, 50.0), 20.0, 1000, 0.0), Appearance::default_art())).unwrap();
+        }
+        let id = d.alloc_id();
+        d.insert(Some(l), 21, Node::path(id, shapes::rectangle(Rect::new(200.0, 100.0, 400.0, 300.0)), Appearance::default_art())).unwrap();
+        (d, id)
+    }
+
     /// A live 100 × 100 rectangle at (100, 100)–(200, 200) with no paint: its centre point
     /// (Attributes › Show Center) is at (150, 150), and a press in the middle of it hits no art.
     pub fn doc_with_live_rect() -> (Document, NodeId) {

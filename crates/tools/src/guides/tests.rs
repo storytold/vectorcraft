@@ -11,6 +11,40 @@ fn artboard_bleed_is_a_target() {
     assert_eq!(t.snap_point(Point::new(512.0, 300.0), 4.0).0.x, 510.0);
 }
 
+/// #8531: when a document has more anchors than the targets gather, the object drawn last, in
+/// front, still gives its anchors, edges and centre, for a ruler guide, a moved selection and a
+/// drawn point, while the anchors stay capped.
+#[test]
+fn the_topmost_object_keeps_its_targets_past_the_anchor_budget() {
+    let (d, rect) = doc_with_rect_over_many_anchors();
+    let t = Targets::collect(&d, &[], None);
+    let anchors: Vec<Point> = t.points.iter().filter(|(_, k)| *k == Kind::Anchor).map(|(p, _)| *p).collect();
+    let in_doc: usize = d.layers[0]
+        .children()
+        .into_iter()
+        .flatten()
+        .map(|n| match &n.kind {
+            NodeKind::Path { path, .. } => path.anchors().count(),
+            _ => 0,
+        })
+        .sum();
+    assert!(anchors.len() < in_doc, "the anchors stay capped");
+    assert!(anchors.contains(&Point::new(400.0, 300.0)), "the rectangle's corner");
+    assert_eq!(t.snap_guide(false, 301.0, 4.0).0, 300.0, "the bottom edge");
+    assert_eq!(t.snap_guide(true, 398.0, 4.0).0, 400.0, "the right edge");
+    let (p, ov) = t.snap_point(Point::new(302.0, 201.0), 4.0);
+    assert_eq!(p, Point::new(300.0, 200.0));
+    assert!(matches!(&ov[0], Overlay::Label { text, .. } if text == "center"), "{ov:?}");
+    // A box moved next to it lines up with its top edge.
+    let other = Targets::collect(&d, &[rect], None);
+    let (s, pt) = (Selection::default(), paint());
+    let moving = Targets::for_move(&cx(&d, &s, &pt), &[]);
+    assert_eq!(moving.snap_rect(Rect::new(420.0, 102.0, 450.0, 130.0), 4.0).0.y, -2.0);
+    assert_eq!(other.snap_rect(Rect::new(420.0, 102.0, 450.0, 130.0), 4.0).0.y, 0.0, "without the rectangle, nothing near");
+    let drawn = Targets::for_drawing(&d, &[], None, None);
+    assert_eq!(drawn.snap_point(Point::new(450.0, 298.0), 4.0).0.y, 300.0);
+}
+
 #[test]
 fn snaps_to_anchor_and_alignment() {
     let (d, _) = doc_with_rect();

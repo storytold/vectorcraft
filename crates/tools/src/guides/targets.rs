@@ -97,6 +97,16 @@ pub(super) fn walk_but<'a>(nodes: &'a [Arc<Node>], skip: &HashSet<NodeId>, f: &m
     }
 }
 
+/// [`walk_but`] in reverse paint order: the topmost node first.
+fn walk_but_topmost_first<'a>(nodes: &'a [Arc<Node>], skip: &HashSet<NodeId>, f: &mut impl FnMut(&'a Node)) {
+    for n in nodes.iter().rev().filter(|n| n.visible && !skip.contains(&n.id)) {
+        if let Some(ch) = n.children() {
+            walk_but_topmost_first(ch.get(usize::from(n.extras().shaper.is_some())..).unwrap_or_default(), skip, f);
+        }
+        f(n);
+    }
+}
+
 /// The lines of `lines` (sorted by where they run) within `tol` of `v`.
 pub(super) fn lines_near(lines: &[(f64, Point, Kind)], v: f64, tol: f64) -> &[(f64, Point, Kind)] {
     within(lines, |l| l.0, v, tol)
@@ -629,7 +639,9 @@ impl Targets {
             }
         }
         let (mut budget, mut segment_budget) = (BUDGET, BUDGET);
-        walk_but(&doc.layers, &exclude.iter().copied().collect(), &mut |n| {
+        // Topmost first, so when the budgets run out the objects in front, the newest, keep
+        // their anchors, edges and centre (#8531).
+        walk_but_topmost_first(&doc.layers, &exclude.iter().copied().collect(), &mut |n| {
             if budget == 0 || n.is_container() || !n.visible {
                 return;
             }

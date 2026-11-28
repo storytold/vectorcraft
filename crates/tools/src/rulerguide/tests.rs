@@ -108,6 +108,21 @@ fn a_new_guide_snaps_to_the_art_and_the_artboard() {
     assert_eq!(drag(true, 320.0), (320.0, None), "nothing within reach");
 }
 
+/// #8531: in a document with more anchors than the snap targets gather, a guide dragged out of
+/// the top ruler still lands on the edge of the rectangle drawn last, over all of them.
+#[test]
+fn a_new_guide_snaps_to_the_newest_object_over_many_anchors() {
+    let (d, _) = doc_with_rect_over_many_anchors();
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let m = Mods::default();
+    let mut g = NewGuide::new(&c, false, None);
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Drag, 300.0, -5.0, m), false), vec![], "still over the ruler");
+    let a = g.pointer(&c, &ev(PointerKind::Drag, 300.0, 301.0, m), true);
+    assert_eq!(a.last(), Some(&Action::Preview("guide.add".into(), json!({"vertical": false, "pos": 300.0}))), "onto the bottom edge: {a:?}");
+    assert_eq!(g.pointer(&c, &ev(PointerKind::Up, 300.0, 301.0, m), true), vec![Action::Commit]);
+}
+
 /// Preferences › Smart Guides (#394) reach a guide dragged out of a ruler: Snapping
 /// Tolerance sets how far a target pulls it, Anchor/Path Labels and Measurement Labels what
 /// shows by it.
