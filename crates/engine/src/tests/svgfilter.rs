@@ -292,6 +292,24 @@ fn pasted_art_keeps_a_filter_another_of_its_name_would_replace() {
     assert_eq!(both, [("Shift".to_string(), SHIFT_MORE.to_string()), ("Shift".to_string(), SHIFT_MORE.to_string())]);
 }
 
+/// Pasted again, art whose filter was renamed takes the name the first paste gave it, so the
+/// same filter does not come in under a new name each time.
+#[test]
+fn pasting_a_renamed_filter_again_reuses_its_name() {
+    let mut s = session();
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT_MORE}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 2);
+    assert_eq!(pasted[0], pasted[1], "{pasted:?}");
+    assert_ne!(pasted[0].0, "Shift", "{pasted:?}");
+}
+
 /// A pasted filter at the size limit, which "Shift 2" would make too long to draw, keeps its own
 /// definition under a free name no longer than its own (a free letter for a one-letter name), and
 /// its id is that name.

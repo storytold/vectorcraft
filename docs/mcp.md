@@ -9849,6 +9849,20 @@ with the defaults.
   them.
 - `file.newProfiles.reset {name}` deletes the category's file, so the shipped profile applies again, and returns
   `{name, reset}`. `reset` is false when there was no file. A copy of the profile that is open stays open.
+- `file.newProfiles.applyDefaults {name}` (Use Profile Defaults, VectorCraft's own command) gives the active document
+  the default fill and stroke and the default font of another profile. The document's Default Graphic Style takes the
+  fills, strokes, effects and transparency of the profile's, and its [Normal Character Style] takes the profile's
+  attributes, with the profile's colors converted to the document's color mode and the swatches, patterns, symbols and
+  brushes they paint with added. A composite font of the profile that those attributes name replaces the document's
+  composite font of that name, as `type.compositeFonts.import` does. A category without a file gives the shipped
+  defaults. The change is one undo step, which also puts back the fill and stroke new art took, and none is recorded
+  when applying the profile leaves the document unchanged. As
+  `graphicStyle.redefine` and `charStyle.redefine` do, objects still linked to the Default Graphic Style and type in
+  [Normal Character Style] take the new definitions and keep their overrides. New art then starts as `paint.default`
+  gives it, and new type in the profile's font. It returns `{name, changed, warnings?}`, and an error when the
+  profile's file can't be read, its [Normal Character Style] has attributes `charStyle.new` does not take, or the
+  composite font it names can't join the document's composite fonts (`type.compositeFonts.set` checks them the same
+  way).
 - Under automation roots, `file.newProfiles.edit` needs write and read access to the profile's file and
   `file.newProfiles.reset` needs write access. An error names the file whole only inside the read roots, and
   otherwise by its file name.
