@@ -215,6 +215,22 @@ fn a_plugin_may_use_the_listed_webassembly_proposals_and_no_others() {
     }
 }
 
+/// A multi-value `br_table` whose targets all take the same values, with another operand under
+/// those values, gives every target the values it was branched with: the run traps unless each
+/// branch index returns both of them.
+#[test]
+fn a_multi_value_branch_table_gives_every_target_its_values() {
+    let fields = "(func $pick (param $i i32) (result i64 i64)
+        (block (result i64 i64) (i32.const 7) (i64.const 0x1111) (i64.const 0x2222) (br_table 0 1 0 (local.get $i))))
+      (func $check (param $i i32) (local $a i64) (local $b i64)
+        (call $pick (local.get $i)) (local.set $b) (local.set $a)
+        (if (i64.ne (local.get $a) (i64.const 0x1111)) (then unreachable))
+        (if (i64.ne (local.get $b) (i64.const 0x2222)) (then unreachable)))";
+    let run = format!("(call $check (i32.const 0)) (call $check (i32.const 1)) (call $check (i32.const 2)) {}", tpl::ECHO);
+    let p = Plugin::load(&module(MANIFEST, &run, fields), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+}
+
 /// A function type with more than 32 parameters or results is refused before any function body is
 /// validated: the module's extra function has an invalid body, and the error names the limit. A
 /// type with 32 of each loads.
