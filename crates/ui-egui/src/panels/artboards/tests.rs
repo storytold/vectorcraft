@@ -1274,3 +1274,44 @@ fn select_all_artboards_chooses_the_tool_and_needs_a_document() {
     let mut empty = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     assert_eq!(empty.run("artboard.selectAll", json!({})).unwrap_err(), "no document");
 }
+
+thread_local! {
+    /// The row and section gaps the last frame's interface resolved.
+    static GAPS: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((0.0, 0.0)) };
+}
+
+/// Artboard Options shows its groups (the preset, the size and position, the colors, the marks and Global) a
+/// section gap apart, and the rows inside a group a row gap apart.
+#[test]
+fn artboard_options_groups_are_a_section_gap_apart() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+    let mut panel = crate::tests::panel_harness::Panel::new(app, |app, ui| {
+        let gap = craft::ui::runtime::env::Env::of(ui).tokens.space.gap;
+        GAPS.with(|c| c.set((gap.row, gap.section)));
+        crate::tests::picks::dialogs(app, ui);
+    });
+    panel.room(egui::vec2(800.0, 1200.0));
+    panel.app().run("tool.options", json!({"tool": "artboard"})).unwrap();
+    panel.frame();
+    panel.frame();
+    let (row, section) = GAPS.with(std::cell::Cell::get);
+    assert!(row > 0.0 && section > row, "the interface resolved its gaps: row {row}, section {section}");
+    let between = |upper: &str, lower: &str| panel.rect(lower).min.y - panel.rect(upper).max.y;
+    let groups =
+        [("Preset:", "Name:"), ("Y:", "Background Color:"), ("Guide Label:", "Show Center Mark"), ("Video Ruler Pixel Aspect Ratio:", "Global")];
+    for (upper, lower) in groups {
+        let gap = between(upper, lower);
+        assert!((gap - section).abs() < 0.01, "{upper} to {lower}: {gap} apart, the section gap is {section}");
+    }
+    let rows = [
+        ("Name:", "Width:"),
+        ("Background Color:", "Guide Label:"),
+        ("Show Center Mark", "Show Cross Hairs"),
+        ("Global", "Fade Region Outside Artboard"),
+    ];
+    for (upper, lower) in rows {
+        let gap = between(upper, lower);
+        assert!((gap - row).abs() < 0.01, "{upper} to {lower}: {gap} apart, the row gap is {row}");
+    }
+}
