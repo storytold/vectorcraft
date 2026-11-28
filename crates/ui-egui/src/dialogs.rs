@@ -139,6 +139,7 @@ pub(crate) mod saved_names;
 pub(crate) mod screen_formats;
 pub mod script_check;
 pub mod script_run;
+pub mod script_window;
 pub mod shape_builder_options;
 pub(crate) mod shapes;
 pub mod shortcut_import;

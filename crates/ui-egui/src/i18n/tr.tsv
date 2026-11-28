@@ -7794,6 +7794,8 @@ axis	Y Axis	Y ekseni
 @msg	`align` must be a string	`align` bir dize olmalıdır
 @msg	`answer` for this {kind} dialog must be one of: {_1}	bu {kind} iletişim kutusu için `answer` şunlardan biri olmalıdır: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` içinde {MAX_ANSWERS} taneden fazla yanıt var
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	{MAX_WAITING} betik paleti olayı zaten bekliyor; bu olay tutulmadı
+@msg	The list's items changed before the choice was taken	Seçim alınmadan önce listenin öğeleri değişti
 @msg	`answers` is larger than 1 MiB	`answers` 1 MiB'tan büyük
 @msg	`answers` must be a list of answers	`answers` bir yanıt listesi olmalıdır
 @msg	`artboard` must be the index of an artboard of the document	`artboard`, belgedeki bir çalışma yüzeyinin dizini olmalıdır
@@ -7996,7 +7998,9 @@ axis	Y Axis	Y ekseni
 @msg	missing `picks`	`picks` eksik
 @msg	missing `word`	`word` eksik
 @msg	must be an object with `kind` and `value`	`kind` ve `value` içeren bir nesne olmalıdır
-@msg	must have `kind` alert, confirm or prompt	`kind` değeri alert, confirm veya prompt olmalıdır
+@msg	must have `kind` alert, confirm, prompt or window	`kind` değeri alert, confirm, prompt veya window olmalıdır
+@msg	is a window's answer, whose `value` must be a list of steps	bir pencerenin yanıtıdır ve `value` değeri bir adım listesi olmalıdır
+@msg	has a step {i} that is not a valid click, change or close	içindeki {i}. adım geçerli bir tıklama, değişiklik veya kapatma değil
 @msg	must have exactly `kind` and `value`	yalnızca `kind` ve `value` içermelidir
 @msg	needs a closing quote after the name	addan sonra bir kapanış tırnağı gerekir
 @msg	needs a name	bir ad gerekir

@@ -6614,6 +6614,8 @@ imageTrace	Outline	Contour
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` moet ankerindexen bevatten (0, 1, 2…), niet {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` voor dit dialoogvenster {kind} moet een van de volgende zijn: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` heeft meer dan {MAX_ANSWERS} antwoorden
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	er wachten al {MAX_WAITING} gebeurtenissen van scriptpaletten; deze is niet bewaard
+@msg	The list's items changed before the choice was taken	De items van de lijst zijn gewijzigd voordat de keuze werd overgenomen
 @msg	`answers` is larger than 1 MiB	`answers` is groter dan 1 MiB
 @msg	`answers` must be a list of answers	`answers` moet een lijst met antwoorden zijn
 @msg	`artboard` must be the index of an artboard of the document	`artboard` moet de index van een tekengebied van het document zijn
@@ -7503,7 +7505,9 @@ imageTrace	Outline	Contour
 @msg	more than {MAX_IMPORT} presets	meer dan {MAX_IMPORT} voorinstellingen
 @msg	moved must be [[x,y]…]	moved moet [[x,y]…] zijn
 @msg	must be an object with `kind` and `value`	moet een object met `kind` en `value` zijn
-@msg	must have `kind` alert, confirm or prompt	moet `kind` alert, confirm of prompt hebben
+@msg	must have `kind` alert, confirm, prompt or window	moet `kind` alert, confirm, prompt of window hebben
+@msg	is a window's answer, whose `value` must be a list of steps	is het antwoord van een venster, waarvan `value` een lijst met stappen moet zijn
+@msg	has a step {i} that is not a valid click, change or close	heeft een stap {i} die geen geldige klik, wijziging of sluiting is
 @msg	must have exactly `kind` and `value`	moet precies `kind` en `value` hebben
 @msg	name (a toolbar's name) is required	name (de naam van een werkbalk) is vereist
 @msg	name (a toolbar's name) must be a string	name (de naam van een werkbalk) moet een string zijn

@@ -2627,9 +2627,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
 
 - `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects,
   syntax and directives, such as `$`, `alert`, `UnitValue`, `reflect`, the XML object and E4X, `#target` and
-  `#targetengine`), `dom` (the reference app's document model), `files`, `menuCommands`, `dialogs`, and `hostOnly`
-  (features only the reference app has: palettes, BridgeTalk, sockets, native code, XMP, operator overloading,
-  actions and `selectTool`).
+  `#targetengine`), `dom` (the reference app's document model), `files`, `menuCommands`, `dialogs` (dialogs and
+  palettes), and `hostOnly` (features only the reference app has: BridgeTalk, sockets, native code, XMP, operator
+  overloading, actions and `selectTool`).
 - `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
   and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
   `locale`. A directive is read where it starts a line, written `#name` or `//@name`.
@@ -3231,10 +3231,12 @@ app's own errors, syntax errors and limits. The status bar shows a `script` mess
 - `console` is `{lines, droppedLines, truncatedLines}`: the run's own output, `vc.log` lines and uncaught error, as
   text.
 - `dialogs` lists the run's dialogs in the order they opened, as `{kind, message, title, errorIcon, answer}` for
-  `alert`, `{kind, message, title, noAsDefault, answer}` for `confirm` and `{kind, message, title, preset, answer}`
-  for `prompt`. `answer` is `"ok"`, `true`, `false`, the prompt's text, `null` for Cancel, `"stop"` for a dialog the
-  run ended at, or `"missing"` for a dialog `answers` had no answer for. `dialogCount` counts every dialog, and
-  `dialogsTruncated` is true when the list stopped at its limit.
+  `alert`, `{kind, message, title, noAsDefault, answer}` for `confirm`, `{kind, message, title, preset, answer}`
+  for `prompt` and `{kind, title, controls, events, answer}` for a ScriptUI dialog's `show()` (kind `window`).
+  `answer` is `"ok"`, `true`, `false`, the prompt's text, `null` for Cancel, the number `show()` returned, `"stop"`
+  for a dialog the run ended at, `"missing"` for a dialog `answers` had no answer or no step for, or `"error"` for a
+  `show()` that ended with an error. `dialogCount` counts every dialog, and `dialogsTruncated` is true when the list
+  stopped at its limit.
 
 ```json
 {"name":"run_command","arguments":{"command":"script.run","params":{"source":"vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10});"}}}
@@ -3283,6 +3285,184 @@ empty object are the same.
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "if (confirm(\"Add a frame?\")) vc.log(prompt(\"Name\", \"Frame\"));", "answers": [{"kind": "confirm", "value": true}, {"kind": "prompt", "value": "Border"}]}'
+```
+
+The help pages https://extendscript.docsforadobe.dev/user-interface-tools/window-object/,
+https://extendscript.docsforadobe.dev/user-interface-tools/control-objects/ and
+https://extendscript.docsforadobe.dev/user-interface-tools/types-of-controls/ describe ScriptUI's `Window` and its
+controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and shows it:
+
+- `new Window("dialog"[, title, bounds, properties])` makes a dialog, and `new Window("palette", ...)` a palette,
+  which is described after the dialogs below. The type `window` and a resource string throw an `Error` that says
+  it is not available yet.
+- `container.add(type[, bounds, ...])` adds a control to the dialog, a `group` or a `panel` and returns it. The
+  types are `group`, `panel`, `statictext`, `edittext`, `button`, `checkbox`, `radiobutton`, `dropdownlist`,
+  `listbox`, `slider` and `progressbar`. After `bounds`, a text control takes its text and `properties` (`name`,
+  and `multiline` and `readonly` for `edittext`), a list takes an array of item texts, a `slider` takes its value,
+  minimum and maximum (0 and 100 when left out), and a `progressbar` its value and maximum. A `group` takes
+  `properties` right after `bounds`, or fourth when the third argument is not an object, and a list may take
+  `properties` right after `bounds` in place of its items, with the item texts in `properties.items`; a list given
+  items both ways throws a `TypeError`. The `alignment` in `properties`,
+  and a container's `orientation`, `alignChildren`, `spacing` and `margins` there, are the control's first values
+  (VectorCraft's own rule). A `listbox` with `multiselect` and the other control types (`tabbedpanel`, `tab`,
+  `scrollbar`, `image`, `iconbutton`, `treeview` and the rest) throw that they are not available yet, and an
+  unknown type throws too.
+- A list's `add("item", text)` adds an item, `find(text)` gives the first item with that text or `null`,
+  `remove(what)` removes the item given by its index, the item itself or its text, `removeAll()` removes them all,
+  `items` lists them and `selection` is the selected item or `null`; setting it to an item or an index selects it.
+  An item has `text`, `index` and `selected`.
+- A control has `text`, `value`, `enabled`, `visible`, `name`, `bounds`, `preferredSize`, `size`, `minimumSize`,
+  `maximumSize`, `alignment`, `parent`, `window`, `show()`, `hide()` and `notify([event])`. Each size starts as an
+  object whose `width` and `height` are -1, so a script can set one side, as in `preferredSize.width = 100`; a side
+  of 0 or less is left to the layout (VectorCraft's own starting values). A container also has `children`,
+  `orientation` (`row`, `column` or `stack`; a group starts as a row and the dialog and a panel as a column),
+  `alignChildren`, `spacing` (10 to start), `margins` (15 to start, 0 for a group), `findElement(name)`, `update()`
+  and `remove(what)`, which removes the control given by its index, the control itself or its text. Removing an item
+  or a control that is not there does nothing. A removed control has no `parent`, it and the controls it holds have
+  no `window`, and its events no longer reach the containers it was in, also when a handler removes it while its
+  event runs; `add`, `remove` and `removeAll` on it, or on a control it holds, throw an `Error`. When a `text`
+  getter changes the list or container while `remove(text)` looks for a match, `remove` throws an `Error` and
+  removes nothing. The dialog has `defaultElement`, `cancelElement`, `close([result])`, `hide()` and `update()`.
+  `center()`, `layout.layout()` and `layout.resize()` do nothing.
+- `update()` on the showing dialog, or on a group or panel in it, runs without an error and does nothing more: a handler
+  runs to its end before the app draws again, so the dialog shows the handler's changes when the handler
+  returns, and a progress bar that a handler moves shows only its last value. On a window that is not showing
+  it throws an `Error`, and on a control that is not a container it throws a `TypeError`. It does not take the
+  person's clicks or changes: the dialog takes them once the running handler returns, so a loop that waits for
+  a Cancel button's `onClick` to set a flag does not see the click.
+- Radio buttons added one after another in a container form a set: setting one's `value` to true, or clicking it,
+  sets the others in the set to false. A control of another kind between two radio buttons starts a new set, as
+  the JavaScript Tools Guide describes radio buttons
+  (https://raw.githubusercontent.com/Adobe-CEP/CEP-Resources/master/ExtendScript-Toolkit/Guides/JavaScript%20Tools%20Guide%20CC.pdf).
+- `notify("onClick")`, `notify("onChange")` and `notify("onChanging")` run the handlers that the person's click or
+  change would run: a click turns a check box over and turns a radio button on, then runs `onClick` and the
+  `click` listeners. `notify` does not close the dialog, even for the default or cancel button. `notify()` gives a
+  click for a button, a check box and a radio button, and a change for the others.
+- `addEventListener(type, handler[, capture])` registers a function for `click`, `change`, `changing` or `show`,
+  and `removeEventListener` with the same arguments removes it, so that it does not run even when the event it was
+  waiting for is already running; a function registered twice for the same type and phase runs once. `show` can
+  be registered only on the dialog, and on a control it throws an `Error`. A window or control takes at most 256
+  handlers, past which `addEventListener` throws a `RangeError` (VectorCraft's own
+  limit). A handler gets an event with `type`, `target`, `currentTarget`, `eventPhase`, `bubbles`, `cancelable`
+  (always false), `detail` (1 for a click), `stopPropagation()` and `preventDefault()`, which does nothing. The
+  containers above the control run their `capture` handlers first, then the control runs its `onClick`,
+  `onChange` or `onChanging` and its own handlers, then the containers run their other handlers, from the nearest
+  out, until a handler calls `stopPropagation()`. The other documented event types (`focus`, `mouseover`,
+  `keydown` and the rest) throw that they are not available yet, and a handler that is not a function throws a
+  `TypeError`.
+- `Window.alert`, `Window.confirm` and `Window.prompt` open the same dialogs as `alert`, `confirm` and `prompt`.
+
+`show()` opens the dialog, runs `onShow` and the `show` handlers, and waits for the person. A click runs the
+control's `onClick` and `click` handlers; a check box turns its value over first, and a radio button turns on and
+the other radio buttons of its set off. An edit field gives its text when it loses the keyboard focus, at Enter in
+a one-line field, or before a click on another control, and a slider gives its value when it is let go: each runs
+`onChanging` and then `onChange`. A list's new selection runs `onChange`. Handlers run in the run's instructions,
+and a handler that does not end stops the run at its limit. `show()` returns the number given to `close(result)`
+(0 when left out), 1 when the default button is clicked and 2 when the cancel button is clicked, and 0 for the
+close box. The default or cancel button closes the dialog only when it has no `onClick` and no `click` handler of
+its own and no `capture` handler on a container stopped the click; `click` handlers on the containers that do not
+capture do not keep it from closing (VectorCraft's own rule). `onClose` runs before the dialog closes, and
+returning `false` keeps it open. The default button is `defaultElement`, else a button named or titled OK, and the
+cancel button is `cancelElement`, else a button named or titled Cancel, in any case. A `show()` inside a handler,
+or of a dialog that is showing, throws an `Error`, and so does one inside a callback of a built-in function. In
+the app, `alert`, `confirm`, `prompt` and the file dialogs called from a handler also throw an `Error`; in a run with
+nobody to ask, `alert`, `confirm` and `prompt` in a handler take their answers from `answers`. A shown dialog can be shown again after it closes.
+
+`show()` checks the dialog: at most 512 controls, nested at most 16 deep, 1,024 list items in all and 16 KiB of
+text a control, past which it throws a `RangeError`, a size or a place that is not a finite number, which throws
+too, and a slider's minimum above its maximum. When a getter changes a list's items after the list was read, it
+reads the dialog again, and throws an `Error` when a list changes again. It lays the controls out from each container's `orientation`,
+`alignChildren`, `spacing` and `margins` and each control's `alignment`, `preferredSize` (each side of `size` that
+is above 0 takes the place of `preferredSize`'s), `minimumSize`, `maximumSize` and `bounds`, which places it in its
+container. A control whose `visible` is false, and every control in it, takes no room in the layout. Sizes and places
+are kept within 8,192 pixels. These limits are VectorCraft's own.
+
+In the app, the dialog (kind `scriptWindow`) draws the controls where they were laid out and has a Stop button,
+which ends the run as `script.stop` does. It stays open while one of its handlers runs and closes when `show()`
+returns. Enter outside a field clicks the default button, also with the keyboard focus on a slider or another
+control that Enter does not click. Escape clicks the
+cancel button, or closes the dialog when it has none. Quitting while it waits, or while one of its handlers runs,
+asks whether to stop the script, and Cancel shows it again with the events it has not given the script yet. When a
+handler takes the run past the growth limit, the question to continue opens over the dialog, and Continue shows the
+dialog again with those events and the text typed in its fields. An event that waits for the script goes to the control
+it was given to, and a typed text stays in its field, also after a handler adds controls before that one.
+`ui.dialog.set` with `event` (`click`, `change` or `close`), `control` (a control's index in the dialog, its name, or
+the text of a control without a name) and `value`, then `ui.dialog.confirm`, gives the script that event; a click or a close first gives the
+script the text still typed in the dialog's fields. When the dialog holds events the script has not taken yet, the
+confirmed event goes after them. When one of those texts is longer than 16 KiB, the script gets
+no event and every field keeps its text: `ui.dialog.confirm`, `ui.dialog.cancel` and `ui.dialog.set` with `action`
+return an error, and Escape shows it in the status bar. Such a text stays in its field when the field loses the
+focus too, with the error in the status bar. A disabled or hidden control, a value out of a list's range, a
+list index that is not a whole number and a click on a control that takes none are errors, and the dialog stays
+open.
+
+A run with nobody to ask takes `{kind: "window", value: [step, ...]}` from `answers` for each `show()`. A step is
+`{control, event: "click"}`, `{control, event: "change", value}` or `{event: "close"}`, where `control` is a
+control's `name`, or the text of a control without a name, and `value` is an edit field's text, a slider's number (kept in its range), or a
+list's item index (a whole number, such as `2` or `2.0`) or `null`. The dialog takes the next step each time it
+waits. The run ends with an error that the script cannot catch, and every document goes back, when no step is
+left, when a step names a control the dialog does not have or that cannot take it, or when the dialog closes, or
+an error in a handler ends `show()`, with steps it did not use.
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"source": "var w = new Window(\"dialog\", \"Frame\"); var name = w.add(\"edittext\", undefined, \"Frame\", {name: \"name\"}); w.add(\"button\", undefined, \"OK\"); w.add(\"button\", undefined, \"Cancel\"); if (w.show() == 1) vc.log(name.text);", "answers": [{"kind": "window", "value": [{"control": "name", "event": "change", "value": "Border"}, {"control": "OK", "event": "click"}]}]}'
+```
+
+A palette is a ScriptUI window that stays open beside the documents after the script that showed it has ended, and
+that the person can use while they work (the window-object help page above). A script builds it like a dialog, with
+the same controls, handlers and limits:
+
+- A palette needs a named engine, which keeps its controls and handlers after the run. In a script without
+  `#targetengine`, or with `#targetengine main`, `new Window("palette")` throws an `Error` that says to add a
+  `#targetengine` line (see [Script engines](#script-engines)).
+- `show()` runs `onShow` and returns `undefined` at once. `hide()` hides the palette, and `show()` shows it again.
+  `close()` runs `onClose` and closes the palette unless `onClose` returns `false`; the close box does the same.
+  A palette also closes when `script.engine.drop` drops its engine, when its engine ends with an internal error,
+  and when the session ends. The palette shows its controls as `show()`, `add()`, each event's handlers and each
+  run of its engine leave them; a run that a limit or `script.stop` ended can leave it showing them as they were.
+  `update()` on the palette, or on a group or panel in it, first runs the handlers of the clicks, changes and
+  closes that wait for the palettes of the run's engine, oldest first, so a Cancel button's `onClick` can stop
+  a loop that calls `update()` (https://extendscript.docsforadobe.dev/user-interface-tools/window-object/).
+  Those events do not wait for runs of their own. Each one is checked against the palette as the script and the
+  handlers before it left it, as an event's own run would be, so a click on a control that an earlier handler
+  disabled, hid or removed runs no handler. In the app, an `update()` in the script's own code then
+  pauses the run so the app draws the palette as it is, at most once every 16 ms of the run's time
+  (VectorCraft's own interval); an `update()` within the same 16 ms does not pause the run, and the app draws
+  its changes at the next pause or when the run ends. An `update()` in a handler, in a callback of a built-in
+  function such as `forEach`, in a getter or in a conversion does not pause the run, since the run cannot
+  pause there, and on the web `update()` does not pause the run; the app draws those changes when the run ends.
+  On a palette that `hide()` hid, or that is not shown, it throws an `Error`; setting the palette's `visible`
+  does not change this.
+  A handler's run reads and writes the files the person allowed the script that first showed the palette with
+  Always. A file allowed once stays with the run whose dialog allowed it, as for any later run.
+- Each click, change or close the person gives a palette runs its handler as a run of its own in the palette's
+  engine, with its own report and, when it changes a document, its own Run Script undo step. While another run
+  goes on, the event waits and runs after it; events run one at a time, oldest first. While an event waits, a
+  newer click on the same control, change of the same control or close of the same palette takes its place,
+  with the newer value. A waiting click or change, and a text typed in a field, stay with their control when a
+  run adds controls before it. A waiting event whose control is gone, or that its control can no longer take
+  because a handler disabled or hid it, is dropped. A list's change ends its run
+  with an error when a script added or removed the list's items after the person chose, even if the list again
+  holds the same texts. A text typed in a palette's field that is longer than 16 KiB stays in the field with the error in the status bar, and a click or close waits
+  until it is fixed. An error in a handler ends that run like any failed run, puts the documents back, and
+  leaves the palette open. In the app, `alert`, `confirm`, `prompt` and a dialog's `show()` throw inside a
+  handler; with nobody to ask, a handler's run has no `answers` and ends at the first of them.
+- A session keeps at most 16 palettes, shown or hidden, past which `show()` throws a `RangeError`, and at most 64
+  waiting events, past which an event is refused. Hiding or closing a palette drops its waiting events. These
+  limits are VectorCraft's own.
+
+`script.palettes {}` lists the palettes in the order they were first shown: `{palettes: [{id, engine, title,
+visible, controls: [{index, kind, name, text, enabled, visible, value?, items?, selection?}]}], waiting, limit: 16,
+waitingLimit: 64}`. `script.palette.event {palette, event, control?, value?}` gives a shown palette a `click`, a
+`change` or a `close`, with `control` and `value` as in a `window` answer's step (`control` can also be a control's
+index). In the app it returns `{waiting: true, merged, waitingEvents}`, and the handler's report is later in
+`ui.inspect`'s `scriptReport`. With nobody to ask, it runs the waiting events and returns the report of this one,
+or its error; an event whose run cannot begin ends it with that error, and the events after it keep waiting. A
+hidden palette, a disabled or hidden control, and a control that cannot take the event are errors, and with nobody
+to ask so is an event while an undo group is open.
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"source": "#targetengine tools\nvar p = new Window(\"palette\", \"Tools\"); var go = p.add(\"button\", undefined, \"Add\"); go.onClick = function () { vc.run(\"shape.rectangle\", {x: 0, y: 0, width: 20, height: 20}); }; p.show();"}'
 ```
 
 The help pages https://extendscript.docsforadobe.dev/file-system-access/file-object/ and

@@ -2807,6 +2807,8 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	there is no script engine named {name}	δεν υπάρχει μηχανή σεναρίων με όνομα {name}
 @msg	`answers` must be a list of answers	το `answers` πρέπει να είναι λίστα απαντήσεων
 @msg	`answers` has more than {MAX_ANSWERS} answers	το `answers` έχει περισσότερες από {MAX_ANSWERS} απαντήσεις
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	ήδη περιμένουν {MAX_WAITING} συμβάντα παλετών σεναρίων· αυτό δεν κρατήθηκε
+@msg	The list's items changed before the choice was taken	Τα στοιχεία της λίστας άλλαξαν πριν ληφθεί η επιλογή
 @msg	`answers` is larger than 1 MiB	το `answers` είναι μεγαλύτερο από 1 MiB
 @msg	`answers[{i}]` {e}	το `answers[{i}]` {e}
 @msg	must be an object with `kind` and `value`	πρέπει να είναι αντικείμενο με `kind` και `value`
@@ -2815,7 +2817,9 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	is a confirm's answer, whose `value` must be true or false	είναι απάντηση σε confirm, οπότε το `value` πρέπει να είναι true ή false
 @msg	is longer than 16 KiB	είναι μεγαλύτερο από 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	είναι απάντηση σε prompt, οπότε το `value` πρέπει να είναι συμβολοσειρά ή null
-@msg	must have `kind` alert, confirm or prompt	πρέπει να έχει `kind` alert, confirm ή prompt
+@msg	must have `kind` alert, confirm, prompt or window	πρέπει να έχει `kind` alert, confirm, prompt ή window
+@msg	is a window's answer, whose `value` must be a list of steps	είναι απάντηση παραθύρου, της οποίας το `value` πρέπει να είναι λίστα βημάτων
+@msg	has a step {i} that is not a valid click, change or close	έχει ένα βήμα {i} που δεν είναι έγκυρο κλικ, αλλαγή ή κλείσιμο
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	το `answers` είναι μόνο για εκτέλεση χωρίς κανέναν να ερωτηθεί: στην εφαρμογή, το άτομο απαντά σε κάθε παράθυρο διαλόγου
 @msg	`maxFuel` must be a whole number from 1 to {_1}	το `maxFuel` πρέπει να είναι ακέραιος από 1 έως {_1}
 @msg	`args{place}` is nested more than 64 levels deep	το `args{place}` έχει ένθεση μεγαλύτερη των 64 επιπέδων

@@ -6616,6 +6616,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	there is no script engine named {name}	no hi ha cap motor d'scripts anomenat {name}
 @msg	`answers` must be a list of answers	`answers` ha de ser una llista de respostes
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` té més de {MAX_ANSWERS} respostes
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	ja esperen {MAX_WAITING} esdeveniments de paletes d'scripts; aquest no s'ha conservat
+@msg	The list's items changed before the choice was taken	Els elements de la llista han canviat abans que es prengués l'elecció
 @msg	`answers` is larger than 1 MiB	`answers` ocupa més d'1 MiB
 @msg	must be an object with `kind` and `value`	ha de ser un objecte amb `kind` i `value`
 @msg	must have exactly `kind` and `value`	ha de tenir exactament `kind` i `value`
@@ -6623,7 +6625,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	is a confirm's answer, whose `value` must be true or false	és la resposta d'un confirm, i el seu `value` ha de ser true o false
 @msg	is longer than 16 KiB	ocupa més de 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	és la resposta d'un prompt, i el seu `value` ha de ser una cadena o null
-@msg	must have `kind` alert, confirm or prompt	ha de tenir `kind` alert, confirm o prompt
+@msg	must have `kind` alert, confirm, prompt or window	ha de tenir `kind` alert, confirm, prompt o window
+@msg	is a window's answer, whose `value` must be a list of steps	és la resposta d’una finestra, el `value` de la qual ha de ser una llista de passos
+@msg	has a step {i} that is not a valid click, change or close	té un pas {i} que no és un clic, un canvi ni un tancament vàlid
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` només és per a una execució sense ningú a qui preguntar: a l'aplicació, la persona respon cada quadre de diàleg
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` ha de ser un nombre enter d’1 a {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` està imbricat en més de 64 nivells

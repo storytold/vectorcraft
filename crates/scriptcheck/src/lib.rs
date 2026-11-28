@@ -120,8 +120,8 @@ pub enum Need {
     MenuCommands,
     /// Dialogs and windows of its own.
     Dialogs,
-    /// Features only the reference app has (palettes, messages to other apps, network
-    /// connections, native code, actions).
+    /// Features only the reference app has (messages to other apps, network connections, native
+    /// code, actions).
     HostOnly,
 }
 

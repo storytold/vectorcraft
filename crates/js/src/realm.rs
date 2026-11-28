@@ -305,6 +305,8 @@ impl Realm {
         interp.waiting_hosted = false;
         interp.constructing = false;
         interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
         interp.finally_marks.clear();
@@ -363,6 +365,8 @@ impl Realm {
         interp.waiting_hosted = false;
         interp.constructing = false;
         interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
         interp.passing = Value::Undefined;
         interp.end_jobs(result.is_ok());
         if let Some(es2015) = interp.next_es2015.take() {
@@ -599,6 +603,38 @@ impl Realm {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }
+    }
+
+    /// Adds ScriptUI's global constructor `Window` ([`crate::scriptui`]), whose dialogs the host
+    /// functions in `items` show: `open` and `wait`, each given the dialog's description, and
+    /// `end`, given the result of `show()` and whether `show()` ended normally.
+    pub fn define_script_ui(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
+        match crate::scriptui::install(&mut self.interp, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Gives the host's `paletteUpdate` the controls of each ScriptUI palette this realm keeps, as
+    /// the run that just ended left them; nothing when it keeps none. A getter it reads runs in the
+    /// run's fuel, and what it throws ends the run.
+    pub fn refresh_script_ui(&mut self) -> Result<(), RunError> {
+        match crate::scriptui::refresh(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// [`Realm::refresh_script_ui`] after a run that failed: what the refresh throws is dropped,
+    /// and the run's error keeps its place ([`Realm::error_source`], [`Realm::error_mark`]) and
+    /// its thrown value.
+    pub fn refresh_script_ui_after_error(&mut self) {
+        let (tag, mark) = (self.interp.error_tag, self.interp.error_mark);
+        let thrown = self.interp.last_thrown.clone();
+        let _ = self.refresh_script_ui();
+        self.interp.error_tag = tag;
+        self.interp.error_mark = mark;
+        self.interp.last_thrown = thrown;
     }
 
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions

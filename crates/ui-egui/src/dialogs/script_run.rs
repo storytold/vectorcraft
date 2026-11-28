@@ -1,6 +1,7 @@
 //! File › Scripts › Other Script…: choosing a JavaScript file and the warning before it runs
 //! (`script.run` runs it), the question a run that keeps adding art asks, the question quitting
 //! asks while a script runs, and the dialogs a script opens with `alert`, `confirm` and `prompt`.
+//! A script's ScriptUI dialog is in [`script_window`]; these questions and dialogs open over it.
 //!
 //! `ui.runScript {path? | source?, name?}` shows the warning for that script; without either it
 //! asks for a `.js` or `.jsx` file through the app's file asks. With Preferences › General › Show
@@ -50,6 +51,7 @@ use vectorcraft_engine::script::dialogs::{MAX_PROMPT_BYTES, cut_to, shown_text};
 use vectorcraft_engine::script::files::{MAX_ENTRIES, PickAnswer, PickerKind, ScriptPicker};
 use vectorcraft_engine::script::{DialogAnswer, MAX_SOURCE_BYTES, ScriptDialog};
 
+use super::script_window::{self, ScriptWindow};
 use crate::VectorcraftApp;
 use crate::file_asks::{self, Owner};
 
@@ -430,9 +432,34 @@ pub(crate) fn asking_to_close(app: &VectorcraftApp) -> bool {
     with_host(app, |host, _| host.is_open::<CloseQuestion>()).unwrap_or(false)
 }
 
-/// Whether a dialog is open or waits to open: a script's dialog opens only over nothing.
+/// Whether a dialog is open or waits to open: a script's dialog opens only over nothing. A
+/// script's palettes ([`crate::script_palettes`]) stay open beside the documents and are not
+/// counted.
 pub(crate) fn busy(app: &VectorcraftApp) -> bool {
-    app.any_dialog_open() || with_host(app, |host, _| !host.is_empty()).unwrap_or(false)
+    let other = |host: &mut DialogHost| {
+        let open = host.open_dialogs();
+        !host.is_empty() && (open.is_empty() || open.iter().any(|d| d.key.as_deref() != Some(crate::script_palettes::KIND)))
+    };
+    app.any_dialog_open() || with_host(app, |host, _| other(host)).unwrap_or(false)
+}
+
+/// Whether the run's question can open now: over nothing, or over the script's ScriptUI dialog
+/// while nothing is open over it.
+pub(crate) fn can_ask(app: &VectorcraftApp) -> bool {
+    !busy(app) || script_window::is_top(app)
+}
+
+/// Opens `dialog` over the script's ScriptUI dialog when that is the top dialog, so the ScriptUI
+/// dialog keeps its queued events and typed text under it; otherwise over nothing.
+fn open_over_window<D: StackDialog>(app: &VectorcraftApp, dialog: D) {
+    with_host(app, |host, _| match host.get::<ScriptWindow>().map(StackDialog::id).filter(|id| host.stack().is_top(*id)) {
+        Some(parent) => {
+            host.open_child(dialog, parent);
+        }
+        None => {
+            host.open(dialog);
+        }
+    });
 }
 
 /// Closes the open `D` the run no longer waits at, and drops its result: only answers the person
@@ -519,34 +546,41 @@ fn close_question() -> CloseQuestion {
     )
 }
 
-/// Asks whether to continue a run that has added a great deal; Stop is its Cancel button.
+/// Asks whether to continue a run that has added a great deal; Stop is its Cancel button. Over the
+/// script's ScriptUI dialog, Continue shows that dialog again with its queued events and typed
+/// text.
 pub(crate) fn open_growth(app: &VectorcraftApp) {
-    with_host(app, |host, _| host.open(growth_question()));
+    open_over_window(app, growth_question());
 }
 
 /// Shows the dialog the running script waits at.
 pub(crate) fn open_notice(app: &VectorcraftApp, d: &ScriptDialog) {
-    with_host(app, |host, _| host.open(ScriptNotice::new(d)));
+    open_over_window(app, ScriptNotice::new(d));
 }
 
 /// Shows the file dialog the running script waits at.
 pub(crate) fn open_picker(app: &VectorcraftApp, p: ScriptPicker) {
-    with_host(app, |host, _| host.open(ScriptFiles::new(p)));
+    open_over_window(app, ScriptFiles::new(p));
 }
 
 /// Quitting while a script runs asks whether to stop it, also over the script's own dialog, which
-/// Cancel shows again as it was. Any other open dialog stays, and quitting asks nothing yet.
+/// Cancel shows again as it was, with the events a ScriptUI dialog has not given the script yet and
+/// the text typed in its fields. Any other open dialog stays, and quitting asks nothing yet.
 pub(crate) fn ask_to_close(app: &mut VectorcraftApp) {
     with_host(app, |host, _| {
-        let own = host.get::<ScriptNotice>().map(StackDialog::id).or_else(|| host.get::<ScriptFiles>().map(StackDialog::id));
-        match own {
-            Some(parent) if host.stack().is_top(parent) => {
+        let own = [
+            host.get::<ScriptNotice>().map(StackDialog::id),
+            host.get::<ScriptFiles>().map(StackDialog::id),
+            host.get::<ScriptWindow>().map(StackDialog::id),
+        ];
+        match own.into_iter().flatten().find(|id| host.stack().is_top(*id)) {
+            Some(parent) => {
                 host.open_child(close_question(), parent);
             }
             None if host.is_empty() => {
                 host.open(close_question());
             }
-            _ => {}
+            None => {}
         }
     });
 }
@@ -606,6 +640,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     if with_host(app, |host, _| host.get_mut::<ScriptFiles>().is_some_and(|d| std::mem::take(&mut d.choose))).unwrap_or(false) {
         choose(app);
     }
+    script_window::pump(app);
 }
 
 /// Takes the answer to the quit question given between two queued runs, before the next run
@@ -636,6 +671,7 @@ fn answer_close(app: &mut VectorcraftApp, close: Option<DialogResult<<CloseQuest
         }
         forget::<ScriptNotice>(app);
         forget::<ScriptFiles>(app);
+        forget::<ScriptWindow>(app);
         app.sync_views();
     }
 }

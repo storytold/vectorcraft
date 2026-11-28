@@ -1593,6 +1593,12 @@ fn declarations_past_a_limit_hold_from_where_they_stand() {
 }
 
 #[test]
+fn palettes_need_dialogs() {
+    let r = report("#targetengine tools\nvar w = new Window('palette');\nw.show();\n");
+    assert_eq!(r.needs, [Need::Language, Need::Dialogs]);
+}
+
+#[test]
 fn application_methods_are_features_not_members() {
     let r = report("app.executeMenuCommand('acmecopyall');\napp.selectTool('acme');\n");
     assert!(r.members.is_empty(), "{:?}", r.members);

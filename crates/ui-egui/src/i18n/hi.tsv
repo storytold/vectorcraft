@@ -7818,6 +7818,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	there is no script engine named {name}	{name} नाम का कोई स्क्रिप्ट इंजन नहीं है
 @msg	`answers` must be a list of answers	`answers` उत्तरों की सूची होनी चाहिए
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` में {MAX_ANSWERS} से अधिक उत्तर हैं
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	स्क्रिप्ट पैलेट की {MAX_WAITING} घटनाएँ पहले से प्रतीक्षा में हैं; यह नहीं रखी गई
+@msg	The list's items changed before the choice was taken	चुनाव लिए जाने से पहले सूची के आइटम बदल गए
 @msg	`answers` is larger than 1 MiB	`answers` 1 MiB से बड़ा है
 @msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
 @msg	must be an object with `kind` and `value`	`kind` और `value` वाला ऑब्जेक्ट होना चाहिए
@@ -7826,7 +7828,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	is a confirm's answer, whose `value` must be true or false	यह confirm का उत्तर है, इसलिए इसका `value` true या false होना चाहिए
 @msg	is longer than 16 KiB	16 KiB से लंबा है
 @msg	is a prompt's answer, whose `value` must be a string or null	यह prompt का उत्तर है, इसलिए इसका `value` स्ट्रिंग या null होना चाहिए
-@msg	must have `kind` alert, confirm or prompt	`kind` alert, confirm या prompt होना चाहिए
+@msg	must have `kind` alert, confirm, prompt or window	`kind` alert, confirm, prompt या window होना चाहिए
+@msg	is a window's answer, whose `value` must be a list of steps	एक window का उत्तर है, जिसका `value` चरणों की सूची होना चाहिए
+@msg	has a step {i} that is not a valid click, change or close	में चरण {i} मान्य क्लिक, बदलाव या बंद करना नहीं है
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` केवल ऐसे रन के लिए है जिसमें पूछने के लिए कोई नहीं है: ऐप में, व्यक्ति हर डायलॉग का उत्तर देता है
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` 1 से {_1} तक की पूर्ण संख्या होनी चाहिए
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` 64 से अधिक स्तर गहराई तक नेस्ट किया गया है

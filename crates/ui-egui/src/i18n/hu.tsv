@@ -8985,6 +8985,8 @@ breakText	Glyphs	Glifák
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors`: horgonypont-indexek listája kell (0, 1, 2…), ez nem az: {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer`: ennél a párbeszédablaknál ({kind}) ezek egyike kell: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers`: több mint {MAX_ANSWERS} választ tartalmaz
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	már {MAX_WAITING} parancsfájlpaletta-esemény várakozik; ez nem lett megtartva
+@msg	The list's items changed before the choice was taken	A lista elemei megváltoztak, mielőtt a választás érvénybe lépett
 @msg	`answers` is larger than 1 MiB	`answers`: nagyobb 1 MiB-nál
 @msg	`answers` must be a list of answers	`answers`: válaszok listája kell
 @msg	`artboard` must be the index of an artboard of the document	`artboard`: a dokumentum egyik rajztáblájának indexe kell
@@ -9869,7 +9871,9 @@ breakText	Glyphs	Glifák
 @msg	more than {MAX_IMPORT} presets	több mint {MAX_IMPORT} előbeállítás
 @msg	moved must be [[x,y]…]	moved: [[x,y]…] kell
 @msg	must be an object with `kind` and `value`	`kind` és `value` kulcsot tartalmazó objektum kell
-@msg	must have `kind` alert, confirm or prompt	a `kind` értéke alert, confirm vagy prompt kell legyen
+@msg	must have `kind` alert, confirm, prompt or window	a `kind` értéke alert, confirm, prompt vagy window kell legyen
+@msg	is a window's answer, whose `value` must be a list of steps	egy ablak válasza, amelynek `value` értéke lépések listája kell legyen
+@msg	has a step {i} that is not a valid click, change or close	{i}. lépése nem érvényes kattintás, módosítás vagy bezárás
 @msg	must have exactly `kind` and `value`	pontosan a `kind` és a `value` kulcsot kell tartalmaznia
 @msg	name (a toolbar's name) is required	name (egy eszköztár neve): kötelező
 @msg	name (a toolbar's name) must be a string	name (egy eszköztár neve): karakterlánc kell

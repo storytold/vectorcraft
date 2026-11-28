@@ -7416,6 +7416,8 @@ axis	Y Axis	Y 軸
 @msg	`align` must be a string	`align` には文字列を指定してください
 @msg	`answer` for this {kind} dialog must be one of: {_1}	この {kind} ダイアログの `answer` には次のいずれかを指定してください: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` の回答が {MAX_ANSWERS} 個を超えています
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	スクリプトパレットのイベントがすでに {MAX_WAITING} 件待機しているため、このイベントは保持されませんでした
+@msg	The list's items changed before the choice was taken	選択が受け付けられる前にリストの項目が変更されました
 @msg	`answers` is larger than 1 MiB	`answers` が 1 MiB を超えています
 @msg	`answers` must be a list of answers	`answers` には回答のリストを指定してください
 @msg	`artboard` must be the index of an artboard of the document	`artboard` にはドキュメントのアートボードのインデックスを指定してください
@@ -7618,7 +7620,9 @@ axis	Y Axis	Y 軸
 @msg	missing `picks`	`picks` がありません
 @msg	missing `word`	`word` がありません
 @msg	must be an object with `kind` and `value`	には `kind` と `value` を持つオブジェクトを指定してください
-@msg	must have `kind` alert, confirm or prompt	の `kind` には alert、confirm、prompt のいずれかを指定してください
+@msg	must have `kind` alert, confirm, prompt or window	の `kind` には alert、confirm、prompt、window のいずれかを指定してください
+@msg	is a window's answer, whose `value` must be a list of steps	は window の回答で、`value` には手順のリストを指定してください
+@msg	has a step {i} that is not a valid click, change or close	の手順 {i} は有効なクリック、変更、閉じる操作のいずれでもありません
 @msg	must have exactly `kind` and `value`	には `kind` と `value` だけを指定してください
 @msg	needs a closing quote after the name	名前の後に閉じ引用符が必要です
 @msg	needs a name	名前が必要です

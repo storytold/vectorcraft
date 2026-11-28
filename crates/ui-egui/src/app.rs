@@ -514,14 +514,22 @@ impl VectorcraftApp {
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
         crate::panels::actions::after_journaled_edit(self);
         crate::scripts_menu::poll(self, ctx);
+        // A palette event whose run starts on the next frame. While a run goes on, the block below
+        // asks for its frames, and a run that waits for the person goes on at their next input. An
+        // event that waits for an open undo group asks for no frame; the pass that ends the group
+        // asks for the next one (`ui_frame`).
+        if self.session.script_palette_can_start() {
+            ctx.request_repaint();
+        }
         if self.session.script_running()
             && !self.session.script_waiting()
             && self.session.script_dialog().is_none()
+            && self.session.script_window().is_none()
             && self.session.script_picker().is_none()
         {
             // A script in `$.sleep` goes on when its time is up; until then the app can idle. A
             // script at a file dialog goes on when the dialog answers, and `file_asks::poll` looks
-            // for that.
+            // for that. A script at its ScriptUI dialog goes on when the dialog gives it an event.
             match self.session.script_sleep_left() {
                 Some(left) => ctx.request_repaint_after(left),
                 None => ctx.request_repaint(),
@@ -707,6 +715,7 @@ impl VectorcraftApp {
         panels::learn::locate::tidy(self, &ctx);
         crate::doc_windows::show(self, ui);
         export_progress::show(self, ui);
+        crate::script_palettes::show(self, &ctx);
         // After every window this pass may open, and before the palette's field takes the keyboard.
         panel_docking::close_overlays_for_modal(self, &ctx);
         dialogs::host::pump(self, &ctx);
@@ -721,6 +730,10 @@ impl VectorcraftApp {
             toast::post(&ctx, &WindowKey::main(), Toast::new(t.message).tone(tone(t.level)).timeout(Some(t.seconds as f32)));
         }
         menus::native::sync(self, &ctx);
+        // A palette event that waited for an undo group this pass ended starts its run next frame.
+        if self.session.script_palette_can_start() {
+            ctx.request_repaint();
+        }
         // Only a field's commit in the pass of the press is the one it made.
         self.canvas.committed_preview = false;
         self.drop_formats_after_egui_copy(&ctx);

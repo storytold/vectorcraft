@@ -8752,6 +8752,8 @@ breakText	Glyphs	Гліфи
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` має містити індекси опорних точок (0, 1, 2…), а не {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` для цього діалогового вікна ({kind}) має бути одним з: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` містить понад {MAX_ANSWERS} відповідей
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	уже очікують {MAX_WAITING} подій палітр скриптів; цю подію не збережено
+@msg	The list's items changed before the choice was taken	Елементи списку змінилися до того, як вибір було прийнято
 @msg	`answers` is larger than 1 MiB	`answers` більший за 1 МіБ
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` призначений лише для запуску, у якому немає кого запитати: у застосунку людина сама відповідає на кожне діалогове вікно
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` має бути цілим числом від 1 до {_1}
@@ -9638,7 +9640,9 @@ breakText	Glyphs	Гліфи
 @msg	more than {MAX_IMPORT} presets	понад {MAX_IMPORT} наборів
 @msg	moved must be [[x,y]…]	moved має бути [[x,y]…]
 @msg	must be an object with `kind` and `value`	має бути об’єктом із `kind` і `value`
-@msg	must have `kind` alert, confirm or prompt	повинен мати `kind` зі значенням alert, confirm або prompt
+@msg	must have `kind` alert, confirm, prompt or window	повинен мати `kind` зі значенням alert, confirm, prompt або window
+@msg	is a window's answer, whose `value` must be a list of steps	є відповіддю вікна, `value` якої має бути списком кроків
+@msg	has a step {i} that is not a valid click, change or close	має крок {i}, який не є допустимим клацанням, зміною або закриттям
 @msg	must have exactly `kind` and `value`	повинен мати рівно `kind` і `value`
 @msg	name (a toolbar's name) is required	name (ім’я панелі інструментів) є обов’язковим
 @msg	name (a toolbar's name) must be a string	name (ім’я панелі інструментів) має бути рядком

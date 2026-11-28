@@ -74,6 +74,7 @@ pub mod recovery;
 pub mod render_worker;
 pub mod retype_runs;
 pub mod screen_color;
+pub mod script_palettes;
 pub mod script_runs;
 pub mod scripts_menu;
 mod settings;

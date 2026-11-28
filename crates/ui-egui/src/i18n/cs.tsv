@@ -9114,6 +9114,8 @@ breakText	Glyphs	Glyfy
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` musí uvádět indexy kotevních bodů (0, 1, 2…), ne {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` pro tento dialog {kind} musí být jedna z hodnot: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` má více než {MAX_ANSWERS} odpovědí
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	už čeká {MAX_WAITING} událostí palet skriptů; tato nebyla zachována
+@msg	The list's items changed before the choice was taken	Položky seznamu se změnily dříve, než byla volba převzata
 @msg	`answers` is larger than 1 MiB	`answers` je větší než 1 MiB
 @msg	`answers` must be a list of answers	`answers` musí být seznam odpovědí
 @msg	`artboard` must be the index of an artboard of the document	`artboard` musí být index pracovní plochy dokumentu
@@ -9999,7 +10001,9 @@ breakText	Glyphs	Glyfy
 @msg	more than {MAX_IMPORT} presets	více než {MAX_IMPORT} přednastavení
 @msg	moved must be [[x,y]…]	moved musí být [[x,y]…]
 @msg	must be an object with `kind` and `value`	musí být objekt s `kind` a `value`
-@msg	must have `kind` alert, confirm or prompt	musí mít `kind` alert, confirm nebo prompt
+@msg	must have `kind` alert, confirm, prompt or window	musí mít `kind` alert, confirm, prompt nebo window
+@msg	is a window's answer, whose `value` must be a list of steps	je odpověď okna, jejíž `value` musí být seznam kroků
+@msg	has a step {i} that is not a valid click, change or close	má krok {i}, který není platné kliknutí, změna ani zavření
 @msg	must have exactly `kind` and `value`	musí mít právě `kind` a `value`
 @msg	name (a toolbar's name) is required	name (název panelu nástrojů) je povinné
 @msg	name (a toolbar's name) must be a string	name (název panelu nástrojů) musí být řetězec

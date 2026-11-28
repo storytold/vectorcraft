@@ -44,6 +44,7 @@ impl VectorcraftApp {
         });
         self.finish_captures(finished);
         let settle = settle_ms(ctx.global_style().animation_time);
+        let mut handled = 0usize;
         while let Some(req) = self.deferred_control.take().or_else(|| self.channel.as_mut().and_then(ControlChannel::next_request)) {
             // A request held past its deadline is answered as one still queued then.
             if req.deadline.is_some_and(|deadline| self.instant() >= deadline) {
@@ -71,6 +72,7 @@ impl VectorcraftApp {
             // Guarded per request: a panic must not stop the requests behind it.
             let answer = file_access::confine(roots.as_ref(), || vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req)));
             self.ui.answering_control = false;
+            handled += 1;
             let reply = match answer {
                 Ok(reply) => reply,
                 Err(msg) => {
@@ -91,6 +93,10 @@ impl VectorcraftApp {
             if self.viewport_hidden(ctx) {
                 host.paint_while_hidden();
             }
+            ctx.request_repaint();
+        } else if handled > 0 && self.session.script_running() {
+            // A request may have answered the dialog a run waits at, which the app idles for: the
+            // next frame takes the answer and the run's next slice.
             ctx.request_repaint();
         }
         self.answer_pointer_waits(ctx);

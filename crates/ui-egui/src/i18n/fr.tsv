@@ -8981,6 +8981,8 @@ breakText	Glyphs	Glyphes
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` doit lister des indices de points d’ancrage (0, 1, 2…), pas {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` pour cette boîte de dialogue {kind} doit valoir l’une de ces valeurs : {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` contient plus de {MAX_ANSWERS} réponses
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	{MAX_WAITING} événements de palettes de script attendent déjà, celui-ci n’a donc pas été conservé
+@msg	The list's items changed before the choice was taken	Les éléments de la liste ont changé avant que le choix soit pris en compte
 @msg	`answers` is larger than 1 MiB	`answers` dépasse 1 Mio
 @msg	`answers` must be a list of answers	`answers` doit être une liste de réponses
 @msg	`artboard` must be the index of an artboard of the document	`artboard` doit être l’indice d’un plan de travail du document
@@ -9859,7 +9861,9 @@ breakText	Glyphs	Glyphes
 @msg	more than {MAX_IMPORT} presets	plus de {MAX_IMPORT} paramètres prédéfinis
 @msg	moved must be [[x,y]…]	moved doit être [[x,y]…]
 @msg	must be an object with `kind` and `value`	doit être un objet avec `kind` et `value`
-@msg	must have `kind` alert, confirm or prompt	doit avoir `kind` alert, confirm ou prompt
+@msg	must have `kind` alert, confirm, prompt or window	doit avoir `kind` alert, confirm, prompt ou window
+@msg	is a window's answer, whose `value` must be a list of steps	est la réponse d’une fenêtre, dont la `value` doit être une liste d’étapes
+@msg	has a step {i} that is not a valid click, change or close	a une étape {i} qui n’est ni un clic, ni une modification, ni une fermeture valide
 @msg	must have exactly `kind` and `value`	doit avoir exactement `kind` et `value`
 @msg	name (a toolbar's name) is required	name (le nom d’une barre d’outils) est obligatoire
 @msg	name (a toolbar's name) must be a string	name (le nom d’une barre d’outils) doit être une chaîne

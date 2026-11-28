@@ -47,14 +47,22 @@
 //! run. An engine keeps no document and no run: its host functions reach the run through a link
 //! that holds the run's host only while the run goes on. An error, a limit or a stop puts the
 //! documents back and keeps the engine's globals; an internal error drops the engine.
+//!
+//! A run in a named engine can show ScriptUI palettes ([`palettes`]), which stay open after it and
+//! whose events run as runs of their own in that engine, one at a time once no run is going. A
+//! palette closes with its engine.
 
 pub mod console;
 pub mod dialogs;
 pub mod dollar;
 pub mod dom;
 pub mod include;
+pub mod palettes;
+pub mod scriptui;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
+pub use palettes::{ScriptPalette, Waiting};
+pub use scriptui::{ScriptUiDialog, UiEvent, UiKind, UiValue};
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -102,6 +110,9 @@ pub const MAX_LOG_LINES: usize = 10_000;
 pub const MAX_LOG_BYTES: usize = 4 << 20;
 /// The most bytes of `args` given to one run, as JSON.
 pub const MAX_ARGS_BYTES: usize = 1 << 20;
+/// The shortest run time between two ScriptUI `update()` calls that each end the slice, so the app
+/// draws the window (VectorCraft's own value, about one frame).
+const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(16);
 /// The `vc.run` calls one slice makes before the interface draws again.
 const SLICE_HOST_CALLS: u32 = 256;
 /// The bytes that may cross between a script and the host in one run.
@@ -135,7 +146,7 @@ impl Written {
 /// The version `vc.api.version` gives.
 pub const API_VERSION: &str = "1.0";
 /// The features `vc.api.has` knows.
-pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs", "dollar"];
+pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs", "dollar", "scriptui"];
 /// The most commands a run's report lists in `slowestCommands`.
 pub const SLOWEST_COMMANDS: usize = 5;
 
@@ -794,6 +805,8 @@ struct Host {
     started: Option<std::time::Instant>,
     /// The time since [`Host::started`] at which a `$.sleep` ends.
     wake_at: Cell<Option<std::time::Duration>>,
+    /// The time since [`Host::started`] at which a ScriptUI `update()` last ended the slice.
+    drawn_at: Cell<Option<std::time::Duration>>,
     /// Set while a host function runs where the run can stop at the call ([`Realm::wait_flag`]).
     can_wait: Rc<Cell<bool>>,
     /// What the last `#strict` line of the file `$.evalFile` last gave set (`None` without one).
@@ -802,6 +815,13 @@ struct Host {
     dollar: dollar::RunState,
     /// The run's `args`, which `vc.args` gives, and their size as `vc.args` charges it.
     args: RefCell<(Data, u64)>,
+    /// The named engine the run is in; `None` for a new realm.
+    engine: Option<String>,
+    /// The script file the run was read from; `None` for a script given as text.
+    file: Option<String>,
+    /// For the run of a palette's handler, the palette's id and the event, until the palette takes
+    /// it ([`palettes`]).
+    palette_event: RefCell<Option<palettes::Queued>>,
     /// The run's state of the script object model (`app`).
     dom: dom::State,
     /// The documents open when the run began as the person last left them, each with its own file
@@ -1014,6 +1034,24 @@ impl Host {
             self.pause.set(true);
         }
         Ok(())
+    }
+
+    /// A palette's `update()` in the script's own code: in the app, ends the slice so the palette is
+    /// drawn as the script left it, at most once per [`UPDATE_INTERVAL`] of the run's time. →
+    /// whether it does, and the palette's controls are to be given now. Without a clock (the web
+    /// build), and in a run with nobody to draw for, the palette is drawn when the slice or the run
+    /// ends for another reason.
+    fn update_drawn(&self) -> bool {
+        if !self.framed {
+            return false;
+        }
+        let Some(now) = self.elapsed() else { return false };
+        if self.drawn_at.get().is_some_and(|t| now.saturating_sub(t) < UPDATE_INTERVAL) {
+            return false;
+        }
+        self.drawn_at.set(Some(now));
+        self.pause.set(true);
+        true
     }
 
     /// The time left of a `$.sleep`, or none when the run is not asleep.
@@ -1770,6 +1808,7 @@ impl Session {
         match gone {
             Some(engine) => {
                 drop(engine);
+                self.keep_engines_palettes();
                 Ok(())
             }
             None => Err(EngineError::Other(format!("there is no script engine named {name:?}"))),
@@ -1908,6 +1947,32 @@ impl Session {
         with_job(k, |j| j.host.dialogs.answer(&mut j.realm, answer)).unwrap_or(false)
     }
 
+    /// The ScriptUI dialog the running script's `show()` waits at for what the person does. A run
+    /// asked to stop no longer waits: the next [`Session::script_pump`] ends it.
+    pub fn script_window(&self) -> Option<ScriptUiDialog> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.dialogs.waiting_window())).flatten()
+    }
+
+    /// The ScriptUI dialog whose `show()` the running script is in, whether it waits at it or runs
+    /// one of its handlers. A run asked to stop is in none.
+    pub fn script_window_showing(&self) -> Option<ScriptUiDialog> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.dialogs.showing_window())).flatten()
+    }
+
+    /// Gives the ScriptUI dialog the running script waits at `event`; the next
+    /// [`Session::script_pump`] runs the control's handler. → an error, and the dialog still
+    /// waits, when nothing waits or the dialog cannot take the event ([`scriptui::check_event`]).
+    pub fn script_window_answer(&mut self, event: UiEvent) -> std::result::Result<(), String> {
+        let Some(k) = self.script_key.as_ref().filter(|_| !self.script_stop.is_set()) else { return Err("no script dialog waits".into()) };
+        with_job(k, |j| j.host.dialogs.window_answer(&mut j.realm, event)).unwrap_or_else(|| Err("no script dialog waits".into()))
+    }
+
     /// The file dialog (`File.openDialog`, `File.saveDialog`, `Folder.selectDialog` and the objects'
     /// `openDlg`, `saveDlg` and `selectDlg`) the running script waits at. A run asked to stop no
     /// longer waits.
@@ -1999,6 +2064,7 @@ impl Session {
             lost
         });
         drop(lost);
+        self.keep_engines_palettes();
         raise_ids(self);
         self.script_stop.clear();
         self.reset_tool();
@@ -2030,6 +2096,7 @@ impl Session {
 
     /// Begins a run of `request`. → the run's name.
     pub(crate) fn script_start(&mut self, request: Request) -> Result<String> {
+        let palette_event = self.script_palettes.starting.take();
         self.settle_for_script()?;
         // In a build where a fault ends the program, every unsaved document has a copy first.
         if self.script_copy_first && self.docs.iter().any(DocState::is_dirty) && cmd::recovery::save_copies(self).is_err() {
@@ -2133,6 +2200,7 @@ impl Session {
                     script: request.file.clone(),
                     // The text with its included files, so a changed included file asks again.
                     source: expanded.as_ref().map_or_else(|_| request.source.clone(), |e| e.source.clone()),
+                    own: palette_event.as_ref().and_then(|q| q.grants.clone()),
                     data_dir: self.script_data_dir.clone(),
                     engine_code: kept_maps.as_ref().map_or_else(Default::default, |m| {
                         let m = m.borrow();
@@ -2149,10 +2217,14 @@ impl Session {
             kept_maps,
             started: clock(),
             wake_at: Cell::new(None),
+            drawn_at: Cell::new(None),
             can_wait: realm.wait_flag(),
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
+            engine: engine.clone(),
+            file: request.file.clone(),
+            palette_event: RefCell::new(palette_event),
             dom: dom::State::new(heap_bytes),
             run_docs: RefCell::new(
                 self.docs
@@ -2200,6 +2272,7 @@ impl Session {
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
+                    .and_then(|()| if fresh { scriptui::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { dom::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
@@ -2218,6 +2291,7 @@ impl Session {
             // error drops a kept one.
             let keep = !fresh && e.kind != RunErrorKind::Internal;
             self.return_engine(engine.as_deref(), &link, keep.then_some(realm));
+            self.keep_engines_palettes();
             let mut report = failure_report(&name, &e, file.as_deref(), &host, 0, 0);
             close_run(self, &host, &mut report, ending(&e.kind));
             let message = failure_text(&report);
@@ -2288,6 +2362,12 @@ impl Session {
         }
         job.host.calls_this_slice.set(0);
         let outcome = run_slice(self, &mut job);
+        // A failure a dialog recorded in the slice (steps a show left unused) ends the run, even
+        // when the script went on.
+        let outcome = match (outcome, job.host.dialogs.take_failure()) {
+            (Ok(Ok(_)), Some(e)) => Ok(Err(e)),
+            (outcome, _) => outcome,
+        };
         match outcome {
             Err(panic) => {
                 let e = RunError { kind: RunErrorKind::Internal, message: panic, line: 0, column: 0, authored: false };
@@ -2327,6 +2407,7 @@ impl Session {
         let mut report = failure_report(&job.name, &e, file.as_deref(), &job.host, fuel_left, job.realm.limits().fuel.saturating_sub(fuel_left));
         close_run(self, &job.host, &mut report, ending(&e.kind));
         self.end_job(job, e.kind == RunErrorKind::Internal);
+        self.keep_engines_palettes();
         raise_ids(self);
         self.script_stop.clear();
         self.reset_tool();
@@ -2443,7 +2524,7 @@ impl Session {
     }
 }
 
-const OPEN_EDIT: &str = "a drag or an undo group is open; finish it before running a script";
+pub(crate) const OPEN_EDIT: &str = "a drag or an undo group is open; finish it before running a script";
 const INVALID_RESULT: &str = "the script left a document that cannot be kept";
 const UNWRITTEN_FILES: &str = "Error: the script left open files that could not be written";
 const JOB_GONE: &str = "the script's run is no longer available";
@@ -2636,6 +2717,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     std::mem::swap(s, &mut *cell.borrow_mut());
     let scope = job.scope.clone();
     let realm = &mut job.realm;
+    let named = job.engine.is_some();
     let started = clock();
     let r = scope.run(|| {
         guard::catch_panic(|| {
@@ -2643,7 +2725,18 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
             if PANIC_IN_SLICE.with(Cell::get) {
                 panic!("a slice failed");
             }
-            realm.advance(SLICE_FUEL)
+            match realm.advance(SLICE_FUEL) {
+                // The palettes of a named engine show the controls as the run left them.
+                Ok(Progress::Done(v)) if named => realm.refresh_script_ui().map(|()| Progress::Done(v)),
+                // A failed run keeps its globals, so its palettes show what it left too; a refresh
+                // that fails as well (the fuel is spent, a stop) leaves them as they were, and the
+                // run's error keeps its place.
+                Err(e) if named && e.kind != RunErrorKind::Internal => {
+                    realm.refresh_script_ui_after_error();
+                    Err(e)
+                }
+                r => r,
+            }
         })
     });
     if let Some(started) = started {

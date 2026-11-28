@@ -9167,6 +9167,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` deve listar índices de pontos de ancoragem (0, 1, 2…), não {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` para esta caixa de diálogo {kind} deve ser um de: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tem mais de {MAX_ANSWERS} respostas
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	já há {MAX_WAITING} eventos de paletas de script aguardando; este não foi mantido
+@msg	The list's items changed before the choice was taken	Os itens da lista mudaram antes de a escolha ser aplicada
 @msg	`answers` is larger than 1 MiB	`answers` tem mais de 1 MiB
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` é só para uma execução sem ninguém a quem perguntar: no app, a pessoa responde a cada caixa de diálogo
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` deve ser um número inteiro de 1 a {_1}
@@ -10061,7 +10063,9 @@ swatch	Yellow Green	Verde-amarelado
 @msg	more than {MAX_IMPORT} presets	mais de {MAX_IMPORT} predefinições
 @msg	moved must be [[x,y]…]	moved deve ser [[x,y]…]
 @msg	must be an object with `kind` and `value`	deve ser um objeto com `kind` e `value`
-@msg	must have `kind` alert, confirm or prompt	deve ter `kind` alert, confirm ou prompt
+@msg	must have `kind` alert, confirm, prompt or window	deve ter `kind` alert, confirm, prompt ou window
+@msg	is a window's answer, whose `value` must be a list of steps	é a resposta de uma janela, cujo `value` deve ser uma lista de etapas
+@msg	has a step {i} that is not a valid click, change or close	tem uma etapa {i} que não é um clique, uma alteração nem um fechamento válido
 @msg	must have exactly `kind` and `value`	deve ter exatamente `kind` e `value`
 @msg	name (a toolbar's name) is required	name (o nome de uma barra de ferramentas) é obrigatório
 @msg	name (a toolbar's name) must be a string	name (o nome de uma barra de ferramentas) deve ser uma string

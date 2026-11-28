@@ -5329,6 +5329,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	there is no script engine named {name}	skriptimoottoria nimeltä {name} ei ole
 @msg	`answers` must be a list of answers	`answers` on oltava vastausten luettelo
 @msg	`answers` has more than {MAX_ANSWERS} answers	kohteessa `answers` on yli {MAX_ANSWERS} vastausta
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	{MAX_WAITING} skriptipalettien tapahtumaa odottaa jo; tätä ei säilytetty
+@msg	The list's items changed before the choice was taken	Luettelon kohteet muuttuivat ennen kuin valinta otettiin vastaan
 @msg	`answers` is larger than 1 MiB	`answers` on suurempi kuin 1 MiB
 @msg	must be an object with `kind` and `value`	on oltava objekti, jossa on `kind` ja `value`
 @msg	must have exactly `kind` and `value`	siinä on oltava täsmälleen `kind` ja `value`
@@ -5336,7 +5338,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	is a confirm's answer, whose `value` must be true or false	on confirm-vastaus, joten sen `value`-arvon on oltava true tai false
 @msg	is longer than 16 KiB	on pidempi kuin 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	on prompt-vastaus, joten sen `value`-arvon on oltava merkkijono tai null
-@msg	must have `kind` alert, confirm or prompt	`kind`-arvon on oltava alert, confirm tai prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind`-arvon on oltava alert, confirm, prompt tai window
+@msg	is a window's answer, whose `value` must be a list of steps	on ikkunan vastaus, jonka `value`-arvon on oltava luettelo vaiheista
+@msg	has a step {i} that is not a valid click, change or close	sisältää vaiheen {i}, joka ei ole kelvollinen napsautus, muutos tai sulkeminen
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` on vain ajolle, jossa ei ole ketään kysyttävää: sovelluksessa henkilö vastaa jokaiseen valintaikkunaan
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` on oltava kokonaisluku väliltä 1–{_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` on sisäkkäin yli 64 tason syvyydellä

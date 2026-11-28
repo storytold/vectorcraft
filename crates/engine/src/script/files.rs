@@ -218,6 +218,9 @@ pub(crate) struct Setup {
     pub script: Option<String>,
     /// The script's text with the files it includes, whose SHA-256 the grants it keeps are for.
     pub source: String,
+    /// The SHA-256 the grants are for in place of `source`'s: for the run of a ScriptUI palette's
+    /// handler, the one of the script that showed the palette.
+    pub own: Option<String>,
     /// The folder that holds each script's data folder ([`crate::Session::attach_script_data`]).
     pub data_dir: Option<std::path::PathBuf>,
     /// The code the run's named engine kept from its earlier runs: the SHA-256 of each source
@@ -304,7 +307,7 @@ impl Disk {
         let start = scope.folder().map_or_else(|| home.clone(), |p| p.to_string_lossy().into_owned());
         let web = cfg!(target_arch = "wasm32");
         let script = setup.script.as_deref().filter(|_| !web).and_then(|p| std::fs::canonicalize(p).ok());
-        let own = vectorcraft_plugins::permissions::sha256_hex(setup.source.as_bytes());
+        let own = setup.own.unwrap_or_else(|| vectorcraft_plugins::permissions::sha256_hex(setup.source.as_bytes()));
         let script = script.map(|p| (p, own.clone()));
         let fenced = setup.data_dir.as_deref().filter(|_| !web).and_then(Path::parent).and_then(real_or_planned);
         let held = scope.roots().iter().map(|r| (r.clone(), false, true)).collect();
@@ -373,6 +376,11 @@ impl Disk {
         if self.saw(code_hash(units)) {
             self.withdraw();
         }
+    }
+
+    /// The SHA-256 the run's grants are for ([`Setup::own`]).
+    pub(crate) fn own(&self) -> &str {
+        &self.own
     }
 
     /// Adds the source with SHA-256 `hash` to what the run's code may run. → whether it was new.

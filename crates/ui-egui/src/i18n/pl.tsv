@@ -8796,6 +8796,8 @@ breakText	Glyphs	Glify
 @msg	`align` must be a string	`align` musi być ciągiem znaków
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` dla tego okna dialogowego {kind} musi mieć jedną z wartości: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` zawiera więcej niż {MAX_ANSWERS} odpowiedzi
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	czeka już {MAX_WAITING} zdarzeń palet skryptów; to zdarzenie nie zostało zachowane
+@msg	The list's items changed before the choice was taken	Elementy listy zmieniły się, zanim wybór został przyjęty
 @msg	`answers` is larger than 1 MiB	`answers` ma rozmiar większy niż 1 MiB
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` służy tylko do uruchomienia, w którym nie ma kogo zapytać: w aplikacji na każde okno dialogowe odpowiada użytkownik
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` musi być liczbą całkowitą od 1 do {_1}
@@ -9008,7 +9010,9 @@ breakText	Glyphs	Glify
 @msg	missing `picks`	brak `picks`
 @msg	missing `word`	brak `word`
 @msg	must be an object with `kind` and `value`	musi być obiektem z `kind` i `value`
-@msg	must have `kind` alert, confirm or prompt	`kind` musi mieć wartość alert, confirm lub prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind` musi mieć wartość alert, confirm, prompt lub window
+@msg	is a window's answer, whose `value` must be a list of steps	jest odpowiedzią okna, której `value` musi być listą kroków
+@msg	has a step {i} that is not a valid click, change or close	ma krok {i}, który nie jest prawidłowym kliknięciem, zmianą ani zamknięciem
 @msg	must have exactly `kind` and `value`	musi mieć dokładnie `kind` i `value`
 @msg	needs a closing quote after the name	wymaga zamykającego cudzysłowu po nazwie
 @msg	needs a name	wymaga nazwy

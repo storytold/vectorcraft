@@ -8751,6 +8751,8 @@ breakText	Glyphs	글리프
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors`에는 앵커 인덱스(0, 1, 2…)를 나열해야 합니다: {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	이 {kind} 대화 상자의 `answer`은(는) 다음 중 하나여야 합니다: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers`에 응답이 {MAX_ANSWERS}개보다 많습니다
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	스크립트 팔레트 이벤트가 이미 {MAX_WAITING}개 대기 중이므로 이 이벤트는 보관되지 않았습니다
+@msg	The list's items changed before the choice was taken	선택이 적용되기 전에 목록의 항목이 변경되었습니다
 @msg	`answers` is larger than 1 MiB	`answers`이(가) 1 MiB보다 큽니다
 @msg	`answers` must be a list of answers	`answers`은(는) 응답 목록이어야 합니다
 @msg	`artboard` must be the index of an artboard of the document	`artboard`은(는) 문서에 있는 아트보드의 인덱스여야 합니다
@@ -9637,7 +9639,9 @@ breakText	Glyphs	글리프
 @msg	more than {MAX_IMPORT} presets	사전 설정이 {MAX_IMPORT}개보다 많습니다
 @msg	moved must be [[x,y]…]	moved는 [[x,y]…]여야 합니다
 @msg	must be an object with `kind` and `value`	`kind`와 `value`가 있는 개체여야 합니다
-@msg	must have `kind` alert, confirm or prompt	`kind`가 alert, confirm 또는 prompt여야 합니다
+@msg	must have `kind` alert, confirm, prompt or window	`kind`가 alert, confirm, prompt 또는 window여야 합니다
+@msg	is a window's answer, whose `value` must be a list of steps	창의 답이며, `value`는 단계 목록이어야 합니다
+@msg	has a step {i} that is not a valid click, change or close	단계 {i}이(가) 올바른 클릭, 변경 또는 닫기가 아닙니다
 @msg	must have exactly `kind` and `value`	`kind`와 `value`만 있어야 합니다
 @msg	name (a toolbar's name) is required	name(도구 막대 이름)이 필요합니다
 @msg	name (a toolbar's name) must be a string	name(도구 막대 이름)은 문자열이어야 합니다

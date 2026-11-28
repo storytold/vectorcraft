@@ -200,7 +200,7 @@ features! {
     Reflection "reflection" Language,
     ScriptuiDialog "scriptui.dialog" Dialogs,
     ScriptuiDrawing "scriptui.drawing" Dialogs,
-    ScriptuiPalette "scriptui.palette" HostOnly,
+    ScriptuiPalette "scriptui.palette" Dialogs,
     ScriptuiWindow "scriptui.window" Dialogs,
     SelectTool "selectTool" HostOnly,
     Socket "socket" HostOnly,

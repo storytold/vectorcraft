@@ -8747,6 +8747,8 @@ breakText	Glyphs	字符
 @msg	`align` must be a string	`align` 必須是字串
 @msg	`answer` for this {kind} dialog must be one of: {_1}	此 {kind} 對話框的 `answer` 必須是下列其中之一：{_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` 的答案超過 {MAX_ANSWERS} 個
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	已有 {MAX_WAITING} 個指令碼面板事件在等待；此事件未保留
+@msg	The list's items changed before the choice was taken	在採用選擇之前，清單的項目已變更
 @msg	`answers` is larger than 1 MiB	`answers` 大於 1 MiB
 @msg	`answers` must be a list of answers	`answers` 必須是答案清單
 @msg	`artboard` must be the index of an artboard of the document	`artboard` 必須是文件中某個工作區域的索引
@@ -8950,7 +8952,9 @@ breakText	Glyphs	字符
 @msg	missing `picks`	未提供 `picks`
 @msg	missing `word`	未提供 `word`
 @msg	must be an object with `kind` and `value`	必須是包含 `kind` 和 `value` 的物件
-@msg	must have `kind` alert, confirm or prompt	`kind` 必須是 alert、confirm 或 prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind` 必須是 alert、confirm、prompt 或 window
+@msg	is a window's answer, whose `value` must be a list of steps	是視窗的回答，其 `value` 必須是步驟清單
+@msg	has a step {i} that is not a valid click, change or close	的第 {i} 步不是有效的點按、變更或關閉
 @msg	must have exactly `kind` and `value`	只能有 `kind` 和 `value`
 @msg	needs a closing quote after the name	名稱之後需要結尾引號
 @msg	needs a name	需要名稱

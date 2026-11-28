@@ -177,6 +177,8 @@
 @msg	`answer` for this {kind} dialog must be one of: {_1}	დიალოგისთვის (ტიპი: {kind}) `answer` უნდა იყოს ერთ-ერთი: {_1}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` შეიცავს {MAX_ANSWERS}-ზე მეტ პასუხს
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	სკრიპტის პალიტრების {MAX_WAITING} მოვლენა უკვე ელოდება; ეს არ შენარჩუნდა
+@msg	The list's items changed before the choice was taken	სიის ელემენტები შეიცვალა არჩევანის მიღებამდე
 @msg	`answers` is larger than 1 MiB	`answers` 1 MiB-ზე დიდია
 @msg	`answers` must be a list of answers	`answers` უნდა იყოს პასუხების სია
 @msg	`artboard` must be the index of an artboard of the document	`artboard` უნდა იყოს დოკუმენტის სამუშაო დაფის ინდექსი
@@ -1088,7 +1090,9 @@
 @msg	more than {MAX_IMPORT} presets	{MAX_IMPORT}-ზე მეტი პრესეტი
 @msg	moved must be [[x,y]…]	moved უნდა იყოს [[x,y]…]
 @msg	must be an object with `kind` and `value`	უნდა იყოს ობიექტი `kind`-ით და `value`-თი
-@msg	must have `kind` alert, confirm or prompt	`kind` უნდა იყოს alert, confirm ან prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind` უნდა იყოს alert, confirm, prompt ან window
+@msg	is a window's answer, whose `value` must be a list of steps	არის ფანჯრის პასუხი, რომლის `value` უნდა იყოს ნაბიჯების სია
+@msg	has a step {i} that is not a valid click, change or close	შეიცავს ნაბიჯს {i}, რომელიც არ არის სწორი დაწკაპუნება, ცვლილება ან დახურვა
 @msg	must have exactly `kind` and `value`	უნდა ჰქონდეს ზუსტად `kind` და `value`
 @msg	name (a toolbar's name) is required	საჭიროა name (ხელსაწყოთა ზოლის სახელი)
 @msg	name (a toolbar's name) must be a string	name (ხელსაწყოთა ზოლის სახელი) უნდა იყოს სტრიქონი
