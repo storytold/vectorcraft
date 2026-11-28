@@ -755,6 +755,46 @@ fn a_hoisted_function_that_changes_or_shares_the_variable_ends_the_own_save_as()
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 11, 13][..]));
 }
 
+/// A function body that declares the variable's name itself can still give the variable another
+/// value through the global object: the variable's methods are not put back when the body closes.
+/// A body that declares the name and does not do that leaves them as they were.
+#[test]
+fn a_global_assignment_under_a_shadowing_declaration_ends_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var local = {saveAs: function () {}};\n",
+        "function replace() { var local = 1; $.global.local = app.activeDocument; }\n",
+        "replace();\n",
+        "local.saveAs(f);\n",
+        "var calm = {saveAs: function () {}};\n",
+        "function keep() { var calm = 1; }\n",
+        "keep();\n",
+        "calm.saveAs(f);\n",
+        "var other = {saveAs: function () {}};\n",
+        "function any() { var other = 1; $.global[k] = app.activeDocument; }\n",
+        "any();\n",
+        "other.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[5, 13][..]));
+}
+
+/// Inside the body of a `with` statement a name may be a property of the statement's object, so a
+/// call of a literal's method there is reported; after the body, and outside it, it is not.
+#[test]
+fn a_call_inside_a_with_body_is_not_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var local = {saveAs: function () {}};\n",
+        "with ({local: app.activeDocument}) {\n",
+        "    local.saveAs(f);\n",
+        "}\n",
+        "local.saveAs(f);\n",
+        "if (x) { with (o) local.saveAs(f); }\n",
+        "local.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7][..]));
+}
+
 /// A table of shared names with no room left for one more means a function may share any name: no
 /// literal after it gives methods that are the script's own.
 #[test]

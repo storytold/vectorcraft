@@ -113,6 +113,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 }
             }
         }
+        self.with_step(t);
         self.writer_use(t);
         match t.kind {
             T::Ident => self.name(t, line),
@@ -395,9 +396,61 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// 0 for anything else. A receiver the check does not follow may be a document.
     /// Whether a call of `name`'s own method may be left out: the call is in the global code, or in a
     /// function body that declares `name` itself. A body that reads `name` from outside may run
-    /// after the variable was given another value, so its calls are not known.
+    /// after the variable was given another value, so its calls are not known. Inside the body of a
+    /// `with` statement the name may be a property of the statement's object, so no call is known
+    /// there ([`Analyzer::with_step`]).
     fn stable(&self, name: &str) -> bool {
-        self.scopes.last().is_none_or(|s| s.saved.contains_key(name))
+        !self.withs_full && self.withs.is_empty() && self.scopes.last().is_none_or(|s| s.saved.contains_key(name))
+    }
+
+    /// Follows the `with` statements around `t`. A body in braces ends with its `}`; a body without
+    /// braces is taken to last until the block the statement is in closes.
+    fn with_step(&mut self, t: &Sig<'s>) {
+        let depth = self.depth();
+        self.withs.retain(|d| *d <= depth);
+        match self.with_head {
+            Some((d, false)) if t.is(")") && depth == d => self.with_head = Some((d, true)),
+            Some((d, true)) => {
+                self.with_head = None;
+                let body = if t.is("{") { depth } else { d };
+                if self.withs.len() < self.acc.limits.nesting {
+                    self.withs.push(body);
+                } else {
+                    self.withs_full = true;
+                }
+            }
+            _ => {}
+        }
+        if t.kind == T::Ident && t.text == "with" && !member_mark(self.h[0]) {
+            self.with_head = Some((depth, false));
+        }
+    }
+
+    /// `name` may have been given another value through the global object: neither the variable
+    /// nor the outer variables of that name that the open function bodies and `catch` blocks keep
+    /// to put back hold their literal's methods any longer.
+    fn forget_writer(&mut self, name: &str) {
+        self.writers.remove(name);
+        for s in &mut self.scopes {
+            if let Some(saved) = s.saved.get_mut(name) {
+                saved.writer = 0;
+            }
+        }
+        for c in self.catches.iter_mut().filter(|c| c.name == name) {
+            c.saved.writer = 0;
+        }
+    }
+
+    /// Any variable may have been given another value through the global object
+    /// ([`Self::forget_writer`] for every name).
+    fn forget_writers(&mut self) {
+        self.writers.clear();
+        for saved in self.scopes.iter_mut().flat_map(|s| s.saved.values_mut()) {
+            saved.writer = 0;
+        }
+        for c in &mut self.catches {
+            c.saved.writer = 0;
+        }
     }
 
     /// A function body uses `name`, which no literal has given methods and the body does not declare,
@@ -510,10 +563,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 None
             };
             if let Some(name) = rebound {
-                self.writers.remove(&name);
+                self.forget_writer(&name);
             } else if global_index_closed {
                 // `$.global[key] = …`: the key may name any of them.
-                self.writers.clear();
+                self.forget_writers();
             }
         }
     }

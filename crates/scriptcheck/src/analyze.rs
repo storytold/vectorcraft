@@ -663,6 +663,15 @@ struct Analyzer<'s, 'a, 'l> {
     global_indexes: Vec<usize>,
     /// The last token was the `]` that closes an index of the global object.
     global_index_closed: bool,
+    /// The `with` statement whose head is being read: the bracket depth of its `with`, and whether
+    /// its `)` was read.
+    with_head: Option<(usize, bool)>,
+    /// The bracket depths the bodies of the open `with` statements hold at, the innermost last, up
+    /// to [`crate::Limits::nesting`] of them ([`Analyzer::with_step`]).
+    withs: Vec<usize>,
+    /// A `with` statement had no room in [`Analyzer::withs`]: no call of a literal's own method is
+    /// known from then on.
+    withs_full: bool,
     /// This file or what the scan started with gives names values the analysis doesn't read
     /// ([`Declared::unsure`]): no object counts as a Folder object whatever the path names.
     unsure: bool,
@@ -748,6 +757,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             index_stable: false,
             global_indexes: vec![],
             global_index_closed: false,
+            with_head: None,
+            withs: vec![],
+            withs_full: false,
             unsure: known.unsure || declared.unsure,
             own_names: HashSet::new(),
             scopes: vec![],
