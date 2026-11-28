@@ -746,6 +746,29 @@ fn a_grants_change_waits_for_a_held_lock_a_bounded_number_of_tries() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A grants lock that is dropped frees the grants file while a copy of its handle is open, as a
+/// child process that is starting holds one: the next change takes the lock without waiting.
+#[test]
+fn a_dropped_grants_lock_frees_the_file_while_a_copy_of_its_handle_is_open() {
+    use crate::script::files::{GRANTS_FILE, WHILE_GRANTS_LOCKED, lock_store, revoke_grants};
+    let base = folder("grants-lock-copied");
+    let data = base.join("settings/Script Data");
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": "/p", "write": false, "folder": false});
+    write(&base.join("settings").join(GRANTS_FILE), json!({"version": 1, "grants": [grant]}).to_string().as_bytes());
+    let lock = lock_store(&base.join("settings").join(GRANTS_FILE)).unwrap();
+    let copy = lock.file().try_clone().unwrap();
+    drop(lock);
+    let waits = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counted = waits.clone();
+    WHILE_GRANTS_LOCKED.set(Some(Box::new(move || counted.set(counted.get() + 1))));
+    let revoked = revoke_grants(&data, None, None);
+    WHILE_GRANTS_LOCKED.set(None);
+    assert_eq!(revoked.map_err(|e| e.kind()), Ok(1), "a dropped lock is free");
+    assert_eq!(waits.get(), 0, "it is taken without waiting");
+    drop(copy);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `rename` of a file an earlier run wrote names both its old and its new path in `written`.
 #[test]
 fn a_renamed_file_names_its_old_and_new_paths_in_written() {

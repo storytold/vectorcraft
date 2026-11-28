@@ -7033,6 +7033,15 @@ axis	Y Axis	Y축
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	읽기 전용 개체가 빠졌습니다: {{"id": …}}만 있는 형태나 받은 그대로 반환하십시오
 @msg	a string	문자열
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`만 있습니다
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend`, `effects`만 있습니다
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend`, `effects`만 있습니다
+@msg	`appearanceOutput` may only be true	`appearanceOutput`에는 true만 지정할 수 있습니다
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput`은 `paintOutput`을 선언한 `api` 3의 라이브 효과에만 쓸 수 있습니다
+@msg	`opacity` must be a number from 0 to 1	`opacity`는 0에서 1 사이의 숫자여야 합니다
+@msg	unknown blending mode; `blend` is one of {_1}	알 수 없는 혼합 모드입니다. `blend`는 {_1} 중 하나입니다
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects`는 최대 {MAX_LOOK_EFFECTS}개 레코드의 배열이어야 합니다
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	결과 하나에는 효과 레코드가 최대 {MAX_RESULT_EFFECTS}개까지 들어갑니다
+@msg	this host takes no effects here	이 호스트는 여기서 효과를 받지 않습니다
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	선은 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 형태여야 합니다
 @msg	an effect must be {{"id", "params"?, "visible"?}}	효과는 {{"id", "params"?, "visible"?}} 형태여야 합니다
 @msg	an effect on a fill returns only `fills`	칠에 적용된 효과는 `fills`만 반환합니다
@@ -8129,6 +8138,7 @@ breakText	Glyphs	글리프
 	Place Brush Art	브러시 아트 배치
 	Replace Brush Art	브러시 아트 바꾸기
 	Replace Pattern Art	패턴 아트 바꾸기
+	Place Pattern Art	패턴 아트 배치
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	선에서 이 브러시를 사용합니다. 새 아트를 해당 선에 적용하시겠습니까, 아니면 선을 그대로 두고 새 아트로 브러시 사본을 추가하시겠습니까?
 	Apply to Strokes	선에 적용
 	Leave Strokes	선 유지

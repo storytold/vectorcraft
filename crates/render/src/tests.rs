@@ -30,6 +30,7 @@ mod meshwarp;
 mod movedstroke;
 mod objectfx;
 mod paintedbrush;
+mod paintedlook;
 mod placed_document;
 mod rasterize;
 mod setup;

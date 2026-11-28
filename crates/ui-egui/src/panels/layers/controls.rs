@@ -432,7 +432,7 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
     let locate_ok = !layers_only || super::rows::locate_layer_listed(tree.doc(), tree.root());
     let root = tree.root();
     let icon = |name: &'static str| IconSpec::svg(IconId::new(name));
-    let document = document_hash(st.uid);
+    let document = document_hash((st.uid, st.reverts));
     let own = move |drag: &LayersDrag<RowId>| drag.document() == Some(document);
     let duplicate = move |drag: &LayersDrag<RowId>| {
         let (nodes, guides) = row_ids(&drag.layers());
@@ -463,8 +463,10 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
     if let Some(drop) = &output.dropped {
         let run = if let Some(d) = drop.payload::<LayersDrag<RowId>>().filter(|d| own(d)) {
             footer_drop(tree, drop.index, FooterPayload::Rows(&d.layers()))
-        } else if let Some(PanelDrag::Appearance(id)) = drop.payload::<PanelDrag>() {
-            footer_drop(tree, drop.index, FooterPayload::Appearance(id.0))
+        } else if let Some(PanelDrag::Appearance { document, source }) = drop.payload::<PanelDrag>()
+            && *document == st.uid
+        {
+            footer_drop(tree, drop.index, FooterPayload::Appearance(source.0))
         } else {
             None
         };

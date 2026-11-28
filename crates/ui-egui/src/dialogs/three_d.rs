@@ -63,8 +63,8 @@ pub(crate) struct Data {
     pub bevels_file: bool,
     /// The active document, for the symbol pictures.
     pub doc: Option<Arc<Document>>,
-    /// The document that owns the object IDs accepted by the Graphics drop target.
-    pub document_uid: Option<u64>,
+    /// The opening document generation while it can still supply artwork to the Graphics drop target.
+    pub document: Option<(u64, u64)>,
     /// The active document's version.
     pub revision: u64,
     /// Whether the active document has a selection.
@@ -87,7 +87,7 @@ pub(crate) fn data(app: &VectorcraftApp, effect: Option<&str>, params: &Map<Stri
         bevels: effect.map(|e| revolve::bevel_options(app, params, e).0).unwrap_or_default(),
         bevels_file: app.session.bevels.path().is_some(),
         doc: st.map(|s| s.doc.clone()),
-        document_uid: st.map(|s| s.uid),
+        document: st.map(|s| (s.uid, s.reverts)),
         revision: st.map_or(0, |s| s.revision),
         selected: st.is_some_and(|s| !s.selection.objects.is_empty()),
         surfaces: None,
@@ -360,6 +360,13 @@ fn surfaces(app: &mut VectorcraftApp, s: &Session, fields: &DialogFields, params
     let listed = Arc::new(vectorcraft_effects::map_surfaces_with(Some(&st.doc), st.doc.node(object)?, (item, s.index), &s.effect, &key.params)?);
     app.canvas.map_surfaces = Some((key, listed.clone()));
     Some(listed)
+}
+
+/// Refresh drop eligibility before the dialog can receive a release in this frame.
+pub(crate) fn sync_graphics_source(app: &VectorcraftApp) {
+    let Some(open) = &app.three_d_dialog else { return };
+    let source = open.source.filter(|&(uid, reverts)| app.session.documents().iter().any(|d| (d.uid, d.reverts) == (uid, reverts)));
+    open.data.write().unwrap_or_else(PoisonError::into_inner).document = source;
 }
 
 /// Once per frame: refreshes the rows' data, runs the preview, and, with Preview off, tries the values so the dialog
@@ -659,16 +666,17 @@ mod drawing_tests {
     fn three_d_ownership_preview_resumes_only_in_the_opening_drawing() {
         let (mut app, original) = drawing();
         open_effect(&mut app, true);
-        let first = app.session.active().unwrap().uid;
         frame(&mut app);
         assert_eq!(applied(&app, original), [EXTRUDE]);
+        let opening_document = read(&app.three_d_dialog.as_ref().unwrap().data).doc.clone().unwrap();
         let other = second_drawing(&mut app);
         frame(&mut app);
         assert!(applied(&app, other).is_empty(), "3D preview reached the other drawing");
         assert!(!app.session.in_interaction());
         assert!(!gizmo_shown(&app));
         assert!(!crate::canvas::revolve_editing(&app));
-        assert_eq!(read(&app.three_d_dialog.as_ref().unwrap().data).document_uid, Some(first));
+        let drawn_document = read(&app.three_d_dialog.as_ref().unwrap().data).doc.clone().unwrap();
+        assert!(Arc::ptr_eq(&drawn_document, &opening_document), "Map Art keeps the opening document");
         app.run("document.activate", json!({"index": 0})).unwrap();
         frame(&mut app);
         assert_eq!(applied(&app, original), [EXTRUDE]);

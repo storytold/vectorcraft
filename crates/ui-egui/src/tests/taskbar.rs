@@ -1584,6 +1584,26 @@ fn the_smooth_tool_shows_fidelity_and_tool_options_for_a_path() {
     });
 }
 
+/// The Smooth tool's "Fidelity:" label is a framework text in the bar: a label node in the access tree, drawn on one
+/// line with its baseline on the Fidelity field's.
+#[test]
+fn the_smooth_tools_fidelity_label_is_one_line_beside_its_field() {
+    let mut app = app();
+    let path = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
+    select(&mut app, &[path]);
+    app.run("tool.select", json!({"tool": "smooth"})).unwrap();
+    on_canvas(&mut app, |rig| {
+        let fx = rig.settle();
+        let tree = fx.tree();
+        let labels = tree.with_role(craft::ui::contract::Role::LABEL);
+        assert!(labels.iter().any(|key| tree.name_of(*key) == Some("Fidelity:")), "the label is in the access tree");
+        let run = |text: &str| fx.texts().iter().find(|t| t.text == text).cloned().unwrap_or_else(|| panic!("no `{text}` painted"));
+        let (label, value) = (run("Fidelity:"), run("2.50 px"));
+        assert!(label.rect.height() < 2.0 * value.rect.height(), "the label is one line: {:?}", label.rect);
+        assert!((label.baseline - value.baseline).abs() <= 1.0, "the label sits on the field's baseline: {label:?} {value:?}");
+    });
+}
+
 /// After a switch to another document and back, the task bar shows the actions for the active
 /// document's selection: an open path's Join in the first, a rectangle's Shape Properties in the second.
 #[test]

@@ -206,7 +206,61 @@ pub struct Placing {
     lane: Lane,
     /// Unit tests: how many reads run now, and the most that ran at once.
     #[cfg(test)]
-    pub(crate) reading: std::sync::Arc<[std::sync::atomic::AtomicUsize; 2]>,
+    pub(crate) reading: std::sync::Arc<Reading>,
+}
+
+/// Unit tests: how many reads run now and the most that ran at once, and a signal each time a read
+/// starts or ends.
+#[cfg(test)]
+#[derive(Default)]
+pub(crate) struct Reading {
+    counts: std::sync::Mutex<[usize; 2]>,
+    changed: std::sync::Condvar,
+}
+
+#[cfg(test)]
+impl Reading {
+    fn counts(&self) -> std::sync::MutexGuard<'_, [usize; 2]> {
+        self.counts.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn started(&self) {
+        let mut counts = self.counts();
+        counts[0] += 1;
+        counts[1] = counts[1].max(counts[0]);
+        self.changed.notify_all();
+    }
+
+    fn ended(&self) {
+        self.counts()[0] -= 1;
+        self.changed.notify_all();
+    }
+
+    /// The most reads that ran at once.
+    pub(crate) fn most(&self) -> usize {
+        self.counts()[1]
+    }
+
+    /// Waits until a read has run and none runs now.
+    pub(crate) fn wait_ended(&self) {
+        let mut counts = self.counts();
+        while !(counts[1] >= 1 && counts[0] == 0) {
+            counts = self.changed.wait(counts).unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+}
+
+/// Unit tests: waits until the first file read for Place has been read, and leaves the result for
+/// [`poll`].
+#[cfg(test)]
+pub(crate) fn wait(app: &mut VectorcraftApp) {
+    let Some(p) = app.placing.pending.first_mut() else { return };
+    let (tx, done) = channel();
+    // A read that stopped without a result leaves the new channel closed too.
+    if let Ok(r) = p.done.recv() {
+        let _ = tx.send(r);
+    }
+    p.done = done;
 }
 
 struct PendingSwatch {
@@ -349,15 +403,12 @@ fn spawn_labeled(
     let raised = token.clone();
     let job: Box<dyn FnOnce() + Send> = Box::new(move || {
         #[cfg(test)]
-        {
-            let now = reading[0].fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
-            reading[1].fetch_max(now, std::sync::atomic::Ordering::SeqCst);
-        }
+        reading.started();
         let r = scope
             .run(|| vectorcraft_engine::guard::catch_panic(|| cancel::scope(&raised, None, read)))
             .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
         #[cfg(test)]
-        reading[0].fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        reading.ended();
         // The app may have quit meanwhile: nothing to hand it to.
         let _ = tx.send(r);
     });

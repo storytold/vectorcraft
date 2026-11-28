@@ -536,7 +536,7 @@ impl Session {
             ids.retain(|id| !matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_) | NodeKind::SymbolInstance { .. })));
         }
         let mut strokes = vec![];
-        for (id, each) in ids.iter().zip(item.per_target(self, &ids)) {
+        for (id, each) in ids.iter().zip(item.each_target(self, &ids)) {
             let n = st.doc.node(*id)?;
             let row = each?.resolve(&n.appearance, false, C).ok()?;
             if row.is_none() && matches!(n.kind, NodeKind::Text(_)) {

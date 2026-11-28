@@ -469,11 +469,11 @@ fn take() {
     }
 }
 
-/// Wait for the listing under way and take it in.
+/// Wait for the listing under way, however long it takes, and take it in.
 #[cfg(test)]
 pub(crate) fn wait() {
     if let Some(queue) = &saved().queue {
-        queue.finish(std::time::Duration::from_secs(10));
+        assert!(queue.finish(std::time::Duration::MAX), "the listing of the Proof Setups folder could not finish");
     }
     take();
 }
@@ -654,6 +654,9 @@ mod tests {
     /// set, and redraw the documents.
     #[test]
     fn cancel_puts_back_a_view_whose_profile_was_removed() {
+        if !crate::testing::in_own_process("dialogs::proof_setup::tests::cancel_puts_back_a_view_whose_profile_was_removed") {
+            return;
+        }
         let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let name = "Proof Setup Removed RGB";
@@ -760,6 +763,9 @@ mod tests {
     /// stays open with the proof view as it was.
     #[test]
     fn ok_with_an_unknown_device_keeps_the_dialog_open() {
+        if !crate::testing::in_own_process("dialogs::proof_setup::tests::ok_with_an_unknown_device_keeps_the_dialog_open") {
+            return;
+        }
         let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let name = "Proof Setup Gone RGB";
