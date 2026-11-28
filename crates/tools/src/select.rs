@@ -817,7 +817,7 @@ pub(crate) fn hold_point(cx: &ToolContext, h: &Hit, p: Point) -> Point {
 }
 
 /// [`hold_point`]'s point of the path hit, None when the press holds no point of it.
-fn held_on_path(cx: &ToolContext, h: &Hit, p: Point) -> Option<Point> {
+pub(crate) fn held_on_path(cx: &ToolContext, h: &Hit, p: Point) -> Option<Point> {
     let reach = if matches!(h.kind, HitKind::Stroke | HitKind::Outline) { f64::INFINITY } else { cx.tol(HOVER_REACH) };
     cx.doc.node(h.leaf).and_then(|n| n.path_data()).and_then(|pd| hold_on_path(pd, p, reach))
 }
