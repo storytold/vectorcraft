@@ -3080,7 +3080,7 @@ returns `{stopped}`. `notifications/cancelled` stops a run only while the `tools
 for it, as in a headless server; use `script.stop` for a run the app started. A script cannot run commands that
 change anything outside the documents: `script.*` except `script.check`, `plugin.*`, `prefs.*`, `actionSet.*`,
 `shortcutSet.*`, `help.*`, `print.*`, `library.*`, `importMatches.*`, `edit.undoGroup.*`, `file.recovery.*`,
-`stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
+`stroke.widthProfile.*`, `proof.*` (Language packs), saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
 `text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
 `view.proofSetup`, `view.proofSetup.save`, `view.proofSetup.load`, `view.proofColors`, `view.overprintPreview` and
 `view.separationsPreview`. It also cannot run
@@ -12686,7 +12686,8 @@ installed packs; the web app has none, and no `proof.*` commands.
 Installs and index fetches need downloading on. Only the person using a Craft app turns it on, with their own click
 (the setting is the font store's, shared by the apps): no command turns it on, and until then an install is an error
 that says so. A caller with automation roots (`--automation-read-root`, `--automation-write-root`) can list packs
-but not fetch, install or remove them, since the store is outside its roots. In the desktop app installs and fetches
+but not fetch, install or remove them, since the store is outside its roots. A script cannot run the `proof.*`
+commands at all, since a run's rollback cannot put the store back. In the desktop app installs and fetches
 run in the background: `proof.installPack` returns
 `{locale, started: true}` and `proof.packs` shows the install in `installing`, then in `installed` or `errors`. In
 `vectorcraft-cli` they return once done.

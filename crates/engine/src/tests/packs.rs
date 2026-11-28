@@ -250,3 +250,18 @@ fn a_confined_caller_lists_packs_but_cannot_change_them() {
     assert!(root.join("nl").join("pack.toml").exists(), "the pack is still there");
     let _ = std::fs::remove_dir_all(&roots_dir);
 }
+
+/// A script's rollback cannot put back what an install writes into the shared font store, so a
+/// script cannot run the pack commands.
+#[test]
+fn a_script_cannot_install_a_pack() {
+    let _turn = packs_lock();
+    let root = folder("script");
+    let _reset = Reset(root.clone());
+    let mut s = dutch_session();
+    packs::set_backend(Some(Arc::new(Fake { dir: root.clone(), downloads: true, hold: AtomicBool::new(false) })));
+    let e = error(&mut s, "script.run", json!({"source": "vc.run('proof.installPack', {locale: 'nl'});", "name": "t.js"}));
+    assert!(e.contains("a script cannot run `proof.installPack`"), "{e}");
+    assert!(installed_locales(&mut s).is_empty(), "nothing installed");
+    assert_eq!(s.execute("proof.installPack", &json!({"locale": "nl"})).unwrap()["installed"], true, "outside a script it installs");
+}
