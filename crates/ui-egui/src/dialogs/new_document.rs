@@ -20,13 +20,13 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Background, ColorMode, Unit};
 use vectorcraft_engine::cmd::newdoc::{self, ArtboardLayout, DocSettings, MAX_ARTBOARDS, PreviewMode, RASTER_PPI};
 
-use craft::behavior::{IconId, Mixed};
+use craft::behavior::{ColumnWidth, IconId, Mixed};
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Segmented};
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
-use craft::ui::display::Text;
+use craft::ui::contract::{Bind, Entry, Gap, Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Grid, Row};
 use craft::ui::patterns::form_dialogs::{
     CardCx, CardSource, DetailsCx, DocumentCard, DocumentSettings, HostedNewDocument, NewDocumentDialog, Orientation, PresetCategory,
 };
@@ -35,6 +35,7 @@ use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::sections::Section;
+use craft::ui::style::TypeRole;
 use craft::ui::text::{LinkMode, LinkedFields, LinkedLayout, NumberField};
 
 use super::host::open_held;
@@ -296,8 +297,8 @@ impl DocumentSettings for VcNewDocument {
                 }
             });
         });
-        // Host viewports below the desktop main window's 800-point minimum need this row to wrap.
-        Row::new().wrap(ui.ctx().content_rect().width() < 800.0).show(ui, |ui, _| {
+        // The row wraps whenever its fields do not fit the column, so Artboards is never cut off at its right edge.
+        Row::new().wrap(true).show(ui, |ui, _| {
             Field::new(height.clone()).show(ui, |ui, _| size_field(ui, &height, &mut s.height, lengths));
             Field::new(orientation.clone()).show(ui, |ui, _| {
                 let entries = [
@@ -354,17 +355,24 @@ impl DocumentSettings for VcNewDocument {
 
         Section::new(text(tl!("Advanced Options"))).initially_open(false).show(ui, |ui, _| advanced(ui, s));
 
-        let more = Button::new(text(tl!("More Settings"))).id_salt("more-settings").show(ui);
-        let mut more_open = memory.more_open != clicked(&more);
-        Popover::new(text(tl!("More Settings")), Bind::bound(&mut more_open)).opened_by(&more).show(ui, |ui, _| more_settings(ui, s, lengths));
-        memory.more_open = more_open;
-
-        let manage = Button::new(text(tl!("Manage Profiles"))).id_salt("manage-profiles").show(ui);
-        let mut profiles_open = memory.profiles_open != clicked(&manage);
-        Popover::new(text(tl!("Manage Profiles")), Bind::bound(&mut profiles_open))
-            .opened_by(&manage)
-            .show(ui, |ui, _| manage_profiles(ui, &setup, &mut action));
-        memory.profiles_open = profiles_open;
+        // The two buttons side by side, the item gap apart.
+        let (mut more, mut manage) = (None, None);
+        Row::new().gap(Gap::Item).wrap(true).show(ui, |ui, _| {
+            more = Some(Button::new(text(tl!("More Settings"))).id_salt("more-settings").show(ui));
+            manage = Some(Button::new(text(tl!("Manage Profiles"))).id_salt("manage-profiles").show(ui));
+        });
+        if let Some(more) = &more {
+            let mut more_open = memory.more_open != clicked(more);
+            Popover::new(text(tl!("More Settings")), Bind::bound(&mut more_open)).opened_by(more).show(ui, |ui, _| more_settings(ui, s, lengths));
+            memory.more_open = more_open;
+        }
+        if let Some(manage) = &manage {
+            let mut profiles_open = memory.profiles_open != clicked(manage);
+            Popover::new(text(tl!("Manage Profiles")), Bind::bound(&mut profiles_open))
+                .opened_by(manage)
+                .show(ui, |ui, _| manage_profiles(ui, &setup, &mut action));
+            memory.profiles_open = profiles_open;
+        }
 
         // Drafts stay in their controls until committed: ending the preset or choosing units cannot be undone by
         // restoring only a scalar value. Units and orientation only change how the page shows; other edits end the preset.
@@ -475,6 +483,10 @@ fn advanced(ui: &mut egui::Ui, s: &mut DocSettings) {
 /// More Settings' pop-up: the artboard layout, spacing and columns. All three are off with one
 /// artboard, Columns also for the row and column layouts; columns stay within the artboards.
 fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
+    crate::panels::popover_body(ui, |ui| more_settings_rows(ui, s, lengths));
+}
+
+fn more_settings_rows(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
     let several = s.artboards > 1;
     let grid = matches!(s.layout, ArtboardLayout::GridByRow | ArtboardLayout::GridByColumn);
     let (layout, spacing, columns, right_to_left) =
@@ -531,21 +543,25 @@ fn choose_layout(s: &mut DocSettings, l: ArtboardLayout) {
 /// Manage Profiles' pop-up: a row per New Document profile with Edit, which opens the profile as a
 /// document, and Reset, which brings back the shipped profile. The button pressed is put in `action`.
 fn manage_profiles(ui: &mut egui::Ui, setup: &Setup, action: &mut Option<String>) {
-    Text::new(text(tl!("NEW DOCUMENT PROFILES"))).show(ui);
-    for (name, customized) in &setup.profiles {
-        ui.push_id(name, |ui| {
-            Row::new().show(ui, |ui, _| {
-                Text::new(text(tl!(name))).show(ui);
-                if clicked(&Button::new(text(tl!("Edit"))).id_salt("edit").enabled(setup.has_profile_folder).show(ui)) {
+    crate::panels::popover_body(ui, |ui| {
+        Text::new(text(tl!("NEW DOCUMENT PROFILES"))).role(TypeRole::SectionCaption).shade(Shade::Muted).show(ui);
+        // The names in one column and the Edit and Reset buttons in columns of their own, so the buttons line up.
+        Grid::new(&PROFILE_COLUMNS).gap(Gap::Item).show(ui, |ui, _| {
+            for (name, customized) in &setup.profiles {
+                Text::new(text(tl!(name))).id_salt(("profile", name)).show(ui);
+                if clicked(&Button::new(text(tl!("Edit"))).id_salt(("edit", name)).enabled(setup.has_profile_folder).show(ui)) {
                     *action = Some(format!("{EDIT_PROFILE}:{name}"));
                 }
-                if clicked(&Button::new(text(tl!("Reset"))).id_salt("reset").enabled(*customized).show(ui)) {
+                if clicked(&Button::new(text(tl!("Reset"))).id_salt(("reset", name)).enabled(*customized).show(ui)) {
                     *action = Some(format!("{RESET_PROFILE}:{name}"));
                 }
-            });
+            }
         });
-    }
+    });
 }
+
+/// The columns of Manage Profiles' rows: the profile's name, Edit and Reset.
+const PROFILE_COLUMNS: [ColumnWidth; 3] = [ColumnWidth::Content, ColumnWidth::Content, ColumnWidth::Content];
 
 /// The category of the settings New Document opens on: the most recent, else Print.
 fn first_category(app: &VectorcraftApp) -> &'static str {
@@ -1009,7 +1025,11 @@ mod tests {
         };
         let landscape = bounds("Landscape", egui::accesskit::Role::RadioButton);
         let artboards = bounds("Artboards", egui::accesskit::Role::SpinButton);
-        assert!(landscape.x1 <= artboards.x0, "Landscape {landscape:?} stays left of Artboards {artboards:?}");
+        // Artboards follows Landscape on its line, or wraps below it when the column has no room for it.
+        assert!(
+            landscape.x1 <= artboards.x0 || landscape.y1 <= artboards.y0,
+            "Landscape {landscape:?} stays clear of Artboards {artboards:?}"
+        );
         let group = bounds("Orientation", egui::accesskit::Role::RadioGroup);
         let mut drawn = Vec::new();
         out.shapes.iter().for_each(|s| texts(&s.shape, &mut drawn));
