@@ -9,17 +9,187 @@ use vectorcraft_geom::BezPath;
 /// Vello flattens the two sides of a filled stroke independently at 0.25 device pixels.
 /// For strokes narrower than four times the raster tolerance, fit and preflatten the
 /// band more tightly. Wider strokes and the document/export geometry are unchanged.
+///
+/// A plain stroke (no dashes, no width profile) along a line with curves is drawn as lines first
+/// ([`thin_line`]) and outlined by [`thin_band`], with one line on each side for each line of the
+/// path. Other thin strokes are fitted and flattened at the fine tolerance.
 pub(crate) fn outline(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64) -> BezPath {
     if width >= tol * 4.0 {
         return effects::stroke::line_outline(line, st, width, tol);
     }
     // Closed endpoint rounding must not consume a substantial part of a subpixel band.
     let fine = (tol / 8.0).min(width / 32.0).max(1e-4);
+    if let Some(band) = thin_line(line, st, width).and_then(|lines| thin_band(&lines, st, width, fine)) {
+        return band;
+    }
     let outline = effects::stroke::line_outline(line, st, width, fine);
     let mut flat = BezPath::new();
     // Keep upstream's per-curve work cap for untrusted or extreme coordinates.
     vectorcraft_geom::flatten(outline.iter(), fine, |el| flat.push(el));
     flat
+}
+
+/// The lines a thin stroke's curves are drawn with lie within about this share of its width of the
+/// curve, before their ends are moved out ([`draw_lines`]).
+const THIN_CHORD: f64 = 1.0 / 6.0;
+/// Where two lines of a thin stroke meet at an angle whose sine is at most this, and turn by less
+/// than a right angle, [`thin_band`] offsets both sides to where the two lines' offsets cross,
+/// whatever the stroke's join.
+const THIN_SMOOTH: f64 = 0.8;
+
+/// `line` with all its curves drawn as lines within about [`THIN_CHORD`] of `width` of them, for a
+/// stroke `st` narrower than four raster tolerances ([`outline`]). `None` for a stroke with a width
+/// profile or dashes, for a line with no curves, and when a curve can't be drawn as lines
+/// ([`lines`]).
+fn thin_line(line: &BezPath, st: &StrokeLayer, width: f64) -> Option<BezPath> {
+    if st.profile.is_some() || st.dash.is_some() || !(width > 0.0 && width.is_finite()) {
+        return None;
+    }
+    let lines = lines(line, 0.0, width * THIN_CHORD)?;
+    lines.elements().iter().all(|el| !matches!(el, PathEl::QuadTo(..) | PathEl::CurveTo(..))).then_some(lines)
+}
+
+/// The outline of stroke `st` at `width` along `lines`, a path of lines only ([`thin_line`]), to fill
+/// with the non-zero rule. Each side of each line is offset by half the width. Where two lines meet
+/// at a small angle ([`THIN_SMOOTH`]) both sides go to where the offsets cross; elsewhere the
+/// stroke's join is drawn, and an open subpath ends in the stroke's caps, with round parts drawn as
+/// lines within `fine` of their arcs. `None` when a subpath has fewer than two distinct points or a
+/// point that isn't finite, or is closed and no wider or taller than the stroke: those take
+/// [`effects::stroke::line_outline`].
+fn thin_band(lines: &BezPath, st: &StrokeLayer, width: f64, fine: f64) -> Option<BezPath> {
+    let h = width / 2.0;
+    // The angle between two points of an arc of radius `h` drawn as lines within `fine` of it.
+    let step = 2.0 * (1.0 - (fine / h).min(1.0)).acos().max(1e-3);
+    let mut out = BezPath::new();
+    let mut pts: Vec<Point> = Vec::new();
+    let mut closed = false;
+    let flush = |pts: &mut Vec<Point>, closed: bool, out: &mut BezPath| -> Option<()> {
+        if pts.is_empty() {
+            return Some(());
+        }
+        if closed && pts.len() > 1 && pts.first() == pts.last() {
+            pts.pop();
+        }
+        if pts.len() < 2 || !pts.iter().all(|p| p.is_finite()) {
+            return None;
+        }
+        if closed {
+            let (lo, hi) =
+                pts.iter().fold((pts[0], pts[0]), |(lo, hi), p| (Point::new(lo.x.min(p.x), lo.y.min(p.y)), Point::new(hi.x.max(p.x), hi.y.max(p.y))));
+            if (hi.x - lo.x).min(hi.y - lo.y) <= width {
+                return None;
+            }
+        }
+        band_sub(out, pts, closed, st, h, step);
+        pts.clear();
+        Some(())
+    };
+    for el in lines.elements() {
+        match *el {
+            PathEl::MoveTo(p) => {
+                flush(&mut pts, closed, &mut out)?;
+                closed = false;
+                pts.push(p);
+            }
+            PathEl::LineTo(p) => {
+                if pts.last() != Some(&p) {
+                    pts.push(p);
+                }
+            }
+            PathEl::ClosePath => closed = true,
+            PathEl::QuadTo(..) | PathEl::CurveTo(..) => return None,
+        }
+    }
+    flush(&mut pts, closed, &mut out)?;
+    Some(out)
+}
+
+/// Adds the outline of one subpath with the distinct points `pts` (at least two, the last not
+/// repeating the first when `closed`) to `out`: for an open subpath one contour, its left side,
+/// the end cap, its right side backward and the start cap; for a closed one its left side and its
+/// right side backward, as two contours. `h` is half the width and `step` the angle between the
+/// points of a round join or cap.
+fn band_sub(out: &mut BezPath, pts: &[Point], closed: bool, st: &StrokeLayer, h: f64, step: f64) {
+    use vectorcraft_doc::{LineCap, LineJoin};
+    let n = pts.len();
+    let chords = if closed { n } else { n - 1 };
+    // The direction of line `i` (from point `i` to the next) as a unit vector, and its normal.
+    let dir = |i: usize| (pts[(i + 1) % n] - pts[i % n]).normalize();
+    let norm = |u: Vec2| Vec2::new(-u.y, u.x);
+    // Points on an arc of radius `h` around `c` from `from` to `to` (both of length `h`), turning
+    // by `angle` (positive: from `from` toward its normal), without its first point.
+    let arc = |side: &mut Vec<Point>, c: Point, from: Vec2, angle: f64| {
+        let k = (angle.abs() / step).ceil().max(1.0) as usize;
+        for j in 1..=k {
+            let a = angle * j as f64 / k as f64;
+            let (s, co) = a.sin_cos();
+            side.push(c + Vec2::new(from.x * co - from.y * s, from.x * s + from.y * co));
+        }
+    };
+    let (mut left, mut right) = (Vec::with_capacity(n + 2), Vec::with_capacity(n + 2));
+    let join = |left: &mut Vec<Point>, right: &mut Vec<Point>, p: Point, ua: Vec2, ub: Vec2| {
+        let (na, nb) = (norm(ua) * h, norm(ub) * h);
+        let (cross, dot) = (ua.cross(ub), ua.dot(ub));
+        // Where the offsets of the two lines cross, on the right side; the left one is opposite.
+        let miter = (na + nb) / (1.0 + dot);
+        if dot > 0.0 && cross.abs() <= THIN_SMOOTH {
+            left.push(p - miter);
+            right.push(p + miter);
+            return;
+        }
+        // The outer side of the turn: the left side when the path turns toward its normal.
+        let (outer, inner, sign) = if cross > 0.0 { (left, right, -1.0) } else { (right, left, 1.0) };
+        inner.push(p - na * sign);
+        inner.push(p);
+        inner.push(p - nb * sign);
+        outer.push(p + na * sign);
+        match st.join {
+            LineJoin::Miter if 2.0 < (1.0 + dot) * st.miter_limit.powi(2) => outer.push(p + miter * sign),
+            LineJoin::Round => arc(outer, p, na * sign, cross.atan2(dot)),
+            LineJoin::Miter | LineJoin::Bevel => {}
+        }
+        outer.push(p + nb * sign);
+    };
+    if closed {
+        for (i, &p) in pts.iter().enumerate() {
+            join(&mut left, &mut right, p, dir(i + n - 1), dir(i));
+        }
+        contour(out, left.iter().copied());
+        contour(out, right.iter().rev().copied());
+        return;
+    }
+    let (first, last) = (dir(0), dir(chords - 1));
+    let square = |u: Vec2| if st.cap == LineCap::Square { u * h } else { Vec2::ZERO };
+    left.push(pts[0] - norm(first) * h - square(first));
+    right.push(pts[0] + norm(first) * h - square(first));
+    for (i, &p) in pts.iter().enumerate().take(chords).skip(1) {
+        join(&mut left, &mut right, p, dir(i - 1), dir(i));
+    }
+    let end = pts[n - 1];
+    left.push(end - norm(last) * h + square(last));
+    right.push(end + norm(last) * h + square(last));
+    let mut ring = left;
+    if st.cap == LineCap::Round {
+        arc(&mut ring, end, -norm(last) * h, std::f64::consts::PI);
+        ring.pop();
+    }
+    ring.extend(right.iter().rev().copied());
+    if st.cap == LineCap::Round {
+        arc(&mut ring, pts[0], norm(first) * h, std::f64::consts::PI);
+        ring.pop();
+    }
+    contour(out, ring.into_iter());
+}
+
+/// Adds the closed contour through `pts` to `out`.
+fn contour(out: &mut BezPath, mut pts: impl Iterator<Item = Point>) {
+    if let Some(p) = pts.next() {
+        out.move_to(p);
+        for p in pts {
+            out.line_to(p);
+        }
+        out.close_path();
+    }
 }
 
 /// Strokes at least this many tolerances wide (8 device pixels at a tolerance of 0.25 px) have
@@ -63,7 +233,7 @@ pub(crate) fn wide(outline: BezPath, width: f64, tol: f64) -> BezPath {
     if !(tol > 0.0 && tol.is_finite() && width >= tol * WIDE) {
         return outline;
     }
-    lines(&outline, tol).unwrap_or(outline)
+    lines(&outline, tol * SPAN, tol * CHORD).unwrap_or(outline)
 }
 
 /// One subpath: where it starts, its segments, each with the most steps it is drawn with as lines
@@ -74,11 +244,11 @@ struct Sub {
     closed: bool,
 }
 
-/// `path` with its long curves drawn as lines ([`wide`]); `None` when it has no long curve, would
+/// `path` with its curves whose control points span at least `span` across or down drawn as lines
+/// within about `chord` of them ([`wide`], [`thin_line`]); `None` when it has no such curve, would
 /// take more than [`MAX_LINES`] lines, or does not start each subpath with a move.
-fn lines(path: &BezPath, tol: f64) -> Option<BezPath> {
-    let chord = tol * CHORD;
-    let subs = subpaths(path.elements(), tol, chord)?;
+fn lines(path: &BezPath, span: f64, chord: f64) -> Option<BezPath> {
+    let subs = subpaths(path.elements(), span, chord)?;
     let mut total = 0usize;
     for (_, steps) in subs.iter().flat_map(|s| &s.segs) {
         if *steps > 0 {
@@ -98,7 +268,7 @@ fn lines(path: &BezPath, tol: f64) -> Option<BezPath> {
 /// The subpaths of `els`, each segment with its steps ([`steps`]). A close adds a line back to the
 /// start when the subpath ends elsewhere. `None` when a segment comes before any move or after a
 /// close without a move.
-fn subpaths(els: &[PathEl], tol: f64, chord: f64) -> Option<Vec<Sub>> {
+fn subpaths(els: &[PathEl], span: f64, chord: f64) -> Option<Vec<Sub>> {
     let mut subs: Vec<Sub> = Vec::new();
     for el in els {
         if let PathEl::MoveTo(p) = *el {
@@ -122,7 +292,7 @@ fn subpaths(els: &[PathEl], tol: f64, chord: f64) -> Option<Vec<Sub>> {
                 continue;
             }
         };
-        sub.segs.push((seg, steps(seg, tol, chord)));
+        sub.segs.push((seg, steps(seg, span, chord)));
     }
     Some(subs)
 }
@@ -137,10 +307,10 @@ fn cubic(seg: PathSeg) -> Option<CubicBez> {
 }
 
 /// How many equal steps of its parameter keep the chords of curve `seg` within `chord` of it (by
-/// the second differences of its control points), when its control points span at least [`SPAN`]
-/// times `tol`; 0 for a line, a shorter curve, a curve with a point that isn't finite, and a curve
-/// that would take more than [`MAX_LINES`] steps.
-fn steps(seg: PathSeg, tol: f64, chord: f64) -> usize {
+/// the second differences of its control points), when its control points span at least `min`
+/// across or down; 0 for a line, a shorter curve, a curve with a point that isn't finite, and a
+/// curve that would take more than [`MAX_LINES`] steps.
+fn steps(seg: PathSeg, min: f64, chord: f64) -> usize {
     let Some(c) = cubic(seg) else { return 0 };
     let pts = [c.p0, c.p1, c.p2, c.p3];
     if !pts.iter().all(|p| p.is_finite()) {
@@ -150,7 +320,7 @@ fn steps(seg: PathSeg, tol: f64, chord: f64) -> usize {
         (Point::new(lo.x.min(p.x), lo.y.min(p.y)), Point::new(hi.x.max(p.x), hi.y.max(p.y)))
     });
     let span = (hi.x - lo.x).max(hi.y - lo.y);
-    if !span.is_finite() || span < tol * SPAN {
+    if !span.is_finite() || span < min {
         return 0;
     }
     let second = |a: Point, b: Point, c: Point| (a.to_vec2() - b.to_vec2() * 2.0 + c.to_vec2()).hypot();

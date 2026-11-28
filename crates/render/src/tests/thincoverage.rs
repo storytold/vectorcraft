@@ -1,6 +1,95 @@
 use super::*;
 use crate::stroke::outline as raster_stroke_outline;
-use vectorcraft_doc::StrokeLayer;
+use vectorcraft_doc::{LineCap, LineJoin, StrokeLayer};
+
+/// How many lines a fill of `path` takes once flattened at `tol`.
+fn lines_at(path: &BezPath, tol: f64) -> usize {
+    let mut n = 0;
+    vectorcraft_geom::flatten(path.iter(), tol, |el| n += usize::from(matches!(el, kurbo::PathEl::LineTo(_) | kurbo::PathEl::ClosePath)));
+    n
+}
+
+/// Whether `path` holds lines only.
+fn lines_only(path: &BezPath) -> bool {
+    path.elements().iter().all(|el| !matches!(el, kurbo::PathEl::QuadTo(..) | kurbo::PathEl::CurveTo(..)))
+}
+
+/// A thin curved stroke's outline takes at most twice the lines the stroke's plain outline takes
+/// at the raster tolerance (#7257). 200 cubic curves, each about 100 device pixels across.
+#[test]
+fn thin_curved_strokes_take_at_most_twice_the_lines_of_their_plain_outline() {
+    let mut seed: u64 = 7;
+    let mut r = |lo: f64, hi: f64| {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        lo + (hi - lo) * ((seed >> 11) as f64 / (1u64 << 53) as f64)
+    };
+    let mut paths = Vec::new();
+    for _ in 0..200 {
+        let (x, y) = (r(20.0, 980.0), r(20.0, 980.0));
+        let mut q = [kurbo::Point::ZERO; 3];
+        for p in &mut q {
+            *p = kurbo::Point::new((x + r(-30.0, 30.0)) * 1.71, (y + r(-30.0, 30.0)) * 1.71);
+        }
+        let mut path = BezPath::new();
+        path.move_to((x * 1.71, y * 1.71));
+        path.curve_to(q[0], q[1], q[2]);
+        paths.push(path);
+    }
+    let tol = 0.25;
+    for width in [0.5, 0.75, 0.99] {
+        let st = StrokeLayer::new(Paint::solid(Color::BLACK), width);
+        let (mut plain, mut thin) = (0, 0);
+        for path in &paths {
+            plain += lines_at(&crate::effects::stroke::line_outline(path, &st, width, tol), tol);
+            let outline = raster_stroke_outline(path, &st, width, tol);
+            assert!(lines_only(&outline), "width {width}: lines only");
+            thin += lines_at(&outline, tol);
+        }
+        assert!(thin <= plain * 2, "width {width}: {thin} lines, plain outline {plain}");
+    }
+}
+
+/// A thin stroke drawn as lines keeps its caps, its joins and the hole of a closed path.
+#[test]
+fn thin_strokes_drawn_as_lines_keep_caps_joins_and_holes() {
+    let (w, tol) = (0.5, 0.25);
+    // A quarter circle from (100, 100) heading right, then a right-angle corner at (200, 200).
+    let mut open = BezPath::new();
+    open.move_to((100.0, 100.0));
+    open.curve_to((155.23, 100.0), (200.0, 144.77), (200.0, 200.0));
+    open.line_to((100.0, 200.0));
+    for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+        for join in [LineJoin::Miter, LineJoin::Round, LineJoin::Bevel] {
+            let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), w);
+            st.cap = cap;
+            st.join = join;
+            let o = raster_stroke_outline(&open, &st, w, tol);
+            assert!(lines_only(&o), "{cap:?} {join:?}: lines only");
+            let inside = |x: f64, y: f64| o.winding(kurbo::Point::new(x, y)) != 0;
+            assert_eq!(inside(100.0 - 0.4 * w, 100.0), cap != LineCap::Butt, "{cap:?} {join:?}: start cap");
+            assert!(!inside(100.0 - 0.6 * w, 100.0), "{cap:?} {join:?}: past the start cap");
+            assert_eq!(inside(100.0 - 0.45 * w, 100.0 + 0.45 * w), cap == LineCap::Square, "{cap:?} {join:?}: cap corner");
+            assert!(
+                inside(200.0 + 0.4 * w, 199.0) && inside(200.0 - 0.4 * w, 199.0) && !inside(200.0 + 0.6 * w, 199.0),
+                "{cap:?} {join:?}: curve end"
+            );
+            assert_eq!(inside(200.0 + 0.3 * w, 200.0 + 0.3 * w), join != LineJoin::Bevel, "{cap:?} {join:?}: corner");
+            assert_eq!(inside(200.0 + 0.45 * w, 200.0 + 0.45 * w), join == LineJoin::Miter, "{cap:?} {join:?}: miter tip");
+            assert!(inside(150.0, 200.0 + 0.4 * w) && !inside(150.0, 200.0 + 0.6 * w), "{cap:?} {join:?}: line");
+        }
+    }
+    let ring = kurbo::Circle::new((300.0, 300.0), 50.0).to_path(0.01);
+    let st = StrokeLayer::new(Paint::solid(Color::BLACK), w);
+    let o = raster_stroke_outline(&ring, &st, w, tol);
+    assert!(lines_only(&o), "closed: lines only");
+    for k in 0..36 {
+        let a = f64::from(k) * 10f64.to_radians();
+        let at = |r: f64| o.winding(kurbo::Point::new(300.0 + r * a.cos(), 300.0 + r * a.sin()));
+        assert!(at(50.0 - 0.4 * w) != 0 && at(50.0 + 0.4 * w) != 0, "ring band at {k}");
+        assert!(at(50.0 - 0.6 * w) == 0 && at(50.0 + 0.6 * w) == 0, "ring edges at {k}");
+    }
+    assert_eq!(o.winding(kurbo::Point::new(300.0, 300.0)), 0, "the hole");
+}
 
 /// Independently integrate coverage in radial/angle bins of an original notched ring. Checking
 /// only the outline geometry misses raster flattening that cancels its two nearby contours.
