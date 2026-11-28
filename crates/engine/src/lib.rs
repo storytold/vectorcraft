@@ -121,6 +121,10 @@ pub struct Session {
     /// lent from: a follow-up in another document, after a tool switch (also one back to the same
     /// tool) or after the tool starts afresh is not lent. None when the press was not lent.
     pub(crate) press_lent: Option<(Option<u64>, &'static str, &'static str)>,
+    /// The uid of the document in which a Cmd press with the Selection tool armed Select Behind
+    /// ([`Session::behind_armed`]): Cmd has been held since. None once Cmd is let go, the tool
+    /// changes or another document becomes active.
+    pub(crate) behind_armed: Option<Option<u64>>,
     /// The selection tool a Cmd press would borrow at the pointer, as [`Session::hover_tool_at`]
     /// or [`Session::cursor`] last found it with Cmd held (None inside when it found none), with
     /// the document state, active tool and keys it was found for. None when it was last asked
