@@ -23,7 +23,7 @@ use vectorcraft_engine::cmd::newdoc::{self, ArtboardLayout, DocSettings, MAX_ART
 use craft::behavior::{ColumnWidth, IconId};
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Segmented};
-use craft::ui::contract::{Bind, Entry, FieldLayout, Gap, Props as _, Show as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::contract::{Bind, Entry, FieldLayout, Gap, Props as _, Show as _, ShowContainer as _, SideLabel, Sizing, clicked};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Grid, Row, Stack};
@@ -420,8 +420,8 @@ fn pixels_per_inch() -> f64 {
 }
 
 /// The four Bleed fields in one row, each under its side's name, and the link button at the end; linked, an edit to
-/// one side sets all four. Each field is as wide as the widest bleed it takes, and the row wraps when the column has
-/// no room for all of them.
+/// one side sets all four, and turning the link on sets all four to Top's. Each field is as wide as the widest bleed it
+/// takes, and the row wraps when the column has no room for all of them.
 fn bleed_row(ui: &mut egui::Ui, s: &mut DocSettings, memory: &mut Memory, lengths: LengthUnits) {
     let mut linked = !memory.bleed_split;
     let link = LinkMode::Equal.label(&Env::of(ui).words::<LinkedWords>());
@@ -429,16 +429,25 @@ fn bleed_row(ui: &mut egui::Ui, s: &mut DocSettings, memory: &mut Memory, length
     let mut edited = None;
     Row::new().wrap(true).show(ui, |ui, _| {
         for (i, side) in sides.iter().enumerate() {
-            Field::new(side.clone()).layout(FieldLayout::Above).sizing(Sizing::Content).id_salt(("bleed", i)).show(ui, |ui, _| {
+            // A drag on the side's name scrubs its field.
+            let field = Field::new(side.clone()).layout(FieldLayout::Above).side(SideLabel::new().scrub(true)).sizing(Sizing::Content);
+            field.id_salt(("bleed", i)).show(ui, |ui, _| {
                 let field = NumberField::length(side.clone(), Bind::given(Some(s.bleed[i])), lengths)
                     .range(0.0..=vectorcraft_doc::setup::MAX_BLEED)
+                    .scrub_by_label()
                     .sizing(Sizing::Content);
                 if let Some(v) = field.show(ui).edit.events.committed().copied().flatten().filter(|v| v.is_finite()) {
                     edited = Some((i, v.clamp(0.0, vectorcraft_doc::setup::MAX_BLEED)));
                 }
             });
         }
-        link_toggle(link.clone(), Bind::bound(&mut linked)).id_salt("bleed-link").show(ui);
+        // Turning the link on sets every side to Top's bleed.
+        if let Some(on) = link_toggle(link.clone(), Bind::given(linked)).id_salt("bleed-link").show(ui).value().copied() {
+            linked = on;
+            if on {
+                s.bleed = [s.bleed[0]; 4];
+            }
+        }
     });
     if let Some((i, v)) = edited {
         if linked {
@@ -1444,6 +1453,20 @@ mod tests {
         assert!(sides.windows(2).all(|w| w[0].y0 == w[1].y0 && w[0].x1 <= w[1].x0), "one row, in order: {sides:?}");
         let link = node(&nodes, "Make all settings the same", Role::Button);
         assert!(sides[3].x1 <= link.x0, "the link button {link:?} ends the Bleed row {sides:?}");
+    }
+
+    /// Turning the Bleed link on sets every side to Top's bleed; unlinking keeps the four values.
+    #[test]
+    fn new_document_bleed_link_turned_on_sets_every_side_to_top() {
+        let mut panel = actual_preset_dialog();
+        set(&panel.app(), "bleed", json!([1, 2, 3, 4])).unwrap();
+        panel.frame();
+        panel.click("Make all settings the same");
+        panel.frame();
+        assert_eq!(fields(&panel.app())["bleed"], json!([1.0, 2.0, 3.0, 4.0]), "unlinking keeps the values");
+        panel.click("Make all settings the same");
+        panel.frame();
+        assert_eq!(fields(&panel.app())["bleed"], json!([1.0, 1.0, 1.0, 1.0]), "linking sets every side to Top");
     }
 
     /// At 1280 by 900 the preset cards stand four to a row, with the details column beside them.
