@@ -2267,7 +2267,7 @@ mod tests {
             crate::testing::app_frame(&mut app, &ctx, raw());
         }
         let nodes = crate::testing::app_frame(&mut app, &ctx, raw()).platform_output.accesskit_update.expect("dialog access tree").nodes;
-        let (_, areas) = nodes.iter().find(|(_, n)| n.role() == Role::TabList && n.label() == Some("shortcuts.area")).expect("area tabs");
+        let (_, areas) = nodes.iter().find(|(_, n)| n.role() == Role::TabList && n.label() == Some("Show:")).expect("area tabs");
         let labels: Vec<_> = areas
             .children()
             .iter()

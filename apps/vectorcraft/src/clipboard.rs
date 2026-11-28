@@ -4,10 +4,12 @@
 //! - Windows: text, SVG, PDF, PNG and an opaque bitmap (for apps that don't read PNG) in one go;
 //!   Paste reads each of them and EPS, a bitmap as PNG, else as the device-independent bitmap that
 //!   screenshots and most apps copy (`CF_DIBV5`, `CF_DIB`; the system makes them of a `CF_BITMAP`).
-//! - macOS and Linux: one format at a time, the text (a type-only copy's text or the SVG markup),
-//!   else the PNG as a bitmap; Paste reads text and bitmaps, and on macOS the pasteboard's SVG, PDF
-//!   and EPS as vector art (#1499) and its PNG or TIFF as they are, as screenshots copy them (on
-//!   Linux arboard reads no other formats). On Wayland, arboard's data-control
+//! - macOS: text, SVG, PDF and PNG in one go: arboard writes the text, else the PNG as TIFF, and
+//!   the other formats are added to the same pasteboard item ([`pasteboard_additions`]); Paste
+//!   reads text and bitmaps, the pasteboard's SVG, PDF and EPS as vector art (#1499) and its PNG
+//!   or TIFF as they are, as screenshots copy them.
+//! - Linux: one format at a time, the text (a type-only copy's text or the SVG markup), else the
+//!   PNG as a bitmap; Paste reads text and bitmaps (arboard reads no other formats). On Wayland, arboard's data-control
 //!   backend reads the compositor's clipboard (X11 through XWayland only sees what X11 apps
 //!   copied), falling back to X11 where the compositor lacks the protocol, and where there is no
 //!   X11 either (a Flatpak on GNOME) to the compositor's core protocol on the window's connection:
@@ -135,6 +137,26 @@ fn pasteboard_types(mime: &str) -> &'static [(&'static str, &'static str)] {
         BITMAP => &[("public.png", PNG), ("public.tiff", "image/tiff")],
         _ => &[],
     }
+}
+
+/// The pasteboard types and data Copy adds on macOS to the item arboard wrote (the text, else the
+/// PNG as TIFF), in the order of `flavors` (best first): the SVG, PDF and EPS under the first of
+/// their [`pasteboard_types`], and the PNG as `public.png`. Text, empty flavours and flavours the
+/// pasteboard has no type for are left out.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn pasteboard_additions(flavors: &[Flavor]) -> Vec<(&'static str, &[u8])> {
+    flavors
+        .iter()
+        .filter(|f| !f.data.is_empty())
+        .filter_map(|f| {
+            let t = match engine_mime(&f.mime)? {
+                TEXT => return None,
+                PNG => "public.png",
+                mime => pasteboard_types(mime).first()?.0,
+            };
+            Some((t, &f.data[..]))
+        })
+        .collect()
 }
 
 /// Most pixels a side of a bitmap another app put on the clipboard (untrusted data).
@@ -1622,7 +1644,8 @@ mod portable {
         /// arboard takes the text, else the PNG as a bitmap; the Wayland core protocol offers the
         /// SVG, PNG and text together ([`DataClipboard::copy`](super::wayland::DataClipboard::copy)).
         /// The index answered is the flavour that went out: the text, else the PNG, and on the
-        /// core protocol the first flavour it offers.
+        /// core protocol the first flavour it offers. On macOS the other flavours are then added
+        /// to the pasteboard item arboard wrote ([`pasteboard_additions`](super::pasteboard_additions)).
         fn write(&mut self, flavors: &[Flavor]) -> Result<usize, ClipboardError> {
             let cb = self.cb(Asker::User).map_err(ClipboardError::Other)?;
             #[cfg(target_os = "linux")]
@@ -1659,6 +1682,8 @@ mod portable {
             // What a read got late was on the clipboard before this write.
             #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
             cb.forget_unanswered();
+            #[cfg(target_os = "macos")]
+            super::mac::add(&super::pasteboard_additions(flavors));
             self.ours = ours;
             Ok(wrote)
         }
@@ -3380,14 +3405,28 @@ mod wayland {
 }
 
 /// The macOS pasteboard's vector art and bitmaps as they are (arboard reads text, and of the
-/// pictures TIFF only, decoded).
+/// pictures TIFF only, decoded), and the formats Copy adds to what arboard wrote.
 #[cfg(target_os = "macos")]
 mod mac {
     use objc2::rc::autoreleasepool;
     use objc2_app_kit::NSPasteboard;
-    use objc2_foundation::{NSArray, NSString};
+    use objc2_foundation::{NSArray, NSData, NSString};
 
     use super::{Flavour, MAX_BYTES, copy_within, pasteboard_types};
+
+    /// Adds `types` ([`super::pasteboard_additions`]: each pasteboard type with its data) to the
+    /// item arboard just wrote. A type that can't be added is logged, and what arboard wrote still
+    /// carries the copy.
+    pub fn add(types: &[(&str, &[u8])]) {
+        autoreleasepool(|_| {
+            let pasteboard = NSPasteboard::generalPasteboard();
+            for &(t, data) in types {
+                if !pasteboard.setData_forType(Some(&NSData::with_bytes(data)), &NSString::from_str(t)) {
+                    log::warn!("clipboard: couldn't add {t}");
+                }
+            }
+        })
+    }
 
     /// Does the pasteboard hold one of `mimes` ([`pasteboard_types`])? Asks for its types only.
     pub fn has(mimes: &[&'static str]) -> bool {
@@ -3475,6 +3514,25 @@ mod tests {
         // Vector art before text, text before bitmaps.
         let at = |m| PASTE_ORDER.iter().position(|x| *x == m).unwrap();
         assert!(at(PDF) < at(EPS) && at(EPS) < at(TEXT) && at(TEXT) < at(BITMAP));
+    }
+
+    /// On macOS a Copy puts every format on the pasteboard, not only the text or the picture
+    /// arboard writes (#6310): with On Copy: PDF the PDF goes with the picture, and with Include
+    /// SVG Code the SVG and the PDF go with the markup as text.
+    #[test]
+    fn a_copy_adds_its_other_formats_to_the_pasteboard() {
+        let flavor = |mime: &'static str, data: &[u8]| Flavor::new(mime, data.to_vec());
+        let added = |flavors: &[Flavor]| pasteboard_additions(flavors).into_iter().map(|(t, data)| (t, data.to_vec())).collect::<Vec<_>>();
+        // On Copy: PDF alone: arboard writes the picture, and the PDF is added beside it.
+        let pdf_only = [flavor(PDF, b"%PDF"), flavor(PNG, b"png")];
+        assert_eq!(added(&pdf_only), [("com.adobe.pdf", b"%PDF".to_vec()), ("public.png", b"png".to_vec())]);
+        // Include SVG Code with the PDF: arboard writes the markup as text, and the SVG, PDF and
+        // picture are added in the order Copy offers them.
+        let both = [flavor(TEXT, b"<svg/>"), flavor(SVG, b"<svg/>"), flavor(PDF, b"%PDF"), flavor(PNG, b"png")];
+        let types: Vec<_> = added(&both).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(types, ["public.svg-image", "com.adobe.pdf", "public.png"]);
+        // An empty flavour and a type the pasteboard doesn't carry are left out.
+        assert!(added(&[flavor(PDF, b""), flavor(EMF, b"emf"), flavor("text/html", b"<p>")]).is_empty());
     }
 
     /// An .eps file copied in a file manager pastes as EPS.

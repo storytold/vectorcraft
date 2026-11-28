@@ -173,11 +173,9 @@ impl Exporter<'_> {
             let cmyk_image = blob.is_cmyk();
             // RGB images of a CMYK document go to CMYK only with a CMYK destination; grey ones stay
             // grey ([`crate::images::recode`]).
-            if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && !crate::images::is_grey(&blob.bytes) {
-                let to_cmyk = matches!(out.pixels(), Some(crate::output::Pixels::Cmyk(_)));
-                let set = if to_cmyk { &mut self.rgb_in_cmyk.converted } else { &mut self.rgb_in_cmyk.kept };
-                set.insert(key.to_string());
-            }
+            let rgb_in_cmyk =
+                !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && !crate::images::is_grey(&blob.bytes);
+            let to_cmyk = matches!(out.pixels(), Some(crate::output::Pixels::Cmyk(_)));
             let r = if cmyk_image {
                 let icc = out.cmyk_image_icc(blob);
                 crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, out.cmyk_tag(icc.as_deref()))
@@ -190,7 +188,14 @@ impl Exporter<'_> {
                 unconverted = embed(blob, interpolate, self.sixteen_bit, profiles).is_some();
                 return None;
             }
+            // An RGB image of a CMYK document is counted once it is written: converted when the
+            // recoded image goes to CMYK, kept when it is written in RGB, as it is or recoded.
+            let converted = to_cmyk && r.image.is_some();
             let img = r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles));
+            if rgb_in_cmyk && img.is_some() {
+                let set = if converted { &mut self.rgb_in_cmyk.converted } else { &mut self.rgb_in_cmyk.kept };
+                set.insert(key.to_string());
+            }
             // An image left out gets the warning below instead.
             for w in [r.warning, r.note].into_iter().flatten().filter(|_| img.is_some()) {
                 self.warn(w);

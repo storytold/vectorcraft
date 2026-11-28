@@ -202,7 +202,8 @@ fn a_plug_in_effect_s_editor_follows_its_manifest() {
         assert!(panel.shows(shown), "no {shown:?}");
     }
     assert!(!panel.shows("spacing") && !panel.shows("width"), "the labels replace the names");
-    assert!(panel.value("Spacing").is_some_and(|v| v.contains("1.5") && v.contains("mm")), "{:?}", panel.value("Spacing"));
+    let spacing = panel.value_role("Spacing", craft::ui::contract::Role::SPIN_BUTTON);
+    assert!(spacing.as_deref().is_some_and(|v| v.contains("1.5") && v.contains("mm")), "{spacing:?}");
     assert!(panel.value("Angles").is_some_and(|v| v.contains("45, 135")), "{:?}", panel.value("Angles"));
     // Without the outline, its width isn't shown.
     panel.app().run("effect.setParams", json!({"item": null, "index": 0, "params": {"outline": false}})).unwrap();

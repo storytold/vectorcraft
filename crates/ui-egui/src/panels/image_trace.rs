@@ -118,6 +118,15 @@ impl ImageTraceUi {
     pub(crate) fn reset(&mut self) {
         self.shown = TraceUi::default();
     }
+
+    /// Release pending settings for drawings that have closed, even when the panel is hidden.
+    pub(crate) fn retain_open_drawings(&mut self, open: &[u64]) {
+        self.shown.drafts.retain(|(uid, _, _), _| open.contains(uid));
+        if self.shown.object.is_some_and(|(uid, _, _)| !open.contains(&uid)) {
+            self.shown.object = None;
+            self.shown.synced = Value::Null;
+        }
+    }
 }
 
 /// A preset: its name, its parameters, those of its enhanced version (null if it has none), and

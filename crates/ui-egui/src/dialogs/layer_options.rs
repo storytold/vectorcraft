@@ -7,6 +7,7 @@
 //! `#rrggbb`), `template`, `locked`, `visible`, `printable`, `preview`, `dimImages` and
 //! `dimPercent`. OK runs `layer.setProps`, `layer.new` or `layer.newSublayer`. For several rows
 //! the dialog shows the first row's settings, and OK sends only the ones set in the dialog.
+//! Existing rows keep their stored names unless Name is edited; unchanged approval adds no Undo step.
 
 use std::cell::RefCell;
 
@@ -327,7 +328,9 @@ fn flag_row(ui: &mut egui::Ui, v: &mut LayerOptionsValue, key: &'static str, tex
 fn body(ui: &mut egui::Ui, v: &mut LayerOptionsValue, requested: &RefCell<Option<ColorRequest>>) {
     if v.shows("name") {
         Field::new(tl!("Name:")).id_salt("name").show(ui, |ui, _| {
-            TextField::new(tl!("Name:"), Bind::bound(&mut v.name)).show(ui);
+            if TextField::new(tl!("Name:"), Bind::bound(&mut v.name)).show(ui).value().is_some() {
+                v.mark("name");
+            }
         });
     }
     if v.layer {
@@ -379,7 +382,7 @@ fn body(ui: &mut egui::Ui, v: &mut LayerOptionsValue, requested: &RefCell<Option
 /// so each row keeps its own values for the rest.
 pub(crate) fn params(v: &LayerOptionsValue) -> (&'static str, Value) {
     let mut p = serde_json::Map::new();
-    if !v.many {
+    if !v.many && (v.mode != "edit" || v.is_set("name")) {
         p.insert("name".into(), json!(v.name));
     }
     p.insert("visible".into(), json!(v.visible));
@@ -415,6 +418,8 @@ pub(crate) struct LayerOptionsDialog {
     reverts: u64,
     open: bool,
     value: LayerOptionsValue,
+    /// Unchanged approval is not an edit, even though the engine command records one.
+    opening_params: Value,
     held: HeldAnswer<LayerOptionsValue>,
     /// The value the held OK was refused for: the reason shows until it changes.
     refused_at: Option<LayerOptionsValue>,
@@ -425,12 +430,14 @@ pub(crate) struct LayerOptionsDialog {
 impl LayerOptionsDialog {
     /// The dialog over `value`.
     fn new(document: u64, reverts: u64, value: LayerOptionsValue) -> Self {
+        let opening_params = params(&value).1;
         LayerOptionsDialog {
             id: dialog_id(KEY),
             document,
             reverts,
             open: true,
             value,
+            opening_params,
             held: HeldAnswer::new(),
             refused_at: None,
             color_request: None,
@@ -553,7 +560,10 @@ impl StackDialog for LayerOptionsDialog {
         }
         let rejects = || FieldRefusal::Rejects(&value).message(field);
         match key {
-            "name" => v.name = value.as_str().ok_or_else(rejects)?.to_owned(),
+            "name" => {
+                v.name = value.as_str().ok_or_else(rejects)?.to_owned();
+                v.mark("name");
+            }
             "color" => v.set_color_text(value.as_str().ok_or_else(rejects)?).ok_or_else(rejects)?,
             "dimPercent" => {
                 v.dim_percent = value.as_f64().filter(|p| p.is_finite()).ok_or_else(rejects)?;
@@ -583,9 +593,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     // The closed dialog's answer was run when OK was filed.
     let _ = dialogs.with(|host| host.take::<LayerOptionsDialog>());
-    let Some((document, reverts, value)) = dialogs.with(|host| {
+    let Some((document, reverts, value, opening_params)) = dialogs.with(|host| {
         let dialog = host.get_mut::<LayerOptionsDialog>()?;
-        Some((dialog.document, dialog.reverts, dialog.take_filed()?))
+        Some((dialog.document, dialog.reverts, dialog.take_filed()?, dialog.opening_params.clone()))
     }) else {
         return;
     };
@@ -603,7 +613,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
             Err(Label::from("exit isolation mode first"))
         }
         _ => {
-            if let Err(e) = app.run(cmd, p) {
+            let targets_exist = app.session.active().is_some_and(|st| value.ids.iter().all(|id| st.doc.node(NodeId(*id)).is_some()));
+            if (cmd != "layer.setProps" || p != opening_params || !value.set.is_empty() || !targets_exist)
+                && let Err(e) = app.run(cmd, p)
+            {
                 app.status(e);
             }
             Ok(())
@@ -662,6 +675,191 @@ mod tests {
         dialogs.with(|host| host.confirm_by_id(&ctx, id));
         crate::dialogs::host::pump(app, &ctx);
         dialogs.with(|host| host.confirm_by_id(&ctx, id));
+    }
+
+    /// Accepting displayed labels must not turn generated object names into stored names, or
+    /// add an edit when the user accepts an existing layer's unchanged options.
+    #[test]
+    fn normal_unchanged_ok_preserves_names_document_and_history() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        for xml_id in [false, true] {
+            for kind in ["text", "path", "layer"] {
+                let mut app = app();
+                if xml_id {
+                    app.session.prefs.identify_objects_by = "xmlId".into();
+                }
+                let id = match kind {
+                    "text" => app.run("text.create", json!({"x": 10, "y": 30, "text": "Opening words"})).unwrap()["id"].as_u64().unwrap(),
+                    "path" => app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap(),
+                    _ => app.session.active().unwrap().doc.layers[0].id.0,
+                };
+                let before = app.session.active().unwrap().doc.clone();
+                let revision = app.session.active().unwrap().revision;
+                let undo = app.session.active().unwrap().history.undo.len();
+                if kind != "layer" {
+                    assert_eq!(before.node(NodeId(id)).unwrap().name, None);
+                }
+                let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+                panel.room(egui::vec2(800.0, 900.0));
+                panel.app().run("ui.layerOptions", json!({"id": id})).unwrap();
+                panel.frame();
+                panel.click_role("Name:", Role::TEXT_INPUT);
+                panel.click("OK");
+                panel.frame();
+                panel.frame();
+                {
+                    let app = panel.app();
+                    assert!(!app.any_dialog_open());
+                    let st = app.session.active().unwrap();
+                    assert_eq!(st.doc, before, "{kind}, XML ID: {xml_id}");
+                    assert_eq!(st.revision, revision);
+                    assert_eq!(st.history.undo.len(), undo);
+                }
+                if kind == "text" {
+                    panel.app().run("text.setText", json!({"id": id, "text": "Later words"})).unwrap();
+                    let app = panel.app();
+                    let node = app.session.active().unwrap().doc.node(NodeId(id)).unwrap();
+                    assert_eq!(node.name, None);
+                    assert_eq!(node.display_name(), "Later words", "the Layers label still follows the text");
+                }
+            }
+        }
+    }
+
+    /// A deliberate Name edit may assign even the generated caption; clearing it still means
+    /// removing the explicit name. Cancel and changes to other options preserve the name.
+    #[test]
+    fn normal_name_edits_other_options_and_cancel_keep_their_intended_effects() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+        for cancel in [false, true] {
+            let mut app = app();
+            let id = app.run("text.create", json!({"x": 10, "y": 30, "text": "Opening words"})).unwrap()["id"].as_u64().unwrap();
+            let original = app.session.active().unwrap().doc.clone();
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(800.0, 900.0));
+            panel.app().run("ui.layerOptions", json!({"id": id})).unwrap();
+            panel.frame();
+            panel.click_role("Name:", Role::TEXT_INPUT);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.key(Key::Backspace, Modifiers::NONE);
+            panel.type_text("Opening words");
+            panel.click(if cancel { "Cancel" } else { "OK" });
+            panel.frame();
+            panel.frame();
+            {
+                let app = panel.app();
+                let st = app.session.active().unwrap();
+                assert!(!app.any_dialog_open());
+                assert_eq!(st.history.undo.len(), undo + usize::from(!cancel));
+                if cancel {
+                    assert_eq!(st.doc, original);
+                } else {
+                    assert_eq!(st.doc.node(NodeId(id)).unwrap().name.as_deref(), Some("Opening words"));
+                }
+            }
+            if !cancel {
+                panel.app().run("edit.undo", json!({})).unwrap();
+                assert_eq!(panel.app().session.active().unwrap().doc, original);
+            }
+            panel.app().run("ui.layerOptions", json!({"id": id})).unwrap();
+            panel.frame();
+            panel.click("Lock");
+            panel.click("OK");
+            panel.frame();
+            panel.frame();
+            let app = panel.app();
+            let st = app.session.active().unwrap();
+            let node = st.doc.node(NodeId(id)).unwrap();
+            assert!(node.locked);
+            assert_eq!(node.name, None, "a different option does not store the generated caption");
+            assert_eq!(st.history.undo.len(), undo + 1);
+        }
+    }
+
+    #[test]
+    fn explicit_automation_can_name_the_generated_caption_or_clear_a_name() {
+        let mut app = app();
+        let id = app.run("text.create", json!({"x": 10, "y": 30, "text": "Opening words"})).unwrap()["id"].as_u64().unwrap();
+        app.run("ui.layerOptions", json!({"id": id})).unwrap();
+        set(&mut app, "name", json!("Opening words"));
+        ok(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.node(NodeId(id)).unwrap().name.as_deref(), Some("Opening words"));
+        app.run("ui.layerOptions", json!({"id": id})).unwrap();
+        set(&mut app, "name", json!(""));
+        ok(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.node(NodeId(id)).unwrap().name, None);
+        app.run("ui.layerOptions", json!({"id": id})).unwrap();
+        app.run("layer.setProps", json!({"ids": [id], "name": "Newer name"})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        ok(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.node(NodeId(id)).unwrap().name.as_deref(), Some("Newer name"));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "unchanged approval keeps an external rename");
+    }
+
+    #[test]
+    fn normal_multi_row_approval_preserves_mixed_names_and_options() {
+        use crate::tests::panel_harness::Panel;
+        let mut app = app();
+        let a = app.run("text.create", json!({"x": 10, "y": 30, "text": "Opening words"})).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("layer.setProps", json!({"ids": [b], "name": "Named path", "locked": true})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        let revision = app.session.active().unwrap().revision;
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(egui::vec2(800.0, 900.0));
+        panel.app().run("ui.layerOptions", json!({"ids": [a, b]})).unwrap();
+        panel.frame();
+        panel.click("OK");
+        panel.frame();
+        panel.frame();
+        let app = panel.app();
+        assert!(!app.any_dialog_open());
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc, before);
+        assert_eq!(st.revision, revision);
+        assert_eq!(st.history.undo.len(), undo);
+    }
+
+    #[test]
+    fn explicit_settings_still_override_changes_made_while_options_are_open() {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("ui.layerOptions", json!({"id": id})).unwrap();
+        app.run("layer.setProps", json!({"ids": [id], "locked": true})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        set(&mut app, "locked", json!(false));
+        ok(&mut app);
+        let st = app.session.active().unwrap();
+        assert!(!st.doc.node(NodeId(id)).unwrap().locked);
+        assert_eq!(st.history.undo.len(), undo + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(app.session.active().unwrap().doc.node(NodeId(id)).unwrap().locked);
+    }
+
+    #[test]
+    fn unchanged_approval_of_a_deleted_row_still_reports_the_command_error() {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("ui.layerOptions", json!({"id": id})).unwrap();
+        app.run("edit.clear", json!({"ids": [id]})).unwrap();
+        assert!(app.session.active().unwrap().doc.node(NodeId(id)).is_none());
+        let before = app.session.active().unwrap().doc.clone();
+        let revision = app.session.active().unwrap().revision;
+        let undo = app.session.active().unwrap().history.undo.len();
+        let expected = app.session.execute("layer.setProps", &json!({"ids": [id]})).unwrap_err().to_string();
+        app.ui.status.clear();
+        ok(&mut app);
+        assert!(!app.any_dialog_open());
+        assert_eq!(app.ui.status, expected);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc, before);
+        assert_eq!(st.revision, revision);
+        assert_eq!(st.history.undo.len(), undo);
     }
 
     /// Explicit object ids must not silently disappear or fall back to the highlighted row.
