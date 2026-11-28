@@ -7,31 +7,23 @@ const THUMBNAILER: &str = include_str!("../../../../packaging/linux/ai.storytell
 const MIME: &str = include_str!("../../../../packaging/linux/ai.storyteller.vectorcraft.mime.xml");
 const PACKAGE: &str = include_str!("../../../../packaging/linux/package.sh");
 
-/// Returns the path of `name` in `vectorcraft-cli-thumbnail-<pid>` in the temp folder. The first
-/// call removes that folder and creates it again empty.
-fn tmp(name: &str) -> PathBuf {
-    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    DIR.get_or_init(|| {
-        let dir = std::env::temp_dir().join(format!("vectorcraft-cli-thumbnail-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
-    })
-    .join(name)
+/// Returns a new empty folder in the temp folder, removed with everything in it when the guard drops.
+fn tmp() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap()
 }
 
 fn cli(args: &[&str]) -> Output {
     Command::new(crate::bin()).args(args).output().unwrap()
 }
 
-/// Saves a `width`×`height` document with a rectangle on its artboard as `name` and returns its path.
-fn document(name: &str, width: u32, height: u32) -> PathBuf {
-    save(name, width, height, &["--cmd", "shape.rectangle", "--params", r#"{"x":10,"y":10,"width":40,"height":20}"#])
+/// Saves a `width`×`height` document with a rectangle on its artboard as `name` in `dir` and returns its path.
+fn document(dir: &Path, name: &str, width: u32, height: u32) -> PathBuf {
+    save(dir, name, width, height, &["--cmd", "shape.rectangle", "--params", r#"{"x":10,"y":10,"width":40,"height":20}"#])
 }
 
-/// Saves a new `width`×`height` document as `name` after the `run` arguments `steps`.
-fn save(name: &str, width: u32, height: u32, steps: &[&str]) -> PathBuf {
-    let path = tmp(name);
+/// Saves a new `width`×`height` document as `name` in `dir` after the `run` arguments `steps`.
+fn save(dir: &Path, name: &str, width: u32, height: u32, steps: &[&str]) -> PathBuf {
+    let path = dir.join(name);
     let size = format!(r#"{{"width":{width},"height":{height}}}"#);
     let mut args = vec!["run", "--cmd", "file.new", "--params", &size];
     args.extend_from_slice(steps);
@@ -78,8 +70,9 @@ fn exec(size: u32, input: &Path, output: &Path) -> Vec<String> {
 /// renderer that embeds a native file's preview.
 #[test]
 fn the_thumbnailer_entry_writes_the_first_artboard() {
-    let doc = document("wide.vectorcraft", 200, 100);
-    let out = tmp("wide.png");
+    let dir = tmp();
+    let doc = document(dir.path(), "wide.vectorcraft", 200, 100);
+    let out = dir.path().join("wide.png");
     let command = exec(128, &doc, &out);
     assert_eq!(command[0], entry("TryExec"));
     assert_eq!(command[0], "vectorcraft-cli");
@@ -109,8 +102,9 @@ fn the_thumbnailer_entry_covers_the_native_types() {
 /// The size defaults to 256 pixels on the longer side, and a tall artboard is fitted by its height.
 #[test]
 fn thumbnail_fits_the_longer_side() {
-    let doc = document("tall.vectorcraft", 100, 400);
-    let out = tmp("tall.png");
+    let dir = tmp();
+    let doc = document(dir.path(), "tall.vectorcraft", 100, 400);
+    let out = dir.path().join("tall.png");
     let run = cli(&["thumbnail", doc.to_str().unwrap(), out.to_str().unwrap()]);
     assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
     assert_eq!(png_size(&std::fs::read(&out).unwrap()), (64, 256));
@@ -120,8 +114,9 @@ fn thumbnail_fits_the_longer_side() {
 /// PNG is written.
 #[test]
 fn thumbnail_refuses_bad_arguments() {
-    let doc = document("args.vectorcraft", 100, 100);
-    let out = tmp("args.png");
+    let dir = tmp();
+    let doc = document(dir.path(), "args.vectorcraft", 100, 100);
+    let out = dir.path().join("args.png");
     let (d, o) = (doc.to_str().unwrap(), out.to_str().unwrap());
     for (args, says) in [
         (vec!["thumbnail", "--size", "0", d, o], "--size"),
@@ -142,20 +137,21 @@ fn thumbnail_refuses_bad_arguments() {
 /// an empty document get an error and no PNG, so the file manager shows the file's icon.
 #[test]
 fn thumbnail_writes_nothing_for_files_it_cannot_read() {
-    let text = tmp("notes.vectorcraft");
+    let dir = tmp();
+    let text = dir.path().join("notes.vectorcraft");
     std::fs::write(&text, b"not a document").unwrap();
-    let saved = std::fs::read(document("whole.vectorcraft", 100, 100)).unwrap();
-    let damaged = tmp("damaged.vectorcraft");
+    let saved = std::fs::read(document(dir.path(), "whole.vectorcraft", 100, 100)).unwrap();
+    let damaged = dir.path().join("damaged.vectorcraft");
     std::fs::write(&damaged, &saved[..saved.len() / 2]).unwrap();
     // Sparse where the file system allows it: its size is checked before anything is read.
-    let large = tmp("large.vectorcraft");
+    let large = dir.path().join("large.vectorcraft");
     std::fs::File::create(&large).unwrap().set_len((256 << 20) + 1).unwrap();
-    let missing = tmp("missing.vectorcraft");
-    let empty = save("empty.vectorcraft", 100, 100, &[]);
+    let missing = dir.path().join("missing.vectorcraft");
+    let empty = save(dir.path(), "empty.vectorcraft", 100, 100, &[]);
     for (input, says) in
         [(&text, None), (&damaged, None), (&large, Some("larger than 256 MiB")), (&missing, None), (&empty, Some("the document shows nothing"))]
     {
-        let out = tmp("unreadable.png");
+        let out = dir.path().join("unreadable.png");
         let run = cli(&["thumbnail", input.to_str().unwrap(), out.to_str().unwrap()]);
         assert!(!run.status.success(), "{input:?}");
         let err = String::from_utf8_lossy(&run.stderr);
