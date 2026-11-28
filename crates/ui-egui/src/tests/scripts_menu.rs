@@ -3,6 +3,7 @@
 //! is gone, the notes and the reads of the folder.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use craft::host::{AppInfo, Host, ManualJobs, ThreadJobs};
 use craft::menu::Node;
