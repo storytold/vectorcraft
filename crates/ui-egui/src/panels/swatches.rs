@@ -820,10 +820,7 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
-    popup(ui, tl!("Swatch Libraries"), out.responses.get(LIBRARIES), |ui| {
-        ui.set_min_width(200.0);
-        library_panel::library_menu::<SwatchLibraries>(app, ui);
-    });
+    popup(ui, tl!("Swatch Libraries"), out.responses.get(LIBRARIES), |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
