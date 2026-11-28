@@ -39,24 +39,74 @@ pub(crate) fn row(ui: &mut Ui, label: &str, value: &str) -> bool {
         Text::new(label.to_string()).shade(Shade::Muted).show(ui);
         // The value can be selected and copied, and a click copies all of it (#8432). A drag selects
         // and a Shift-click extends the selection, so neither copies.
-        let shown = SelectableText::new(label.to_string(), value).show(ui);
-        // The click's own position and keys: a move or a key change after the release in the same
-        // frame leaves the pointer and the held keys elsewhere. A frame with more than one release
-        // copies nothing, since the click flags below do not say which release they describe.
-        let area = shown.interact_rect.intersect(ui.clip_rect());
-        let primary = egui::PointerButton::Primary;
-        let release = ui.input(|i| {
-            let mut releases = i.events.iter().filter_map(|e| match e {
-                egui::Event::PointerButton { pos, button, pressed: false, modifiers } if *button == primary => Some((*pos, *modifiers)),
-                _ => None,
-            });
-            let release = releases.next().filter(|_| releases.next().is_none());
-            let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
-            release.filter(|_| single)
-        });
-        clicked = release.is_some_and(|(pos, keys)| keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id()));
+        clicked = copy_value(ui, label, value, false);
     });
     clicked
+}
+
+/// The framework readout policy introduced for Document Info in #9353: the first plain
+/// primary release copies immediately, while subsequent double-clicks select text.
+pub(crate) fn copy_value(ui: &mut Ui, label: &str, value: &str, mono: bool) -> bool {
+    let text = SelectableText::new(label.to_string(), value);
+    let shown = if mono { text.mono().show(ui) } else { text.show(ui) };
+    copy_shown(ui, &shown, value)
+}
+
+/// The same guarded full-value copy for an already shown readout. An elided path remains
+/// static text: selection indices must describe the text actually shown by the framework.
+pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bool {
+    // The click's own position and keys: a move or a key change after the release in the same
+    // frame leaves the pointer and the held keys elsewhere. A frame with more than one release
+    // copies nothing, since the click flags below do not say which release they describe.
+    let area = shown.interact_rect.intersect(ui.clip_rect());
+    let primary = egui::PointerButton::Primary;
+    let press_id = shown.id.with("readout_copy_press");
+    let saved_origin = ui.ctx().data(|d| d.get_temp::<egui::Pos2>(press_id));
+    let eligible = ui.is_enabled() && !value.is_empty() && area.is_positive();
+    let (events, single) = ui.input(|i| {
+        let events: Vec<_> = i
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                egui::Event::PointerButton { pos, button, pressed, modifiers } if *button == primary => Some((*pos, *pressed, *modifiers)),
+                _ => None,
+            })
+            .collect();
+        let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
+        (events, single)
+    });
+    let mut origin = saved_origin;
+    let mut release = None;
+    let mut release_count = 0_usize;
+    // egui clears pointer.press_origin on release. Remember only an eligible press in
+    // this clipped readout's own layer, including a press/release in the same frame.
+    for (pos, pressed, modifiers) in events {
+        if pressed {
+            origin = (eligible && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())).then_some(pos);
+        } else {
+            release_count += 1;
+            release = Some((origin.take(), pos, modifiers));
+        }
+    }
+    let release = release.filter(|_| release_count == 1 && single);
+    if origin != saved_origin {
+        ui.ctx().data_mut(|d| match origin {
+            Some(pos) => {
+                d.insert_temp(press_id, pos);
+            }
+            None => d.remove::<egui::Pos2>(press_id),
+        });
+    }
+    ui.ctx().accesskit_node_builder(shown.id, |node| {
+        node.set_description(tl!("Copy"));
+        node.add_action(egui::accesskit::Action::Click);
+    });
+    let activated = ui.input(|i| i.num_accesskit_action_requests(shown.id, egui::accesskit::Action::Click) > 0);
+    eligible
+        && (activated
+            || release.is_some_and(|(origin, pos, keys)| {
+                origin.is_some() && keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())
+            }))
 }
 
 /// Whether no artwork is selected. Artboards the Artboard tool has selected are not artwork:
@@ -68,20 +118,28 @@ fn no_artwork_selected(app: &VectorcraftApp) -> bool {
     }
 }
 
-/// `document.info` with its categories, fetched again only when the document, the scope or the
-/// artboards the Artboard tool has selected change. A frame that fetches nothing returns the stored
-/// result without copying it and stores nothing; a failed fetch leaves the stored result as it was.
+/// Whether the panel shows Objects, where Path Area is: only then does it ask `document.info`
+/// for the paths' area, whose pass normalizes every closed path again after each edit.
+fn shows_path_area(view: &DocInfoView) -> bool {
+    view.category.is_empty() || view.category == "objects"
+}
+
+/// `document.info` with its categories, fetched again only when the document, the scope, the
+/// artboards the Artboard tool has selected or whether Objects is shown change. A frame that
+/// fetches nothing returns the stored result without copying it and stores nothing; a failed fetch
+/// leaves the stored result as it was.
 pub(crate) fn info(app: &mut VectorcraftApp) -> Option<Arc<Value>> {
     let selection_only = app.ui.doc_info.selection_only;
+    let path_area = shows_path_area(&app.ui.doc_info);
     let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
     let st = app.session.active()?;
-    let key = (st.uid, st.revision, selection_only, artboard_tool);
+    let key = (st.uid, st.revision, selection_only, path_area, artboard_tool);
     if let Some((cached, info)) = &app.canvas.doc_info
         && *cached == key
     {
         return Some(Arc::clone(info));
     }
-    let info = Arc::new(app.session.execute("document.info", &json!({ "selectionOnly": selection_only })).ok()?);
+    let info = Arc::new(app.session.execute("document.info", &json!({ "selectionOnly": selection_only, "pathArea": path_area })).ok()?);
     app.canvas.doc_info = Some((key, Arc::clone(&info)));
     Some(info)
 }
@@ -121,7 +179,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for (k, r) in rows.iter().enumerate() {
                 let (label, value) = (r[0].as_str().unwrap_or_default(), r[1].as_str().unwrap_or_default());
                 if value.is_empty() {
-                    Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
+                    if named.contains(&k) && !label.is_empty() {
+                        if copy_value(ui, label, label, false) {
+                            copy = Some(label.to_string());
+                        }
+                    } else {
+                        Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
+                    }
                 } else {
                     let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
                     if row(ui, super::label_or_name(label, !named.contains(&k)), &shown) {
@@ -757,28 +821,30 @@ mod tests {
     }
 
     /// The by-value cache the panel kept before its result was shared, with the same key.
-    type CopiedCache = Option<((u64, u64, bool, Value), Value)>;
+    type CopiedCache = Option<((u64, u64, bool, bool, Value), Value)>;
 
     /// `document.info` read as the panel read it before its result was shared: the stored result
     /// copied out by value on every call, kept in `cache` so it does not touch the panel's.
     fn copied_info(app: &mut VectorcraftApp, cache: &mut CopiedCache) -> Option<Value> {
         let selection_only = app.ui.doc_info.selection_only;
+        let path_area = shows_path_area(&app.ui.doc_info);
         let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
         let st = app.session.active()?;
-        let key = (st.uid, st.revision, selection_only, artboard_tool);
+        let key = (st.uid, st.revision, selection_only, path_area, artboard_tool);
         if let Some((cached, info)) = cache.as_ref()
             && *cached == key
         {
             return Some(info.clone());
         }
-        let info = app.session.execute("document.info", &json!({ "selectionOnly": selection_only })).ok()?;
+        let info = app.session.execute("document.info", &json!({ "selectionOnly": selection_only, "pathArea": path_area })).ok()?;
         *cache = Some((key, info.clone()));
         Some(info)
     }
 
     /// A frame that fetches nothing keeps the stored `document.info` result without a copy and
     /// shows the same rows; another document (at the same revision), an edit, Selection Only and
-    /// the Artboard tool's options each store a new one, and a category does not. With no
+    /// the Artboard tool's options each store a new one, and a category that keeps Objects shown or
+    /// hidden does not. With no
     /// document nothing is fetched and the stored result stays as it was.
     #[test]
     fn frames_that_fetch_nothing_reuse_the_cached_rows() {
@@ -841,13 +907,44 @@ mod tests {
         app.select_tool("selection");
         let (key, away, _) = frame(&mut app);
         assert!(!Arc::ptr_eq(&kept, &away), "another tool stores a new result");
-        assert_eq!(key.3, Value::Null);
+        assert_eq!(key.4, Value::Null);
         // With no document the panel shows its empty state and keeps the stored result.
         app.session.execute("file.close", &json!({})).unwrap();
         app.session.execute("file.close", &json!({})).unwrap();
         let (_, closed, text) = frame(&mut app);
         assert!(Arc::ptr_eq(&away, &closed), "nothing is fetched or stored without a document");
         assert!(text.contains("No document"), "{text}");
+    }
+
+    /// The paths' area pass normalizes every closed path, so while the panel shows a category other
+    /// than Objects its `document.info` leaves the area out, and edits there do not work it out
+    /// again. Objects and All Categories ask for it and share one result.
+    #[test]
+    fn the_path_area_is_worked_out_only_while_objects_is_shown() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 20})).unwrap();
+        let shown = |app: &mut VectorcraftApp, category: &str| {
+            run(app, "ui.docInfo.category", &json!({ "category": category })).unwrap().unwrap();
+            let _ = crate::tests_labels::painted_text(app, show);
+            app.canvas.doc_info.clone().unwrap().1
+        };
+        let all = shown(&mut app, "");
+        assert!(all["pathArea"].as_f64().is_some_and(|a| a > 0.0), "{}", all["pathArea"]);
+        assert!(Arc::ptr_eq(&all, &shown(&mut app, "objects")), "Objects reuses All Categories' result");
+        for category in ["document", "fonts"] {
+            let other = shown(&mut app, category);
+            assert!(other["pathArea"].is_null(), "{category}: {}", other["pathArea"]);
+            // An edit while another category is shown fetches again, still without the area.
+            app.session.execute("shape.ellipse", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap();
+            let edited = shown(&mut app, category);
+            assert!(!Arc::ptr_eq(&other, &edited));
+            assert!(edited["pathArea"].is_null(), "{category}: {}", edited["pathArea"]);
+        }
+        // Back on Objects, the area covers the paths drawn meanwhile.
+        let objects = shown(&mut app, "objects");
+        assert!(objects["pathArea"].as_f64().unwrap() > all["pathArea"].as_f64().unwrap());
+        assert!(shown_rows(&objects, "objects").iter().any(|(l, _)| l == "Path Area"));
     }
 
     /// Time a frame's read of Document Info's result for a document with 5,000 objects painted

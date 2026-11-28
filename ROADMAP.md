@@ -124,7 +124,8 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 ## Progress log
 
-- 2026-11-20: macOS Quick Look (#663): Finder thumbnails and Space-bar previews of `.vectorcraft` and `.drawcraft` files, through two app extensions written in Rust (`apps/vectorcraft-ql`, their read path `crates/quicklook`), packaged in `VectorCraft.app/Contents/PlugIns`; native saves embed the preview by default (File Handling › Embed Preview). The thumbnail is the embedded preview, so files saved before keep the icon until saved again. Thumbnails checked on a macOS 15 runner (`packaging/macos/quicklook/check-thumbnails.sh`, ad-hoc signed: good files in 0.05–0.25 s, bad ones an error in under 0.2 s); the Space-bar preview and a notarised build on a real Mac are still to check. Headline numbers unchanged.
+- 2026-11-28: macOS Quick Look (#663): Finder thumbnails and Space-bar previews of `.vectorcraft` and `.drawcraft` files, through two app extensions written in Rust (`apps/vectorcraft-ql`, their read path `crates/quicklook`), packaged in `VectorCraft.app/Contents/PlugIns`; native saves embed the preview by default (File Handling › Embed Preview). The thumbnail is the embedded preview, so files saved before keep the icon until saved again. Thumbnails checked on a macOS 15 runner (`packaging/macos/quicklook/check-thumbnails.sh`, ad-hoc signed: good files in 0.05–0.25 s, bad ones an error in under 0.2 s); the Space-bar preview and a notarised build on a real Mac are still to check. Headline numbers unchanged.
+- 2026-11-20: Color conversion indexes global swatch bases and linked-paint lookups (#8804); scores, estimates and measured budgets unchanged.
 
 - 2026-11-18: Built-in symbol library Media Controls: adds a seventh procedural symbol library (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu) containing six original vector symbols (Play, Pause, Stop, Skip Next, Shuffle, Repeat) generated in code without default 9-slice guides (part of Gap 5). Headline numbers unchanged.
 
@@ -257,7 +258,8 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-27 | minor | Progress log row for macOS Quick Look (#663); headline numbers unchanged. |
+| 2026-11-28 | minor | Progress log row for macOS Quick Look (#663); headline numbers unchanged. |
+| 2026-11-20 | minor | Color conversion indexes global swatch bases and linked-paint lookups (#8804); scores, estimates and measured budgets unchanged. |
 | 2026-11-22 | minor | Upcoming: the G11 item names what is left, the unit preference reverting to points (#864; SVG export units are fixed) and a Transform effect in a fill's or stroke's own effects (#885), instead of Shape Builder regions and Asset Export borders, which are fixed (#937, #983 / #1037); its estimate follows docs/roadmap.md and docs/gaps.md, 8–15 → 6–13 h, #8314. The Essentials readiness row's Shape Builder item names what its 4–8 h still covers (checking #937's fix on the reporter's file, still unconfirmed). Headline numbers unchanged. |
 | 2026-11-15 | minor | Graphic Styles: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h). |
 | 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |

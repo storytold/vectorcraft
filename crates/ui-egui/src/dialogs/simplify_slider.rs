@@ -86,7 +86,7 @@ pub(crate) struct Strip {
     /// Which command the strip previews.
     pub kind: StripKind,
     /// The drawing whose selection and preview the strip uses.
-    document: Option<u64>,
+    document: Option<(u64, u64)>,
     /// The slider's value, 0 to 100.
     pub level: f64,
     /// The selection's document bounds when the strip opened, so the strip stays put while the
@@ -102,7 +102,7 @@ pub(crate) struct Strip {
 
 impl Strip {
     fn in_source(&self, app: &VectorcraftApp) -> bool {
-        self.document == app.session.active().map(|doc| doc.uid)
+        self.document == app.session.active().map(|doc| (doc.uid, doc.reverts))
     }
 
     fn cancel(self, app: &mut VectorcraftApp) {
@@ -142,7 +142,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, kind: StripKind) {
     }
     let strip = Strip {
         kind,
-        document: app.session.active().map(|doc| doc.uid),
+        document: app.session.active().map(|doc| (doc.uid, doc.reverts)),
         level: opening_level(app, kind),
         bounds: app.selection_bounds(),
         open: true,

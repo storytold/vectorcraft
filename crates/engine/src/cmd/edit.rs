@@ -815,6 +815,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     turned.recost_paints();
     st.history.redo.push(turned);
     st.history.trim();
+    st.history_restores += 1;
     st.revision += 1;
     st.selection.prune(&st.doc);
     // Guides locked and slices locked or hidden since the step was made stay deselected.
@@ -852,6 +853,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     turned.recost_paints();
     st.history.undo.push(turned);
     st.history.trim();
+    st.history_restores += 1;
     st.revision += 1;
     st.selection.prune(&st.doc);
     crate::deselect_hidden(&menu, &st.doc, &mut st.selection);
@@ -958,8 +960,12 @@ fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::
 /// instance as it is. Copy copies the instance whole ([`copy_cut_targets`]).
 pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
     refuse_symbol_part(s)?;
-    let st = s.doc()?;
-    Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
+    Ok(selection_roots(s.doc()?))
+}
+
+/// [`selected_roots`] of one document's selection.
+pub(crate) fn selection_roots(st: &crate::DocState) -> Vec<NodeId> {
+    roots_of(&st.doc, st.selection.in_paint_order(&st.doc))
 }
 
 /// [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art is selected:

@@ -165,6 +165,21 @@ fn command_rows(ui: &mut Ui, rows: &[CommandRow]) -> Option<(&'static str, Value
 /// The Control bar's snapping quick access; every change uses its existing command, and Pixel
 /// Snapping Options… opens the dialog of `view.snapToPixel.options`.
 fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let label = tl!("Snapping");
+    let mut ran = None;
+    ranked(ui, rank::FIELDS, |ui| {
+        let button = Button::new(label).trailing_icon(IconId::new("chevron-down")).show(ui);
+        Menu::new(label).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
+            ran = snapping_menu_contents(app, ui);
+        });
+    });
+    if let Some((id, params)) = ran {
+        crate::menus::invoke(app, id, params);
+    }
+}
+
+/// The same live command menu in the Control and Status bars.
+pub(super) fn snapping_menu_contents(app: &VectorcraftApp, ui: &mut Ui) -> Option<(&'static str, Value)> {
     let toggle = |label, id, on| CommandRow { label, check: Some(on), id, params: json!({}) };
     let preference =
         |label, key: &'static str, on: bool| CommandRow { label, check: Some(on), id: "prefs.set", params: json!({"key": key, "value": !on}) };
@@ -185,22 +200,14 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             preference(tl!("Snap to Perpendicular"), "snapPerpendicular", prefs.snap_perpendicular),
         ],
     ];
-    let label = tl!("Snapping");
     let mut ran = None;
-    ranked(ui, rank::FIELDS, |ui| {
-        let button = Button::new(label).trailing_icon(IconId::new("chevron-down")).show(ui);
-        Menu::new(label).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
-            for (i, rows) in sections.iter().enumerate() {
-                if i > 0 {
-                    Divider::horizontal().show(ui);
-                }
-                ran = command_rows(ui, rows).or(ran.take());
-            }
-        });
-    });
-    if let Some((id, params)) = ran {
-        crate::menus::invoke(app, id, params);
+    for (i, rows) in sections.iter().enumerate() {
+        if i > 0 {
+            Divider::horizontal().show(ui);
+        }
+        ran = command_rows(ui, rows).or(ran.take());
     }
+    ran
 }
 
 /// The Control bar's isolation action: icon, name and command. In isolation mode it is Exit Isolation Mode,

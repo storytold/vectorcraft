@@ -364,6 +364,14 @@ impl Panel {
         self.fixture.tree().value_of(self.look_role(name, role).node).map(str::to_owned)
     }
 
+    /// Whether a label named `name` has exactly `value`, where a field's static label may share its name and role.
+    pub(crate) fn label_has_value(&self, name: &str, value: &str) -> bool {
+        let tree = self.fixture.tree();
+        tree.keys().into_iter().any(|key| {
+            tree.role_of(key) == Some(craft::ui::contract::Role::LABEL) && tree.name_of(key) == Some(name) && tree.value_of(key) == Some(value)
+        })
+    }
+
     /// The description of the control named `name` (a list row's trailing texts).
     pub(crate) fn description(&self, name: &str) -> Option<String> {
         self.fixture.tree().description_of(self.look(name).node).map(str::to_owned)

@@ -13,7 +13,7 @@ use vectorcraft_geom::{FillRule, PathData, SubPath};
 use vectorcraft_pathops as po;
 use vectorcraft_pathops::{BoolOp, PathfinderOp};
 
-use super::edit::selected_roots;
+use super::edit::{selected_roots, selection_roots};
 use super::expand::{fill_shape, reshaped, seeded};
 use super::{
     CommandSpec, EngineError, Result, Session, always, bad, check_switches, checked_ids_or_selection, cmd, has_doc, has_selected_path, has_selection,
@@ -1145,6 +1145,59 @@ pub(crate) fn ordered_map<T: Sync, R: Send>(
 /// Can Outline Stroke turn `st` into filled art?
 pub(crate) fn outlinable(st: &StrokeLayer) -> bool {
     st.visible && !st.paint.is_none() && st.width > 0.0
+}
+
+/// Whether any segment can paint a butt-capped stroke. Check only used control points:
+/// coincident endpoints can still describe a curve, but unused open-end handles cannot.
+fn may_paint_butt_stroke(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.subpaths.iter().any(|sp| {
+            (0..sp.segment_count()).any(|i| {
+                let c = sp.segment(i);
+                c.p0 != c.p3 || c.p0 != c.p1 || c.p0 != c.p2
+            })
+        }),
+        NodeKind::Compound { children, .. } => children.iter().any(|c| may_paint_butt_stroke(c)),
+        _ => false,
+    }
+}
+
+/// Does Outline Stroke have a stroke to turn into art under `n`, outside the dimension subtrees
+/// the command will keep? Guides, clipping paths and type are not outlined.
+fn has_outlinable_stroke(n: &Node, kept: &[NodeId]) -> bool {
+    if kept.contains(&n.id) {
+        return false;
+    }
+    match &n.kind {
+        NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => false,
+        NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+            let geometry = std::cell::LazyCell::new(|| may_paint_butt_stroke(n));
+            n.appearance.items.iter().any(|i| {
+                let AppearanceItem::Stroke(st) = i else { return false };
+                // Brushes, arrowheads, profiles and geometry effects can make a point paint.
+                outlinable(st)
+                    && (st.cap != vectorcraft_doc::LineCap::Butt
+                        || st.brush.is_some()
+                        || st.start_arrow.is_some()
+                        || st.end_arrow.is_some()
+                        || st.profile.is_some()
+                        || vectorcraft_render::effects::has_geometry(&n.appearance.effects)
+                        || vectorcraft_render::effects::has_geometry(&st.effects)
+                        || *geometry)
+            })
+        }
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => children.iter().any(|c| has_outlinable_stroke(c, kept)),
+        _ => false,
+    }
+}
+
+/// Does `object.path.outlineStroke` have a stroke to outline in `st`'s selection? It acts on the
+/// selection's roots (a compound path's member stands for its compound, which holds the
+/// appearance), excluding the linked dimensions that the command lifts while outlining their art.
+pub fn can_outline_stroke(st: &crate::DocState) -> bool {
+    let roots = selection_roots(st);
+    let kept = super::dimension::with_their_art(&st.doc, &roots);
+    roots.into_iter().filter_map(|id| st.doc.node(id)).any(|n| has_outlinable_stroke(n, &kept))
 }
 
 /// `n` with `opacity` and `blend` applied: set on it when it has none of its own, else on a

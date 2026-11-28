@@ -12,6 +12,8 @@
 //! Help:
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-and-place-symbols.html>.
 
+use std::collections::HashSet;
+
 use craft::ui::contract::{Bind, Outcome as _, Show as _};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
@@ -100,13 +102,25 @@ fn rows(name: &str) -> Vec<Param> {
 /// edited), applies the fields to it; `keep_art` leaves the selection as ordinary art for a new one;
 /// `opened` are the guides the dialog opened with.
 fn open_dialog(app: &mut VectorcraftApp, fields: DialogFields, edit: Option<String>, keep_art: bool, opened: [f64; 4]) -> Result<Value, String> {
-    let document = app.session.active().ok_or("no document open")?.uid;
+    let st = app.session.active().ok_or("no document open")?;
+    let (document, reverts) = (st.uid, st.reverts);
+    let selection = edit.is_none().then(|| st.selection.objects.iter().copied().collect::<HashSet<_>>());
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let name = fields.text("name").unwrap_or_default().to_string();
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Symbol Options"), rows(&name)));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        ParamDialog::new(KIND, tl!("Symbol Options"), rows(&name)).values(Bind::bound(fields))
+    });
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| -> Result<(), String> {
-        if !app.session.active().is_some_and(|active| active.uid == document) {
-            return Err(tl!("This symbol belongs to the document that opened the dialog.").to_owned());
+        let Some(active) = app.session.active().filter(|st| st.uid == document) else {
+            return Err(tl!("This symbol belongs to the document that opened the dialog.").into());
+        };
+        if active.reverts != reverts {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+        }
+        if let Some(selection) = &selection
+            && (active.selection.objects.len() != selection.len() || active.selection.objects.iter().any(|id| !selection.contains(id)))
+        {
+            return Err(tl!("The selected artwork changed. Restore the selection to continue.").into());
         }
         let f = &result.fields;
         let name = f.text("name").unwrap_or_default().trim().to_string();
@@ -195,10 +209,83 @@ fn merge(into: &mut Value, extra: Value) {
 #[cfg(test)]
 mod document_tests {
     use craft::ui::dialog::dialog_id;
+    use vectorcraft_doc::NodeId;
     use vectorcraft_engine::Session;
 
-    use super::super::tests_warp::{accept, set, windowed};
+    use super::super::tests_warp::{accept, dismiss, set, windowed};
     use super::*;
+    use crate::tests::picks::answer_dialog;
+
+    #[test]
+    fn keyboard_and_pointer_edits_reach_new_and_existing_symbol_options() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+
+        fn draw(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+            if let Some(dialogs) = app.dialogs() {
+                dialogs.with(|host| host.run(ui));
+            }
+            super::super::host::pump(app, ui.ctx());
+        }
+
+        for editing in [false, true] {
+            let mut app = windowed(VectorcraftApp::new(Session::new(), Default::default()));
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 40})).unwrap();
+            if editing {
+                app.run("symbol.new", json!({"name": "Badge", "type": "static", "alignToPixelGrid": true})).unwrap();
+            }
+            let mut panel = Panel::new(app, draw);
+            panel.room(egui::vec2(800.0, 800.0));
+            if editing {
+                open_edit(&mut panel.app(), Some("Badge")).unwrap();
+            } else {
+                open(&mut panel.app(), false).unwrap();
+            }
+            panel.frame();
+            let undo = panel.app().session.active().unwrap().history.undo.len();
+            assert_eq!(
+                panel.toggled("Align to Pixel Grid"),
+                Some(craft::behavior::Mixed::Same(editing)),
+                "the options open with the symbol's current pixel-alignment setting"
+            );
+            panel.click_role("Name", Role::TEXT_INPUT);
+            panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+            panel.type_text("Keyboard badge");
+            panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+            assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog_id(KIND))["name"], "Keyboard badge");
+            assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog_id(KIND))["type"], if editing { "static" } else { "dynamic" });
+            panel.click_role(if editing { "Dynamic Symbol" } else { "Static Symbol" }, Role::RADIO_BUTTON);
+            assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog_id(KIND))["type"], if editing { "dynamic" } else { "static" });
+            panel.click_role("Align to Pixel Grid", Role::CHECK_BOX);
+            panel.click_role("Enable Guides for 9-Slice Scaling", Role::CHECK_BOX);
+            for (label, key, input, value) in [
+                ("Left", "sliceLeft", "10", 10.0),
+                ("Top", "sliceTop", "20", 20.0),
+                ("Right", "sliceRight", "30", 30.0),
+                ("Bottom", "sliceBottom", "40", 40.0),
+            ] {
+                panel.click_role(label, Role::SPIN_BUTTON);
+                panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+                panel.type_text(input);
+                panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+                assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog_id(KIND))[key], value);
+            }
+            panel.click("OK");
+            assert!(!super::super::tests_warp::open_ids(&panel.app()).contains(&dialog_id(KIND)));
+            let app = panel.app();
+            let state = app.session.active().unwrap();
+            let symbol = state.doc.symbols.iter().find(|symbol| symbol.name == "Keyboard badge").unwrap();
+            assert_eq!(symbol.dynamic, editing);
+            assert_eq!(state.doc.symbol_pixel_aligned("Keyboard badge"), !editing);
+            assert_eq!(
+                state.doc.symbol_nine_slice("Keyboard badge"),
+                Some(vectorcraft_doc::SymbolNineSlice { left: 0.1, top: 0.2, right: 0.3, bottom: 0.4 })
+            );
+            assert_eq!(state.doc.symbols.len(), 1);
+            assert_eq!(state.history.undo.len(), undo + 1);
+        }
+    }
 
     #[test]
     fn editing_symbol_options_does_not_rename_another_drawings_symbol() {
@@ -224,5 +311,68 @@ mod document_tests {
         activate(&mut app, 0);
         accept(&mut app, id);
         assert!(app.session.active().unwrap().doc.symbols.iter().any(|symbol| symbol.name == "Source badge"));
+    }
+
+    #[test]
+    fn new_symbol_does_not_replace_art_selected_after_opening() {
+        let mut app = windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let original = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+        let other = app.run("shape.rectangle", json!({"x": 60, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        open(&mut app, false).unwrap();
+        let id = dialog_id(KIND);
+        set(&app, id, "name", json!("Badge"));
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        answer_dialog(&mut app, id, &[], true);
+        assert!(app.session.active().unwrap().doc == before, "OK cannot turn the later selection into a symbol");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        answer_dialog(&mut app, id, &[], true);
+        let symbols = app.run("symbol.list", json!({})).unwrap();
+        assert_eq!(symbols["symbols"][0]["name"], "Badge");
+        assert_eq!(symbols["symbols"][0]["size"], json!([30.0, 30.0]), "the original art becomes the symbol");
+        assert!(app.session.active().unwrap().doc.node(NodeId(other)).is_some(), "the unrelated rectangle remains");
+    }
+
+    #[test]
+    fn editing_symbol_options_keeps_the_definition_restored_by_revert() {
+        let mut app = windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+        app.run("symbol.new", json!({"name": "Badge"})).unwrap();
+        let file = std::env::temp_dir().join(format!("vectorcraft-symbol-options-revert-{}.vectorcraft", std::process::id()));
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+        let st = app.session.active().unwrap();
+        let (uid, reverts) = (st.uid, st.reverts);
+
+        app.run("symbol.options", json!({"name": "Badge", "registration": 0})).unwrap();
+        open_edit(&mut app, Some("Badge")).unwrap();
+        let id = dialog_id(KIND);
+        set(&app, id, "name", json!("Edited badge"));
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let _ = std::fs::remove_file(file);
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+        assert_eq!(st.doc.symbol_registration("Badge").0, 4);
+        let restored = st.doc.clone();
+        let undo = st.history.undo.len();
+
+        answer_dialog(&mut app, id, &[], true);
+        assert_eq!(app.session.active().unwrap().doc.symbols[0].name, "Badge", "the restored symbol keeps its name");
+        assert_eq!(app.session.active().unwrap().doc, restored);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+        dismiss(&mut app, id);
+        open_edit(&mut app, Some("Badge")).unwrap();
+        set(&app, id, "name", json!("New badge"));
+        accept(&mut app, id);
+        assert_eq!(app.session.active().unwrap().doc.symbols[0].name, "New badge");
     }
 }

@@ -42,7 +42,7 @@ const WRONG_DOCUMENT: &str = "Save for Web belongs to the document that opened t
 /// What the open dialog's pump keeps between frames: data keyed by its inputs, never UI state.
 #[derive(Default)]
 pub(crate) struct WebExport {
-    document: Option<u64>,
+    document: Option<(u64, u64)>,
     opening: Arc<()>,
     /// The rendering of the art before optimisation, by [`render_key`].
     render: Option<(String, Result<Arc<WebRender>, String>)>,
@@ -186,7 +186,8 @@ fn settings_of(options: &SaveForWebOptions, table: &Value, kept: &Value, path: O
 
 /// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let document = app.session.active().ok_or("no document")?.uid;
+    let active = app.session.active().ok_or("no document")?;
+    let document = (active.uid, active.reverts);
     let host = app.dialogs().ok_or("no window")?;
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     // Settle a completed opening while its settings and source are still available.
@@ -461,8 +462,13 @@ fn on_dialog<R>(host: &craft::ui::shell::WindowDialogs, f: impl FnOnce(&mut Host
     host.with(|h| h.get_mut::<HostedSaveForWeb>().map(f))
 }
 
-fn on_original_document(app: &VectorcraftApp) -> bool {
-    app.session.active().is_some_and(|active| app.web_export.document == Some(active.uid))
+fn document_problem(app: &VectorcraftApp) -> Option<&'static str> {
+    match (app.web_export.document, app.session.active()) {
+        (Some((uid, reverts)), Some(active)) if uid == active.uid => {
+            (reverts != active.reverts).then(|| tl!("The document was reverted. Reopen this dialog to continue."))
+        }
+        _ => Some(tl!(WRONG_DOCUMENT)),
+    }
 }
 
 /// Answers the open dialog once per frame: its result when it closed, else its requests.
@@ -479,7 +485,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         _ => {}
     }
     let Some(asked) = on_dialog(&host, Asked::take) else { return };
-    if !on_original_document(app) {
+    if let Some(reason) = document_problem(app) {
         let restore = asked.tables.iter().any(|event| matches!(event.edit, ColorTableEdit::Restore));
         if restore {
             color_table::restore(&mut app.web_export.table);
@@ -494,7 +500,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         update_presets(app, &host, asked.presets, restore);
         if requested {
             on_dialog(&host, HostedSaveForWeb::cancel_requests);
-            app.status(tl!(WRONG_DOCUMENT).to_owned());
+            app.status(reason);
         }
         return;
     }
@@ -595,8 +601,8 @@ pub(crate) fn take_palette_pick(app: &mut VectorcraftApp, parent: DialogId, key:
     let Some(options) = host.with(|h| h.get_mut_by_id::<HostedSaveForWeb>(parent).map(|d| d.current().clone())) else {
         return false;
     };
-    if !on_original_document(app) {
-        app.status(tl!(WRONG_DOCUMENT).to_owned());
+    if let Some(reason) = document_problem(app) {
+        app.status(reason);
         return true;
     }
     let rgb = |c: Srgba| {
@@ -736,11 +742,11 @@ fn ask_path(app: &mut VectorcraftApp, host: &craft::ui::shell::WindowDialogs, id
         if !Arc::ptr_eq(&opening, &app.web_export.opening) {
             return Ok(Value::Null);
         }
-        if !on_original_document(app) {
+        if let Some(reason) = document_problem(app) {
             if let Some(host) = app.dialogs() {
                 on_dialog(&host, HostedSaveForWeb::cancel_requests);
             }
-            app.status(tl!(WRONG_DOCUMENT).to_owned());
+            app.status(reason);
             return Ok(Value::Null);
         }
         match picked.first_path() {
@@ -765,12 +771,12 @@ fn answer_path(app: &VectorcraftApp, id: DialogId, key: &str, path: PathBuf) {
 /// The dialog closed with Save… or Done: the settings are remembered, and with a path the files are
 /// written. Failures show in the status line; the dialog has closed.
 fn finish(app: &mut VectorcraftApp, result: SaveForWebResult) {
-    let wrong_document = result.path.is_some() && !on_original_document(app);
+    let problem = document_problem(app).filter(|_| result.path.is_some());
     let table = std::mem::take(&mut app.web_export.table);
     let kept = std::mem::take(&mut app.web_export.kept);
     app.web_export = WebExport::default();
-    if wrong_document {
-        return app.status(tl!(WRONG_DOCUMENT).to_owned());
+    if let Some(reason) = problem {
+        return app.status(reason);
     }
     let params = settings_of(&result.options, &table, &kept, None);
     if let Err(e) = app.run("webExport.settings", params.clone()) {
