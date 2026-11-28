@@ -39,7 +39,6 @@ pub(crate) enum Owner {
 /// A pick asked for and not yet answered.
 struct Waiting {
     ticket: PickId,
-    owner: Owner,
     /// The file service is writing bytes that the caller already prepared.
     saving: bool,
     /// The active drawing's UID and Revert counter when asked, if the request is document-owned.
@@ -168,7 +167,7 @@ fn start(
         Owner::Free => None,
     };
     let (scope, automated) = (ScopeHandle::capture(), app.automation_asked());
-    app.file_asks.waiting.push(Waiting { ticket, owner, saving, doc, scope, automated, current, then: Box::new(then) });
+    app.file_asks.waiting.push(Waiting { ticket, saving, doc, scope, automated, current, then: Box::new(then) });
     json!({ "pending": "fileDialog" })
 }
 
