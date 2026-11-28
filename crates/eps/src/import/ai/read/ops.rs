@@ -378,7 +378,7 @@ impl<'a> Reader<'a> {
                 }
             }
             "Xw" => self.gs.hidden = Self::nums(&vals).last() == Some(&1.0),
-            "A" => self.gs.locked = Self::nums(&vals).last() == Some(&1.0),
+            "A" => self.gs.locked = Self::nums(&vals).last().is_some_and(|&v| v != 0.0),
             "XW" => self.state_marker(&vals, hidden),
             // Gradients.
             "Bd" => self.gradient_def = GradientDef::begin(&vals, &mut self.names),
@@ -978,9 +978,14 @@ impl<'a> Reader<'a> {
             let Some(mut look) = f.children.pop() else { return };
             let state = (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape);
             (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape) = (1.0, BlendMode::Normal, false, Knockout::Neutral, false);
+            let (visible, locked) = (object.visible, object.locked);
             (object.opacity, object.blend, object.isolate, object.knockout_shape) = (1.0, BlendMode::Normal, false, false);
+            object.visible = true;
+            object.locked = false;
             let mut group = Node::group(self.doc.alloc_id(), vec![Arc::new(look), Arc::new(object)]);
             (group.opacity, group.blend, group.isolate, group.knockout, group.knockout_shape) = state;
+            group.visible = visible;
+            group.locked = locked;
             self.text_looks.insert(group.id);
             if let Some(f) = self.frames.last_mut() {
                 f.children.push(group);

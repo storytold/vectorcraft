@@ -12411,6 +12411,35 @@ fn type_with_an_art_brush_keeps_its_drawn_look() {
     assert_eq!(brushed, 0, "{:?}", r.warnings);
 }
 
+/// A hidden styled text wrapper group inherits hidden state while its inner text and look retain
+/// intrinsic visibility, so showing the group makes the inner artwork visible.
+#[test]
+fn hidden_styled_text_look_wrapper_group_showing_reveals_inner_text() {
+    let own: String = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n7 /StoryIndex ,\n;\n".lines().map(|l| format!("%_{l}\n")).collect();
+    let object = format!(
+        "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{RED}{}f\nU\n0 0.5 0 0 0 Xy\n0 0 Xd\n6 () XW\n1 Xw\n1 A\n{own}1 (Inked) XW\n0 Xw\n0 A\n",
+        rect_path(20.0, 18.0, 100.0, 62.0)
+    );
+    let def = format!("{}{}", lopsided_art("Ribbon art"), plugin_object(ART_BRUSH, "Ribbon", RIBBON));
+    let r = read_ok(&format!("{def}{}{}", art_style("Ribbon", 1.0, &STRETCHED, ""), layer(&object)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "wrapper group created: {a:#?}");
+    let group = &a[0];
+    assert!(!group.visible, "wrapper group must inherit hidden state");
+    assert!(group.locked, "wrapper group must inherit locked state");
+    let children = group.children().expect("must be a group of look and text");
+    assert_eq!(children.len(), 2);
+    for child in children {
+        assert!(child.visible, "inner child must retain intrinsic visibility");
+        assert!(!child.locked, "inner child must not be locked");
+    }
+    let mut shown = (**group).clone();
+    shown.visible = true;
+    for child in shown.children().unwrap() {
+        assert!(child.visible, "inner child remains visible when parent group is shown");
+    }
+}
+
 /// Each copy a Scatter brush places is its section's art turned over before the copy's rotation:
 /// the side of the section with y up goes down the page with the rotation at 0° to the page, and
 /// to the right of the path's direction when the rotation follows the path. A rotation turns the

@@ -307,12 +307,6 @@ pub(super) fn fill_slots(
                         .iter()
                         .map(|p| {
                             let mut p = reid(doc, p);
-                            if !visible {
-                                Arc::make_mut(&mut p).visible = false;
-                            }
-                            if locked {
-                                Arc::make_mut(&mut p).locked = true;
-                            }
                             if let Some(name) = name.filter(|_| matches!(p.kind, NodeKind::Text(_))) {
                                 Arc::make_mut(&mut p).name = Some(name.clone());
                             }
@@ -321,6 +315,7 @@ pub(super) fn fill_slots(
                         .collect();
                     let mut text = vec![];
                     text_ids(&parts, &mut text);
+                    let mut wrapped = false;
                     // When the page draws each of them with no transparency, the slot's, or the slot's
                     // combined with that of the objects around it, the slot's takes its place: on the one
                     // part, or on a group of several when the slot has transparency. Otherwise every part
@@ -342,9 +337,12 @@ pub(super) fn fill_slots(
                             (p.opacity, p.blend, p.isolate, p.knockout, p.knockout_shape) = (state.0, state.1, state.2, state.3, shape);
                         } else if transparent {
                             let mut group = Node::group(doc.alloc_id(), std::mem::take(&mut parts));
+                            group.visible = visible;
+                            group.locked = locked;
                             (group.opacity, group.blend, group.isolate, group.knockout, group.knockout_shape) =
                                 (state.0, state.1, state.2, state.3, shape);
                             parts.push(Arc::new(group));
+                            wrapped = true;
                         }
                     }
                     // A wrap object stays one: the page's parts of it in a group, when there are several.
@@ -352,10 +350,23 @@ pub(super) fn fill_slots(
                         if parts.len() > 1 {
                             let mut group = Node::group(doc.alloc_id(), std::mem::take(&mut parts));
                             group.visible = visible;
+                            group.locked = locked;
                             parts.push(Arc::new(group));
+                            wrapped = true;
                         }
                         for p in &mut parts {
                             Arc::make_mut(p).extras_mut().wrap = wrap;
+                        }
+                    }
+                    if !wrapped {
+                        for p in &mut parts {
+                            let p = Arc::make_mut(p);
+                            if !visible {
+                                p.visible = false;
+                            }
+                            if locked {
+                                p.locked = true;
+                            }
                         }
                     }
                     // One text object with the slot's appearance and transparency keeps its graphic style.
@@ -750,5 +761,94 @@ mod tests {
         assert_eq!(nodes.len(), 2);
         let inner = nodes[0].children().unwrap()[0].id;
         assert_eq!(filled.get(&slot), Some(&Filled { text: vec![inner], objects: vec![nodes[0].id, nodes[1].id] }));
+    }
+
+    /// A transparent slot wrapper group inherits hidden state while its inner children retain
+    /// their original visibility (both visible and intrinsically hidden), so showing the group
+    /// reveals only the intrinsically visible artwork.
+    #[test]
+    fn transparent_slot_wrapper_group_showing_reveals_inner_art() {
+        let mut doc = Document::new(100.0, 100.0);
+        let mut slot = Node::group(doc.alloc_id(), vec![]);
+        slot.name = Some("\u{0}text0:0".into());
+        slot.visible = false;
+        slot.locked = true;
+        slot.opacity = 0.5; // see_through(n) == true -> transparent == true
+
+        let part = |doc: &mut Document, x: f64, visible: bool| {
+            let t = vectorcraft_doc::TextObject::point(Point::new(x, 50.0), "Part", Default::default());
+            let mut node = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+            node.visible = visible;
+            Arc::new(node)
+        };
+        // Page run contains both a visible child and an intrinsically hidden child:
+        let parts = vec![part(&mut doc, 10.0, true), part(&mut doc, 60.0, false)];
+        let mut nodes = vec![Arc::new(slot)];
+        let mut content = vec![Content::Page(parts)].into_iter();
+        let (mut empty, mut made, mut filled) = (0, vec![], std::collections::HashMap::new());
+        fill_slots(&mut doc, &mut nodes, &mut content, &Default::default(), &mut empty, &mut made, &mut vec![], &mut filled);
+
+        assert_eq!(nodes.len(), 1);
+        let group = &nodes[0];
+        assert!(!group.visible, "wrapper group must inherit hidden state (visible = false)");
+        assert!(group.locked, "wrapper group must inherit locked state");
+
+        let children = group.children().expect("must be a group of parts");
+        assert_eq!(children.len(), 2);
+        assert!(children[0].visible, "intrinsically visible child retains visible = true");
+        assert!(!children[0].locked, "inner child must not be locked");
+        assert!(!children[1].visible, "intrinsically hidden child retains visible = false");
+        assert!(!children[1].locked, "inner child must not be locked");
+
+        // Showing the group updates only the group node's visible field:
+        let mut shown = (**group).clone();
+        shown.visible = true;
+        assert!(shown.visible);
+        let shown_children = shown.children().unwrap();
+        assert!(shown_children[0].visible, "intrinsically visible child is visible when parent group is shown");
+        assert!(!shown_children[1].visible, "intrinsically hidden child remains hidden when parent group is shown");
+    }
+
+    /// A wrap slot wrapper group inherits hidden and locked states without overwriting children's
+    /// original visibility flags when a page run contains both visible and intrinsically hidden children.
+    #[test]
+    fn wrap_slot_wrapper_group_preserves_child_visibility_and_showing_reveals_art() {
+        let mut doc = Document::new(100.0, 100.0);
+        let mut slot = Node::group(doc.alloc_id(), vec![]);
+        slot.name = Some("\u{0}text0:0".into());
+        slot.visible = false;
+        slot.locked = true;
+        let wrap = vectorcraft_doc::TextWrap { offset: 3.0, invert: true };
+        slot.extras_mut().wrap = Some(wrap);
+
+        let part = |doc: &mut Document, x: f64, visible: bool| {
+            let t = vectorcraft_doc::TextObject::point(Point::new(x, 50.0), "Part", Default::default());
+            let mut node = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+            node.visible = visible;
+            Arc::new(node)
+        };
+        let parts = vec![part(&mut doc, 10.0, true), part(&mut doc, 60.0, false)];
+        let mut nodes = vec![Arc::new(slot)];
+        let mut content = vec![Content::Page(parts)].into_iter();
+        let (mut empty, mut made, mut filled) = (0, vec![], std::collections::HashMap::new());
+        fill_slots(&mut doc, &mut nodes, &mut content, &Default::default(), &mut empty, &mut made, &mut vec![], &mut filled);
+
+        assert_eq!(nodes.len(), 1);
+        let group = &nodes[0];
+        assert!(!group.visible, "wrap wrapper group must inherit hidden state");
+        assert!(group.locked, "wrap wrapper group must inherit locked state");
+
+        let children = group.children().expect("must be a group of parts");
+        assert_eq!(children.len(), 2);
+        assert!(children[0].visible, "intrinsically visible child retains visible = true");
+        assert!(!children[0].locked, "inner child must not be locked");
+        assert!(!children[1].visible, "intrinsically hidden child retains visible = false");
+        assert!(!children[1].locked, "inner child must not be locked");
+
+        let mut shown = (**group).clone();
+        shown.visible = true;
+        let shown_children = shown.children().unwrap();
+        assert!(shown_children[0].visible, "intrinsically visible child is visible when parent group is shown");
+        assert!(!shown_children[1].visible, "intrinsically hidden child remains hidden when parent group is shown");
     }
 }

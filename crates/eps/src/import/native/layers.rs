@@ -172,6 +172,9 @@ pub fn layered_ai_from(
     }
     // The PDF part, its pages placed and named as the editing data's artboards are, when the
     // layers can't be used (`why`).
+    let structure = structure.unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new));
+    let private_layers: Vec<LockTree> =
+        structure.as_ref().ok().map(|s| s.doc.layers.iter().map(|l| LockTree::from_node(l)).collect()).unwrap_or_default();
     let from_pdf_part = |mut visible: Document, mut warnings: Vec<String>, why: &str| {
         let mut read = ai::Names::new(names);
         let mut board_names = ai::Names::new(names);
@@ -179,6 +182,7 @@ pub fn layered_ai_from(
         if place_pages(&boards, active, &mut visible, unit) {
             read.absorb(board_names);
         }
+        apply_private_layer_locks(&mut visible.layers, &private_layers);
         let have = visible.patterns.len();
         let own_palette = use_palette(&data, &mut visible, &mut read);
         use_brushes(&data, &mut visible, have, &mut warnings, &mut read);
@@ -192,7 +196,7 @@ pub fn layered_ai_from(
     // The envelopes of type the page doesn't hold against layers that don't draw as it, and how many
     // envelopes of type the layers had.
     let (mut free, mut count) = (None, 0);
-    let built = structure.unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new)).and_then(|structure| {
+    let built = structure.and_then(|structure| {
         count = structure.warped_type.envelope_count();
         build_weighing(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit, &mut free, &mut text)
     });
@@ -236,6 +240,86 @@ fn holds_type_envelope(nodes: &[Arc<Node>]) -> bool {
         NodeKind::Envelope { content, .. } => content.iter().any(|c| holds_type(c)),
         _ => n.children().is_some_and(|c| holds_type_envelope(c)),
     })
+}
+
+/// Lightweight lock metadata snapshot of a node hierarchy, preserving names and lock states
+/// without holding `Arc<Node>` references to the artwork tree.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LockTree {
+    pub name: Option<String>,
+    pub locked: bool,
+    pub children: Vec<LockTree>,
+}
+
+impl LockTree {
+    pub fn from_node(node: &Node) -> Self {
+        Self {
+            name: node.name.clone(),
+            locked: node.locked,
+            children: node.children().map(|kids| kids.iter().map(|k| Self::from_node(k)).collect()).unwrap_or_default(),
+        }
+    }
+}
+
+/// Match unique names between visible nodes and private lock trees.
+fn unique_name_pairs<T: std::ops::Deref<Target = Node>>(vis_nodes: &[T], priv_nodes: &[LockTree]) -> Vec<(usize, usize)> {
+    let mut priv_names: std::collections::HashMap<&str, (usize, usize)> = std::collections::HashMap::new();
+    for (i, p) in priv_nodes.iter().enumerate() {
+        if let Some(name) = p.name.as_deref() {
+            let entry = priv_names.entry(name).or_insert((0, i));
+            entry.0 += 1;
+        }
+    }
+
+    let mut vis_names: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for v in vis_nodes.iter() {
+        if let Some(name) = v.name.as_deref() {
+            *vis_names.entry(name).or_insert(0) += 1;
+        }
+    }
+
+    let mut pairs = Vec::new();
+    for (v_idx, vis) in vis_nodes.iter().enumerate() {
+        if let Some(name) = vis.name.as_deref()
+            && vis_names.get(name).copied() == Some(1)
+            && let Some(&(1, p_idx)) = priv_names.get(name)
+        {
+            pairs.push((v_idx, p_idx));
+        }
+    }
+    pairs
+}
+
+/// Apply lock states from private data layers to visible PDF layers.
+pub(crate) fn apply_private_layer_locks(visible_layers: &mut [Arc<Node>], private_layers: &[LockTree]) {
+    if private_layers.is_empty() || visible_layers.is_empty() {
+        return;
+    }
+
+    // A document with a single visible layer and a single private layer pairs them directly.
+    if visible_layers.len() == 1 && private_layers.len() == 1 {
+        apply_node_locks(Arc::make_mut(&mut visible_layers[0]), &private_layers[0]);
+        return;
+    }
+
+    // Otherwise, match only layers with identifiable correspondence (matching unique names).
+    for (v_idx, p_idx) in unique_name_pairs(visible_layers, private_layers) {
+        apply_node_locks(Arc::make_mut(&mut visible_layers[v_idx]), &private_layers[p_idx]);
+    }
+}
+
+fn apply_node_locks(vis: &mut Node, priv_: &LockTree) {
+    if priv_.locked {
+        vis.locked = true;
+    }
+    let Some(vis_kids) = vis.children_mut() else { return };
+    if vis_kids.is_empty() || priv_.children.is_empty() {
+        return;
+    }
+
+    for (v_idx, p_idx) in unique_name_pairs(vis_kids.as_slice(), &priv_.children) {
+        apply_node_locks(Arc::make_mut(&mut vis_kids[v_idx]), &priv_.children[p_idx]);
+    }
 }
 
 /// The `.ai` whose editing copy is `private` (as [`layered_ai`] takes it) from its layers alone,

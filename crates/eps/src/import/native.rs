@@ -43,7 +43,7 @@ use super::ate::{Story, Texts};
 
 mod build;
 pub(super) mod compare;
-mod layers;
+pub(super) mod layers;
 mod plan;
 mod slots;
 

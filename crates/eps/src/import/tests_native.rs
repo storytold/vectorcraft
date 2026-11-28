@@ -8564,3 +8564,290 @@ fn trusted_editing_data_keeps_an_artboard_taller_than_its_pdf_page() {
     let (_, w, read) = crate::layered_ai(&private(&art), Document::new(12000.0, 14400.0), vec![], false, true, 1.0);
     assert!(!read, "the uncapped dimension must still match: {w:?}");
 }
+
+/// A locked layer as the format writes it.
+fn locked_layer(name: &str, body: &str) -> String {
+    format!("%AI5_BeginLayer\n1 1 0 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{body}\nLB\n%AI5_EndLayer--\n")
+}
+
+#[test]
+fn ai_locked_layers_and_groups_preserve_locks() {
+    let art_locked_group = format!("1 A\nu\n{}\nU\n0 A", square(10, 10));
+    let plain_layer = layer("Unlocked Layer", true, &square(0, 0));
+    let locked_l = locked_layer("Locked Layer", &art_locked_group);
+    let n = native(&format!("{plain_layer}{locked_l}"));
+    let file = private(&n);
+    let (doc, notes, read) = crate::layered_ai(&file, pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(read, "{notes:?}");
+    let unlocked = doc.layers.iter().find(|l| l.name.as_deref() == Some("Unlocked Layer")).unwrap();
+    let locked = doc.layers.iter().find(|l| l.name.as_deref() == Some("Locked Layer")).unwrap();
+    assert!(!unlocked.locked, "Unlocked Layer is not locked");
+    assert!(locked.locked, "Locked Layer retains locked == true");
+    let group = locked.children().and_then(|c| c.iter().find(|n| matches!(n.kind, NodeKind::Group { .. })));
+    assert!(group.is_some_and(|g| g.locked), "group with 1 A retains locked == true");
+}
+
+#[test]
+fn ai_fallback_to_pdf_part_preserves_private_stream_layer_and_group_locks() {
+    use std::sync::Arc;
+    let art_locked_group = format!("1 A\nu\n{}\nU\n%_/ArtDictionary :\n%_(Locked Subgroup) /String (AIArtName) ,\n%_;\n0 A", square(10, 10));
+    let locked_l = locked_layer("Map Layer", &art_locked_group);
+    let n = native(&locked_l);
+    let file = private(&n);
+    let mut pdf = Document::new(100.0, 100.0);
+    pdf.layers.clear();
+    let mut vis_layer = Node::layer(pdf.alloc_id(), "Map Layer", LayerColor::Preset(0));
+    vis_layer.locked = false;
+    let mut vis_group = Node::group(pdf.alloc_id(), vec![]);
+    vis_group.name = Some("Locked Subgroup".to_string());
+    vis_group.locked = false;
+    if let NodeKind::Layer { children, .. } = &mut vis_layer.kind {
+        children.push(Arc::new(vis_group));
+    }
+    pdf.layers.push(Arc::new(vis_layer));
+
+    let layers = crate::AiLayers::decode(&file);
+    let (doc, _notes, read) = crate::layered_ai_from(layers, pdf, vec![], false, false, 1.0, crate::NameEncoding::default());
+    assert!(!read, "falls back to PDF part");
+    let map_layer = doc.layers.iter().find(|l| l.name.as_deref() == Some("Map Layer")).unwrap();
+    assert!(map_layer.locked, "Map Layer preserved locked == true from private stream metadata");
+    let subgroup = map_layer.children().and_then(|c| c.iter().find(|n| n.name.as_deref() == Some("Locked Subgroup"))).unwrap();
+    assert!(subgroup.locked, "Locked Subgroup preserved locked == true from private stream metadata");
+}
+
+#[test]
+fn ai_duplicate_group_names_under_different_layers_preserve_individual_lock_states() {
+    use std::sync::Arc;
+    let art_locked_group = format!("1 A\nu\n{}\nU\n%_/ArtDictionary :\n%_(SharedGroup) /String (AIArtName) ,\n%_;\n0 A", square(10, 10));
+    let art_unlocked_group = format!("0 A\nu\n{}\nU\n%_/ArtDictionary :\n%_(SharedGroup) /String (AIArtName) ,\n%_;\n0 A", square(10, 10));
+    let layer_a = layer("Layer A", true, &art_locked_group);
+    let layer_b = layer("Layer B", true, &art_unlocked_group);
+    let n = native(&format!("{layer_a}{layer_b}"));
+    let file = private(&n);
+
+    let mut pdf = Document::new(100.0, 100.0);
+    pdf.layers.clear();
+    let mut vis_a = Node::layer(pdf.alloc_id(), "Layer A", LayerColor::Preset(0));
+    let mut vis_grp_a = Node::group(pdf.alloc_id(), vec![]);
+    vis_grp_a.name = Some("SharedGroup".to_string());
+    vis_grp_a.locked = false;
+    if let NodeKind::Layer { children, .. } = &mut vis_a.kind {
+        children.push(Arc::new(vis_grp_a));
+    }
+
+    let mut vis_b = Node::layer(pdf.alloc_id(), "Layer B", LayerColor::Preset(1));
+    let mut vis_grp_b = Node::group(pdf.alloc_id(), vec![]);
+    vis_grp_b.name = Some("SharedGroup".to_string());
+    vis_grp_b.locked = false;
+    if let NodeKind::Layer { children, .. } = &mut vis_b.kind {
+        children.push(Arc::new(vis_grp_b));
+    }
+    pdf.layers.push(Arc::new(vis_a));
+    pdf.layers.push(Arc::new(vis_b));
+
+    let layers = crate::AiLayers::decode(&file);
+    let (doc, _notes, read) = crate::layered_ai_from(layers, pdf, vec![], false, false, 1.0, crate::NameEncoding::default());
+    assert!(!read, "falls back to PDF part");
+
+    let l_a = doc.layers.iter().find(|l| l.name.as_deref() == Some("Layer A")).unwrap();
+    let l_b = doc.layers.iter().find(|l| l.name.as_deref() == Some("Layer B")).unwrap();
+    let grp_a = l_a.children().and_then(|c| c.iter().find(|n| n.name.as_deref() == Some("SharedGroup"))).unwrap();
+    let grp_b = l_b.children().and_then(|c| c.iter().find(|n| n.name.as_deref() == Some("SharedGroup"))).unwrap();
+
+    assert!(grp_a.locked, "Layer A's SharedGroup is locked");
+    assert!(!grp_b.locked, "Layer B's SharedGroup remains unlocked");
+}
+
+#[test]
+fn ai_reordered_mixed_named_and_unnamed_children_preserve_locks() {
+    use std::sync::Arc;
+    let mut doc = Document::new(100.0, 100.0);
+    let mut priv_layer = Node::layer(doc.alloc_id(), "Map", LayerColor::Preset(0));
+    let mut priv_unnamed = Node::group(doc.alloc_id(), vec![]);
+    priv_unnamed.locked = false;
+    let mut priv_roads = Node::group(doc.alloc_id(), vec![]);
+    priv_roads.name = Some("Roads".to_string());
+    priv_roads.locked = true;
+    if let NodeKind::Layer { children, .. } = &mut priv_layer.kind {
+        children.push(Arc::new(priv_unnamed));
+        children.push(Arc::new(priv_roads));
+    }
+
+    let mut vis_layer = Node::layer(doc.alloc_id(), "Map", LayerColor::Preset(0));
+    let mut vis_roads = Node::group(doc.alloc_id(), vec![]);
+    vis_roads.name = Some("Roads".to_string());
+    vis_roads.locked = false;
+    let mut vis_unnamed = Node::group(doc.alloc_id(), vec![]);
+    vis_unnamed.locked = false;
+    if let NodeKind::Layer { children, .. } = &mut vis_layer.kind {
+        children.push(Arc::new(vis_roads));
+        children.push(Arc::new(vis_unnamed));
+    }
+
+    let mut visible_layers = vec![Arc::new(vis_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
+    super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
+
+    let roads = visible_layers[0].children().unwrap()[0].clone();
+    let unnamed = visible_layers[0].children().unwrap()[1].clone();
+    assert_eq!(roads.name.as_deref(), Some("Roads"));
+    assert!(roads.locked, "Roads matched by unique name and preserved locked == true");
+    assert!(!unnamed.locked, "unnamed child matched to unlocked private child");
+}
+
+#[test]
+fn ai_reordered_three_children_roads_triangle_circle_preserve_locks() {
+    use std::sync::Arc;
+    let mut doc = Document::new(100.0, 100.0);
+    // Private children: [Roads (unlocked), locked triangle (unnamed), unlocked circle (unnamed)]
+    let mut priv_layer = Node::layer(doc.alloc_id(), "Layer", LayerColor::Preset(0));
+    let mut priv_roads = Node::group(doc.alloc_id(), vec![]);
+    priv_roads.name = Some("Roads".to_string());
+    priv_roads.locked = false;
+    let mut priv_triangle = Node::group(doc.alloc_id(), vec![]);
+    priv_triangle.locked = true;
+    let mut priv_circle = Node::group(doc.alloc_id(), vec![]);
+    priv_circle.locked = false;
+    if let NodeKind::Layer { children, .. } = &mut priv_layer.kind {
+        children.push(Arc::new(priv_roads));
+        children.push(Arc::new(priv_triangle));
+        children.push(Arc::new(priv_circle));
+    }
+
+    // Visible children: [triangle (unnamed), circle (unnamed), Roads]
+    let mut vis_layer = Node::layer(doc.alloc_id(), "Layer", LayerColor::Preset(0));
+    let mut vis_triangle = Node::group(doc.alloc_id(), vec![]);
+    vis_triangle.locked = false;
+    let mut vis_circle = Node::group(doc.alloc_id(), vec![]);
+    vis_circle.locked = false;
+    let mut vis_roads = Node::group(doc.alloc_id(), vec![]);
+    vis_roads.name = Some("Roads".to_string());
+    vis_roads.locked = false;
+    if let NodeKind::Layer { children, .. } = &mut vis_layer.kind {
+        children.push(Arc::new(vis_triangle));
+        children.push(Arc::new(vis_circle));
+        children.push(Arc::new(vis_roads));
+    }
+
+    let mut visible_layers = vec![Arc::new(vis_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
+    super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
+
+    let vis_tri = visible_layers[0].children().unwrap()[0].clone();
+    let vis_circ = visible_layers[0].children().unwrap()[1].clone();
+    let vis_rd = visible_layers[0].children().unwrap()[2].clone();
+
+    assert!(!vis_tri.locked, "unnamed triangle does not pair blindly with private triangle");
+    assert!(!vis_circ.locked, "unnamed circle remains unlocked");
+    assert!(!vis_rd.locked, "Roads matched to unlocked private Roads by unique name");
+}
+
+#[test]
+fn ai_fallback_with_generated_page_name_preserves_private_layer_lock() {
+    use std::sync::Arc;
+    let mut doc = Document::new(100.0, 100.0);
+    let mut priv_layer = Node::layer(doc.alloc_id(), "Map", LayerColor::Preset(0));
+    priv_layer.locked = true;
+    let mut vis_layer = Node::layer(doc.alloc_id(), "Page 1", LayerColor::Preset(0));
+    vis_layer.locked = false;
+
+    let mut visible_layers = vec![Arc::new(vis_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
+    super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
+
+    assert_eq!(visible_layers[0].name.as_deref(), Some("Page 1"));
+    assert!(visible_layers[0].locked, "single-layer document pairs visible and private layers");
+}
+
+#[test]
+fn ai_unnamed_visible_child_does_not_pair_with_private_node() {
+    use std::sync::Arc;
+    let mut doc = Document::new(100.0, 100.0);
+    let mut priv_layer = Node::layer(doc.alloc_id(), "Layer", LayerColor::Preset(0));
+    let mut priv_unnamed = Node::group(doc.alloc_id(), vec![]);
+    priv_unnamed.locked = false;
+    let mut priv_roads = Node::group(doc.alloc_id(), vec![]);
+    priv_roads.name = Some("Roads".to_string());
+    priv_roads.locked = true;
+    if let NodeKind::Layer { children, .. } = &mut priv_layer.kind {
+        children.push(Arc::new(priv_unnamed));
+        children.push(Arc::new(priv_roads));
+    }
+
+    let mut vis_layer = Node::layer(doc.alloc_id(), "Layer", LayerColor::Preset(0));
+    let mut vis_first = Node::group(doc.alloc_id(), vec![]);
+    vis_first.locked = false;
+    let mut vis_second = Node::group(doc.alloc_id(), vec![]);
+    vis_second.locked = false;
+    if let NodeKind::Layer { children, .. } = &mut vis_layer.kind {
+        children.push(Arc::new(vis_first));
+        children.push(Arc::new(vis_second));
+    }
+
+    let mut visible_layers = vec![Arc::new(vis_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
+    super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
+
+    let first = visible_layers[0].children().unwrap()[0].clone();
+    let second = visible_layers[0].children().unwrap()[1].clone();
+    assert!(!first.locked, "first unnamed visible group is unlocked");
+    assert!(!second.locked, "second unnamed visible group does not pair positionally with locked Roads group");
+}
+
+#[test]
+fn ai_multi_page_unlayered_pdf_does_not_blindly_pair_with_private_layers() {
+    use std::sync::Arc;
+    let mut doc = Document::new(100.0, 100.0);
+    let mut priv_1 = Node::layer(doc.alloc_id(), "Layer 1", LayerColor::Preset(0));
+    priv_1.locked = true;
+    let mut priv_2 = Node::layer(doc.alloc_id(), "Layer 2", LayerColor::Preset(0));
+    priv_2.locked = false;
+
+    let vis_1 = Node::layer(doc.alloc_id(), "Page 1", LayerColor::Preset(0));
+    let vis_2 = Node::layer(doc.alloc_id(), "Page 2", LayerColor::Preset(0));
+
+    let mut visible_layers = vec![Arc::new(vis_1), Arc::new(vis_2)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_1), super::native::layers::LockTree::from_node(&priv_2)];
+    super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
+
+    assert!(!visible_layers[0].locked, "Page 1 does not pair with private Layer 1");
+    assert!(!visible_layers[1].locked, "Page 2 does not pair with private Layer 2");
+}
+
+#[test]
+fn ai_duplicate_visible_name_does_not_lock_multiple_from_single_private_node() {
+    use std::sync::Arc;
+    let mut doc = Document::new(100.0, 100.0);
+    let mut priv_layer = Node::layer(doc.alloc_id(), "Layer", LayerColor::Preset(0));
+    let mut priv_roads = Node::group(doc.alloc_id(), vec![]);
+    priv_roads.name = Some("Roads".to_string());
+    priv_roads.locked = true;
+    let mut priv_buildings = Node::group(doc.alloc_id(), vec![]);
+    priv_buildings.name = Some("Buildings".to_string());
+    priv_buildings.locked = false;
+    if let NodeKind::Layer { children, .. } = &mut priv_layer.kind {
+        children.push(Arc::new(priv_roads));
+        children.push(Arc::new(priv_buildings));
+    }
+
+    let mut vis_layer = Node::layer(doc.alloc_id(), "Layer", LayerColor::Preset(0));
+    let mut vis_roads1 = Node::group(doc.alloc_id(), vec![]);
+    vis_roads1.name = Some("Roads".to_string());
+    vis_roads1.locked = false;
+    let mut vis_roads2 = Node::group(doc.alloc_id(), vec![]);
+    vis_roads2.name = Some("Roads".to_string());
+    vis_roads2.locked = false;
+    if let NodeKind::Layer { children, .. } = &mut vis_layer.kind {
+        children.push(Arc::new(vis_roads1));
+        children.push(Arc::new(vis_roads2));
+    }
+
+    let mut visible_layers = vec![Arc::new(vis_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
+    super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
+
+    let r1 = visible_layers[0].children().unwrap()[0].clone();
+    let r2 = visible_layers[0].children().unwrap()[1].clone();
+    assert!(!r1.locked, "ambiguous duplicate visible name does not receive private lock");
+    assert!(!r2.locked, "second duplicate visible name remains unlocked");
+}
