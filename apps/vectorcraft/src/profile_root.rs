@@ -175,7 +175,16 @@ fn forbidden_roots(platform: Platform, env: &impl Fn(&str) -> Option<OsString>, 
 
 fn private_subdirectory(root: &Path, name: impl AsRef<Path>, label: &str) -> Result<PathBuf, String> {
     let chosen = canonical_future(&absolute(root.to_path_buf(), "the nightly profile root")?)?;
-    let child = canonical_future(&chosen.join(name))?;
+    let target = chosen.join(name);
+    match std::fs::symlink_metadata(&target) {
+        Ok(metadata) if !metadata.is_dir() => {
+            return Err(format!("the nightly {label} must be a directory inside its selected profile"));
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("cannot inspect the nightly {label}: {error}")),
+    }
+    let child = canonical_future(&target)?;
     if child == chosen || !child.starts_with(&chosen) {
         return Err(format!("the nightly {label} must stay inside its selected profile"));
     }
@@ -192,10 +201,85 @@ fn entries_stay_inside(root: &Path) -> Result<(), String> {
     };
     for entry in entries {
         let entry = entry.map_err(|e| format!("cannot inspect the nightly profile: {e}"))?;
-        private_subdirectory(root, entry.file_name(), "profile entry")?;
+        let path = entry.path();
+        let metadata = std::fs::symlink_metadata(&path).map_err(|e| format!("cannot inspect the nightly profile: {e}"))?;
+        // Settings and session state are ordinary files, not directories. Keep the existing
+        // directory-boundary check for folders (including the known folder-only entries).
+        let folder_only = PROFILE_FOLDERS.iter().any(|name| entry.file_name().eq_ignore_ascii_case(name));
+        if metadata.is_file() && !folder_only {
+            private_regular_file(&path, &metadata)?;
+        } else {
+            private_subdirectory(root, entry.file_name(), "profile entry")?;
+        }
     }
     Ok(())
 }
+
+/// Persisted files must have their own ordinary file identity, not an alias to other data.
+fn private_regular_file(path: &Path, metadata: &std::fs::Metadata) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        if metadata.nlink() != 1 {
+            return Err("the nightly profile file must not be shared".into());
+        }
+    }
+    #[cfg(all(windows, feature = "wgpu"))]
+    {
+        use winsafe::{HFILE, co};
+        let (file, _) = HFILE::CreateFile(
+            path.to_str().ok_or("the nightly profile file path is not textual")?,
+            co::GENERIC::default(),
+            Some(co::FILE_SHARE::READ | co::FILE_SHARE::WRITE | co::FILE_SHARE::DELETE),
+            None,
+            co::DISPOSITION::OPEN_EXISTING,
+            co::FILE_ATTRIBUTE::NORMAL,
+            Some(co::FILE_FLAG::OPEN_REPARSE_POINT),
+            None,
+            None,
+        )
+        .map_err(|e| e.to_string())?;
+        let info = file.GetFileInformationByHandle().map_err(|e| e.to_string())?;
+        if info.dwFileAttributes.has(co::FILE_ATTRIBUTE::REPARSE_POINT) || info.dwFileAttributes.has(co::FILE_ATTRIBUTE::DIRECTORY) {
+            return Err("the nightly profile file must not be an alias or directory".into());
+        }
+        if info.nNumberOfLinks != 1 {
+            return Err("the nightly profile file must not be shared".into());
+        }
+    }
+    #[cfg(all(windows, not(feature = "wgpu")))]
+    {
+        use std::os::windows::fs::MetadataExt as _;
+        const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if metadata.file_attributes() & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT) != 0 {
+            return Err("the nightly profile file must not be an alias or directory".into());
+        }
+    }
+    let _ = (path, metadata);
+    Ok(())
+}
+
+const PROFILE_FOLDERS: [&str; 18] = [
+    "Data Recovery",
+    "Fonts",
+    "logs",
+    "Launch",
+    "Color Profiles",
+    "Plug-ins",
+    "Scripts",
+    "Startup Scripts",
+    "Metadata Templates",
+    "New Document Profiles",
+    "Proof Setups",
+    "Script Data",
+    "PDF Presets",
+    "Swatches",
+    "Graphic Styles",
+    "Symbols",
+    "Brushes",
+    "Libraries",
+];
 
 /// Recognise the shared portable data namespace in both the supplied and the resolved path. Up to
 /// the chosen folder itself, a marker only counts beside a VectorCraft executable, so an unrelated
@@ -555,6 +639,31 @@ mod tests {
         let root = fixture.root.join("nightly");
         let result = fixture.check_with(Platform::Linux, &root, |_| Err(std::io::Error::other("read-only")));
         assert!(result.unwrap_err().contains("not writable"));
+    }
+
+    #[test]
+    fn nightly_profile_reopens_after_saving_settings_and_session_state() {
+        let fixture = Fixture::new();
+        for platform in PLATFORMS {
+            let private = fixture.root.join(format!("nightly-reopen-{platform:?}"));
+            assert_eq!(fixture.check(platform, &private).unwrap(), private);
+            for name in ["config.toml", "instance.json", "Color Settings.json", "app.ron"] {
+                std::fs::write(private.join(name), b"saved profile data").unwrap();
+            }
+            for name in PROFILE_FOLDERS {
+                std::fs::create_dir(private.join(name)).unwrap();
+            }
+            assert_eq!(fixture.check(platform, &private).unwrap(), private);
+            assert_eq!(std::fs::read(private.join("config.toml")).unwrap(), b"saved profile data");
+            for name in PROFILE_FOLDERS {
+                let path = private.join(name);
+                std::fs::remove_dir(&path).unwrap();
+                std::fs::write(&path, b"not a directory").unwrap();
+                assert!(fixture.check(platform, &private).is_err(), "{name} must stay a directory");
+                std::fs::remove_file(&path).unwrap();
+                std::fs::create_dir(&path).unwrap();
+            }
+        }
     }
 
     #[test]
