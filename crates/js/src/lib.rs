@@ -133,6 +133,7 @@ mod reflect;
 mod regexp;
 mod regexp_builtins;
 mod regexp_vm;
+pub mod scriptui;
 mod string_builtins;
 mod symbol;
 mod token;
@@ -313,6 +314,8 @@ mod interp_tests;
 mod promise_tests;
 #[cfg(test)]
 mod reflect_tests;
+#[cfg(test)]
+mod scriptui_tests;
 #[cfg(test)]
 mod symbol_tests;
 #[cfg(test)]

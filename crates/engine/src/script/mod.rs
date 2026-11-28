@@ -53,8 +53,10 @@ pub mod dialogs;
 pub mod dollar;
 pub mod dom;
 pub mod include;
+pub mod scriptui;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
+pub use scriptui::{ScriptUiDialog, UiEvent, UiKind, UiValue};
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -135,7 +137,7 @@ impl Written {
 /// The version `vc.api.version` gives.
 pub const API_VERSION: &str = "1.0";
 /// The features `vc.api.has` knows.
-pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs", "dollar"];
+pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs", "dollar", "scriptui"];
 /// The most commands a run's report lists in `slowestCommands`.
 pub const SLOWEST_COMMANDS: usize = 5;
 
@@ -1908,6 +1910,32 @@ impl Session {
         with_job(k, |j| j.host.dialogs.answer(&mut j.realm, answer)).unwrap_or(false)
     }
 
+    /// The ScriptUI dialog the running script's `show()` waits at for what the person does. A run
+    /// asked to stop no longer waits: the next [`Session::script_pump`] ends it.
+    pub fn script_window(&self) -> Option<ScriptUiDialog> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.dialogs.waiting_window())).flatten()
+    }
+
+    /// The ScriptUI dialog whose `show()` the running script is in, whether it waits at it or runs
+    /// one of its handlers. A run asked to stop is in none.
+    pub fn script_window_showing(&self) -> Option<ScriptUiDialog> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.dialogs.showing_window())).flatten()
+    }
+
+    /// Gives the ScriptUI dialog the running script waits at `event`; the next
+    /// [`Session::script_pump`] runs the control's handler. → an error, and the dialog still
+    /// waits, when nothing waits or the dialog cannot take the event ([`scriptui::check_event`]).
+    pub fn script_window_answer(&mut self, event: UiEvent) -> std::result::Result<(), String> {
+        let Some(k) = self.script_key.as_ref().filter(|_| !self.script_stop.is_set()) else { return Err("no script dialog waits".into()) };
+        with_job(k, |j| j.host.dialogs.window_answer(&mut j.realm, event)).unwrap_or_else(|| Err("no script dialog waits".into()))
+    }
+
     /// The file dialog (`File.openDialog`, `File.saveDialog`, `Folder.selectDialog` and the objects'
     /// `openDlg`, `saveDlg` and `selectDlg`) the running script waits at. A run asked to stop no
     /// longer waits.
@@ -2200,6 +2228,7 @@ impl Session {
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
+                    .and_then(|()| if fresh { scriptui::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { dom::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
@@ -2288,6 +2317,12 @@ impl Session {
         }
         job.host.calls_this_slice.set(0);
         let outcome = run_slice(self, &mut job);
+        // A failure a dialog recorded in the slice (steps a show left unused) ends the run, even
+        // when the script went on.
+        let outcome = match (outcome, job.host.dialogs.take_failure()) {
+            (Ok(Ok(_)), Some(e)) => Ok(Err(e)),
+            (outcome, _) => outcome,
+        };
         match outcome {
             Err(panic) => {
                 let e = RunError { kind: RunErrorKind::Internal, message: panic, line: 0, column: 0, authored: false };
