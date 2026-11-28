@@ -241,6 +241,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         super::new_swatch::pump,
         super::brush_options::pump,
         super::brush_delete::pump,
+        super::failed_plugins::pump,
         super::brush_replace_art::pump,
         super::symbol_delete::pump,
         crate::find_font::pump,

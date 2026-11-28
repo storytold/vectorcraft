@@ -518,6 +518,15 @@ impl FolderLoad {
         Self::list_on(dir, allow, None)
     }
 
+    /// [`FolderLoad::list`] for the one file `file` of a folder, without listing the folder: a file
+    /// that is no longer there is reported as failed.
+    pub fn list_file(
+        file: &std::path::Path,
+        allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
+    ) -> Result<FolderLoad> {
+        Self::list_found(Ok((vec![file.to_path_buf()], 0)), allow, None)
+    }
+
     /// Starts the loads, unless they started already.
     pub fn start(&mut self) {
         self.changes.start();
@@ -531,13 +540,26 @@ impl FolderLoad {
         allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
         workers: Option<usize>,
     ) -> Result<FolderLoad> {
+        Self::list_found(Err(dir), allow, workers)
+    }
+
+    /// [`FolderLoad::list_on`] for the files of folder `Err(dir)`, or for the files and the count of
+    /// files left out given as `Ok`.
+    fn list_found(
+        found: std::result::Result<(Vec<std::path::PathBuf>, usize), &std::path::Path>,
+        allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
+        workers: Option<usize>,
+    ) -> Result<FolderLoad> {
         use crate::loader::{Job, Loads};
         use crate::safe_mode::{self, Item};
         safe_mode::check()?;
         // A change made elsewhere once the folder starts being listed is one the load doesn't undo.
         let mut changes = LoadChanges::default();
         changes.start();
-        let (found, left_out) = folder_files(dir)?;
+        let (found, left_out) = match found {
+            Ok(found) => found,
+            Err(dir) => folder_files(dir)?,
+        };
         let allow = std::sync::Arc::new(allow);
         let mut files = Vec::with_capacity(found.len());
         let mut jobs = Vec::new();

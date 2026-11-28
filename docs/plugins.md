@@ -31,7 +31,7 @@ in `crates/engine/src/cmd/plugin.rs`).
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, context?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `context` lists the [document information](#document-information) it reads; `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `runtime: "js"` and `script` mark a [JavaScript filter](#javascript-filters); `cacheBytes` is the size of its [cache](#settings-and-cache)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, context?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `context` lists the [document information](#document-information) it reads; `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `runtime: "js"` and `script` mark a [JavaScript filter](#javascript-filters); `cacheBytes` is the size of its [cache](#settings-and-cache)), `"failed": [{file, error, from}]` (the plug-in files that [didn't load](#plug-ins-that-didnt-load)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. An output that changes no object and none of the data it keeps with the document ([`documentData`](#output)) records no undo step and leaves the document unmodified. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` or a [JavaScript filter's](#javascript-filters) `.vcplugin` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
@@ -39,9 +39,31 @@ in `crates/engine/src/cmd/plugin.rs`).
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder with its [settings and cache](#settings-and-cache). |
 | `plugin.clearCache` | `{"id"?}` | Deletes every entry in the [cache](#settings-and-cache) of plug-in `id`, or of every installed plug-in; settings stay. Returns `{"cleared": [id], "bytesFreed"}`. |
 | `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` and `*.vcplugin` in a folder, the first 1,000 by file name; a bad module is reported and skipped, and so are an entry that is not a regular file, a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). Returns `{"folder", "loaded", "failed": [{file, error}], "leftOut"}`; `leftOut` counts the `*.wasm` and `*.vcplugin` files past the first 1,000, which were not tried. |
+| `plugin.retry` | `{"file"?}` (a file `plugin.list`'s `failed` names; default: every one) | Loads a plug-in file that [didn't load](#plug-ins-that-didnt-load) again, with the same checks as the load it failed in. Returns `{"retried": [{file, loaded, id?, error?}]}`. |
 
 Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>", "params": {…}}`, edited with
 `effect.setParams`, listed by `effect.list` (menu `Effect › Plug-ins`) and baked by Object › Expand Appearance.
+
+### Plug-ins that didn't load
+
+`plugin.list`'s `failed` lists each plug-in file that didn't load in this process, with why and where it was loaded
+from (`from`: `"store"` for the `Plug-ins` folder, `"folder"` for the Additional Plug-ins Folder or the folder
+`plugin.reload` loaded last). A file of the `Plug-ins` folder stays listed until it installs or the folder is loaded
+again. The folder's files are the ones its last load report lists as failed, so a `plugin.reload` replaces them and
+leaves the `Plug-ins` folder's files listed. A `plugin.reload` of the `Plug-ins` folder itself lists a file that failed
+in both loads once, as a `"store"` file. Disabled plug-ins (listed in `disabled`, also a file turned off with
+`plugin.setEnabled {"file"}` after it failed) and modules skipped because the plug-in with their id was installed or
+removed elsewhere while they loaded are not listed.
+
+`plugin.retry {"file"}` loads one of those files again, and `plugin.retry {}` loads all of them: a file of the
+`Plug-ins` folder loads as that folder's files load at startup, and a folder file as `plugin.reload` loads it, with the
+same permission and budget checks. A folder file's row in the folder report then moves to `loaded`, or keeps its new
+error. Each row of the reply says whether this retry installed the file. Under automation read roots, a file outside
+them is not read again and stays listed, and its row says why, naming the file and its folder by their names.
+Installing or removing a plug-in whose module is stored in a file that didn't load, or a later load that installs it,
+takes that file off the list. In Safe Mode `plugin.retry` returns an error. Object › Plug-ins › Plug-ins That Didn't
+Load… lists the files by name with why, and its Retry All loads them again under the read roots the list opened
+under; the status bar says how many loaded. The item is disabled while no plug-in failed to load.
 
 An exporter adds a write-only format, `plugin.<id>`, which `document.formats` lists with its `plugin` id.
 `document.export {"format": "plugin.<id>", "params"?: {…}, "path"?}` writes it, and so does a `path` ending in one of
@@ -199,8 +221,8 @@ finish. Plug-in commands, commands that edit a document, exports, File › Open,
 opened at launch wait for them first; view commands and queries chosen from a menu do not. Until then a live effect
 whose plug-in is still loading is drawn as if it weren't there, and another window's `plugin.list` reports the folder
 as `{"folder", "loading": true}`. A folder set later in Preferences, `vectorcraft-cli` and `plugin.reload` wait for
-the loads before they go on. A module whose load panics is reported as failed or skipped with a log record, and the
-others install. So is a module whose read and load take 10 s or longer (VectorCraft's own limit), also one that would have
+the loads before they go on. A module whose load panics is skipped with a log record and listed as one that
+[didn't load](#plug-ins-that-didnt-load), and the others install. So is a module whose read and load take 10 s or longer (VectorCraft's own limit), also one that would have
 finished later, such as a module on a slow network share. The launch marker names every module still loading, so when
 the app stops during the loads, the next launch's Safe Mode choice lists all of them. A module whose load panicked or
 failed is no longer named; one past its 10 s limit is named until its load returns. A module is also skipped when the
