@@ -5569,6 +5569,88 @@ fn right_aligned_point_type_that_differs_from_the_page_differs_as_type() {
     assert!(!r.warnings.iter().any(|w| w.starts_with("the art on the layers differs")), "{:?}", r.warnings);
 }
 
+/// Two text objects on one line, far apart, that the page draws as one piece of type (one string
+/// with the space between them): neither holds half of the piece, but each lies in it and is spelled
+/// by words of it, so the page's type is theirs and nothing is noted as left out.
+#[test]
+fn a_line_the_page_draws_as_one_piece_is_the_type_of_the_text_objects_along_it() {
+    // "20" starts 20 points across the art, "24" where ten spaces after it end (a space in 14 point
+    // Helvetica is 3.892 points wide, "20" 15.568).
+    let doc = text_document(&[("20\r", 0, (8161.5, 8180.0), (0.0, 0.0), 0.0), ("24\r", 0, (8216.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    let page = "0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont 20 61.5 moveto (20          24) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["20", "24"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| crate::is_loss(w)), "{:?}", r.warnings);
+}
+
+/// Along a line the page draws as one piece, only the type the page draws there is its type: a
+/// text object in the gap, a copy stacked on a text object that already has the whole line, text
+/// objects in the other order, and words written another way (marks, case) take none of it. What
+/// the page doesn't draw is weighed against it as before, and the page's words that nobody has keep
+/// the loss note or send the file to its page.
+#[test]
+fn type_the_page_doesnt_draw_along_a_line_takes_none_of_the_piece() {
+    let open = |stories: &[Story<'_>], line: &str| {
+        let body: String = (0..stories.len() as u32).map(text_object).collect();
+        let art = native_with_text(&layer("Art", true, &body), &text_document(stories));
+        let page = format!("0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont 20 61.5 moveto ({line}) show");
+        import(&eps(&page, &art)).unwrap()
+    };
+    let at = |text: &'static str, x: f64| -> Story<'static> { (text, 0, (x, 8180.0), (0.0, 0.0), 0.0) };
+    let texts = |r: &crate::import::Imported| text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>();
+    let noted = |r: &crate::import::Imported, note: &str| r.warnings.iter().any(|w| w.contains(note));
+    let (left_out, unseen) =
+        ("some of the page's type has no text object in the layers", "text objects that the file keeps but its page doesn't draw");
+    // A second "24" in the gap: the two the page draws are its type, the third is taken out.
+    let r = open(&[at("20\r", 8161.5), at("24\r", 8216.0), at("24\r", 8189.0)], "20          24");
+    assert_eq!((names(&r.document), texts(&r)), (vec!["Art".to_string()], vec!["20".to_string(), "24".to_string()]), "{:?}", r.warnings);
+    assert!(noted(&r, unseen) && !noted(&r, left_out), "{:?}", r.warnings);
+    // A "20" stacked on a text object that has the whole line: its words are taken already.
+    let r = open(&[at("20          24\r", 8161.5), at("20\r", 8161.5)], "20          24");
+    assert_eq!(texts(&r).len(), 1, "{:?}", r.warnings);
+    assert!(noted(&r, unseen), "{:?}", r.warnings);
+    // "24" where the page draws "20" and the other way round.
+    let r = open(&[at("24\r", 8161.5), at("20\r", 8216.0)], "20          24");
+    assert!(noted(&r, left_out), "{:?}", r.warnings);
+    // "Go!" and "go" where the page draws "GO": the piece isn't theirs, and the file opens as its page.
+    for other in ["Go!\r", "go\r"] {
+        let r = open(&[at(other, 8161.5), at("24\r", 8216.0)], "GO          24");
+        assert_ne!(names(&r.document), ["Art"], "{other}: {:?}", r.warnings);
+    }
+}
+
+/// Where a text object's type isn't made, the page's line goes into its slot as the page draws it:
+/// the text objects along the line don't take it too (it would be drawn twice), and are weighed
+/// against the page as before.
+#[test]
+fn a_line_given_to_a_text_object_without_made_type_isnt_also_the_text_objects_along_it() {
+    // Three text objects; the third names a story the text document doesn't have.
+    let doc = text_document(&[("20\r", 0, (8161.5, 8180.0), (0.0, 0.0), 0.0), ("24\r", 0, (8216.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1) + &text_object(2))), &doc);
+    let page = "0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont 20 61.5 moveto (20          24) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["20          24"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("text objects that the file keeps but its page doesn't draw")), "{:?}", r.warnings);
+}
+
+/// A line the page draws turned a quarter isn't the type of text objects set level over its words:
+/// the file opens as its page, as before.
+#[test]
+fn a_line_the_page_draws_turned_isnt_the_type_of_level_text_objects_over_its_words() {
+    // The page's line runs up from (24, 20); "20" and "24" lie level over where its two words are.
+    let doc = text_document(&[("20\r", 0, (8150.5, 8219.5), (0.0, 0.0), 0.0), ("24\r", 0, (8150.5, 8165.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    let page =
+        "0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont gsave 24 20 translate 90 rotate 0 0 moveto (20          24) show grestore";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_ne!(names(&r.document), ["Art"], "{:?}", r.warnings);
+}
+
 /// A ligature the page shows by a glyph its font's encoding names `uniE028` (a private-use
 /// character, without the letters it stands for) is the letters of its text object: the page's type
 /// has one, and nothing is noted as left out.

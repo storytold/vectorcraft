@@ -170,7 +170,7 @@ pub(super) fn made_only(
         rest = shown.iter().filter(|o| !o.iter().any(|n| taken.contains(&n.id))).cloned().collect();
         &rest
     };
-    match see_page_type(&mut content, untaken) {
+    match see_page_type(&mut content, untaken, true) {
         Some(0) => {}
         Some(_) => warn.push(PAGE_TYPE_LEFT_OUT.into()),
         None => warn.push(PAGE_TYPE_UNCHECKED.into()),
@@ -338,7 +338,18 @@ fn made_content(infos: &[SlotInfo], made: Vec<Option<Made>>, laid: bool) -> Vec<
 /// it, as far as strokes round type reach) as type the page draws. How many of the page's text
 /// objects no made type takes, shown or not: none that holds a piece of the object has its words
 /// ([`spelling`]). Past `MAX_PAIRS` comparisons nothing is marked or counted (`None`).
-fn see_page_type(content: &mut [Content], shown: &[Vec<Arc<Node>>]) -> Option<usize> {
+///
+/// The page can draw the type of several text objects as one piece (one line, the text objects
+/// apart along it): none of them holds half of the piece. With `lines` (not from [`plan`], which
+/// puts the page's pieces into slots too), after the pass above, shown made type
+/// that holds no piece takes the words of an object that are still left where the page draws them
+/// ([`take_words_drawn_at`]): the words that follow one another along the piece, written as the
+/// made type writes them, in about the place where it draws. Where such text objects take every
+/// word the object has left, they are marked and the words are no longer left; where some word
+/// stays, nothing changes. Words another text object took, words drawn elsewhere along the piece,
+/// and words written another way (other case, other marks) aren't taken: type the page doesn't
+/// draw there stays unmarked, to be weighed against the page (see `prune_unseen`).
+fn see_page_type(content: &mut [Content], shown: &[Vec<Arc<Node>>], lines: bool) -> Option<usize> {
     let texts = |o: &[Arc<Node>]| o.iter().filter_map(|n| if let NodeKind::Text(_) = &n.kind { Some(n.clone()) } else { None }).collect::<Vec<_>>();
     // Each object's pieces of type, and the words of them that no made type holding it has yet.
     let mut objects: Vec<(Vec<Rect>, Vec<String>, bool)> =
@@ -348,7 +359,7 @@ fn see_page_type(content: &mut [Content], shown: &[Vec<Arc<Node>>]) -> Option<us
         return None;
     }
     let holds = |drawn: Rect, r: &Rect| drawn.inflate(OUTLINE_REACH, OUTLINE_REACH).intersect(*r).area() >= 0.5 * r.area().max(1e-9);
-    for c in content {
+    for c in content.iter_mut() {
         let Content::Made(node, region, seen) = c else { continue };
         // Hidden made type has no region: where it draws, shown, is its own box.
         let Some(drawn) = region.or_else(|| node.visual_bounds()) else { continue };
@@ -361,7 +372,116 @@ fn see_page_type(content: &mut [Content], shown: &[Vec<Arc<Node>>]) -> Option<us
             }
         }
     }
+    if !lines {
+        return Some(objects.iter().filter(|(_, words, held)| !held || !words.is_empty()).count());
+    }
+    // The shown made type that holds no piece (set along a line: not on a path, not vertical), with
+    // where it draws, the way its lines run and its words as it writes them.
+    let mut loose: Vec<(usize, Rect, f64, Vec<String>)> = content
+        .iter()
+        .enumerate()
+        .filter_map(|(at, c)| match c {
+            Content::Made(node, Some(drawn), false) => match &node.kind {
+                NodeKind::Text(t) if !t.vertical && !matches!(t.kind, TextKind::OnPath { .. }) => {
+                    Some((at, *drawn, turn(t), word_pieces(&plain_text(node)).map(str::to_string).collect()))
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    for (k, (_, words, held)) in objects.iter_mut().enumerate() {
+        if words.is_empty() || loose.is_empty() {
+            continue;
+        }
+        // All of the object's words that are left, or none: a piece the text objects only partly
+        // account for isn't theirs (the page may be of another state of the file).
+        let page = shown.get(k).map_or_else(Vec::new, |o| words_drawn(o));
+        let (mut left, mut takers) = (words.clone(), vec![]);
+        for (i, (_, drawn, turned, written)) in loose.iter().enumerate() {
+            if take_words_drawn_at(&page, &mut left, written, *drawn, *turned) {
+                takers.push(i);
+            }
+        }
+        if left.is_empty() && !takers.is_empty() {
+            (*words, *held) = (left, true);
+            for i in takers.into_iter().rev() {
+                let (at, ..) = loose.remove(i);
+                if let Some(Content::Made(_, _, seen)) = content.get_mut(at) {
+                    *seen = true;
+                }
+            }
+        }
+    }
     Some(objects.iter().filter(|(_, words, held)| !held || !words.is_empty()).count())
+}
+
+/// The way the lines of `t` run on the document: the angle of its baseline, in radians.
+fn turn(t: &vectorcraft_doc::TextObject) -> f64 {
+    let [a, b, ..] = t.xf.as_coeffs();
+    b.atan2(a)
+}
+
+/// Each word of the page's text object `o` as it is written (see [`word_pieces`]) with where the
+/// page draws it and the way its line runs ([`turn`]), in the order of its pieces: the glyphs'
+/// advances along each line, a line high. Nothing for a piece on a path or set vertically, whose
+/// words don't lie along a line this way.
+fn words_drawn(o: &[Arc<Node>]) -> Vec<(String, Rect, f64)> {
+    let mut out = vec![];
+    for n in o {
+        let NodeKind::Text(t) = &n.kind else { continue };
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        if layout.vertical || layout.on_path {
+            continue;
+        }
+        let text = t.plain_text();
+        let mut at = 0;
+        for word in word_pieces(&text) {
+            // `word` is a slice of `text` after the words before it.
+            let Some(start) = text.get(at..).and_then(|rest| rest.find(word)).map(|i| at + i) else { break };
+            at = start + word.len();
+            let glyphs = layout.glyphs.iter().filter(|g| (start..at).contains(&g.byte));
+            let lines = glyphs.map(|g| {
+                let size = t.runs.get(g.run).map_or(0.0, |r| r.style.size);
+                Rect::new(g.origin.x, g.origin.y - size, g.origin.x + g.advance, g.origin.y + 0.25 * size)
+            });
+            if let Some(r) = lines.reduce(|a, b| a.union(b)).filter(|r| r.is_finite()) {
+                out.push((word.to_string(), t.xf.transform_rect_bbox(r), turn(t)));
+            }
+        }
+    }
+    out
+}
+
+/// Take from `left` (the [`spelling`]s of a page object's words that no text object has yet) the
+/// words `written` (a made text object's, as it writes them) where `page` (the object's words with
+/// where the page draws each, [`words_drawn`]) has them following one another, each still left,
+/// written the same (case and marks too), running the way the made type's lines run (`turned`,
+/// within about six degrees), and together drawn in about the place `drawn` where the made type
+/// draws: each box holds half of the other, or round it as far as strokes reach. Whether they were
+/// taken; nothing is otherwise.
+fn take_words_drawn_at(page: &[(String, Rect, f64)], left: &mut Vec<String>, written: &[String], drawn: Rect, turned: f64) -> bool {
+    if written.is_empty() || written.len() > page.len() {
+        return false;
+    }
+    let half = |a: Rect, b: Rect| a.inflate(OUTLINE_REACH, OUTLINE_REACH).intersect(b).area() >= 0.5 * b.area().max(1e-9);
+    for run in page.windows(written.len()) {
+        // The same way round, whichever of the two turns is the shorter.
+        let same_way = |angle: f64| (angle - turned).sin().abs() < 0.1 && (angle - turned).cos() > 0.0;
+        if !run.iter().zip(written).all(|((word, _, angle), w)| word == w && same_way(*angle)) {
+            continue;
+        }
+        // Every word of the run is still left, as many times as the run has it.
+        let mut rest = left.clone();
+        let spelled: Vec<String> = run.iter().map(|(word, ..)| spelling(word)).filter(|w| !w.is_empty()).collect();
+        let all_left = spelled.iter().all(|w| rest.iter().position(|l| l == w).map(|i| rest.remove(i)).is_some());
+        let Some(place) = run.iter().map(|(_, r, _)| *r).reduce(|a, b| a.union(b)) else { continue };
+        if all_left && !spelled.is_empty() && half(drawn, place) && half(place, drawn) {
+            *left = rest;
+            return true;
+        }
+    }
+    false
 }
 
 /// What goes into each of `infos`' slots when the file's text document can't make the type of every
@@ -441,7 +561,9 @@ pub(super) fn plan(
         }
     }
     // The page's type that no made type takes is the spare type below.
-    let _ = see_page_type(&mut content, shown);
+    // Not the lines the page draws as one piece: here the page's pieces also go into slots without
+    // made type, and a piece given to one would be drawn again by the text objects along it.
+    let _ = see_page_type(&mut content, shown, false);
     for (k, c) in content.iter_mut().enumerate() {
         if let (Content::Page(parts), Some(Some(l))) = (c, lines.get(k)) {
             join_pieces(parts, l);
@@ -551,6 +673,49 @@ fn fill_hidden(infos: &[SlotInfo], stories: &[Option<Arc<Story>>], content: &mut
     for (slot, parts) in unread.iter().zip(assign(&hidden, unread.len())) {
         if let Some(c) = content.get_mut(*slot) {
             *c = Content::Page(parts.into_iter().flat_map(|p| p.iter().cloned()).collect());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Rect, take_words_drawn_at};
+
+    /// A made text object takes words of a piece only where they follow one another, are written
+    /// as it writes them, are still left and are drawn about where it draws.
+    #[test]
+    fn made_type_takes_the_words_the_page_draws_where_it_draws() {
+        let word = |w: &str, x: f64| (w.to_string(), Rect::new(x, 0.0, x + 20.0, 14.0), 0.0);
+        let page = [word("DOWN", 0.0), word("TO", 100.0), word("GO", 125.0), word("20", 300.0)];
+        let all = || vec!["down".to_string(), "to".to_string(), "go".to_string(), "20".to_string()];
+        let take = |left: &mut Vec<String>, written: &[&str], x0: f64, x1: f64| {
+            let written: Vec<String> = written.iter().map(|w| w.to_string()).collect();
+            take_words_drawn_at(&page, left, &written, Rect::new(x0, 0.0, x1, 14.0), 0.0)
+        };
+        let mut left = all();
+        assert!(take(&mut left, &["TO", "GO"], 100.0, 145.0));
+        assert_eq!(left, ["down", "20"]);
+        // Taken once: a copy stacked on it finds them gone.
+        assert!(!take(&mut left, &["TO", "GO"], 100.0, 145.0));
+        // Drawn elsewhere along the piece, written another way, not next to each other, part of a word.
+        for (written, x0, x1) in [
+            (&["20"][..], 0.0, 20.0),
+            (&["Down"][..], 0.0, 20.0),
+            (&["DOWN!"][..], 0.0, 20.0),
+            (&["DOWN", "GO"][..], 0.0, 145.0),
+            (&["DOW"][..], 0.0, 15.0),
+        ] {
+            let mut left = all();
+            assert!(!take(&mut left, written, x0, x1), "{written:?}");
+            assert_eq!(left, all());
+        }
+        // A word in a box many times its size isn't the word.
+        let mut left = all();
+        assert!(!take(&mut left, &["20"], 0.0, 320.0));
+        // Nor is a word whose line runs another way: a quarter turn, or upside down.
+        for turned in [std::f64::consts::FRAC_PI_2, std::f64::consts::PI] {
+            let mut left = all();
+            assert!(!take_words_drawn_at(&page, &mut left, &["20".to_string()], Rect::new(300.0, 0.0, 320.0, 14.0), turned), "{turned}");
         }
     }
 }
