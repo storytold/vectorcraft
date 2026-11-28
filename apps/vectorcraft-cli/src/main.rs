@@ -150,9 +150,10 @@ USAGE:
       Open IN (any readable format) and write OUT as a PNG of its first artboard (else the art),
       N pixels on its longer side (1 to 1024, default 256), with a transparent background. Linux
       file managers run it for .vectorcraft, .drawcraft and .vctemplate files through
-      share/thumbnailers/ai.storyteller.vectorcraft.thumbnailer. It exits with an error and writes
-      nothing when IN is larger than 256 MiB, can't be opened, shows nothing, or takes longer than
-      20 seconds.
+      share/thumbnailers/ai.storyteller.vectorcraft.thumbnailer, and the Windows thumbnail
+      handler (vectorcraft_thumbnail_handler.dll) runs it for Explorer. It exits with an error
+      and writes nothing when IN is larger than 256 MiB, can't be opened, shows nothing, or takes
+      longer than 20 seconds.
 
   vectorcraft-cli bench FILE [--size WxH] [--iters N]
       Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
@@ -542,7 +543,8 @@ const THUMBNAIL_TIME: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// `thumbnail`: the PNG a Linux file manager shows for a document, run through the
 /// `.thumbnailer` entry in `packaging/linux`
-/// (<https://specifications.freedesktop.org/thumbnail-spec/latest/creation.html>).
+/// (<https://specifications.freedesktop.org/thumbnail-spec/latest/creation.html>), and the
+/// picture the Windows thumbnail handler (`apps/vectorcraft-thumbnail-handler`) gives Explorer.
 fn thumbnail(args: &[String]) -> Result<(), String> {
     if help_requested(args, &["--size", "-s"]) {
         return help();
