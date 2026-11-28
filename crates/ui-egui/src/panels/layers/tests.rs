@@ -558,6 +558,99 @@ fn layer_row_footer_drops_after_next_document_leave_the_new_document_alone() {
     }
 }
 
+/// Whether object `id` in the active document has a basic appearance.
+fn basic(app: &VectorcraftApp, id: NodeId) -> bool {
+    app.session.active().unwrap().doc.node(id).unwrap().appearance.is_basic()
+}
+
+/// A target circle dropped on Delete Selection reduces its row's appearance to a basic appearance and keeps the row;
+/// Create New Layer refuses it. Neither button takes a paint or the selected art dragged from a panel.
+#[test]
+fn delete_selection_reduces_a_dropped_appearance_to_basic() {
+    use crate::panel_drag::PanelDrag;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+
+    let (mut app, _, [a, b]) = two_rects();
+    name_row(&mut app, a, "A");
+    name_row(&mut app, b, "B");
+    app.run("appearance.addFill", json!({"ids": [a.0]})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    assert!(!basic(&app, a) && basic(&app, b));
+    let rows = rows_of(&app);
+    let mut panel = Panel::new(app, drag_sources_and_layers);
+
+    for (name, role) in [("Dragged paint", Role::LIST_ITEM), ("Dragged art", Role::LIST_ITEM), ("Target A", Role::BUTTON)] {
+        for button in ["Delete Selection", "Create New Layer"] {
+            if name == "Target A" && button == "Delete Selection" {
+                continue;
+            }
+            let from = panel.rect_role(name, role).center();
+            let to = panel.rect(button).center();
+            panel.drag_hold_role(name, role, to - from);
+            assert!(drag::active::<PanelDrag>(panel.ctx()).is_some(), "{name} carries its payload");
+            assert!(drag::mark(panel.ctx()).is_none(), "{button} refuses {name}");
+            let history = undo_len(&panel.app());
+            panel.release();
+            let app = panel.app();
+            assert_eq!(undo_len(&app), history, "{name} on {button} makes no edit");
+            assert!(!basic(&app, a) && rows_of(&app) == rows, "{name} on {button} leaves the rows as they were");
+        }
+    }
+
+    let from = panel.rect_role("Target A", Role::BUTTON).center();
+    let to = panel.rect("Delete Selection").center();
+    panel.drag_hold_role("Target A", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "Delete Selection takes a target circle's appearance");
+    let history = undo_len(&panel.app());
+    panel.release();
+    let app = panel.app();
+    assert!(basic(&app, a) && basic(&app, b), "the dropped appearance is reduced to a basic appearance");
+    assert_eq!(undo_len(&app), history + 1);
+    assert_eq!(rows_of(&app), rows, "the row is not deleted");
+    assert!(crate::dialogs::confirm::open_question(&app).is_none());
+}
+
+/// Delete Selection refuses an appearance carried over from another document: held across Next Document and
+/// released on the trash, it leaves the object with the same ID there as it was.
+#[test]
+fn delete_selection_refuses_an_appearance_from_another_document() {
+    use crate::panel_drag::PanelDrag;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    let (app, [a, _]) = two_documents_with_a_styled();
+    let first = app.session.active().unwrap().uid;
+    let mut panel = Panel::new(app, show);
+    let from = panel.rect_role("Target A", Role::BUTTON).center();
+    let to = panel.rect("Delete Selection").center();
+    panel.drag_hold_role("Target A", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "Delete Selection takes an appearance from its own document");
+
+    panel.key(Key::F6, Modifiers::COMMAND);
+    let history = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_ne!(st.uid, first, "Next Document switches documents during the drag");
+        st.history.undo.len()
+    };
+    let carried = drag::active::<PanelDrag>(panel.ctx());
+    assert!(matches!(carried.as_deref(), Some(PanelDrag::Appearance { document, source, .. }) if *document == first && *source == a));
+    assert!(drag::mark(panel.ctx()).is_none(), "Delete Selection refuses an appearance from another document");
+    panel.release();
+    {
+        let app = panel.app();
+        assert!(!basic(&app, a), "the object with the same ID keeps its appearance");
+        assert_eq!(undo_len(&app), history, "the foreign drop makes no edit");
+    }
+
+    panel.drag("Target A", "Delete Selection", Modifiers::NONE);
+    assert!(basic(&panel.app(), a), "a drag within the new document still reduces the appearance");
+}
+
 /// The footer's layer count is in the accessibility tree, and it follows the document's layers.
 #[test]
 fn the_footer_counts_the_layers() {
@@ -985,6 +1078,193 @@ fn row_menus_list_plugin_commands() {
 
     app.run("plugin.remove", json!({"id": id})).unwrap();
     assert!(plugins(&app, b).is_empty(), "removed: no Plug-ins submenu");
+}
+
+/// Whether `a` and `b` are within float rounding of each other.
+fn near(a: f32, b: f32) -> bool {
+    (a - b).abs() < 1e-6
+}
+
+/// Object `id`'s opacity in the active document.
+fn opacity(app: &VectorcraftApp, id: NodeId) -> f32 {
+    app.session.active().unwrap().doc.node(id).unwrap().opacity
+}
+
+/// Two documents, each with rows "A" and "B" of the same local IDs in both; A has a second fill and 30% opacity.
+/// The first document is active.
+fn two_documents_with_a_styled() -> (VectorcraftApp, [NodeId; 2]) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut ids = Vec::new();
+    for _ in 0..2 {
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let mut add = |x| NodeId(app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap());
+        let (a, b) = (add(0), add(60));
+        name_row(&mut app, a, "A");
+        name_row(&mut app, b, "B");
+        app.run("appearance.addFill", json!({"ids": [a.0]})).unwrap();
+        app.run("transparency.set", json!({"ids": [a.0], "opacity": 30})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        ids.push([a, b]);
+    }
+    assert_eq!(ids[0], ids[1], "the documents have different objects with the same local IDs");
+    assert!(app.session.set_active(0));
+    (app, ids[0])
+}
+
+/// The Layers panel under three list rows that drag, from the active document, a paint, the bottom object as
+/// selected art and the bottom object's appearance.
+fn drag_sources_and_layers(app: &mut VectorcraftApp, ui: &mut Ui) {
+    use crate::panel_drag::PanelDrag;
+    use craft::ui::contract::ListDrag;
+    use craft::ui::contract::ShowCollection as _;
+    use craft::ui::list::{List, ListRow};
+
+    let st = app.session.active().unwrap();
+    let (document, reverts) = (st.uid, st.reverts);
+    let source = st.doc.layers[0].children().unwrap()[0].id;
+    let drags = [
+        ("Dragged paint", PanelDrag::paint(vectorcraft_color::Paint::None)),
+        ("Dragged art", PanelDrag::Art { document, reverts, ids: vec![source] }),
+        ("Dragged appearance", PanelDrag::Appearance { document, reverts, source }),
+    ];
+    egui::Panel::top("drag-sources").exact_size(150.0).show(ui, |ui| {
+        for (name, drag) in drags {
+            ui.allocate_ui(egui::vec2(ui.available_width(), 48.0), |ui| {
+                let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
+                List::<usize>::new(name)
+                    .drag_payload(move |_: &ListDrag<usize>| Some(drag.clone()))
+                    .show_items(ui, &keys, &mut |_, _| ListRow::new(name));
+            });
+        }
+    });
+    show(app, ui);
+}
+
+/// A target circle takes an appearance from another row's circle of the same document: a plain drop moves it and an
+/// Alt drop copies it. Held back over its own row's circle, the appearance is refused and nothing changes.
+#[test]
+fn a_target_circle_takes_another_rows_appearance_and_refuses_its_own() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::{Event, Modifiers};
+
+    let (mut app, _, [a, b]) = two_rects();
+    name_row(&mut app, a, "A");
+    name_row(&mut app, b, "B");
+    app.run("transparency.set", json!({"ids": [a.0], "opacity": 30})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let mut panel = Panel::new(app, show);
+
+    let own = panel.rect_role("Target A", Role::BUTTON).center();
+    let other = panel.rect_role("Target B", Role::BUTTON).center();
+    panel.drag_hold_role("Target A", Role::BUTTON, other - own);
+    assert!(drag::mark(panel.ctx()).is_some(), "another row's circle takes the appearance");
+    panel.frame_with(vec![Event::PointerMoved(own)]);
+    assert!(drag::mark(panel.ctx()).is_none(), "the circle refuses its own row's appearance");
+    let history = undo_len(&panel.app());
+    panel.release();
+    {
+        let app = panel.app();
+        assert_eq!(undo_len(&app), history, "the drop on its own circle makes no edit");
+        assert!(near(opacity(&app, a), 0.3) && near(opacity(&app, b), 1.0));
+    }
+
+    panel.drag("Target A", "Target B", Modifiers::ALT);
+    {
+        let app = panel.app();
+        assert!(near(opacity(&app, a), 0.3) && near(opacity(&app, b), 0.3), "an Alt drop copies the appearance");
+    }
+    panel.app().run("transparency.set", json!({"ids": [a.0], "opacity": 50})).unwrap();
+    panel.drag("Target A", "Target B", Modifiers::NONE);
+    let app = panel.app();
+    assert!(near(opacity(&app, a), 1.0) && near(opacity(&app, b), 0.5), "a plain drop moves the appearance");
+}
+
+/// A target circle refuses an appearance carried over from another document: held across Next Document and
+/// released on the new document's circle, it leaves the objects with the same IDs there as they were.
+#[test]
+fn a_target_circle_refuses_an_appearance_from_another_document() {
+    use crate::panel_drag::PanelDrag;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::{Event, Key, Modifiers};
+
+    let (app, [a, b]) = two_documents_with_a_styled();
+    let first = app.session.active().unwrap().uid;
+    let mut panel = Panel::new(app, show);
+    let from = panel.rect_role("Target A", Role::BUTTON).center();
+    let to = panel.rect_role("Target B", Role::BUTTON).center();
+    panel.drag_hold_role("Target A", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "the circle takes an appearance from its own document");
+
+    panel.key(Key::F6, Modifiers::COMMAND);
+    let history = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_ne!(st.uid, first, "Next Document switches documents during the drag");
+        st.history.undo.len()
+    };
+    let to = panel.rect_role("Target B", Role::BUTTON).center();
+    panel.frame_with(vec![Event::PointerMoved(to)]);
+    let carried = drag::active::<PanelDrag>(panel.ctx());
+    assert!(matches!(carried.as_deref(), Some(PanelDrag::Appearance { document, source, .. }) if *document == first && *source == a));
+    assert!(drag::mark(panel.ctx()).is_none(), "the circle refuses an appearance from another document");
+    panel.release();
+    {
+        let app = panel.app();
+        assert!(near(opacity(&app, b), 1.0), "the object with the same ID keeps its look");
+        assert_eq!(undo_len(&app), history, "the foreign drop makes no edit");
+    }
+
+    panel.drag("Target A", "Target B", Modifiers::NONE);
+    assert!(near(opacity(&panel.app(), b), 0.3), "a drag within the new document still moves the appearance");
+}
+
+/// A target circle takes only an appearance: a paint or the selected art dragged from a panel is refused and
+/// leaves the row as it was.
+#[test]
+fn a_target_circle_refuses_a_paint_and_dragged_art() {
+    use crate::panel_drag::PanelDrag;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+
+    let (mut app, _, [a, b]) = two_rects();
+    name_row(&mut app, a, "A");
+    name_row(&mut app, b, "B");
+    app.run("transparency.set", json!({"ids": [a.0], "opacity": 30})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let mut panel = Panel::new(app, drag_sources_and_layers);
+    let hold = |panel: &mut Panel, name: &str| {
+        let from = panel.rect_role(name, Role::LIST_ITEM).center();
+        let to = panel.rect_role("Target B", Role::BUTTON).center();
+        panel.drag_hold_role(name, Role::LIST_ITEM, to - from);
+        drag::active::<PanelDrag>(panel.ctx()).map(|carried| (*carried).clone())
+    };
+
+    for name in ["Dragged paint", "Dragged art"] {
+        let carried = hold(&mut panel, name);
+        assert!(matches!(carried, Some(PanelDrag::Paint { .. } | PanelDrag::Art { .. })), "{name} carries its payload");
+        assert!(drag::mark(panel.ctx()).is_none(), "the circle refuses {name}");
+        let history = undo_len(&panel.app());
+        panel.release();
+        let app = panel.app();
+        assert_eq!(undo_len(&app), history, "{name} makes no edit");
+        assert!(near(opacity(&app, b), 1.0), "{name} leaves the row's appearance alone");
+    }
+
+    let carried = hold(&mut panel, "Dragged appearance");
+    let (document, reverts) = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+    assert_eq!(carried, Some(PanelDrag::Appearance { document, reverts, source: a }));
+    assert!(drag::mark(panel.ctx()).is_some(), "the circle takes an appearance from a panel");
+    panel.release();
+    assert!(near(opacity(&panel.app(), b), 0.3), "the dropped appearance moves to the row");
 }
 
 /// A target circle's appearance held across File › Revert and dropped on another row's circle
