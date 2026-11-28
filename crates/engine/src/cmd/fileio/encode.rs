@@ -1069,7 +1069,7 @@ fn encode_all_of(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     }
     // Formats that draw type: missing fonts come out in the fallback font (PDF and SVG say so
     // themselves: SVG only when it outlines or embeds fonts).
-    if (f.raster || matches!(f.id, "eps" | "emf" | "wmf" | "hpgl"))
+    if (f.raster || matches!(f.id, "eps" | "emf" | "wmf" | "hpgl" | "cmx"))
         && let Some(w) = crate::cmd::fonts::substitution_warning(doc)
     {
         enc.warnings.push(w);
@@ -1110,7 +1110,7 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
     let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
     // SVG reads its own `useArtboards` (an SVG option).
-    let use_artboards = if f.raster || matches!(f.id, "pdf" | "ai" | "dxf" | "emf" | "wmf" | "hpgl") { use_artboards(C, p)? } else { None };
+    let use_artboards = if f.raster || matches!(f.id, "pdf" | "ai" | "dxf" | "emf" | "wmf" | "hpgl" | "cmx") { use_artboards(C, p)? } else { None };
     // `rect`: that area of the page, as if it were the only artboard (the document is not changed).
     if let Some(rect) = page_rect(f, p)? {
         let mut q = super::export::without_artboards(p);
@@ -1156,6 +1156,7 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
         "emf" => return super::metafile::encode(doc, p, use_artboards, vectorcraft_metafile::Kind::Emf),
         "wmf" => return super::metafile::encode(doc, p, use_artboards, vectorcraft_metafile::Kind::Wmf),
         "hpgl" => return super::hpgl::encode(doc, p, use_artboards),
+        "cmx" => return super::cmx::encode(doc, f, p, use_artboards),
         "ai" => return super::save::encode_ai(C, f, doc, p),
         "pdf" => {
             let (bytes, notes) = super::pdf::encode(C, doc, p)?;

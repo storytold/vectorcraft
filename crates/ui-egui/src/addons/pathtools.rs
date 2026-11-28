@@ -3,8 +3,9 @@
 //! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle…, Add Bounding Circle… and Add Inscribed Circle; the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
-//! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
-//! `tool.setOption`.
+//! ([`shape`]); its tools' options dialog (a double-click on the tool); and the Tangent Circle Tool's radius dialog
+//! ([`tangent_circle_radius`]). Everything acts through `addon.pathtools.*` and `tool.setOption`, except that the radius
+//! dialog draws its circle with `shape.circleThroughPoints`.
 
 pub mod bridge;
 pub mod corner;
@@ -13,6 +14,7 @@ pub mod set_corners;
 pub mod shape;
 pub mod shared_edge;
 pub mod tangent_circle;
+pub mod tangent_circle_radius;
 
 use craft::behavior::ColumnWidth;
 use craft::menu::Node;
@@ -317,6 +319,8 @@ fn options_params(tool: &str, lengths: LengthUnits) -> Vec<Param> {
             Param::new("color", tl!("Color"), ParamKind::choice(colors, Some("red".into()))),
             Param::new("snapTolerance", tl!("Snap Tolerance"), snap).unit(UnitKind::Pixels),
             Param::new("snapWithoutGuides", tl!("Snap When Smart Guides Are Off"), ParamKind::bool(true)),
+            Param::new("askRadius", tl!("Ask For Circle Radius"), ParamKind::bool(false)),
+            Param::new("autoUpdateDefault", tl!("Auto-Update Default"), ParamKind::bool(false)),
         ];
     }
     let (size, tolerance) = (anchor_eraser::SIZE_RANGE, anchor_eraser::TOLERANCE_RANGE);

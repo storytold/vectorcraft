@@ -11,6 +11,70 @@ fn app() -> (VectorcraftApp, Value) {
     (app, id)
 }
 
+/// Cancelling a highlighted output must keep the custom threshold and the report made for it.
+/// A deliberate choice still takes that output's default threshold.
+#[test]
+fn cancelling_output_choices_preserves_custom_ppi_and_the_diagnostic_report() {
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    let mut panel = Panel::new(app, show);
+    panel.type_into("Minimum PPI:", "240");
+    let (doc, undo, key, report) = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (0, 240.0));
+        assert_eq!(app.ui.preflight_panel.cache.report["minPpi"], 240.0);
+        (st.doc.clone(), st.history.undo.len(), app.ui.preflight_panel.cache.key, app.ui.preflight_panel.cache.report.clone())
+    };
+    let output_name = if panel.shows("Output") { "Output" } else { "Output:" };
+    panel.click_role(output_name, Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Escape, Modifiers::NONE);
+    panel.frame();
+    {
+        let app = panel.app();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (0, 240.0));
+        assert_eq!(app.ui.preflight_panel.cache.key, key);
+        assert_eq!(app.ui.preflight_panel.cache.report, report);
+        assert_eq!(*app.session.active().unwrap().doc, *doc);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+    panel.click_role(output_name, Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Enter, Modifiers::NONE);
+    panel.frame();
+    {
+        let app = panel.app();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (2, 96.0));
+        assert_eq!(app.ui.preflight_panel.cache.report["output"], "screen");
+        assert_eq!(app.ui.preflight_panel.cache.report["minPpi"], 96.0);
+    }
+    panel.type_into("Minimum PPI:", "120");
+    panel.click_role(output_name, Role::COMBO_BOX);
+    panel.key(Key::ArrowUp, Modifiers::NONE);
+    panel.key(Key::Escape, Modifiers::NONE);
+    panel.frame();
+    {
+        let app = panel.app();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (2, 120.0));
+    }
+    panel.click_role(output_name, Role::COMBO_BOX);
+    panel.key(Key::ArrowUp, Modifiers::NONE);
+    panel.key(Key::Enter, Modifiers::NONE);
+    panel.frame();
+    {
+        let app = panel.app();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (1, 300.0));
+    }
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+}
+
 /// The accessible name of the row of the first finding with `code`, as the list words it.
 fn row(app: &mut VectorcraftApp, code: &str) -> String {
     let report = app.session.execute("document.preflight", &json!({})).unwrap();

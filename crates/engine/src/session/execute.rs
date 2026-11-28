@@ -95,6 +95,14 @@ impl Session {
         if self.depth == 0 && self.script_running() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
             return Err(EngineError::Busy);
         }
+        // A command-calling plug-in run blocks external document, selection and preference changes.
+        // Its completion command can still apply the output.
+        let find_selects = id == "document.find" && params.get("select").and_then(Value::as_bool) == Some(true);
+        let changes = (waits_for_tool_edit(id) && !JOURNALED_READS.contains(&id) && (id != "document.find" || find_selects))
+            || id.starts_with("clipboard.import");
+        if self.depth == 0 && self.plugin_calls_open() && !self.plugin_calls_end_with(id) && changes {
+            return Err(EngineError::PluginBusy);
+        }
         // A step of a batch a script runs is held to the same rule as the script's own commands.
         if self.script_in_run && crate::script::refused_to_scripts(id) {
             return Err(EngineError::Other(crate::script::refused_text(id)));
@@ -109,7 +117,6 @@ impl Session {
         // A command from outside the tool, while the tool's drag is in progress, is a step of its
         // own before the drag's ([`Session::outside_interaction`]). Find Objects with `select` is
         // journaled (`Session::journal_query`), so it is one too.
-        let find_selects = id == "document.find" && params.get("select").and_then(Value::as_bool) == Some(true);
         let outside = (spec.journal || find_selects) && !self.previewing && !self.in_tool_actions;
         // A preview that a top-level command applied first (a drag with Real-time Drawing off, kept
         // before Undo) reports its warning in the command's result.

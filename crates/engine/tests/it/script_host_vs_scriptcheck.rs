@@ -37,6 +37,8 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("Document.prototype.exportVariables", "app.activeDocument.exportVariables(f);", "filesWritten"),
+    ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
@@ -45,11 +47,13 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// documents; `Document.saveAs` and `close` throw "not available yet".
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
-    ("Object.prototype.", "toSource"),
+    ("Object.prototype.", "reflect toSource"),
     ("UnitValue.", "baseUnit baseUnit= length prototype"),
     ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
+    ("ExternalObject.", "length prototype search"),
+    ("ExternalObject.prototype.", "constructor terminate"),
     (
         "$.",
         "about appEncoding appEncoding= bp build buildDate colorPicker decimalPoint engineName error fileName flags \
@@ -135,6 +139,23 @@ const INSIDE: &[(&str, &str)] = &[
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
+    // Variables and data sets. `importVariables` reads the library file it is given. `PageItem`'s
+    // `visibilityVariable` is in its row above.
+    ("", "Dataset Datasets Variable VariableKind Variables"),
+    ("VariableKind.", "GRAPH IMAGE TEXTUAL Unknown VISIBILITY"),
+    ("Variables.", "prototype"),
+    ("Variables.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Variable.", "prototype"),
+    ("Variable.prototype.", "constructor kind kind= name name= pageItems parent remove typename"),
+    ("Datasets.", "prototype"),
+    ("Datasets.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Dataset.", "prototype"),
+    ("Dataset.prototype.", "constructor display name name= parent remove typename update"),
+    ("Document.prototype.", "activeDataset activeDataset= dataSets importVariables variables variablesLocked variablesLocked="),
+    ("GraphItem.prototype.", "contentVariable contentVariable="),
+    ("PlacedItem.prototype.", "contentVariable contentVariable="),
+    ("RasterItem.prototype.", "contentVariable contentVariable="),
+    ("TextFrame.prototype.", "contentVariable contentVariable="),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types.

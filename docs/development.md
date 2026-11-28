@@ -179,6 +179,11 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   `startup` and `demand` faces of `crates/text/web-fonts.txt` are served under `fonts/ui/`
   instead: the stack fetches the UI language's at once and the others the first time text needs
   them.
+- Document tab titles: desktop builds also embed the Noto Sans Condensed SemiBold row of the
+  checkout's opt-in `fonts/latin-manifest.txt` (`Embed::tab_face` in `crates/text/build.rs`).
+  The interface font stack draws document tab titles in it, scaled to the x-height of the
+  semibold face; the document font list leaves it out. Without `CRAFT_FONTS_DIR`, on the web, or
+  with a checkout that lacks the row (a build warning), tab titles draw in the semibold face.
 - Tests that need Japanese or Georgian glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.

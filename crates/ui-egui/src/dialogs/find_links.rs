@@ -10,7 +10,7 @@
 //! choice and those that fail to relink go back to that dialog; opened from the Links panel's Find
 //! in Folder… (`ui.findLinksInFolder`), they stay as they are.
 //!
-//! Fields: `document` (the document's uid), `missing` (`[{name, path, ids}]`), `modified` (the ids
+//! Fields: `document` (the document's uid), `reverts` (its revert count when the dialog opened), `missing` (`[{name, path, ids}]`), `modified` (the ids
 //! of the images whose file was modified, offered for update afterwards), `notes` (from
 //! `missingLinks`: the open's notes, shown with the line about the modified files), `back` (the
 //! files left without a choice and those that fail to relink go back to dialog `missingLinks`), `state`
@@ -282,10 +282,19 @@ impl FindLinksDialog {
 
 /// The fields of a Find Linked Files dialog for the `missing` files of the active document.
 fn dialog(app: &VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>, back: bool) -> Result<Fields, String> {
-    let uid = app.session.active().map(|d| d.uid).ok_or("no document open")?;
+    let (uid, reverts) = app.session.active().map(|d| (d.uid, d.reverts)).ok_or("no document open")?;
     let picks = vec![Value::Null; missing.len()];
-    let fields =
-        json!({ "document": uid, "missing": missing, "modified": modified, "back": back, "state": "", "picks": picks, "touched": [], "copy": false });
+    let fields = json!({
+        "document": uid,
+        "reverts": reverts,
+        "missing": missing,
+        "modified": modified,
+        "back": back,
+        "state": "",
+        "picks": picks,
+        "touched": [],
+        "copy": false,
+    });
     match fields {
         Value::Object(fields) => Ok(fields),
         _ => Err("the dialog has no fields".into()),
@@ -311,10 +320,12 @@ pub(super) fn from_missing_links(
     folder: &str,
 ) -> Result<(), String> {
     let mut find = dialog(app, missing.clone(), modified.clone(), true)?;
+    let document = find["document"].as_u64().ok_or("no document open")?;
+    let reverts = find["reverts"].as_u64().ok_or("no document open")?;
     find.insert("notes".into(), json!(notes));
     start_search(app, &mut find, folder)?;
     open(app, find)?;
-    app.link_asks = Some(LinkAsk { missing, modified, notes, back: true });
+    app.link_asks = Some(LinkAsk { document, reverts, missing, modified, notes, back: true });
     Ok(())
 }
 
@@ -383,13 +394,17 @@ fn is_image(app: &VectorcraftApp, id: &Value) -> bool {
     st.and_then(|st| st.doc.stored_node(vectorcraft_doc::NodeId(id))).is_some_and(|(n, _)| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)))
 }
 
-/// Make the dialog's document the active one: it may be another tab's.
+/// Make the dialog's document the active one: it may be another tab's. A document whose content File > Revert
+/// replaced since the dialog opened is refused: the rows' ids named objects of the content thrown away.
 fn activate(app: &mut VectorcraftApp, d: &Fields) -> Result<(), String> {
     let uid = d.get("document").and_then(Value::as_u64);
+    let index = app.session.documents().iter().position(|doc| Some(doc.uid) == uid).ok_or("that document is no longer open")?;
+    if d.get("reverts").and_then(Value::as_u64) != app.session.documents().get(index).map(|doc| doc.reverts) {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+    }
     if app.session.active().map(|st| st.uid) == uid {
         return Ok(());
     }
-    let index = app.session.documents().iter().position(|doc| Some(doc.uid) == uid).ok_or("that document is no longer open")?;
     app.run("document.activate", json!({ "index": index })).map(|_| ())
 }
 

@@ -379,7 +379,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "copyAsSvg",
         "Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.",
     ),
-    ("copyAsPdf", "On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet."),
+    ("copyAsPdf", "On Windows and macOS, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet."),
     ("copyAicb", "VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet."),
     (
         "aicbMode",

@@ -56,6 +56,19 @@ pub(crate) struct Edits {
     styles: HashMap<roxmltree::NodeId, (usize, bool, String)>,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The numbers [`Edits::id`] has tried for a made-up id on this thread, taken or not: the
+    /// work of making up ids.
+    static TRIED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Count one number tried for a made-up id in [`TRIED`]; nothing outside tests.
+fn tried() {
+    #[cfg(test)]
+    TRIED.set(TRIED.get() + 1);
+}
+
 impl Edits {
     fn insert(&mut self, at: usize, text: String) {
         self.list.push((at..at, text));
@@ -71,8 +84,10 @@ impl Edits {
             return id.clone();
         }
         let taken = self.taken.get_or_insert_with(|| named_made_up_ids(n.document()));
+        tried();
         while taken.contains(&self.next) {
             self.next += 1;
+            tried();
         }
         let id = format!("{MADE_UP_ID}{}", self.next);
         self.next += 1;
@@ -491,7 +506,7 @@ mod tests {
     use super::*;
 
     /// A file that already holds the made-up ids does not make each new id try them all again:
-    /// 5,000 ids made up past 50,000 taken ones take a moment, not 250 million tries.
+    /// 5,000 ids made up past 50,000 taken ones try 55,000 numbers, not 250 million.
     #[test]
     fn made_up_ids_skip_the_taken_ones_once() {
         let taken: String = (0..50_000).map(|i| format!("<g id=\"{MADE_UP_ID}{i}\"/>")).collect();
@@ -500,9 +515,9 @@ mod tests {
         let doc = roxmltree::Document::parse(&svg).unwrap();
         let rects: Vec<XNode> = doc.descendants().filter(|n| n.has_tag_name("rect")).collect();
         let mut edits = Edits::default();
-        let start = std::time::Instant::now();
+        TRIED.set(0);
         let ids: Vec<String> = rects.iter().map(|n| edits.id(&svg, *n)).collect();
-        assert!(start.elapsed() < std::time::Duration::from_secs(1), "{:?}", start.elapsed());
+        assert_eq!(TRIED.get(), 55_000);
         assert_eq!(ids.first().map(String::as_str), Some(format!("{MADE_UP_ID}50000").as_str()));
         assert_eq!(ids.iter().collect::<HashSet<_>>().len(), ids.len());
     }

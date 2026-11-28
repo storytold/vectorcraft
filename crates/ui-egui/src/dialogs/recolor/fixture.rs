@@ -15,6 +15,50 @@ use serde_json::{Value, json};
 use super::{Fields, GROUP_ACTION, KIND, RecolorDialog};
 use crate::VectorcraftApp;
 
+#[test]
+fn preserve_grays_can_be_clicked_in_a_narrow_localized_dialog() {
+    use egui::accesskit::Role;
+    use egui::{RawInput, pos2, vec2};
+
+    for lang in ["de", "el"] {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.session.prefs.interface_language = lang.into();
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(540.0, 500.0));
+        let mut time = 0.0;
+        let mut draw = |app: &mut VectorcraftApp, events| {
+            time += 0.25;
+            crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() })
+        };
+        draw(&mut app, vec![]);
+        app.run("ui.recolorDialog", json!({})).unwrap();
+        for _ in 0..5 {
+            draw(&mut app, vec![]);
+        }
+        let out = draw(&mut app, vec![]);
+        let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+        let label = crate::i18n::t("Grays");
+        let bounds = nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::CheckBox && node.label() == Some(label))
+            .and_then(|(_, node)| node.bounds())
+            .unwrap_or_else(|| panic!("{lang} has no Preserve Grays checkbox"));
+        let at = pos2(((bounds.x0 + bounds.x1) * 0.5) as f32, ((bounds.y0 + bounds.y1) * 0.5) as f32);
+        draw(&mut app, vec![Event::PointerMoved(at)]);
+        for pressed in [true, false] {
+            draw(&mut app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+        }
+        draw(&mut app, vec![]);
+        let preserves_grays = app.dialogs().unwrap().with(|host| host.get::<RecolorDialog>().map(|d| d.fields.bool("preserveGrays")));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(preserves_grays, Some(true), "the pointer click toggles Preserve Grays in {lang}");
+    }
+}
+
 /// Recolor Artwork over an app, in a window-sized fixture.
 pub(crate) struct Recolor {
     fixture: Fixture,

@@ -68,7 +68,7 @@ impl Settings {
 /// The document as the last Refresh saw it, and what flattening it would do.
 struct Shot {
     doc: Arc<Document>,
-    doc_index: usize,
+    doc_uid: u64,
     revision: u64,
     /// The settings it was taken with.
     options: FlattenOptions,
@@ -121,7 +121,8 @@ pub fn refresh(app: &mut VectorcraftApp) -> Result<Value, String> {
     let set = &app.ui.flattener_preview;
     let (o, report) = app.session.flattener_report(&set.params()).map_err(|e| e.to_string())?;
     let (options, overprints) = (set.options.clone(), set.overprints);
-    let (st, doc_index) = (app.session.active().ok_or("no document open")?, app.session.active_index().unwrap_or(0));
+    let st = app.session.active().ok_or("no document open")?;
+    let doc_uid = st.uid;
     let mut out = report.to_json(&st.doc, set.highlight);
     out["options"] = serde_json::to_value(&o).unwrap_or_default();
     let mut fit = st.doc.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b)).unwrap_or(DRect::new(0.0, 0.0, 612.0, 792.0));
@@ -132,7 +133,7 @@ pub fn refresh(app: &mut VectorcraftApp) -> Result<Value, String> {
     let (doc, revision) = (st.doc.clone(), st.revision);
     let m = &mut app.flattener_preview;
     m.generation += 1;
-    m.shot = Some(Shot { doc, doc_index, revision, options, overprints, report, fit, generation: m.generation });
+    m.shot = Some(Shot { doc, doc_uid, revision, options, overprints, report, fit, generation: m.generation });
     m.view = fitting_view();
     Ok(out)
 }
@@ -176,7 +177,7 @@ fn merged(base: &FlattenOptions, over: &Value) -> Value {
 fn stale(app: &VectorcraftApp) -> bool {
     let (Some(st), Some(s)) = (app.session.active(), app.flattener_preview.shot.as_ref()) else { return false };
     let set = &app.ui.flattener_preview;
-    s.revision != st.revision || s.options != set.options || s.overprints != set.overprints
+    s.doc_uid != st.uid || s.revision != st.revision || s.options != set.options || s.overprints != set.overprints
 }
 
 /// Whether the options are no preset's: the preset field then reads `[Custom]`.
@@ -191,9 +192,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         super::empty_state(ui, "eye", tl!("No document"), tl!("Open a document to preview its flattening."));
         return;
     }
-    let index = app.session.active_index().unwrap_or(0);
+    let uid = app.session.active().map(|st| st.uid);
     // A document the panel hasn't seen yet gets a snapshot right away.
-    if app.flattener_preview.shot.as_ref().map(|s| s.doc_index) != Some(index)
+    if app.flattener_preview.shot.as_ref().map(|s| s.doc_uid) != uid
         && let Err(e) = refresh(app)
     {
         app.status(e);
@@ -453,6 +454,37 @@ mod tests {
             out.textures_delta.clear();
         }
         ctx
+    }
+
+    #[test]
+    fn another_drawing_at_the_same_index_and_revision_gets_its_own_preview() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let make_drawing = |app: &mut VectorcraftApp, x| {
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 10, "height": 10})).unwrap();
+        };
+        make_drawing(&mut app, 10);
+        frame(&mut app);
+        let first = app.session.active().unwrap();
+        let (uid, revision, index) = (first.uid, first.revision, app.session.active_index());
+        let old_generation = app.flattener_preview.generation;
+        let old_art = first.doc.clone();
+
+        app.session.execute("file.close", &json!({"index": 0})).unwrap();
+        frame(&mut app);
+        make_drawing(&mut app, 70);
+        let second = app.session.active().unwrap();
+        assert_ne!(second.uid, uid);
+        assert_eq!(second.revision, revision);
+        assert_eq!(app.session.active_index(), index);
+        let expected = second.doc.clone();
+        assert_ne!(expected.layers, old_art.layers, "the replacement drawing has different artwork");
+
+        frame(&mut app);
+        let shot = app.flattener_preview.shot.as_ref().unwrap();
+        assert!(Arc::ptr_eq(&shot.doc, &expected), "the preview snapshots the drawing now open");
+        assert!(shot.generation > old_generation);
+        assert!(!stale(&app));
     }
 
     #[test]

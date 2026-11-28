@@ -4,8 +4,8 @@
 //! Preview shows the proof on the canvas while the dialog is open; OK sets the proof setup and
 //! turns Proof Colors on (`view.proofSetup`), and Cancel puts the earlier proof view back. Save…
 //! writes the dialog's settings to a proof setup file (`view.proofSetup.save`) and Load… reads one
-//! into the dialog (`view.proofSetup.read`). Both are desktop only. Their pickers start in the
-//! Proof Setups folder next to the preferences, whose setups View → Proof Setup lists below
+//! into the dialog (`view.proofSetup.read`). The browser reads picked bytes and downloads a copy
+//! when saving. Desktop pickers start in the Proof Setups folder next to the preferences, whose setups View → Proof Setup lists below
 //! Customize… ([`saved_items`]): Save… makes the folder when it may be written, and Load…'s picker
 //! starts in its own default folder until the folder exists.
 //!
@@ -116,15 +116,10 @@ fn rgb_device(device: &str) -> bool {
 
 /// The dialog over the host's values, made again every pass.
 fn build(fields: &mut DialogFields) -> ParamDialog<'_> {
-    // The web has no folder to keep setups in.
-    let footer = if cfg!(target_arch = "wasm32") {
-        Vec::new()
-    } else {
-        vec![
-            (SAVE.to_string(), FooterButton::new(tl!("Save…").to_string(), DialogRole::Other)),
-            (LOAD_BUTTON.to_string(), FooterButton::new(tl!("Load…").to_string(), DialogRole::Other)),
-        ]
-    };
+    let footer = vec![
+        (SAVE.to_string(), FooterButton::new(tl!("Save…").to_string(), DialogRole::Other)),
+        (LOAD_BUTTON.to_string(), FooterButton::new(tl!("Load…").to_string(), DialogRole::Other)),
+    ];
     ParamDialog::new(KIND, tl!("Proof Setup").to_string(), rows(fields)).values(Bind::bound(fields)).previews(true).extra_buttons(footer)
 }
 
@@ -297,6 +292,29 @@ fn act(app: &mut VectorcraftApp, id: DialogId, fields: &DialogFields, action: &s
 
 /// Save…: the dialog's settings go to the picked file, and the menu lists the saved setups again.
 fn save(app: &mut VectorcraftApp, fields: &DialogFields) {
+    let mut request =
+        PickRequest::save("proof-setups").file_name(format!("{}.{EXT}", tl!("Proof Setup"))).filter("Proof setups", &[EXT]).suggested_extension(EXT);
+    let mut p = params(fields);
+    if let Some(o) = p.as_object_mut() {
+        o.remove("proof");
+    }
+    if app.host.files().browser_saves() {
+        match proof_file::draft_bytes(&p) {
+            Ok(bytes) => {
+                crate::file_asks::save(app, request, bytes, Owner::Free, |app, picked| {
+                    match picked {
+                        Picked::Saved { path, .. } => app.status(format!("Saved {}", path.display())),
+                        Picked::Downloaded(name) => app.status(format!("Saved {name}")),
+                        Picked::Failed(error) => return Err(error),
+                        _ => {}
+                    }
+                    Ok(Value::Null)
+                });
+            }
+            Err(e) => app.status(e.to_string()),
+        }
+        return;
+    }
     // The picker opens in the folder, made for it when it may be written. [`list_saved`] removes
     // it again when the picker closes without a file in it.
     let dir = app.session.proof_setup_dir().map(Path::to_path_buf);
@@ -307,14 +325,8 @@ fn save(app: &mut VectorcraftApp, fields: &DialogFields) {
     if made.is_some() {
         saved().made = made;
     }
-    let mut request =
-        PickRequest::save("proof-setups").file_name(format!("{}.{EXT}", tl!("Proof Setup"))).filter("Proof setups", &[EXT]).suggested_extension(EXT);
     if let Some(dir) = dir {
         request = request.directory(dir);
-    }
-    let mut p = params(fields);
-    if let Some(o) = p.as_object_mut() {
-        o.remove("proof");
     }
     ask(app, request, Owner::Free, move |app, picked| {
         let Picked::Saved { path, .. } = picked else { return Ok(Value::Null) };
@@ -343,8 +355,16 @@ fn load(app: &mut VectorcraftApp, id: DialogId) {
             && app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.get_by_id::<HostedParamDialog>(id).is_some()))
     };
     ask_while(app, request, Owner::Free, is_live, move |app, picked| {
-        let Some(path) = picked.first_path() else { return Ok(Value::Null) };
-        let r = app.run("view.proofSetup.read", json!({ "path": path.to_string_lossy() }))?;
+        let r = match picked {
+            Picked::Contents(files) => {
+                let Some((name, bytes)) = files.into_iter().next() else { return Ok(Value::Null) };
+                proof_file::draft_fields(&bytes, &name).map_err(|e| e.to_string())?
+            }
+            other => {
+                let Some(path) = other.first_path() else { return Ok(Value::Null) };
+                app.run("view.proofSetup.read", json!({ "path": path.to_string_lossy() }))?
+            }
+        };
         let fields = [
             ("device", "target"),
             ("intent", "intent"),
@@ -449,11 +469,11 @@ fn take() {
     }
 }
 
-/// Wait for the listing under way and take it in.
+/// Wait for the listing under way, however long it takes, and take it in.
 #[cfg(test)]
 pub(crate) fn wait() {
     if let Some(queue) = &saved().queue {
-        queue.finish(std::time::Duration::from_secs(10));
+        assert!(queue.finish(std::time::Duration::MAX), "the listing of the Proof Setups folder could not finish");
     }
     take();
 }
@@ -634,6 +654,9 @@ mod tests {
     /// set, and redraw the documents.
     #[test]
     fn cancel_puts_back_a_view_whose_profile_was_removed() {
+        if !crate::testing::in_own_process("dialogs::proof_setup::tests::cancel_puts_back_a_view_whose_profile_was_removed") {
+            return;
+        }
         let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let name = "Proof Setup Removed RGB";
@@ -740,6 +763,9 @@ mod tests {
     /// stays open with the proof view as it was.
     #[test]
     fn ok_with_an_unknown_device_keeps_the_dialog_open() {
+        if !crate::testing::in_own_process("dialogs::proof_setup::tests::ok_with_an_unknown_device_keeps_the_dialog_open") {
+            return;
+        }
         let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let name = "Proof Setup Gone RGB";
@@ -815,6 +841,52 @@ mod tests {
         let v = proof::view();
         assert!(v.proof_colors && v.setup.preserve_numbers);
         assert_eq!((v.setup.target, v.setup.intent), (ProofTarget::Rgb(cms::DISPLAY_P3.into()), Intent::Saturation));
+    }
+
+    #[test]
+    fn a_browser_pick_loads_a_proof_setup_into_the_draft() {
+        let _view = DefaultProofView::new();
+        let (mut app, ctx) = app();
+        let files = scripted(&mut app, ScriptedFiles::held().in_browser());
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        set(&mut app, &ctx, "preview", json!(false));
+        let before = proof::view();
+        let mut source = before.setup.clone();
+        source.intent = Intent::Saturation;
+        press(&mut app, &ctx, LOAD_BUTTON);
+        files.answer(Picked::Contents(vec![("browser.vcproof".into(), proof_file::encode(&source))]));
+        crate::file_asks::poll(&mut app);
+        assert_eq!(values(&app)["intent"], "saturation");
+        assert_eq!(proof::view(), before);
+
+        press(&mut app, &ctx, LOAD_BUTTON);
+        files.answer(Picked::Contents(vec![("oversized.vcproof".into(), vec![b' '; proof_file::MAX_FILE + 1])]));
+        crate::file_asks::poll(&mut app);
+        assert!(app.ui.status.contains("larger than"));
+        assert_eq!(values(&app)["intent"], "saturation");
+        assert_eq!(proof::view(), before);
+    }
+
+    #[test]
+    fn saving_a_browser_proof_setup_gives_the_file_service_the_draft_bytes() {
+        let _view = DefaultProofView::new();
+        let (mut app, ctx) = app();
+        let files = scripted(&mut app, ScriptedFiles::held().in_browser());
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        for (k, v) in [("intent", json!("saturation")), ("preview", json!(false))] {
+            set(&mut app, &ctx, k, v);
+        }
+        let before = proof::view();
+        let dir = vectorcraft_testkit::TempDir::new("proof-setup-browser-save");
+        let path = dir.join("draft.vcproof");
+        press(&mut app, &ctx, SAVE);
+        files.answer(Picked::Saved { path: path.clone(), file_type: None });
+        crate::file_asks::poll(&mut app);
+        let bytes = files.file(&path).expect("the browser file service receives the draft bytes");
+        assert_eq!(proof_file::parse(&bytes).unwrap().intent, Intent::Saturation);
+        assert_eq!(proof::view(), before);
+        assert_eq!(values(&app)["intent"], "saturation");
+        assert!(!path.exists(), "the browser save does not write through the native path");
     }
 
     #[test]
