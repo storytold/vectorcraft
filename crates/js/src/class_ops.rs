@@ -129,8 +129,9 @@ impl Interp {
         let mut v = v.clone();
         for _ in 0..MAX_BOUND_CHAIN {
             match self.func_of(&v) {
-                Some(Func::Closure { code, .. }) => return !(code.arrow || code.method),
+                Some(Func::Closure { code, .. }) => return !(code.arrow || code.method || code.generator),
                 Some(Func::Native { constructor, .. }) => return constructor,
+                Some(Func::Data { read: crate::host::ArgRead::Hosted, .. }) => return v.as_object().is_some_and(|o| self.is_host_constructor(o)),
                 Some(Func::Bound { target, .. }) => v = Value::Object(target),
                 _ => return false,
             }
@@ -200,6 +201,7 @@ impl Interp {
         let nt = new_target.unwrap_or(callee);
         match self.func_of(&f) {
             Some(Func::Closure { code, .. }) if code.arrow => Err(self.type_error("an arrow function is not a constructor")),
+            Some(Func::Closure { code, .. }) if code.generator => Err(self.type_error("a generator function is not a constructor")),
             Some(Func::Closure { code, .. }) if code.method => Err(self.type_error("a method is not a constructor")),
             Some(Func::Closure { code, env }) if code.derived => {
                 self.stack.truncate(start);
@@ -243,6 +245,26 @@ impl Interp {
                     }
                     v
                 };
+                self.stack.truncate(start);
+                self.push(v)
+            }
+            // A host class's constructor ([`crate::host_classes`]) gives the object it makes. A plain
+            // object it gives inherits from the class's prototype. The class's other functions are
+            // not constructors. A constructor called with `new` cannot wait for its result.
+            Some(Func::Data { f: host, name, read: read @ crate::host::ArgRead::Hosted }) if self.is_host_constructor(callee) => {
+                if nt != callee {
+                    return Err(self.type_error("this built-in cannot be subclassed"));
+                }
+                let was = std::mem::replace(&mut self.constructing, true);
+                let v = self.call_data(&host, &name, &Value::Undefined, &args, &read);
+                self.constructing = was;
+                let v = v?;
+                if let Value::Object(o) = &v
+                    && matches!(self.object(*o)?.class, Class::Ordinary)
+                    && let Some(Prop::Data { value: Value::Object(proto), .. }) = self.find_property(callee, &key("prototype"))?
+                {
+                    self.object_mut(*o)?.proto = Some(proto);
+                }
                 self.stack.truncate(start);
                 self.push(v)
             }

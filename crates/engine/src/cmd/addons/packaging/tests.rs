@@ -537,4 +537,20 @@ fn compound_paths_carry_a_role() {
     let r = set_role(&mut s, json!({"role": "crease", "ids": [a.0, b.0]}));
     assert_eq!((r["ids"].clone(), r["changed"].as_u64()), (json!([c.0]), Some(1)));
     assert_eq!(counts(&mut s, json!({"ids": [c.0]})), [0, 1, 0, 0]);
+    // A locked member named by id is skipped, and its compound keeps its role.
+    s.edit("Test", |d, _| {
+        if let Some(n) = d.node_mut(a) {
+            n.locked = true;
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert!(err(&mut s, "addon.packaging.setRole", json!({"role": "cut", "ids": [a.0]})).contains("neither locked nor hidden"));
+    // The same with the locked path selected.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert!(err(&mut s, "addon.packaging.setRole", json!({"role": "cut"})).contains("neither locked nor hidden"));
+    assert_eq!(counts(&mut s, json!({"ids": [c.0]})), [0, 1, 0, 0]);
+    // Named twice, it is skipped once.
+    let r = set_role(&mut s, json!({"role": "cut", "ids": [a.0, a.0, b.0]}));
+    assert_eq!((r["ids"].clone(), r["skipped"].as_u64()), (json!([c.0]), Some(1)), "{r}");
 }

@@ -146,6 +146,23 @@ fn item_rows_follow_remove_and_move() {
 }
 
 #[test]
+fn moving_a_single_row_keeps_the_active_objects_landing() {
+    let mut s = session();
+    let short = rect(&mut s, 50.0);
+    let long = rect(&mut s, 200.0);
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "select.set", json!({"ids": [short.0, long.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+
+    let moved = run(&mut s, "appearance.moveItem", json!({"ids": [short.0, long.0], "from": 0, "to": 2}));
+
+    assert_eq!(moved["index"], 2, "the command still reports the last target's landing");
+    assert!(matches!(node(&s, short).appearance.items[1], AppearanceItem::Fill(_)));
+    assert!(matches!(node(&s, long).appearance.items[0], AppearanceItem::Stroke(_)));
+    assert_eq!(s.appearance_item(), Some(1), "the active row follows its own object's landing");
+}
+
+#[test]
 fn transparency_goes_to_the_targeted_item() {
     let mut s = session();
     let id = rect(&mut s, 100.0);
@@ -251,6 +268,39 @@ fn brushed_strokes_profiled_reads_the_strokes_stroke_set_edits() {
     assert!(node(&s, c).appearance.stroke().is_none());
     run(&mut s, "select.set", json!({"ids": [a.0, c.0]}));
     assert_eq!(s.brushed_strokes_profiled(), None, "an object without a stroke row takes a plain stroke");
+}
+
+/// `edited_strokes_profiled` reads the same strokes, with or without a brush: one profiled member
+/// counts, and a group's own uniform stroke, which `stroke.set` edits instead, hides its members'
+/// profiles. With an object without a stroke row among the targets the answer is false, since a
+/// profile from `stroke.set` would give that object a plain stroke. Type without an Appearance row
+/// is left out.
+#[test]
+fn edited_strokes_profiled_reads_the_strokes_stroke_set_edits() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 100.0), rect(&mut s, 250.0));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    assert!(!s.edited_strokes_profiled(), "neither has a profile");
+    run(&mut s, "stroke.set", json!({"ids": [b.0], "profile": "lens"}));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    assert!(s.edited_strokes_profiled(), "the second one has a profile");
+    let g = NodeId(run(&mut s, "object.group", json!({"ids": [a.0, b.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert!(s.edited_strokes_profiled(), "a group without its own stroke: its members'");
+    run(&mut s, "appearance.addStroke", json!({"ids": [g.0]}));
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert!(!s.edited_strokes_profiled(), "the group's own uniform stroke");
+    let c = rect(&mut s, 400.0);
+    run(&mut s, "appearance.removeItem", json!({"ids": [c.0], "index": 1}));
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    assert!(s.edited_strokes_profiled(), "the profiled member alone");
+    run(&mut s, "select.set", json!({"ids": [b.0, c.0]}));
+    assert!(!s.edited_strokes_profiled(), "an object without a stroke row");
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Hi"}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [t.0, b.0]}));
+    assert!(s.edited_strokes_profiled(), "type is left out");
+    run(&mut s, "select.set", json!({"ids": []}));
+    assert!(!s.edited_strokes_profiled(), "nothing selected");
 }
 
 /// A compound shape's own stroke is the one `stroke.set` edits: brushed members do not count.

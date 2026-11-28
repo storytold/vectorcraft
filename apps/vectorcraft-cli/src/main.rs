@@ -238,11 +238,13 @@ fn main() -> ExitCode {
 /// A headless session that remembers what the user keeps between runs: the PDF presets saved, the
 /// ICC profiles loaded, the plug-ins installed (#2168, #2174, #2541), the custom dictionary's words (#4936) and the Color Settings (#6335), in the folders
 /// and files next to the preferences that the desktop app uses too, and lists the scripts of the Scripts folder there
-/// (`script.listInstalled`), keeps each script's `Folder.userData` in the Script Data folder there, keeps File Info's
+/// (`script.listInstalled`) and finds its Startup Scripts folder (`script.startup.run`, never run on its own), keeps each
+/// script's `Folder.userData` in the Script Data folder there, keeps File Info's
 /// metadata templates there and starts new documents from the New Document profiles there. `VECTORCRAFT_NO_PREFS` and
 /// `VECTORCRAFT_CONFIG_DIR` apply as they do there.
 fn with_stores(mut h: Headless) -> Headless {
     prefs_dir::attach_scripts_dir(&mut h.session);
+    prefs_dir::attach_startup_scripts_dir(&mut h.session);
     prefs_dir::attach_script_data(&mut h.session);
     prefs_dir::attach_metadata_templates_dir(&mut h.session);
     prefs_dir::attach_new_doc_profiles(&mut h.session);
@@ -321,11 +323,13 @@ fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
         Box::new(accepting_grants(with_stores(Headless::with_document()), allow_grants))
     } else if let Some(addr) = connect {
         // Explicit address: fail loudly if the app isn't there.
-        Box::new(Remote::connect(&addr).map_err(|e| format!("cannot connect to {addr}: {e}"))?)
+        let token = vectorcraft_mcp::control_token()?;
+        Box::new(Remote::connect(&addr, &token).map_err(|e| format!("cannot connect to {addr}: {e}"))?)
     } else {
-        match Remote::connect(DEFAULT_ADDR) {
-            Ok(r) => Box::new(r),
-            Err(_) => Box::new(with_stores(Headless::with_document())),
+        // No token or no app listening: the headless session answers instead.
+        match vectorcraft_mcp::control_token().ok().and_then(|token| Remote::connect(DEFAULT_ADDR, &token).ok()) {
+            Some(r) => Box::new(r),
+            None => Box::new(with_stores(Headless::with_document())),
         }
     };
     eprintln!("vectorcraft-cli: MCP server on stdio ({})", backend.describe());

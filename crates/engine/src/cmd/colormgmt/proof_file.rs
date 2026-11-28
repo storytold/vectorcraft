@@ -26,6 +26,7 @@ pub const MAX_FILE: usize = 64 << 10;
 /// The most setups `view.proofSetup.list` lists.
 pub const MAX_LISTED: usize = 100;
 /// The most folder entries `view.proofSetup.list` looks at, setup files or not.
+#[cfg(not(target_arch = "wasm32"))]
 const MAX_SCANNED: usize = 100_000;
 /// The longest `name`, in characters.
 const MAX_NAME: usize = 100;
@@ -156,14 +157,7 @@ pub fn encode(setup: &ProofSetup) -> Vec<u8> {
 pub(super) fn save(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "view.proofSetup.save";
     let (path, named) = file_path(s, p, C)?;
-    let mut setup = proof::view().setup;
-    setup_params(p, &mut setup, C)?;
-    check_device(&setup.target).map_err(|e| bad(C, e))?;
-    // A file `view.proofSetup.load` would refuse is not written (a device with a very long name).
-    let bytes = encode(&setup);
-    if bytes.len() > MAX_FILE {
-        return Err(bad(C, format!("{path}: larger than {MAX_FILE} bytes")));
-    }
+    let (setup, bytes) = encode_options(p, &path)?;
     if named
         && let Some(dir) = std::path::Path::new(&path).parent()
         && !dir.is_dir()
@@ -178,17 +172,45 @@ pub(super) fn save(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(Value::Object(r))
 }
 
+/// Serialize the Customize dialog's draft without committing it or writing a path.
+pub fn draft_bytes(p: &Value) -> Result<Vec<u8>> {
+    encode_options(p, "Proof Setup").map(|(_, bytes)| bytes)
+}
+
+fn encode_options(p: &Value, file: &str) -> Result<(ProofSetup, Vec<u8>)> {
+    const C: &str = "view.proofSetup.save";
+    let mut setup = proof::view().setup;
+    setup_params(p, &mut setup, C)?;
+    check_device(&setup.target).map_err(|e| bad(C, e))?;
+    let bytes = encode(&setup);
+    if bytes.len() > MAX_FILE {
+        return Err(bad(C, format!("{file}: larger than {MAX_FILE} bytes")));
+    }
+    Ok((setup, bytes))
+}
+
 /// The file `p` names for `cmd` and the usable proof setup in it.
 fn read_setup(s: &Session, p: &Value, cmd: &str) -> Result<(String, ProofSetup)> {
     let (path, _) = file_path(s, p, cmd)?;
     // One byte past the limit shows a file over it, which is not read further.
     let bytes = fileio::read_file_head(&path, MAX_FILE + 1)?;
-    if bytes.len() > MAX_FILE {
-        return Err(bad(cmd, format!("{path}: larger than {MAX_FILE} bytes")));
-    }
-    let setup = parse(&bytes).map_err(|e| bad(cmd, format!("{path}: {e}")))?;
-    check_device(&setup.target).map_err(|e| bad(cmd, format!("{path}: {e}")))?;
+    let setup = checked_setup(&bytes, &path, cmd)?;
     Ok((path, setup))
+}
+
+/// Read a picked proof setup's validated settings without applying them to the view.
+pub fn draft_fields(bytes: &[u8], name: &str) -> Result<Value> {
+    let setup = checked_setup(bytes, name, "view.proofSetup.read")?;
+    Ok(Value::Object(setup_json(&setup)))
+}
+
+fn checked_setup(bytes: &[u8], name: &str, cmd: &str) -> Result<ProofSetup> {
+    if bytes.len() > MAX_FILE {
+        return Err(bad(cmd, format!("{name}: larger than {MAX_FILE} bytes")));
+    }
+    let setup = parse(bytes).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
+    check_device(&setup.target).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
+    Ok(setup)
 }
 
 pub(super) fn read(s: &mut Session, p: &Value) -> Result<Value> {

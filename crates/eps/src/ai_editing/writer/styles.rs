@@ -20,7 +20,7 @@ use super::{Writer, Xy, blend_code, compound_path, hide};
 use crate::ai_ops;
 use crate::ps;
 
-pub(in crate::ai_editing) const LARGE_CANVAS_STYLES: &str = "on a large canvas, no art styles or graphic styles are written: objects with live effects are written with their geometry effects applied to the artwork, where they can no longer be edited, and their other effects are left out of the editing data for other apps";
+pub(in crate::ai_editing) const LARGE_CANVAS_STYLES: &str = "on a large canvas, no graphic styles and no art styles of objects are written: objects with live effects are written with their geometry effects applied to the artwork, where they can no longer be edited, and their other effects are left out of the editing data for other apps";
 pub(in crate::ai_editing) const PANEL_STYLES: &str = "graphic styles with gradient or pattern fills, with fills, strokes or effects the editing data can't hold as a graphic style, with a name another style has, with names over 1,024 bytes, or past 4,096 styles, are left out of the editing data for other apps";
 pub(in crate::ai_editing) const PANEL_EMPTY: &str =
     "a Graphic Styles panel with no style written opens from the editing data with a new document's styles";
@@ -173,6 +173,9 @@ pub(in crate::ai_editing) struct Styles {
     next_anon: u64,
     /// How many objects were written with the graphic style they are linked to.
     pub(super) links_written: usize,
+    /// The styles that only link type's colors to their swatches ([`Writer::type_color_style`]):
+    /// written only when the text document names them.
+    type_colors: HashSet<String>,
     /// The style texts checked so far, as the reader parses them.
     pub(super) parsed: Parsed,
 }
@@ -333,6 +336,33 @@ impl Writer<'_> {
         let saved = std::mem::take(&mut self.body);
         self.color(paint, stroke);
         std::mem::replace(&mut self.body, saved)
+    }
+
+    /// Look at the swatch links of the colors of type `texts` ([`super::texts::TextDoc::set_link`]):
+    /// each is held by an art style of one paint, its color with its swatch at its tint, which key 5
+    /// of a run's paint names ([`Self::type_color_style`]), or by none.
+    pub(super) fn link_type_colors(&mut self, texts: &[&vectorcraft_doc::TextObject]) {
+        for p in self.texts.unlooked_links(texts) {
+            let style = self.type_color_style(p);
+            self.texts.set_link(p, style);
+        }
+    }
+
+    /// The name of the art style that holds the swatch link of type colored `p`: a style of one
+    /// paint, its fill alone on (`0 1 Xd`), whose paint is `p` as a path's fill writes it (a spot or
+    /// global process color by its name and tint, Registration). The reader gives type whose paint
+    /// names that style the style's color at its tint, linked to its swatch
+    /// ([`crate::import::parsed_type_color`]); `None`, and no style, when it wouldn't give the same
+    /// swatch and tint (a swatch that is neither spot nor global, for one).
+    fn type_color_style(&mut self, p: &Paint) -> Option<String> {
+        let Paint::Solid { swatch: Some(name), tint, .. } = p else { return None };
+        let ops = self.color_ops(p, false);
+        let text = format!("/SimpleStyle :\n0 O\n{ops}0 1 0 0 0 Xy\n{NO_LINE}0 XR\n0 1 Xd\n/Paint ;\n /Def ;\n");
+        let back = self.styles.parsed.get(&text).and_then(crate::import::parsed_type_color);
+        let same = matches!(back, Some(Paint::Solid { swatch: Some(n), tint: t, .. }) if n == name && (t - tint).abs() <= 1e-4);
+        let name = same.then(|| self.styles.object_style(text))?;
+        self.styles.type_colors.insert(name.clone());
+        Some(name)
     }
 
     /// A fill style holding a color, as an effect's entry `key` or a fill's own.
@@ -929,12 +959,17 @@ impl Writer<'_> {
 
     /// The art styles written, in a non-printing block: `%AI9_BeginArtStyles`, each style,
     /// `%AI9_EndArtStyles`.
+    /// A style that only links type's colors is written when the text document names it: type
+    /// whose story isn't written (written as its outlines instead) leaves none behind.
     pub(in crate::ai_editing) fn art_styles(&self, s: &mut String) {
-        if self.styles.known.is_empty() {
+        let named = self.texts.named_styles();
+        let written: Vec<&(String, String)> =
+            self.styles.known.iter().filter(|(name, _)| !self.styles.type_colors.contains(name) || named.contains(name.as_str())).collect();
+        if written.is_empty() {
             return;
         }
         s.push_str("%AI5_Begin_NonPrinting\nNp\n%AI9_BeginArtStyles\n");
-        for (name, text) in &self.styles.known {
+        for (name, text) in written {
             s.push_str(&known_style(name, text));
         }
         s.push_str("%AI9_EndArtStyles\n%AI5_End_NonPrinting--\n");

@@ -7,14 +7,16 @@
 //! stack, and prefix operators, assignment chains, `else if` chains and labels with loops, so long
 //! runs of them do not nest at all.
 
+mod pattern;
 mod xml;
 
 use std::collections::{HashMap, HashSet};
 
 use crate::LineTable;
 use crate::ast::{
-    AssignOp, Ast, BinaryOp, CatchClause, ClassDef, ClassElement, ClassKey, Expr, ExprId, ForInTarget, ForInit, Function, FunctionKind, LexKind,
-    LogicalOp, MethodKind, Name, Program, Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl,
+    AssignOp, Ast, BinaryOp, Binding, CatchClause, ClassDef, ClassElement, ClassKey, Expr, ExprId, ForInTarget, ForInit, Function, FunctionKind,
+    LexKind, LogicalOp, MethodKind, Name, Program, Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp,
+    VarDecl,
 };
 use crate::error::{SyntaxError, TOO_DEEP};
 use crate::lexer::{Goal, Lexer};
@@ -36,6 +38,9 @@ struct Context {
     breakables: u32,
     /// The current function body's directive prologue has a `"use strict"` directive.
     use_strict: bool,
+    /// The code is a generator function's body or parameters: `yield` starts a yield expression
+    /// there and is not an identifier (ECMA-262 2015 sections 12.1.1 and 14.4).
+    generator: bool,
 }
 
 /// The names declared in a scope, for the early errors of ECMA-262 2015 about redeclarations
@@ -68,9 +73,9 @@ struct SuperRules {
     new_target: bool,
 }
 
-/// The parameters of a function as they are read: plain names, each name's default value, and a
-/// rest parameter.
-type Params = (Vec<Name>, Vec<Option<ExprId>>, Option<Name>);
+/// The parameters of a function as they are read: names or patterns, each one's default value,
+/// and a rest parameter.
+type Params = (Vec<Binding>, Vec<Option<ExprId>>, Option<Binding>);
 
 /// A binary operator, with the logical ones apart.
 #[derive(Clone, Copy, Debug)]
@@ -115,6 +120,22 @@ pub(crate) struct Parser<'s> {
     scopes: Vec<Scope>,
     /// What `super` and `new.target` may do in the function being read.
     supers: SuperRules,
+    /// Where each shorthand property with an initializer (`{a = 1}`) not yet read as part of a
+    /// destructuring pattern starts; one left when its expression ends is a `SyntaxError`.
+    cover_inits: Vec<u32>,
+    /// The next assignment expression may leave such properties to a pattern around it: it is an
+    /// element of an array or object literal, an arrow function's parenthesized head or a
+    /// `for` loop's head.
+    cover_ok: bool,
+    /// The spread elements of array literals followed by a comma, which cannot end a pattern.
+    rest_commas: HashSet<u32>,
+    /// Where each `__proto__: value` after the first in an object literal starts (ECMA-262 2015
+    /// section B.3.1). Each is also in `cover_inits`, so it is a `SyntaxError` unless the literal
+    /// is read as a destructuring pattern.
+    proto_twice: HashSet<u32>,
+    /// Where each yield expression read so far starts, in the order read, so the parameters of a
+    /// generator function and an arrow function's head can be checked for one.
+    yields: Vec<u32>,
 }
 
 impl<'s> Parser<'s> {
@@ -140,6 +161,11 @@ impl<'s> Parser<'s> {
             es2015: options.es2015,
             scopes: if options.es2015 { vec![Scope { function: true, ..Scope::default() }] } else { Vec::new() },
             supers: SuperRules::default(),
+            cover_inits: Vec::new(),
+            cover_ok: false,
+            rest_commas: HashSet::new(),
+            proto_twice: HashSet::new(),
+            yields: Vec::new(),
         };
         parser.tok = parser.next_significant()?;
         Ok(parser)
@@ -281,7 +307,16 @@ impl<'s> Parser<'s> {
         if self.ctx.strict && strict_reserved(name) {
             return Err(self.error_at_token(token, format!("'{name}' is a reserved word in strict mode")));
         }
+        if self.ctx.generator && name == "yield" {
+            return Err(self.error_at_token(token, "'yield' cannot be an identifier in a generator function"));
+        }
         Ok(())
+    }
+
+    /// A yield expression starts at `offset` or later, before `end`.
+    fn yield_between(&self, offset: u32, end: u32) -> bool {
+        let i = self.yields.partition_point(|&y| y < offset);
+        self.yields.get(i).is_some_and(|&y| y < end)
     }
 
     /// Reads an identifier that a declaration binds: checked as [`Self::check_identifier`] does,
@@ -356,7 +391,7 @@ impl<'s> Parser<'s> {
     /// Declares a function declaration that stands in a statement list: var-scoped in a function
     /// body or the script, lexical in a block.
     fn declare_function(&mut self, id: crate::ast::FunctionId) -> Result<()> {
-        let Some(name) = self.ast.function(id).and_then(|f| f.name.clone()) else { return Ok(()) };
+        let Some((name, generator)) = self.ast.function(id).and_then(|f| Some((f.name.clone()?, f.generator))) else { return Ok(()) };
         match self.scopes.last_mut() {
             Some(scope) if scope.function => {
                 if scope.lexical.contains_key(&name.name) {
@@ -365,7 +400,8 @@ impl<'s> Parser<'s> {
                 scope.vars.insert(name.name);
                 Ok(())
             }
-            Some(_) => self.declare_lexical(&name, true),
+            // Only plain function declarations may repeat in a block (Annex B.3.3.4).
+            Some(_) => self.declare_lexical(&name, !generator),
             None => Ok(()),
         }
     }
@@ -390,25 +426,32 @@ impl<'s> Parser<'s> {
     }
 
     /// `let` or `const` declarations after the keyword: each name declared in the innermost scope.
-    /// `no_in` leaves `in` to a `for (… in …)` around them, where a `const` may go without an
-    /// initializer.
+    /// `no_in` leaves `in` to a `for (… in …)` around them, where a `const` or a pattern may go
+    /// without an initializer, as in `for (… of …)`.
     fn parse_lexical_decls(&mut self, kind: LexKind, no_in: bool) -> Result<Vec<VarDecl>> {
         let mut decls = Vec::new();
         loop {
-            if self.at(Punct::LBracket) || self.at(Punct::LBrace) {
-                return Err(self.error_at_token(&self.tok, "destructuring declarations are not supported"));
+            let target = self.parse_declaration_target()?;
+            for name in self.ast.bound_names(&target) {
+                if name.name == "let" {
+                    return Err(self.error_at_offset(name.span.start, "'let' cannot be the name of a let or const declaration"));
+                }
+                self.declare_lexical(&name, false)?;
             }
-            let name = self.binding_identifier()?;
-            if name.name == "let" {
-                return Err(self.error_at_offset(name.span.start, "'let' cannot be the name of a let or const declaration"));
-            }
-            self.declare_lexical(&name, false)?;
             let init = if self.eat(Punct::Eq)? { Some(self.parse_assignment(no_in)?) } else { None };
-            let in_head = no_in && self.at_keyword(Keyword::In) && decls.is_empty();
-            if kind == LexKind::Const && init.is_none() && !in_head {
-                return Err(self.error_at_offset(name.span.start, format!("const '{}' needs an initializer", name.name)));
+            let in_head = no_in && (self.at_keyword(Keyword::In) || self.at_of()) && decls.is_empty();
+            if init.is_none() && !in_head {
+                match &target {
+                    Binding::Pattern(p) => {
+                        return Err(self.error_at_offset(self.ast.expr_span(*p).start, "a destructuring declaration needs an initializer"));
+                    }
+                    Binding::Name(name) if kind == LexKind::Const => {
+                        return Err(self.error_at_offset(name.span.start, format!("const '{}' needs an initializer", name.name)));
+                    }
+                    Binding::Name(_) => {}
+                }
             }
-            decls.push(VarDecl { name, init });
+            decls.push(VarDecl { target, init });
             if !self.eat(Punct::Comma)? {
                 return Ok(decls);
             }
@@ -533,6 +576,9 @@ impl<'s> Parser<'s> {
                     };
                     return Err(self.error_at_token(&self.tok, message));
                 }
+                if self.es2015 && self.peek().is_some_and(|t| t.is_punct(Punct::Star)) {
+                    return Err(self.error_at_token(&self.tok, "a generator declaration cannot stand here; put it in a block"));
+                }
                 self.parse_function_declaration()
             }
             TokenKind::Ident(_) if self.peek().is_some_and(|t| t.is_punct(Punct::Colon)) => self.parse_labeled(in_list),
@@ -551,6 +597,11 @@ impl<'s> Parser<'s> {
                 Ok(self.ast.push_stmt(Stmt::Empty, start))
             }
             TokenKind::Keyword(k) => self.keyword_statement(*k, start),
+            // An expression statement cannot start with `let [` (ECMA-262 2015 section 13.5); in
+            // a statement list that starts a declaration, and elsewhere it is an error.
+            _ if self.es2015 && self.tok.ident() == Some("let") && !self.tok.escaped && self.peek().is_some_and(|t| t.is_punct(Punct::LBracket)) => {
+                Err(self.error_at_token(&self.tok, "a lexical declaration cannot stand here; put it in a block"))
+            }
             _ => {
                 let expr = self.parse_expression(false)?;
                 self.semicolon()?;
@@ -600,10 +651,20 @@ impl<'s> Parser<'s> {
     }
 
     /// `{ … }`, a scope of its own; `param` is a catch clause's parameter, which a lexical
-    /// declaration in the block must not take.
-    fn parse_block_with(&mut self, param: Option<&str>) -> Result<Vec<StmtId>> {
+    /// declaration in the block must not take. A pattern's names are not taken by a `var` in the
+    /// block either (ECMA-262 2015 section 13.15.1 and Annex B.3.5).
+    fn parse_block_with(&mut self, param: Option<&Binding>) -> Result<Vec<StmtId>> {
         self.expect(Punct::LBrace)?;
-        self.push_scope(false, param.map(str::to_string));
+        match param {
+            Some(Binding::Name(name)) => self.push_scope(false, std::iter::once(name.name.clone())),
+            Some(Binding::Pattern(p)) => {
+                self.push_scope(false, std::iter::empty());
+                for name in self.ast.pattern_names(*p) {
+                    self.declare_lexical(&name, false)?;
+                }
+            }
+            None => self.push_scope(false, std::iter::empty()),
+        }
         let body = self.block_items();
         self.pop_scope();
         let body = body?;
@@ -626,10 +687,18 @@ impl<'s> Parser<'s> {
     fn parse_var_decls(&mut self, no_in: bool) -> Result<Vec<VarDecl>> {
         let mut decls = Vec::new();
         loop {
-            let name = self.binding_identifier()?;
-            self.declare_var(&name)?;
+            let target = self.parse_declaration_target()?;
+            for name in self.ast.bound_names(&target) {
+                self.declare_var(&name)?;
+            }
             let init = if self.eat(Punct::Eq)? { Some(self.parse_assignment(no_in)?) } else { None };
-            decls.push(VarDecl { name, init });
+            if let (Binding::Pattern(p), None) = (&target, init) {
+                let in_head = no_in && (self.at_keyword(Keyword::In) || self.at_of()) && decls.is_empty();
+                if !in_head {
+                    return Err(self.error_at_offset(self.ast.expr_span(*p).start, "a destructuring declaration needs an initializer"));
+                }
+            }
+            decls.push(VarDecl { target, init });
             if !self.eat(Punct::Comma)? {
                 return Ok(decls);
             }
@@ -718,22 +787,46 @@ impl<'s> Parser<'s> {
         } else if self.at_keyword(Keyword::Var) {
             self.bump()?;
             let mut decls = self.parse_var_decls(true)?;
+            if decls.len() == 1 && self.at_of() {
+                let decl = decls.pop().ok_or_else(|| self.unexpected())?;
+                return self.parse_for_of_var(decl, start);
+            }
             if decls.len() == 1 && self.at_keyword(Keyword::In) {
                 let decl = decls.pop().ok_or_else(|| self.unexpected())?;
                 // The variable of a for-in loop takes an initializer only outside strict mode
-                // code (ECMA-262 2017 Annex B.3.6).
-                if self.ctx.strict && decl.init.is_some() {
-                    return Err(self.error_at_token(&self.tok, "a for-in variable cannot have an initializer in strict mode code"));
+                // code, and only when it is a name (ECMA-262 2017 Annex B.3.6).
+                if decl.init.is_some() && (self.ctx.strict || matches!(decl.target, Binding::Pattern(_))) {
+                    return Err(self.error_at_token(&self.tok, "a for-in variable cannot have an initializer here"));
                 }
                 return self.parse_for_in(ForInTarget::Var(decl), start, false);
             }
             Some(ForInit::Var(decls))
         } else {
+            let starts_with_let = self.tok.ident() == Some("let") && !self.tok.escaped;
+            let async_of =
+                self.tok.ident() == Some("async") && !self.tok.escaped && self.peek().is_some_and(|t| t.ident() == Some("of") && !t.escaped);
+            let mark = self.cover_inits.len();
+            self.cover_ok = self.es2015;
             let expr = self.parse_expression(true)?;
+            if self.at_of() {
+                if starts_with_let {
+                    return Err(self.error_at_offset(self.ast.expr_span(expr).start, "a for-of loop's left-hand side cannot start with 'let'"));
+                }
+                // `for (async of …` is a SyntaxError, as ECMAScript 2021 has it (ECMA-262 12th
+                // edition section 14.7.5, the lookahead restriction on `async of`).
+                if async_of {
+                    return Err(self.error_at_offset(self.ast.expr_span(expr).start, "a for-of loop's left-hand side cannot be 'async'"));
+                }
+                self.loop_target(expr, "invalid left-hand side in for-of loop", true)?;
+                self.check_cover(mark)?;
+                return self.parse_for_of(ForInTarget::Expr(expr), start);
+            }
             if self.at_keyword(Keyword::In) {
-                self.check_target(expr, "invalid left-hand side in for-in loop")?;
+                self.loop_target(expr, "invalid left-hand side in for-in loop", false)?;
+                self.check_cover(mark)?;
                 return self.parse_for_in(ForInTarget::Expr(expr), start, false);
             }
+            self.check_cover(mark)?;
             Some(ForInit::Expr(expr))
         };
         self.parse_for_rest(init, start)
@@ -753,12 +846,15 @@ impl<'s> Parser<'s> {
     /// `for (let …` or `for (const …`, after the keyword, in the loop's own scope.
     fn parse_for_lexical(&mut self, kind: LexKind, start: Span) -> Result<StmtId> {
         let mut decls = self.parse_lexical_decls(kind, true)?;
-        if decls.len() == 1 && self.at_keyword(Keyword::In) {
+        if decls.len() == 1 && (self.at_keyword(Keyword::In) || self.at_of()) {
             let Some(decl) = decls.pop() else { return Err(self.unexpected()) };
             if decl.init.is_some() {
-                return Err(self.error_at_token(&self.tok, "a for-in variable declared with let or const cannot have an initializer"));
+                return Err(self.error_at_token(&self.tok, "a loop variable declared with let or const cannot have an initializer here"));
             }
-            return self.parse_for_in(ForInTarget::Lexical(kind, decl.name), start, false);
+            if self.at_of() {
+                return self.parse_for_of(ForInTarget::Lexical(kind, decl.target), start);
+            }
+            return self.parse_for_in(ForInTarget::Lexical(kind, decl.target), start, false);
         }
         self.parse_for_rest(Some(ForInit::Lexical(kind, decls)), start)
     }
@@ -789,8 +885,11 @@ impl<'s> Parser<'s> {
             self.pop_scope();
             return result;
         }
+        let mark = self.cover_inits.len();
+        self.cover_ok = self.es2015;
         let expr = self.parse_expression(true)?;
-        self.check_target(expr, "invalid left-hand side in for each loop")?;
+        self.loop_target(expr, "invalid left-hand side in for each loop", false)?;
+        self.check_cover(mark)?;
         self.parse_for_in(ForInTarget::Expr(expr), start, true)
     }
 
@@ -802,9 +901,9 @@ impl<'s> Parser<'s> {
             return Err(self.error_at_token(&self.tok, "for each takes one variable"));
         };
         if decl.init.is_some() {
-            return Err(self.error_at_token(&self.tok, "a for-in variable declared with let or const cannot have an initializer"));
+            return Err(self.error_at_token(&self.tok, "a loop variable declared with let or const cannot have an initializer here"));
         }
-        self.parse_for_in(ForInTarget::Lexical(kind, decl.name), start, true)
+        self.parse_for_in(ForInTarget::Lexical(kind, decl.target), start, true)
     }
 
     /// `break` or `continue`, with an optional label on the same line, which must name a label
@@ -929,12 +1028,9 @@ impl<'s> Parser<'s> {
         let handler = if self.at_keyword(Keyword::Catch) {
             self.bump()?;
             self.expect(Punct::LParen)?;
-            if self.es2015 && (self.at(Punct::LBracket) || self.at(Punct::LBrace)) {
-                return Err(self.error_at_token(&self.tok, "destructuring catch parameters are not supported"));
-            }
-            let param = self.binding_identifier()?;
+            let param = self.parse_declaration_target()?;
             self.expect(Punct::RParen)?;
-            let body = self.parse_block_with(Some(&param.name))?;
+            let body = self.parse_block_with(Some(&param))?;
             Some(CatchClause { param, body })
         } else {
             None
@@ -993,8 +1089,9 @@ impl<'s> Parser<'s> {
 
     fn parse_function_declaration(&mut self) -> Result<StmtId> {
         let start = self.expect_keyword(Keyword::Function)?.span;
+        let generator = self.es2015 && self.eat(Punct::Star)?;
         let name = self.function_name()?;
-        let id = self.parse_function_rest(FunctionKind::Declaration, Some(name), start)?;
+        let id = self.parse_function_rest(FunctionKind::Declaration, Some(name), start, generator)?;
         Ok(self.ast.push_stmt(Stmt::FunctionDecl(id), self.span_from(start)))
     }
 
@@ -1010,48 +1107,88 @@ impl<'s> Parser<'s> {
         Ok((Name { name, span: token.span }, token))
     }
 
-    /// The parameters and body of a function, from `(`.
-    fn parse_function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span) -> Result<crate::ast::FunctionId> {
-        self.parse_function_with(kind, name, start, false)
+    /// The parameters and body of a function, from `(`; with `generator`, a generator function's.
+    fn parse_function_rest(
+        &mut self,
+        kind: FunctionKind,
+        name: Option<(Name, Token)>,
+        start: Span,
+        generator: bool,
+    ) -> Result<crate::ast::FunctionId> {
+        self.parse_function_with(kind, name, start, false, generator)
     }
 
-    /// The parameters and body of a function, from `(`; `home` for one defined in a class body,
-    /// where `super.property` may stand.
-    fn parse_function_with(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span, home: bool) -> Result<crate::ast::FunctionId> {
+    /// The parameters and body of a function, from `(`; `home` for one defined in a class body or
+    /// as a method of an object literal, where `super.property` may stand, and with `generator`, a
+    /// generator function's.
+    fn parse_function_with(
+        &mut self,
+        kind: FunctionKind,
+        name: Option<(Name, Token)>,
+        start: Span,
+        home: bool,
+        generator: bool,
+    ) -> Result<crate::ast::FunctionId> {
         self.enter()?;
         let rules = SuperRules { property: home, call: kind == FunctionKind::DerivedConstructor, new_target: true };
         let outer = std::mem::replace(&mut self.supers, rules);
-        let result = self.function_rest(kind, name, start, home);
+        // The parameters are read with the function's own `yield` rule, not the enclosing code's.
+        let outer_generator = std::mem::replace(&mut self.ctx.generator, generator);
+        let yields = self.yields.len();
+        let result = self.function_rest(kind, name, start, home, generator);
+        // The `yield` expressions of this function are not in the code around it.
+        self.yields.truncate(yields);
+        self.ctx.generator = outer_generator;
         self.supers = outer;
         self.leave();
         result
     }
 
-    fn function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span, home: bool) -> Result<crate::ast::FunctionId> {
+    fn function_rest(
+        &mut self,
+        kind: FunctionKind,
+        name: Option<(Name, Token)>,
+        start: Span,
+        home: bool,
+        generator: bool,
+    ) -> Result<crate::ast::FunctionId> {
+        let params_start = self.tok.span.start;
         self.expect(Punct::LParen)?;
-        let mut params: Vec<Name> = Vec::new();
+        let mut params: Vec<Binding> = Vec::new();
         let mut defaults: Vec<Option<ExprId>> = Vec::new();
         let mut rest = None;
         if !self.at(Punct::RParen) {
             loop {
                 if self.es2015 && self.at(Punct::Ellipsis) {
                     self.bump()?;
-                    rest = Some(self.function_name_or_param()?.0);
+                    rest = Some(self.parse_param_target()?);
                     if !self.at(Punct::RParen) {
                         return Err(self.error_at_token(&self.tok, "a rest parameter must be the last parameter"));
                     }
                     break;
                 }
-                let (param, _) = self.function_name_or_param()?;
+                let param = self.parse_param_target()?;
                 let default = if self.es2015 && self.eat(Punct::Eq)? { Some(self.parse_assignment(false)?) } else { None };
                 params.push(param);
                 defaults.push(default);
+                // A comma may follow the last parameter (ECMAScript 2017, section 14.1), except in
+                // a setter, which takes one parameter and no comma (section 14.3).
                 if !self.eat(Punct::Comma)? {
+                    break;
+                }
+                if self.at(Punct::RParen) {
+                    if kind == FunctionKind::Setter {
+                        return Err(self.error_at_token(&self.tok, "a setter must have exactly one parameter"));
+                    }
                     break;
                 }
             }
         }
         let close = self.expect(Punct::RParen)?;
+        if generator && self.yield_between(params_start, close.span.start) {
+            let at = self.yields.get(self.yields.partition_point(|&y| y < params_start)).copied().unwrap_or(params_start);
+            return Err(self.error_at_offset(at, "a yield expression cannot stand in a generator function's parameters"));
+        }
         match kind {
             FunctionKind::Getter if !params.is_empty() || rest.is_some() => {
                 return Err(self.error_at_token(&close, "a getter must not have parameters"));
@@ -1065,9 +1202,9 @@ impl<'s> Parser<'s> {
             defaults.clear();
         }
         self.expect(Punct::LBrace)?;
-        let names: Vec<String> = params.iter().chain(&rest).map(|p| p.name.clone()).collect();
+        let names: Vec<String> = params.iter().chain(&rest).flat_map(|p| self.ast.bound_names(p)).map(|n| n.name).collect();
         let outer_strict = self.ctx.strict;
-        let inner = Context { strict: outer_strict, in_function: true, ..Context::default() };
+        let inner = Context { strict: outer_strict, in_function: true, generator, ..Context::default() };
         let outer = std::mem::replace(&mut self.ctx, inner);
         self.push_scope(true, names);
         let body = self.parse_body(true);
@@ -1076,7 +1213,8 @@ impl<'s> Parser<'s> {
         self.ctx = outer;
         let body = body?;
         self.expect(Punct::RBrace)?;
-        let function = Function { kind, name: name.map(|(n, _)| n), params, defaults, rest, body, strict, span: self.span_from(start), home };
+        let function =
+            Function { kind, name: name.map(|(n, _)| n), params, defaults, rest, body, strict, generator, span: self.span_from(start), home };
         self.check_params(&function, use_strict)?;
         Ok(self.ast.push_function(function))
     }
@@ -1088,7 +1226,7 @@ impl<'s> Parser<'s> {
         }
         self.expect(Punct::Arrow)?;
         self.enter()?;
-        let names: Vec<String> = params.iter().chain(&rest).map(|p| p.name.clone()).collect();
+        let names: Vec<String> = params.iter().chain(&rest).flat_map(|p| self.ast.bound_names(p)).map(|n| n.name).collect();
         let outer_strict = self.ctx.strict;
         let inner = Context { strict: outer_strict, in_function: true, ..Context::default() };
         let outer = std::mem::replace(&mut self.ctx, inner);
@@ -1108,40 +1246,46 @@ impl<'s> Parser<'s> {
             self.expect(Punct::RBrace)?;
         }
         let defaults = if defaults.iter().all(Option::is_none) { Vec::new() } else { defaults };
-        let function =
-            Function { kind: FunctionKind::Arrow, name: None, params, defaults, rest, body, strict, span: self.span_from(start), home: false };
+        let function = Function {
+            kind: FunctionKind::Arrow,
+            name: None,
+            params,
+            defaults,
+            rest,
+            body,
+            strict,
+            generator: false,
+            span: self.span_from(start),
+            home: false,
+        };
         self.check_params(&function, use_strict)?;
         let id = self.ast.push_function(function);
         Ok(self.ast.push_expr(Expr::Arrow(id), self.span_from(start)))
     }
 
     /// The parameters an arrow function's parenthesized head `expr` gives (ECMA-262 2015 section
-    /// 14.2.1): names, names with `= default`, and a last `...name`, each written bare.
-    fn arrow_params(&self, expr: ExprId) -> Result<Params> {
-        let invalid = |at: ExprId| self.error_at_offset(self.ast.expr_span(at).start, "invalid arrow function parameters");
-        let Some(Expr::Paren(inner)) = self.ast.expr(expr) else { return Err(invalid(expr)) };
+    /// 14.2.1): names or patterns, each with an optional `= default`, and a last `...name` or
+    /// `...[pattern]`.
+    fn arrow_params(&mut self, expr: ExprId) -> Result<Params> {
+        let invalid = |p: &Self, at: ExprId| p.error_at_offset(p.ast.expr_span(at).start, "invalid arrow function parameters");
+        let Some(Expr::Paren(inner)) = self.ast.expr(expr) else { return Err(invalid(self, expr)) };
         let items = match self.ast.expr(*inner) {
             Some(Expr::Sequence(list)) => list.clone(),
             _ => vec![*inner],
         };
         let (mut params, mut defaults, mut rest) = (Vec::new(), Vec::new(), None);
-        let name_of = |id: ExprId| match self.ast.expr(id) {
-            Some(Expr::Ident(n)) => Some(Name { name: n.clone(), span: self.ast.expr_span(id) }),
-            _ => None,
-        };
         let count = items.len();
         for (i, item) in items.into_iter().enumerate() {
-            match self.ast.expr(item) {
-                Some(Expr::Ident(_)) => {
-                    params.push(name_of(item).ok_or_else(|| invalid(item))?);
+            match self.ast.expr(item).cloned() {
+                Some(Expr::Assign { op: None, target, value }) => {
+                    params.push(self.arrow_param(target).ok_or_else(|| invalid(self, item))??);
+                    defaults.push(Some(value));
+                }
+                Some(Expr::Spread(arg)) if i + 1 == count => rest = Some(self.arrow_param(arg).ok_or_else(|| invalid(self, item))??),
+                _ => {
+                    params.push(self.arrow_param(item).ok_or_else(|| invalid(self, item))??);
                     defaults.push(None);
                 }
-                Some(Expr::Assign { op: None, target, value }) => {
-                    params.push(name_of(*target).ok_or_else(|| invalid(item))?);
-                    defaults.push(Some(*value));
-                }
-                Some(Expr::Spread(arg)) if i + 1 == count => rest = Some(name_of(*arg).ok_or_else(|| invalid(item))?),
-                _ => return Err(invalid(item)),
             }
         }
         Ok((params, defaults, rest))
@@ -1161,15 +1305,16 @@ impl<'s> Parser<'s> {
     /// The rules for a function's name and parameters. Strict mode code (Annex C): neither `eval`,
     /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function,
     /// a method or a function with a default or rest parameter has no parameter name twice either
-    /// (ECMA-262 2015 sections 14.1.2, 14.2.1 and 14.3.1), and a function with a default or rest
-    /// parameter cannot start its body with `"use strict"` (`body_strict`; ECMA-262 2016 section
-    /// 14.1.2).
+    /// (ECMA-262 2015 sections 14.1.2, 14.2.1 and 14.3.1), and a function with default, rest or
+    /// destructured parameters cannot start its body with `"use strict"` (`body_strict`; ECMA-262
+    /// 2016 section 14.1.2).
     fn check_params(&self, function: &Function, body_strict: bool) -> Result<()> {
-        let params = || function.params.iter().chain(&function.rest);
+        let names: Vec<Name> = function.params.iter().chain(&function.rest).flat_map(|p| self.ast.bound_names(p)).collect();
+        let params = || names.iter();
         let simple = function.simple_params() && !matches!(function.kind, FunctionKind::Arrow | FunctionKind::Method);
         if body_strict && !function.simple_params() {
             let at = function.body.first().map_or(function.span.start, |&s| self.ast.stmt_span(s).start);
-            return Err(self.error_at_offset(at, "\"use strict\" is not allowed in a function with default or rest parameters"));
+            return Err(self.error_at_offset(at, "\"use strict\" is not allowed in a function with default, rest or destructured parameters"));
         }
         if function.strict {
             for n in function.name.iter().chain(params()) {
@@ -1215,20 +1360,31 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_assignment(&mut self, no_in: bool) -> Result<ExprId> {
+        let cover_ok = std::mem::take(&mut self.cover_ok);
+        let mark = self.cover_inits.len();
         self.enter()?;
         let result = self.assignment(no_in);
         self.leave();
-        result
+        let expr = result?;
+        if !cover_ok {
+            self.check_cover(mark)?;
+        }
+        Ok(expr)
     }
 
     /// `a = b += c`: the targets kept on a stack, so a long chain does not nest.
     fn assignment(&mut self, no_in: bool) -> Result<ExprId> {
         let mut targets: Vec<(ExprId, AssignOp)> = Vec::new();
         loop {
-            let mut expr = self.parse_conditional(no_in)?;
-            if self.es2015 && self.at(Punct::Arrow) {
-                expr = self.arrow_from(expr, no_in)?;
-            }
+            let expr = if self.ctx.generator && self.tok.ident() == Some("yield") && !self.tok.escaped {
+                self.parse_yield(no_in)?
+            } else {
+                let mut expr = self.parse_conditional(no_in)?;
+                if self.es2015 && self.at(Punct::Arrow) {
+                    expr = self.arrow_from(expr, no_in)?;
+                }
+                expr
+            };
             let Some(op) = assign_op(&self.tok) else {
                 let mut value = expr;
                 while let Some((target, op)) = targets.pop() {
@@ -1237,18 +1393,40 @@ impl<'s> Parser<'s> {
                 }
                 return Ok(value);
             };
-            self.check_target(expr, "invalid assignment target")?;
+            if op.is_none() && self.es2015 && matches!(self.ast.expr(expr), Some(Expr::Array(_) | Expr::Object(_))) {
+                self.check_assignment_pattern(expr)?;
+            } else {
+                self.check_target(expr, "invalid assignment target")?;
+            }
             self.bump()?;
             targets.push((expr, op));
         }
+    }
+
+    /// A yield expression, from `yield` (ECMA-262 2015 section 14.4): its operand is left out when
+    /// a line break follows `yield` or the next token cannot start an expression, and `yield*`
+    /// must have one.
+    fn parse_yield(&mut self, no_in: bool) -> Result<ExprId> {
+        let start = self.bump()?.span;
+        self.yields.push(start.start);
+        let delegate = !self.tok.newline_before && self.at(Punct::Star);
+        if delegate {
+            self.bump()?;
+        }
+        let arg =
+            if delegate || (!self.tok.newline_before && starts_expression(&self.tok, self.e4x)) { Some(self.parse_assignment(no_in)?) } else { None };
+        Ok(self.ast.push_expr(Expr::Yield { arg, delegate }, self.span_from(start)))
     }
 
     /// The arrow function whose head is `expr`, read before the current `=>`: a name standing
     /// alone, or parameters in parentheses.
     fn arrow_from(&mut self, expr: ExprId, no_in: bool) -> Result<ExprId> {
         let start = self.ast.expr_span(expr);
+        if self.yield_between(start.start, start.end) {
+            return Err(self.error_at_offset(start.start, "a yield expression cannot stand in an arrow function's parameters"));
+        }
         let params = match self.ast.expr(expr) {
-            Some(Expr::Ident(name)) => (vec![Name { name: name.clone(), span: start }], vec![None], None),
+            Some(Expr::Ident(name)) => (vec![Binding::Name(Name { name: name.clone(), span: start })], vec![None], None),
             Some(Expr::Paren(_)) => self.arrow_params(expr)?,
             _ => return Err(self.unexpected()),
         };
@@ -1294,29 +1472,50 @@ impl<'s> Parser<'s> {
         let mut ops: Vec<(BinKind, u8)> = Vec::new();
         while let Some((op, precedence)) = binary_op(&self.tok, no_in) {
             while ops.last().is_some_and(|&(_, top)| top >= precedence) {
-                self.reduce(&mut operands, &mut ops);
+                self.reduce(&mut operands, &mut ops)?;
             }
             self.bump()?;
             ops.push((op, precedence));
             operands.push(self.parse_unary()?);
         }
         while !ops.is_empty() {
-            self.reduce(&mut operands, &mut ops);
+            self.reduce(&mut operands, &mut ops)?;
         }
         operands.pop().ok_or_else(|| self.unexpected())
     }
 
     /// Joins the top two operands with the top operator.
-    fn reduce(&mut self, operands: &mut Vec<ExprId>, ops: &mut Vec<(BinKind, u8)>) {
+    fn reduce(&mut self, operands: &mut Vec<ExprId>, ops: &mut Vec<(BinKind, u8)>) -> Result<()> {
         let (Some((op, _)), Some(right), Some(left)) = (ops.pop(), operands.pop(), operands.pop()) else {
-            return;
+            return Ok(());
         };
         let span = self.ast.expr_span(left).to(self.ast.expr_span(right));
         let expr = match op {
             BinKind::Binary(op) => Expr::Binary { op, left, right },
-            BinKind::Logical(op) => Expr::Logical { op, left, right },
+            BinKind::Logical(op) => {
+                self.check_coalesce_mix(op, left, right)?;
+                Expr::Logical { op, left, right }
+            }
         };
         operands.push(self.ast.push_expr(expr, span));
+        Ok(())
+    }
+
+    /// `??` and `&&` or `||` written together without parentheses around one of them, which
+    /// ECMA-262 2020 section 12.13 does not allow (`a ?? b || c`, `a && b ?? c`).
+    fn check_coalesce_mix(&self, op: LogicalOp, left: ExprId, right: ExprId) -> Result<()> {
+        let coalesce = op == LogicalOp::Coalesce;
+        for operand in [left, right] {
+            if let Some(Expr::Logical { op: inner, .. }) = self.ast.expr(operand)
+                && (*inner == LogicalOp::Coalesce) != coalesce
+            {
+                return Err(self.error_at_offset(
+                    self.ast.expr_span(operand).start,
+                    "'??' cannot be used with '&&' or '||' without parentheses around one of them",
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Prefix operators, read with a loop and applied innermost first.
@@ -1408,6 +1607,12 @@ impl<'s> Parser<'s> {
                         None => self.ast.push_expr(Expr::Call { callee: expr, args }, span),
                     };
                 }
+                TokenKind::Punct(Punct::QuestionDot) => {
+                    if !news.is_empty() {
+                        return Err(self.error_at_token(&self.tok, "an optional chain cannot follow 'new' without parentheses around it"));
+                    }
+                    expr = self.parse_optional_chain(expr)?;
+                }
                 _ => break,
             }
         }
@@ -1478,6 +1683,63 @@ impl<'s> Parser<'s> {
         }
     }
 
+    /// An optional chain (ECMA-262 2020 section 12.3.9), from the `?.` after `base` to the last
+    /// access or call that follows it. A `?.` inside it is a step of the same chain; a tagged
+    /// template and the E4X accesses (`..`, `.@`, `.(`) cannot follow one.
+    fn parse_optional_chain(&mut self, base: ExprId) -> Result<ExprId> {
+        let start = self.ast.expr_span(base).start;
+        let mut expr = base;
+        loop {
+            match &self.tok.kind {
+                TokenKind::Punct(Punct::QuestionDot) => {
+                    self.bump()?;
+                    let object = self.ast.push_expr(Expr::Optional(expr), self.ast.expr_span(expr));
+                    expr = match &self.tok.kind {
+                        TokenKind::Punct(Punct::LParen) => {
+                            let args = self.parse_arguments()?;
+                            self.ast.push_expr(Expr::Call { callee: object, args }, Span::new(start, self.prev_end))
+                        }
+                        TokenKind::Punct(Punct::LBracket) => self.optional_index(object, start)?,
+                        _ => self.optional_member(object, start)?,
+                    };
+                }
+                TokenKind::Punct(Punct::Dot) => {
+                    self.bump()?;
+                    if self.e4x && self.at_e4x_member() {
+                        return Err(self.error_at_token(&self.tok, "an E4X access cannot follow an optional chain"));
+                    }
+                    expr = self.optional_member(expr, start)?;
+                }
+                TokenKind::Punct(Punct::LBracket) => expr = self.optional_index(expr, start)?,
+                TokenKind::Punct(Punct::LParen) => {
+                    let args = self.parse_arguments()?;
+                    expr = self.ast.push_expr(Expr::Call { callee: expr, args }, Span::new(start, self.prev_end));
+                }
+                TokenKind::Template { .. } => return Err(self.error_at_token(&self.tok, "a tagged template cannot follow an optional chain")),
+                TokenKind::Punct(Punct::DotDot) => return Err(self.error_at_token(&self.tok, "an E4X access cannot follow an optional chain")),
+                _ => break,
+            }
+        }
+        Ok(self.ast.push_expr(Expr::OptionalChain(expr), Span::new(start, self.prev_end)))
+    }
+
+    /// `.name` in an optional chain, with the `.` (or `?.`) already read.
+    fn optional_member(&mut self, object: ExprId, start: u32) -> Result<ExprId> {
+        let Some(name) = self.tok.identifier_name().map(str::to_string) else {
+            return Err(self.error_at_token(&self.tok, format!("expected a property name but found {}", describe(&self.tok))));
+        };
+        let token = self.bump()?;
+        Ok(self.ast.push_expr(Expr::Member { object, property: Name { name, span: token.span } }, Span::new(start, token.span.end)))
+    }
+
+    /// `[index]` in an optional chain.
+    fn optional_index(&mut self, object: ExprId, start: u32) -> Result<ExprId> {
+        self.expect(Punct::LBracket)?;
+        let index = self.parse_expression(false)?;
+        let close = self.expect(Punct::RBracket)?;
+        Ok(self.ast.push_expr(Expr::Index { object, index }, Span::new(start, close.span.end)))
+    }
+
     /// An element of an array literal or an argument list: an assignment expression, or with
     /// [`crate::Options::es2015`] a spread (`...expression`).
     fn parse_element(&mut self) -> Result<ExprId> {
@@ -1495,7 +1757,8 @@ impl<'s> Parser<'s> {
         if !self.at(Punct::RParen) {
             loop {
                 args.push(self.parse_element()?);
-                if !self.eat(Punct::Comma)? {
+                // A comma may follow the last argument (ECMAScript 2017, section 12.3).
+                if !self.eat(Punct::Comma)? || self.at(Punct::RParen) {
                     break;
                 }
             }
@@ -1579,15 +1842,16 @@ impl<'s> Parser<'s> {
         let start = self.expect(Punct::LParen)?.span;
         let mut items = Vec::new();
         let mut head_only = self.at(Punct::RParen);
+        let mark = self.cover_inits.len();
         while !self.at(Punct::RParen) {
             if self.at(Punct::Ellipsis) {
                 let spread_start = self.bump()?.span;
-                let name = self.binding_identifier()?;
-                let arg = self.ast.push_expr(Expr::Ident(name.name), name.span);
+                let arg = self.binding_target_expr()?;
                 items.push(self.ast.push_expr(Expr::Spread(arg), self.span_from(spread_start)));
                 head_only = true;
                 break;
             }
+            self.cover_ok = true;
             items.push(self.parse_assignment(false)?);
             if !self.eat(Punct::Comma)? {
                 break;
@@ -1599,6 +1863,9 @@ impl<'s> Parser<'s> {
         self.expect(Punct::RParen)?;
         if head_only && !self.at(Punct::Arrow) {
             return Err(self.error_at_token(&self.tok, format!("expected '=>' but found {}", describe(&self.tok))));
+        }
+        if !self.at(Punct::Arrow) {
+            self.check_cover(mark)?;
         }
         let inner = match items.as_slice() {
             [one] => *one,
@@ -1637,8 +1904,13 @@ impl<'s> Parser<'s> {
 
     fn parse_function_expression(&mut self) -> Result<ExprId> {
         let start = self.expect_keyword(Keyword::Function)?.span;
-        let name = if matches!(self.tok.kind, TokenKind::Ident(_)) { Some(self.function_name()?) } else { None };
-        let id = self.parse_function_rest(FunctionKind::Expression, name, start)?;
+        let generator = self.es2015 && self.eat(Punct::Star)?;
+        // A generator expression's name is read with its own `yield` rule.
+        let outer_generator = std::mem::replace(&mut self.ctx.generator, generator);
+        let name = if matches!(self.tok.kind, TokenKind::Ident(_)) { self.function_name().map(Some) } else { Ok(None) };
+        self.ctx.generator = outer_generator;
+        let name = name?;
+        let id = self.parse_function_rest(FunctionKind::Expression, name, start, generator)?;
         Ok(self.ast.push_expr(Expr::Function(id), self.span_from(start)))
     }
 
@@ -1728,7 +2000,7 @@ impl<'s> Parser<'s> {
                 return Err(self.error_at_offset(start.start, "a class constructor cannot be a getter or a setter"));
             }
             let ctor = if derived { FunctionKind::DerivedConstructor } else { FunctionKind::ClassConstructor };
-            return Ok(Err(self.parse_function_with(ctor, None, start, true)?));
+            return Ok(Err(self.parse_function_with(ctor, None, start, true, false)?));
         }
         if is_static && named("prototype") {
             return Err(self.error_at_offset(start.start, "a class cannot have a static method named 'prototype'"));
@@ -1738,7 +2010,7 @@ impl<'s> Parser<'s> {
             MethodKind::Get => FunctionKind::Getter,
             MethodKind::Set => FunctionKind::Setter,
         };
-        let function = self.parse_function_with(fkind, None, start, true)?;
+        let function = self.parse_function_with(fkind, None, start, true, false)?;
         Ok(Ok(ClassElement { key, is_static, kind, function }))
     }
 
@@ -1751,11 +2023,13 @@ impl<'s> Parser<'s> {
             let ident = self.ast.push_expr(Expr::Ident(args.name.clone()), span);
             let spread = self.ast.push_expr(Expr::Spread(ident), span);
             let call = self.ast.push_expr(Expr::SuperCall(vec![spread]), span);
-            (FunctionKind::DerivedConstructor, Some(args), vec![self.ast.push_stmt(Stmt::Expr(call), span)])
+            (FunctionKind::DerivedConstructor, Some(Binding::Name(args)), vec![self.ast.push_stmt(Stmt::Expr(call), span)])
         } else {
             (FunctionKind::ClassConstructor, None, Vec::new())
         };
-        self.ast.push_function(Function { kind, name: None, params: Vec::new(), defaults: Vec::new(), rest, body, strict: true, span, home: true })
+        let function =
+            Function { kind, name: None, params: Vec::new(), defaults: Vec::new(), rest, body, strict: true, generator: false, span, home: true };
+        self.ast.push_function(function)
     }
 
     /// `[a, , b]`: elements, a comma with nothing before it leaving a hole.
@@ -1770,27 +2044,59 @@ impl<'s> Parser<'s> {
                 elements.push(None);
                 continue;
             }
-            elements.push(Some(self.parse_element()?));
+            self.cover_ok = self.es2015;
+            let element = self.parse_element()?;
+            elements.push(Some(element));
             if !self.at(Punct::RBracket) {
                 self.expect(Punct::Comma)?;
+                if matches!(self.ast.expr(element), Some(Expr::Spread(_))) {
+                    self.rest_commas.insert(element.0);
+                }
             }
         }
         Ok(self.ast.push_expr(Expr::Array(elements), self.span_from(start)))
     }
 
     /// `{a: 1, "b": 2, 3: c, get d() {…}, set d(v) {…}}`. A name may repeat, a later definition
-    /// replacing an earlier one (ECMA-262 2015 section 12.2.6.1).
+    /// replacing an earlier one (ECMA-262 2015 section 12.2.6.1). With [`crate::Options::es2015`],
+    /// also computed names, shorthand properties and methods ([`Self::parse_property_es2015`]).
     fn parse_object(&mut self) -> Result<ExprId> {
         let start = self.expect(Punct::LBrace)?.span;
         let mut properties = Vec::new();
         while !self.eat(Punct::RBrace)? {
-            let property = self.parse_property()?;
+            let property = if self.es2015 { self.parse_property_es2015()? } else { self.parse_property()? };
             properties.push(property);
             if !self.at(Punct::RBrace) {
                 self.expect(Punct::Comma)?;
             }
         }
+        if self.es2015 {
+            self.note_proto_twice(&properties);
+        }
         Ok(self.ast.push_expr(Expr::Object(properties), self.span_from(start)))
+    }
+
+    /// Records each `__proto__: value` of `properties` after the first in `proto_twice` and, in
+    /// order, in `cover_inits`.
+    fn note_proto_twice(&mut self, properties: &[Property]) {
+        // The offsets rise along the properties, so they are merged into the sorted list in one
+        // pass.
+        let twice: Vec<u32> = properties.iter().filter(|p| p.is_proto_setter(&self.ast)).skip(1).map(|p| p.span.start).collect();
+        let Some(&lowest) = twice.first() else { return };
+        let first = self.cover_inits.partition_point(|&x| x < lowest);
+        let tail = self.cover_inits.split_off(first);
+        let (mut a, mut b) = (tail.into_iter().peekable(), twice.iter().copied().peekable());
+        while let (Some(&x), Some(&y)) = (a.peek(), b.peek()) {
+            if y <= x {
+                self.cover_inits.push(y);
+                b.next();
+            } else {
+                self.cover_inits.push(x);
+                a.next();
+            }
+        }
+        self.cover_inits.extend(b.chain(a));
+        self.proto_twice.extend(twice);
     }
 
     fn parse_property(&mut self) -> Result<Property> {
@@ -1805,8 +2111,7 @@ impl<'s> Parser<'s> {
             let word = self.bump()?;
             if property_key(&self.tok).is_some() {
                 let (key, _) = self.parse_property_key()?;
-                // With ES2015 an accessor is a method, whose home object is the literal's object.
-                let function = self.parse_function_with(kind, None, start, self.es2015)?;
+                let function = self.parse_function_rest(kind, None, start, false)?;
                 let value = if kind == FunctionKind::Getter { PropertyValue::Get(function) } else { PropertyValue::Set(function) };
                 return Ok(Property { key, value, span: self.span_from(start) });
             }
@@ -1817,13 +2122,8 @@ impl<'s> Parser<'s> {
         self.property_value(key, start)
     }
 
-    /// `: value` after a data property's name, or with ES2015 the parameters and body of a
-    /// method (`m() {…}`, ECMA-262 2015 section 14.3).
+    /// `: value` after a data property's name.
     fn property_value(&mut self, key: PropertyKey, start: Span) -> Result<Property> {
-        if self.es2015 && self.at(Punct::LParen) {
-            let function = self.parse_function_with(FunctionKind::Method, None, start, true)?;
-            return Ok(Property { key, value: PropertyValue::Method(function), span: self.span_from(start) });
-        }
         self.expect(Punct::Colon)?;
         let value = self.parse_assignment(false)?;
         Ok(Property { key, value: PropertyValue::Init(value), span: self.span_from(start) })
@@ -1847,6 +2147,42 @@ fn property_key(token: &Token) -> Option<PropertyKey> {
         TokenKind::String(s) => Some(PropertyKey::String(s.clone())),
         TokenKind::Number(n) => Some(PropertyKey::Number(*n)),
         _ => token.identifier_name().map(|n| PropertyKey::Ident(n.to_string())),
+    }
+}
+
+/// The token can start an expression, so a `yield` before it on the same line takes an operand.
+fn starts_expression(token: &Token, e4x: bool) -> bool {
+    match &token.kind {
+        TokenKind::Ident(_) | TokenKind::Number(_) | TokenKind::String(_) | TokenKind::Template { .. } | TokenKind::RegExp { .. } => true,
+        TokenKind::Keyword(k) => matches!(
+            k,
+            Keyword::This
+                | Keyword::Null
+                | Keyword::True
+                | Keyword::False
+                | Keyword::Function
+                | Keyword::New
+                | Keyword::Delete
+                | Keyword::Void
+                | Keyword::Typeof
+        ),
+        TokenKind::Punct(p) => {
+            matches!(
+                p,
+                Punct::LParen
+                    | Punct::LBracket
+                    | Punct::LBrace
+                    | Punct::Plus
+                    | Punct::Minus
+                    | Punct::Bang
+                    | Punct::Tilde
+                    | Punct::PlusPlus
+                    | Punct::MinusMinus
+                    | Punct::Slash
+                    | Punct::SlashEq
+            ) || (e4x && matches!(p, Punct::Lt | Punct::At))
+        }
+        _ => false,
     }
 }
 
@@ -1881,6 +2217,7 @@ fn binary_op(token: &Token, no_in: bool) -> Option<(BinKind, u8)> {
         TokenKind::Keyword(Keyword::In) if !no_in => Some((B(BinaryOp::In), 7)),
         TokenKind::Punct(p) => Some(match p {
             Punct::PipePipe => (L(LogicalOp::Or), 1),
+            Punct::QuestionQuestion => (L(LogicalOp::Coalesce), 1),
             Punct::AmpAmp => (L(LogicalOp::And), 2),
             Punct::Pipe => (B(BinaryOp::BitOr), 3),
             Punct::Caret => (B(BinaryOp::BitXor), 4),
