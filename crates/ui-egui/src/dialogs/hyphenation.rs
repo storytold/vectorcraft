@@ -175,6 +175,8 @@ mod tests {
             ui["dialogs"].as_array().unwrap().iter().find(|dialog| dialog["key"] == KIND).expect("open Hyphenation dialog")["fields"].clone()
         }
 
+        // The Japanese pass measures the controls once and clicks them frames later.
+        crate::testing::wait_for_cjk_fonts();
         let screen = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 500.0));
         let mut failures = Vec::new();
         for lang in ["en", "de", "fr", "ja"] {
