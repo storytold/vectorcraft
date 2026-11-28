@@ -1178,12 +1178,12 @@ fn add_document_refuses_pixel_preview() {
 
 #[test]
 fn document_preset_values_count_toward_the_data_a_run_passes() {
-    // A 64 KiB title, set once, then read or handed to addDocument 32 times: 2 MiB, over a 1 MiB limit.
+    // A 4 KiB title, set once, then read or handed to addDocument 512 times: 2 MiB, over a 1 MiB limit.
     crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(Some(1 << 20)));
     let mut s = Session::new();
-    let set = "var p = new DocumentPreset(); p.title = new Array(65537).join('t');";
-    let read = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) p.title;"));
-    let added = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) try {{ app.documents.addDocument('Print', p, 5); }} catch (e) {{}}"));
+    let set = "var p = new DocumentPreset(); p.title = new Array(4097).join('t');";
+    let read = failure(&mut s, &format!("{set} for (var i = 0; i < 512; i++) p.title;"));
+    let added = failure(&mut s, &format!("{set} for (var i = 0; i < 512; i++) try {{ app.documents.addDocument('Print', p, 5); }} catch (e) {{}}"));
     let within = run(&mut s, &format!("{set} for (var i = 0; i < 8; i++) p.title;"));
     crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(None));
     for e in [read, added] {
@@ -1191,6 +1191,32 @@ fn document_preset_values_count_toward_the_data_a_run_passes() {
     }
     within.unwrap();
     assert!(s.documents().is_empty());
+}
+
+#[test]
+fn document_preset_setter_refuses_a_value_of_the_wrong_kind_or_size_and_keeps_the_old_one() {
+    let mut s = Session::new();
+    let out = log(
+        &mut s,
+        "var p = new DocumentPreset(); p.title = 'Flyer';\
+         var bad = [['title', new Array(4098).join('t')], ['title', 5], ['width', 'wide'], ['width', Infinity], ['height', null],\
+         ['colorMode', 'RGB'], ['units', {}], ['artboardLayout', 'DocumentColorSpace.RGB'], ['documentBleedLink', 1],\
+         ['documentBleedOffsetRect', [1, 2, 3]], ['documentBleedOffsetRect', [1, 2, 3, 'x']], ['transparencyGrid', 'TransparencyGridRed']];\
+         for (var i = 0; i < bad.length; i++) { try { p[bad[i][0]] = bad[i][1]; vc.log('kept ' + bad[i][0]); } catch (e) { vc.log(e.name); } }\
+         vc.log([p.title, p.width, p.height, p.colorMode === undefined, p.units === undefined, p.artboardLayout,\
+         p.documentBleedLink === undefined, p.documentBleedOffsetRect === undefined, p.transparencyGrid === undefined]);",
+    );
+    let mut names = vec![json!("RangeError")];
+    names.extend(std::iter::repeat_n(json!("TypeError"), 11));
+    assert_eq!(out[..12], names[..], "{out:?}");
+    assert_eq!(out[12], json!(["Flyer", 612, 792, true, true, "DocumentArtboardLayout.GridByRow", true, true, true]));
+    let out = log(
+        &mut s,
+        "var p = new DocumentPreset(); p.title = new Array(4097).join('t'); p.documentBleedLink = null; p.transparencyGrid = null;\
+         p.documentBleedOffsetRect = [0, 0, 0, 0]; p.width = undefined; vc.log([p.title.length, p.documentBleedLink, p.width === undefined]);\
+         p.documentBleedOffsetRect = undefined; vc.log(app.documents.addDocument('Print', p).typename);",
+    );
+    assert_eq!(out, vec![json!([4096, null, true]), json!("Document")]);
 }
 
 #[test]

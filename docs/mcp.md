@@ -2787,8 +2787,12 @@ other files through `$`:
   `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
   `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
-  starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
-  `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
+  starts with the defaults that page gives. Assigning one of its settings checks the value's kind: a value of the
+  setting's enumeration, a finite number, a `title` string, `true` or `false` for `documentBleedLink`, or an array
+  of four finite numbers for `documentBleedOffsetRect`. Any setting takes `undefined`, which unsets it. A value of
+  another kind throws a `TypeError`, a `title` longer than 4096 bytes throws a `RangeError`, and the setting keeps
+  its old value. `addDocument` checks the ranges of the values. `documentBleedLink`, `documentBleedOffsetRect` and
+  `transparencyGrid` also take `null` and can be assigned, but `addDocument` throws an error that says they are not available yet when
   the preset it is given holds one of them with a value other than `null`, and makes no document. A
   `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
   `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
