@@ -213,6 +213,13 @@ fn directives_are_read_at_the_start_of_a_line_in_both_forms() {
 }
 
 #[test]
+fn reflection_needs_only_the_language() {
+    let r = report("var p = obj.reflect.properties;\nvar m = $.reflect.find('write');\n");
+    assert_eq!(feature(&r, "reflection").map(|f| f.lines.clone()), Some(vec![1, 2]));
+    assert_eq!(r.needs, [Need::Language], "VectorCraft runs reflect");
+}
+
+#[test]
 fn a_byte_order_mark_and_every_line_break_are_read() {
     // U+2028 ends line 2.
     let r = check("t.jsx", b"\xEF\xBB\xBF#target acme\nvar a = 1;\xE2\x80\xA8#target b\r\n", None, &Limits::default());
@@ -530,6 +537,29 @@ fn the_scripts_own_platform_names_are_not_the_platforms() {
     assert_eq!(r.outside.iter().map(|o| o.id).collect::<Vec<_>>(), ["filesWritten"]);
 }
 
+/// A document's `exportVariables` writes the file it is given; `importVariables` only reads one.
+#[test]
+fn export_variables_writes_a_file() {
+    let r = report("var f = new File(p);\napp.activeDocument.importVariables(f);\napp.activeDocument.exportVariables(f);\n");
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3][..])]);
+}
+
+/// `exportVariables` called with its name as a string literal in brackets writes the file too;
+/// reading the method without calling it does not.
+#[test]
+fn export_variables_in_brackets_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument['importVariables'](f);\n",
+        "app.activeDocument[\"exportVariables\"](f);\n",
+        "var d = app.activeDocument; d['exportVariables'] (f);\n",
+        "var n = d['exportVariables'];\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]
@@ -617,6 +647,25 @@ fn file_only_calls_on_a_folder_do_nothing() {
     assert_eq!(lines("file.write"), [6, 7, 8]);
     assert_eq!(lines("file.read"), [8, 9]);
     assert_eq!(lines("file.dialog"), [8]);
+}
+
+/// A variable holding a Folder object is the same object in grouping parentheses, so `(d).write(s)`
+/// and `(d).length = 0` do nothing, as `d.write(s)` and `d.length = 0` do. A variable that may hold
+/// a File object still counts in them.
+#[test]
+fn a_folder_in_parentheses_is_still_a_folder() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "(d).write(s); ((d)).copy(q); (d).open('r'); (d).length = 0;\n",
+        "var f = new File(p);\n",
+        "(f).write(s);\n",
+        "var g = Folder(p); (g).open('r');\n",
+    ));
+    let lines = |id: &str| feature(&r, id).map(|f| f.lines.clone()).unwrap_or_default();
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[4][..])]);
+    assert_eq!(lines("file.write"), [4]);
+    assert_eq!(lines("file.read"), [5]);
 }
 
 /// A File object assigned to a function's own variable, its parameter or a `catch` block's
@@ -1551,6 +1600,13 @@ fn application_methods_are_features_not_members() {
 }
 
 #[test]
+fn e4x_and_the_xml_object_need_only_the_language() {
+    let r = report("var x = <a><b/></a>;\nvar y = new XML(s);\nfor each (var v in x.b) {}\n");
+    assert!(feature(&r, "e4x").is_some() && feature(&r, "xml").is_some());
+    assert_eq!(r.needs, [Need::Language]);
+}
+
+#[test]
 fn type_names_compared_or_created_are_listed() {
     let r = report(concat!(
         "if (item.typename == 'AcmeShape') {}\n",
@@ -1564,6 +1620,17 @@ fn type_names_compared_or_created_are_listed() {
     let types: Vec<&str> = r.types.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(types, ["AcmeColor", "AcmeShape"]);
     assert_eq!(r.needs, [Need::Dom]);
+}
+
+#[test]
+fn collections_and_typed_arrays_are_not_type_names() {
+    let r = report(concat!(
+        "var m = new Map(), s = new Set(), wm = new WeakMap(), ws = new WeakSet();\n",
+        "var b = new ArrayBuffer(8), v = new DataView(b), u = new Uint8Array(b), c = new Uint8ClampedArray(2);\n",
+        "var i = [new Int8Array(1), new Int16Array(1), new Uint16Array(1), new Int32Array(1), new Uint32Array(1)];\n",
+        "var f = [new Float32Array(1), new Float64Array(1)];\n",
+    ));
+    assert!(r.types.is_empty(), "{:?}", r.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>());
 }
 
 #[test]

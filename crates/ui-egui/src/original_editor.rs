@@ -14,7 +14,7 @@ use crate::VectorcraftApp;
 
 /// Opaque saved choice. Public so hosts can construct `UiState` with a struct update; its path
 /// has no public setter and is never read from the generic preference or dialog-field maps.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Choice {
     path: Option<String>,
 }
@@ -45,13 +45,22 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     app.original_editor.choice = app.ui.original_editor.clone();
 }
 
-pub(crate) fn commit(app: &mut VectorcraftApp) {
+/// Saves the dialog's choice; returns whether it differs from the saved one.
+pub(crate) fn commit(app: &mut VectorcraftApp) -> bool {
+    let changed = app.ui.original_editor != app.original_editor.choice;
     app.ui.original_editor = app.original_editor.choice.clone();
+    changed
 }
 
 pub(crate) fn reset(app: &mut VectorcraftApp) {
     forget(app);
     app.original_editor.choice = Choice::default();
+}
+
+/// `prefs.reset`: the saved choice goes back to the default, and the next Preferences shows it.
+pub(crate) fn reset_saved(app: &mut VectorcraftApp) {
+    app.ui.original_editor = Choice::default();
+    reset(app);
 }
 
 pub(crate) fn cancel(app: &mut VectorcraftApp) {
@@ -260,6 +269,32 @@ mod tests {
         prefs_dialog::answer_reset(&mut app, PromptChoice::Proceed);
         prefs_dialog::confirm(&mut app).unwrap();
         assert!(app.ui.original_editor.path.is_none());
+    }
+
+    /// `prefs.reset` of every category or of File Handling, alone or as a batch step, resets the
+    /// saved choice; a reset of another category keeps it.
+    #[test]
+    fn prefs_reset_resets_the_saved_choice_with_file_handling() {
+        let (mut app, picker) = app();
+        prefs_dialog::cancel(&mut app);
+        let mine = editor("prefs-reset");
+        let chosen = |app: &mut VectorcraftApp| {
+            prefs_dialog::open(app, Some("File Handling"));
+            choose(app, &picker, Some(&mine)).unwrap();
+            prefs_dialog::confirm(app).unwrap();
+            assert!(app.ui.original_editor.path.is_some());
+        };
+        chosen(&mut app);
+        app.run("prefs.reset", json!({"category": "General"})).unwrap();
+        assert!(app.ui.original_editor.path.is_some(), "General keeps the choice");
+        app.run("prefs.reset", json!({"category": "File Handling"})).unwrap();
+        assert!(app.ui.original_editor.path.is_none(), "File Handling resets it");
+        chosen(&mut app);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("command.batch", json!({"commands": [{"command": "prefs.reset", "params": {}}]})).unwrap();
+        assert!(app.ui.original_editor.path.is_none(), "every category, as a batch step");
+        prefs_dialog::open(&mut app, Some("File Handling"));
+        assert!(app.original_editor.choice.path.is_none(), "Preferences shows the default");
     }
 
     #[test]

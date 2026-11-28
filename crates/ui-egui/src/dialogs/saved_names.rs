@@ -137,6 +137,8 @@ impl ItemSource<usize> for Shown<'_> {}
 /// The saved-names dialog of one kind.
 pub(crate) struct SavedNamesDialog {
     id: DialogId,
+    document: u64,
+    reverts: u64,
     names: SavedNames,
     draft: NamesDraft,
     /// The picked row, by its index in the draft; one at most.
@@ -147,10 +149,10 @@ pub(crate) struct SavedNamesDialog {
 
 impl SavedNamesDialog {
     /// The dialog over `list`, with the first name picked.
-    fn new(names: SavedNames, list: Vec<String>) -> Self {
+    fn new(document: u64, reverts: u64, names: SavedNames, list: Vec<String>) -> Self {
         let selection = if list.is_empty() { Selection::default() } else { Selection::single(0) };
         let rows = list.into_iter().map(|name| NameRow { orig: name.clone(), name, deleted: false }).collect();
-        SavedNamesDialog { id: id_of(names.kind), names, draft: NamesDraft { rows }, selection, held: HeldAnswer::new() }
+        SavedNamesDialog { id: id_of(names.kind), document, reverts, names, draft: NamesDraft { rows }, selection, held: HeldAnswer::new() }
     }
 
     /// OK as its button gives it: with nothing edited the dialog closes at once (`Some`); with edits they wait for
@@ -326,8 +328,10 @@ impl StackDialog for SavedNamesDialog {
 /// Opens the dialog of `names` on `list`, the saved names in their order (the first `names.max` of them).
 pub(crate) fn open(app: &mut VectorcraftApp, names: SavedNames, mut list: Vec<String>) -> Result<(), String> {
     list.truncate(names.max);
+    let active = app.session.active().ok_or("no document open")?;
+    let (document, reverts) = (active.uid, active.reverts);
     let dialogs = app.dialogs().ok_or("no window")?;
-    dialogs.with(|host| host.open(SavedNamesDialog::new(names, list)));
+    dialogs.with(|host| host.open(SavedNamesDialog::new(document, reverts, names, list)));
     Ok(())
 }
 
@@ -335,18 +339,22 @@ pub(crate) fn open(app: &mut VectorcraftApp, names: SavedNames, mut list: Vec<St
 /// closes when the command took the edits, and stays open with the reason when it refused them.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
-    let filed: Vec<(DialogId, &'static str, Vec<Value>)> = dialogs.with(|host| {
+    let filed: Vec<_> = dialogs.with(|host| {
         host.open_dialogs()
             .into_iter()
             .filter_map(|open| {
                 let dialog = host.get_mut_by_id::<SavedNamesDialog>(open.id)?;
                 let edits = dialog.held.take()?;
-                Some((open.id, dialog.names.command, edits))
+                Some((open.id, dialog.document, dialog.reverts, dialog.names.command, edits))
             })
             .collect()
     });
-    for (id, command, edits) in filed {
-        let outcome = app.run(command, json!({ "edits": edits }));
+    for (id, document, reverts, command, edits) in filed {
+        let outcome = match app.session.active().filter(|active| active.uid == document) {
+            Some(active) if active.reverts != reverts => Err(tl!("The document was reverted. Reopen the dialog to edit saved names.").to_owned()),
+            Some(_) => app.run(command, json!({ "edits": edits })),
+            None => Err(tl!("Saved names can only be edited in the document this dialog was opened for.").to_owned()),
+        };
         if let Err(reason) = &outcome {
             app.status(reason.clone());
         }
@@ -355,5 +363,153 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
                 dialog.held.answer(outcome.map(|_| ()).map_err(Label::from));
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct SavedFile(std::path::PathBuf);
+
+    impl Drop for SavedFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    #[test]
+    fn saved_selection_draft_does_not_edit_a_reverted_drawing() {
+        exercise_reverted_draft(false);
+    }
+
+    #[test]
+    fn saved_views_draft_does_not_edit_a_reverted_drawing() {
+        exercise_reverted_draft(true);
+    }
+
+    fn exercise_reverted_draft(is_view: bool) {
+        let path = SavedFile(std::env::temp_dir().join(format!("vc-saved-names-revert-{}-{is_view}.vectorcraft", std::process::id())));
+        let services = crate::Services {
+            read: Some(Box::new(|path: &str| std::fs::read(path).map_err(|e| e.to_string()))),
+            write: Some(Box::new(|path: &str, bytes: &[u8]| std::fs::write(path, bytes).map_err(|e| e.to_string()))),
+            ..Default::default()
+        };
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), services));
+        let add_shape = |app: &mut VectorcraftApp, x| {
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap();
+        };
+        let names = |app: &mut VectorcraftApp| {
+            if is_view {
+                let views = &app.session.active().unwrap().doc.views;
+                json!(views.iter().map(|view| &view.name).collect::<Vec<_>>())
+            } else {
+                app.run("select.savedList", json!({})).unwrap()
+            }
+        };
+        let open = |app: &mut VectorcraftApp| {
+            if is_view {
+                crate::dialogs::edit_views::open(app).unwrap();
+                crate::dialogs::edit_views::KIND
+            } else {
+                crate::dialogs::edit_selection::open(app).unwrap();
+                crate::dialogs::edit_selection::KIND
+            }
+        };
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        add_shape(&mut app, 10);
+        for name in ["Shared", "Spare"] {
+            app.run(if is_view { "view.saved.new" } else { "select.save" }, json!({"name": name})).unwrap();
+        }
+        app.run("file.saveAs", json!({"path": path.0})).unwrap();
+        assert!(path.0.is_file());
+        add_shape(&mut app, 40);
+        let old = app.session.active().unwrap();
+        let (document, reverts) = (old.uid, old.reverts);
+        let kind = open(&mut app);
+        let id = id_of(kind);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialogs = app.dialogs().unwrap();
+        dialogs.with(|host| {
+            host.set_json_field(&ctx, id, "name0", json!("Stale")).unwrap();
+            host.set_json_field(&ctx, id, "deleted1", json!(true)).unwrap();
+            assert!(!host.confirm_by_id(&ctx, id));
+            assert_eq!(host.held_state(id), Some(HeldOk::Waiting));
+        });
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let active = app.session.active().unwrap();
+        assert_eq!((active.uid, active.reverts), (document, reverts + 1), "Revert preserves the tab's UID");
+        assert_eq!(names(&mut app), json!(["Shared", "Spare"]));
+        let undo = app.session.active().unwrap().history.undo.len();
+        pump(&mut app, &ctx);
+
+        assert_eq!(names(&mut app), json!(["Shared", "Spare"]), "{kind} cannot apply its old draft to the reloaded drawing");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+        assert!(dialogs.with(|host| host.cancel_by_id(&ctx, id)));
+        assert_eq!(open(&mut app), kind);
+        dialogs.with(|host| {
+            host.set_json_field(&ctx, id, "name0", json!("Revised")).unwrap();
+            host.confirm_by_id(&ctx, id);
+        });
+        pump(&mut app, &ctx);
+        assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Accepted)));
+        assert_eq!(names(&mut app), json!(["Revised", "Spare"]));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    }
+
+    #[test]
+    fn saved_names_edits_stay_with_their_document() {
+        for is_view in [false, true] {
+            let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+            for size in [100, 200] {
+                app.run("file.new", json!({"width": size, "height": size})).unwrap();
+                app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+                for name in ["Shared", "Spare"] {
+                    app.run(if is_view { "view.saved.new" } else { "select.save" }, json!({"name": name})).unwrap();
+                }
+            }
+            let names = |app: &mut VectorcraftApp| {
+                if is_view {
+                    let views = &app.session.active().unwrap().doc.views;
+                    json!(views.iter().map(|view| &view.name).collect::<Vec<_>>())
+                } else {
+                    app.run("select.savedList", json!({})).unwrap()
+                }
+            };
+            let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+            activate(&mut app, 0);
+            let kind = if is_view {
+                crate::dialogs::edit_views::open(&mut app).unwrap();
+                crate::dialogs::edit_views::KIND
+            } else {
+                crate::dialogs::edit_selection::open(&mut app).unwrap();
+                crate::dialogs::edit_selection::KIND
+            };
+            let id = id_of(kind);
+            let ctx = app.ui_ctx.clone().unwrap();
+            let host = app.dialogs().unwrap();
+            host.with(|h| {
+                h.set_json_field(&ctx, id, "name0", json!("Revised")).unwrap();
+                h.set_json_field(&ctx, id, "deleted1", json!(true)).unwrap();
+                h.confirm_by_id(&ctx, id);
+            });
+
+            activate(&mut app, 1);
+            let b_undo = app.session.active().unwrap().history.undo.len();
+            pump(&mut app, &ctx);
+            assert_eq!(names(&mut app), json!(["Shared", "Spare"]), "the destination's saved names stay unchanged for {kind}");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), b_undo);
+            assert!(matches!(host.with(|h| h.held_state(id)), Some(HeldOk::Refused(_))));
+
+            activate(&mut app, 0);
+            let a_undo = app.session.active().unwrap().history.undo.len();
+            host.with(|h| h.confirm_by_id(&ctx, id));
+            pump(&mut app, &ctx);
+            assert!(matches!(host.with(|h| h.held_state(id)), Some(HeldOk::Accepted)));
+            assert_eq!(names(&mut app), json!(["Revised"]));
+            assert_eq!(app.session.active().unwrap().history.undo.len(), a_undo + 1);
+        }
     }
 }

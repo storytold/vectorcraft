@@ -23,7 +23,7 @@ use crate::doc_windows::Win;
 use crate::panel_drag::PanelDrag;
 use crate::panels::brushes::BrushKey;
 use crate::panels::brushes::BrushLibraries;
-use crate::panels::graphic_styles::StyleKey;
+use crate::panels::graphic_styles::StyleDrag;
 use crate::panels::library_panel::{self, LibraryKey, LibraryKind as _};
 use crate::panels::symbols::{SymbolKey, SymbolLibraries};
 use crate::place::{CanvasDrop, CanvasFiles};
@@ -50,7 +50,7 @@ pub(crate) struct CarriedArt {
 #[derive(Clone, Debug)]
 enum Payload {
     Panel(PanelDrag),
-    Style(StyleKey),
+    Style(StyleDrag),
     Symbol(SymbolKey),
     Brush(BrushKey),
     Library(LibraryKey),
@@ -76,17 +76,19 @@ pub struct CanvasDropsStyle {
 }
 
 /// A drop target for one payload type `P`: `make` turns the payload into the canvas's own, or refuses it. `seen` is
-/// the operation of the last payload it accepted at the pointer.
+/// the operation of the last payload it accepted at the pointer. Where `covered` (another window lies over the canvas),
+/// it takes nothing: that window's targets take the drop.
 struct Target<'a, F> {
     rect: Rect,
     view: &'a CanvasView,
+    covered: &'a dyn Fn(Pos2) -> bool,
     make: F,
     seen: Cell<Option<DropOperation>>,
 }
 
 impl<'a, F> Target<'a, F> {
-    fn new(rect: Rect, view: &'a CanvasView, make: F) -> Self {
-        Target { rect, view, make, seen: Cell::new(None) }
+    fn new(rect: Rect, view: &'a CanvasView, covered: &'a dyn Fn(Pos2) -> bool, make: F) -> Self {
+        Target { rect, view, covered, make, seen: Cell::new(None) }
     }
 }
 
@@ -94,6 +96,9 @@ impl<P: ?Sized, F: Fn(&P) -> Option<Payload>> DropTarget<P> for Target<'_, F> {
     type Drop = Dropped;
 
     fn accept(&self, payload: &P, at: Pos2, op: DropOperation) -> Option<Dropped> {
+        if (self.covered)(at) {
+            return None;
+        }
         let payload = (self.make)(payload)?;
         self.seen.set(Some(op));
         Some(Dropped { payload, at: self.view.to_doc(at), zoom: self.view.zoom, op })
@@ -121,6 +126,8 @@ pub(crate) struct CanvasDrops<'a> {
     /// has the content the move started from ([`CarriedArt::before`]), and the document a tab rest showed is still the
     /// current one.
     given_up: bool,
+    /// Whether another window lies over the canvas at a point of it: a floating panel's OS window.
+    covered: &'a dyn Fn(Pos2) -> bool,
     out: &'a RefCell<Option<Dropped>>,
     /// The files from the OS the canvas places, and where their drop goes.
     files: (CanvasFiles<'a>, &'a RefCell<Option<CanvasDrop>>),
@@ -150,9 +157,9 @@ impl Component for CanvasDrops<'_> {
 
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
         let rect = cx.rect;
-        let (sources, given_up, view) = (&self.sources, self.given_up, &self.view);
+        let (sources, given_up, view, covered) = (&self.sources, self.given_up, &self.view, self.covered);
         let unchanged = |a: &CarriedArt| given_up || sources.contains(&(a.document, a.revision));
-        let art = Target::new(rect, view, |a: &CarriedArt| unchanged(a).then(|| Payload::Art(a.clone())));
+        let art = Target::new(rect, view, covered, |a: &CarriedArt| unchanged(a).then(|| Payload::Art(a.clone())));
         let mut dropped = cx.drop_target::<CarriedArt, _>(&art);
         if self.kind == BodyKind::Pane
             && let (Some(op), Some((carried, _))) = (art.seen.get(), cx.dragging::<CarriedArt>())
@@ -163,13 +170,19 @@ impl Component for CanvasDrops<'_> {
         }
         if self.kind == BodyKind::Live {
             // The art of this canvas's own document is not accepted as a panel payload: its move resumes.
-            let panel = Target::new(rect, view, |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())));
-            let style = Target::new(rect, view, |d: &ListDrag<StyleKey>| Some(Payload::Style(d.grabbed.clone())));
-            let symbol = Target::new(rect, view, |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())));
-            let brush = Target::new(rect, view, |d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone())));
-            let library = Target::new(rect, view, |d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone())));
+            let panel = Target::new(rect, view, covered, |p: &PanelDrag| match p {
+                PanelDrag::Art { .. } => None,
+                PanelDrag::Appearance { document, .. } if *document != self.document => None,
+                _ => Some(Payload::Panel(p.clone())),
+            });
+            let style = Target::new(rect, view, covered, |d: &StyleDrag| (d.document == self.document).then(|| Payload::Style(d.clone())));
+            let symbol = Target::new(rect, view, covered, |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())));
+            let brush = Target::new(rect, view, covered, |d: &ListDrag<BrushKey>| {
+                (d.grabbed.doc == self.document).then(|| Payload::Brush(d.grabbed.clone()))
+            });
+            let library = Target::new(rect, view, covered, |d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone())));
             let panel = cx.drop_target::<PanelDrag, _>(&panel);
-            let style = cx.drop_target::<ListDrag<StyleKey>, _>(&style);
+            let style = cx.drop_target::<StyleDrag, _>(&style);
             let symbol = cx.drop_target::<ListDrag<SymbolKey>, _>(&symbol);
             let brush = cx.drop_target::<ListDrag<BrushKey>, _>(&brush);
             let library = cx.drop_target::<ListDrag<LibraryKey>, _>(&library);
@@ -215,8 +228,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
             && app.session.documents().iter().any(|d| d.uid == a.document && d.same_content(&a.before))
     });
     let (out, files_out) = (RefCell::new(None), RefCell::new(None));
+    let ctx = ui.ctx().clone();
+    let covered = |at: Pos2| crate::panel_docking::os_window_at(app, &ctx, at);
     let files = (CanvasFiles::new(app, rect, &view), &files_out);
-    let drops = CanvasDrops { common: Common::new(), view, kind, document, sources, given_up, out: &out, files };
+    let drops = CanvasDrops { common: Common::new(), view, kind, document, sources, given_up, covered: &covered, out: &out, files };
     drops.id_salt(("canvas-drops", win)).show_at(ui, rect);
     if let Some(files) = files_out.take() {
         crate::place::canvas_drop(app, ui.ctx(), files);
@@ -268,8 +283,9 @@ pub(crate) fn released_on_pane(app: &VectorcraftApp, art: CarriedArt, at: Pos2, 
 /// to the drag session. Moves of anchors or segments stay reshapes. `covered`: another window is over the canvas at the
 /// pointer. → whether a carry runs.
 pub(crate) fn carry_out(app: &mut VectorcraftApp, cx: &mut ToolContext<'_>, pointer: &ToolPointer, covered: bool) -> bool {
+    let Some(reverts) = app.session.active().map(|st| st.reverts) else { return false };
     let Some(art) = carried(app, cx, pointer, covered) else { return false };
-    let panel = PanelDrag::Art { document: art.document, ids: art.ids.clone() };
+    let panel = PanelDrag::Art { document: art.document, reverts, ids: art.ids.clone() };
     cx.start_drag_also(art, Arc::new(panel), DragPreview::None);
     true
 }
@@ -327,20 +343,30 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
         Payload::Panel(PanelDrag::LibraryGraphic { library, item }) => {
             run(app, "library.use", json!({"library": library, "kind": "graphic", "item": item, "center": [at.x, at.y]}))
         }
-        Payload::Brush(key) => match hit() {
-            None if brush_has_art(app, key) => run(app, "brush.placeArt", json!({"name": key.name, "x": at.x, "y": at.y})),
+        Payload::Brush(key) if app.session.active().is_some_and(|st| st.uid == key.doc) => match hit() {
+            None if brush_has_art(app, key) && no_art_at(app, at, zoom) => {
+                run(app, "brush.placeArt", json!({"name": key.name, "x": at.x, "y": at.y}))
+            }
             None => Ok(()),
             Some(hit) => {
                 let owner = owner(app, &hit)?;
                 run(app, "brush.apply", json!({"name": key.name, "ids": [owner]}))
             }
         },
-        Payload::Style(key) => {
+        Payload::Brush(_) => Ok(()),
+        Payload::Style(style) if app.session.active().is_some_and(|st| st.uid == style.document) => {
             let Some(hit) = hit() else { return Ok(()) };
             let top = top_object(app, &hit)?;
-            run(app, "graphicStyle.apply", json!({"name": key, "ids": [top], "add": drop.op == DropOperation::Copy}))
+            run(app, "graphicStyle.apply", json!({"name": style.name, "ids": [top], "add": drop.op == DropOperation::Copy}))
         }
-        Payload::Panel(PanelDrag::Paint { params, paint, .. }) if !params.is_null() => {
+        Payload::Style(_) => Ok(()),
+        // A pattern swatch from the Swatches panel dropped where there is no art: a copy of its tile art with its tile.
+        Payload::Panel(PanelDrag::Paint { paint: vectorcraft_color::Paint::Pattern { pattern, .. }, rows: Some(_), .. })
+            if hit().is_none() && no_art_at(app, at, zoom) =>
+        {
+            run(app, "pattern.placeArt", json!({"name": pattern, "x": at.x, "y": at.y}))
+        }
+        Payload::Panel(drag @ PanelDrag::Paint { params, paint, rows, .. }) if !params.is_null() => {
             if let Some(color) = paint.color()
                 && crate::panels::proxy_cmd(app, false) == "paint.setFill"
                 && let Some((id, points)) = selected_mesh_drop(app, at, zoom)
@@ -349,13 +375,26 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
                 return run(app, "object.mesh.setPointColor", params);
             }
             let Some(hit) = hit() else { return Ok(()) };
-            let mut params = params.clone();
+            let destination = app.session.active().map(|st| st.uid);
+            if rows.as_ref().is_some_and(|rows| !rows.unlinked_process_color && destination.is_some_and(|uid| uid != rows.document))
+                && paint.color().is_some()
+                && !paint.is_registration()
+            {
+                return Err(tl!("A linked color swatch can only be applied in its own document.").into());
+            }
+            let Some(mut params) = drag.paint_drop_params(destination) else { return Ok(()) };
             params["ids"] = json!([owner(app, &hit)?]);
             params["focus"] = json!(false);
             let cmd = crate::panels::proxy_cmd(app, false);
+            if let Some(gradient) = params.get_mut("gradient").and_then(Value::as_object_mut) {
+                if cmd == "paint.setStroke" {
+                    gradient.remove("dither");
+                }
+                params["keepModel"] = json!(true);
+            }
             run(app, cmd, params)
         }
-        Payload::Panel(PanelDrag::Appearance(source)) => {
+        Payload::Panel(PanelDrag::Appearance { document, source }) if app.session.active().is_some_and(|st| st.uid == *document) => {
             let Some(hit) = hit() else { return Ok(()) };
             let target = top_object(app, &hit)?;
             if target == source.0 {
@@ -391,6 +430,16 @@ fn brush_has_art(app: &VectorcraftApp, key: &BrushKey) -> bool {
         .and_then(|d| vectorcraft_brush::find(&d.doc, &key.name))
         .and_then(|b| serde_json::to_value(b).ok()) // PLAN: assumed `Brush: Serialize` with a "type" tag, as the panel's `def`
         .is_some_and(|v| matches!(v["type"].as_str(), Some("scatter" | "art" | "pattern")))
+}
+
+/// Whether no art is under document point `p` at `zoom`, with fills counted even with Object Selection by Path Only and
+/// type objects by their area even with Type Object Selection by Path Only: a brush's or a pattern swatch's art is
+/// placed only there.
+fn no_art_at(app: &VectorcraftApp, p: Point, zoom: f64) -> bool {
+    hit_with(app, p, zoom, |doc, p, opt| {
+        vectorcraft_doc::hit::hit_test(doc, p, vectorcraft_doc::hit::HitOptions { path_only: false, type_path_only: false, ..opt })
+    })
+    .is_none()
 }
 
 /// The selected, editable gradient mesh and its points that a solid color dropped at document

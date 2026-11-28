@@ -484,6 +484,18 @@ fn tagged_templates_get_one_frozen_strings_object_for_each_site() {
 }
 
 #[test]
+fn unreachable_closures_release_their_template_objects_in_one_collection() {
+    let mut realm = es();
+    assert_eq!(
+        realm.run("function tag(value) { return value; } var site = function () { return tag`gone`; }; site(); site = null; 0"),
+        Ok(JsValue::Number(0.0)),
+    );
+    assert_eq!(realm.interp().template_objects.len(), 1);
+    realm.collect_garbage();
+    assert_eq!(realm.interp().template_objects.len(), 0);
+}
+
+#[test]
 fn template_objects_go_once_their_code_cannot_run() {
     // Each eval makes code with two template sites; once it has run, nothing can run that code.
     let mut realm = es();
@@ -613,45 +625,37 @@ fn an_array_s_spread_is_checked_against_the_elements_it_reads() {
 }
 
 #[test]
-fn an_index_setter_without_a_getter_does_not_delay_the_spread_s_check() {
-    // A setter does not run when the elements are read, so the array is still checked when
-    // spread begins, on its own and on its prototype.
+fn an_index_setter_without_a_getter_does_not_run_when_the_array_is_spread() {
+    // The iterator reads the element and the new array defines its own, so a setter on the array
+    // or on its prototype does not run, and the long array ends at the fuel limit.
     for setter in ["a", "Array.prototype"] {
         let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
-        let src = format!("var a = []; a.length = 4294967295; Object.defineProperty({setter}, 0, {{ set: function () {{}} }}); [...a]");
+        let src = format!(
+            "var ran = false; var a = []; a.length = 4294967295; Object.defineProperty({setter}, 0, {{ set: function () {{ ran = true; }} }}); [...a]"
+        );
         let long = realm.run(&src);
-        assert!(is_thrown(&long, "RangeError"), "{setter}: {long:?}");
+        assert!(matches!(&long, Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Fuel)), "{setter}: {long:?}");
+        realm.set_limits(Limits::default());
+        assert_eq!(realm.run("ran"), Ok(JsValue::Bool(false)), "{setter}");
     }
 }
 
 #[test]
-fn a_prototype_getter_behind_an_own_element_does_not_delay_the_spread_s_check() {
-    // The array's own element 0 is read instead of the getter on its prototype, so no getter can
-    // shrink it, and it is checked when spread begins.
+fn a_prototype_getter_behind_an_own_element_is_not_read_by_the_spread() {
+    // The array's own element 0 is read instead of the getter on its prototype, so the getter does
+    // not shrink it, and the long array ends at the fuel limit.
     let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
     let src = "var a = [7]; Object.defineProperty(Array.prototype, 0, { get: function () { a.length = 1; return 0; } }); \
                a.length = 4294967295; [...a]";
     let long = realm.run(src);
-    assert!(is_thrown(&long, "RangeError"), "{long:?}");
+    assert!(matches!(&long, Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Fuel)), "{long:?}");
+    realm.set_limits(Limits::default());
+    assert_eq!(realm.run("a.length"), Ok(JsValue::Number(4294967295.0)));
     // A getter on the prototype with no own element in front of it is read, and shrinks the array.
     let shrink = "var a = []; a.length = 4294967295; \
                   Object.defineProperty(Array.prototype, 0, { get: function () { a.length = 1; return 7; } }); \
                   var b = [...a]; b.length === 1 && b[0] === 7";
     truth(shrink);
-}
-
-#[test]
-fn looking_for_index_getters_takes_fuel_for_each_property() {
-    // Each attempt to spread the long array looks at every one of its 10,000 elements, so each
-    // takes at least that much fuel.
-    let fuel = 10_000_000;
-    let mut realm = Realm::with_options(es_options(), Limits { fuel, ..Limits::default() });
-    let setup = "var a = []; for (var i = 0; i < 10000; i++) a[i] = i; a.length = 4294967295; 0";
-    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
-    let attempt = "var ok = false; try { [...a]; } catch (e) { ok = e instanceof RangeError; } ok";
-    assert_eq!(realm.run(attempt), Ok(JsValue::Bool(true)));
-    let used = fuel - realm.interp().fuel;
-    assert!(used >= 10_000, "{used}");
 }
 
 #[test]

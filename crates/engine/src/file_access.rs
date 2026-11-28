@@ -207,9 +207,16 @@ pub fn unconfined<T>(f: impl FnOnce() -> T) -> T {
     with_gate_reads_exempt(true, || with_scope(Some(Scope::Unconfined), f))
 }
 
+/// Run `f`, a read of a file in one of the app's own folders, with reads exempt from the gate of
+/// the script command this thread runs. Unlike [`unconfined`], the roots in force still apply.
+pub(crate) fn app_folder_read<T>(f: impl FnOnce() -> T) -> T {
+    with_gate_reads_exempt(true, f)
+}
+
 thread_local! {
     /// Are reads on this thread exempt from the gate of the script command it runs? Only inside an
-    /// [`unconfined`] entered after the gate was put in force ([`with_script_gate`]).
+    /// [`unconfined`] or an [`app_folder_read`] entered after the gate was put in force
+    /// ([`with_script_gate`]).
     static GATE_READS_EXEMPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -355,7 +362,8 @@ impl ScriptGate {
         ScriptGate { also: Some(also), ..self.clone() }
     }
 
-    fn check(&self, path: &str, access: Access) -> Result<(), String> {
+    /// May `path` be read (or written) through this gate?
+    pub(crate) fn check(&self, path: &str, access: Access) -> Result<(), String> {
         if let Some(also) = &self.also {
             also.check(path, access)?;
         }

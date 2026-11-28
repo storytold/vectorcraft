@@ -193,10 +193,12 @@ fn pages_sharing_a_large_content_stream_are_hashed_within_a_budget() {
     stream.extend_from_slice(&packed);
     stream.extend_from_slice(b"\nendstream");
     let bytes = raw_pdf_bytes(objects.into_iter().enumerate().map(|(i, o)| if i == 5 { stream.clone() } else { o.into_bytes() }));
-    let start = std::time::Instant::now();
+    let before = crate::editing::DECODED.get();
     let e = editing(&bytes).unwrap();
     assert_eq!((e.data.as_slice(), e.intact), (&b"hello"[..], false));
-    assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
+    // The content hashed, and the one stream that went past it.
+    let decoded = crate::editing::DECODED.get() - before;
+    assert!(decoded <= (crate::editing::MAX_HASHED + (1 << 20)) as u64, "decoded {decoded} bytes");
 }
 
 #[test]

@@ -16,6 +16,15 @@
 | `crates/text/patterns/hyph-or.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-or.tex | MIT (selected option) | Unmodified; full license in file |
 | `crates/text/patterns/hyph-as.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-as.tex | MIT (selected option) | Unmodified; full license in file |
 
+## Printing-condition characterization data
+
+Fogra's terms (https://fogra.org/en/downloads/work-tools/characterisation-data): "Free use and redistribution of the Fogra characterisation data is permitted, including redistribution as part of commercial and non-commercial software, provided that the data are distributed unmodified and Fogra is identified as the source. The designation FOGRAxx may be used solely to identify the respective reference data. Such use does not imply certification, approval or endorsement by Fogra." VectorCraft computes its Coated CMYK (FOGRA51) and Uncoated CMYK (FOGRA52) working spaces from these files at run time; the files themselves are not changed.
+
+| Asset | Author | Source | Licence | Notes |
+|---|---|---|---|---|
+| `crates/color/data/FOGRA51.txt` | Fogra Forschungsgesellschaft Druck e.V. (www.fogra.org) | https://fogra.org/fileadmin/files/7_downloads/Charakterisierungsdaten/F51-52.zip | Fogra characterization data terms (above): redistribution of the unmodified data with Fogra named as the source | Unmodified, byte for byte (SHA-256 `ad472a1c0bdafd558597ff93eeda5175805086565af814cb6346e910e2f25aa5`, checked by a test) |
+| `crates/color/data/FOGRA52.txt` | Fogra Forschungsgesellschaft Druck e.V. (www.fogra.org) | https://fogra.org/fileadmin/files/7_downloads/Charakterisierungsdaten/F51-52.zip | Fogra characterization data terms (above): redistribution of the unmodified data with Fogra named as the source | Unmodified, byte for byte (SHA-256 `be4f0732328ed62ade63ec7f317d3b9e9dad6bbe2430fefddaf0f901d5ba13d6`, checked by a test) |
+
 Every non-code asset in this repository (icons, images, fonts, example art, colour profiles, presets) is listed here with its author, source and licence. `cargo xtask assets` (part of `cargo xtask ci`) fails if an asset file is missing from this table.
 
 **Policy (mandatory):** VectorCraft contains **no Adobe iconography, images, artwork, presets, swatch/brush/symbol/pattern libraries or ICC profiles**. Every asset is either original work by VectorCraft contributors, or third-party material under an open licence (OSI open source, public domain / CC0, or Creative Commons that allows redistribution), and it is attributed below. Screenshots of Adobe software are never committed. The one exception is the ArtCraft name, wordmark and logos in `docs/brand/`: ArtCraft trademarks, not open source, usable only under [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt).
@@ -24,7 +33,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 
 **Font files are never committed here.** Fonts shared by the Crafting Apps live in [storytold/craft-fonts](https://github.com/storytold/craft-fonts). The small Latin UI/document fonts below predate that rule and stay.
 
-**Optional build input: craft-fonts.** Builds made with `CRAFT_FONTS_DIR=<craft-fonts checkout>` (all official releases) embed the Japanese fonts listed in its [`ATTRIBUTION.md`](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md): BIZ UDPGothic Regular and Bold, Shippori Mincho Regular and BIZ UDMincho Regular (web builds: BIZ UDPGothic Regular only), all under the SIL Open Font License 1.1. They are not files in this repository; release packages carry each one's `OFL-<family>.txt`. Builds without `CRAFT_FONTS_DIR` embed none of them.
+**Optional build input: craft-fonts.** Builds made with `CRAFT_FONTS_DIR=<craft-fonts checkout>` (all official releases) embed the Japanese fonts listed in its [`ATTRIBUTION.md`](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md): BIZ UDPGothic Regular and Bold, Shippori Mincho Regular and BIZ UDMincho Regular (web builds: BIZ UDPGothic Regular only), all under the SIL Open Font License 1.1. They are not files in this repository; release packages carry each one's `OFL-<family>.txt`. Builds without `CRAFT_FONTS_DIR` embed none of them. Desktop builds with a checkout whose opt-in `fonts/latin-manifest.txt` lists Noto Sans Condensed SemiBold (The Noto Project Authors, SIL Open Font License 1.1, from the [notofonts/latin-greek-cyrillic NotoSans-v2.015 release](https://github.com/notofonts/latin-greek-cyrillic/releases/tag/NotoSans-v2.015)) also embed that face, for document tab titles.
 
 | Asset | Author | Source | Licence | Notes |
 |---|---|---|---|---|
@@ -141,6 +150,8 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-arrow-down.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-arrow-extend.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-arrow-fill.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 | The Selection and Direct Selection arrows' fill, painted black or white under their outline |
+| `assets/icons/dc-arrow-left.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-arrow-right.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-arrow-tip.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-arrow-up.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-artboard.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
@@ -213,6 +224,8 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-graphic-styles.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-grid-view.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-group-select.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-guide-horizontal.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a ruler down the left with a line across) | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-guide-vertical.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a ruler along the top with a line down) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-help.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a question mark in a circle) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-join-bevel.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-join-miter.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |

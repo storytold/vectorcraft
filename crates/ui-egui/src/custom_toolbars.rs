@@ -8,9 +8,12 @@
 //! The ••• button at a toolbar's foot opens the All Tools drawer beside it, and tools dragged from the
 //! drawer fill it (`edit_toolbar`, with the `toolbar` param of its commands). The + button above it
 //! opens Add Tool…, a menu of every tool where a click adds the tool at the end, and whose Remove Tool
-//! items take tools out: VectorCraft's own way to fill a toolbar without a drag. Each toolbar is listed
-//! under Window › Toolbars, where its item shows or hides it. Window › Toolbars › Manage Toolbars (also
-//! in the drawer's menu) renames, copies and deletes them.
+//! items take tools out: VectorCraft's own way to fill a toolbar without a drag. The same menu's Add
+//! Command submenu searches the Command Palette's results and adds a command button after the tools,
+//! which runs what the command's menu item runs (`toolbar.addCommand`, `toolbar.removeCommand`);
+//! command buttons are VectorCraft's own. Each toolbar is listed under Window › Toolbars, where its
+//! item shows or hides it. Window › Toolbars › Manage Toolbars (also in the drawer's menu) renames,
+//! copies and deletes them.
 //!
 //! Behavior from the public documentation:
 //! <https://helpx.adobe.com/illustrator/using/tools.html> (Create and manage toolbars: New Toolbar
@@ -23,11 +26,11 @@
 use std::collections::BTreeSet;
 
 use craft::behavior::IconId;
-use craft::behavior::dock::{Action, DockEdge};
-use craft::ui::buttons::IconButton;
-use craft::ui::contract::{PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::behavior::dock::{Action, DockEdge, DockPlacement, Target};
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::dialog::DialogResult;
-use craft::ui::display::Divider;
+use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::form_dialogs::{
     DialogFields, FieldValue, HostedListManager, HostedParamDialog, ListManagerAction, ListManagerChoice, ListManagerEntry, ListManagerWords, Param,
@@ -35,6 +38,7 @@ use craft::ui::patterns::form_dialogs::{
 };
 use craft::ui::rails::RailFooter;
 use craft::ui::runtime::commands::CommandRef;
+use craft::ui::text::TextField;
 use egui::pos2;
 use serde_json::{Value, json};
 use vectorcraft_tools::tool_info;
@@ -47,6 +51,8 @@ use crate::{VectorcraftApp, panel_docking};
 pub(crate) const MAX: usize = 64;
 /// The most characters a toolbar's name has.
 const MAX_NAME: usize = 200;
+/// The most command buttons a toolbar holds.
+const MAX_COMMANDS: usize = 200;
 /// Where the first toolbar made floats, right of the Tools panel; the next ones go lower.
 const NEW_AT: [f32; 2] = [96.0, 120.0];
 /// The kind every Manage Toolbars entry has: all of them rename in place.
@@ -179,6 +185,7 @@ fn blank(id: u32, name: String) -> CustomToolbar {
         slot_tool: Default::default(),
         double: false,
         floating: Vec::new(),
+        commands: Vec::new(),
     }
 }
 
@@ -274,8 +281,10 @@ pub(crate) fn delete(app: &mut VectorcraftApp, name: &str) -> Result<(), String>
 
 /// Keep named toolbars, each name once whatever its case and at most [`MAX_NAME`] characters, of
 /// known tools, each once in its toolbar, each group's tool chosen last only when the group holds it,
-/// and each with an id of its own: one saved without an id or repeating an earlier toolbar's gets
-/// the lowest id nobody holds (a hand-edited preferences file or workspace).
+/// at most [`MAX_COMMANDS`] command buttons, each command once and none for a tool, and each with an
+/// id of its own: one saved without an id or repeating an earlier toolbar's gets the lowest id nobody
+/// holds (a hand-edited preferences file or workspace). A command that is not known now stays: it may
+/// be an uninstalled plug-in's.
 pub(crate) fn sanitize(bars: &mut Vec<CustomToolbar>) {
     let mut names = BTreeSet::new();
     bars.retain_mut(|b| {
@@ -285,6 +294,9 @@ pub(crate) fn sanitize(bars: &mut Vec<CustomToolbar>) {
             s.retain(|id| tool_info(id).is_some() && seen.insert(id.clone()));
         }
         b.slots.retain(|s| !s.is_empty());
+        let mut commands = BTreeSet::new();
+        b.commands.retain(|id| !id.trim().is_empty() && !id.starts_with("tool:") && commands.insert(id.clone()));
+        b.commands.truncate(MAX_COMMANDS);
         let old = std::mem::take(&mut b.last_used);
         for (first, slot) in b.slots.iter().filter_map(|s| Some((s.first()?, s))) {
             let at = crate::toolbar::slot_id(first);
@@ -345,13 +357,140 @@ fn set_shown(app: &mut VectorcraftApp, name: &str, show: Option<bool>) -> Result
     Ok(show)
 }
 
+// ---------- docking and floating ----------
+
+/// The window edge and column index from that edge where `panel` docks; none while it floats or is hidden.
+fn docked_at(ui: &UiState, panel: &str) -> Option<(DockEdge, usize)> {
+    panel_docking::column_of(panel_docking::layout_of(ui), panel).and_then(|(slot, _)| slot)
+}
+
+/// The window edge toolbar panel `panel` docks at: while docked, its edge; while it floats or is
+/// hidden, the edge of the docked panel the dock records it left; else the left edge.
+fn last_edge(ui: &UiState, panel: &str) -> DockEdge {
+    let ws = &ui.dock_workspace;
+    let left = ws.floated().iter().chain(ws.hidden()).find(|(p, _)| p == panel).and_then(|(_, at)| at.anchor.as_deref());
+    docked_at(ui, panel).or_else(|| left.and_then(|anchor| docked_at(ui, anchor))).map_or(DockEdge::Start, |(edge, _)| edge)
+}
+
+/// The `side` param's name of `edge`.
+fn side_name(edge: DockEdge) -> &'static str {
+    if edge == DockEdge::End { "right" } else { "left" }
+}
+
+/// Where toolbar `bar` is: `{toolbar, floating, side, order, pos}`, as `window.toolbar.dock` and
+/// `window.toolbar.float` return it.
+fn placement(app: &VectorcraftApp, bar: &str) -> Result<Value, String> {
+    let b = find(&app.ui, bar).ok_or_else(|| format!("no toolbar named `{bar}`"))?;
+    let panel = panel_id(b.id);
+    let docked = docked_at(&app.ui, &panel);
+    let pos = panel_docking::floating_window(panel_docking::layout_of(&app.ui), &panel).map(|w| [w.rect.min.x, w.rect.min.y]);
+    Ok(json!({
+        "toolbar": b.name,
+        "floating": docked.is_none(),
+        "side": side_name(last_edge(&app.ui, &panel)),
+        "order": docked.map(|(_, n)| n),
+        "pos": pos,
+    }))
+}
+
+/// `window.toolbar.dock`: docks the toolbar named `name` as a column of the dock on the `side` edge
+/// (omitted: [`last_edge`]), at column `order` from the window edge (omitted: the innermost, or where it
+/// is when it docks at that edge already). Bad params are errors and change nothing.
+fn dock(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let name = p.get("name").and_then(Value::as_str).ok_or("name (a toolbar's name) is required")?;
+    let bar = find(&app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
+    let (id, panel, name) = (bar.id, panel_id(bar.id), bar.name.clone());
+    let edge = match p.get("side") {
+        None | Some(Value::Null) => last_edge(&app.ui, &panel),
+        // `Start` and `End`, as panels take them, too.
+        Some(Value::String(s)) if s.eq_ignore_ascii_case("left") || s.eq_ignore_ascii_case("start") => DockEdge::Start,
+        Some(Value::String(s)) if s.eq_ignore_ascii_case("right") || s.eq_ignore_ascii_case("end") => DockEdge::End,
+        Some(Value::String(s)) => return Err(format!("side is left or right, not `{s}`")),
+        Some(v) => return Err(format!("side is left or right, not `{v}`")),
+    };
+    // A panel of each other column of that edge's dock, from the window edge inwards.
+    let others: Vec<String> = panel_docking::edge_columns(panel_docking::layout_of(&app.ui), edge)
+        .iter()
+        .filter(|c| !c.panels().any(|q| *q == panel))
+        .filter_map(|c| c.panels().next().cloned())
+        .collect();
+    let order = match p.get("order") {
+        None | Some(Value::Null) => None,
+        Some(v) => match v.as_u64().and_then(|n| usize::try_from(n).ok()).filter(|&n| n <= others.len()) {
+            Some(n) => Some(n),
+            None => return Err(format!("order is a whole number from 0 to {}, not `{v}`", others.len())),
+        },
+    };
+    let here = docked_at(&app.ui, &panel).filter(|(e, _)| *e == edge).map(|(_, n)| n);
+    if here.is_none() {
+        // A new innermost column of that edge's dock; a hidden toolbar shows.
+        let hidden = !panel_docking::layout_of(&app.ui).contains(&panel);
+        app.run("window.panel.dock", json!({ "panel": panel, "side": if edge == DockEdge::End { "End" } else { "Start" } }))?;
+        shown_again(app, id, hidden);
+    }
+    let now = docked_at(&app.ui, &panel).map(|(_, n)| n);
+    if let Some(n) = order.filter(|n| Some(*n) != now) {
+        let to = match others.get(n) {
+            Some(anchor) => Target::at(anchor.clone(), DockPlacement::column(false)),
+            None => match others.last() {
+                Some(last) => Target::at(last.clone(), DockPlacement::column(true)),
+                None => return placement(app, &name),
+            },
+        };
+        let ctx = app.ui_ctx.clone();
+        panel_docking::apply(app, ctx.as_ref(), vec![Action::move_panel(panel, to)])?;
+    }
+    // A toolbar where it was asked to go shows too, which ends a Tab hide.
+    panel_docking::show_panels(app);
+    placement(app, &name)
+}
+
+/// `window.toolbar.float`: floats the toolbar named `name` with its top-left corner at `x`, `y` in
+/// window points (both or neither; neither: where the dock floats a panel, and a floating toolbar
+/// stays where it is).
+fn float(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let name = p.get("name").and_then(Value::as_str).ok_or("name (a toolbar's name) is required")?;
+    let bar = find(&app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
+    let (id, panel, name) = (bar.id, panel_id(bar.id), bar.name.clone());
+    let coord = |k: &str| match p.get(k) {
+        None | Some(Value::Null) => Some(None),
+        Some(v) => v.as_f64().filter(|f| f.abs() <= 1e6).map(|f| Some(f as f32)),
+    };
+    let at = match (coord("x"), coord("y")) {
+        (Some(Some(x)), Some(Some(y))) => Some(pos2(x, y)),
+        (Some(None), Some(None)) => None,
+        _ => return Err("x and y must both be numbers from -1000000 to 1000000".into()),
+    };
+    let window = panel_docking::floating_window(panel_docking::layout_of(&app.ui), &panel).map(|w| w.rect);
+    let hidden = !panel_docking::layout_of(&app.ui).contains(&panel);
+    match (at, window) {
+        (Some(at), _) => panel_docking::place_floating(app, &panel, at, window.map_or(0.0, |r| r.width()))?,
+        (None, None) => {
+            app.run("window.panel.float", json!({ "panel": panel }))?;
+        }
+        (None, Some(_)) => {}
+    }
+    shown_again(app, id, hidden);
+    // A toolbar floating already shows too, which ends a Tab hide.
+    panel_docking::show_panels(app);
+    placement(app, &name)
+}
+
+/// After a command showed toolbar `id`, which was `hidden`, the groups torn off it show again, as
+/// Show Toolbar brings them back.
+fn shown_again(app: &mut VectorcraftApp, id: u32, hidden: bool) {
+    if hidden && panel_docking::layout_of(&app.ui).contains(&panel_id(id)) {
+        crate::toolbar::strips_follow(app, &Owner::Toolbar(id), true);
+    }
+}
+
 /// Opens New Toolbar: a name box whose OK is held while the name is refused, the refusal shown under
 /// the row.
 fn open_new(app: &mut VectorcraftApp) -> Result<(), String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let fields = DialogFields::from_pairs([("name", blank_name(&app.ui))]);
-    let dialog = HostedParamDialog::new(&ctx, NEW_KEY, fields, |_| {
-        ParamDialog::new(NEW_KEY, tl!("New Toolbar"), vec![Param::new("name", tl!("Name:"), ParamKind::text(""))])
+    let dialog = HostedParamDialog::new(&ctx, NEW_KEY, fields, |fields| {
+        ParamDialog::new(NEW_KEY, tl!("New Toolbar"), vec![Param::new("name", tl!("Name:"), ParamKind::text(""))]).values(Bind::bound(fields))
     });
     crate::dialogs::host::open_held(app, dialog, |app, answer: &ParamResult| {
         let name = match answer.fields.get("name") {
@@ -432,6 +571,41 @@ fn run_choice(app: &mut VectorcraftApp, choice: &ListManagerChoice) {
     }
 }
 
+/// The toolbar the `toolbar` param of `toolbar.addCommand` and `toolbar.removeCommand` names,
+/// which must be one made with New Toolbar: the Tools panel's toolbar holds tools only.
+fn command_target(ui: &UiState, p: &Value) -> Result<usize, String> {
+    let name = target(ui, p)?.ok_or("toolbar (a toolbar's name) is required: only toolbars made with New Toolbar hold commands")?;
+    index(ui, &name)
+}
+
+/// Put the command button for the Command Palette result `id` in `bar`, moving it if it is there
+/// already: at place `at` among its command buttons (0 = the first; none: at the end). A command
+/// that is gone (an uninstalled plug-in's) can still move, but not be added. A tool, and a UI
+/// command that fails without params, can't be added.
+pub(crate) fn add_command(bar: &mut CustomToolbar, id: &str, at: Option<usize>) -> Result<(), String> {
+    if id.starts_with("tool:") {
+        return Err(format!("`{id}` is a tool: toolbar.addTool adds tools"));
+    }
+    if crate::shortcut_editor::ui_command_needs_params(id) {
+        return Err(format!("`{id}` needs params, which a click on a button does not give"));
+    }
+    if !bar.commands.iter().any(|c| c == id) && !crate::palette::is_command(id) {
+        return Err(format!("unknown command `{id}`"));
+    }
+    let mut list: Vec<String> = bar.commands.iter().filter(|c| *c != id).cloned().collect();
+    if list.len() >= MAX_COMMANDS {
+        return Err(format!("a toolbar holds at most {MAX_COMMANDS} commands"));
+    }
+    let at = match at {
+        None => list.len(),
+        Some(n) if n <= list.len() => n,
+        Some(n) => return Err(format!("`at` must be a whole number from 0 to {} (got {n})", list.len())),
+    };
+    list.insert(at, id.to_string());
+    bar.commands = list;
+    Ok(())
+}
+
 /// The commands of the toolbars made with New Toolbar; `None` for other ids.
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     Some(match id {
@@ -464,6 +638,27 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             let name = p.get("name").and_then(Value::as_str).ok_or("name (a toolbar's name) is required")?;
             delete(app, name).map(|_| Value::Null)
         })(),
+        "toolbar.addCommand" => (|| {
+            let k = command_target(&app.ui, p)?;
+            let id = p.get("command").and_then(Value::as_str).ok_or("command (a command's id) is required")?;
+            let at = match p.get("at") {
+                None | Some(Value::Null) => None,
+                Some(v) => Some(
+                    v.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or_else(|| format!("`at` must be 0 or a larger whole number (got {v})"))?,
+                ),
+            };
+            let bar = app.ui.custom_toolbars.get_mut(k).ok_or("no such toolbar")?;
+            add_command(bar, id, at).map(|_| json!(bar.commands))
+        })(),
+        "toolbar.removeCommand" => (|| {
+            let k = command_target(&app.ui, p)?;
+            let id = p.get("command").and_then(Value::as_str).ok_or("command (a command's id) is required")?;
+            let bar = app.ui.custom_toolbars.get_mut(k).ok_or("no such toolbar")?;
+            bar.commands.retain(|c| c != id);
+            Ok(json!(bar.commands))
+        })(),
+        "window.toolbar.dock" => dock(app, p),
+        "window.toolbar.float" => float(app, p),
         "window.toolbar.list" => {
             let layout = panel_docking::layout_of(&app.ui);
             Ok(json!(
@@ -474,15 +669,15 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                         let panel = panel_id(b.id);
                         let place = panel_docking::column_of(layout, &panel);
                         let docked = place.as_ref().and_then(|(at, _)| at.as_ref());
-                        let side = if matches!(docked, Some((DockEdge::End, _))) { "right" } else { "left" };
                         let double = place.as_ref().is_some_and(|(_, column)| column.steps == Some(2));
                         json!({
                             "name": b.name,
                             "shown": panel_docking::visible(app, &panel),
                             "double": double,
                             "slots": b.slots,
+                            "commands": b.commands,
                             "floating": docked.is_none(),
-                            "side": side,
+                            "side": side_name(last_edge(&app.ui, &panel)),
                             "order": docked.map(|(_, n)| *n),
                         })
                     })
@@ -523,19 +718,100 @@ pub(crate) fn shown_tool(bar: &CustomToolbar, active: &'static str, tools: &[&'s
     Some(bar.last_used.get(crate::toolbar::slot_id(first)).and_then(|id| tools.iter().copied().find(|t| *t == id.as_str())).unwrap_or(first))
 }
 
-/// Add Tool…, in the footer of the toolbar with id `id`: the + button opens a menu where, under Remove
-/// Tool, a click takes one of the toolbar's tools out; then every tool under the All Tools drawer's
-/// headings, where a click adds one at the end (dimmed: in the toolbar already). `measured`: the rail
-/// measures its footer, which draws the button alone.
-pub(crate) fn add_menu(app: &VectorcraftApp, ui: &mut egui::Ui, id: u32, _footer: RailFooter, measured: bool) {
-    let Some(bar) = app.ui.custom_toolbars.iter().find(|b| b.id == id) else { return };
-    let held: Vec<&'static str> = bar.slots.iter().flatten().filter_map(|id| tool_info(id).map(|t| t.id)).collect();
-    let plus = IconButton::new(IconId::new("plus")).label(tl!("Add Tool…")).popup(PopupKind::Menu).show(ui).response;
-    // The rail measures its footer too: the menu opens from the button the rail shows.
-    if measured || craft::ui::runtime::measure::active(ui.ctx()) {
+/// What a command button shows, worked out before its toolbar's footer is drawn.
+#[derive(Clone, Debug)]
+struct CommandLook {
+    /// The Command Palette result it runs.
+    id: String,
+    /// Its label, name and command; none while the palette lists no result with its id (an
+    /// uninstalled plug-in's command).
+    text: Option<crate::palette::ButtonText>,
+}
+
+impl CommandLook {
+    /// The label the button shows: the command's, or its id while the command is gone.
+    fn label(&self) -> &str {
+        self.text.as_ref().map_or(self.id.as_str(), |t| t.label.as_str())
+    }
+
+    /// Its full name, with the menu path that tells it apart from a command of the same label, or
+    /// its id while the command is gone.
+    fn name(&self) -> &str {
+        self.text.as_ref().map_or(self.id.as_str(), |t| t.name.as_str())
+    }
+}
+
+/// How each command button of the toolbar with id `id` looks now.
+fn command_looks(app: &mut VectorcraftApp, ui: &egui::Ui, id: u32) -> Vec<CommandLook> {
+    let commands = app.ui.custom_toolbars.iter().find(|b| b.id == id).map(|b| b.commands.clone()).unwrap_or_default();
+    let texts = crate::palette::button_texts(app, ui, &commands);
+    commands.into_iter().zip(texts).map(|(id, text)| CommandLook { id, text }).collect()
+}
+
+/// A command button on the toolbar named `bar`: the command's label, cut short with … when it is
+/// longer than the toolbar is wide, and its full name and shortcut in its tooltip. A click runs what a
+/// pick of the command in the Command Palette runs, and while the command's menu item is dimmed the
+/// button is dimmed too. A command that is gone shows its id, dimmed. Its context menu moves it up or
+/// down among the toolbar's command buttons (`place`: its place and how many there are) and takes it
+/// out; `measuring`: the rail measures its footer, which draws the button alone.
+fn command_button(app: &VectorcraftApp, ui: &mut egui::Ui, bar: &str, look: &CommandLook, place: (usize, usize), measuring: bool) {
+    let shortcut = crate::menus::shortcut_of(app, &look.id).map(|c| c.display(crate::keymap::platform()));
+    let tip = match (&look.text, shortcut) {
+        (None, _) => format!("{}\n{}", look.id, crate::i18n::msg(&format!("command `{}` is not available right now", look.id))),
+        (Some(t), Some(keys)) => format!("{}  {keys}", t.name),
+        (Some(t), None) => t.name.clone(),
+    };
+    let button = match &look.text {
+        Some(t) => Button::command(t.command.clone()).label(look.label().to_string()),
+        None => Button::new(look.label().to_string()).enabled(false),
+    };
+    let response = button.tooltip(tip).show(ui).response;
+    if measuring {
         return;
     }
-    let command = |verb: &str, tool: &str| CommandRef::with_params(verb, json!({ "tool": tool, "toolbar": bar.name }));
+    let (i, n) = place;
+    let moved = |at: usize| CommandRef::with_params("toolbar.addCommand", json!({ "command": look.id, "toolbar": bar, "at": at }));
+    let removed = CommandRef::with_params("toolbar.removeCommand", json!({ "command": look.id, "toolbar": bar }));
+    Menu::context(look.name().to_string(), &response).show(ui, |ui, _| {
+        MenuItem::command(moved(i.saturating_sub(1))).label(tl!("Move Up")).enabled(i > 0).show(ui);
+        MenuItem::command(moved(i + 1)).label(tl!("Move Down")).enabled(i + 1 < n).show(ui);
+        MenuItem::command(removed.clone()).label(tl!("Remove from Toolbar")).show(ui);
+    });
+}
+
+/// The most commands the Add Command submenu lists for a search.
+const COMMAND_RESULTS: usize = 30;
+
+/// Where the Add Command submenu of the toolbar with id `id` keeps the text of its search field.
+pub(crate) fn command_query_id(id: u32) -> egui::Id {
+    egui::Id::unique(("custom-toolbar-command-query", id))
+}
+
+/// Add Tool…, in the footer of the toolbar with id `id`, after the toolbar's command buttons
+/// ([`command_button`]): the + button opens a menu where, under Remove Tool, a click takes one of the
+/// toolbar's tools out; then every tool under the All Tools drawer's headings, where a click adds one
+/// at the end (dimmed: in the toolbar already); then, under Remove Command, the toolbar's command
+/// buttons by their full names, which a click takes out, and the Add Command submenu: a search field
+/// over the Command Palette's results other than tools, whose first [`COMMAND_RESULTS`] matches a
+/// click adds at the end (dimmed: on the toolbar already). `measured`: the rail measures its footer,
+/// which draws the buttons alone.
+pub(crate) fn add_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u32, _footer: RailFooter, measured: bool) {
+    let Some(bar) = app.ui.custom_toolbars.iter().find(|b| b.id == id) else { return };
+    let held: Vec<&'static str> = bar.slots.iter().flatten().filter_map(|id| tool_info(id).map(|t| t.id)).collect();
+    let name = bar.name.clone();
+    let measuring = measured || craft::ui::runtime::measure::active(ui.ctx());
+    let looks = command_looks(app, ui, id);
+    for (i, look) in looks.iter().enumerate() {
+        command_button(app, ui, &name, look, (i, looks.len()), measuring);
+    }
+    let plus = IconButton::new(IconId::new("plus")).label(tl!("Add Tool…")).popup(PopupKind::Menu).show(ui).response;
+    // The rail measures its footer too: the menu opens from the button the rail shows.
+    if measuring {
+        return;
+    }
+    let command = |verb: &str, tool: &str| CommandRef::with_params(verb, json!({ "tool": tool, "toolbar": name }));
+    let query_id = command_query_id(id);
+    let mut query: String = ui.data(|d| d.get_temp(query_id)).unwrap_or_default();
     Menu::new(tl!("Add Tool…")).opened_by(&plus, Trigger::Click).show(ui, |ui, _| {
         if !held.is_empty() {
             MenuItem::heading(crate::i18n::colon(tl!("Remove Tool"))).show(ui);
@@ -550,7 +826,35 @@ pub(crate) fn add_menu(app: &VectorcraftApp, ui: &mut egui::Ui, id: u32, _footer
                 MenuItem::command(command("toolbar.addTool", tool.id)).label(tool.label).enabled(!held.contains(&tool.id)).show(ui);
             }
         }
+        Divider::horizontal().show(ui);
+        if !looks.is_empty() {
+            MenuItem::heading(crate::i18n::colon(tl!("Remove Command"))).show(ui);
+            for look in &looks {
+                let removed = CommandRef::with_params("toolbar.removeCommand", json!({ "command": look.id, "toolbar": name }));
+                MenuItem::command(removed).label(look.name().to_string()).show(ui);
+            }
+            Divider::horizontal().show(ui);
+        }
+        Menu::submenu_row(ui, tl!("Add Command"), |ui, cx| {
+            // The field drives the submenu: Up and Down move its active row and Enter runs it, while
+            // typing stays in the field.
+            TextField::search(tl!("Search Commands"), Bind::bound(&mut query)).placeholder(tl!("Search Commands")).drives(cx.resolved.id).show(ui);
+            if query.trim().is_empty() {
+                Text::new(tl!("Type to find a command")).shade(Shade::Muted).show(ui);
+                return;
+            }
+            let found = crate::palette::command_matches(app, ui, &query, COMMAND_RESULTS);
+            if found.is_empty() {
+                Text::new(tl!("No matching commands")).shade(Shade::Muted).show(ui);
+            }
+            for (command, shown) in found {
+                let on = !looks.iter().any(|l| l.id == command);
+                let added = CommandRef::with_params("toolbar.addCommand", json!({ "command": command, "toolbar": name }));
+                MenuItem::command(added).label(shown).enabled(on).show(ui);
+            }
+        });
     });
+    ui.data_mut(|d| d.insert_temp(query_id, query));
 }
 
 #[cfg(test)]
@@ -562,6 +866,55 @@ mod tests {
 
     fn app() -> VectorcraftApp {
         VectorcraftApp::new(Session::new(), Default::default())
+    }
+
+    #[test]
+    fn the_new_toolbar_dialog_creates_and_retries_the_typed_name() {
+        use crate::tests::panel_harness::Panel;
+        use crate::tests::picks::open_dialogs;
+        use egui::{Key, Modifiers};
+
+        fn type_name(panel: &mut Panel, name: &str) {
+            panel.click("Name");
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(name);
+            panel.key(Key::Tab, Modifiers::NONE);
+        }
+
+        let mut panel = Panel::new(crate::testing::windowed(app()), crate::tests::picks::dialogs);
+        panel.room(egui::vec2(800.0, 600.0));
+        panel.app().run(NEW_KEY, json!({})).unwrap();
+        panel.frame();
+        let suggested = blank_name(&panel.app().ui);
+        assert_eq!(panel.value("Name").as_deref(), Some(suggested.as_str()), "the dialog opens with the suggested name");
+        type_name(&mut panel, "Drawing tools");
+        panel.click("OK");
+        panel.frame();
+        assert!(find(&panel.app().ui, "Drawing tools").is_some(), "the typed name replaces the suggestion");
+        assert_eq!(panel.app().ui.custom_toolbars.len(), 1);
+        assert!(open_dialogs(&panel.app()).is_empty());
+
+        panel.app().run(NEW_KEY, json!({})).unwrap();
+        type_name(&mut panel, "drawing TOOLS");
+        panel.click("OK");
+        panel.frame();
+        assert_eq!(panel.app().ui.custom_toolbars.len(), 1, "a duplicate name creates nothing");
+        assert_eq!(open_dialogs(&panel.app()).len(), 1, "refusal keeps the editable dialog");
+        assert_eq!(panel.value("Name").as_deref(), Some("drawing TOOLS"));
+        type_name(&mut panel, "Retried tools");
+        panel.click("OK");
+        panel.frame();
+        assert!(find(&panel.app().ui, "Retried tools").is_some(), "a corrected name can be retried");
+        assert_eq!(panel.app().ui.custom_toolbars.len(), 2);
+        assert!(open_dialogs(&panel.app()).is_empty());
+
+        panel.app().run(NEW_KEY, json!({})).unwrap();
+        type_name(&mut panel, "Discarded tools");
+        panel.click("Cancel");
+        panel.frame();
+        assert!(find(&panel.app().ui, "Discarded tools").is_none());
+        assert_eq!(panel.app().ui.custom_toolbars.len(), 2);
+        assert!(open_dialogs(&panel.app()).is_empty());
     }
 
     /// The items of Window › Toolbars: (label, command id, params).
@@ -655,7 +1008,7 @@ mod tests {
         let names: Vec<String> = toolbars_menu(&app).into_iter().filter(|(_, id, _)| *id == "window.toolbar.custom").map(|(l, ..)| l).collect();
         assert_eq!(names, ["Mine", "Toolbar 1"]);
         let list = app.run("window.toolbar.list", json!({})).unwrap();
-        let blank = |name: &str| json!({"name": name, "shown": true, "double": false, "slots": [], "floating": true, "side": "left", "order": null});
+        let blank = |name: &str| json!({"name": name, "shown": true, "double": false, "slots": [], "commands": [], "floating": true, "side": "left", "order": null});
         assert_eq!(list, json!([blank("Mine"), blank("Toolbar 1")]));
     }
 
@@ -699,7 +1052,10 @@ mod tests {
         assert!(app.run("toolbar.addTool", json!({"tool": "pen", "toolbar": "Nope"})).is_err());
         let r = app.run("toolbar.removeTool", json!({"tool": "artboard", "toolbar": "Mine"})).unwrap();
         assert_eq!(r, json!([["pen", "curvature"]]));
+        // Its command buttons go with it.
+        app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
         let mine = find(&app.ui, "Mine").cloned().unwrap();
+        assert_eq!(mine.commands, ["object.group"]);
         // Another workspace has its own toolbars (none); coming back brings Mine back.
         app.run("window.workspace", json!({"name": "Essentials"})).unwrap();
         assert!(app.ui.custom_toolbars.is_empty());
@@ -723,8 +1079,9 @@ mod tests {
 
     /// What hides a toolbar: Window › Tools hides the Tools panel alone and a toolbar still shows, with
     /// the drawer open for it; a strip torn off a toolbar follows the toolbar and one torn off Tools
-    /// follows Tools; Tab hides the toolbar and a second Tab shows it; making, copying or showing a
-    /// toolbar while Tab hides the panels shows them again, with the other toolbars as they were
+    /// follows Tools; Tab hides the toolbar and a second Tab shows it; making, copying, showing,
+    /// docking or floating a toolbar while Tab hides the panels shows them again, with the other
+    /// toolbars as they were
     /// (VectorCraft's own rule: showing one does not turn the others off).
     #[test]
     fn a_new_toolbar_shows_without_the_tools_panel_until_tab() {
@@ -759,11 +1116,15 @@ mod tests {
         assert!(!panel_docking::panels_shown(&app));
         tab(&mut app, &ctx, 2.0);
         assert!(panel_docking::panels_shown(&app) && shown(&app, "Mine"));
-        // Made, copied or shown while Tab hides the panels, a toolbar ends the hide.
+        // Made, copied, shown, docked or floated while Tab hides the panels, a toolbar ends the hide.
         for (k, (command, params)) in [
             ("window.toolbar.new", json!({"name": "Other"})),
             ("window.toolbar.duplicate", json!({"name": "Mine"})),
             ("window.toolbar.custom", json!({"name": "Other", "show": true})),
+            // Floating already, docked, then docked where it is already.
+            ("window.toolbar.float", json!({"name": "Mine"})),
+            ("window.toolbar.dock", json!({"name": "Mine"})),
+            ("window.toolbar.dock", json!({"name": "Mine"})),
         ]
         .into_iter()
         .enumerate()
@@ -966,7 +1327,12 @@ mod tests {
         bars[0].last_used.set(slot("rectangle"), "pen".into());
         bars[4].last_used.set(slot("pen"), "curvature".into());
         bars[5].last_used.set(slot("pen"), "curvature".into());
+        // Command buttons: each once, none for a tool or a blank id; one not known now stays.
+        bars[4].commands = ["object.group", "tool:pen", " ", "object.group", "plugin:gone"].map(String::from).to_vec();
+        bars[5].commands = (0..MAX_COMMANDS + 5).map(|i| format!("plugin:p{i}")).collect();
         sanitize(&mut bars);
+        assert_eq!(bars[1].commands, ["object.group", "plugin:gone"]);
+        assert_eq!(bars[2].commands.len(), MAX_COMMANDS);
         assert_eq!(bars.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["A", "B", "C"], "a name past {MAX_NAME} characters goes too");
         assert_eq!(bars.iter().map(|b| b.id).collect::<Vec<_>>(), [1, 3, 2], "the first has none, the third repeats the second's");
         assert_eq!(bars[0].last_used.get(slot("pen")), Some(&"curvature".to_string()));
@@ -977,5 +1343,123 @@ mod tests {
         sanitize(&mut many);
         assert_eq!(many.len(), MAX);
         assert_eq!(many.iter().map(|b| b.id).collect::<BTreeSet<_>>().len(), MAX, "every toolbar has an id of its own");
+    }
+
+    /// A hidden toolbar that `window.toolbar.dock` or `window.toolbar.float` shows brings back the
+    /// group torn off it, as Show Toolbar does.
+    #[test]
+    fn docking_or_floating_a_hidden_toolbar_brings_back_its_torn_off_group() {
+        let mut app = app();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("toolbar.addTool", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
+        app.run("toolbar.addTool", json!({"tool": "curvature", "toolbar": "Mine", "slot": 0, "place": "group"})).unwrap();
+        app.run("window.floatTools", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
+        let id = find(&app.ui, "Mine").unwrap().id;
+        let strip = strip_id(&Owner::Toolbar(id), "pen");
+        let on = |app: &VectorcraftApp| panel_docking::layout_of(&app.ui).contains(&strip);
+        assert!(on(&app));
+        for (command, params) in [
+            ("window.toolbar.dock", json!({"name": "Mine"})),
+            ("window.toolbar.float", json!({"name": "Mine"})),
+            ("window.toolbar.float", json!({"name": "Mine", "x": 40, "y": 50})),
+        ] {
+            app.run("window.toolbar.custom", json!({"name": "Mine", "show": false})).unwrap();
+            assert!(!on(&app), "the strip hides with its toolbar");
+            app.run(command, params.clone()).unwrap();
+            assert!(panel_docking::layout_of(&app.ui).contains(&panel_id(id)), "{command} {params} shows the toolbar");
+            assert!(on(&app), "{command} {params} brings the strip back");
+        }
+    }
+
+    /// The dock layout, to compare.
+    fn layout(app: &VectorcraftApp) -> Value {
+        serde_json::to_value(panel_docking::layout_of(&app.ui)).unwrap()
+    }
+
+    /// Where the toolbar named `name` docks: its edge and column from that edge (none: floating).
+    fn dock_place(app: &VectorcraftApp, name: &str) -> Option<(DockEdge, usize)> {
+        docked_at(&app.ui, &panel_id(find(&app.ui, name).unwrap().id))
+    }
+
+    /// `window.toolbar.dock` docks a toolbar at an edge, innermost or at the column asked for, and
+    /// `window.toolbar.float` floats it, at x, y when given; bad params and a toolbar already where
+    /// it is asked to go change nothing, and `window.toolbar.list` reports the same places.
+    #[test]
+    fn toolbars_dock_and_float_by_their_commands() {
+        let mut app = app();
+        for name in ["A", "B", "C"] {
+            app.run("window.toolbar.new", json!({ "name": name })).unwrap();
+        }
+        assert_eq!(dock_place(&app, "A"), None, "New Toolbar floats");
+        let undo = app.session.doc().map_or(0, |d| d.history.undo.len());
+        let r = app.run("window.toolbar.dock", json!({"name": "a"})).unwrap();
+        assert_eq!((&r["toolbar"], &r["floating"], &r["side"], &r["pos"]), (&json!("A"), &json!(false), &json!("left"), &Value::Null));
+        let (edge, a) = dock_place(&app, "A").unwrap();
+        assert_eq!(edge, DockEdge::Start);
+        assert_eq!(r["order"], json!(a));
+        // Each one docked after it goes inside it; one asked to go at A's column goes outside it.
+        app.run("window.toolbar.dock", json!({"name": "B", "side": "left"})).unwrap();
+        let b = dock_place(&app, "B").unwrap().1;
+        assert!(b > dock_place(&app, "A").unwrap().1, "B docks inside A");
+        let at_a = dock_place(&app, "A").unwrap().1;
+        app.run("window.toolbar.dock", json!({"name": "C", "side": "start", "order": at_a})).unwrap();
+        let [c, a, b] = ["C", "A", "B"].map(|n| dock_place(&app, n).unwrap().1);
+        assert!(c < a && a < b, "C goes outside A: {c} {a} {b}");
+        // Docked again at the edge it docks at, with no column asked for, nothing changes.
+        let before = layout(&app);
+        app.run("window.toolbar.dock", json!({"name": "A"})).unwrap();
+        app.run("window.toolbar.dock", json!({"name": "A", "side": "left", "order": a})).unwrap();
+        assert_eq!(layout(&app), before);
+        // Bad params are errors and change nothing.
+        let columns = panel_docking::edge_columns(panel_docking::layout_of(&app.ui), DockEdge::Start).len();
+        for p in [
+            json!({"name": "A", "side": "top"}),
+            json!({"name": "A", "side": 1}),
+            json!({"name": "A", "order": columns}),
+            json!({"name": "A", "order": -1}),
+            json!({"name": "A", "order": 0.5}),
+            json!({"name": "A", "order": "1"}),
+            json!({"name": "Nope"}),
+            json!({}),
+        ] {
+            assert!(app.run("window.toolbar.dock", p.clone()).is_err(), "{p}");
+        }
+        for p in [
+            json!({"name": "A", "x": 10}),
+            json!({"name": "A", "x": 1e7, "y": 0}),
+            json!({"name": "A", "x": "1", "y": 2}),
+            json!({"name": "Nope"}),
+            json!({}),
+        ] {
+            assert!(app.run("window.toolbar.float", p.clone()).is_err(), "{p}");
+        }
+        assert_eq!(layout(&app), before);
+        // The innermost column asked for: A moves inside B.
+        app.run("window.toolbar.dock", json!({"name": "A", "order": columns - 1})).unwrap();
+        assert!(dock_place(&app, "A").unwrap().1 > dock_place(&app, "B").unwrap().1);
+        // At the right edge.
+        let r = app.run("window.toolbar.dock", json!({"name": "A", "side": "RIGHT"})).unwrap();
+        assert_eq!(r["side"], json!("right"));
+        assert_eq!(dock_place(&app, "A").map(|(e, _)| e), Some(DockEdge::End));
+        // Floated, it remembers the right edge, and docks there again.
+        let r = app.run("window.toolbar.float", json!({"name": "A"})).unwrap();
+        assert_eq!((&r["floating"], &r["side"], &r["order"]), (&json!(true), &json!("right"), &Value::Null));
+        assert!(r["pos"].is_array());
+        let listed = app.run("window.toolbar.list", json!({})).unwrap();
+        let a_row = listed.as_array().unwrap().iter().find(|t| t["name"] == "A").unwrap().clone();
+        assert_eq!((&a_row["floating"], &a_row["side"]), (&json!(true), &json!("right")));
+        // Floating already, with no x, y: it stays where it is.
+        let before = layout(&app);
+        app.run("window.toolbar.float", json!({"name": "A"})).unwrap();
+        assert_eq!(layout(&app), before);
+        let r = app.run("window.toolbar.float", json!({"name": "A", "x": 300, "y": 200})).unwrap();
+        assert_eq!(r["pos"], json!([300.0, 200.0]));
+        assert_eq!(app.run("window.toolbar.dock", json!({"name": "A"})).unwrap()["side"], json!("right"));
+        // A hidden toolbar shows where it is docked or floated to.
+        app.run("window.toolbar.custom", json!({"name": "B", "show": false})).unwrap();
+        app.run("window.toolbar.float", json!({"name": "B", "x": 50, "y": 60})).unwrap();
+        assert!(panel_docking::floating_window(panel_docking::layout_of(&app.ui), &panel_id(find(&app.ui, "B").unwrap().id)).is_some());
+        // Neither command records an undo step.
+        assert_eq!(app.session.doc().map_or(0, |d| d.history.undo.len()), undo);
     }
 }

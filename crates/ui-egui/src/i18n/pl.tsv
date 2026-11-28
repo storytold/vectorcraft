@@ -2095,6 +2095,17 @@ digits	Malayalam	Malajalam
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` oznacza zmienione ustawienia: zapisz ustawienie pod inną nazwą
 @msg	`{key}` must be an array of these names: {_1}	`{key}` musi być tablicą tych nazw: {_1}
 	Graphics	Grafiki
+	Show Contrast	Pokaż kontrast
+	Contrast For	Kontrast dla
+	Normal Text	Zwykły tekst
+	Large Text	Duży tekst
+	Contrast Background	Tło kontrastu
+	Behind Selection	Za zaznaczeniem
+	Current Color	Bieżący kolor
+	Pass	Spełnia
+	Fail	Nie spełnia
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minimalny kontrast według WCAG 2.2: zwykły tekst AA 4.5:1 (1.4.3) i AAA 7:1 (1.4.6), duży tekst AA 3:1 i AAA 4.5:1, grafika i elementy sterujące AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Tło jest odczytywane na środku zaznaczenia.
 	Local Libraries	Biblioteki lokalne
 	Add Content	Dodaj zawartość
 	Click to apply to the selected type	Kliknij, aby zastosować do zaznaczonego tekstu
@@ -4660,7 +4671,7 @@ font-technology	Variable	Zmienne
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Zaznacz › Taki sam › Kolor wypełnienia, Kolor obrysu oraz Wypełnienie i obrys dopasowują tylko ten sam odcień globalnej lub dodatkowej próbki, a nie dowolny jej odcień.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Pokazuje stronę startową, gdy nie jest otwarty żaden dokument; po wyłączeniu okno pozostaje puste, dopóki nie klikniesz Strona startowa.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mierzy obiekty razem z obrysami i efektami zmieniającymi kształt na potrzeby rozmiaru, położenia i wyrównania; cienie, poświaty i rozmycia nie są mierzone.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Przy powiększeniu 100% jeden cal dokumentu zajmuje 96 punktów ekranu zamiast 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Przy powiększeniu 100% jeden cal dokumentu wypełnia jeden cal ekranu albo 96 punktów ekranu, gdy system nie podaje użytecznego rozmiaru ekranu.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Dwukrotne kliknięcie grupy, ścieżki lub obrazu narzędziem Zaznaczanie otwiera je w trybie izolacji.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Wypełnienia i obrysy wzorkiem przekształcają się razem z kompozycją, chyba że przekształcenie lub menu panelu Przekształć wybierze inaczej.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Promienie narożników dynamicznych skalują się razem z kompozycją, chyba że skalowanie wybierze inaczej.
@@ -5071,6 +5082,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Skrypt prosi o odczyt i zapis wybranego przez Ciebie folderu wraz z całą jego zawartością.
 	Allow Once	Zezwól raz
 	Always Allow This Script	Zawsze zezwalaj temu skryptowi
+	No script has kept file access.	Żaden skrypt nie ma zachowanego dostępu do plików.
+	Read file	Odczyt pliku
+	Read and write file	Odczyt i zapis pliku
+	Read and write folder	Odczyt i zapis folderu
+	Revoke	Odwołaj
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Odwołaj usuwa dostęp zachowany dla każdej wersji skryptu. Dostęp do folderu obejmuje całą jego zawartość.
+@msg	Script file access revoked	Odwołano dostęp skryptu do plików
+@msg	The script file access was already revoked	Dostęp skryptu do plików został już odwołany
 	Deny	Odmów
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
@@ -5236,6 +5255,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` dla okna dialogowego plików skryptu musi być jedną z wartości: once, always, deny, stop
 @msg	choose a file or folder first, or deny	najpierw wybierz plik lub folder albo odmów
 @msg	the script file permissions could not be saved: {e}	nie można zapisać uprawnień skryptów do plików: {e}
+@msg	the script file permissions could not be read: {e}	nie można odczytać uprawnień skryptów do plików: {e}
 @msg	this script's file access can be allowed only once	na dostęp tego skryptu do plików można zezwolić tylko raz
 @msg	Only the person at the keyboard can allow a script's file access	Na dostęp skryptu do plików może zezwolić tylko osoba przy klawiaturze
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Skrypt otrzymuje najwyżej 2 048 plików: pliki wybrane po nich zostały pominięte
@@ -5709,6 +5729,12 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	finish editing the pattern first	najpierw zakończ edycję wzorka
 @msg	nothing encoded	nic nie zakodowano
 @msg	nothing selected	nic nie zaznaczono
+@msg	`{key}` must be a color or {_1}	`{key}` musi być kolorem lub {_1}
+@msg	the selected objects' colors differ: give `color`	kolory zaznaczonych obiektów się różnią: podaj `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	kolory zaznaczonych obiektów się różnią: podaj `opacity` lub `color`
+@msg	the active fill or stroke has no color: give `color`	aktywne wypełnienie lub obrys nie ma koloru: podaj `color`
+@msg	the active fill or stroke is hidden: give `color`	aktywne wypełnienie lub obrys jest ukryte: podaj `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	aktywne wypełnienie lub obrys jest rysowane przez maskę krycia: podaj `color`
 @msg	nothing selected is in a group	nic z zaznaczenia nie należy do grupy
 @msg	nothing to align	nie ma czego wyrównać
 @msg	nothing to distort	nie ma czego zniekształcić
@@ -7169,6 +7195,8 @@ axis	Y Axis	Oś Y
 	Cancel Plug-in Run	Anuluj działanie wtyczki
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} zakończył działanie, ale w międzyczasie zmienił się dokument lub wtyczka: uruchom ją ponownie
 @msg	Running “{name}”…	Uruchamianie „{name}”…
+@msg	Plug-in “{name}”: {notice}	Wtyczka „{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` musi być ciągiem znaków z widocznym tekstem
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	efekt na żywo działa podczas rysowania dokumentu, więc nie może być `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	wtyczka eksportu zawsze dostaje budżet eksportu: pomiń `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}” prosi o duży budżet obliczeń (każde uruchomienie do {minutes} minut i {times} razy więcej instrukcji niż zwykle): musi ją zatwierdzić osoba w aplikacji desktopowej albo przekaż `allowHeavy: true` w sesji uruchomionej z --allow-plugin-grants
@@ -7260,12 +7288,21 @@ axis	Y Axis	Oś Y
 @msg	a list of {min_items} to {max_items} numbers	listą od {min_items} do {max_items} liczb
 @msg	a new object needs a `path`	nowy obiekt wymaga `path`
 @msg	a number	liczbą
-@msg	a painted live effect returns only `objects`	malujący efekt dynamiczny zwraca tylko `objects`
+@msg	a painted live effect returns only `objects` and `notice`	malujący efekt dynamiczny zwraca tylko `objects` i `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	element malującego efektu dynamicznego ma tylko `path`, `fillRule`, `fills` i `strokes`
 @msg	a read-only object was left out	pominięto obiekt tylko do odczytu
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	pominięto obiekt tylko do odczytu: zwróć go jako samo {{"id": …}} lub w postaci, w jakiej został przekazany
 @msg	a string	ciągiem znaków
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	obrys ma tylko `paint`, `width`, `join`, `cap` i `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	element malującego efektu dynamicznego ma tylko `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` i `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	obrys ma tylko `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` i `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` może mieć tylko wartość true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` dotyczy tylko efektu na żywo, który deklaruje `paintOutput`, z `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` musi być liczbą od 0 do 1
+@msg	unknown blending mode; `blend` is one of {_1}	nieznany tryb mieszania; `blend` to jeden z {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` musi być tablicą najwyżej {MAX_LOOK_EFFECTS} rekordów
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	wynik zawiera najwyżej {MAX_RESULT_EFFECTS} rekordów efektów
+@msg	this host takes no effects here	ten host nie przyjmuje tu efektów
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	obrys musi mieć postać {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	efekt musi mieć postać {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efekt wypełnienia zwraca tylko `fills`
@@ -7365,6 +7402,8 @@ axis	Y Axis	Oś Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` ma wartość {_1}; ten host obsługuje poziomy API wtyczek od 1 do {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` może mieć tylko wartość true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` dotyczy tylko efektu na żywo (`kind` "effect") z `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` dotyczy tylko importera (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	„{shown}” otwiera pliki, ale ich nie umieszcza: jego manifest nie ustawia `place`
 @msg	`grant` must be a list of permission names	`grant` musi być listą nazw uprawnień
 @msg	`grant` names an unknown permission `{shown}`	`grant` wymienia nieznane uprawnienie `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	wtyczka rodzaju `{_1}` potrzebuje uprawnienia `{_2}`
@@ -7376,6 +7415,35 @@ axis	Y Axis	Oś Y
 @msg	`inputs` lists `{shown}` twice	`inputs` wymienia `{shown}` dwa razy
 @msg	`inputs` needs `api` 2 or later	`inputs` wymaga `api` 2 lub nowszego
 @msg	`inputs` needs the permission `doc.read`	`inputs` wymaga uprawnienia `doc.read`
+@msg	only a filter declares `writes`	tylko filtr deklaruje `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` wymienia nieznany rodzaj obiektu `{shown}`: użyj type, image lub symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` wymienia `{shown}` dwa razy
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` wymienia `{shown}`, którego nie wymienia `inputs`
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` wymaga `api` {WRITES_API} lub nowszego
+@msg	`writes` needs the permission `doc.write`	`writes` wymaga uprawnienia `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} nie jest tekstem, obrazem ani wystąpieniem symbolu
+@msg	the text of type given as `truncated` can't be changed	nie można zmienić tekstu obiektu tekstowego przekazanego jako `truncated`
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	musi być listą co najwyżej {MAX_INPUT_RUNS} pozycji
+@msg	type needs at least one run	tekst potrzebuje co najmniej jednego fragmentu
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bajtów tekstu (limit {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} akapitów (limit {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	ponad {MAX_INPUT_TEXT_TOTAL} bajtów tekstu w całym wyniku
+@msg	unknown key '{k}'	nieznany klucz '{k}'
+@msg	must be a list of 6 numbers	musi być listą 6 liczb
+@msg	a number is out of range (limit ±{MAX_COORD})	liczba spoza zakresu (limit ±{MAX_COORD})
+@msg	flattens the object to a line or a point	spłaszcza obiekt do linii lub punktu
+@msg	an object flattened to a line or a point can't be placed again	obiektu spłaszczonego do linii lub punktu nie można ponownie umieścić
+@msg	must be a number from 0 to 1	musi być liczbą od 0 do 1
+@msg	must be the name of a symbol	musi być nazwą symbolu
+@msg	'{shown}' is not a symbol in this document	'{shown}' nie jest symbolem w tym dokumencie
+@msg	a run must be {{"text", "style", "inline"?}}	fragment musi mieć postać {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` zawiera znak grafiki w wierszu
+@msg	inline graphics can't be added, removed, reordered or changed	grafik w wierszu nie można dodawać, usuwać, zmieniać ich kolejności ani modyfikować
+@msg	the characters of threaded type can't be changed	nie można zmienić znaków tekstu wątkowego
+@msg	the characters of type with ruby can't be changed	nie można zmienić znaków tekstu z ruby
+@msg	expected {count} paragraph styles, one per paragraph	oczekiwano {count} stylów akapitowych, po jednym na akapit
+@msg	the document has no Kinsoku set named '{shown}'	dokument nie ma zestawu kinsoku o nazwie '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	musi mieć 1-{MAX_FAMILY} drukowalnych znaków
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Odczytywać obiekty, które otrzymuje, oraz ustawienia, obszary kompozycji, warstwy i próbki dokumentu
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musi wymieniać różne sekcje: settings, artboards, layers lub swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` dotyczy filtra albo efektu na żywo z `commands`, z `api` 3 lub nowszym i z uprawnieniem `doc.read`
@@ -7386,6 +7454,21 @@ axis	Y Axis	Oś Y
 @msg	time budget	budżet czasu
 @msg	memory budget (the selection is too large to hand over)	budżet pamięci (zaznaczenie jest zbyt duże, aby je przekazać)
 @msg	output size ({what} is {len} bytes, limit {max})	rozmiar wyjścia ({what} ma {len} bajtów, limit {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} wiersz {line}, kolumna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	budżet pamięci
+@msg	call depth	głębokość wywołań
+@msg	run(input, params) returned no output object	run(input, params) nie zwróciła obiektu wyjściowego
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" wymaga `script`: nazwy pliku .js wtyczki obok manifestu
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` musi być nazwą pliku .js w folderze manifestu: 1-128 bajtów, bez folderu, bez `:`, nie może zaczynać się od `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` to tekst skryptu, podawany tylko w JSON, który przyjmuje dataBase64 polecenia plugin.install: plik .vcplugin podaje swój skrypt w `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifest wtyczki JavaScript podaje `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" jest dla filtra obiektów (`kind` "filter"), nie dla `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	wtyczka JavaScript nie może wymienić uprawnienia `{name}`: spośród uprawnień hosta może wymienić `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifest modułu WebAssembly pomija `runtime`: "js" jest dla wtyczki JavaScript
+@msg	a JavaScript plug-in makes no command calls	wtyczka JavaScript nie wywołuje poleceń
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) przyjmuje dwie liczby
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) przyjmuje poziom, 0 (błąd), 1 (ostrzeżenie), 2 (informacja) lub 3 (debugowanie), oraz ciąg znaków
 @msg	the plug-in's grant can't be removed from the plug-in store	nie można usunąć uprawnienia wtyczki z magazynu wtyczek
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	uprawnienie `{shown}` jest zarezerwowane dla późniejszego API wtyczek; ten host go nie przyznaje
 @msg	unknown permission `{shown}`	nieznane uprawnienie `{shown}`
@@ -8279,6 +8362,7 @@ breakText	Glyphs	Glify
 	Place Brush Art	Umieść kompozycję pędzla
 	Replace Brush Art	Zastąp kompozycję pędzla
 	Replace Pattern Art	Zastąp kompozycję wzorka
+	Place Pattern Art	Umieść kompozycję wzorka
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Obrysy używają tego pędzla. Zastosować nową kompozycję do tych obrysów, czy pozostawić je bez zmian i dodać kopię pędzla z nową kompozycją?
 	Apply to Strokes	Zastosuj do obrysów
 	Leave Strokes	Pozostaw obrysy
@@ -8348,6 +8432,8 @@ breakText	Glyphs	Glify
 	Tangent Circle	Okrąg styczny
 	Tangent Circle Tool	Narzędzie Okrąg styczny
 	No tangent circle here	Brak okręgu stycznego w tym miejscu
+	Ask For Circle Radius	Pytaj o promień okręgu
+	Auto-Update Default	Automatycznie aktualizuj wartość domyślną
 	Circle:	Okrąg:
 @msg	`ids` names an object twice	`ids` wskazuje ten sam obiekt dwa razy
 @msg	select two or three paths or compound paths	zaznacz dwie lub trzy ścieżki lub ścieżki złożone
@@ -10647,6 +10733,11 @@ breakText	Glyphs	Glify
 	No objects are selected.	Nie zaznaczono żadnych obiektów.
 	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
 	Remove Fold Line Role	Usuń rodzaj linii
+	Fold Angle	Kąt zgięcia
+	Set Fold Angle…	Ustaw kąt zgięcia…
+	Set Fold Angle	Ustaw kąt zgięcia
+	Reset Fold Angle	Resetuj kąt zgięcia
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	zaznacz linię bigowania, nacięcia lub perforacji, która nie jest zablokowana ani ukryta
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Zamiast podpowiedzi pokazuje kartę z tym, co robią narzędzie z paska i jego klawisze; wymaga opcji Pokaż podpowiedzi.
 	Selects whole objects and groups to move, resize or rotate them.	Zaznacza całe obiekty i grupy, aby je przesuwać, skalować lub obracać.

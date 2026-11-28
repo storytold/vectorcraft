@@ -5,7 +5,7 @@
 //! (section 20.4.4.45). Installed in a realm with [`crate::Options::es2015`] only.
 
 use super::{arg, constructor, create_at, data, method, native, new_array};
-use crate::heap::{CONFIGURABLE, Class, NativeFn, NativeKind, ObjId, Object, Prop, SYMBOL_BYTES, string_bytes};
+use crate::heap::{CONFIGURABLE, Class, NativeFn, NativeKind, ObjId, Object, Prop, SYMBOL_BYTES};
 use crate::interp::{Hint, Interp, JsResult};
 use crate::symbol::{Es2015Objects, REGISTRY_ENTRY_BYTES, Sym, WellKnown};
 use crate::value::{Str, Value};
@@ -44,13 +44,16 @@ pub(super) fn install(interp: &mut Interp, object_ctor: ObjId) -> JsResult<()> {
     method(interp, object_ctor, "getOwnPropertySymbols", get_own_property_symbols, 1)?;
     let function_proto = interp.intrinsics.function_proto;
     let has_instance = sym_method(interp, function_proto, has_instance, "[Symbol.hasInstance]", function_has_instance, 1, 0)?;
-    // The iterator prototypes and `%ArrayProto_values%` are set when the iterators are installed.
+    // The iterator and generator prototypes and `%ArrayProto_values%` are set when the iterators
+    // and generators are installed.
     interp.symbols.objects = Some(Es2015Objects {
         symbol_proto: proto,
         array_iterator_proto: proto,
         string_iterator_proto: proto,
         array_values: has_instance,
         has_instance,
+        generator_proto: proto,
+        generator_function_proto: function_proto,
     });
     Ok(())
 }
@@ -87,11 +90,12 @@ fn symbol_ctor(interp: &mut Interp, _: Value, args: &[Value], construct: bool) -
 fn symbol_for(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let key = interp.to_str(&arg(args, 0))?;
     let units = crate::string_builtins::flat_charged(interp, &key)?;
+    crate::string_builtins::charge_units(interp, units.len())?;
     if let Some(v) = interp.symbols.registry.get(&*units) {
         return Ok(v.clone());
     }
-    let extra = REGISTRY_ENTRY_BYTES.saturating_add(string_bytes(units.len()));
-    let sym = new_symbol(interp, Some(Str::from_rc(units.clone())), true, extra)?;
+    crate::string_builtins::charge_units(interp, units.len())?;
+    let sym = new_symbol(interp, Some(Str::from_rc(units.clone())), true, REGISTRY_ENTRY_BYTES)?;
     interp.symbols.registry.insert(units, Value::Symbol(sym.clone()));
     Ok(Value::Symbol(sym))
 }

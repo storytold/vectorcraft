@@ -36,6 +36,7 @@ use vectorcraft_eps::{Level, Overprint, Preview};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, CollectionEvent, Show as _, ShowCollection as _, ShowContainer as _, TooltipSpec};
+use craft::ui::display::Text;
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{ThumbAspect, ToggleState};
 use craft::ui::notices::Notice;
@@ -404,7 +405,7 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
         .show(ui, |ui, _| {
             // Each run of the body starts from the checks as they stood: a check flips them, and the body may run twice.
             boards.clone_from(&before);
-            ui.label(tl!("A legacy .ai file holds one artboard: each artboard you check is saved as a separate file."));
+            Notice::new(Tone::Info, tl!("A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.")).show(ui);
             Row::new().show(ui, |ui, _| {
                 if Button::new(tl!("Select All")).show(ui).clicks > 0 {
                     boards.iter_mut().for_each(|b| *b = true);
@@ -414,14 +415,14 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
                 }
                 let checked = boards.iter().filter(|b| **b).count();
                 let (count, total) = (checked.to_string(), n.to_string());
-                ui.label(crate::i18n::fmt(tl!("{count} of {total} artboards"), &[("count", &count), ("total", &total)]));
+                Text::new(crate::i18n::fmt(tl!("{count} of {total} artboards"), &[("count", &count), ("total", &total)])).show(ui);
             });
             if !boards.iter().any(|b| *b) {
                 Notice::new(Tone::Warn, tl!("Check an artboard to save.")).show(ui);
             }
             // PLAN: assumed TileGrid::show_items(ui, &source, &mut |key, _| tile) as the framework's stories call it;
             // the checks arrive as `CollectionEvent::Item(key, TilePartEvent::Check { .. })` in `response.events`.
-            let grid = TileGrid::new("Artboards").checks(true).max_rows(BOARD_ROWS).show_items(ui, &Boards(n), &mut |i, _| {
+            let grid = TileGrid::new(tl!("Artboards")).checks(true).max_rows(BOARD_ROWS).show_items(ui, &Boards(n), &mut |i, _| {
                 let on = boards.get(*i).copied().unwrap_or(false);
                 let mut tile = Tile::new(menus.names.get(*i).cloned().unwrap_or_default()).check(if on { ToggleState::On } else { ToggleState::Off });
                 if let Some(file) = files.get(*i).cloned().flatten() {

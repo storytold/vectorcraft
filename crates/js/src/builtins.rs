@@ -1,22 +1,28 @@
 //! The built-in objects (ECMA-262 5.1 section 15): `Object` with `Object.prototype` and the
 //! ES5 statics, `Function` with `Function.prototype.call`, `apply`, `bind` and `toString`,
 //! `Array`, the error constructors, `Math`, `JSON`, the global functions and constants, Annex
-//! B's `escape` and `unescape`, and the prototypes primitive values look properties up on, with
-//! `Boolean.prototype`'s `toString` and `valueOf`. `String`, `Number`, `RegExp` and `Date` are in
-//! their own modules. A realm with [`crate::Options::es2015`] also has `Symbol` (in `symbol`) and
-//! the iterators of arrays, strings and `arguments` objects (in `iterator`).
+//! B's `escape` and `unescape`, `Boolean` with `Boolean.prototype`'s `toString` and `valueOf`, and
+//! the prototypes primitive values look properties up on. `String`, `Number`, `RegExp` and `Date` are in
+//! their own modules. A realm with [`crate::Options::es2015`] also has `Symbol` (in `symbol`),
+//! the iterators of arrays, strings and `arguments` objects (in `iterator`), the generator
+//! objects' prototypes with `GeneratorFunction` (in `generator`), `Map`, `Set`, `WeakMap` and
+//! `WeakSet` (in `collections`) and `ArrayBuffer`, `DataView` and the typed arrays (in `binary`).
 //!
 //! Every loop in a built-in takes a unit of fuel for each step, and every string, array, object
 //! or property it makes is checked against the heap limit before it is made, so no built-in can
 //! run past [`crate::Limits`].
 
 mod array;
+pub(crate) mod binary;
+pub(crate) mod collections;
 pub(crate) mod extensions;
+mod generator;
 mod global;
 pub(crate) mod iterator;
 mod json;
 mod math;
 mod object;
+pub(crate) mod promise;
 mod symbol;
 
 use std::rc::Rc;
@@ -242,6 +248,8 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     method(interp, function_proto, "bind", function_bind, 1)?;
     method(interp, function_proto, "toString", function_to_string, 0)?;
 
+    let boolean = native(interp, "Boolean", boolean_ctor, 1, NativeKind::Plain, true)?;
+    constructor(interp, "Boolean", boolean, boolean_proto)?;
     method(interp, boolean_proto, "toString", boolean_to_string, 0)?;
     method(interp, boolean_proto, "valueOf", boolean_value_of, 0)?;
 
@@ -258,9 +266,15 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     if interp.options.es2015 {
         symbol::install(interp, object)?;
         iterator::install(interp)?;
+        generator::install(interp, function)?;
     }
     if interp.options.e4x {
         crate::xml_builtins::install(interp)?;
+    }
+    if interp.options.es2015 {
+        promise::install(interp)?;
+        collections::install(interp)?;
+        binary::install(interp)?;
     }
     Ok(())
 }
@@ -282,8 +296,16 @@ fn key_of(n: f64) -> Key {
     number_to_str(n).flat()
 }
 
-/// ToUint32 of an object's `length`.
+/// ToUint32 of an object's `length`. While a `%TypedArray%.prototype` method runs the array
+/// method it shares, the typed array's length is its element count, whatever its `length`
+/// property says (ECMA-262 6.0 section 22.2.3).
 fn length_of(interp: &mut Interp, o: ObjId) -> JsResult<u32> {
+    if interp.typed_length == Some(o) {
+        interp.typed_length = None;
+        if let Some(Class::TypedArray(view)) = interp.heap.object(o).map(|obj| &obj.class) {
+            return Ok(u32::try_from(view.length).unwrap_or(u32::MAX));
+        }
+    }
     let len = interp.get_from(o, &key("length"), &Value::Object(o))?;
     Ok(to_uint32(interp.to_number(&len)?))
 }
@@ -293,7 +315,7 @@ fn get_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<Value> {
 }
 
 fn has_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<bool> {
-    interp.has_property(o, &key_of(k))
+    interp.has_property_indexed(o, &key_of(k))
 }
 
 /// The estimated bytes a new element adds.
@@ -465,7 +487,7 @@ pub(crate) fn arg(args: &[Value], i: usize) -> Value {
 }
 
 fn unreachable_native(_: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    Err(Abrupt::Internal("call or apply reached its native body".into()))
+    Err(Abrupt::Internal("a built-in the interpreter runs itself reached its native body".into()))
 }
 
 fn throw_type_error(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
@@ -516,6 +538,16 @@ fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> J
     Ok(Value::str(&format!("[object {class}]")))
 }
 
+/// `Boolean(value)` and `new Boolean(value)` (sections 15.6.1 and 15.6.2).
+fn boolean_ctor(interp: &mut Interp, _: Value, args: &[Value], construct: bool) -> JsResult<Value> {
+    let b = args.first().is_some_and(Value::truthy);
+    if !construct {
+        return Ok(Value::Bool(b));
+    }
+    let proto = interp.intrinsics.boolean_proto;
+    Ok(Value::Object(interp.heap.alloc_object(Object::new(Class::Boolean(b), Some(proto)))))
+}
+
 /// The Boolean a `Boolean.prototype` method was called on (sections 15.6.4.2 and 15.6.4.3): a
 /// primitive, or the primitive value of a Boolean object.
 fn this_boolean(interp: &mut Interp, this: &Value, name: &str) -> JsResult<bool> {
@@ -559,7 +591,15 @@ fn object_value_of(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> Js
 fn has_own_property(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let k = interp.to_prop_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some()))
+    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some() || is_host_member_pk(interp, o, &k)?))
+}
+
+/// [`Interp::is_host_member`] for either kind of key: a Symbol never names a host member.
+fn is_host_member_pk(interp: &Interp, o: ObjId, k: &crate::symbol::PropKey) -> JsResult<bool> {
+    match k {
+        crate::symbol::PropKey::Str(name) => interp.is_host_member(o, name),
+        crate::symbol::PropKey::Sym(_) => Ok(false),
+    }
 }
 
 fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -578,7 +618,7 @@ fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) ->
 fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let k = interp.to_prop_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some_and(|p| p.enumerable())))
+    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some_and(|p| p.enumerable()) || is_host_member_pk(interp, o, &k)?))
 }
 
 // ---- Function ----
@@ -586,7 +626,13 @@ fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: b
 /// `Function(p1, …, body)` and `new Function(…)` (section 15.3.2.1): the source is read as
 /// `(function anonymous(p1,…\n) {\nbody\n})` and must be exactly that one function.
 fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    const HEAD: &str = "(function anonymous(";
+    create_dynamic_function(interp, args, false)
+}
+
+/// CreateDynamicFunction (ECMA-262 11th edition, section 19.2.1.1.1) for `Function` and, with
+/// `generator`, for `GeneratorFunction`, whose source is read as `(function* anonymous(…`.
+pub(crate) fn create_dynamic_function(interp: &mut Interp, args: &[Value], generator: bool) -> JsResult<Value> {
+    let head: &str = if generator { "(function* anonymous(" } else { "(function anonymous(" };
     const MID: &str = "\n) {\n";
     const TAIL: &str = "\n})";
     let mut parts = Vec::with_capacity(args.len());
@@ -598,12 +644,12 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
     let total = parts
         .iter()
         .map(Str::len)
-        .chain([parts.len().saturating_sub(1), HEAD.len() + MID.len() + TAIL.len(), body.len()])
+        .chain([parts.len().saturating_sub(1), head.len() + MID.len() + TAIL.len(), body.len()])
         .fold(0usize, usize::saturating_add);
     interp.check_source_units(total).map_err(|e| interp.compile_error_to_abrupt(e))?;
     interp.prepare_source(total)?;
     let mut units = Vec::with_capacity(total);
-    units.extend(HEAD.encode_utf16());
+    units.extend(head.encode_utf16());
     for (i, p) in parts.iter().enumerate() {
         if i > 0 {
             units.push(u16::from(b','));
@@ -623,8 +669,8 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
     };
     let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: interp.source_tag, strict_writes: interp.writes_mode() });
     let code = match compile_constructed_function(&program, &source) {
-        Ok(Some(code)) => code,
-        Ok(None) => return Err(interp.throw(ErrorType::Syntax, "the parameters or body do not form one function")),
+        Ok(Some(code)) if code.generator == generator => code,
+        Ok(_) => return Err(interp.throw(ErrorType::Syntax, "the parameters or body do not form one function")),
         Err(CompileFail::Syntax(e)) => return Err(interp.throw(ErrorType::Syntax, &e.message)),
         Err(CompileFail::Internal(m)) => return Err(Abrupt::Internal(m)),
     };
@@ -663,6 +709,10 @@ fn function_bind(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let Some(target) = this.as_object() else { return Err(interp.type_error("the value bind was called on is not a function")) };
     let bound_this = arg(args, 0);
     let bound_args: Rc<[Value]> = args.get(1..).unwrap_or_default().into();
+    // With ECMAScript 2015 the bound function inherits from the target's prototype, read before
+    // `length` and `name` (ECMA-262 2020 section 9.4.1.3 step 2), so a bound generator function
+    // inherits from %GeneratorFunction.prototype%.
+    let target_proto = interp.heap.object(target).and_then(|o| o.proto);
     // A host function's `length` is an ordinary property a script can set, so it is converted
     // to an integer first, as later editions specify. With ECMAScript 2015 only an own `length` is
     // read (ECMA-262 2020 section 19.2.3.2 step 4), so an inherited getter does not run.
@@ -676,7 +726,7 @@ fn function_bind(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     // Adding 0 turns a negative zero into 0.
     let length = (target_length - bound_args.len() as f64).max(0.0) + 0.0;
     if interp.options.es2015 {
-        return bind_es2015(interp, target, bound_this, bound_args, length);
+        return bind_es2015(interp, target, target_proto, bound_this, bound_args, length);
     }
     interp.reserve_heap(OBJECT_BYTES + prop_bytes(&["length", "caller", "arguments"]) + BOUND_ARG_BYTES * bound_args.len())?;
     let proto = interp.intrinsics.function_proto;
@@ -698,9 +748,10 @@ fn prop_bytes(names: &[&str]) -> usize {
 
 /// The rest of `Function.prototype.bind` with [`crate::Options::es2015`] (ECMA-262 2020 section
 /// 19.2.3.2): the bound function's `length` is configurable, its `name` is `bound ` and the
-/// target's `name` when that is a string (read after `length`, so a getter for it runs). It keeps
-/// the `caller` and `arguments` that throw, as without the option.
-fn bind_es2015(interp: &mut Interp, target: ObjId, bound_this: Value, bound_args: Rc<[Value]>, length: f64) -> JsResult<Value> {
+/// target's `name` when that is a string (read after `length`, so a getter for it runs), and its
+/// prototype is `proto`, the target's. It keeps the `caller` and `arguments` that throw, as
+/// without the option.
+fn bind_es2015(interp: &mut Interp, target: ObjId, proto: Option<ObjId>, bound_this: Value, bound_args: Rc<[Value]>, length: f64) -> JsResult<Value> {
     let target_name = match interp.get_from(target, &key("name"), &Value::Object(target))? {
         Value::String(s) => s,
         _ => Str::from(""),
@@ -716,9 +767,8 @@ fn bind_es2015(interp: &mut Interp, target: ObjId, bound_this: Value, bound_args
     crate::string_builtins::charge_units(interp, name_len)?;
     let mut units: Vec<u16> = "bound ".encode_utf16().collect();
     units.extend_from_slice(&target_units);
-    let proto = interp.intrinsics.function_proto;
     let class = Class::Function(Func::Bound { target, this: bound_this, args: bound_args.clone() });
-    let f = interp.heap.alloc_object(Object::new(class, Some(proto)));
+    let f = interp.heap.alloc_object(Object::new(class, proto));
     interp.heap.bytes = interp.heap.bytes.saturating_add(BOUND_ARG_BYTES * bound_args.len() + string_bytes(name_len));
     interp.define(f, key("length"), Prop::Data { value: Value::Number(length), flags: CONFIGURABLE })?;
     interp.define(f, key("name"), Prop::Data { value: Value::String(Str::from_units(units)), flags: CONFIGURABLE })?;

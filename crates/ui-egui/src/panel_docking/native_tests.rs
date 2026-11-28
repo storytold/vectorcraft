@@ -24,9 +24,17 @@ struct Window {
     /// The OS files held over it, as the OS sends them before a drop.
     hovered: Vec<egui::HoveredFile>,
     dropped: Vec<egui::DroppedFileHandle>,
+    close_requested: bool,
     frames: usize,
     /// The texts its last frame drew, with their rects in the window.
     texts: Vec<(String, Rect)>,
+    /// The named nodes of its last frame's access tree, with their rects in the window.
+    nodes: Vec<(String, Rect)>,
+}
+
+/// The texts a frame copied.
+fn copied_texts(full: &egui::FullOutput) -> impl Iterator<Item = String> + '_ {
+    full.platform_output.commands.iter().filter_map(|c| if let egui::OutputCommand::CopyText(t) = c { Some(t.clone()) } else { None })
 }
 
 struct Host {
@@ -46,7 +54,13 @@ impl Host {
             ..Default::default()
         };
         std::iter::once((ViewportId::ROOT, info(ViewportId::ROOT, SCREEN.translate(ORIGIN.to_vec2()))))
-            .chain(self.windows.iter().map(|(id, w)| (*id, info(*id, w.rect))))
+            .chain(self.windows.iter().map(|(id, w)| {
+                let mut info = info(*id, w.rect);
+                if w.close_requested {
+                    info.events.push(egui::ViewportEvent::Close);
+                }
+                (*id, info)
+            }))
             .collect()
     }
 
@@ -57,6 +71,7 @@ impl Host {
                 match command {
                     ViewportCommand::OuterPosition(pos) => window.rect = Rect::from_min_size(*pos, window.rect.size()),
                     ViewportCommand::InnerSize(size) => window.rect = Rect::from_min_size(window.rect.min, *size),
+                    ViewportCommand::CancelClose => window.close_requested = false,
                     _ => {}
                 }
             }
@@ -75,8 +90,10 @@ impl Host {
                 events: Vec::new(),
                 hovered: Vec::new(),
                 dropped: Vec::new(),
+                close_requested: false,
                 frames: 0,
                 texts: Vec::new(),
+                nodes: Vec::new(),
             });
             let viewports = host.infos();
             let (time, focused) = (host.time, host.focus == id);
@@ -105,9 +122,16 @@ impl Host {
         }
         let mut shown = Vec::new();
         full.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        let nodes = full.platform_output.accesskit_update.as_ref().map_or_else(Vec::new, |update| {
+            let rect = |b: egui::accesskit::Rect| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32));
+            update.nodes.iter().filter_map(|(_, node)| Some((node.label()?.to_string(), rect(node.bounds()?)))).collect()
+        });
         let mut host = host.borrow_mut();
         if let Some(window) = host.windows.get_mut(&id) {
             window.texts = shown;
+            if !nodes.is_empty() {
+                window.nodes = nodes;
+            }
         }
         host.apply(&full);
     }
@@ -134,6 +158,11 @@ impl Harness {
     }
 
     fn frame(&mut self, events: Vec<Event>) {
+        self.main_frame(events);
+    }
+
+    /// One frame with `events` in the main window: the main window's output.
+    fn main_frame(&mut self, events: Vec<Event>) -> egui::FullOutput {
         let (viewports, focused, time) = {
             let mut host = self.host.borrow_mut();
             host.time += 0.05;
@@ -142,6 +171,7 @@ impl Harness {
         let input = egui::RawInput { time: Some(time), events, screen_rect: Some(SCREEN), viewports, focused, ..Default::default() };
         let full = crate::testing::app_frame(&mut self.app, &self.ctx, input);
         self.host.borrow_mut().apply(&full);
+        full
     }
 
     fn frames(&mut self, n: usize) {
@@ -232,6 +262,44 @@ fn an_explicit_float_command_updates_an_existing_native_windows_geometry() {
     }
 }
 
+/// Swatches and Color as tabs of one native window, with its OS window drawn.
+fn native_tab_group(h: &mut Harness) -> ViewportId {
+    let viewport = h.float("swatches");
+    h.app.run("window.panel.float", json!({"panel": "color", "onto": "swatches"})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport("color"), viewport);
+    viewport
+}
+
+#[test]
+fn a_group_float_of_a_tab_group_resizes_its_native_window() {
+    let mut h = Harness::new();
+    let viewport = native_tab_group(&mut h);
+    let id = floating_window(layout_of(&h.app.ui), "swatches").unwrap().id;
+    let before = h.host.borrow().windows[&viewport].rect;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "group": true, "width": 400})).unwrap();
+    h.frames(3);
+    assert_eq!(floating_window(layout_of(&h.app.ui), "swatches").unwrap().id, id);
+    assert_eq!(h.viewport("color"), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(before.min, vec2(400.0, before.height())));
+}
+
+/// `window.toolbar.float` with x, y moves the OS window a toolbar made with New Toolbar already has.
+#[test]
+fn floating_a_toolbar_at_a_point_moves_its_native_window() {
+    let mut h = Harness::new();
+    h.app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    h.app.run("window.toolbar.float", json!({"name": "Mine", "x": 240, "y": 160})).unwrap();
+    h.frames(3);
+    let panel = crate::custom_toolbars::panel_id(crate::custom_toolbars::find(&h.app.ui, "Mine").unwrap().id);
+    let viewport = h.viewport(&panel);
+    assert_eq!(h.host.borrow().windows[&viewport].rect.min, ORIGIN + vec2(240.0, 160.0));
+    h.app.run("window.toolbar.float", json!({"name": "Mine", "x": 300, "y": 220})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport(&panel), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect.min, ORIGIN + vec2(300.0, 220.0));
+}
+
 #[test]
 fn keys_typed_in_a_native_window_run_the_main_windows_shortcuts() {
     let mut h = Harness::new();
@@ -312,11 +380,46 @@ fn button(pos: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
 }
 
+#[test]
+fn select_all_returns_to_the_art_after_closing_a_focused_artboards_window() {
+    let mut h = Harness::new();
+    h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    h.app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 30, "height": 40})).unwrap();
+    for x in [500, 1000] {
+        h.app.run("artboard.new", json!({"x": x, "y": 0, "width": 400, "height": 300})).unwrap();
+    }
+    h.app.run("select.none", json!({})).unwrap();
+    h.app.select_tool("artboard");
+    let viewport = h.float("artboards");
+    h.frames(3);
+    let row = h.host.borrow().windows[&viewport].texts.iter().find(|(name, _)| name == "Artboard 2").expect("Artboard 2 row").1.center();
+    for events in [vec![Event::PointerMoved(row)], vec![button(row, true)], vec![button(row, false)]] {
+        h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend(events);
+        h.frame(vec![]);
+    }
+    assert_eq!(crate::panels::artboards::picked(&h.app, 3), vec![1], "the panel row was selected");
+    assert!(crate::panels::artboards::selects_all(&h.app, &h.ctx), "the detached list owns Select All before closing");
+
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().close_requested = true;
+    h.frame(vec![]);
+    assert!(!showing(&h.app.ui, "artboards"), "the platform close hides the Artboards panel");
+    {
+        let mut host = h.host.borrow_mut();
+        host.windows.remove(&viewport);
+        host.focus = ViewportId::ROOT;
+    }
+    h.frames(3);
+    h.frame(vec![Event::Key { key: Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND }]);
+    assert_eq!(h.app.session.active().unwrap().selection.objects.len(), 2, "Select All returns to the artwork");
+    assert_eq!(crate::panels::artboards::picked(&h.app, 3), vec![1], "the closed panel no longer handles the shortcut");
+}
+
 /// Art dragged off the canvas onto a panel in an OS window of its own, which lies over the
 /// canvas: that panel takes it, and the art stays where it was.
 #[test]
 fn art_dragged_from_the_canvas_onto_a_native_panel_window_drops_there() {
     let mut h = Harness::new();
+    h.ctx.enable_accesskit();
     let id = h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap();
     let id = vectorcraft_doc::NodeId(id);
     let viewport = h.float("graphicStyles");
@@ -327,8 +430,14 @@ fn art_dragged_from_the_canvas_onto_a_native_panel_window_drops_there() {
     let before = art(&h);
     let view = h.app.canvas_view().expect("the canvas was drawn");
     let from = view.to_screen(vectorcraft_geom::Point::new(35.0, 30.0));
-    let window = h.host.borrow().windows.get(&viewport).map(|w| w.rect).unwrap();
-    let to = window.min + vec2(60.0, 120.0) - ORIGIN.to_vec2();
+    // The first style's tile, found by its name: the panel takes art dropped onto a style or between styles.
+    let first = h.app.session.active().unwrap().doc.graphic_styles[0].name.clone();
+    let to = {
+        let host = h.host.borrow();
+        let window = &host.windows[&viewport];
+        let tile = window.nodes.iter().find(|(name, _)| *name == first).map(|(_, r)| *r).expect("the first style's tile");
+        window.rect.min + tile.center().to_vec2() - ORIGIN.to_vec2()
+    };
     assert!(view.rect.contains(to), "the window lies over the canvas");
     h.frame(vec![Event::PointerMoved(from), button(from, true)]);
     for k in 1..=8 {
@@ -375,4 +484,96 @@ fn delete_after_a_row_click_in_a_native_appearance_window_removes_the_row() {
     h.key_in(viewport, Key::Delete);
     assert_eq!(h.objects(), before, "the object stays");
     assert_eq!(items(&h), Some(1), "the fill row goes");
+}
+
+/// The text of the selected label.
+const LABEL: &str = "234 pt";
+
+/// One frame with `events` sent to the native window `viewport`: the main window's output.
+fn frame_in(h: &mut Harness, viewport: ViewportId, events: Vec<Event>) -> egui::FullOutput {
+    if let Some(window) = h.host.borrow_mut().windows.get_mut(&viewport) {
+        window.events.extend(events);
+    }
+    h.main_frame(vec![])
+}
+
+/// Drag across a label `text` in a window of its own, selecting its text there: the label stands for one in any
+/// window other than the one a test then presses its keys in.
+fn select_label_text_in_another_window(h: &mut Harness, text: &str) {
+    let window = ViewportId::from_hash_of("window with a selected label");
+    let rect = std::cell::Cell::new(Rect::NOTHING);
+    let pass = |h: &mut Harness, events: Vec<Event>| {
+        let time = {
+            let mut host = h.host.borrow_mut();
+            host.time += 0.05;
+            host.time
+        };
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 200.0));
+        let mut input = egui::RawInput { viewport_id: window, events, time: Some(time), screen_rect: Some(screen), ..Default::default() };
+        input.viewports.insert(window, egui::ViewportInfo { parent: Some(ViewportId::ROOT), ..Default::default() });
+        h.ctx.run_ui(input, |ui| rect.set(ui.label(text).rect)).drop_without_applying_deltas();
+    };
+    pass(h, vec![]);
+    let (from, to) = (rect.get().left_center() + vec2(1.0, 0.0), rect.get().right_center() - vec2(1.0, 0.0));
+    pass(h, vec![Event::PointerMoved(from)]);
+    pass(h, vec![button(from, true)]);
+    for k in 1..=4 {
+        pass(h, vec![Event::PointerMoved(from + (to - from) * k as f32 / 4.0)]);
+    }
+    pass(h, vec![button(to, false)]);
+    pass(h, vec![]);
+    h.frames(2);
+    assert!(
+        h.ctx.with_plugin(|s: &mut egui::text_selection::LabelSelectionState| s.has_selection()).unwrap_or(false),
+        "the text of {text:?} is selected"
+    );
+}
+
+/// Cmd+C or Cmd+X (`event`) pressed in the window `viewport`, then let go, and the frames after it: the texts they
+/// copied, the native windows' included.
+fn clipboard_chord_in(h: &mut Harness, viewport: ViewportId, event: Event) -> Vec<String> {
+    let frames =
+        [vec![Event::ModifiersChanged(egui::Modifiers::COMMAND), event], vec![Event::ModifiersChanged(egui::Modifiers::NONE)], vec![], vec![]];
+    let mut copied = Vec::new();
+    for events in frames {
+        copied.extend(copied_texts(&frame_in(h, viewport, events)));
+    }
+    copied
+}
+
+/// With a label's text selected in another window, Copy and Cut pressed in the OS window of a floating panel, a
+/// floating toolbar or a floating document, which shows no selected text, copy and cut the selected art.
+#[test]
+fn copy_and_cut_in_a_native_window_act_on_the_art_while_another_windows_label_has_text_selected() {
+    for what in ["panel", "toolbar", "document"] {
+        let mut h = Harness::new();
+        h.app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap();
+        h.app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 37, "height": 40})).unwrap();
+        let viewport = match what {
+            "panel" => h.float("swatches"),
+            "toolbar" => {
+                h.app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+                h.app.run("window.toolbar.float", json!({"name": "Mine", "x": 240, "y": 160})).unwrap();
+                h.frames(3);
+                h.viewport(&crate::custom_toolbars::panel_id(crate::custom_toolbars::find(&h.app.ui, "Mine").unwrap().id))
+            }
+            _ => {
+                let before: Vec<ViewportId> = h.host.borrow().windows.keys().copied().collect();
+                h.app.run("window.arrange.floatInWindow", json!({})).unwrap();
+                h.frames(3);
+                let opened = h.host.borrow().windows.keys().copied().filter(|id| !before.contains(id)).collect::<Vec<_>>();
+                assert_eq!(opened.len(), 1, "the document opened an OS window");
+                opened[0]
+            }
+        };
+        h.host.borrow_mut().focus = viewport;
+        select_label_text_in_another_window(&mut h, LABEL);
+        assert!(h.app.session.clipboard.is_empty(), "{what}: nothing copied yet");
+        let copied = clipboard_chord_in(&mut h, viewport, Event::Copy);
+        assert!(!h.app.session.clipboard.is_empty(), "{what}: Copy in the floating window copied the art");
+        let before = h.objects();
+        let cut = clipboard_chord_in(&mut h, viewport, Event::Cut);
+        assert_eq!(h.objects(), before - 1, "{what}: Cut in the floating window cut the selected object");
+        assert!(![copied, cut].concat().iter().any(|t| t == LABEL), "{what}: the floating window copied no label text");
+    }
 }

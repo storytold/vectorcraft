@@ -85,8 +85,8 @@ pub(crate) struct Publishing {
     /// The latest one's formats wait to be written.
     pending: bool,
     /// The latest one's formats could not be written: what the system clipboard's text was when the
-    /// write failed, and the text of those formats.
-    unwritten: Option<(Held, String)>,
+    /// write failed, and the text of those formats, if they have text.
+    unwritten: Option<(Held, Option<String>)>,
     /// The status bar's message when the latest one ran, with [`crate::state::UiState::status_sets`]
     /// then. Its formats' notes replace the message only while the status bar still shows it and
     /// nothing has set the status since.
@@ -119,6 +119,22 @@ impl Publishing {
     /// setting the status since?
     fn shows_status(&self, ui: &crate::state::UiState) -> bool {
         ui.status == self.status.0 && ui.status_sets == self.status.1
+    }
+
+    /// Is the latest Copy or Cut one whose formats could not be written to `cb`, with nothing
+    /// copied since ([`VectorcraftApp::holds_unwritten_copy`])? Different text read from `cb` shows
+    /// a later copy: the record of the failed write is then dropped, so the clipboard holding the
+    /// older text again later does not bring it back. Text that could not be read keeps the record.
+    fn holds_unwritten(&mut self, cb: &mut Clipboard) -> bool {
+        let Some((held, _)) = &self.unwritten else { return false };
+        let now = held_text(cb);
+        if now == *held {
+            return true;
+        }
+        if now.is_some() {
+            self.unwritten = None;
+        }
+        false
     }
 }
 
@@ -185,14 +201,31 @@ impl VectorcraftApp {
             || self.clipboard.holds_ours()
     }
 
+    /// Is the latest Copy or Cut one whose formats could not be written to the system clipboard,
+    /// with nothing copied since? Paste then takes the internal clipboard, and a paste into type or
+    /// a text field takes that copy's text (nothing when its formats have no text), until another
+    /// app copies something. A copy is noticed only when it changes the clipboard's text, so the
+    /// copy is kept only when the clipboard held text when the write failed. When it held only a
+    /// picture, or nothing that could be read, Paste takes what the clipboard holds.
+    fn holds_unwritten_copy(&mut self) -> bool {
+        self.clipboard_publishing.holds_unwritten(&mut self.clipboard)
+    }
+
     /// The text of the latest Copy or Cut whose formats could not be written to the system
-    /// clipboard, while nothing has been copied since that Copy or Cut. A paste into type or a text
-    /// field takes this text until another app copies something. A copy is noticed only when it
-    /// changes the clipboard's text, so the copy is kept only when the clipboard held text when the
-    /// write failed.
+    /// clipboard, while nothing has been copied since that Copy or Cut
+    /// ([`Self::holds_unwritten_copy`]).
     pub(crate) fn unwritten_clipboard_text(&mut self) -> Option<String> {
-        let (held, text) = self.clipboard_publishing.unwritten.as_ref()?;
-        (held_text(&mut self.clipboard) == *held).then(|| text.clone())
+        self.clipboard_publishing.unwritten.as_ref()?.1.as_ref()?;
+        self.unwritten_copy().flatten()
+    }
+
+    /// While [`Self::holds_unwritten_copy`]: the text of that copy's formats, `None` inside when
+    /// they have no text.
+    fn unwritten_copy(&mut self) -> Option<Option<String>> {
+        if !self.holds_unwritten_copy() {
+            return None;
+        }
+        self.clipboard_publishing.unwritten.as_ref().map(|(_, text)| text.clone())
     }
 
     /// After Copy or Cut: offer the copied objects to other apps. The background worker makes the
@@ -279,8 +312,8 @@ impl VectorcraftApp {
 
     /// Writes `formats` to the system clipboard; `before` is the clipboard's text at the Copy or Cut.
     /// When that fails, another app may hold the clipboard open: it keeps what it held (or what the
-    /// failed write left), and a paste into text takes this copy's text until something else is
-    /// copied ([`Self::unwritten_clipboard_text`]).
+    /// failed write left). Until something else is copied, Paste takes this copy, and a paste into
+    /// text takes its text ([`Self::holds_unwritten_copy`]).
     fn write_formats(&mut self, formats: &[Flavor], before: &Held) -> Result<Written, String> {
         let cb = &mut self.clipboard;
         let before_write = held_text(cb);
@@ -306,7 +339,7 @@ impl VectorcraftApp {
         // A clipboard with no text can't show a later copy of a picture, or tell an empty clipboard
         // from one that couldn't be read: unless it held text the write emptied, and it reads.
         let trackable = held.is_some() || (before_write.is_some() && cb.read(&[TEXT]).is_ok());
-        self.clipboard_publishing.unwritten = text.filter(|_| current && left_by_write && trackable).map(|text| (held, text));
+        self.clipboard_publishing.unwritten = (current && left_by_write && trackable).then_some((held, text));
         Err(e.to_string())
     }
 
@@ -389,17 +422,20 @@ impl VectorcraftApp {
         let waited = ctx.data(|d| d.get_temp::<bool>(egui::Id::unique("clipboard.pending-at-tick"))).unwrap_or(false);
         ctx.data_mut(|d| d.remove::<bool>(egui::Id::unique("clipboard.pending-at-tick")));
         if !(self.clipboard_publishing.pending || waited) {
-            // A copy whose formats could not be written: a paste takes its text, not the text the
-            // clipboard kept ([`Self::unwritten_clipboard_text`]).
+            // A copy whose formats could not be written: a paste takes its text, or nothing when
+            // they have none, not the text the clipboard kept ([`Self::unwritten_copy`]).
             let pasting = textless || ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Paste(_))));
-            if pasting && let Some(text) = self.unwritten_clipboard_text() {
+            if pasting && let Some(text) = self.unwritten_copy() {
                 ctx.input_mut(|i| {
-                    for e in &mut i.events {
-                        if let egui::Event::Paste(t) = e {
-                            t.clone_from(&text);
+                    i.events.retain_mut(|e| match (e, &text) {
+                        (egui::Event::Paste(t), Some(text)) => {
+                            t.clone_from(text);
+                            true
                         }
-                    }
-                    if textless {
+                        (egui::Event::Paste(_), None) => false,
+                        _ => true,
+                    });
+                    if textless && let Some(text) = text {
                         i.events.insert(0, egui::Event::Paste(text));
                     }
                 });
@@ -474,7 +510,10 @@ impl VectorcraftApp {
             // A picture or file the host read from the paste.
             Some(f) if f.mime != TEXT => import_command(&f, center),
             _ if self.clipboard.readable_any_time() => {
-                if self.clipboard_publishing.pending || self.clipboard.holds_ours() {
+                // After a Copy or Cut whose formats could not be written, with nothing copied
+                // since, what the clipboard still holds is older than the internal clipboard.
+                let publishing = &mut self.clipboard_publishing;
+                if publishing.pending || publishing.holds_unwritten(&mut self.clipboard) || self.clipboard.holds_ours() {
                     return Ok(None);
                 }
                 // Art and text load at once, so a paste that waits behind another takes them as it was given; only a
@@ -554,12 +593,24 @@ impl VectorcraftApp {
     }
 
     /// The text on the system clipboard once the formats a Copy or Cut is making are written, for a
-    /// paste into a text field or type. When they could not be written, their text
-    /// ([`Self::unwritten_clipboard_text`]).
+    /// paste into a text field or type. When they could not be written, their text, or `None` when
+    /// they have none ([`Self::unwritten_copy`]).
     pub(crate) fn written_clipboard_text(&mut self) -> Option<String> {
         // Only other copies' formats are ahead of them on the worker ([`Self::publish_clipboard`]).
         background::wait_until(self, |app| !app.clipboard_publishing.pending);
-        self.unwritten_clipboard_text().or_else(|| self.system_clipboard_text())
+        self.unwritten_copy().unwrap_or_else(|| self.system_clipboard_text())
+    }
+
+    /// The text a paste from the Edit menu gives a focused text field ([`Self::written_clipboard_text`]):
+    /// empty when the formats of a Copy or Cut could not be written and have no text, so the field
+    /// takes nothing and the art is not pasted onto the canvas. `None` when the system clipboard
+    /// holds no text.
+    pub(crate) fn field_paste_text(&mut self) -> Option<String> {
+        background::wait_until(self, |app| !app.clipboard_publishing.pending);
+        match self.unwritten_copy() {
+            Some(text) => Some(text.unwrap_or_default()),
+            None => self.system_clipboard_text(),
+        }
     }
 
     /// The text on the system clipboard, if any.

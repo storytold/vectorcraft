@@ -61,14 +61,15 @@ pollster = "1"
 # which src/host_services.rs uses to read the path PhotoCraft registers under App Paths.
 # Win32_Devices_Display has `QueryDisplayConfig`, Win32_UI_ColorSystem the display's ICC profile and
 # Win32_System_LibraryLoader `GetProcAddress`, which src/display_profile.rs uses to read the
-# display's color profile for the canvas.
-windows = { version = "0.62", features = ["Win32_Devices_Display", "Win32_Foundation", "Win32_Graphics_DirectWrite", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_ColorSystem", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Input_Pointer", "Win32_UI_WindowsAndMessaging"] }
+# display's color profile for the canvas. Win32_UI_HiDpi has `GetDpiForMonitor`, which
+# src/windows_display_size.rs uses to read a monitor's raw density for Display Print Size.
+windows = { version = "0.62", features = ["Win32_Devices_Display", "Win32_Foundation", "Win32_Graphics_DirectWrite", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_ColorSystem", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Input_Pointer", "Win32_UI_WindowsAndMessaging"] }
 # The renderer's worker count follows those cores (src/windows_cores.rs).
 vectorcraft-render = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-foundation", "objc2-quartz-core", "NSApplication", "NSCursor", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSButton", "NSColor", "NSColorSpace", "NSControl", "NSEvent", "NSPasteboard", "NSPopUpButton", "NSResponder", "NSSavePanel", "NSScreen", "NSTextField", "NSTextInputContext", "NSView", "NSWindow"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-foundation", "objc2-quartz-core", "NSApplication", "NSCursor", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSButton", "NSColor", "NSColorSpace", "NSControl", "NSEvent", "NSPasteboard", "NSPopUpButton", "NSResponder", "NSSavePanel", "NSScreen", "NSTextField", "NSView", "NSWindow"] }
 # Files opened from Finder and the Dock (src/open_documents.rs) and pasted bitmaps (src/clipboard.rs); both already come with winit.
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSGeometry", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSURL"] }
 block2 = "0.6"
@@ -83,7 +84,8 @@ objc2-core-text = { version = "0.3", default-features = false, features = ["std"
 # The windows' Metal layers and the sRGB color space they are tagged with (src/mac_color_space.rs).
 # Zlib OR Apache-2.0 OR MIT, already in the build through wgpu with these features.
 objc2-quartz-core = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "objc2-core-graphics", "CALayer", "CAMetalLayer"] }
-objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGColorSpace"] }
+# CGDisplayScreenSize gives a display's physical size for Display Print Size (src/screen_density.rs).
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGColorSpace", "CGDirectDisplay", "CGDisplayConfiguration"] }
 # Waits for the answer of a file dialog shown as a sheet (src/main.rs, #867). MIT OR Apache-2.0,
 # already in the build through eframe.
 pollster = "1"

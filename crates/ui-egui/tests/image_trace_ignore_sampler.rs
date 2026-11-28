@@ -31,13 +31,15 @@ fn pointer_events(events: &[Event]) -> usize {
     events.iter().filter(|event| matches!(event, Event::PointerMoved(_) | Event::PointerButton { .. })).count()
 }
 
-/// One step of the app: the frame of `raw`, then empty frames at its time until all its pointer events arrived. A frame
-/// can take more than one pass, and egui gives the frame's events to its first; the framework gives a pass one press,
-/// as its last pointer event, and holds the events after it for the next frame ("Input pacing", one press per pass).
+/// One step of the app: the frame of `raw`, then empty frames at its time until all its pointer events arrived and the
+/// press lifecycle reported them. A frame can take more than one pass, and egui gives the frame's events to its first;
+/// the framework gives a pass one press, as its last pointer event, and holds the events after it for the next frame
+/// ("Input pacing", one press per pass). The lifecycle reports one phase a pass: a pass that brings a release and the
+/// next press reports the press's Down in the next pass, and the release that follows it one pass later still.
 fn run_ui(app: &mut VectorcraftApp, ctx: &egui::Context, mut raw: RawInput) -> egui::FullOutput {
     let (sent, time, screen_rect) = (pointer_events(&raw.events), raw.time, raw.screen_rect);
     let mut frames = Vec::new();
-    let mut arrived = 0;
+    let (mut arrived, mut owed) = (0, 0);
     loop {
         let mut first = None;
         let out = ctx.run_ui(raw, |ui| {
@@ -49,8 +51,10 @@ fn run_ui(app: &mut VectorcraftApp, ctx: &egui::Context, mut raw: RawInput) -> e
         });
         let first = first.expect("a frame runs a pass");
         arrived += pointer_events(&first.events);
+        let buttons = first.events.iter().filter(|event| matches!(event, Event::PointerButton { .. })).count();
+        owed = (owed + buttons).saturating_sub(out.platform_output.num_completed_passes);
         frames.push(first);
-        if arrived >= sent {
+        if arrived >= sent && owed == 0 {
             FRAME_INPUT.with(|input| *input.borrow_mut() = Some((frames, ctx.cumulative_pass_nr())));
             return out;
         }
@@ -1518,4 +1522,103 @@ fn review_597048_a_later_drag_release_does_not_replace_a_qualified_double_click(
     assert!(!frame_event(&ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)), "the out-of-slop drag is not a third click");
     assert_eq!(frame_input(&ctx, |i| i.pointer.interact_pos()), Some(away));
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "the qualified Double belongs to the earlier group release");
+}
+
+fn review_9086_camera(app: &VectorcraftApp) -> (Point, f64, f64) {
+    let v = app.view().unwrap();
+    (v.center, v.zoom, v.rotation)
+}
+
+fn review_9086_assert_camera(app: &VectorcraftApp, expected: (Point, f64, f64), label: &str) {
+    let actual = review_9086_camera(app);
+    assert!(actual.0.distance(expected.0) < 1e-6, "{label}: center {:?}, expected {:?}", actual.0, expected.0);
+    assert!((actual.1 - expected.1).abs() < 1e-9, "{label}: zoom {}, expected {}", actual.1, expected.1);
+    assert!((actual.2 - expected.2).abs() < 1e-9, "{label}: navigation does not rotate the view");
+}
+
+fn review_9086_valid_down(app: &mut VectorcraftApp, ctx: &egui::Context, hit: Point) -> (Pos2, Pos2, f64, f64) {
+    let expected = review_gesture_state(app);
+    let camera = review_9086_camera(app);
+    let target = selected(app).id;
+    click_control(app, ctx, SAMPLE_TIP);
+    assert_eq!(app.session.tool_id(), "eyedropper", "CONTROL: the real panel button arms the sampler");
+    let binding = app.ui.trace_ignore_sampler.as_ref().expect("CONTROL: a real panel binding exists");
+    let state = app.session.active().unwrap();
+    assert_eq!((binding.doc, binding.target, binding.revision), (state.uid, target, state.revision));
+    assert_eq!(binding.back, "selection");
+    assert_eq!(app.session.tool_options()["imageTraceIgnoreColor"], json!({"doc":state.uid,"target":target.0,"revision":state.revision}));
+    // click_control leaves the pointer over this actual docked panel button.
+    let dock = ctx.input(|i| i.pointer.hover_pos()).expect("CONTROL: the real dock button has a pointer position");
+    assert!(!app.canvas_view().unwrap().rect.contains(dock), "CONTROL: this point is on the dock, outside the canvas");
+    let at = review_gesture_screen(app, hit);
+    let (start, step) = review_gesture_times(ctx);
+    review_gesture_press(app, ctx, at, start);
+    assert_eq!(app.session.tool_id(), "selection", "CONTROL: opaque sampler Down completes and returns its bound tool");
+    assert!(app.ui.trace_ignore_sampler.is_none(), "CONTROL: the successful Down clears the sampler binding");
+    assert!(ctx.input(|i| i.pointer.primary_down()), "CONTROL: this is the real still-owned press before Up");
+    assert_eq!(review_gesture_state(app), expected, "CONTROL: Preview-off sampling changes no art, selection, revision, history, paint or isolation");
+    review_9086_assert_camera(app, camera, "CONTROL: sampling itself preserves the displayed camera");
+    (at, dock, start, step)
+}
+
+#[test]
+fn review_4629359086_owned_sampler_up_preserves_trackpad_zoom() {
+    const FACTOR: f32 = 1.25;
+    // A real ordinary unarmed frame proves that Zoom reaches the canvas exactly once.
+    let (mut ordinary, ordinary_ctx, _, hit, _) = review_gesture_completion_fixture();
+    assert!(ordinary.ui.trace_ignore_sampler.is_none());
+    assert_eq!(ordinary.session.tool_id(), "selection");
+    let at = review_gesture_screen(&ordinary, hit);
+    let initial = review_9086_camera(&ordinary);
+    let state = review_gesture_state(&ordinary);
+    let pinned = ordinary.canvas_view().unwrap().to_doc(at);
+    let (start, _) = review_gesture_times(&ordinary_ctx);
+    frame_at(&mut ordinary, &ordinary_ctx, start, vec![Event::PointerMoved(at), Event::Zoom(FACTOR)]);
+    let zoomed = review_9086_camera(&ordinary);
+    assert!((zoomed.1 / initial.1 - f64::from(FACTOR)).abs() < 1e-7, "CONTROL: ordinary trackpad Zoom applies exactly one factor");
+    let still_pinned = ordinary.canvas_view().unwrap().to_doc(at);
+    assert!(still_pinned.distance(pinned) < 1e-6, "CONTROL: ordinary zoom stays pinned to the real canvas pointer");
+    assert_eq!(review_gesture_state(&ordinary), state, "CONTROL: ordinary navigation changes no non-view state");
+
+    // Release-only comes first and proves the real sample was accepted, not merely cancelled.
+    let (mut release_only, release_ctx, _, hit, _) = review_gesture_completion_fixture();
+    let (at, _, start, step) = review_9086_valid_down(&mut release_only, &release_ctx, hit);
+    let state = review_gesture_state(&release_only);
+    review_gesture_release(&mut release_only, &release_ctx, at, start + step);
+    review_9086_assert_camera(&release_only, initial, "CONTROL: sampler Up without navigation leaves the view unchanged");
+    assert_eq!(review_gesture_state(&release_only), state);
+    assert_eq!(release_only.session.tool_id(), "selection");
+    click_control(&mut release_only, &release_ctx, "Trace");
+    assert_eq!(settings(&release_only)["params"]["ignoreColor"], "#255395", "CONTROL: the real valid Down accepted its opaque source color");
+    assert_eq!(settings(&release_only)["params"]["ignoreWhite"], true);
+
+    // The same owned Up over the real dock must not admit navigation from the panel.
+    let (mut docked, dock_ctx, _, hit, _) = review_gesture_completion_fixture();
+    let (_, dock, start, step) = review_9086_valid_down(&mut docked, &dock_ctx, hit);
+    let state = review_gesture_state(&docked);
+    frame_at(&mut docked, &dock_ctx, start + step, vec![Event::PointerMoved(dock), review_596866_button(dock, false), Event::Zoom(FACTOR)]);
+    review_9086_assert_camera(&docked, initial, "CONTROL: dock hover cannot start canvas navigation");
+    assert_eq!(review_gesture_state(&docked), state);
+    assert_eq!(docked.session.tool_id(), "selection");
+    assert!(!dock_ctx.input(|i| i.pointer.primary_down()));
+    click_control(&mut docked, &dock_ctx, "Trace");
+    assert_eq!(settings(&docked)["params"]["ignoreColor"], "#255395", "CONTROL: the rejected dock zoom does not cancel the valid sample");
+
+    let (mut app, ctx, _, hit, _) = review_gesture_completion_fixture();
+    let (at, _, start, step) = review_9086_valid_down(&mut app, &ctx, hit);
+    review_9086_assert_camera(&app, initial, "CONTROL: the regression starts from the ordinary camera");
+    let state = review_gesture_state(&app);
+    frame_at(&mut app, &ctx, start + step, vec![review_596866_button(at, false), Event::Zoom(FACTOR)]);
+    assert!(!ctx.input(|i| i.pointer.primary_down()));
+    assert_eq!(app.session.tool_id(), "selection");
+    assert!(app.ui.trace_ignore_sampler.is_none());
+    assert_eq!(review_gesture_state(&app), state, "the owned Up cannot select, isolate, paint or change document/history state");
+    review_9086_assert_camera(&app, zoomed, "REGRESSION: sampler-owned Up still admits the same trackpad zoom as an ordinary frame");
+    frame_at(&mut app, &ctx, start + 2.0 * step, vec![]);
+    review_9086_assert_camera(&app, zoomed, "later idle cannot replay navigation or revive primary ownership");
+    assert_eq!(review_gesture_state(&app), state);
+    assert_eq!(app.session.tool_id(), "selection");
+    click_control(&mut app, &ctx, "Trace");
+    assert_eq!(settings(&app)["params"]["ignoreColor"], "#255395", "the navigation fix retains the actual accepted sample");
+    assert_eq!(settings(&app)["params"]["ignoreWhite"], true);
 }

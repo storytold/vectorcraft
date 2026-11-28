@@ -12,8 +12,9 @@ use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::Canvas;
 use craft::ui::canvas::{CanvasSpace, canvas_space};
 use craft::ui::canvas_controls::SelectionOutline;
+use craft::ui::choice::Swatch;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft::ui::display::Picture;
+use craft::ui::display::{Picture, Text};
 use craft::ui::layout_components::Row;
 use craft::ui::list::ThumbAspect;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamKind};
@@ -195,11 +196,11 @@ fn shading_custom() -> Param {
             fields.set(SHADING_CUSTOM, Srgba::from_rgb_array(rgb).to_hex());
         }
         let color = shading_color(fields);
-        let button = Button::new(color.to_hex().to_uppercase()).show(ui); // PLAN: assumed a swatch icon via IconSpec::Swatch
-        if button.clicked() {
+        let swatch = Swatch::new(tl!("Color"), color).show(ui);
+        if swatch.clicked {
             cx.pick_color(SHADING_CUSTOM, color);
         }
-        button.response
+        swatch.response
     })
     .opens_with("#000000")
 }
@@ -315,7 +316,7 @@ fn navigator(count: usize, seen: Vec<bool>) -> Param {
                 }
             }
             if !seen.get(current - 1).copied().unwrap_or(true) {
-                ui.label(tl!("Hidden"));
+                Text::new(tl!("Hidden")).show(ui);
             }
         });
         let shown = next.map_or(current, |n| n.clamp(1, count));

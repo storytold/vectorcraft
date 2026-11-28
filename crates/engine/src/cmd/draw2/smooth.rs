@@ -12,9 +12,15 @@ use super::{
 // ---------- Smooth ----------
 
 /// The spread (points) of the Gaussian the Smooth tool smooths a path along its length with before
-/// refitting it, as a share of the tool's reach: a third, so each point is averaged with the stretch
-/// of path within the reach on either side of it. VectorCraft's own value.
+/// refitting it at the default Smoothness ([`SMOOTH_SMOOTHNESS`]), as a share of the tool's reach: a
+/// third, so each point is averaged with the stretch of path within the reach on either side of it.
+/// The spread grows in proportion to the Smoothness, from none at 0% to twice this at 100%.
+/// VectorCraft's own value.
 const SMOOTH_SPREAD: f64 = 1.0 / 3.0;
+
+/// The Smoothness (percent) `path.smoothRegion` smooths with when the drag leaves it out. VectorCraft's
+/// own value.
+const SMOOTH_SMOOTHNESS: f64 = 50.0;
 
 /// The degrees by which a path must turn at an anchor, and over the tool's reach and twice its reach
 /// on either side of it, for the Smooth tool to keep the anchor as a corner ([`smooth_corners`]): a
@@ -327,10 +333,17 @@ fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64, free: [bool; 2]) -> Vec<A
 }
 
 /// Pieces of curve that one Smooth drag measures against the drag while it searches the segments
-/// under it ([`reach_samples`]), shared equally by the curved segments that come within its reach,
-/// each of which gets at least one: enough to search 300,000 pt of curve within the default reach
-/// of the drag.
+/// under it ([`reach_samples`]), besides the whole of each curved segment, which is measured once
+/// however many there are: a drag measures no more than this many pieces plus one for each curved
+/// segment of the paths it searches. Shared equally by the curved segments that come within its
+/// reach, it is enough to search 300,000 pt of curve within the default reach of the drag.
 const MAX_REACH_PIECES: usize = 1 << 17;
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many pieces of curve [`reach_samples`] measured against a drag on this thread.
+    static PIECES_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 /// The box around the control points of `s`, which holds all of `s`.
 fn control_box(s: CubicBez) -> Rect {
@@ -523,13 +536,24 @@ fn segments_in_reach(pd: &PathData, reach: &DragReach) -> usize {
 /// Samples along the part of `c` from `t0` to `t1`, in order: (t, whether the point there is within
 /// `radius` of the stretches `of` of the drag `pts`). A piece no stretch comes near gives one sample
 /// out of reach; the others are halved until their control polygon is no longer than half the
-/// reach, or until `budget` pieces have been measured, and then give one sample: in reach at the
-/// piece's middle or at its place nearest the drag when either is in reach, otherwise out of reach
-/// at its middle. Each piece measures only the stretches near
+/// reach, or until fewer than the two halves are left in this segment's `budget` or in `shared`,
+/// the pieces the whole drag may still measure past the first piece of each segment, and then give
+/// one sample: in reach at the piece's middle or at its place nearest the drag when either is in
+/// reach, otherwise out of reach at its middle. Both halves of a piece are taken from `budget` and
+/// from `shared` before either is measured, so a search measures no more than one piece besides
+/// what it takes from them. Each piece measures only the stretches near
 /// the piece it was cut from, so a long drag along a long curve costs about one pass over the drag
 /// per halving, plus the stretches near each piece.
-fn reach_samples(c: CubicBez, (t0, t1): (f64, f64), (pts, of): (&[Point], &[usize]), radius: f64, budget: &mut usize, out: &mut Vec<(f64, bool)>) {
-    *budget = budget.saturating_sub(1);
+fn reach_samples(
+    c: CubicBez,
+    (t0, t1): (f64, f64),
+    (pts, of): (&[Point], &[usize]),
+    radius: f64,
+    (budget, shared): (&mut usize, &mut usize),
+    out: &mut Vec<(f64, bool)>,
+) {
+    #[cfg(test)]
+    PIECES_MEASURED.set(PIECES_MEASURED.get() + 1);
     let s = c.subsegment(t0..t1);
     let mid = 0.5 * (t0 + t1);
     let near = stretches_near(pts, of, control_box(s), radius);
@@ -538,7 +562,7 @@ fn reach_samples(c: CubicBez, (t0, t1): (f64, f64), (pts, of): (&[Point], &[usiz
         return;
     }
     let len = s.p0.distance(s.p1) + s.p1.distance(s.p2) + s.p2.distance(s.p3);
-    if len <= (radius / 2.0).max(1e-3) || *budget == 0 || mid <= t0 || mid >= t1 {
+    if len <= (radius / 2.0).max(1e-3) || *budget < 2 || *shared < 2 || mid <= t0 || mid >= t1 {
         // The piece's middle, or the place on it nearest the drag when the middle is out of reach.
         let sample = if dist_to_stretches(pts, &near, c.eval(mid)) <= radius {
             (mid, true)
@@ -549,8 +573,10 @@ fn reach_samples(c: CubicBez, (t0, t1): (f64, f64), (pts, of): (&[Point], &[usiz
         out.push(sample);
         return;
     }
-    reach_samples(c, (t0, mid), (pts, &near), radius, budget, out);
-    reach_samples(c, (mid, t1), (pts, &near), radius, budget, out);
+    *budget -= 2;
+    *shared -= 2;
+    reach_samples(c, (t0, mid), (pts, &near), radius, (&mut *budget, &mut *shared), out);
+    reach_samples(c, (mid, t1), (pts, &near), radius, (budget, shared), out);
 }
 
 /// `sp` cut where the reach of the drag crosses its curved segments, and whether each
@@ -559,8 +585,11 @@ fn reach_samples(c: CubicBez, (t0, t1): (f64, f64), (pts, of): (&[Point], &[usiz
 /// out of reach in the middle of each stretch out of reach between two stretches in reach, so that a
 /// stretch in reach is smoothed even when the segment's anchors are not, and the stretches between
 /// stay as they are. A segment is searched no more than half the reach apart where it comes within
-/// the reach of the drag ([`reach_samples`]), measuring up to `share` pieces of each segment.
-fn mark_reached(sp: &SubPath, reach: &DragReach, share: usize) -> (SubPath, Vec<bool>) {
+/// the reach of the drag ([`reach_samples`]): each curved segment is measured whole, and then up
+/// to `share` more pieces of it are measured while the drag's `shared` pieces last, so the segments
+/// in reach share the search equally whatever order they come in, and a segment searched after
+/// the pieces run out is still found where its middle or its place nearest the drag is in reach.
+fn mark_reached(sp: &SubPath, reach: &DragReach, (share, shared): (usize, &mut usize)) -> (SubPath, Vec<bool>) {
     let (pts, radius) = (reach.pts, reach.radius);
     let n = sp.anchors.len();
     let marked: Vec<bool> = sp.anchors.iter().map(|a| reach.in_reach(a.p, 0.0)).collect();
@@ -572,7 +601,7 @@ fn mark_reached(sp: &SubPath, reach: &DragReach, share: usize) -> (SubPath, Vec<
         let c = sp.segment(i);
         let (mut samples, mut budget) = (vec![], share);
         let near = reach.near_rect(control_box(c.subsegment(0.0..1.0)));
-        reach_samples(c, (0.0, 1.0), (pts, &near), radius, &mut budget, &mut samples);
+        reach_samples(c, (0.0, 1.0), (pts, &near), radius, (&mut budget, &mut *shared), &mut samples);
         // Stretches of samples alike, in order: (in reach, first, last).
         let mut runs: Vec<(bool, usize, usize)> = vec![];
         for (k, s) in samples.iter().enumerate() {
@@ -617,15 +646,16 @@ fn mark_reached(sp: &SubPath, reach: &DragReach, share: usize) -> (SubPath, Vec<
 
 /// `sp` with the anchors in the drag's reach smoothed and refitted, `None` when none are in reach.
 /// A closed path whose first anchor is in reach starts at the point of the refitted path nearest
-/// that anchor's place (VectorCraft's own rule).
-fn smooth_subpath(sp: &SubPath, reach: &DragReach, share: usize, tol: f64, sigma: f64) -> Option<SubPath> {
+/// that anchor's place (VectorCraft's own rule). `search` is each curved segment's share of the
+/// drag's search and the pieces the drag has left ([`mark_reached`]).
+fn smooth_subpath(sp: &SubPath, reach: &DragReach, search: (usize, &mut usize), tol: f64, sigma: f64) -> Option<SubPath> {
     if sp.anchors.len() < 2 {
         return None;
     }
     let radius = reach.radius;
     let near = &|q: Point| reach.in_reach(q, 0.0);
     // A drag along a segment smooths it even when its anchors are out of reach.
-    let (sp, marked) = mark_reached(sp, reach, share);
+    let (sp, marked) = mark_reached(sp, reach, search);
     let sp = &sp;
     if !marked.iter().any(|m| *m) {
         return None;
@@ -929,7 +959,11 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
     if !(lo..=hi).contains(&tol) {
         return Err(bad(C, format!("`fidelity` must be from {lo} to {hi} pt")));
     }
-    let sigma = radius * SMOOTH_SPREAD;
+    let smoothness = number_or(p, "smoothness", SMOOTH_SMOOTHNESS, C)?;
+    if !(0.0..=100.0).contains(&smoothness) {
+        return Err(bad(C, "`smoothness` must be from 0 to 100"));
+    }
+    let sigma = radius * SMOOTH_SPREAD * smoothness / SMOOTH_SMOOTHNESS;
     let st = s.doc()?;
     let mut plan = vec![];
     let (mut before, mut after) = (0, 0);
@@ -938,15 +972,17 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
         paths.push((id, path_of(&st.doc, id)?.0));
     }
     let reach = DragReach::new(&pts, radius);
-    // Each curved segment in reach gets the same share of the search, whatever order they come in.
+    // Each curved segment in reach gets the same share of the search, whatever order they come in,
+    // and all of them together measure no more than `MAX_REACH_PIECES` pieces past their first.
     let in_reach: usize = paths.iter().map(|(_, pd)| segments_in_reach(pd, &reach)).sum();
     let share = (MAX_REACH_PIECES / in_reach.max(1)).max(1);
+    let mut shared = MAX_REACH_PIECES;
     for (id, pd) in paths {
         let mut changed = false;
         let subs: Vec<SubPath> = pd
             .subpaths
             .iter()
-            .map(|sp| match smooth_subpath(sp, &reach, share, tol, sigma) {
+            .map(|sp| match smooth_subpath(sp, &reach, (share, &mut shared), tol, sigma) {
                 Some(n) if n != *sp && n.anchors.len() >= 2 => {
                     changed = true;
                     n
@@ -1294,19 +1330,106 @@ mod tests {
         assert_eq!(start_nearest(ring(), Point::new(f64::NAN, 0.0), &ring()), ring());
     }
 
+    /// How many pieces `f` makes [`reach_samples`] measure on this thread.
+    fn pieces_measured(f: impl FnOnce()) -> usize {
+        let before = PIECES_MEASURED.get();
+        f();
+        PIECES_MEASURED.get() - before
+    }
+
     /// Searching a curve 1,000,000 pt long under a drag of 1,000 points along it measures no more
-    /// pieces than the budget it is given, and a search with none left gives one sample.
+    /// than one piece besides the drag's `MAX_REACH_PIECES`, counting the pieces it halves as well
+    /// as those it samples, and a search with none of the drag's pieces left measures the curve
+    /// once and gives one sample, whatever share of its own it has.
     #[test]
     fn searching_a_segment_under_a_drag_stays_within_its_budget() {
         let c = CubicBez::new(Point::new(0.0, 0.0), Point::new(300000.0, 0.0), Point::new(700000.0, 0.0), Point::new(1000000.0, 0.0));
         let pts: Vec<Point> = (0..1000).map(|i| Point::new(f64::from(i) * 1000.0, 0.0)).collect();
         let all = drag_stretches(&pts);
-        let mut budget = MAX_REACH_PIECES;
+        let (mut budget, mut shared) = (MAX_REACH_PIECES, MAX_REACH_PIECES);
         let (mut first, mut second) = (vec![], vec![]);
-        reach_samples(c, (0.0, 1.0), (&pts, &all), 12.0, &mut budget, &mut first);
-        reach_samples(c, (0.0, 1.0), (&pts, &all), 12.0, &mut budget, &mut second);
-        assert!(first.len() <= MAX_REACH_PIECES, "{} samples", first.len());
-        assert_eq!((budget, second.len()), (0, 1), "the budget is spent, so the next search gives one sample");
+        let measured = pieces_measured(|| reach_samples(c, (0.0, 1.0), (&pts, &all), 12.0, (&mut budget, &mut shared), &mut first));
+        assert!(measured <= MAX_REACH_PIECES + 1, "{measured} pieces measured");
+        assert!(first.len() <= measured && first.len() > 1, "{} samples", first.len());
+        assert!(shared < 2, "{shared} pieces left");
+        let mut fresh = MAX_REACH_PIECES;
+        let again = pieces_measured(|| reach_samples(c, (0.0, 1.0), (&pts, &all), 12.0, (&mut fresh, &mut shared), &mut second));
+        assert_eq!((again, second.len()), (1, 1), "the drag's pieces are spent, so the next search gives one sample");
+    }
+
+    /// One curved segment `w` pt wide from `(x, y)`, bowed `h` pt up.
+    fn bow((x, y): (f64, f64), w: f64, h: f64) -> CubicBez {
+        CubicBez::new(Point::new(x, y), Point::new(x + w / 3.0, y + h), Point::new(x + 2.0 * w / 3.0, y + h), Point::new(x + w, y))
+    }
+
+    /// An open subpath of the curved segments `segs`, each starting where the one before ends.
+    fn chain(segs: &[CubicBez]) -> SubPath {
+        let mut anchors: Vec<Anchor> = vec![];
+        for s in segs {
+            match anchors.last_mut() {
+                Some(last) => *last = Anchor::with_handles(s.p0, last.h_in, s.p1),
+                None => anchors.push(Anchor::with_handles(s.p0, s.p0, s.p1)),
+            }
+            anchors.push(Anchor::with_handles(s.p3, s.p2, s.p3));
+        }
+        SubPath::new(anchors, false)
+    }
+
+    /// A drag along two subpaths of 21,845 curved segments 100 pt long each, which share the search
+    /// three pieces to a segment, and past a third of 1,000 curved segments far from the drag: every
+    /// segment is measured whole and the whole drag measures no more than `MAX_REACH_PIECES` pieces
+    /// past those, though each segment in reach would halve its pieces while its share lasts. Each
+    /// segment in reach, the last one included, is halved once with its share of three, so the
+    /// segments searched first leave the later ones their share.
+    #[test]
+    fn a_drag_over_many_curved_segments_measures_at_most_its_pieces_past_the_first_of_each() {
+        let row = |(x, y): (f64, f64), n: u32| chain(&(0..n).map(|i| bow((x + f64::from(i) * 100.0, y), 100.0, 8.0)).collect::<Vec<_>>());
+        let subs = [row((0.0, 0.0), 21_845), row((3_000_000.0, 0.0), 21_845), row((0.0, 1e6), 1000)];
+        let pts = [Point::new(-10.0, 0.0), Point::new(6_000_000.0, 0.0)];
+        let segments: usize = subs.iter().map(SubPath::segment_count).sum();
+        assert_eq!(segments, 2 * 21_845 + 1000);
+        let reach = DragReach::new(&pts, 12.0);
+        let in_reach = segments_in_reach(&PathData::new(subs.to_vec()), &reach);
+        assert_eq!(in_reach, 2 * 21_845, "the far segments are not counted");
+        let share = (MAX_REACH_PIECES / in_reach).max(1);
+        assert_eq!(share, 3);
+        let mut shared = MAX_REACH_PIECES;
+        let mut marks = vec![];
+        let measured = pieces_measured(|| {
+            for sp in &subs {
+                marks.push(mark_reached(sp, &reach, (share, &mut shared)).1);
+            }
+        });
+        assert!(measured >= segments && measured <= segments + MAX_REACH_PIECES, "{measured} pieces measured for {segments} segments");
+        assert_eq!((measured, shared), (segments + 2 * in_reach, MAX_REACH_PIECES - 2 * in_reach), "every segment in reach is halved once");
+        assert!(marks[0].iter().all(|m| *m), "the first path's anchors are all on the drag");
+    }
+
+    /// More than `MAX_REACH_PIECES` short curved segments in reach are each measured once, and a
+    /// segment searched after the drag's pieces are spent is still found in reach where only a
+    /// narrow stretch of it, away from its middle, comes near the drag.
+    #[test]
+    fn every_curved_segment_is_searched_after_the_drags_pieces_run_out() {
+        let n = 140_000;
+        let tiny = chain(&(0..n).map(|i| bow((f64::from(i) * 4.0, 0.0), 4.0, 1.0)).collect::<Vec<_>>());
+        let pts = [Point::new(0.0, 0.0), Point::new(f64::from(n) * 4.0, 0.0)];
+        let reach = DragReach::new(&pts, 12.0);
+        let share = (MAX_REACH_PIECES / segments_in_reach(&PathData::single(tiny.clone()), &reach).max(1)).max(1);
+        let mut shared = MAX_REACH_PIECES;
+        let measured = pieces_measured(|| {
+            mark_reached(&tiny, &reach, (share, &mut shared));
+        });
+        assert_eq!(measured, 140_000, "each segment is measured whole once");
+        // An arch 1,000 pt wide and 300 pt high, with the drag on it a quarter of the way along.
+        let arch = CubicBez::new(Point::new(0.0, 0.0), Point::new(0.0, 400.0), Point::new(1000.0, 400.0), Point::new(1000.0, 0.0));
+        let sp = chain(&[arch]);
+        let hit = [arch.eval(0.25)];
+        assert!(dist_to_polyline(&hit, arch.eval(0.5)) > 12.0, "the arch's middle is out of reach");
+        let mut spent = 0;
+        let (out, marked) = mark_reached(&sp, &DragReach::new(&hit, 12.0), (MAX_REACH_PIECES, &mut spent));
+        assert_eq!(out.anchors.len(), 3, "{out:?}");
+        assert_eq!(marked, vec![false, true, false]);
+        assert!(out.anchors[1].p.distance(hit[0]) <= 12.0, "{out:?}");
     }
 
     /// A small piece of curve is measured only against the few stretches of a drag of 100,000
@@ -1374,14 +1497,14 @@ mod tests {
         assert!(in_reach > 0 && boxes < 100_000, "{in_reach} segments in reach, {boxes} measures");
         let share = (MAX_REACH_PIECES / in_reach).max(1);
         let mut got = None;
-        let marks = stretch_tests(|| got = Some(mark_reached(&sp, &reach, share)));
+        let marks = stretch_tests(|| got = Some(mark_reached(&sp, &reach, (share, &mut { MAX_REACH_PIECES }))));
         assert!(marks < 100_000, "{marks} measures");
-        let smoothed = smooth_subpath(&sp, &reach, share, 2.5, 4.0);
+        let smoothed = smooth_subpath(&sp, &reach, (share, &mut { MAX_REACH_PIECES }), 2.5, 4.0);
         assert!(smoothed.is_some());
         let all = linear(&pts, 12.0);
         assert_eq!(segments_in_reach(&pd, &all), in_reach);
-        assert_eq!(Some(mark_reached(&sp, &all, share)), got);
-        assert_eq!(smooth_subpath(&sp, &all, share, 2.5, 4.0), smoothed);
+        assert_eq!(Some(mark_reached(&sp, &all, (share, &mut { MAX_REACH_PIECES }))), got);
+        assert_eq!(smooth_subpath(&sp, &all, (share, &mut { MAX_REACH_PIECES }), 2.5, 4.0), smoothed);
     }
 
     /// Paths and drags of many shapes, a drag of one point, one far away, one with a stretch longer
@@ -1434,10 +1557,20 @@ mod tests {
                     let in_reach = segments_in_reach(&pd, &all);
                     assert_eq!(segments_in_reach(&pd, &grid), in_reach, "path {k}, reach {radius}, drag {:?}", pts.first());
                     let share = (MAX_REACH_PIECES / in_reach.max(1)).max(1);
-                    assert_eq!(mark_reached(sp, &grid, share), mark_reached(sp, &all, share), "path {k}, reach {radius}, drag {:?}", pts.first());
+                    assert_eq!(
+                        mark_reached(sp, &grid, (share, &mut { MAX_REACH_PIECES })),
+                        mark_reached(sp, &all, (share, &mut { MAX_REACH_PIECES })),
+                        "path {k}, reach {radius}, drag {:?}",
+                        pts.first()
+                    );
                     let sigma = radius * SMOOTH_SPREAD;
-                    let want = smooth_subpath(sp, &all, share, 2.5, sigma);
-                    assert_eq!(smooth_subpath(sp, &grid, share, 2.5, sigma), want, "path {k}, reach {radius}, drag {:?}", pts.first());
+                    let want = smooth_subpath(sp, &all, (share, &mut { MAX_REACH_PIECES }), 2.5, sigma);
+                    assert_eq!(
+                        smooth_subpath(sp, &grid, (share, &mut { MAX_REACH_PIECES }), 2.5, sigma),
+                        want,
+                        "path {k}, reach {radius}, drag {:?}",
+                        pts.first()
+                    );
                 }
             }
         }

@@ -184,6 +184,11 @@ impl App {
         let now = ctx.input(|i| i.time);
         if let Some(w) = &self.winit_window {
             self.display_profile.tick(w, now, self.app.session.prefs.monitor_profile_display, &self.app.display_profile, ctx);
+            if let Some(read) = self.screen_density.tick(w, self.app.session.prefs.display_print_size, ctx) {
+                self.app.services.screens = read.screens;
+                self.app.set_screen_reading(read.main);
+                ctx.request_repaint();
+            }
         }
         self.app.tick(ctx);
         if self.app.ui.status == "quit" {
@@ -236,16 +241,5 @@ pub(crate) fn open_files(app: &mut VectorcraftApp, files: Vec<String>) {
         if let Err(e) = vectorcraft_ui_egui::io::open_reporting(app, &f) {
             eprintln!("vectorcraft: {f}: {e}");
         }
-    }
-}
-
-/// Tell the macOS input method to drop its composition (the Type tool kept the marked text as
-/// typed). winit's IME toggle only clears its own copy, so the IME would type it again.
-#[cfg(target_os = "macos")]
-fn discard_marked_text() {
-    if let Some(mtm) = objc2::MainThreadMarker::new()
-        && let Some(ic) = objc2_app_kit::NSTextInputContext::currentInputContext(mtm)
-    {
-        ic.discardMarkedText();
     }
 }
