@@ -64,7 +64,9 @@ use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{IconButton, Link, PopupMark};
 use craft::ui::choice::{Radio, RadioGroup, SwatchSpacing};
-use craft::ui::contract::{Bind, CommandSet as _, Entry, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger};
+use craft::ui::contract::{
+    Bind, CaptionColumn, CommandSet as _, Entry, LabelScheme, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger,
+};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::{Row, Stack};
@@ -74,7 +76,7 @@ use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::CommandStates;
-use craft::ui::runtime::env::Label;
+use craft::ui::runtime::env::{Label, with_env};
 use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::text::{NumberField, link_toggle};
 use egui::Ui;
@@ -213,27 +215,37 @@ fn rectangle_corners() -> [(usize, &'static str, &'static str); 4] {
 }
 
 /// One Corner Radius field and one Corner select per corner of a live rectangle, each pair on its
-/// own row after the corner's label, the labels in one column; in a panel too narrow for that,
-/// each select wraps under its field. A value typed or a kind picked is set on that corner alone,
-/// of each selected live rectangle ([`set_rectangle_corners`]).
+/// own row after the corner's label, the labels in one column at its start; in a panel too narrow
+/// for that, each select wraps under its field. A value typed or a kind picked is set on that
+/// corner alone, of each selected live rectangle ([`set_rectangle_corners`]).
 fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     let Some(lc) = LiveCorners::of(n) else { return };
     let lengths = general_lengths(app);
     let entries = corner_entries();
     let mut radii = Vec::new();
     let mut kinds = Vec::new();
-    FieldGroup::new(tl!("Corners")).show(ui, |ui, _| {
-        for (k, label, corner) in rectangle_corners() {
-            Field::new(label).show(ui, |ui, _| {
-                Row::new().wrap(true).show(ui, |ui, _| {
-                    radii.push((k, NumberField::length(label, Bind::given(Some(corner_length(&lc, k))), lengths).show(ui).edit));
-                    if let Some(kind) = corner_select(ui, corner, Some(lc.kind(k)), &entries) {
-                        kinds.push((k, kind));
-                    }
-                });
+    // An inline form whose captions share one column: each label starts the column and the fields
+    // after the labels line up.
+    with_env(
+        ui,
+        |scope| {
+            scope.values.set(CaptionColumn::SHARED);
+        },
+        |ui| {
+            FieldGroup::new(tl!("Corners")).labels(LabelScheme::Inline).show(ui, |ui, _| {
+                for (k, label, corner) in rectangle_corners() {
+                    Field::new(label).show(ui, |ui, _| {
+                        Row::new().wrap(true).show(ui, |ui, _| {
+                            radii.push((k, NumberField::length(label, Bind::given(Some(corner_length(&lc, k))), lengths).show(ui).edit));
+                            if let Some(kind) = corner_select(ui, corner, Some(lc.kind(k)), &entries) {
+                                kinds.push((k, kind));
+                            }
+                        });
+                    });
+                }
             });
-        }
-    });
+        },
+    );
     for (k, edit) in &radii {
         apply_edits(app, edit, EditPath::Scope, |app, v: &Option<f64>, _| {
             // A negative radius typed in rounds nothing: the command takes 0 or more.

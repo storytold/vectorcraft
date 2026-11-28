@@ -376,7 +376,7 @@ impl KinsokuDialog {
         let entries = bases(&list);
         Row::new().show(ui, |ui, _| {
             Text::new(tl!("Based on:")).show(ui);
-            if let Some(base) = Select::new(tl!("Based on:"), Bind::given(self.base.clone()), &entries).show(ui).value().cloned() {
+            if let Some(base) = Select::new(tl!("Based on:"), Bind::given(self.base.clone()), &entries).show(ui).events.committed().cloned() {
                 self.base = base;
                 self.edited();
             }
@@ -402,7 +402,7 @@ impl KinsokuDialog {
         Row::new().show(ui, |ui, _| {
             Text::new(tl!("Unicode")).show(ui);
             TextField::new(tl!("Unicode"), Bind::bound(&mut self.code)).show(ui);
-            if let Some(into) = Select::new(tl!("Add to"), Bind::given(self.into.clone()), &targets).show(ui).value().cloned() {
+            if let Some(into) = Select::new(tl!("Add to"), Bind::given(self.into.clone()), &targets).show(ui).events.committed().cloned() {
                 self.into = into;
             }
             add = Button::new(tl!("Add")).enabled(code_char(&self.code).is_some()).show(ui).clicked();

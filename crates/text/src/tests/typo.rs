@@ -1925,25 +1925,24 @@ fn a_ligature_does_not_span_a_change_of_paint() {
 // ---------- performance ----------
 
 #[test]
-fn layout_10k_area_text_is_fast() {
-    let text: String = COPY.chars().cycle().take(10_000).collect();
+fn layout_10k_area_text_takes_work_in_proportion_to_its_length() {
     for (justify, composer) in
         [(Justify::JustifyLeft, Composer::EveryLine), (Justify::Left, Composer::EveryLine), (Justify::Left, Composer::SingleLine)]
     {
-        let mut t = area(&text, style(10.0), Rect::new(0.0, 0.0, 400.0, 20_000.0), justify);
-        t.para.hyphenate = true;
-        t.para.composer = composer;
-        let _ = layout(db(), &t);
-        let n = 5;
-        let start = std::time::Instant::now();
-        for _ in 0..n {
-            let l = layout(db(), &t);
-            assert!(!l.overflow);
-        }
-        let per = start.elapsed().as_secs_f64() * 1000.0 / n as f64;
-        eprintln!("layout of 10k chars ({justify:?}, {composer:?}, hyphenated): {per:.3} ms");
-        let budget = if cfg!(debug_assertions) { 400.0 } else { 10.0 };
-        assert!(per < budget, "{justify:?} {composer:?}: {per} ms");
+        // The steps (shaping, line breaking, composing) of `chars` characters, hyphenated.
+        let work = |chars: usize| {
+            let text: String = COPY.chars().cycle().take(chars).collect();
+            let mut t = area(&text, style(10.0), Rect::new(0.0, 0.0, 400.0, 20_000.0), justify);
+            t.para.hyphenate = true;
+            t.para.composer = composer;
+            let before = crate::layout::layout_work();
+            assert!(!layout(db(), &t).overflow);
+            crate::layout::layout_work() - before
+        };
+        let (half, whole) = (work(5_000), work(10_000));
+        eprintln!("layout of 10k chars ({justify:?}, {composer:?}, hyphenated): {whole} steps; 5k: {half}");
+        assert!(whole <= half * 5 / 2, "{justify:?} {composer:?}: 5,000 characters: {half} steps; 10,000: {whole}");
+        assert!(whole <= 10_000 * super::MAX_LAYOUT_STEPS_PER_CHAR, "{justify:?} {composer:?}: 10,000 characters: {whole} steps");
     }
 }
 

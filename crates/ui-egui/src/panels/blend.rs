@@ -112,7 +112,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut change = None;
     let spacings: Vec<Entry<&'static str>> = SPACING.iter().map(|(v, l)| Entry::new(*v, *l)).collect();
     Field::new(tl!("Spacing:")).show(ui, |ui, _| {
-        let picked = Select::new(tl!("Spacing:"), Bind::given(mode_id(mode)), &spacings).show(ui).value().copied();
+        let picked = Select::new(tl!("Spacing:"), Bind::given(mode_id(mode)), &spacings).show(ui).events.committed().copied();
         if let Some(value) = picked.filter(|value| *value != mode) {
             change = Some(spacing_params(value, steps, distance));
         }
@@ -120,7 +120,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     if mode == "distance" {
         Field::new(tl!("Distance:")).show(ui, |ui, _| {
             let out = NumberField::length(tl!("Distance:"), Bind::given(Some(distance)), general_lengths(app)).show(ui);
-            if let Some(d) = out.value().copied().flatten() {
+            if let Some(d) = out.events.committed().copied().flatten() {
                 change = Some(spacing_params("distance", steps, d));
             }
         });
@@ -129,7 +129,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
         let on = mode == "steps";
         Field::new(tl!("Steps:")).enabled(on).show(ui, |ui, _| {
             let out = NumberField::new(tl!("Steps:"), Bind::given(Some(steps))).range(1.0..=1000.0).commit_decimals(0).enabled(on).show(ui);
-            if let Some(n) = out.value().copied().flatten() {
+            if let Some(n) = out.events.committed().copied().flatten() {
                 change = Some(spacing_params("steps", n, distance));
             }
         });
@@ -140,7 +140,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     ];
     let orientation = if info["orientation"] == "path" { "path" } else { "page" };
     Field::new(tl!("Orientation:")).show(ui, |ui, _| {
-        let picked = Segmented::new(tl!("Orientation:"), Bind::given(orientation), &orientations).show(ui).value().copied();
+        let picked = Segmented::new(tl!("Orientation:"), Bind::given(orientation), &orientations).show(ui).events.committed().copied();
         if let Some(value) = picked.filter(|value| *value != orientation) {
             change = Some(json!({ "orientation": value }));
         }
@@ -155,7 +155,7 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     let easings: Vec<Entry<&'static str>> = modes.iter().zip(labels).map(|(m, l)| Entry::new(*m, l)).collect();
     let easing = modes.iter().copied().find(|m| Some(*m) == info["easingType"].as_str()).unwrap_or(modes[0]);
     Field::new(tl!("Type:")).enabled(selected && spined).show(ui, |ui, _| {
-        let picked = Select::new(tl!("Type:"), Bind::given(easing), &easings).enabled(selected && spined).show(ui).value().copied();
+        let picked = Select::new(tl!("Type:"), Bind::given(easing), &easings).enabled(selected && spined).show(ui).events.committed().copied();
         if let Some(value) = picked.filter(|value| *value != easing) {
             change = Some(json!({"easingType": value}));
         }
@@ -180,7 +180,7 @@ fn create_spine(app: &mut VectorcraftApp, ui: &mut Ui) {
     let entries: Vec<Entry<&'static str>> = BlendSpineMode::ALL.iter().zip(labels).map(|(m, l)| Entry::new(m.id(), l)).collect();
     let mut picked = None;
     Field::new(tl!("Create Spine:")).show(ui, |ui, _| {
-        picked = Select::new(tl!("Create Spine:"), Bind::given(current), &entries).show(ui).value().copied();
+        picked = Select::new(tl!("Create Spine:"), Bind::given(current), &entries).show(ui).events.committed().copied();
     });
     if let Some(mode) = picked.filter(|mode| *mode != current) {
         app.run("object.blend.createSpine", json!({ "mode": mode })).ok();
@@ -201,4 +201,98 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     actions(app, ui, &[(tl!("Reverse Spine"), "object.blend.reverseSpine"), (tl!("Replace Spine"), "object.blend.replaceSpine")]);
     Divider::horizontal().show(ui);
     actions(app, ui, &[(tl!("Expand"), "object.blend.expand"), (tl!("Release"), "object.blend.release")]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use vectorcraft_engine::Session;
+
+    fn app() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        app.run("object.blend.createSpine", json!({"mode": "always"})).unwrap();
+        for x in [10, 200] {
+            app.run("shape.rectangle", json!({"x": x, "y": 30, "width": 30, "height": 30})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        app.run("object.blend.make", json!({})).unwrap();
+        app.run("object.blend.options", json!({"spacing": "smooth", "orientation": "path", "easingType": "easeIn", "ramp": 50})).unwrap();
+        app
+    }
+
+    #[test]
+    fn canceled_dropdown_choices_leave_blend_options_and_defaults_unchanged() {
+        for label in ["Spacing:", "Type:", "Create Spine:"] {
+            let app = app();
+            let original = app.session.active().unwrap().doc.clone();
+            let revision = app.session.active().unwrap().revision;
+            let undo = app.session.active().unwrap().history.undo.len();
+            let prefs = serde_json::to_value(app.session.prefs.blend_options).unwrap();
+            let mut panel = Panel::new(app, show);
+            panel.room(egui::vec2(400.0, 900.0));
+            panel.click_role(label, Role::COMBO_BOX);
+            panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+            panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+            {
+                let app = panel.app();
+                let state = app.session.active().unwrap();
+                assert_eq!(state.doc, original, "canceling {label} keeps the blend");
+                assert_eq!(state.revision, revision);
+                assert_eq!(state.history.undo.len(), undo);
+                assert_eq!(serde_json::to_value(app.session.prefs.blend_options).unwrap(), prefs);
+            }
+            panel.click_role(label, Role::COMBO_BOX);
+            panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+            panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+            let info = panel.app().run("object.blend.info", json!({})).unwrap();
+            if label == "Create Spine:" {
+                assert_eq!(panel.app().session.prefs.blend_options.unwrap().create_spine, BlendSpineMode::Never);
+                assert_eq!(panel.app().session.active().unwrap().doc, original);
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            } else {
+                assert_eq!(
+                    if label == "Spacing:" { &info["spacing"] } else { &info["easingType"] },
+                    if label == "Spacing:" { "steps" } else { "easeOut" }
+                );
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+                panel.app().run("edit.undo", json!({})).unwrap();
+                assert_eq!(panel.app().session.active().unwrap().doc, original);
+            }
+        }
+    }
+
+    #[test]
+    fn canceled_step_and_distance_typing_leaves_the_blend_and_history_unchanged() {
+        for (mode, label, key, typed, value) in [("steps", "Steps:", "steps", "12", 12.0), ("distance", "Distance:", "distance", "24 pt", 24.0)] {
+            let mut app = app();
+            app.run("object.blend.options", json!({"spacing": mode, "steps": 5, "distance": 10})).unwrap();
+            let original = app.session.active().unwrap().doc.clone();
+            let revision = app.session.active().unwrap().revision;
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, show);
+            panel.room(egui::vec2(400.0, 900.0));
+            panel.click_role(label, Role::SPIN_BUTTON);
+            panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+            panel.type_text(typed);
+            panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+            {
+                let app = panel.app();
+                let state = app.session.active().unwrap();
+                assert_eq!(state.doc, original, "canceling {label} keeps the blend");
+                assert_eq!(state.revision, revision);
+                assert_eq!(state.history.undo.len(), undo);
+            }
+            panel.click_role(label, Role::SPIN_BUTTON);
+            panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+            panel.type_text(typed);
+            panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+            assert_eq!(panel.app().run("object.blend.info", json!({})).unwrap()[key], value);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
+    }
 }

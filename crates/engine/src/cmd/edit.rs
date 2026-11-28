@@ -823,7 +823,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     super::symboledit::follow_history(st, editing_symbol.as_ref());
-    leave_isolation_if_gone(st);
+    st.leave_isolation_if_gone();
     super::globaledit::follow_history(st);
     st.drop_stale_variables_highlight();
     if let Some((before, _)) = paints {
@@ -860,22 +860,13 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     super::symboledit::follow_history(st, editing_symbol.as_ref());
-    leave_isolation_if_gone(st);
+    st.leave_isolation_if_gone();
     super::globaledit::follow_history(st);
     st.drop_stale_variables_highlight();
     if let Some((_, after)) = paints {
         s.paint = after;
     }
     Ok(json!({ "redone": label }))
-}
-
-/// After undo or redo, isolation mode ends when the isolated object is no longer in the document,
-/// such as the clip group Draw Inside made around the isolated object (#3705), rather than naming
-/// an id a later object may take.
-fn leave_isolation_if_gone(st: &mut crate::DocState) {
-    if st.isolation.is_some_and(|i| st.doc.node(i).is_none()) {
-        st.isolation = None;
-    }
 }
 
 /// History panel › Clear History: removes the steps after the current state and the steps before

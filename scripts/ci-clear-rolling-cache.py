@@ -7,14 +7,17 @@ The cold run (ci.yml, `cold-build`) never restores the rolling entry, so the old
 the cache while the new one is saved: two entries of about 4.6 GB each, beside the others, go over
 the repository's 10 GB limit and GitHub evicts the corpus, SonarCloud and Windows ARM64 entries. The
 gate's `cache warm` leg saves in its `Post Setup` step; this deletes the old entries when that step
-starts. Pull requests and pushes that start in the minutes between restore nothing from the
-deleted entry and build cold once. Deleting is the only write; the entry the cold run saves does not
-exist yet when this runs. Only entries created before this run started are deleted: a push or pull
-request run in the same minutes may have saved an entry of its own, and the cold run's own save is
-never touched. A leg that failed or was canceled saves nothing: its old entries stay, and this
-exits 1, so "Re-run failed jobs" runs it again beside the re-run leg. The same holds for a leg that
-ends, canceled or failed, before its save step finished. It also exits 1 when the leg has not
-reached its save GIVE_UP_SECONDS after the leg started. An absent warm leg is treated as finished only
+starts, then waits for the step to finish. Pull requests and pushes that start in the minutes
+between restore nothing from the deleted entry and build cold once. Deleting is the only write; the
+entry the cold run saves does not exist yet when this runs. Only entries created before this run
+started are deleted: a push or pull request run in the same minutes may have saved an entry of its
+own, and the cold run's own save is never touched. A leg that failed or was canceled before its
+save step started saves nothing: its old entries stay, and this exits 1, so "Re-run failed jobs"
+runs it again beside the re-run leg. A save step that is canceled or fails after the old entries
+were deleted leaves no rolling entry, so the next run starts cold, and this exits 1 too. A failure
+in a later post step does not count once the save step has succeeded. This also exits 1 when the
+leg has not reached its save, or its save has not finished, GIVE_UP_SECONDS after the leg started.
+An absent warm leg is treated as finished only
 when the most recent earlier attempt that lists it reports success and the current attempt lists
 no `cache prune` job, which runs from the start of "Re-run all jobs". Otherwise this keeps polling
 because reusable-workflow dependencies may still be scheduling it.
@@ -47,6 +50,7 @@ STOPPED = ('failure', 'cancelled', 'timed_out')
 # Steps with continue-on-error in craft-common-actions .github/workflows/gate.yml.
 TOLERATED_FAILURES = ('Trim the cache entry to this build',)
 NO_SAVE = 'the cache warm leg failed or was canceled and saves no entry; nothing deleted. Re-running the failed jobs runs this job again with the leg'
+SAVE_LOST = 'the cache warm leg did not finish its save after the old rolling entries were deleted; the next run starts cold'
 
 
 def save_step(job):
@@ -73,6 +77,12 @@ def saves_nothing(job):
     if step is not None and step['status'] == 'completed':
         return step.get('conclusion') != 'success'
     return job.get('status') == 'completed'
+
+
+def save_finished(job):
+    """True once the save step has completed or the job has ended."""
+    step = save_step(job)
+    return job.get('status') == 'completed' or (step is not None and step['status'] == 'completed')
 
 
 def gave_up(job, now, began):
@@ -135,9 +145,10 @@ def gh(*args):
 def main():
     repo, run, attempt = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_RUN_ID'], os.environ.get('GITHUB_RUN_ATTEMPT', '1')
     began = datetime.now(timezone.utc)
+    jobs_url = f'repos/{repo}/actions/runs/{run}/attempts/{attempt}/jobs?per_page=100'
     earlier_jobs = {}
     while True:
-        jobs = gh(f'repos/{repo}/actions/runs/{run}/attempts/{attempt}/jobs?per_page=100') or {}
+        jobs = gh(jobs_url) or {}
         job = warm_job(jobs.get('jobs', []))
         if job and saving(job):
             break
@@ -178,6 +189,16 @@ def main():
             else:
                 print(result.stderr, end='', file=sys.stderr)
                 return result.returncode
+    while not save_finished(job):
+        if gave_up(job, datetime.now(timezone.utc), began):
+            print(f'::error::{SAVE_LOST}')
+            return 1
+        time.sleep(POLL_SECONDS)
+        job = warm_job((gh(jobs_url) or {}).get('jobs', [])) or job
+    if saves_nothing(job):
+        print(f'::error::{SAVE_LOST}')
+        return 1
+    print('the cache warm leg saved its entry')
 
 
 if __name__ == '__main__':

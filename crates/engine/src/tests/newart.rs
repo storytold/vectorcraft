@@ -233,6 +233,43 @@ fn an_object_added_after_an_edit_is_compared_with_the_edited_objects() {
     assert_eq!(s.paint.fill, blue, "a, b and c are all blue now");
 }
 
+fn toggle(s: &mut Session, id: NodeId) {
+    run(s, "select.toggle", json!({"id": id.0}));
+}
+
+/// Objects taken out one at a time leave the others to be compared: a fill and weight the objects
+/// left share loads, one they don't stays as it was.
+#[test]
+fn objects_taken_out_one_at_a_time_load_only_the_paints_the_objects_left_share() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let b = painted(&mut s, 120.0, "#00ffff", "#00ff00", 5.0);
+    let c = painted(&mut s, 220.0, "#0000ff", "#00ff00", 1.0);
+    let d = painted(&mut s, 320.0, "#ff0000", "#00ff00", 5.0);
+    let red = node(&s, a).appearance.fill_paint();
+    select(&mut s, &[a, b, c, d]);
+    (s.paint.fill, s.paint.stroke_width) = (Paint::None, 0.5);
+    toggle(&mut s, c);
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 5.0), "a, b and d share the weight, not the fill");
+    s.paint.stroke_width = 0.5;
+    toggle(&mut s, b);
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (red, 5.0), "a and d share both");
+}
+
+/// Taking out every object with the fill met first leaves the other objects' fills to compare.
+#[test]
+fn taking_out_the_objects_with_the_first_fill_compares_the_fills_left() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let b = painted(&mut s, 120.0, "#0000ff", "#00ff00", 5.0);
+    let c = painted(&mut s, 220.0, "#0000ff", "#00ff00", 5.0);
+    let blue = node(&s, b).appearance.fill_paint();
+    select(&mut s, &[a, b, c]);
+    s.paint.fill = Paint::None;
+    toggle(&mut s, a);
+    assert_eq!(s.paint.fill, blue, "b and c are both blue");
+}
+
 #[test]
 fn art_without_paint_leaves_the_proxies_as_they_were() {
     let mut s = session();

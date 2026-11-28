@@ -383,6 +383,31 @@ mod tests {
         assert!(app.session.in_interaction());
     }
 
+    /// With its preview turned off, OK leaves an edit that began in the same document since then in place and keeps
+    /// the dialog open.
+    #[test]
+    fn color_adjustment_ok_leaves_a_later_edit_in_its_document_intact() {
+        let (mut app, ctx, [source, _]) = two_documents("#808080");
+        let id = dialog_id(KIND);
+        let dialogs = app.dialogs().unwrap();
+        open(&mut app);
+        set(&app, &ctx, "r", json!(20));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#b38080");
+        set(&app, &ctx, "preview", json!(false));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#808080", "turning Preview off rolls the preview back");
+
+        app.session.begin_interaction("Change fill").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        confirm(&mut app, &ctx);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Refused(_))));
+        assert_eq!(fill_hex(&app, source), "#00ff00", "the later edit keeps its color");
+        assert!(app.session.in_interaction());
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+
     #[test]
     fn previews_live_and_commits_one_undo_step() {
         let (mut app, ctx) = app();

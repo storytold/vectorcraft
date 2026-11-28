@@ -276,6 +276,8 @@ impl VectorcraftApp {
             #[cfg(test)]
             now_override: None,
             #[cfg(test)]
+            clock_origin: craft::ui::runtime::motion::now(),
+            #[cfg(test)]
             fail_next_tool_choice: None,
             held_tool: Vec::new(),
         }
@@ -339,6 +341,17 @@ impl VectorcraftApp {
             return now;
         }
         now_secs()
+    }
+
+    /// The app's clock as an instant, which the control channel times requests and captures with:
+    /// [`motion::now`](craft::ui::runtime::motion::now), or `now_override` seconds after the app was
+    /// made when a test set it.
+    pub(crate) fn instant(&self) -> craft::ui::runtime::motion::Instant {
+        #[cfg(test)]
+        if let Some(now) = self.now_override {
+            return self.clock_origin + std::time::Duration::from_secs_f64(now.max(0.0));
+        }
+        craft::ui::runtime::motion::now()
     }
 
     /// Applies the work that finished off the UI thread. It stays pending while a script runs, since
@@ -654,17 +667,29 @@ impl VectorcraftApp {
         // PLAN: assumed `chrome::window_title(&VectorcraftApp) -> String` (shell-01 A1 names the call, no row gives its signature; shell-w9).
         let window_title = chrome::window_title(self);
         let shown = AppShell::new(WindowKey::main())
-            .title_bar_if(true, chrome::app_bar)
-            .options_bar(self.ui.control_bar, |ui, _cx, app: &mut VectorcraftApp| {
-                chrome::control_bar(app, ui);
-            })
+            .title_bar_if(true, |_| None, chrome::app_bar)
+            .options_bar(
+                self.ui.control_bar,
+                |_| None,
+                |ui, _cx, app: &mut VectorcraftApp| {
+                    chrome::control_bar(app, ui);
+                },
+            )
             .options_place(Bind::bound(&mut control_bar_place))
-            .status(self.ui.status_bar, |ui, _cx, app: &mut VectorcraftApp| {
-                chrome::status_bar(app, ui);
-            })
-            .bottom(Slot::new(chrome::HINT_SLOT).visible(self.ui.help_bar), |ui, _cx, app: &mut VectorcraftApp| {
-                chrome::hint_bar(app, ui);
-            })
+            .status(
+                self.ui.status_bar,
+                |_| None,
+                |ui, _cx, app: &mut VectorcraftApp| {
+                    chrome::status_bar(app, ui);
+                },
+            )
+            .bottom(
+                Slot::new(chrome::HINT_SLOT).visible(self.ui.help_bar),
+                |_| None,
+                |ui, _cx, app: &mut VectorcraftApp| {
+                    chrome::hint_bar(app, ui);
+                },
+            )
             .window_title(window_title)
             .screen_mode(Bind::given(given))
             .allow_reveal(!self.ui.presenting())
