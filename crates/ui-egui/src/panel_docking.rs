@@ -1261,6 +1261,10 @@ impl DockPanels<String> for Panels<'_> {
         // A rail shares its column with nothing, so its group is the rail alone. Its view draws
         // the Edit Toolbar drawer while the drawer targets it.
         let owner = panels.iter().find_map(|p| rail_owner(&self.app.ui, p))?;
+        // A floating toolbar's OS window runs a pass of its own, as a floating panel's does.
+        if matches!(at, GroupAt::Show(_)) && ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+            crate::shortcuts::leave_to_labels(self.app, ui.ctx());
+        }
         Some(crate::toolbar::rail_view(self.app, ui, owner, at, cx))
     }
 

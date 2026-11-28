@@ -31,6 +31,9 @@ const KEY: &str = "flattenTransparency";
 
 const CMD: &str = "object.flattenTransparency";
 
+/// The name of the preview's interaction.
+const LABEL: &str = "Flatten Transparency";
+
 /// The switches the PDF 1.3 writer sets itself, which Custom Transparency Flattener Options show
 /// but can't change: rasterized areas are always clipped to their regions and keep no alpha, and
 /// overprints are kept only with Overprint set to Preserve.
@@ -53,7 +56,39 @@ pub(crate) struct FlattenDialog {
 /// An open Flatten Transparency.
 pub(crate) struct Open {
     id: DialogId,
+    /// The drawing the dialog opened on and its revert count then.
+    source: Option<(u64, u64)>,
     preview: LivePreview,
+}
+
+impl Open {
+    /// Is the active drawing the one the dialog opened on, as it was then? Another drawing, or
+    /// the same one reverted meanwhile, is the refusal.
+    fn check_source(&self, app: &VectorcraftApp) -> Result<(), String> {
+        let active = app.session.active().map(|doc| (doc.uid, doc.reverts));
+        match (active, self.source) {
+            (Some(now), Some(source)) if now == source => Ok(()),
+            (Some((uid, _)), Some((source, _))) if uid == source => Err(tl!("The document was reverted. Reopen this dialog to continue.").into()),
+            _ => Err(tl!("Return to the original drawing to flatten its transparency").into()),
+        }
+    }
+
+    /// Is the interaction running in the opening drawing this dialog's preview?
+    fn owns_preview(&self, app: &VectorcraftApp) -> bool {
+        self.check_source(app).is_ok()
+            && app
+                .session
+                .active()
+                .and_then(|doc| doc.interaction.as_ref())
+                .is_some_and(|interaction| interaction.preview.as_ref().map_or_else(|| interaction.label == LABEL, |(command, _)| command == CMD))
+    }
+
+    /// Rolls the preview back, leaving any other drawing's interaction alone.
+    fn cancel_preview(self, app: &mut VectorcraftApp) {
+        if self.owns_preview(app) {
+            self.preview.cancel(app);
+        }
+    }
 }
 
 /// Write `o` into the option fields.
@@ -175,12 +210,13 @@ pub(crate) fn custom_dialog(ctx: &egui::Context, parent: &HostedPdfExport, job: 
     as_written(&mut o, parent.settings().advanced.overprint);
     let mut fields = option_fields(&o);
     fields.set(KEPT_OVERPRINTS, kept);
-    HostedParamDialog::new(ctx, CUSTOM_KEY, fields, |_| {
+    HostedParamDialog::new(ctx, CUSTOM_KEY, fields, |fields| {
         ParamDialog::new(
             CUSTOM_KEY,
             tl!("Custom Transparency Flattener Options"),
             option_params(&FIXED, tl!("PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.")),
         )
+        .values(Bind::bound(fields))
     })
 }
 
@@ -213,8 +249,8 @@ pub(crate) fn apply_custom(job: &mut SavePdfJob, parent: &HostedPdfExport, field
 /// Open Flatten Transparency for the selection with the default preset.
 pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let dialog = HostedParamDialog::new(&ctx, KEY, option_fields(&FlattenOptions::default()), |_| {
-        ParamDialog::new(KEY, tl!("Flatten Transparency"), option_params(&[], "")).previews(true)
+    let dialog = HostedParamDialog::new(&ctx, KEY, option_fields(&FlattenOptions::default()), |fields| {
+        ParamDialog::new(KEY, tl!("Flatten Transparency"), option_params(&[], "")).values(Bind::bound(fields)).previews(true)
     })
     // Flattening complex art is slow: the preview waits until it is turned on.
     .preview_off();
@@ -222,12 +258,13 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         parent: None,
         cancel: Some(Box::new(|app: &mut VectorcraftApp| {
             if let Some(open) = app.flatten_dialog.open.take() {
-                open.preview.cancel(app);
+                open.cancel_preview(app);
             }
         })),
     };
+    let source = app.session.active().map(|doc| (doc.uid, doc.reverts));
     let id = open_held_with(app, dialog, ok, held).ok_or("no window")?;
-    app.flatten_dialog.open = Some(Open { id, preview: LivePreview::default() });
+    app.flatten_dialog.open = Some(Open { id, source, preview: LivePreview::default() });
     Ok(json!({ "dialog": KEY }))
 }
 
@@ -240,11 +277,22 @@ fn command_params(params: &[Param], fields: &DialogFields, saved: &[FlattenerPre
 }
 
 /// OK: flatten with the dialog's options, keeping the preview as the one undo step. A refusal
-/// keeps the dialog open with its reason.
+/// keeps the dialog open with its reason, still on the drawing it opened on; OK in another drawing
+/// is refused.
 fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
     let params = command_params(&option_params(&[], ""), &result.fields, &app.session.prefs.flattener_presets)?;
-    let preview = app.flatten_dialog.open.take().map(|o| o.preview).unwrap_or_default();
-    preview.commit(app, CMD, params).map(|_| ()).inspect_err(|e| app.status(e.clone()))
+    let Some(mut open) = app.flatten_dialog.open.take() else { return Err("the Flatten Transparency dialog is closed".into()) };
+    if let Err(why) = open.check_source(app) {
+        app.flatten_dialog.open = Some(open);
+        return Err(why);
+    }
+    let preview = if open.owns_preview(app) { std::mem::take(&mut open.preview) } else { LivePreview::default() };
+    let committed = preview.commit(app, CMD, params).map(|_| ());
+    if let Err(e) = &committed {
+        app.status(e.clone());
+        app.flatten_dialog.open = Some(open);
+    }
+    committed
 }
 
 /// Gives the dialog `id` the session's flattener presets.
@@ -288,15 +336,21 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some((previewing, fields, events)) = seen else { return };
     let options = command_params(&params, &fields, &app.session.prefs.flattener_presets);
     if let Some(mut open) = app.flatten_dialog.open.take() {
-        match &options {
-            Ok(p) => {
-                // The answer is the preview's own; a refusal reaches the status bar inside `run`.
-                let _ = open.preview.run(app, previewing, "Flatten Transparency", CMD, p);
-            }
-            // Invalid values keep the last preview; with the preview off there is nothing to keep.
-            Err(_) if previewing => {}
-            Err(_) => {
-                let _ = open.preview.run(app, false, "Flatten Transparency", CMD, &Value::Null);
+        // In another drawing the preview waits; the switch rolled the shown one back.
+        if !open.owns_preview(app) {
+            open.preview = LivePreview::default();
+        }
+        if open.check_source(app).is_ok() {
+            match &options {
+                Ok(p) => {
+                    // The answer is the preview's own; a refusal reaches the status bar inside `run`.
+                    let _ = open.preview.run(app, previewing, LABEL, CMD, p);
+                }
+                // Invalid values keep the last preview; with the preview off there is nothing to keep.
+                Err(_) if previewing => {}
+                Err(_) => {
+                    let _ = open.preview.run(app, false, LABEL, CMD, &Value::Null);
+                }
             }
         }
         app.flatten_dialog.open = Some(open);
@@ -402,6 +456,120 @@ mod tests {
         assert!(!transparent_left(&app));
     }
 
+    /// [`scene`] with a second drawing holding a half-transparent square, the first one active.
+    fn two_drawings() -> VectorcraftApp {
+        let mut app = scene();
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 80, "height": 80})).unwrap();
+        app.run("transparency.set", json!({"opacity": 50})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app
+    }
+
+    fn activate(app: &mut VectorcraftApp, index: usize) {
+        app.run("document.activate", json!({"index": index})).unwrap();
+        frame(app);
+    }
+
+    fn undo_steps(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    fn refused(app: &VectorcraftApp, id: DialogId) -> bool {
+        matches!(app.dialogs().unwrap().with(|h| h.held_state(id)), Some(craft::ui::dialog::HeldOk::Refused(_)))
+    }
+
+    #[test]
+    fn flatten_preview_pauses_in_a_second_drawing() {
+        let mut app = two_drawings();
+        let id = open_dialog(&mut app);
+        set(&app, id, "preview", json!(true));
+        frame(&mut app);
+        assert!(!transparent_left(&app), "previewed in the first drawing");
+        activate(&mut app, 1);
+        assert!(!app.session.in_interaction(), "no preview in the second drawing");
+        assert!(transparent_left(&app), "the second drawing is not flattened");
+
+        activate(&mut app, 0);
+        assert!(app.session.in_interaction() && !transparent_left(&app), "the preview is back in the first drawing");
+        let steps = undo_steps(&app);
+        confirm(&mut app);
+        assert!(app.flatten_dialog.open.is_none() && !app.session.in_interaction());
+        assert_eq!(undo_steps(&app), steps + 1);
+        activate(&mut app, 1);
+        assert!(transparent_left(&app), "OK left the second drawing alone");
+    }
+
+    #[test]
+    fn flatten_ok_waits_for_its_original_drawing() {
+        let mut app = two_drawings();
+        let id = open_dialog(&mut app);
+        activate(&mut app, 1);
+        let steps = undo_steps(&app);
+        confirm(&mut app);
+        assert!(refused(&app, id), "OK in the second drawing is refused");
+        assert!(transparent_left(&app) && !app.session.in_interaction());
+        assert_eq!(undo_steps(&app), steps);
+
+        activate(&mut app, 0);
+        crate::tests::picks::answer_dialog(&mut app, id, &[], true);
+        assert!(app.flatten_dialog.open.is_none());
+        assert!(!transparent_left(&app), "OK flattens the first drawing");
+        activate(&mut app, 1);
+        assert!(transparent_left(&app));
+    }
+
+    #[test]
+    fn a_refused_flatten_stays_on_its_original_drawing() {
+        let mut app = two_drawings();
+        let id = open_dialog(&mut app);
+        app.run("select.none", json!({})).unwrap();
+        confirm(&mut app);
+        assert!(refused(&app, id), "OK with nothing selected is refused");
+        activate(&mut app, 1);
+        let steps = undo_steps(&app);
+        crate::tests::picks::answer_dialog(&mut app, id, &[], true);
+        assert!(refused(&app, id), "OK in the second drawing is still refused");
+        assert!(transparent_left(&app));
+        assert_eq!(undo_steps(&app), steps);
+    }
+
+    #[test]
+    fn flatten_ok_refuses_a_reverted_drawing() {
+        let mut app = scene();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let folder = vectorcraft_testkit::TempDir::new("flatten-opening-revert");
+        app.run("file.saveAs", json!({"path": folder.join("drawing.vectorcraft")})).unwrap();
+        app.run("shape.rectangle", json!({"x": 150, "y": 150, "width": 20, "height": 20})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let id = open_dialog(&mut app);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        frame(&mut app);
+        let steps = undo_steps(&app);
+        confirm(&mut app);
+        assert!(refused(&app, id), "OK in the reverted drawing is refused");
+        assert!(transparent_left(&app));
+        assert_eq!(undo_steps(&app), steps);
+    }
+
+    #[test]
+    fn cancelling_flatten_leaves_a_second_drawings_interaction_alone() {
+        let mut app = two_drawings();
+        let id = open_dialog(&mut app);
+        set(&app, id, "preview", json!(true));
+        frame(&mut app);
+        activate(&mut app, 1);
+        app.session.begin_interaction("The second drawing's edit").unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        app.dialogs().unwrap().with(|h| h.cancel::<HostedParamDialog>(&ctx));
+        frame(&mut app);
+        assert!(app.flatten_dialog.open.is_none());
+        assert_eq!(app.session.active().unwrap().interaction.as_ref().unwrap().label, "The second drawing's edit");
+    }
+
     #[test]
     fn ok_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
         const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
@@ -449,5 +617,72 @@ mod tests {
         // Built-in presets can't be replaced.
         create(&mut app, &ctx, id, params, "High Resolution");
         assert_eq!(app.session.prefs.flattener_presets.len(), 1);
+    }
+
+    #[test]
+    fn flattened_art_resolution_keeps_a_live_keyboard_edit() {
+        assert_live_resolution(false);
+    }
+
+    #[test]
+    fn pdf_flattener_resolution_keeps_a_live_keyboard_edit() {
+        assert_live_resolution(true);
+    }
+
+    fn assert_live_resolution(custom: bool) {
+        use craft::ui::testing::Fixture;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let app = Rc::new(RefCell::new(scene()));
+        let shown = app.clone();
+        let mut fixture = Fixture::new(move |ui| {
+            let mut app = shown.borrow_mut();
+            let dialogs = app.dialogs().unwrap();
+            dialogs.with(|host| host.run(ui));
+            super::super::host::pump(&mut app, ui.ctx());
+        });
+        fixture.room(egui::vec2(880.0, 720.0));
+        let ctx = fixture.ctx().clone();
+        let document = app.borrow().session.active().unwrap().uid;
+        let mut job = SavePdfJob {
+            document,
+            path: None,
+            save_mode: None,
+            flattener: Some(FlattenOptions { line_art_ppi: 611.0, ..FlattenOptions::default() }),
+            selection: false,
+        };
+        let parent = HostedPdfExport::new(vectorcraft_pdf::APP, vectorcraft_pdf::PdfSettings::default());
+        let id = {
+            let mut app = app.borrow_mut();
+            app.ui_ctx = Some(ctx.clone());
+            if custom {
+                let dialog = custom_dialog(&ctx, &parent, &job, &[]);
+                app.dialogs().unwrap().with(|host| host.open(dialog))
+            } else {
+                open(&mut app).unwrap();
+                app.flatten_dialog.open.as_ref().unwrap().id
+            }
+        };
+        fixture.settle();
+        let field = fixture
+            .by_label("Line Art and Text Resolution")
+            .or_else(|| fixture.by_label("Line Art and Text Resolution:"))
+            .expect("the hosted resolution field");
+        if custom {
+            let fields = app.borrow().dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).unwrap().fields().clone());
+            assert_eq!(fields.number("lineArtPpi"), Some(611.0), "the PDF dialog opens with the job's own resolution");
+        }
+        fixture.click(&field).key(egui::Key::A, egui::Modifiers::COMMAND).type_text("399").key(egui::Key::Tab, egui::Modifiers::NONE).settle();
+        let app = app.borrow();
+        let fields = app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).unwrap().fields().clone());
+        assert_eq!(fields.number("lineArtPpi"), Some(399.0), "the hosted form keeps its keyboard edit");
+        if custom {
+            apply_custom(&mut job, &parent, &fields, &[]).unwrap();
+            assert_eq!(job.flattener.unwrap().line_art_ppi, 399.0);
+        } else {
+            let params = command_params(&option_params(&[], ""), &fields, &[]).unwrap();
+            assert_eq!(params["lineArtPpi"], 399.0);
+        }
     }
 }

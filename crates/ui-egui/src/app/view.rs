@@ -47,7 +47,8 @@ impl VectorcraftApp {
     /// new document gets its saved view.
     pub fn sync_views(&mut self) {
         let docs = self.session.documents();
-        if self.view_uids.len() == self.views.len() && docs.iter().map(|d| d.uid).ne(self.view_uids.iter().copied()) {
+        let documents_changed = docs.iter().map(|d| d.uid).ne(self.view_uids.iter().copied());
+        if documents_changed && self.view_uids.len() == self.views.len() {
             let mut old: Vec<Option<View>> = std::mem::take(&mut self.views).into_iter().map(Some).collect();
             self.views = docs
                 .iter()
@@ -65,6 +66,9 @@ impl VectorcraftApp {
             view.shown_ppi.get_or_insert(main);
         }
         let uids: Vec<u64> = docs.iter().map(|d| d.uid).collect();
+        if documents_changed {
+            self.ui.image_trace_panel.retain_open_drawings(&uids);
+        }
         if let Some(ctx) = &self.ui_ctx {
             for closed in self.view_uids.iter().filter(|u| !uids.contains(u)) {
                 panels::layers::forget(ctx, *closed);

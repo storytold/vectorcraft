@@ -37,10 +37,13 @@ use crate::{VectorcraftApp, io};
 pub(super) mod color_table;
 
 pub const KIND: &str = "saveForWeb";
+const WRONG_DOCUMENT: &str = "Save for Web belongs to the document that opened the dialog.";
 
 /// What the open dialog's pump keeps between frames: data keyed by its inputs, never UI state.
 #[derive(Default)]
 pub(crate) struct WebExport {
+    document: Option<(u64, u64)>,
+    opening: Arc<()>,
     /// The rendering of the art before optimisation, by [`render_key`].
     render: Option<(String, Result<Arc<WebRender>, String>)>,
     /// The Original pane's picture, `None` while the dialog has not been given the current rendering's.
@@ -183,11 +186,21 @@ fn settings_of(options: &SaveForWebOptions, table: &Value, kept: &Value, path: O
 
 /// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    app.session.active().ok_or("no document")?;
+    let active = app.session.active().ok_or("no document")?;
+    let document = (active.uid, active.reverts);
     let host = app.dialogs().ok_or("no window")?;
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    // Settle a completed opening while its settings and source are still available.
+    if let Some(DialogResult::Ok(result)) = host.with(|dialog| dialog.take::<HostedSaveForWeb>()) {
+        finish(app, result);
+    }
     let s = remembered(app);
-    app.web_export = WebExport { table: serde_json::to_value(&s.color_table).unwrap_or_default(), kept: kept_of(&s), ..WebExport::default() };
+    app.web_export = WebExport {
+        document: Some(document),
+        table: serde_json::to_value(&s.color_table).unwrap_or_default(),
+        kept: kept_of(&s),
+        ..WebExport::default()
+    };
     let (name, artboards, slices) = {
         let st = app.session.active().ok_or("no document")?;
         let slices: Vec<WebSlice> = st
@@ -449,6 +462,15 @@ fn on_dialog<R>(host: &craft::ui::shell::WindowDialogs, f: impl FnOnce(&mut Host
     host.with(|h| h.get_mut::<HostedSaveForWeb>().map(f))
 }
 
+fn document_problem(app: &VectorcraftApp) -> Option<&'static str> {
+    match (app.web_export.document, app.session.active()) {
+        (Some((uid, reverts)), Some(active)) if uid == active.uid => {
+            (reverts != active.reverts).then(|| tl!("The document was reverted. Reopen this dialog to continue."))
+        }
+        _ => Some(tl!(WRONG_DOCUMENT)),
+    }
+}
+
 /// Answers the open dialog once per frame: its result when it closed, else its requests.
 /// Colour requests (the matte, a palette cell) are routed by the host-wide colour picker routing;
 /// a palette cell's pick is applied to the table by [`take_palette_pick`].
@@ -456,13 +478,32 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(host) = app.dialogs() else { return };
     match host.with(|h| h.take::<HostedSaveForWeb>()) {
         Some(DialogResult::Ok(result)) => return finish(app, result),
-        Some(_) => {
+        Some(_) if on_dialog(&host, |_| ()).is_none() => {
             app.web_export = WebExport::default();
             return;
         }
-        None => {}
+        _ => {}
     }
     let Some(asked) = on_dialog(&host, Asked::take) else { return };
+    if let Some(reason) = document_problem(app) {
+        let restore = asked.tables.iter().any(|event| matches!(event.edit, ColorTableEdit::Restore));
+        if restore {
+            color_table::restore(&mut app.web_export.table);
+            let marks = color_table::marks(&app.web_export.table);
+            on_dialog(&host, |dialog| dialog.set_marks(marks));
+        }
+        let requested = asked.path.is_some()
+            || asked.browser
+            || asked.optimize_open
+            || asked.optimize.is_some()
+            || asked.tables.iter().any(|event| !matches!(event.edit, ColorTableEdit::Restore));
+        update_presets(app, &host, asked.presets, restore);
+        if requested {
+            on_dialog(&host, HostedSaveForWeb::cancel_requests);
+            app.status(reason);
+        }
+        return;
+    }
     // The framework keeps the result line while the settings are the ones it found; the art is the app's.
     let art = art_key(app);
     if app.web_export.optimized.is_some() && optimized_result(&app.web_export.optimized, &art).is_none() {
@@ -474,12 +515,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let marks = color_table::marks(&app.web_export.table);
     on_dialog(&host, |d| d.set_marks(marks));
-    let refresh_presets = !asked.tables.is_empty() || !asked.presets.is_empty();
-    store_presets(app, asked.presets);
-    if refresh_presets {
-        let presets = dialog_presets(app);
-        on_dialog(&host, |d| d.set_presets(presets));
-    }
+    update_presets(app, &host, asked.presets, !asked.tables.is_empty());
     if asked.optimize_open {
         let bytes = optimize_start(app, &asked.options);
         on_dialog(&host, |d| d.answer_optimize_start(bytes));
@@ -565,6 +601,10 @@ pub(crate) fn take_palette_pick(app: &mut VectorcraftApp, parent: DialogId, key:
     let Some(options) = host.with(|h| h.get_mut_by_id::<HostedSaveForWeb>(parent).map(|d| d.current().clone())) else {
         return false;
     };
+    if let Some(reason) = document_problem(app) {
+        app.status(reason);
+        return true;
+    }
     let rgb = |c: Srgba| {
         let [r, g, b, _] = c.to_rgba().0;
         [r, g, b]
@@ -578,7 +618,8 @@ pub(crate) fn take_palette_pick(app: &mut VectorcraftApp, parent: DialogId, key:
 }
 
 /// Runs what the preset list asked for and shows a failure in the status line.
-fn store_presets(app: &mut VectorcraftApp, events: Vec<WebPresetEvent>) {
+fn update_presets(app: &mut VectorcraftApp, host: &craft::ui::shell::WindowDialogs, events: Vec<WebPresetEvent>, table_changed: bool) {
+    let refresh = table_changed || !events.is_empty();
     for event in events {
         let r = match event {
             WebPresetEvent::Saved(p) => {
@@ -594,6 +635,10 @@ fn store_presets(app: &mut VectorcraftApp, events: Vec<WebPresetEvent>) {
         if let Err(e) = r {
             app.status(e);
         }
+    }
+    if refresh {
+        let presets = dialog_presets(app);
+        on_dialog(host, |d| d.set_presets(presets));
     }
 }
 
@@ -692,7 +737,18 @@ fn ask_path(app: &mut VectorcraftApp, host: &craft::ui::shell::WindowDialogs, id
         pick = pick.filter(f.name.clone(), &extensions);
     }
     // A cancelled panel has no path.
+    let opening = app.web_export.opening.clone();
     file_asks::ask(app, pick, Owner::Free, move |app, picked| {
+        if !Arc::ptr_eq(&opening, &app.web_export.opening) {
+            return Ok(Value::Null);
+        }
+        if let Some(reason) = document_problem(app) {
+            if let Some(host) = app.dialogs() {
+                on_dialog(&host, HostedSaveForWeb::cancel_requests);
+            }
+            app.status(reason);
+            return Ok(Value::Null);
+        }
         match picked.first_path() {
             Some(path) => answer_path(app, id, &key, path),
             None => {
@@ -715,9 +771,13 @@ fn answer_path(app: &VectorcraftApp, id: DialogId, key: &str, path: PathBuf) {
 /// The dialog closed with Save… or Done: the settings are remembered, and with a path the files are
 /// written. Failures show in the status line; the dialog has closed.
 fn finish(app: &mut VectorcraftApp, result: SaveForWebResult) {
+    let problem = document_problem(app).filter(|_| result.path.is_some());
     let table = std::mem::take(&mut app.web_export.table);
     let kept = std::mem::take(&mut app.web_export.kept);
     app.web_export = WebExport::default();
+    if let Some(reason) = problem {
+        return app.status(reason);
+    }
     let params = settings_of(&result.options, &table, &kept, None);
     if let Err(e) = app.run("webExport.settings", params.clone()) {
         return app.status(e);

@@ -145,6 +145,38 @@ fn ok_pastes_nothing_after_another_document_became_active() {
 }
 
 #[test]
+fn immediate_swatch_conflict_pastes_nothing_after_destination_revert() {
+    let mut app = conflicting();
+    let dir = vectorcraft_testkit::TempDir::new("immediate-swatch-conflict-revert");
+    let path = dir.join("destination.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    run(&mut app, "file.saveAs", json!({"path": path.to_string_lossy()}));
+    rect(&mut app);
+
+    assert_eq!(run(&mut app, "edit.paste", json!({"profileMismatch": "preserveNumbers"}))["dialog"], dialogs::swatch_conflict::KIND);
+    let id = question(&app);
+    host::set(&app, id, "choice", json!("add"));
+    host::set(&app, id, "applyToAll", json!(true));
+    let before = app.session.active().unwrap();
+    let (uid, reverts) = (before.uid, before.reverts);
+    run(&mut app, "file.revert", json!({"confirmed": true}));
+    let restored = app.session.active().unwrap();
+    assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+    assert!(objects(&app).is_empty());
+    assert_eq!(question(&app), id, "the old question is still waiting");
+    let saved = restored.doc.clone();
+    let undo = restored.history.undo.len();
+
+    assert!(host::confirm(&app, id));
+    host::frame(&mut app);
+    let after = app.session.active().unwrap();
+    assert!(after.doc == saved, "the old swatch approval must leave the restored drawing intact");
+    assert_eq!(after.history.undo.len(), undo);
+    assert!(dialogs::swatch_conflict::id(&app).is_none());
+}
+
+#[test]
 fn paste_goes_to_the_centre_of_the_view() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     run(&mut app, "file.new", json!({"width": 400, "height": 300}));

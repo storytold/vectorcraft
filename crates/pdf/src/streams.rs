@@ -321,6 +321,21 @@ pub(crate) fn unsafe_file_streams(pdf: &[u8]) -> bool {
 /// A stream the reader would fail on, or a file that spent the scan's budget.
 struct Unsafe;
 
+#[cfg(test)]
+thread_local! {
+    /// The bytes [`unsafe_file_streams`] has looked at on this thread, counted each time one is
+    /// looked at, charged to its budget or not: the scan's work.
+    static SCANNED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Count `bytes` the scan looked at in [`SCANNED`]; nothing outside tests.
+fn scanned(bytes: usize) {
+    #[cfg(test)]
+    SCANNED.set(SCANNED.get().saturating_add(u64::try_from(bytes).unwrap_or(u64::MAX)));
+    #[cfg(not(test))]
+    let _ = bytes;
+}
+
 /// The most bytes a dictionary read from inside a string, comment or stream data may span past
 /// the last `<<` in it, as far as the scan looked back from a `stream` keyword before.
 const MAX_SKIPPED_DICT: usize = 1 << 16;
@@ -335,7 +350,9 @@ fn white(b: u8) -> bool {
 
 /// Where `what` is first found in `pdf` at or after `from`.
 fn find(pdf: &[u8], from: usize, what: &[u8]) -> Option<usize> {
-    pdf.get(from..).and_then(|rest| rest.windows(what.len()).position(|w| w == what)).map(|at| from + at)
+    let found = pdf.get(from..).and_then(|rest| rest.windows(what.len()).position(|w| w == what)).map(|at| from + at);
+    scanned(found.map_or(pdf.len().saturating_sub(from), |at| at + what.len() - from));
+    found
 }
 
 /// Past the literal string opening at `at` (a `(`), as the reader reads it: parentheses nest and
@@ -349,6 +366,7 @@ fn string_end(pdf: &[u8], at: usize, limit: usize) -> Result<usize, usize> {
             b')' => {
                 depth = depth.saturating_sub(1);
                 if depth == 0 {
+                    scanned(i + 1 - at);
                     return Ok(i + 1);
                 }
             }
@@ -356,6 +374,7 @@ fn string_end(pdf: &[u8], at: usize, limit: usize) -> Result<usize, usize> {
         }
         i += 1;
     }
+    scanned(i.min(limit).saturating_sub(at));
     Err(i.min(limit))
 }
 
@@ -366,7 +385,9 @@ const NEAR_STRING: usize = 64;
 /// Is the byte at `at` escaped, a `\` before it that isn't escaped itself? Reading a string from
 /// any `(` before it sees the same, as the run of `\` before it lies after that `(`.
 fn escaped(pdf: &[u8], at: usize) -> bool {
-    pdf.get(..at).unwrap_or_default().iter().rev().take_while(|b| **b == b'\\').count() % 2 == 1
+    let run = pdf.get(..at).unwrap_or_default().iter().rev().take_while(|b| **b == b'\\').count();
+    scanned(run + 1);
+    run % 2 == 1
 }
 
 /// Where the literal strings read from the file's `(` end, for those ending more than
@@ -386,6 +407,7 @@ impl StringEnds {
     /// file built for it nests strings so deep).
     fn of(pdf: &[u8]) -> Option<StringEnds> {
         let most = pdf.len() / 16 + 1024;
+        scanned(pdf.len().saturating_mul(3));
         // What the byte at `i` adds to the count: an escaped `(` adds nothing but is one too.
         let step = |i: usize| match pdf.get(i) {
             Some(b'(') => Some(i64::from(!escaped(pdf, i))),
@@ -445,12 +467,15 @@ fn hex_end(pdf: &[u8], at: usize, limit: usize) -> Result<usize, usize> {
     while pdf.get(i).is_some_and(|b| i < limit && (b.is_ascii_hexdigit() || white(*b))) {
         i += 1;
     }
+    scanned(i - at);
     if i < limit && pdf.get(i) == Some(&b'>') { Ok(i + 1) } else { Err(i.min(limit)) }
 }
 
 /// The end of the comment starting at `at` (a `%`): its end of line, not included.
 fn comment_end(pdf: &[u8], at: usize) -> usize {
-    pdf.get(at..).and_then(|rest| rest.iter().position(|b| matches!(b, b'\n' | b'\r'))).map_or(pdf.len(), |n| at + n)
+    let end = pdf.get(at..).and_then(|rest| rest.iter().position(|b| matches!(b, b'\n' | b'\r'))).map_or(pdf.len(), |n| at + n);
+    scanned(end.saturating_sub(at));
+    end
 }
 
 /// Can the reader start a dictionary at the `<<` at `at`? Its repair scan tries one at the start
@@ -482,6 +507,7 @@ struct FileScan<'a> {
 
 impl FileScan<'_> {
     fn charge(&mut self, bytes: usize) -> Result<(), Unsafe> {
+        scanned(bytes);
         self.budget = self.budget.checked_sub(bytes).ok_or(Unsafe)?;
         Ok(())
     }
@@ -494,6 +520,7 @@ impl FileScan<'_> {
         let mut closed: Option<(usize, usize)> = None;
         let mut i = 0;
         while let Some(&b) = pdf.get(i) {
+            scanned(1);
             if white(b) {
                 i += 1;
                 continue;
@@ -935,16 +962,27 @@ mod tests {
         assert!(unsafe_file_streams(&[fine.as_slice(), b"<< >>stream x endstream", &bad].concat()));
     }
 
+    /// The most bytes the scan may look at for each byte of the file it scans: a scan that reads
+    /// some text again for each of many places in it looks at far more.
+    const MOST_SCANNED_PER_BYTE: u64 = 32;
+
+    /// [`unsafe_file_streams`] of `pdf`, and the bytes it looked at for each byte of `pdf`,
+    /// rounded up.
+    fn scan(pdf: &[u8]) -> (bool, u64) {
+        let before = SCANNED.get();
+        let refused = unsafe_file_streams(pdf);
+        (refused, (SCANNED.get() - before).div_ceil(u64::try_from(pdf.len().max(1)).unwrap()))
+    }
+
     #[test]
     fn a_file_dense_with_stream_keywords_is_scanned_in_linear_time() {
         // #3586: each `stream` keyword walked back up to 64 KiB, through every dictionary before
-        // it, so 1 MiB of keywords took minutes. Now the whole scan takes milliseconds.
+        // it, so 1 MiB of keywords took minutes. Now each byte is looked at a few times.
         for unit in [&b"<</A <</B 1>> >>stream"[..], b">>stream", b"<</Type/XRef>>stream"] {
             let pdf = unit.repeat((1 << 20) / unit.len());
-            let t = std::time::Instant::now();
-            assert!(!unsafe_file_streams(&pdf));
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{} took {took:?}", String::from_utf8_lossy(unit));
+            let (refused, per_byte) = scan(&pdf);
+            assert!(!refused);
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{} looked at {per_byte} bytes a byte", String::from_utf8_lossy(unit));
         }
     }
 
@@ -1008,10 +1046,9 @@ mod tests {
             ("string", [&b"%PDF-1.7\n2 0 obj ("[..], &run[..], b") endobj\n"].concat()),
             ("comment", [&b"%PDF-1.7\n% "[..], &run[..], b"\n"].concat()),
         ] {
-            let t = std::time::Instant::now();
-            assert!(!unsafe_file_streams(&pdf), "{what}");
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{what} took {took:?}");
+            let (refused, per_byte) = scan(&pdf);
+            assert!(!refused, "{what}");
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{what} looked at {per_byte} bytes a byte");
         }
     }
 
@@ -1028,10 +1065,9 @@ mod tests {
             (" <<( then noise", [&b" <<(".repeat(1 << 16)[..], &noise].concat()),
         ] {
             let pdf = [format!("1 0 obj << /Length {} >> stream\n", data.len()).as_bytes(), &data[..], b"\nendstream endobj\n"].concat();
-            let t = std::time::Instant::now();
-            assert!(!unsafe_file_streams(&pdf), "{what}");
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{what} took {took:?}");
+            let (refused, per_byte) = scan(&pdf);
+            assert!(!refused, "{what}");
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{what} looked at {per_byte} bytes a byte");
         }
     }
 
@@ -1041,20 +1077,17 @@ mod tests {
         // its own, within a budget for the whole file.
         for unit in [&b"<<("[..], b"(<<", b"%<<\n", b"<</A (<</B 1>>stream) >>stream\n", b"<"] {
             let pdf = unit.repeat((1 << 20) / unit.len());
-            let t = std::time::Instant::now();
-            unsafe_file_streams(&pdf);
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{} took {took:?}", String::from_utf8_lossy(unit));
+            let (_, per_byte) = scan(&pdf);
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{} looked at {per_byte} bytes a byte", String::from_utf8_lossy(unit));
         }
         // An image's flat area of a colour whose bytes are `<<` and white space, `(` or `%` (a
         // reader may start at each `<<` after white space): read about once, and it opens.
         for pixel in [&b" <<"[..], b"<<(", b"<<%", b" <<%", b"\0<<\0"] {
             let data = pixel.repeat((1 << 20) / pixel.len());
             let pdf = [format!("1 0 obj << /Length {} >> stream\n", data.len()).as_bytes(), &data[..], b"\nendstream endobj\n"].concat();
-            let t = std::time::Instant::now();
-            assert!(!unsafe_file_streams(&pdf), "{}", String::from_utf8_lossy(pixel));
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{} took {took:?}", String::from_utf8_lossy(pixel));
+            let (refused, per_byte) = scan(&pdf);
+            assert!(!refused, "{}", String::from_utf8_lossy(pixel));
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{} looked at {per_byte} bytes a byte", String::from_utf8_lossy(pixel));
         }
     }
 }

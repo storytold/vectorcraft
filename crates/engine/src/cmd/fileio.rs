@@ -19,6 +19,7 @@
 //! - `metafile`: EMF and WMF export, open and place; PICT open and place.
 //! - `cdr`: `.cdr` drawings of versions 1 to 27 and `.cdt` templates, and `.cmx` files with
 //!   32-bit coordinates, open and place.
+//! - `cmx`: `.cmx` export (a page for each chosen artboard, a layer for each layer with art on it).
 //! - `hpgl`: HP-GL export options and plots.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
@@ -31,6 +32,7 @@ mod action_batch;
 mod affinity;
 mod batch;
 mod cdr;
+mod cmx;
 pub mod dxf;
 pub mod dxfimport;
 mod encode;
