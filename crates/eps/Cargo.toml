@@ -8,6 +8,10 @@ description = "VectorCraft Encapsulated PostScript: a hand-written EPS writer (P
 [lints]
 workspace = true
 
+[features]
+# `vectorcraft_eps::blend_work` for other crates' tests (dev-dependencies only).
+work-count = []
+
 [dependencies]
 craft-eps = { workspace = true }
 craft-ps = { workspace = true }

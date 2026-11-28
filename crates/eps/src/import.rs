@@ -90,6 +90,8 @@ use interp::{Fault, Interp};
 use obj::PsError;
 
 pub use ai::NameEncoding;
+#[cfg(any(test, feature = "work-count"))]
+pub use ai::blend_work;
 #[cfg(test)]
 pub(crate) use ai::objects_read;
 #[cfg(test)]

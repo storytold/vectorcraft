@@ -966,7 +966,9 @@ fn pdf_of(objs: &[Vec<u8>]) -> Vec<u8> {
 
 /// A file filling thousands of paths with function-based shadings, each a long PostScript
 /// calculator function of fine stripes, opens in bounded time: each shading is read once, and all
-/// of them within one budget of function evaluations per import (#3621 review).
+/// of them within one budget of function evaluations per import (#3621 review). One shading
+/// filling 5,000 paths takes no more evaluations than filling one, and twenty no more than the
+/// budget.
 #[test]
 fn pdf_many_paths_filled_with_long_function_shadings_open_in_bounded_time() {
     let shadings = 20;
@@ -981,13 +983,21 @@ fn pdf_many_paths_filled_with_long_function_shadings_open_in_bounded_time() {
                 .into_bytes()
         })
         .collect();
-    let content: String = (0..5000).map(|i| format!("/Pattern cs /P{} scn {} {} 2 2 re f\n", i % shadings, i % 100 * 2, i / 100 * 2)).collect();
-    let pdf = handmade_pdf_with(&content, &format!("<< /Pattern << {patterns}>> >>"), "[0 0 200 100]", &functions);
-    let start = std::time::Instant::now();
-    let d = vectorcraft_pdf::import(&pdf).unwrap();
-    let took = start.elapsed();
-    assert!(!d.layers.is_empty());
-    assert!(took < std::time::Duration::from_secs(30), "took {took:?}");
+    // The evaluations an import of a file filling `paths` paths with the first `used` shadings takes.
+    let evaluations = |used: usize, paths: usize| {
+        let content: String = (0..paths).map(|i| format!("/Pattern cs /P{} scn {} {} 2 2 re f\n", i % used, i % 100 * 2, i / 100 * 2)).collect();
+        let pdf = handmade_pdf_with(&content, &format!("<< /Pattern << {patterns}>> >>"), "[0 0 200 100]", &functions);
+        let before = vectorcraft_pdf::function_evaluations_of(&pdf);
+        let d = vectorcraft_pdf::import(&pdf).unwrap();
+        assert!(!d.layers.is_empty());
+        vectorcraft_pdf::function_evaluations_of(&pdf) - before
+    };
+    let limit = vectorcraft_pdf::function_evaluation_limit();
+    let (one, one_many) = (evaluations(1, 1), evaluations(1, 5000));
+    assert!(one > 0 && one < limit, "one path: {one} evaluations, the budget {limit}");
+    assert!(one_many <= one, "one shading: 5,000 paths took {one_many} evaluations, one path {one}");
+    let all = evaluations(shadings, 5000);
+    assert!(all <= limit, "{shadings} shadings: {all} evaluations, the budget {limit}");
 }
 
 /// One content-stream operation with junk operands.
@@ -7716,7 +7726,8 @@ fn pdf_streams_the_reader_would_fail_on_are_refused() {
 
 /// A page drawing a thousand times one form that decodes to 64 MiB (of spaces, then a square):
 /// each drawing reads the form again, so the import stops at the page's form content instead of
-/// decoding 64 GB (#3569, which hung).
+/// decoding 64 GB (#3569, which hung). The scan walks no more than the page's limit and the form
+/// that passes it.
 #[test]
 fn pdf_a_huge_form_drawn_over_and_over_is_refused_in_bounded_time() {
     use std::io::Write as _;
@@ -7724,14 +7735,17 @@ fn pdf_a_huge_form_drawn_over_and_over_is_refused_in_bounded_time() {
     for _ in 0..64 {
         e.write_all(&[b' '; 1 << 20]).unwrap();
     }
-    e.write_all(b"0 0 5 5 re f").unwrap();
+    let square = b"0 0 5 5 re f";
+    e.write_all(square).unwrap();
     let form = packed_as_is(FORM, &e.finish().unwrap());
     let bytes = pdf_with(&"/F Do ".repeat(1000), "<< /XObject << /F 5 0 R >> >>", &[form]);
-    let start = std::time::Instant::now();
+    let before = vectorcraft_pdf::form_content_of(&bytes);
     let e = vectorcraft_engine::cmd::fileio::load("repeated.pdf", &bytes).err().map(|e| e.to_string());
-    let took = start.elapsed();
+    let walked = vectorcraft_pdf::form_content_of(&bytes) - before;
+    let one_form = (64 << 20) + square.len();
+    assert!(walked > 0, "the page's scan reads the form");
+    assert!(walked <= vectorcraft_pdf::form_content_limit() + one_form, "{walked} bytes of form content walked");
     assert!(e.as_deref().is_some_and(|e| e.contains("no document was imported")), "{e:?}");
-    assert!(took < std::time::Duration::from_secs(60), "took {took:?}");
 }
 
 // A large file the reader would fail on says which stream (#4366): an image with its size in
@@ -8357,21 +8371,30 @@ fn ai_private(layer_art: &str) -> Vec<u8> {
 }
 
 /// A blend of many steps doesn't stall the import: one within the limits (a thousand steps between
-/// two keys) is checked and made live quickly, one past them keeps its drawn steps without being
-/// laid out.
+/// two keys) is checked and made live with no more measuring per object than a blend of three
+/// steps, one past them keeps its drawn steps without being laid out.
 #[test]
 fn large_ai_blends_import_in_bounded_time() {
-    for (steps, live) in [(3, true), (998, true), (1_500, false)] {
+    // The objects laid out and the laid objects measured against drawn steps, reading `steps`.
+    let work = |steps: usize, live: bool| {
         let private = ai_private(&blend_text(steps));
-        let started = std::time::Instant::now();
+        let before = vectorcraft_eps::blend_work();
         let (doc, notes, read) = vectorcraft_eps::layered_ai(&private, Document::new(4000.0, 200.0), vec![], false, true, 1.0);
+        let after = vectorcraft_eps::blend_work();
         assert!(read, "{steps} steps: read from the layers ({notes:?})");
-        let took = started.elapsed();
-        assert!(took < std::time::Duration::from_secs(30), "{steps} steps took {took:?}");
         let mut blends = 0;
         doc.walk(|n| blends += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Blend { .. })));
         assert_eq!(blends == 1, live, "{steps} steps: live {live}");
-    }
+        (after.0 - before.0, after.1 - before.1)
+    };
+    let (small_laid, small_measured) = work(3, true);
+    let (laid, measured) = work(998, true);
+    assert!(small_laid > 0 && laid > small_laid, "laid out: {small_laid} for 3 steps, {laid} for 998");
+    assert!(
+        measured * small_laid <= 2 * small_measured * laid,
+        "998 steps: {measured} measured for {laid} laid out; 3 steps: {small_measured} for {small_laid}"
+    );
+    assert_eq!(work(1_500, false), (0, 0), "a blend past the limits isn't laid out");
 }
 
 proptest! {

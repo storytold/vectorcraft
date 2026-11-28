@@ -178,24 +178,47 @@ const AVERAGE_EVALUATIONS: usize = (FUNCTION_GRID + 1) * (FUNCTION_GRID + 1);
 #[cfg(test)]
 pub(crate) static EVALUATIONS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+/// The function evaluations function-based shadings may take in one import (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn function_evaluation_limit() -> usize {
+    MAX_FUNCTION_EVALUATIONS
+}
+
 /// What is left of one import's function evaluations ([`MAX_FUNCTION_EVALUATIONS`]).
-pub(crate) struct FunctionBudget(std::cell::Cell<usize>);
+pub(crate) struct FunctionBudget {
+    left: std::cell::Cell<usize>,
+    /// The evaluations taken (tests).
+    #[cfg(any(test, feature = "read-count"))]
+    taken: std::cell::Cell<usize>,
+}
 
 impl FunctionBudget {
     pub(crate) fn new() -> Self {
-        Self(std::cell::Cell::new(MAX_FUNCTION_EVALUATIONS))
+        Self {
+            left: std::cell::Cell::new(MAX_FUNCTION_EVALUATIONS),
+            #[cfg(any(test, feature = "read-count"))]
+            taken: std::cell::Cell::new(0),
+        }
     }
 
     /// Take one evaluation, leaving at least `reserve`: `false` when there isn't one.
     fn take(&self, reserve: usize) -> bool {
-        let left = self.0.get();
+        let left = self.left.get();
         if left <= reserve {
             return false;
         }
-        self.0.set(left - 1);
+        self.left.set(left - 1);
         #[cfg(test)]
         EVALUATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        #[cfg(any(test, feature = "read-count"))]
+        self.taken.set(self.taken.get().saturating_add(1));
         true
+    }
+
+    /// The evaluations taken from it (tests).
+    #[cfg(any(test, feature = "read-count"))]
+    pub(crate) fn spent(&self) -> usize {
+        self.taken.get()
     }
 }
 
