@@ -28,7 +28,8 @@
 //!   false then. Assigning to such a name throws the same error.
 //! - Assigning `activeDocument` or `selection` without `app.` assigns `app.activeDocument` or the
 //!   active document's selection. A top-level `var selection = ...` does the same and does
-//!   not make a variable of the script. Assigning `documents` keeps its value.
+//!   not make a variable of the script. An assignment to `documents` is ignored outside strict
+//!   mode and throws a `TypeError` in strict mode code or with `#strict on`.
 //! - Collections list documents in tab order. The objectReferences page says `documents[0]` is
 //!   always the active document; VectorCraft does not follow that yet.
 //! - `pageItems` lists every object, with the objects inside groups and compound paths after the
