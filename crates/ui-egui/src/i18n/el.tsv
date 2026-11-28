@@ -8566,6 +8566,8 @@ breakText	Glyphs	Γλύφοι
 	Tangent Circle	Εφαπτόμενος κύκλος
 	Tangent Circle Tool	Εφαπτόμενος κύκλος (Tangent Circle Tool)
 	No tangent circle here	Δεν υπάρχει εφαπτόμενος κύκλος εδώ
+	Ask For Circle Radius	Ερώτηση για την ακτίνα του κύκλου
+	Auto-Update Default	Αυτόματη ενημέρωση προεπιλογής
 	Circle:	Κύκλος:
 @msg	`ids` names an object twice	το `ids` αναφέρει ένα αντικείμενο δύο φορές
 @msg	select two or three paths or compound paths	επιλέξτε δύο ή τρεις διαδρομές ή σύνθετες διαδρομές

@@ -8198,6 +8198,8 @@ breakText	Glyphs	Glyphen
 	Tangent Circle	Tangentialkreis
 	Tangent Circle Tool	Tangentialkreis-Werkzeug
 	No tangent circle here	Hier kein Tangentialkreis
+	Ask For Circle Radius	Nach Kreisradius fragen
+	Auto-Update Default	Standardwert automatisch aktualisieren
 	Circle:	Kreis:
 @msg	`ids` names an object twice	`ids` nennt ein Objekt zweimal
 @msg	select two or three paths or compound paths	wählen Sie zwei oder drei Pfade oder zusammengesetzte Pfade aus

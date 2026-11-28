@@ -10471,6 +10471,8 @@ breakText	Glyphs	Glyphs
 	Tangent Circle	Raakcirkel
 	Tangent Circle Tool	Raakcirkel-gereedschap
 	No tangent circle here	Hier geen raakcirkel
+	Ask For Circle Radius	Vragen naar cirkelradius
+	Auto-Update Default	Standaard automatisch bijwerken
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` noemt een object twee keer
 @msg	select two or three paths or compound paths	selecteer twee of drie paden of samengestelde paden

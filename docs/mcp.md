@@ -15920,8 +15920,20 @@ Tools:
   `snapTolerance` (screen pixels, 0 to 25, 3; VectorCraft's own range and default) is how near the pointer picks a
   segment while Smart Guides are on (their Snapping Tolerance counts instead when it is larger) or while they are off
   with `snapWithoutGuides` (true or false, true) on. Otherwise a segment is picked within the Selection Tolerance, which is also the least reach with snapping.
+  `askRadius` (Ask For Circle Radius) and `autoUpdateDefault` (Auto-Update Default) are true or false, both false.
   `tool.setOption` gives an error for a value outside an option's range, of the wrong type, or a color not listed, and
-  for any other option, and then sets none of the values.
+  for any other option, and then sets none of the values. With `askRadius` on, a click on the second segment that finds
+  a circle (with or without Shift) opens the Tangent Circle dialog (`tangentCircleRadius`) instead of drawing; a drag,
+  which sets the radius, draws at once. The dialog's Radius starts at the radius of the circle found, and each radius
+  previews the circle of that radius touching the second segments nearest the click, anywhere along the first segment
+  (at the radius it opened with, the circle found). A radius that gives no circle there shows the note and leaves OK
+  off, as do an edit to either segment's path after the click and another active document; a circle the target layer
+  cannot take (locked or hidden) shows why and leaves OK off; a radius outside 0.01 to
+  1000000 pt, typed or set, shows the radius error and leaves OK off, except the radius the dialog opened with.
+  `ui.dialog.set` gives an error for a radius that is not a number. OK draws the circle in one undo
+  step, with `shape.circleThroughPoints`, and with `autoUpdateDefault` on also sets `radius` to the radius given when
+  it is in that range. Cancel draws nothing, leaves no undo step and
+  keeps the first segment picked.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
