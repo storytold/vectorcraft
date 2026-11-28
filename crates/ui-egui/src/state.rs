@@ -230,6 +230,11 @@ fn zoom_stops(print: Option<f64>) -> ZoomScheme {
     ZoomScheme::ILLUSTRATOR.with_hundred(zoom_baseline(print))
 }
 
+/// The zoom stops in the percent the status bar shows, lowest first.
+pub fn zoom_stop_percents() -> impl DoubleEndedIterator<Item = f64> {
+    zoom_stops(None).rungs.iter().map(|rung| rung * 100.0)
+}
+
 /// The zoom `z` as the status bar shows it, in percent of [`zoom_baseline`].
 pub fn zoom_display_percent(z: f64, print: Option<f64>) -> f64 {
     zoom_stops(print).percent(z)
