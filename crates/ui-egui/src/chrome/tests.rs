@@ -473,6 +473,59 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
     assert!(widest.zip(narrowest).is_some_and(|(w, n)| n >= w - 0.5), "the search keeps its width until it goes: {search_widths:?}");
 }
 
+/// A click on the title bar's Close caption button asks the window to close, and the close reaches the app's close guard
+/// as an OS close does: with a modified document the window stays and the Unsaved Changes question shows.
+#[test]
+fn the_title_bars_close_button_closes_the_window() {
+    use craft::window::policy::{Backend, Desktop, Frame, Os, Runtime, TitleBarPref, WindowKind, decide};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    // The window the desktop host opens on Windows: decorations off, and the title bar draws the caption buttons.
+    let desktop = Desktop::detect(Backend::X11);
+    let decision = decide(Os::Windows, Runtime::Native, Backend::X11, &desktop, WindowKind::Main, TitleBarPref::Integrated, None);
+    assert!(matches!(decision.frame, Frame::Integrated(_)), "{:?}", decision.frame);
+    let ctx = egui::Context::default();
+    craft::ui::shell::embed::install(&ctx, craft::ui::testing::install_spec().frame(decision), &crate::ui_fonts()).expect("the runtime installs");
+    craft::ui::testing::windows::set_os(&ctx, Os::Windows);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.session.add_document(vectorcraft_doc::Document::new(612.0, 792.0), None);
+    app.sync_views();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    let room = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 600.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let out = crate::testing::app_frame(app, &ctx, egui::RawInput { screen_rect: Some(room), events, ..Default::default() });
+        out.viewport_output.get(&egui::ViewportId::ROOT).is_some_and(|root| root.commands.contains(&egui::ViewportCommand::Close))
+    };
+    // The Close button sits at the bar's right end, flush with the window's top right corner.
+    let at = egui::pos2(room.right() - 4.0, 4.0);
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    let mut closed = false;
+    for events in [vec![], vec![], vec![egui::Event::PointerMoved(at)]] {
+        closed |= frame(&mut app, events);
+    }
+    assert!(!closed, "no close before the click");
+    for events in [vec![button(true)], vec![button(false)], vec![]] {
+        closed |= frame(&mut app, events);
+    }
+    assert!(closed, "the Close caption button asks the main window to close");
+    // The host answers the close with the window's close event, which `embed::logic` takes to the app's close guard.
+    let mut raw = egui::RawInput { screen_rect: Some(room), ..Default::default() };
+    raw.viewports.entry(egui::ViewportId::ROOT).or_default().events.push(egui::ViewportEvent::Close);
+    let mut decision = None;
+    ctx.run_ui(raw, |ui| {
+        app.ui(ui);
+        craft::ui::shell::embed::logic(ui.ctx(), || {
+            let answer = app.close_decision();
+            decision = Some(answer);
+            answer
+        });
+    })
+    .textures_delta
+    .clear();
+    assert_eq!(decision, Some(craft::ui::shell::embed::CloseDecision::Hold), "the modified document keeps the window open");
+    let asks = app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.get::<craft::ui::dialog::UnsavedChangesDialog>().is_some()));
+    assert!(asks, "the close asks about the modified document");
+}
+
 /// A text the status bar painted, with where it lies.
 #[derive(Debug)]
 struct StatusText {
