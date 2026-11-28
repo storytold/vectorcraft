@@ -358,12 +358,21 @@ fn a_pick_places_with_the_importer_and_params_given() {
     let picker = scripted(&mut app);
     let ctx = crate::testing::ui_context();
     let with = json!({"importer": "plugin.test.ui.placepick", "params": {"density": 7}, "showImportOptions": false});
+    let picked_files = |app: &VectorcraftApp| {
+        let mut files = fields(app)["files"].clone();
+        for file in files.as_array_mut().unwrap() {
+            let source = file.as_object_mut().unwrap().remove("__pickedSource").expect("browser files keep their source identity");
+            let token = source.as_str().unwrap();
+            assert!(app.place.picked.iter().any(|(key, bytes)| key == token && bytes == b"?"));
+        }
+        files
+    };
 
     // The web: the picker answers with the files' contents.
     app.run("file.place", with.clone()).unwrap();
     picker.answer_contents(&[("a.svg", b"?")]);
     poll(&mut app, &ctx);
-    assert_eq!(fields(&app)["files"], json!([{"name": "a.svg", "importer": "plugin.test.ui.placepick", "params": {"density": 7}}]));
+    assert_eq!(picked_files(&app), json!([{"name": "a.svg", "importer": "plugin.test.ui.placepick", "params": {"density": 7}}]));
     let steps = app.session.active().unwrap().history.undo.len();
     try_confirm(&mut app).unwrap();
     assert_eq!(placed_group(&app).as_deref(), Some("a.svg"), "{}", app.ui.status);
@@ -383,7 +392,7 @@ fn a_pick_places_with_the_importer_and_params_given() {
     app.run("file.place", json!({})).unwrap();
     picker.answer_contents(&[("c.svg", b"?")]);
     poll(&mut app, &ctx);
-    assert_eq!(fields(&app)["files"], json!([{"name": "c.svg"}]));
+    assert_eq!(picked_files(&app), json!([{"name": "c.svg"}]));
     cancel(&mut app);
 
     // Two picks open at once: each one's files keep that pick's importer and parameters, also when
@@ -392,11 +401,11 @@ fn a_pick_places_with_the_importer_and_params_given() {
     app.run("file.place", json!({})).unwrap();
     picker.answer_contents(&[("e.svg", b"?")]);
     poll(&mut app, &ctx);
-    assert_eq!(fields(&app)["files"], json!([{"name": "e.svg"}]));
+    assert_eq!(picked_files(&app), json!([{"name": "e.svg"}]));
     cancel(&mut app);
     picker.answer_contents(&[("d.svg", b"?")]);
     poll(&mut app, &ctx);
-    assert_eq!(fields(&app)["files"], json!([{"name": "d.svg", "importer": "plugin.test.ui.placepick", "params": {"density": 7}}]));
+    assert_eq!(picked_files(&app), json!([{"name": "d.svg", "importer": "plugin.test.ui.placepick", "params": {"density": 7}}]));
     try_confirm(&mut app).unwrap();
     assert_eq!(placed_group(&app).as_deref(), Some("d.svg"), "{}", app.ui.status);
 

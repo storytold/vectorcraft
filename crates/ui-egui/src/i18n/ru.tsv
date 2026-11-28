@@ -7063,6 +7063,15 @@ axis	Y Axis	Ось Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущен объект только для чтения: верните его как один {{"id": …}} или в том виде, в каком он был передан
 @msg	a string	строка
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	у обводки есть только `paint`, `width`, `join`, `cap` и `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	у части рисующего динамического эффекта есть только `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` и `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	у обводки есть только `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` и `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` может быть только true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` допустим только для динамического эффекта, который объявляет `paintOutput`, с `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` должно быть числом от 0 до 1
+@msg	unknown blending mode; `blend` is one of {_1}	неизвестный режим наложения; `blend` принимает одно из значений {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` должен быть массивом не более чем из {MAX_LOOK_EFFECTS} записей
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	результат содержит не более {MAX_RESULT_EFFECTS} записей эффектов
+@msg	this host takes no effects here	этот хост здесь не принимает эффекты
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обводка должна иметь вид {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	эффект должен иметь вид {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	эффект на заливке возвращает только `fills`
@@ -8489,6 +8498,7 @@ breakText	Glyphs	Глифы
 	Place Brush Art	Поместить рисунок кисти
 	Replace Brush Art	Заменить рисунок кисти
 	Replace Pattern Art	Заменить рисунок узора
+	Place Pattern Art	Поместить рисунок узора
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обводки используют эту кисть. Применить новый рисунок к этим обводкам или оставить их как есть и добавить копию кисти с новым рисунком?
 	Apply to Strokes	Применить к обводкам
 	Leave Strokes	Оставить обводки
@@ -8558,6 +8568,8 @@ breakText	Glyphs	Глифы
 	Tangent Circle	Касательная окружность
 	Tangent Circle Tool	Инструмент «Касательная окружность»
 	No tangent circle here	Здесь нет касательной окружности
+	Ask For Circle Radius	Запрашивать радиус окружности
+	Auto-Update Default	Автоматически обновлять значение по умолчанию
 	Circle:	Окружность:
 @msg	`ids` names an object twice	`ids` указывает объект дважды
 @msg	select two or three paths or compound paths	выделите два или три контура или составных контура

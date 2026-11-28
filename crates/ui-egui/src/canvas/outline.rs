@@ -218,10 +218,13 @@ pub(super) fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vector
 
 /// The topmost editable object under document point `p` at `zoom`, as the selection tools pick
 /// it: [`hit_at`], and a clipping path on its outline before the art it clips
-/// ([`vectorcraft_doc::hit::HitOptions::clip_outlines`]). Object Highlighting and a right-click's
-/// selection show and take what a click of those tools would.
+/// ([`vectorcraft_doc::hit::HitOptions::clip_outlines`]), and an unfilled closed path inside where
+/// nothing else is hit ([`vectorcraft_doc::hit::HitOptions::unfilled_interiors`]). Object
+/// Highlighting and a right-click's selection show and take what a click of those tools would.
 pub(super) fn selection_hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::hit::Hit> {
-    hit_with(app, p, zoom, |doc, p, opt| vectorcraft_doc::hit::hit_test(doc, p, vectorcraft_doc::hit::HitOptions { clip_outlines: true, ..opt }))
+    hit_with(app, p, zoom, |doc, p, opt| {
+        vectorcraft_doc::hit::hit_test(doc, p, vectorcraft_doc::hit::HitOptions { clip_outlines: true, unfilled_interiors: true, ..opt })
+    })
 }
 
 /// `test` on the active document at document point `p`, with the options the selection tools hit

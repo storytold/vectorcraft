@@ -686,7 +686,9 @@ impl Realm {
     /// Adds the script extensions: the global `localize(object, ...values)`, which gives a
     /// localization object's text for the locale of [`Realm::localization`], the global
     /// `toSource(value)` and `Object.prototype.toSource()`, which write plain data as source text,
-    /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
+    /// `Object.prototype.reflect`, which describes an object's properties and methods (a host
+    /// class's from its [`crate::HostClass`]), and the localized `Object.prototype.toString` while
+    /// [`crate::Localization::enabled`].
     pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
         match crate::builtins::extensions::install(&mut self.interp) {
             Ok(()) => Ok(()),

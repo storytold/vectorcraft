@@ -18,11 +18,11 @@ use vectorcraft_doc::{MAX_TAG_TEXT, ObjectTag};
 
 use super::{
     Answer, Doc, Host, Item, Link, NOT_FOUND, STALE_DOCUMENT, STALE_ITEM, arg, class, command, doc_of, doc_ref, edit_item, find_doc, float, get,
-    handle_of, id_of, id_parts, item_of, item_ref, method, named, num, on_doc, page_items, property, text, typename, whole, with_doc,
+    handle_of, id_of, id_parts, item_of, item_ref, method, named, num, on_doc, page_items, property, returns, text, typed, typename, whole, with_doc,
 };
 use crate::NodeId;
 use serde_json::json;
-use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref};
+use vectorcraft_js::{Data, HostClass, HostError, host_ref};
 
 /// The error for a tag that was deleted, or that came from an earlier run.
 pub const STALE_TAG: &str = "Stale tag";
@@ -286,21 +286,21 @@ fn tag_typename(h: &Host, a: &[Data]) -> Answer {
 
 /// The `Tags` and `Tag` classes.
 pub(super) fn classes(l: &Link) -> Vec<HostClass> {
-    let tags: Vec<(String, HostMember)> = named(vec![
-        ("typename", get(l, tags_typename)),
-        ("length", get(l, tags_length)),
-        ("parent", get(l, tags_parent)),
-        ("index", method(l, tags_index)),
-        ("getByName", method(l, tags_by_name)),
-        ("add", method(l, tags_add)),
-        ("removeAll", method(l, tags_remove_all)),
+    let tags = named(vec![
+        ("typename", get(l, tags_typename), typed("string")),
+        ("length", get(l, tags_length), typed("number")),
+        ("parent", get(l, tags_parent), typed("*")),
+        ("index", method(l, tags_index), returns("Tag", &[("itemKey", "*")])),
+        ("getByName", method(l, tags_by_name), returns("Tag", &[("name", "string")])),
+        ("add", method(l, tags_add), returns("Tag", &[])),
+        ("removeAll", method(l, tags_remove_all), returns("undefined", &[])),
     ]);
     let tag = named(vec![
-        ("typename", get(l, tag_typename)),
-        ("name", property(l, tag_name, tag_set_name)),
-        ("value", property(l, tag_value, tag_set_value)),
-        ("parent", get(l, tag_parent)),
-        ("remove", method(l, tag_remove)),
+        ("typename", get(l, tag_typename), typed("string")),
+        ("name", property(l, tag_name, tag_set_name), typed("string")),
+        ("value", property(l, tag_value, tag_set_value), typed("string")),
+        ("parent", get(l, tag_parent), typed("PageItem")),
+        ("remove", method(l, tag_remove), returns("undefined", &[])),
     ]);
     vec![class("Tags", None, tags, Some(super::function(l, tags_at))), class("Tag", None, tag, None)]
 }

@@ -7441,6 +7441,15 @@ axis	Y Axis	osa Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objekt jen pro čtení byl vynechán: vraťte ho jako samotné {{"id": …}} nebo tak, jak byl předán
 @msg	a string	řetězec
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	tah má jen `paint`, `width`, `join`, `cap` a `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	část malujícího živého efektu má jen `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` a `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	tah má jen `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` a `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` může být jen true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` je jen pro živý efekt, který deklaruje `paintOutput`, s `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` musí být číslo od 0 do 1
+@msg	unknown blending mode; `blend` is one of {_1}	neznámý režim míchání; `blend` je jedno z {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` musí být pole nejvýše {MAX_LOOK_EFFECTS} záznamů
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	výsledek nese nejvýše {MAX_RESULT_EFFECTS} záznamů efektů
+@msg	this host takes no effects here	tento hostitel zde nepřijímá žádné efekty
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	tah musí být {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	efekt musí být {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efekt na výplni vrací jen `fills`
@@ -8496,6 +8505,7 @@ breakText	Glyphs	Glyfy
 	Place Brush Art	Umístit kresbu štětce
 	Replace Brush Art	Nahradit kresbu štětce
 	Replace Pattern Art	Nahradit kresbu vzorku
+	Place Pattern Art	Umístit kresbu vzorku
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Tahy používají tento štětec. Použít novou kresbu na tyto tahy, nebo je ponechat beze změny a přidat kopii štětce s novou kresbou?
 	Apply to Strokes	Použít na tahy
 	Leave Strokes	Ponechat tahy
@@ -8565,6 +8575,8 @@ breakText	Glyphs	Glyfy
 	Tangent Circle	Tečná kružnice
 	Tangent Circle Tool	Nástroj Tečná kružnice
 	No tangent circle here	Zde není žádná tečná kružnice
+	Ask For Circle Radius	Ptát se na poloměr kružnice
+	Auto-Update Default	Automaticky aktualizovat výchozí hodnotu
 	Circle:	Kružnice:
 @msg	`ids` names an object twice	`ids` uvádí některý objekt dvakrát
 @msg	select two or three paths or compound paths	vyberte dvě nebo tři cesty nebo složené cesty

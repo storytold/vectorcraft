@@ -503,7 +503,8 @@ fn run(
     tests::RUNS_STARTED.with(|n| n.set(n.get() + 1));
     let output = plugin.run_limited(&input, &params, &limits)?;
     if plugin.manifest().paint_output {
-        return Ok(Out::Pieces(Arc::new(painted::decode(&output, scope, rule)?)));
+        let looks = plugin.manifest().appearance_output.then(painted::effect_check);
+        return Ok(Out::Pieces(Arc::new(painted::decode_with(&output, scope, rule, looks)?)));
     }
     Ok(Out::Path(output_geometry(decode(&output)?)))
 }

@@ -8,6 +8,23 @@ use super::{
 /// Most bytes one filter or image reads.
 pub(super) const MAX_DATA: usize = 1 << 28;
 
+/// Decoded bytes the measuring of an image's data left out charges one operation for. A program's
+/// budget grows by 64 operations for each byte of it, so the data of one image compressed up to
+/// 1024 to 1 is measured within what its own compressed bytes add.
+const MEASURED_PER_OP: usize = 16;
+
+#[cfg(test)]
+thread_local! {
+    /// How many decoded bytes the measuring of images' data left out on this thread decoded.
+    static MEASURED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`MEASURED`] of this thread.
+#[cfg(test)]
+pub(crate) fn measured() -> u64 {
+    MEASURED.get()
+}
+
 /// Most data sources one image may name (a DeviceN space has up to 32 components).
 const MAX_SOURCES: usize = 32;
 /// The longest chain of filters over one pending file (real programs stack two or three).
@@ -538,10 +555,10 @@ impl Interp<'_> {
             // it was; the import goes on without the image either way.
             let Some(first) = chain.first() else { return };
             // Measuring decompresses the data, which is charged by the bytes decoded (one operation
-            // per 256, as `spend_bytes` charges) and stops at what the budget still pays for:
-            // data measured again and again (a reusable stream reset in a loop) runs out of the
-            // budget instead of being decoded in full on every pass.
-            let most = usize::try_from(self.ops_left().saturating_mul(256)).unwrap_or(usize::MAX);
+            // per [`MEASURED_PER_OP`]) and stops at what the budget still pays for: data measured
+            // again and again (a reusable stream reset in a loop) runs out of the budget after a
+            // few passes instead of being decoded in full on every pass.
+            let most = usize::try_from(self.ops_left().saturating_mul(MEASURED_PER_OP as u64)).unwrap_or(usize::MAX);
             let (used, decoded) = match &from {
                 Some(r) => match &*r.borrow() {
                     Stream::Buf { data, pos, .. } => encoded_len(first, data.get(*pos..).unwrap_or_default(), most),
@@ -549,7 +566,9 @@ impl Interp<'_> {
                 },
                 None => encoded_len(first, self.lex.data(), most),
             };
-            let paid = self.spend_bytes(decoded).is_ok();
+            #[cfg(test)]
+            MEASURED.set(MEASURED.get().saturating_add(decoded as u64));
+            let paid = self.spend((decoded / MEASURED_PER_OP) as u64).is_ok();
             let Some(used) = used.filter(|_| paid) else {
                 *f.borrow_mut() = Stream::Pending { chain, from };
                 return;

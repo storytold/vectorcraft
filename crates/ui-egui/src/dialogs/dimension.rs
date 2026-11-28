@@ -457,7 +457,8 @@ fn choose<T: Serialize + DeserializeOwned>(ui: &mut Ui, label: &'static str, cho
     let entries: Vec<Entry<String>> = choices.iter().map(|&(value, name)| Entry::new(value.to_owned(), tl!(name).to_owned())).collect();
     let current = serde_json::to_value(&*slot).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default();
     let mut picked = None;
-    Field::new(tl!(label)).show(ui, |ui, _| picked = Select::new(tl!(label), Bind::given(current.clone()), &entries).show(ui).value().cloned());
+    Field::new(tl!(label))
+        .show(ui, |ui, _| picked = Select::new(tl!(label), Bind::given(current.clone()), &entries).show(ui).events.committed().cloned());
     match picked.and_then(|name| serde_json::from_value(Value::String(name)).ok()) {
         Some(value) => {
             *slot = value;
@@ -468,7 +469,7 @@ fn choose<T: Serialize + DeserializeOwned>(ui: &mut Ui, label: &'static str, cho
 }
 
 fn check_row(ui: &mut Ui, label: &'static str, value: &mut bool) -> bool {
-    let picked = Checkbox::new(Bind::given(*value)).label(tl!(label)).show(ui).value().copied();
+    let picked = Checkbox::new(Bind::given(*value)).label(tl!(label)).show(ui).events.committed().copied();
     if let Some(on) = picked {
         *value = on;
     }
@@ -487,7 +488,7 @@ fn number_row(ui: &mut Ui, o: &mut DimensionOptions, e: &mut Edited, num: Num) {
         edit = Some(field.show(ui).edit);
     });
     if let Some(edit) = edit {
-        if let Some(Some(v)) = edit.value().copied() {
+        if let Some(Some(v)) = edit.events.landed().copied() {
             *(num.slot)(o) = v;
         }
         e.numbers.push((num.slot, edit));
@@ -511,7 +512,7 @@ fn precision_row(ui: &mut Ui, o: &mut DimensionOptions, e: &mut Edited) {
     let entries: Vec<Entry<usize>> = (0..=6).map(|n| Entry::new(n, n.to_string())).collect();
     let mut picked = None;
     Field::new(tl!("Precision"))
-        .show(ui, |ui, _| picked = Select::new(tl!("Precision"), Bind::given(o.precision), &entries).show(ui).value().copied());
+        .show(ui, |ui, _| picked = Select::new(tl!("Precision"), Bind::given(o.precision), &entries).show(ui).events.committed().copied());
     if let Some(precision) = picked {
         o.precision = precision;
         e.set = true;
@@ -526,7 +527,7 @@ fn scale_row(ui: &mut Ui, o: &mut DimensionOptions) {
             TextField::new(tl!("Scale"), Bind::bound(&mut o.scale)).show(ui);
         });
         if let Some(scale) =
-            Select::new(tl!("Scale Presets"), Bind::given(o.scale.clone()), &presets).placeholder(tl!("Presets")).show(ui).value().cloned()
+            Select::new(tl!("Scale Presets"), Bind::given(o.scale.clone()), &presets).placeholder(tl!("Presets")).show(ui).events.committed().cloned()
         {
             o.scale = scale;
         }
@@ -569,7 +570,8 @@ fn arrow_style_row(ui: &mut Ui, o: &mut DimensionOptions, e: &mut Edited) {
                 }
             })
             .show(ui)
-            .value()
+            .events
+            .committed()
             .copied();
     });
     if let Some(ch) = picked.flatten().and_then(|at| choices.get(at)) {
@@ -597,7 +599,7 @@ fn font_rows(ui: &mut Ui, o: &mut DimensionOptions, font: &mut FontPickerSetting
     let styles = FontDb::global().styles(&o.font_family);
     let entries: Vec<Entry<String>> = styles.iter().map(|style| Entry::new(style.clone(), style.clone())).collect();
     Field::new(tl!("Font Style")).show(ui, |ui, _| {
-        if let Some(style) = Select::new(tl!("Font Style"), Bind::given(o.font_style.clone()), &entries).show(ui).value().cloned() {
+        if let Some(style) = Select::new(tl!("Font Style"), Bind::given(o.font_style.clone()), &entries).show(ui).events.committed().cloned() {
             o.font_style = style;
         }
     });
@@ -623,7 +625,7 @@ fn text_rows(ui: &mut Ui, o: &mut DimensionOptions, e: &mut Edited, full: bool) 
 fn mode_control(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mode = app.session.tool_options()["mode"].as_str().unwrap_or("linear").to_owned();
     let entries: Vec<Entry<String>> = MODES.iter().map(|&(id, label)| Entry::new(id.to_owned(), tl!(label).to_owned())).collect();
-    if let Some(picked) = Segmented::new(tl!("Dimension Type"), Bind::given(mode), &entries).show(ui).value().cloned()
+    if let Some(picked) = Segmented::new(tl!("Dimension Type"), Bind::given(mode), &entries).show(ui).events.committed().cloned()
         && let Err(e) = select_mode(app, &picked)
     {
         app.ui.status = e;
@@ -784,6 +786,92 @@ mod tests {
 
     fn saved_style(app: &Rc<RefCell<VectorcraftApp>>) -> DimensionOptions {
         serde_json::from_value(app.borrow().session.tool_options_of("dimension")["style"].clone()).unwrap()
+    }
+
+    #[test]
+    fn canceled_tool_options_controls_do_not_leak_into_the_saved_style() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+
+        fn draw(app: &mut VectorcraftApp, ui: &mut Ui) {
+            if let Some(dialogs) = app.dialogs() {
+                dialogs.with(|host| host.run(ui));
+            }
+            super::super::host::pump(app, ui.ctx());
+        }
+
+        for (commit, save) in [(false, true), (true, true), (true, false)] {
+            let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let initial = DimensionOptions::default();
+            app.run("tool.setOption", json!({"tool": "dimension", "values": {"style": initial}})).unwrap();
+            let original = app.session.active().unwrap().doc.clone();
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, draw);
+            panel.room(egui::vec2(1000.0, 1400.0));
+            open(&mut panel.app()).unwrap();
+            panel.frame();
+            for name in ["Units", "Precision", "Scale Presets", "Arrow Style"] {
+                panel.click_role(name, Role::COMBO_BOX);
+                panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+                panel.key(if commit { egui::Key::Enter } else { egui::Key::Escape }, egui::Modifiers::NONE);
+            }
+            let mut expected = initial.clone();
+            if commit {
+                panel.click_role("Line Weight", Role::SPIN_BUTTON);
+                panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+                panel.type_text("2");
+                panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+                expected.units = serde_json::from_value(json!("pc")).unwrap();
+                expected.precision = 3;
+                expected.scale = "1:2".into();
+                expected.arrow_style = ArrowStyle::Open;
+                expected.line_weight = 2.0;
+            }
+            assert_eq!(panel.app().dialogs().unwrap().with(|host| host.get::<DimensionDialog>().unwrap().draft.clone()), expected);
+            panel.click(if save { "Save" } else { "Cancel" });
+            panel.frame();
+            assert!(!panel.app().dialogs().unwrap().with(|host| host.is_open::<DimensionDialog>()));
+            let style: DimensionOptions = serde_json::from_value(panel.app().session.tool_options_of("dimension")["style"].clone()).unwrap();
+            assert_eq!(style, if save { expected } else { initial });
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+        }
+    }
+
+    #[test]
+    fn canceled_properties_choices_preserve_the_dimension_and_undo_history() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+
+        for name in ["Units", "Precision", "Arrow Style"] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let id = app.run("dimension.create", json!({"a": [0, 0], "b": [72, 0]})).unwrap()["id"].as_u64().unwrap();
+            app.run("select.set", json!({"ids": [id]})).unwrap();
+            let original = app.session.active().unwrap().doc.clone();
+            let revision = app.session.active().unwrap().revision;
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, properties_section);
+            panel.room(egui::vec2(600.0, 1000.0));
+            panel.click_role(name, Role::COMBO_BOX);
+            panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+            panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+            {
+                let app = panel.app();
+                let state = app.session.active().unwrap();
+                assert_eq!(state.doc, original);
+                assert_eq!(state.revision, revision);
+                assert_eq!(state.history.undo.len(), undo);
+            }
+            panel.click_role(name, Role::COMBO_BOX);
+            panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+            panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+            assert_ne!(panel.app().session.active().unwrap().doc, original, "an accepted {name} choice changes the dimension");
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
     }
 
     #[test]
