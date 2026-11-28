@@ -148,6 +148,108 @@ fn an_ai_file_opens_with_its_active_artboard() {
     assert_eq!(d.opened_artboard, Some(d.artboards[1].id), "{r}");
 }
 
+/// A `.ai` or `.ait` file VectorCraft wrote reopens, restored from the document it carries, on the
+/// artboard its editing copy names as active; without the copy, on the first artboard.
+#[test]
+fn a_restored_ai_file_opens_on_the_artboard_active_when_saved() {
+    let mut doc = vectorcraft_doc::Document::new(100.0, 100.0);
+    let first = doc.artboards[0].clone();
+    for (i, id) in [(1.0, 7), (2.0, 9)] {
+        let x0 = i * 150.0;
+        doc.artboards.push(vectorcraft_doc::Artboard { id, rect: vectorcraft_geom::Rect::new(x0, 0.0, x0 + 100.0, 100.0), ..first.clone() });
+    }
+    let mut s = Session::new();
+    // The view's artboard, one the document doesn't have, none, and the first.
+    for (active, opened, reopened) in
+        [(Some(7), None, Some(7)), (Some(99), Some(9), Some(9)), (None, Some(9), Some(9)), (Some(first.id), Some(9), None)]
+    {
+        for (cmd, format) in [("document.save", "ai"), ("file.saveAsTemplate", "ait")] {
+            let mut d = doc.clone();
+            d.opened_artboard = opened;
+            s.add_document(d, None);
+            s.doc_mut().unwrap().active_artboard = active;
+            let saved = s.execute(cmd, &json!({"format": format})).unwrap();
+            let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+            let r = open(&mut s, &format!("again.{format}"), &bytes, json!({})).unwrap();
+            assert_eq!(r["restored"], json!(true), "{r}");
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(d.artboards.iter().map(|a| a.id).collect::<Vec<_>>(), [first.id, 7, 9]);
+            assert_eq!(d.opened_artboard, reopened, "{format} {active:?} {opened:?}");
+        }
+    }
+    // A file saved without its PDF part still has the editing copy.
+    s.add_document(doc.clone(), None);
+    s.doc_mut().unwrap().active_artboard = Some(7);
+    let saved = s.execute("document.save", &json!({"format": "ai", "options": {"pdfCompatible": false}})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let r = open(&mut s, "again.ai", &bytes, json!({})).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, Some(7), "{r}");
+    // Without the editing copy, the file reopens on the first artboard.
+    s.add_document(doc.clone(), None);
+    s.doc_mut().unwrap().active_artboard = Some(7);
+    let saved = s.execute("document.save", &json!({"format": "ai", "options": {"editingData": false}})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let r = open(&mut s, "again.ai", &bytes, json!({})).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, None, "{r}");
+}
+
+/// A `.ai` save names the view's active artboard in its editing copy, else the one the document
+/// opened on, else the first; the file read from that copy opens on it.
+#[test]
+fn an_ai_save_names_its_active_artboard() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let ids: Vec<u32> = s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect();
+    let opts = LoadOptions { native: false, ..Default::default() };
+    let active = |s: &mut Session, format: &str| {
+        let cmd = if format == "ait" { "file.saveAsTemplate" } else { "file.saveCopy" };
+        let saved = s.execute(cmd, &json!({"format": format})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+        let l = load::load_with(&format!("a.{format}"), &bytes, &opts).unwrap();
+        assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+        assert_eq!(l.doc.artboards.len(), 3);
+        l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0)
+    };
+    assert_eq!(active(&mut s, "ai"), 0);
+    // The view's.
+    s.doc_mut().unwrap().active_artboard = Some(ids[2]);
+    assert_eq!((active(&mut s, "ai"), active(&mut s, "ait")), (2, 2));
+    // The one the document opened on, when the view names none or an artboard it doesn't have.
+    Arc::make_mut(&mut s.doc_mut().unwrap().doc).opened_artboard = Some(ids[1]);
+    for view in [None, Some(99)] {
+        s.doc_mut().unwrap().active_artboard = view;
+        assert_eq!(active(&mut s, "ai"), 1, "{view:?}");
+    }
+    // The view's first artboard over the one the document opened on.
+    s.doc_mut().unwrap().active_artboard = Some(ids[0]);
+    assert_eq!(active(&mut s, "ai"), 0);
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, Some(ids[1]), "the document is unchanged");
+}
+
+/// A `.ai` export (`document.serialize`, `document.export`, with or without `selectedOnly`) names
+/// the view's active artboard in its editing copy, as a save does.
+#[test]
+fn an_ai_export_names_its_active_artboard() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let ids: Vec<u32> = s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect();
+    s.doc_mut().unwrap().active_artboard = Some(ids[2]);
+    let opts = LoadOptions { native: false, ..Default::default() };
+    for (cmd, selected) in [("document.serialize", false), ("document.serialize", true), ("document.export", false)] {
+        let out = s.execute(cmd, &json!({"format": "ai", "selectedOnly": selected})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(out["dataBase64"].as_str().unwrap()).unwrap();
+        let l = load::load_with("a.ai", &bytes, &opts).unwrap();
+        assert!(l.editing_data && !l.restored, "{cmd}: {:?}", l.warnings);
+        let active = l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id));
+        assert_eq!(active, Some(2), "{cmd} {selected}");
+    }
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, None, "the document is unchanged");
+}
+
 #[test]
 fn an_ai_unread_group_keeps_its_layers_and_live_neighbor() {
     let live = format!("0 0 1 0 k\n{}f", ai::rect(10.0, 10.0, 14.0, 14.0));
@@ -311,6 +413,257 @@ fn a_swatch_library_in_a_ai_file_without_layers_loads_its_palette() {
     assert!(matches!(sky, Some(vectorcraft_color::Paint::Gradient(_))), "{sky:?}");
 }
 
+/// A `.ai` swatch library (a palette and no layers) holding White, the gradient Sky and, in the
+/// color group Textures, the swatch Tiles of the 4 pt pattern Dots, whose square is painted with
+/// `square` (a color operator), a color the palette doesn't list.
+fn textures_library(square: &str) -> Vec<u8> {
+    let dots = format!("%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_{square}\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n");
+    let gradient =
+        "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_0 0 0 0 1 1 1 2 1 6 50 0 Bs\n%_0 0 0 1 0 0 0 2 0.5 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\n\
+                   1 (Textures) 1 Pg\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Tiles)\nPc\nPB\n%AI5_EndPalette\n";
+    let data = ai::editing_data(200.0, 100.0, &format!("{dots}{gradient}{palette}"));
+    ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f")
+}
+
+/// `swatch.library.load` of `file` named `name` → its library id.
+fn load_library(s: &mut Session, name: &str, file: &[u8]) -> Value {
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(file), "name": name});
+    s.execute("swatch.library.load", &p).unwrap()["library"].clone()
+}
+
+/// Other Library… on a `.ai` swatch library lists its colors, gradients and pattern swatches in its
+/// order and color groups, and adding the pattern swatch makes a pattern swatch with the pattern's
+/// tile and art in the document, in the library's color group, not the pattern's colors.
+#[test]
+fn a_swatch_library_in_a_ai_file_lists_and_adds_its_pattern_swatches() {
+    let mut s = Session::new();
+    let id = load_library(&mut s, "textures.ai", &textures_library("0 0 0 1 k"));
+    let lib = s.execute("swatch.library.get", &json!({"library": id})).unwrap();
+    let kinds: Vec<(&str, &str, Option<&str>)> =
+        lib["swatches"].as_array().unwrap().iter().map(|w| (w["name"].as_str().unwrap(), w["kind"].as_str().unwrap(), w["group"].as_str())).collect();
+    assert_eq!(kinds, [("White", "color", None), ("Sky", "gradient", None), ("Tiles", "pattern", Some("Textures"))], "{lib}");
+    assert_eq!(lib["swatches"][2]["pattern"], json!("Dots"), "{lib}");
+    // The library panel draws the pattern from the file it came from; a copy of the swatch isn't its own.
+    let (_, library) = crate::cmd::swatchlib::library(&s, id.as_str().unwrap()).unwrap();
+    let tiles = library.iter().find(|w| w.name == "Tiles").unwrap();
+    assert!(crate::cmd::swatchlib::pattern_source(&s, tiles).is_some_and(|d| d.pattern("Dots").is_some()));
+    assert!(crate::cmd::swatchlib::pattern_source(&s, &tiles.clone()).is_none());
+
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let r = s.execute("swatch.library.add", &json!({"library": id, "names": ["Textures"]})).unwrap();
+    assert_eq!(r["added"], json!(["Tiles"]), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let dots = doc.pattern("Dots").expect("the pattern comes with its swatch");
+    assert_eq!((dots.tile.width(), dots.tile.height()), (4.0, 4.0));
+    assert_eq!(dots.art.len(), 1, "{:?}", dots.art);
+    let textures = doc.swatch_groups.iter().find(|g| g.name == "Textures").expect("the color group comes too");
+    let tiles: Vec<_> = textures.swatches.iter().map(|w| (w.name.as_str(), &w.paint)).collect();
+    assert!(matches!(tiles[..], [("Tiles", vectorcraft_color::Paint::Pattern { pattern, .. })] if pattern == "Dots"), "{tiles:?}");
+    // Added again, the swatch the document has is used.
+    let again = s.execute("swatch.library.add", &json!({"library": id, "names": ["Tiles"]})).unwrap();
+    assert_eq!((again["added"].clone(), again["existing"].clone()), (json!([]), json!(["Tiles"])), "{again}");
+}
+
+/// A pattern swatch of a `.ai` library whose pattern paints with a color the library doesn't list
+/// still comes in with that color in its art.
+#[test]
+fn a_pattern_from_a_ai_library_keeps_a_color_the_library_lacks() {
+    let mut s = Session::new();
+    let id = load_library(&mut s, "textures.ai", &textures_library("0 0.5 1 0 k"));
+    let lib = s.execute("swatch.library.get", &json!({"library": id})).unwrap();
+    let names: Vec<&str> = lib["swatches"].as_array().unwrap().iter().map(|w| w["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["White", "Sky", "Tiles"], "the pattern's color isn't listed: {lib}");
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("swatch.library.add", &json!({"library": id, "names": ["Tiles"]})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let art = &doc.pattern("Dots").unwrap().art;
+    let fill = art.first().and_then(|n| n.appearance.fill()).map(|f| f.paint.color());
+    assert_eq!(fill, Some(Some(vectorcraft_color::Color::cmyk(0.0, 0.5, 1.0, 0.0))), "{art:?}");
+    // Copy to User Defined would write a .vcswatches file, which can't hold the pattern swatch: it is
+    // refused, writes nothing and leaves the library loaded.
+    let dir = std::env::temp_dir().join(format!("vc-pattern-copy-{}", std::process::id()));
+    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let e = s.execute("swatch.library.copyToUser", &json!({"library": id})).unwrap_err().to_string();
+    assert!(e.contains("`textures` has pattern swatches"), "{e}");
+    assert!(!dir.exists() || std::fs::read_dir(&dir).unwrap().next().is_none(), "nothing written");
+    assert!(s.execute("swatch.library.get", &json!({"library": id})).is_ok());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A `.ai` file without a palette of its own, and a document with no swatches, are refused as
+/// swatch libraries with a message, not listed as the default swatches or as an empty library. A
+/// damaged `.ai` is refused with the reader's error, and none of them is listed. A library file
+/// with no swatches loads as an empty library.
+#[test]
+fn swatch_library_documents_without_swatches_or_damaged_are_refused() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.edit("Clear", |d, _| {
+        d.swatches.clear();
+        d.swatch_groups.clear();
+        Ok(())
+    })
+    .unwrap();
+    let b64 = s.execute("document.serialize", &json!({})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    let e = s.execute("swatch.library.load", &json!({"dataBase64": b64, "name": "Bare.vectorcraft"})).unwrap_err().to_string();
+    assert!(e.contains("`Bare.vectorcraft` has no swatches of its own"), "{e}");
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &format!("0 0 0 1 k\n{}f\n", ai::rect(10.0, 50.0, 40.0, 90.0))));
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f")), "name": "art.ai"});
+    let e = s.execute("swatch.library.load", &p).unwrap_err().to_string();
+    assert!(e.contains("`art.ai` has no swatches of its own"), "{e}");
+    let damaged = json!({"data": "%PDF-1.4\n%damaged\n", "name": "damaged.ai"});
+    assert!(s.execute("swatch.library.load", &damaged).is_err());
+    let list = s.execute("swatch.library.list", &json!({})).unwrap();
+    assert!(list["libraries"].as_array().unwrap().iter().all(|l| l["category"] != "loaded"), "{list}");
+    // A library file without swatches still loads, as an empty library.
+    let r = s.execute("swatch.library.load", &json!({"data": "GIMP Palette\nName: Empty\n#\n", "name": "Empty.gpl"})).unwrap();
+    assert_eq!(r["count"], json!(0), "{r}");
+}
+
+/// Other Library… on a `.ai` graphic style library (art styles, their list and no layers) gives the
+/// library the styles of its list, in the list's order, not the default styles; the file opens with
+/// them too.
+#[test]
+fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
+    let style = |name: &str, xa: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n"
+        )
+    };
+    // Styles of one paint (`/SimpleStyle`): a red 2 pt stroke and no fill, and a fill with a gradient
+    // the file doesn't define, which is left out rather than listed with no paint.
+    let one_paint = |name: &str, paint: &str| format!("/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n{paint}/Paint ;\n/Def ;\n");
+    let styles = format!(
+        "%AI9_BeginArtStyles\n{}{}{}{}{}%AI9_EndArtStyles\n\
+         %AI9_BeginArtStyleList\n(Red)\n(Green)\n(Blue)\n(Red outline)\n(Sky fill)\n%AI9_EndArtStyleList\n",
+        style("Blue", "0 0 0 0 0 0 1 Xa\n"),
+        style("Green", "0 0 0 0 0 1 0 Xa\n"),
+        style("Red", "0 0 0 0 1 0 0 Xa\n"),
+        one_paint("Red outline", "0 R\n0 1 1 0 K\n0 J 0 j 2 w 10 M []0 d\n1 0 Xd\n"),
+        one_paint("Sky fill", "0 O\n0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n")
+    );
+    let data = ai::editing_data(200.0, 100.0, &styles);
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fills.ai"});
+    let r = s.execute("graphicStyle.loadLibrary", &p).unwrap();
+    assert_eq!((&r["name"], &r["count"]), (&json!("fills"), &json!(4)), "{r}");
+    let library = r["library"].clone();
+    let lib = s.execute("graphicStyle.library", &json!({"library": library})).unwrap();
+    let names: Vec<&str> = lib["styles"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Red", "Green", "Blue", "Red outline"], "{lib}");
+    // The outline style strokes a rectangle red, 2 pt wide, and leaves it unfilled.
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    let r = s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": ["Red outline"], "apply": true, "ids": [id.0]})).unwrap();
+    assert_eq!(r["added"], json!(["Red outline"]), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let look = &doc.node(id).unwrap().appearance;
+    assert!(look.fill().is_none(), "{look:?}");
+    let strokes: Vec<_> = look.items.iter().filter(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_))).collect();
+    assert_eq!(strokes.len(), 1, "{look:?}");
+    let stroke = look.stroke().unwrap();
+    assert_eq!((stroke.paint.color(), stroke.width), (Some(vectorcraft_color::Color::cmyk(0.0, 1.0, 1.0, 0.0)), 2.0), "{look:?}");
+    assert_eq!(doc.graphic_style("Red outline").map(|g| &g.appearance), Some(&**look));
+    let r = open(&mut s, "fills.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
+    assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3), ("Red outline", 4)], "{r}");
+}
+
+/// A `.ai` graphic style library's styles that paint with one of the file's gradients by name (a
+/// fill style's, and the fill or stroke of a style of one paint) load with that gradient at the
+/// style's angle, fitted to the bounds of each object the style is applied to; one naming a gradient
+/// the file doesn't define is left out.
+#[test]
+fn graphic_styles_in_a_ai_library_that_paint_with_a_named_gradient_load_with_it() {
+    let gradient =
+        "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let band = "/KnownStyle :\n(Sky band) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n\
+         0 Bb\n2 (Sky) 0 0 45 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let one_paint = |name: &str, paint: &str| format!("/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n{paint}/Paint ;\n/Def ;\n");
+    let styles = format!(
+        "%AI9_BeginArtStyles\n{band}{}{}{}%AI9_EndArtStyles\n\
+         %AI9_BeginArtStyleList\n(Sky band)\n(Sky fill)\n(Sky outline)\n(Dusk fill)\n%AI9_EndArtStyleList\n",
+        one_paint("Sky fill", "0 O\n0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n"),
+        one_paint("Sky outline", "0 R\n0 J 0 j 2 w 10 M []0 d\n1 Bb\n2 (Sky) 0 0 90 100 1 0 0 1 0 0 1 Bg\n0 BB\n1 0 Xd\n"),
+        one_paint("Dusk fill", "0 O\n0 Bb\n2 (Dusk) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n")
+    );
+    // A palette with the gradient's swatch, so the document opened from the file shows its gradient.
+    let palette = INKS_PALETTE.replace("0 0 Pb\n", "0 0 Pb\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\n");
+    let data = ai::editing_data(200.0, 100.0, &format!("{gradient}{palette}{styles}"));
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "skies.ai"});
+    let r = s.execute("graphicStyle.loadLibrary", &p).unwrap();
+    let library = r["library"].clone();
+    let lib = s.execute("graphicStyle.library", &json!({"library": library})).unwrap();
+    let names: Vec<&str> = lib["styles"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Sky band", "Sky fill", "Sky outline"], "{lib}");
+    // The file's gradient, as the document opened from it has its swatch.
+    open(&mut s, "skies.ai", &file, json!({})).unwrap();
+    let sky = match s.doc().unwrap().doc.swatch("Sky").map(|w| w.paint.clone()) {
+        Some(vectorcraft_color::Paint::Gradient(g)) => g.gradient,
+        other => panic!("{other:?}"),
+    };
+    // Applied to a small and a large rectangle, each gradient is fitted to the rectangle it paints.
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    for (style, (x, size)) in [("Sky band", (10, 20)), ("Sky fill", (40, 200)), ("Sky outline", (10, 120))] {
+        let rect = json!({"x": x, "y": x, "width": size, "height": size / 2});
+        let id = NodeId(s.execute("shape.rectangle", &rect).unwrap()["id"].as_u64().unwrap());
+        let r = s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": [style], "apply": true, "ids": [id.0]})).unwrap();
+        assert_eq!(r["added"], json!([style]), "{r}");
+        let look = &s.doc().unwrap().doc.node(id).unwrap().appearance;
+        let (paint, angle, stroked) = match style {
+            "Sky outline" => (look.stroke().map(|st| &st.paint), 90.0, true),
+            "Sky band" => (look.fill().map(|f| &f.paint), 45.0, false),
+            _ => (look.fill().map(|f| &f.paint), 0.0, false),
+        };
+        let Some(vectorcraft_color::Paint::Gradient(g)) = paint else { panic!("{style}: {look:?}") };
+        assert_eq!((&g.gradient, g.geom, g.angle), (&sky, None, angle), "{style}");
+        assert_eq!(look.stroke().is_some(), stroked, "{style}: {look:?}");
+        if stroked {
+            assert!(look.fill().is_none() && look.stroke().is_some_and(|st| st.width == 2.0), "{look:?}");
+        }
+    }
+}
+
+/// A `.ai` symbol library (symbols and their list, no layers) opens with its symbols, and Other
+/// Library… in the Symbols panel lists them in the list's order.
+#[test]
+fn a_symbol_library_in_a_ai_file_without_layers_loads_its_symbols() {
+    let symbol = |name: &str, x: f64| {
+        format!(
+            "%AI14_BeginSymbol\n({name})\n0 A\n0 Xw\n0 Ae\nu\n0 1 1 0 1 0 0 Xa\n{x} 0 m\n{x} 4 L\n{} 4 L\n{} 0 L\nf\nU\n\
+             %_/ArtDictionary :\n%_5 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n",
+            x + 4.0,
+            x + 4.0
+        )
+    };
+    let symbols = format!(
+        "%AI5_Begin_NonPrinting\n{}{}{}%AI5_End_NonPrinting--\n%AI24_BeginSymbolList\n(Star)\n(Leaf)\n(Arrow)\n%AI24_EndSymbolList\n",
+        symbol("Arrow", 0.0),
+        symbol("Leaf", 10.0),
+        symbol("Star", 20.0)
+    );
+    let data = ai::editing_data(200.0, 100.0, &symbols);
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "shapes.ai"});
+    let r = s.execute("symbol.loadLibrary", &p).unwrap();
+    assert_eq!((&r["name"], &r["count"]), (&json!("shapes"), &json!(3)), "{r}");
+    let lib = s.execute("symbol.library", &json!({"library": r["library"]})).unwrap();
+    let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Star", "Leaf", "Arrow"], "{lib}");
+    let r = open(&mut s, "shapes.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let names: Vec<&str> = doc.symbols.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(names, ["Star", "Leaf", "Arrow"], "{r}");
+}
+
 /// A 1-bit RGB image opens from the editing data in the colors its PDF part shows.
 #[test]
 fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
@@ -326,7 +679,24 @@ fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
     assert_eq!(names(&doc.layers), ["Art"], "{r}");
     let mut found = vec![];
     doc.visit_images(|_, im| {
-        let img = image::load_from_memory(&doc.images[&im.key].bytes).unwrap().to_rgb8();
+        let img = craft_image_codecs::decode(&doc.images[&im.key].bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgb8();
         found.push(img.pixels().map(|p| p.0).collect::<Vec<_>>());
     });
     assert_eq!(found, [[[255, 0, 0], [0, 255, 0], [0, 0, 255]]], "{r}");
@@ -344,7 +714,27 @@ fn a_zero_width_stroke_in_the_editing_data_draws_a_hairline() {
         assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
         let v = s.execute("document.export", &json!({"format": "png", "background": "transparent"})).unwrap();
         let png = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
-        image::load_from_memory(&png).unwrap().to_rgba8().pixels().filter(|p| p.0[3] > 0).count()
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .pixels()
+            .filter(|p| p.0[3] > 0)
+            .count()
     };
     assert!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nS\n") > 0, "the hairline draws");
     assert_eq!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nN\n"), 0, "the unstroked path draws nothing");
@@ -517,7 +907,7 @@ fn unread_pdf_part(e: &str) -> String {
 
 /// #4366: a `.ai`, or a PDF saved with the editing data, whose PDF part can't be read opens from
 /// its editing data, with a first note saying why. Pages picked, layers off or the editing data
-/// off keep the error, and so does editing data that can't be read.
+/// off keep the error. Editing data that can't be read keeps it too, followed by why.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     let mut s = Session::new();
@@ -535,8 +925,23 @@ fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     }
     for (name, file) in refused_files(b"%AI12_CompressedData not zlib", ai::page_pdf()) {
         let plain = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
-        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), plain, "{name}");
+        let both = format!("{plain}; its editing data couldn't be read either (its zlib compression is damaged)");
+        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), both, "{name}");
+        for p in [json!({"pages": "1"}), json!({"layers": false})] {
+            assert_eq!(open(&mut s, name, &file, p.clone()).unwrap_err().to_string(), plain, "{name}: {p}");
+        }
     }
+}
+
+/// #4366: editing data stored in a form the reader doesn't take, beside a PDF part that can't be
+/// read, is named in the error.
+#[test]
+fn the_error_says_why_the_editing_data_couldnt_be_read() {
+    let mut s = Session::new();
+    let file = ai::ai_with_private_streams(&compressed(&ai::sample_data()), ai::page_pdf(), REFUSED_CONTENT, "/Filter /Bogus ");
+    let plain = open(&mut s, "art.ai", &file, json!({"editingData": false})).unwrap_err().to_string();
+    let e = open(&mut s, "art.ai", &file, json!({})).unwrap_err().to_string();
+    assert_eq!(e, format!("{plain}; its editing data couldn't be read either (it is stored in a form that isn't read)"));
 }
 
 /// A file saved in units of 10 points (`/UserUnit 10`, as in
@@ -586,7 +991,7 @@ fn a_file_whose_pdf_part_cant_be_read_outlines_its_type_when_asked() {
     assert!(paths > 0, "the outlines are there: {r}");
 }
 
-/// An image too large to read from the editing data of a file whose PDF part can't be read is
+/// An image whose data is cut short in the editing data of a file whose PDF part can't be read is
 /// left out, and both notes say so.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
@@ -595,7 +1000,7 @@ fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
     let mut s = Session::new();
     let e = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
     let r = open(&mut s, name, &file, json!({})).unwrap();
-    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image too large to read from the editing data was left out"]), "{r}");
+    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image whose data is cut short was left out"]), "{r}");
 }
 
 /// A copied file whose PDF part can't be read pastes the objects of its editing data when asked
@@ -721,7 +1126,7 @@ fn an_ai_file_opens_its_variable_library() {
                 {"name": "v_file", "kind": "image", "bindings": 0},
                 {"name": "v_graph", "kind": "graph", "bindings": 0},
                 {"name": "v_unbound", "kind": "unknown", "bindings": 0},
-            ], "locked": true})
+            ], "locked": true, "sort": {"by": "none", "descending": false}})
         );
         let r = s.execute("dataset.list", &json!({})).unwrap();
         assert_eq!(r["active"], "ds_two", "{r}");
@@ -855,6 +1260,21 @@ fn an_ai_file_saved_without_its_pdf_part_pastes_from_its_editing_data() {
     assert!(e.contains("placeholder"), "{e}");
 }
 
+/// `file.place` reads a `.ai` saved without its PDF part in the `legacyNameEncoding` it is given.
+#[test]
+fn an_ai_file_saved_without_its_pdf_part_places_in_the_encoding_picked() {
+    let mut data = ai::sample_data();
+    let at = data.windows(4).position(|w| w == b"Pair").unwrap();
+    // 빨강 in code page 949.
+    data.splice(at..at + 4, br"\273\241\260\255".iter().copied());
+    let file = vectorcraft_format::base64_encode(&ai::ai(&compressed(&data), PLACEHOLDER));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "art.ai", "dataBase64": file, "link": false, "legacyNameEncoding": "windows-949"})).unwrap();
+    let placed = s.doc().unwrap().doc.layers[0].children().unwrap()[0].clone();
+    assert_eq!(names(&placed.children().unwrap()[1..]), ["빨강", "Ring", "Window"], "{r}");
+}
+
 #[test]
 fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
     let [sample, damaged, plain] = placeholder_files();
@@ -898,6 +1318,91 @@ fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
     assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
     let e = s.execute("file.place", &json!({"name": "plain.ai", "dataBase64": plain})).unwrap_err().to_string();
     assert!(e.contains("placeholder"), "{e}");
+}
+
+/// `document.open` with `linkPages` refuses a `.ai` saved without PDF compatibility, whose page is
+/// only a placeholder, and opens a PDF-compatible one.
+#[test]
+fn link_pages_refuses_an_ai_file_saved_without_its_pdf_part() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpages-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let file = |name: &str, page: &str| {
+        let path = d.join(name);
+        std::fs::write(&path, ai::ai(&compressed(&ai::sample_data()), page)).unwrap();
+        path.to_string_lossy().to_string()
+    };
+    let (plain, compatible) = (file("plain.ai", PLACEHOLDER), file("compatible.ai", "0 g 10 10 40 40 re f"));
+    let mut s = Session::new();
+    let e = s.execute("document.open", &json!({"path": plain, "linkPages": true})).unwrap_err().to_string();
+    assert!(e.contains("isn't a PDF or a PDF-compatible .ai file"), "{e}");
+    assert!(s.documents().is_empty(), "nothing opened");
+    s.execute("document.open", &json!({"path": compatible, "linkPages": true})).unwrap();
+    assert!(s.doc().unwrap().doc.has_placed());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// `document.open` with `linkPages` opens a PDF-compatible `.ai` asked for its crop box on its trim
+/// box, as it opens as art, showing its bleed box round the artboard, which is the document's bleed.
+#[test]
+fn link_pages_open_an_ai_file_on_its_trim_box_with_its_bleed() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpagestrim-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("trimmed.ai");
+    let boxes = "/TrimBox [10 10 190 90] /BleedBox [4 2 196 98]";
+    std::fs::write(&path, ai::ai_with(&compressed(&ai::sample_data()), "0 g 10 10 40 40 re f", boxes)).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path, "linkPages": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let board = doc.artboards[0].rect;
+    assert_eq!((board.width(), board.height()), (180.0, 80.0), "the trim box");
+    assert_eq!(doc.setup.bleed, [8.0, 8.0, 6.0, 6.0], "top, bottom, left, right");
+    // The page shows its bleed box, so the art in the bleed is kept.
+    let placed = doc.layers[0].children().unwrap()[0].clone();
+    let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("{:?}", placed.kind) };
+    assert_eq!((p.width, p.height, p.page_box), (192.0, 96.0, vectorcraft_doc::PageBox::Bleed));
+    assert_eq!(p.xf.translation(), vectorcraft_geom::Vec2::new(-6.0, -8.0), "the trim box on the artboard");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn link_pages_on_their_trim_boxes_keep_the_bleed_between_the_artboards() {
+    // Two 100 pt trim boxes: the first with 60 pt of bleed on each side, the second with 80 pt on
+    // its left, more than the largest document bleed (72 pt).
+    let entries = format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {} 0 R /NumBlock 1 >> >> >>", first_extra(2));
+    let first = PdfPage {
+        bleed: Some([0.0, 0.0, 220.0, 220.0]),
+        trim: Some([60.0, 60.0, 160.0, 160.0]),
+        entries,
+        ..PdfPage::new(220.0, 220.0, "0 g 0 0 220 220 re f")
+    };
+    let second = PdfPage {
+        bleed: Some([0.0, 0.0, 240.0, 220.0]),
+        trim: Some([80.0, 60.0, 180.0, 160.0]),
+        ..PdfPage::new(240.0, 220.0, "0 g 0 0 240 220 re f")
+    };
+    let d = std::env::temp_dir().join(format!("vc-ailinkpagesgap-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("pages.ai");
+    std::fs::write(&path, pdf_with(&[first, second], &["<< /Length 4 >>\nstream\ndata\nendstream"], None)).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path, "linkPages": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.setup.bleed, [60.0, 60.0, 72.0, 60.0], "top, bottom, left, right");
+    // The first page's bleed ends at 160; the second's starts 36 pt later, 80 pt left of its trim box.
+    let boards: Vec<(f64, f64)> = doc.artboards.iter().map(|a| (a.rect.x0, a.rect.x1)).collect();
+    assert_eq!(boards, [(0.0, 100.0), (276.0, 376.0)]);
+    let shown: Vec<f64> = doc
+        .layers
+        .iter()
+        .map(|l| match &l.children().unwrap()[0].kind {
+            NodeKind::PlacedDocument(p) => p.xf.translation().x,
+            k => panic!("{k:?}"),
+        })
+        .collect();
+    assert_eq!(shown, [-60.0, 196.0], "each page's bleed box round its artboard");
+    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A page of text alone, as text-only art has in its PDF part: no path is painted.

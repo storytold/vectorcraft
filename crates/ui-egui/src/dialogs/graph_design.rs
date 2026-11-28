@@ -9,372 +9,1203 @@
 //! For Fractions; OK runs `graph.column`.
 //! Marker: the design the selected graph series draw their data points with, or None (the default
 //! square marker); OK runs `graph.marker`.
+//! Column and Marker also list, under each library's name, the graph designs of the documents
+//! Window › Swatch Libraries › Other Library… loaded that the document lacks; OK on one copies it
+//! into the document with the resources its art uses.
 //!
-//! Fields: `selected` (the selected designs' names; Column and Marker: one name, null for None),
-//! in Graph Design `name` (the name Rename gives), and in Column `columnType`, `each` and
-//! `fractions`.
+//! One [`GraphDesignDialog`] is all three. Its OK is held: it files the answer, [`pump`] runs the
+//! command and answers it, and a refusal keeps the dialog open with the reason.
+//!
+//! Fields: `selected` (Graph Design: the selected designs' names; Column and Marker: one name, null
+//! for None), in Column and Marker `library` (the library of the selected design, null for the
+//! document's), in Graph Design `name` (the name Rename gives), and in Column `columnType`, `each`
+//! and `fractions`. Setting `selected` to a name finds its library itself.
 
+use std::cell::RefCell;
+use std::sync::Arc;
+
+use craft::behavior::{DisplayOrder, ItemSource, Selection};
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry, Pad, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
+use craft::ui::display::{Picture, PictureSize, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::list::{List, ListRow, ThumbSize};
+use craft::ui::patterns::form_dialogs::FormDialog;
+use craft::ui::pickers::Select;
+use craft::ui::primitives::Revision;
+use craft::ui::runtime::env::Label;
+use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::style::SurfaceKind;
+use craft::ui::text::{NumberField, TextField};
 use serde_json::{Value, json};
+use vectorcraft_doc::{Document, Node};
 
-use super::{DialogSpec, form, run_and_close};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use crate::VectorcraftApp;
 
 /// The dialog kinds.
 pub const DESIGN: &str = "graphDesign";
 pub const COLUMN: &str = "graphColumn";
 pub const MARKER: &str = "graphMarker";
 
-/// The preview's size.
-const PREVIEW: f32 = 120.0;
+/// The rows the design list shows before it scrolls.
+const LIST_ROWS: u16 = 7;
 
-pub(super) const DESIGN_SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Graph Design").into(),
-    body: design_body,
-    confirm: |app, _| {
-        app.ui.dialog = None;
-        Ok(Value::Null)
-    },
-    ok: None,
-    min_width: 420.0,
-    ..DialogSpec::FORM
-};
+/// The side of the square a design's preview is drawn at, in pixels.
+const PREVIEW_PX: u32 = 256;
 
-pub(super) const COLUMN_SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Graph Column").into(),
-    body: column_body,
-    confirm: |app, d| {
-        let p = json!({
-            "design": d.fields.get("selected").and_then(Value::as_str),
-            "columnType": d.str("columnType"),
-            "each": d.f64("each", vectorcraft_doc::ColumnDesign::EACH),
-            "fractions": d.str("fractions"),
+/// The values Each Design Represents takes in the dialog (`graph.column` takes any value more than 0).
+const EACH_RANGE: std::ops::RangeInclusive<f64> = 0.0001..=1_000_000_000.0;
+
+/// Which of the three dialogs a [`GraphDesignDialog`] is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Kind {
+    /// Object › Graph › Design…: manages the document's designs.
+    Design,
+    /// Object › Graph › Column…: picks the design the selected series draw their columns with.
+    Column,
+    /// Object › Graph › Marker…: picks the design the selected series draw their points with.
+    Marker,
+}
+
+impl Kind {
+    /// The dialog's kind string, which automation sees.
+    fn key(self) -> &'static str {
+        match self {
+            Kind::Design => DESIGN,
+            Kind::Column => COLUMN,
+            Kind::Marker => MARKER,
+        }
+    }
+}
+
+/// A design: its name and the library it comes from (`None`: the document's own).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct DesignKey {
+    /// The id of the loaded library that holds the design.
+    pub library: Option<String>,
+    /// The design's name.
+    pub name: String,
+}
+
+impl DesignKey {
+    /// The document's design `name`.
+    fn document(name: &str) -> Self {
+        DesignKey { library: None, name: name.to_owned() }
+    }
+}
+
+/// A row of the design list.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum RowKey {
+    /// Column and Marker's None: no design.
+    None,
+    /// A library's name, over its designs; it cannot be picked.
+    Heading(String),
+    /// A design.
+    Design(DesignKey),
+}
+
+/// The rows of one pass as the list's item source.
+struct Rows<'a>(&'a [RowKey]);
+
+impl DisplayOrder<RowKey> for Rows<'_> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn key(&self, at: usize) -> RowKey {
+        // The list only asks for positions below `len`.
+        self.0.get(at).cloned().unwrap_or(RowKey::None)
+    }
+
+    fn is_section(&self, at: usize) -> bool {
+        matches!(self.0.get(at), Some(RowKey::Heading(_)))
+    }
+}
+
+impl ItemSource<RowKey> for Rows<'_> {}
+
+/// How Column draws the design.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+enum ColumnType {
+    #[default]
+    Vertical,
+    Uniform,
+    Repeating,
+    Sliding,
+}
+
+impl ColumnType {
+    /// The name `graph.column` takes.
+    fn as_str(self) -> &'static str {
+        match self {
+            ColumnType::Vertical => "vertical",
+            ColumnType::Uniform => "uniform",
+            ColumnType::Repeating => "repeating",
+            ColumnType::Sliding => "sliding",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        [ColumnType::Vertical, ColumnType::Uniform, ColumnType::Repeating, ColumnType::Sliding].into_iter().find(|t| t.as_str() == s)
+    }
+}
+
+/// What a repeating design does with a fraction of its length.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+enum Fractions {
+    #[default]
+    Chop,
+    Scale,
+}
+
+impl Fractions {
+    /// The name `graph.column` takes.
+    fn as_str(self) -> &'static str {
+        match self {
+            Fractions::Chop => "chop",
+            Fractions::Scale => "scale",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        [Fractions::Chop, Fractions::Scale].into_iter().find(|f| f.as_str() == s)
+    }
+}
+
+/// Column's options beside the design.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ColumnOptions {
+    column_type: ColumnType,
+    each: f64,
+    fractions: Fractions,
+}
+
+impl Default for ColumnOptions {
+    fn default() -> Self {
+        ColumnOptions { column_type: ColumnType::default(), each: vectorcraft_doc::ColumnDesign::EACH, fractions: Fractions::default() }
+    }
+}
+
+/// What a Graph Design button asks `graph.design` to do.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Action {
+    /// New Design: the selected art as a design.
+    New,
+    /// Rename: the design `from` to `to`.
+    Rename { from: String, to: String },
+    /// Delete Design: these designs.
+    Delete(Vec<String>),
+    /// Paste Design: a copy of this design into the document.
+    Paste(String),
+    /// Select Unused: the designs no graph draws with.
+    SelectUnused,
+}
+
+/// What the dialog shows once an [`Action`] ran.
+#[derive(Default)]
+struct Effects {
+    /// The designs to select.
+    select: Option<Vec<String>>,
+    /// Paste Design leaves the copy selected to edit, as the dialog closes.
+    close: bool,
+}
+
+impl Action {
+    /// `graph.design`'s params.
+    fn params(&self) -> Value {
+        match self {
+            Action::New => json!({ "new": true }),
+            Action::Rename { from, to } => json!({ "rename": from, "to": to }),
+            Action::Delete(names) => json!({ "delete": names }),
+            Action::Paste(name) => json!({ "paste": name }),
+            Action::SelectUnused => json!({ "selectUnused": true }),
+        }
+    }
+
+    /// Notes what the dialog does with the command's result `r`.
+    fn apply(&self, r: &Value, effects: &mut Effects) {
+        let names = |v: &Value| v.as_array().map(|a| a.iter().filter_map(|n| n.as_str().map(str::to_owned)).collect::<Vec<_>>());
+        if let Some(name) = r["name"].as_str() {
+            effects.select = Some(vec![name.to_owned()]);
+        }
+        if *self == Action::SelectUnused
+            && let Some(unused) = names(&r["unused"])
+        {
+            effects.select = Some(unused);
+        }
+        effects.close |= matches!(self, Action::Paste(_));
+    }
+}
+
+/// What OK of Column or Marker files for [`pump`] to run.
+#[derive(Clone)]
+pub(crate) enum Answer {
+    /// `graph.column`.
+    Column { design: Option<DesignKey>, options: ColumnOptions },
+    /// `graph.marker`.
+    Marker { design: Option<DesignKey> },
+}
+
+impl Answer {
+    /// Runs the command; the refusal is its error.
+    fn run(&self, app: &mut VectorcraftApp, target: &GraphTarget) -> Result<(), Label> {
+        let Some(active) = app.session.active().filter(|active| active.uid == target.document.0) else {
+            return Err(Label::from(tl!("This graph design belongs to the document that opened the dialog.")));
+        };
+        if active.reverts != target.document.1 {
+            return Err(Label::from(tl!("The document was reverted. Reopen this dialog to continue.")));
+        }
+        let design = |d: &Option<DesignKey>| json!({ "design": d.as_ref().map(|d| d.name.as_str()), "library": library_of(d.as_ref()) });
+        let (command, mut params) = match self {
+            Answer::Column { design: d, options } => {
+                let mut params = design(d);
+                params["columnType"] = json!(options.column_type.as_str());
+                params["each"] = json!(options.each);
+                params["fractions"] = json!(options.fractions.as_str());
+                ("graph.column", params)
+            }
+            Answer::Marker { design: d } => ("graph.marker", design(d)),
+        };
+        // When selection still describes the opening target, let the command keep its selected series highlighted.
+        let selected = vectorcraft_engine::graph_type_subject(&app.session).ok();
+        if !selected.is_some_and(|selected| selected.id.0 == target.graph && selected.series == target.series) {
+            params["id"] = json!(target.graph);
+            if !target.series.is_empty() {
+                params["seriesIndexes"] = json!(target.series);
+            }
+        }
+        app.run(command, params).map(|_| ()).map_err(Label::from)
+    }
+}
+
+/// The graph and picked series the Column or Marker form opened for.
+#[derive(Clone)]
+struct GraphTarget {
+    document: (u64, u64),
+    graph: u64,
+    series: Vec<usize>,
+}
+
+impl GraphTarget {
+    fn selected(app: &VectorcraftApp) -> Result<Self, String> {
+        let active = app.session.active().ok_or("no document open")?;
+        let document = (active.uid, active.reverts);
+        let selected = vectorcraft_engine::graph_type_subject(&app.session).map_err(|error| error.to_string())?;
+        Ok(Self { document, graph: selected.id.0, series: selected.series })
+    }
+}
+
+/// A loaded library's document, for the thumbnails of its designs.
+struct LibraryDoc {
+    id: String,
+    /// Which load of the library this is ([`vectorcraft_engine::cmd::swatchlib::DesignLibrary::generation`]).
+    generation: u64,
+    doc: Arc<Document>,
+}
+
+/// What the dialog reads from the app: the app pushes it in every pass ([`pump`]), since the body gets no app.
+struct Lists {
+    /// The drawing contents these names and thumbnails came from.
+    drawing: (u64, u64),
+    /// The document's design names.
+    designs: Vec<String>,
+    /// The loaded libraries' designs the document lacks ([`library_designs`]).
+    libraries: Vec<(String, String, Vec<String>)>,
+    /// Whether art is selected: New Design needs it.
+    has_art: bool,
+    doc: Arc<Document>,
+    doc_revision: u64,
+    lib_docs: Vec<LibraryDoc>,
+}
+
+impl Lists {
+    fn read(app: &VectorcraftApp) -> Result<Lists, String> {
+        let designs = names(app)?;
+        let st = app.session.active().ok_or("no document open")?;
+        Ok(Lists {
+            drawing: (st.uid, st.reverts),
+            designs,
+            libraries: library_designs(app),
+            has_art: !st.selection.is_empty(),
+            doc: st.doc.clone(),
+            doc_revision: st.revision,
+            lib_docs: app
+                .session
+                .graph_design_libraries
+                .iter()
+                .map(|l| LibraryDoc { id: l.id.clone(), generation: l.generation, doc: l.doc.clone() })
+                .collect(),
+        })
+    }
+
+    /// Whether the document or the library of `key` still has the design.
+    fn holds(&self, key: &DesignKey) -> bool {
+        match &key.library {
+            None => self.designs.contains(&key.name),
+            Some(id) => self.libraries.iter().any(|(l, _, designs)| l == id && designs.contains(&key.name)),
+        }
+    }
+
+    /// The design called `name`: the document's, else the library `prefer` when it has one, else the first library that does.
+    fn find(&self, name: &str, prefer: Option<&str>) -> Option<DesignKey> {
+        if self.designs.iter().any(|n| n == name) {
+            return Some(DesignKey::document(name));
+        }
+        let has = |(id, _, designs): &&(String, String, Vec<String>)| designs.iter().any(|n| n == name) && prefer.is_none_or(|p| p == id);
+        let library = self.libraries.iter().find(has).or_else(|| self.libraries.iter().find(|(_, _, designs)| designs.iter().any(|n| n == name)))?;
+        Some(DesignKey { library: Some(library.0.clone()), name: name.to_owned() })
+    }
+
+    fn library_name(&self, id: &str) -> String {
+        self.libraries.iter().find(|(l, ..)| l == id).map(|(_, name, _)| name.clone()).unwrap_or_default()
+    }
+
+    /// The list's rows: Graph Design the document's designs; Column and Marker None, the document's designs, then
+    /// each library's name over its designs.
+    fn rows(&self, kind: Kind) -> Vec<RowKey> {
+        let own = self.designs.iter().map(|n| RowKey::Design(DesignKey::document(n)));
+        if kind == Kind::Design {
+            return own.collect();
+        }
+        let libraries = self.libraries.iter().flat_map(|(id, _, designs)| {
+            let from = designs.iter().map(|n| RowKey::Design(DesignKey { library: Some(id.clone()), name: n.clone() }));
+            std::iter::once(RowKey::Heading(id.clone())).chain(from)
         });
-        run_and_close(app, "graph.column", p)
-    },
-    min_width: 420.0,
-    ..DialogSpec::FORM
-};
+        std::iter::once(RowKey::None).chain(own).chain(libraries).collect()
+    }
 
-pub(super) const MARKER_SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Graph Marker").into(),
-    body: marker_body,
-    confirm: |app, d| run_and_close(app, "graph.marker", json!({ "design": d.fields.get("selected").and_then(Value::as_str) })),
-    min_width: 300.0,
-    ..DialogSpec::FORM
-};
+    /// The design's document, art and the revision of that document's picture of it.
+    fn art(&self, key: &DesignKey) -> Option<(Arc<Document>, Arc<Node>, Revision)> {
+        let (doc, revision) = match &key.library {
+            None => (&self.doc, Revision::new(self.doc_revision)),
+            Some(id) => {
+                let lib = self.lib_docs.iter().find(|l| &l.id == id)?;
+                (&lib.doc, Revision::new(lib.generation))
+            }
+        };
+        let art = doc.graph_designs.iter().find(|d| d.name == key.name)?.art.clone();
+        Some((doc.clone(), art, revision))
+    }
+}
+
+/// Graph Design, Graph Column or Graph Marker, on the window's dialog host.
+pub(crate) struct GraphDesignDialog {
+    id: DialogId,
+    kind: Kind,
+    target: Option<GraphTarget>,
+    lists: Lists,
+    /// The selected rows: any number of designs in Graph Design; one design, or None, in Column and Marker.
+    selection: Selection<RowKey>,
+    /// Graph Design's Name field.
+    name: String,
+    column: ColumnOptions,
+    /// The buttons pressed since [`pump`] last ran.
+    actions: Vec<Action>,
+    /// OK of Column and Marker.
+    held: HeldAnswer<Answer>,
+}
+
+/// What [`pump`] takes from the open dialog to run.
+struct Work {
+    actions: Vec<Action>,
+    list_drawing: (u64, u64),
+    answer: Option<(Answer, GraphTarget)>,
+    document: Option<(u64, u64)>,
+}
+
+impl GraphDesignDialog {
+    fn new(kind: Kind, lists: Lists, chosen: Vec<DesignKey>, column: ColumnOptions, target: Option<GraphTarget>) -> Self {
+        let mut dialog = GraphDesignDialog {
+            id: dialog_id(kind.key()),
+            kind,
+            target,
+            lists,
+            selection: Selection::new(Vec::new(), None, None),
+            name: String::new(),
+            column,
+            actions: Vec::new(),
+            held: HeldAnswer::new(),
+        };
+        dialog.select(chosen);
+        dialog
+    }
+
+    /// The designs among the selected rows.
+    fn chosen(&self) -> Vec<DesignKey> {
+        designs_in(&self.selection)
+    }
+
+    /// Selects `keys` without touching the Name field: all of them in Graph Design, the first, or None, in the others.
+    fn set_selection(&mut self, keys: Vec<DesignKey>) {
+        let mut rows: Vec<RowKey> = keys.into_iter().map(RowKey::Design).collect();
+        if self.kind != Kind::Design {
+            rows.truncate(1);
+            if rows.is_empty() {
+                rows.push(RowKey::None);
+            }
+        }
+        let last = rows.last().cloned();
+        self.selection = Selection::new(rows, last.clone(), last);
+    }
+
+    /// Selects `keys`, and Graph Design's Name field takes the first one's name.
+    fn select(&mut self, keys: Vec<DesignKey>) {
+        if self.kind == Kind::Design {
+            self.name = keys.first().map(|k| k.name.clone()).unwrap_or_default();
+        }
+        self.set_selection(keys);
+    }
+
+    /// Takes what the app pushed in, and drops selections and drafts that no longer belong to it.
+    fn feed(&mut self, lists: Lists) {
+        let drawing_changed = self.lists.drawing != lists.drawing;
+        self.lists = lists;
+        if self.kind == Kind::Design && drawing_changed {
+            self.select(self.lists.designs.first().map(|name| DesignKey::document(name)).into_iter().collect());
+            return;
+        }
+        let chosen = self.chosen();
+        let kept: Vec<DesignKey> = chosen.iter().filter(|k| self.lists.holds(k)).cloned().collect();
+        if kept.len() != chosen.len() {
+            self.set_selection(kept);
+        }
+    }
+
+    fn take_work(&mut self) -> Work {
+        let answer = self.held.take().and_then(|answer| self.target.clone().map(|target| (answer, target)));
+        let document = self.target.as_ref().map(|target| target.document);
+        Work { actions: std::mem::take(&mut self.actions), list_drawing: self.lists.drawing, answer, document }
+    }
+
+    /// What OK files.
+    fn answer(&self) -> Answer {
+        let design = self.chosen().into_iter().next();
+        match self.kind {
+            Kind::Marker => Answer::Marker { design },
+            _ => Answer::Column { design, options: self.column.clone() },
+        }
+    }
+
+    fn show_design(&mut self, ui: &mut egui::Ui) -> Option<DialogResult<()>> {
+        let close = FooterButton::new(tl!("Close").to_owned(), DialogRole::Cancel);
+        let shown = Dialog::new(tl!("Graph Design").to_owned()).buttons([close]).show(ui, |ui, _| self.design_body(ui));
+        shown.output.closed.map(|_| DialogResult::Cancel)
+    }
+
+    fn design_body(&mut self, ui: &mut egui::Ui) {
+        // PLAN: the sheet's note 3 lists library headings in Graph Design; production lists the document's designs
+        // only and every action runs on a document design's name, so the list follows production.
+        let GraphDesignDialog { lists, selection, name, actions, .. } = self;
+        let lists = &*lists;
+        let before = selection.items.clone();
+        let under_list = |ui: &mut egui::Ui, selection: &mut Selection<RowKey>, side: &mut Side<'_>| {
+            if selection.items != before {
+                *side.name = designs_in(selection).first().map(|k| k.name.clone()).unwrap_or_default();
+            }
+            Field::new(tl!("Name:").to_owned()).show(ui, |ui, _| {
+                TextField::new(tl!("Name").to_owned(), Bind::bound(&mut *side.name)).show(ui);
+            });
+        };
+        let under_preview = |ui: &mut egui::Ui, selection: &Selection<RowKey>, side: &mut Side<'_>| {
+            let Side { name, actions } = side;
+            let chosen: Vec<String> = designs_in(selection).into_iter().map(|k| k.name).collect();
+            let button = |ui: &mut egui::Ui, label: &str, enabled: bool| {
+                clicked(&Button::new(label.to_owned()).enabled(enabled).sizing(Sizing::FillWidth).show(ui))
+            };
+            if button(ui, tl!("New Design"), lists.has_art) {
+                actions.push(Action::New);
+            }
+            let rename = chosen.len() == 1 && !name.trim().is_empty();
+            if button(ui, tl!("Rename"), rename)
+                && let Some(from) = chosen.first()
+            {
+                actions.push(Action::Rename { from: from.clone(), to: name.clone() });
+            }
+            if button(ui, tl!("Delete Design"), !chosen.is_empty()) {
+                actions.push(Action::Delete(chosen.clone()));
+            }
+            if button(ui, tl!("Paste Design"), chosen.len() == 1)
+                && let Some(only) = chosen.first()
+            {
+                actions.push(Action::Paste(only.clone()));
+            }
+            if button(ui, tl!("Select Unused"), !lists.designs.is_empty()) {
+                actions.push(Action::SelectUnused);
+            }
+        };
+        picker(ui, Kind::Design, lists, selection, &mut Side { name, actions }, under_list, under_preview);
+    }
+
+    fn show_form(&mut self, ui: &mut egui::Ui) -> Option<DialogResult<()>> {
+        if self.held.is_accepted() {
+            self.held.finish();
+            return Some(DialogResult::Ok(()));
+        }
+        let title = if self.kind == Kind::Column { tl!("Graph Column") } else { tl!("Graph Marker") };
+        let waiting = self.held.is_waiting();
+        let GraphDesignDialog { kind, lists, selection, column, held, .. } = self;
+        let (kind, lists) = (*kind, &*lists);
+        let form = FormDialog::new(title.to_owned(), Bind::bound(&mut *column)).accept_stays_open(true).ok_enabled(!waiting);
+        let shown = form.show(ui, |ui, _, options| {
+            let (rows, opts) = (selection.items.clone(), options.clone());
+            picker(ui, kind, lists, selection, &mut (), |_, _, _| {}, |_, _, _| {});
+            if kind == Kind::Column {
+                column_options(ui, options);
+            }
+            if let Some((reason, _)) = held.refusal() {
+                Text::new(reason.clone()).show(ui);
+            }
+            // A refusal is about the values it refused.
+            if selection.items != rows || *options != opts {
+                held.clear_refusal();
+            }
+            true
+        });
+        if shown.closed.is_some() {
+            return Some(DialogResult::Cancel);
+        }
+        if shown.picked == Some(0) && !waiting {
+            let answer = self.answer();
+            self.held.file(answer);
+        }
+        None
+    }
+}
+
+/// What Graph Design's own rows read and write beside the selection.
+struct Side<'a> {
+    name: &'a mut String,
+    actions: &'a mut Vec<Action>,
+}
+
+/// The list of designs with a preview of the first one picked beside it; `under_list` and `under_preview` add the
+/// dialog's own rows below each, sharing `side`.
+fn picker<S>(
+    ui: &mut egui::Ui,
+    kind: Kind,
+    lists: &Lists,
+    selection: &mut Selection<RowKey>,
+    side: &mut S,
+    mut under_list: impl FnMut(&mut egui::Ui, &mut Selection<RowKey>, &mut S),
+    mut under_preview: impl FnMut(&mut egui::Ui, &Selection<RowKey>, &mut S),
+) {
+    let rows = lists.rows(kind);
+    let source = Rows(&rows);
+    Row::new().show(ui, |ui, _| {
+        Stack::new().show(ui, |ui, _| {
+            design_list(kind, selection).show_items(ui, &source, &mut |key, _| row(key, lists));
+            under_list(ui, selection, side);
+        });
+        Stack::new().show(ui, |ui, _| {
+            preview(ui, lists, designs_in(selection).first());
+            under_preview(ui, selection, side);
+        });
+    });
+}
+
+/// The list: Graph Design picks any number of designs, Column and Marker exactly one row.
+fn design_list(kind: Kind, selection: &mut Selection<RowKey>) -> List<'_, RowKey> {
+    let list = List::new(tl!("Designs").to_owned())
+        .id_salt(kind.key())
+        .surface(SurfaceKind::Sunken)
+        .pad(Pad::Control)
+        .max_rows(LIST_ROWS)
+        .selection(Bind::bound(selection));
+    if kind == Kind::Design { list } else { list.select(SelectMode::Single).allow_empty(false) }
+}
+
+fn row<'a>(key: &RowKey, lists: &Lists) -> ListRow<'a> {
+    match key {
+        RowKey::None => ListRow::new(tl!("None").to_owned()),
+        RowKey::Design(design) => ListRow::new(design.name.clone()),
+        // The library's own name, not interface text.
+        RowKey::Heading(id) => ListRow::new(lists.library_name(id)).section_heading(),
+    }
+}
+
+/// Column's Column Type, and for a repeating design Each Design Represents and For Fractions.
+fn column_options(ui: &mut egui::Ui, options: &mut ColumnOptions) {
+    let repeating = options.column_type == ColumnType::Repeating;
+    let types = [
+        Entry::new(ColumnType::Vertical, tl!("Vertically Scaled").to_owned()),
+        Entry::new(ColumnType::Uniform, tl!("Uniformly Scaled").to_owned()),
+        Entry::new(ColumnType::Repeating, tl!("Repeating").to_owned()),
+        Entry::new(ColumnType::Sliding, tl!("Sliding").to_owned()),
+    ];
+    Field::new(tl!("Column Type:").to_owned()).show(ui, |ui, _| {
+        Select::new(tl!("Column Type").to_owned(), Bind::bound(&mut options.column_type), &types).show(ui);
+    });
+    Field::new(tl!("Each Design Represents:").to_owned()).show(ui, |ui, _| {
+        let mut each = Some(options.each);
+        NumberField::new(tl!("Each Design Represents").to_owned(), Bind::bound(&mut each))
+            .range(EACH_RANGE)
+            .fixed_decimals(4)
+            .enabled(repeating)
+            .show(ui);
+        // A cleared field keeps the last number.
+        options.each = each.unwrap_or(options.each);
+    });
+    let fractions = [Entry::new(Fractions::Chop, tl!("Chop Design").to_owned()), Entry::new(Fractions::Scale, tl!("Scale Design").to_owned())];
+    Field::new(tl!("For Fractions:").to_owned()).show(ui, |ui, _| {
+        Select::new(tl!("For Fractions").to_owned(), Bind::bound(&mut options.fractions), &fractions).enabled(repeating).show(ui);
+    });
+}
+
+/// The design `key` drawn in the preview's square, or an empty square without one.
+fn preview(ui: &mut egui::Ui, lists: &Lists, key: Option<&DesignKey>) {
+    let shown = key.and_then(|key| lists.art(key));
+    let revision = shown.as_ref().map(|(.., revision)| *revision).unwrap_or_default();
+    let image = || shown.as_ref().map_or_else(blank, |(doc, art, _)| thumbnail(doc, art));
+    Picture::new("", Revision::of(&key).get(), &image).revision(revision).extent(PictureSize::Sample(ThumbSize::Large)).show(ui);
+}
+
+fn blank() -> egui::ColorImage {
+    egui::ColorImage::filled([1, 1], egui::Color32::TRANSPARENT)
+}
+
+/// `art` drawn on white at the preview's side.
+fn thumbnail(doc: &Document, art: &Node) -> egui::ColorImage {
+    thread_local! {
+        static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
+    }
+    RENDERER
+        .with(|r| r.borrow_mut().render_node_thumbnail(doc, art, PREVIEW_PX, Some([255, 255, 255, 255])))
+        .map_or_else(blank, |img| crate::canvas::color_image(&img))
+}
+
+/// The designs among `selection`'s rows.
+fn designs_in(selection: &Selection<RowKey>) -> Vec<DesignKey> {
+    selection
+        .items
+        .iter()
+        .filter_map(|row| match row {
+            RowKey::Design(design) => Some(design.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Column and Marker's `library`: the library of the selected design, `None` for the document's.
+fn library_of(design: Option<&DesignKey>) -> Option<&str> {
+    design.and_then(|d| d.library.as_deref())
+}
+
+impl StackDialog for GraphDesignDialog {
+    type Result = ();
+
+    fn id(&self) -> DialogId {
+        self.id
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(self.kind.key())
+    }
+
+    fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<()>> {
+        match self.kind {
+            Kind::Design => self.show_design(ui),
+            Kind::Column | Kind::Marker => self.show_form(ui),
+        }
+    }
+
+    /// OK files the answer for [`pump`]; once the command accepted it, OK closes the dialog. Graph Design has no OK.
+    fn confirm(&mut self, _: &egui::Context) -> Option<()> {
+        if self.kind == Kind::Design {
+            return None;
+        }
+        if self.held.finish().is_some() {
+            return Some(());
+        }
+        if !self.held.is_waiting() {
+            let answer = self.answer();
+            self.held.file(answer);
+        }
+        None
+    }
+
+    fn held_state(&self) -> Option<HeldOk> {
+        self.held.state()
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        let chosen = self.chosen();
+        let first = chosen.first();
+        Some(match self.kind {
+            Kind::Design => json!({ "selected": chosen.iter().map(|k| k.name.as_str()).collect::<Vec<_>>(), "name": self.name }),
+            Kind::Marker => json!({ "selected": first.map(|k| k.name.as_str()), "library": library_of(first) }),
+            Kind::Column => json!({
+                "selected": first.map(|k| k.name.as_str()),
+                "library": library_of(first),
+                "columnType": self.column.column_type.as_str(),
+                "each": self.column.each,
+                "fractions": self.column.fractions.as_str(),
+            }),
+        })
+    }
+
+    /// Sets a field as its row does: a design the document and the libraries no longer hold is refused, and in
+    /// Column `each` and `fractions` take no input unless `columnType` is `repeating`.
+    fn set_json_field(&mut self, _: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        let rejects = || FieldRefusal::Rejects(&value).message(field);
+        match (self.kind, field) {
+            (Kind::Design, "selected") => {
+                let names = value.as_array().ok_or_else(rejects)?;
+                let keys = names
+                    .iter()
+                    .map(|n| n.as_str().and_then(|n| self.lists.find(n, None)).filter(|k| k.library.is_none()).ok_or_else(rejects))
+                    .collect::<Result<Vec<_>, _>>()?;
+                self.select(keys);
+            }
+            (Kind::Design, "name") => self.name = value.as_str().ok_or_else(rejects)?.to_owned(),
+            (Kind::Column | Kind::Marker, "selected") => {
+                let key = match &value {
+                    Value::Null => None,
+                    Value::String(n) => {
+                        let current = self.chosen();
+                        Some(self.lists.find(n, library_of(current.first())).ok_or_else(rejects)?)
+                    }
+                    _ => return Err(rejects()),
+                };
+                self.select(key.into_iter().collect());
+            }
+            (Kind::Column | Kind::Marker, "library") => {
+                let library = match &value {
+                    Value::Null => None,
+                    Value::String(id) => Some(id.clone()),
+                    _ => return Err(rejects()),
+                };
+                let name = self.chosen().into_iter().next().map(|k| k.name).ok_or_else(rejects)?;
+                let moved = DesignKey { library, name };
+                if !self.lists.holds(&moved) {
+                    return Err(rejects());
+                }
+                self.select(vec![moved]);
+            }
+            (Kind::Column, "columnType") => self.column.column_type = value.as_str().and_then(ColumnType::parse).ok_or_else(rejects)?,
+            (Kind::Column, "each" | "fractions") if self.column.column_type != ColumnType::Repeating => {
+                return Err(FieldRefusal::Inactive.message(field));
+            }
+            (Kind::Column, "each") => self.column.each = value.as_f64().filter(|v| EACH_RANGE.contains(v)).ok_or_else(rejects)?,
+            (Kind::Column, "fractions") => self.column.fractions = value.as_str().and_then(Fractions::parse).ok_or_else(rejects)?,
+            _ => return Err(FieldRefusal::Unknown.message(field)),
+        }
+        self.held.clear_refusal();
+        Ok(())
+    }
+}
 
 /// Open Graph Design.
 pub fn open_design(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let names = names(app)?;
-    let first: Vec<String> = names.first().cloned().into_iter().collect();
-    let name = first.first().cloned().unwrap_or_default();
-    app.ui.dialog = Some(Dialog::new(DESIGN, json!({ "selected": first, "name": name })));
-    Ok(Value::Null)
+    let lists = Lists::read(app)?;
+    let first = lists.designs.first().map(|n| DesignKey::document(n));
+    open(app, GraphDesignDialog::new(Kind::Design, lists, first.into_iter().collect(), ColumnOptions::default(), None))
 }
 
 /// Open Column for the selected graph series, on the design and options they draw their columns with (None for plain
 /// columns).
 pub fn open_column(app: &mut VectorcraftApp) -> Result<Value, String> {
     let v = app.session.execute("graph.column", &json!({})).map_err(|e| e.to_string())?;
-    let fields = json!({ "selected": v["design"].as_str(), "columnType": v["columnType"], "each": v["each"], "fractions": v["fractions"] });
-    app.ui.dialog = Some(Dialog::new(COLUMN, fields));
-    Ok(Value::Null)
+    let options = ColumnOptions {
+        column_type: v["columnType"].as_str().and_then(ColumnType::parse).unwrap_or_default(),
+        each: v["each"].as_f64().unwrap_or(vectorcraft_doc::ColumnDesign::EACH),
+        fractions: v["fractions"].as_str().and_then(Fractions::parse).unwrap_or_default(),
+    };
+    let chosen = v["design"].as_str().map(DesignKey::document);
+    let target = GraphTarget::selected(app)?;
+    open(app, GraphDesignDialog::new(Kind::Column, Lists::read(app)?, chosen.into_iter().collect(), options, Some(target)))
 }
 
 /// Open Marker for the selected graph series, on the design they draw with (None for the default).
 pub fn open_marker(app: &mut VectorcraftApp) -> Result<Value, String> {
     let v = app.session.execute("graph.marker", &json!({})).map_err(|e| e.to_string())?;
-    app.ui.dialog = Some(Dialog::new(MARKER, json!({ "selected": v["design"].as_str() })));
+    let chosen = v["design"].as_str().map(DesignKey::document);
+    let target = GraphTarget::selected(app)?;
+    open(app, GraphDesignDialog::new(Kind::Marker, Lists::read(app)?, chosen.into_iter().collect(), ColumnOptions::default(), Some(target)))
+}
+
+fn open(app: &VectorcraftApp, dialog: GraphDesignDialog) -> Result<Value, String> {
+    app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
 
-/// The document's design names, read from the document (the dialogs draw every frame).
+/// The document's design names, read from the document.
 fn names(app: &VectorcraftApp) -> Result<Vec<String>, String> {
     let st = app.session.active().ok_or("no document open")?;
     Ok(st.doc.graph_designs.iter().map(|d| d.name.clone()).collect())
 }
 
-/// Graph Design's selected designs.
-fn selected(d: &Dialog) -> Vec<String> {
-    d.fields.get("selected").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default()
+/// The designs of the loaded libraries that the document lacks (the document's own design of a name
+/// is the one used), by library: its id, its name and the design names, libraries with none left
+/// out.
+fn library_designs(app: &VectorcraftApp) -> Vec<(String, String, Vec<String>)> {
+    let own = names(app).unwrap_or_default();
+    app.session
+        .graph_design_libraries
+        .iter()
+        .map(|l| (l.id.clone(), l.name.clone(), l.doc.graph_designs.iter().map(|g| g.name.clone()).filter(|n| !own.contains(n)).collect::<Vec<_>>()))
+        .filter(|(.., names)| !names.is_empty())
+        .collect()
 }
 
-fn select(d: &mut Dialog, names: Vec<String>) {
-    d.fields.insert("name".into(), json!(names.first().cloned().unwrap_or_default()));
-    d.fields.insert("selected".into(), json!(names));
-}
-
-/// A design's art drawn in `r` (cached by the art's identity).
-fn preview(ui: &egui::Ui, app: &VectorcraftApp, name: &str, r: egui::Rect) {
-    use std::cell::RefCell;
-    use std::collections::HashMap;
-    thread_local! {
-        static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
-        static CACHE: crate::graphics::TexCache<HashMap<usize, egui::TextureHandle>> = crate::graphics::TexCache::default();
-    }
-    let Some(st) = app.session.active() else { return };
-    let Some(art) = st.doc.graph_designs.iter().find(|x| x.name == name).map(|x| x.art.clone()) else { return };
-    let key = std::sync::Arc::as_ptr(&art) as usize;
-    let px = (r.width() * ui.ctx().pixels_per_point()).round() as u32;
-    let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).or_else(|| {
-        let img = RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail(&st.doc, &art, px.max(16), Some([255, 255, 255, 255])))?;
-        let color = crate::canvas::color_image(&img);
-        let tex = ui.ctx().load_texture(format!("graph-design-{key}"), color, egui::TextureOptions::LINEAR);
-        CACHE.with(|c| {
-            let mut c = c.borrow_mut();
-            if c.len() > 200 {
-                c.clear();
+/// Runs the open dialog's buttons and held OK, and pushes the app's lists into it. Every pass: the lists change
+/// without a pass of the dialog (an undo, a library loaded). The commands run outside the host's lock.
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let Some(work) = dialogs.with(|host| host.get_mut::<GraphDesignDialog>().map(GraphDesignDialog::take_work)) else { return };
+    let mut effects = Effects::default();
+    if app.session.active().is_some_and(|active| (active.uid, active.reverts) == work.list_drawing) {
+        for action in &work.actions {
+            match app.run("graph.design", action.params()) {
+                Ok(r) => action.apply(&r, &mut effects),
+                Err(e) => app.status(e),
             }
-            c.insert(key, tex.clone());
-        });
-        Some(tex)
-    });
-    if let Some(t) = tex {
-        ui.painter().image(t.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
-    }
-}
-
-fn design_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let names = names(app).unwrap_or_default();
-    let chosen: Vec<String> = selected(d).into_iter().filter(|n| names.contains(n)).collect();
-    let one = chosen.first().cloned();
-    let has_art = app.session.active().is_some_and(|st| !st.selection.is_empty());
-    let mut run = None;
-    ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
-            ui.set_width(220.0);
-            // Click picks a design; Cmd/Ctrl-click adds or removes one.
-            widgets::list_box(ui, |ui| {
-                egui::ScrollArea::vertical().id_salt("graph-designs").min_scrolled_height(160.0).max_height(160.0).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.set_min_height(160.0);
-                    for n in &names {
-                        if ui.selectable_label(chosen.contains(n), n.as_str()).clicked() {
-                            let mut now = chosen.clone();
-                            if ui.input(|i| i.modifiers.command) {
-                                if let Some(k) = now.iter().position(|x| x == n) {
-                                    now.remove(k);
-                                } else {
-                                    now.push(n.clone());
-                                }
-                            } else {
-                                now = vec![n.clone()];
-                            }
-                            select(d, now);
-                        }
-                    }
-                });
-            });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                widgets::dim_label(ui, tl!("Name:"));
-                form::text(ui, d, "name", 150.0);
-            });
-        });
-        ui.add_space(10.0);
-        ui.vertical(|ui| {
-            let (r, _) = ui.allocate_exact_size(egui::vec2(PREVIEW, PREVIEW), egui::Sense::hover());
-            ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, egui::Color32::from_gray(160)), egui::StrokeKind::Inside);
-            if let Some(n) = &one {
-                preview(ui, app, n, r.shrink(4.0));
-            }
-            ui.add_space(6.0);
-            let button =
-                |ui: &mut egui::Ui, on: bool, label: &str| ui.add_enabled_ui(on, |ui| widgets::flat_button(ui, label, PREVIEW)).inner.clicked();
-            if button(ui, has_art, tl!("New Design")) {
-                run = Some(json!({ "new": true }));
-            }
-            let to = d.str("name");
-            if button(ui, chosen.len() == 1 && !to.trim().is_empty(), tl!("Rename")) {
-                run = one.clone().map(|n| json!({ "rename": n, "to": to }));
-            }
-            if button(ui, !chosen.is_empty(), tl!("Delete Design")) {
-                run = Some(json!({ "delete": chosen }));
-            }
-            if button(ui, chosen.len() == 1, tl!("Paste Design")) {
-                run = one.clone().map(|n| json!({ "paste": n }));
-            }
-            if button(ui, !names.is_empty(), tl!("Select Unused")) {
-                run = Some(json!({ "selectUnused": true }));
-            }
-        });
-    });
-    if let Some(p) = run {
-        match app.run("graph.design", p.clone()) {
-            Ok(r) => {
-                if let Some(n) = r["name"].as_str() {
-                    select(d, vec![n.to_string()]);
-                }
-                if let Some(unused) = r["unused"].as_array().filter(|_| p.get("selectUnused").is_some()) {
-                    select(d, unused.iter().filter_map(|v| v.as_str().map(str::to_string)).collect());
-                }
-                // Paste Design leaves the copy selected to edit, as the dialog closes.
-                if p.get("paste").is_some() {
-                    return true;
-                }
-            }
-            Err(e) => app.status(e),
         }
     }
-    false
-}
-
-/// The list of Column and Marker: None, then the designs `names`; a click picks one into `selected` (null for None).
-fn one_design_list(ui: &mut egui::Ui, d: &mut Dialog, names: &[String], salt: &str) {
-    widgets::list_box(ui, |ui| {
-        egui::ScrollArea::vertical().id_salt(salt).min_scrolled_height(160.0).max_height(160.0).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.set_min_height(160.0);
-            let current = d.fields.get("selected").and_then(Value::as_str).map(str::to_string);
-            if ui.selectable_label(current.is_none(), tl!("None")).clicked() {
-                d.fields.insert("selected".into(), Value::Null);
+    let answered = work.answer.map(|(answer, target)| answer.run(app, &target));
+    let same_document = work.document.is_none_or(|document| app.session.active().is_some_and(|active| (active.uid, active.reverts) == document));
+    let lists = if same_document { Lists::read(app).ok() } else { None };
+    dialogs.with(|host| {
+        if let Some(dialog) = host.get_mut::<GraphDesignDialog>() {
+            if let Some(lists) = lists {
+                dialog.feed(lists);
             }
-            for n in names {
-                if ui.selectable_label(current.as_deref() == Some(n.as_str()), n.as_str()).clicked() {
-                    d.fields.insert("selected".into(), json!(n));
-                }
+            if let Some(names) = effects.select {
+                dialog.select(names.iter().map(|n| DesignKey::document(n)).collect());
             }
-        });
-    });
-}
-
-fn column_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let names = names(app).unwrap_or_default();
-    ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
-            ui.set_width(220.0);
-            one_design_list(ui, d, &names, "graph-columns");
-        });
-        ui.add_space(10.0);
-        let (r, _) = ui.allocate_exact_size(egui::vec2(PREVIEW, PREVIEW), egui::Sense::hover());
-        ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, egui::Color32::from_gray(160)), egui::StrokeKind::Inside);
-        if let Some(n) = d.fields.get("selected").and_then(Value::as_str).filter(|n| names.iter().any(|x| x == n)) {
-            preview(ui, app, n, r.shrink(4.0));
+            if let Some(answered) = answered {
+                dialog.held.answer(answered);
+            }
+        }
+        if effects.close {
+            host.cancel::<GraphDesignDialog>(ctx);
         }
     });
-    ui.add_space(8.0);
-    const LABEL_W: f32 = 150.0;
-    let types =
-        [("vertical", tl!("Vertically Scaled")), ("uniform", tl!("Uniformly Scaled")), ("repeating", tl!("Repeating")), ("sliding", tl!("Sliding"))];
-    form::choice(ui, d, "columnType", tl!("Column Type:"), (LABEL_W, 160.0), &types);
-    // Each Design Represents and For Fractions are for repeating designs.
-    ui.add_enabled_ui(d.str("columnType") == "repeating", |ui| {
-        widgets::label_row(ui, tl!("Each Design Represents:"), LABEL_W, |ui| {
-            let each = d.f64("each", vectorcraft_doc::ColumnDesign::EACH);
-            if let Some(v) = widgets::range_field(ui, ("graph-column", "each"), each, EACH_RANGE, "", 4, 72.0) {
-                d.fields.insert("each".into(), json!(v));
-            }
-        });
-        let fractions = [("chop", tl!("Chop Design")), ("scale", tl!("Scale Design"))];
-        form::choice(ui, d, "fractions", tl!("For Fractions:"), (LABEL_W, 160.0), &fractions);
-    });
-    false
-}
-
-/// The values Each Design Represents takes in the dialog (`graph.column` takes any value more than 0).
-const EACH_RANGE: std::ops::RangeInclusive<f64> = 0.0001..=1_000_000_000.0;
-
-fn marker_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let names = names(app).unwrap_or_default();
-    // A list as wide as Graph Design's, not the whole window.
-    ui.set_width(220.0);
-    one_design_list(ui, d, &names, "graph-markers");
-    false
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use egui_kittest::kittest::Queryable;
+    use serde_json::{Value, json};
 
+    use super::{Action, GraphDesignDialog};
     use crate::VectorcraftApp;
-    use crate::state::Dialog;
 
-    fn frame(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(app, ui.ctx()));
-        out.textures_delta.clear();
-    }
-
-    fn app_with_design() -> VectorcraftApp {
+    fn app_with_design() -> (VectorcraftApp, egui::Context) {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = crate::testing::ui_context();
+        app.ui_ctx = Some(ctx.clone());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let r = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [r]})).unwrap();
         app.run("graph.design", json!({"new": true})).unwrap();
-        app
+        (app, ctx)
+    }
+
+    fn select_graph(app: &mut VectorcraftApp, kind: &str) {
+        let g = app.run("graph.create", json!({"type": kind, "x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [g]})).unwrap();
+    }
+
+    /// The open dialog's fields, as automation lists them.
+    fn fields(app: &VectorcraftApp) -> Value {
+        app.dialogs().unwrap().with(|host| host.open_dialogs()).last().unwrap().fields.clone().unwrap()
+    }
+
+    /// `ui.dialog.set` on the open dialog.
+    fn set(app: &VectorcraftApp, ctx: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        app.dialogs().unwrap().with(|host| {
+            let id = host.open_dialogs().last().unwrap().id;
+            host.set_json_field(ctx, id, field, value)
+        })
+    }
+
+    /// OK through the host: it files the held answer, the pump runs the command, and OK closes the dialog.
+    fn ok(app: &mut VectorcraftApp, ctx: &egui::Context) {
+        let dialogs = app.dialogs().unwrap();
+        assert!(!dialogs.with(|host| host.confirm::<GraphDesignDialog>(ctx)), "OK holds its answer for the pump");
+        super::pump(app, ctx);
+        assert!(dialogs.with(|host| host.confirm::<GraphDesignDialog>(ctx)), "the accepted answer closes the dialog");
+        assert!(!dialogs.with(|host| host.is_open::<GraphDesignDialog>()));
+    }
+
+    fn graph_design_manager_changes_drawing(queued_rename: bool) {
+        for revert in [false, true] {
+            let (mut app, ctx) = app_with_design();
+            let dir = vectorcraft_testkit::TempDir::new("graph-design-manager-drawing");
+            if revert {
+                let path = dir.join("graph-designs.vectorcraft");
+                app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+                app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+                app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+                app.run("shape.rectangle", json!({"x": 35, "y": 20, "width": 15, "height": 10})).unwrap();
+            } else {
+                app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+                app.run("shape.rectangle", json!({"x": 35, "y": 20, "width": 15, "height": 10})).unwrap();
+                app.run("graph.design", json!({"new": true})).unwrap();
+                app.run("document.activate", json!({"index": 0})).unwrap();
+            }
+            super::open_design(&mut app).unwrap();
+            set(&app, &ctx, "name", json!("Old draft")).unwrap();
+            let uid = app.session.active().unwrap().uid;
+
+            let mut fonts = false;
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
+                move |ui, app: &mut VectorcraftApp| {
+                    if !std::mem::replace(&mut fonts, true) {
+                        crate::testing::install(ui.ctx());
+                        return;
+                    }
+                    app.dialogs().unwrap().with(|host| host.run(ui));
+                },
+                app,
+            );
+            h.run_steps(4);
+            if queued_rename {
+                h.get_by_label("Rename").click_accesskit();
+                h.run_steps(1);
+                let dialogs = h.state().dialogs().unwrap();
+                let queued = dialogs.with(|host| matches!(host.get::<GraphDesignDialog>().unwrap().actions.as_slice(), [Action::Rename { .. }]));
+                assert!(queued, "the old list filed a Rename action before the drawing changed");
+            }
+            let app = h.state_mut();
+            if revert {
+                let generation = app.session.active().unwrap().reverts;
+                app.run("file.revert", json!({"confirmed": true})).unwrap();
+                let drawing = app.session.active().unwrap();
+                assert_eq!((drawing.uid, drawing.reverts), (uid, generation + 1));
+            } else {
+                app.run("document.activate", json!({"index": 1})).unwrap();
+                assert_ne!(app.session.active().unwrap().uid, uid);
+            }
+            let undo = app.session.active().unwrap().history.undo.len();
+            super::pump(app, &ctx);
+            assert_eq!(super::names(app).unwrap(), ["New Design"], "an old Rename action leaves other drawing contents intact");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+            assert_eq!(fields(app)["name"], "New Design", "the old Name draft is retired when the list refreshes");
+
+            set(app, &ctx, "name", json!("Fresh draft")).unwrap();
+            h.run_steps(2);
+            h.get_by_label("Rename").click();
+            h.run_steps(3);
+            let app = h.state_mut();
+            super::pump(app, &ctx);
+            assert_eq!(super::names(app).unwrap(), ["Fresh draft"], "the refreshed list can rename its own design");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+        }
     }
 
     #[test]
-    fn the_graph_menu_opens_both_dialogs_and_they_draw_with_a_preview() {
-        let mut app = app_with_design();
-        crate::menus::invoke(&mut app, "graph.design", json!({}));
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!(d.kind, super::DESIGN);
-        assert_eq!((super::selected(d), d.str("name")), (vec!["New Design".to_string()], "New Design".to_string()));
-        frame(&mut app);
-        frame(&mut app);
-        assert!(app.ui.dialog.is_some());
-        app.ui.dialog = None;
-        // Marker needs a graph.
-        crate::menus::invoke(&mut app, "graph.marker", json!({}));
-        assert!(app.ui.dialog.is_none());
-        let g = app.run("graph.create", json!({"type": "line", "x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [g]})).unwrap();
-        crate::menus::invoke(&mut app, "graph.marker", json!({}));
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(super::MARKER));
-        frame(&mut app);
-        assert!(app.ui.dialog.is_some());
+    fn graph_design_manager_refreshes_rename_drafts_after_the_drawing_changes() {
+        graph_design_manager_changes_drawing(false);
+    }
+
+    #[test]
+    fn graph_design_manager_drops_queued_renames_after_the_drawing_changes() {
+        graph_design_manager_changes_drawing(true);
+    }
+
+    #[test]
+    fn graph_column_and_marker_keep_their_opening_graph() {
+        for (graph_kind, command) in [("column", "graph.column"), ("line", "graph.marker")] {
+            let (mut app, ctx) = app_with_design();
+            select_graph(&mut app, graph_kind);
+            let graph = app.session.active().unwrap().selection.objects[0].0;
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            let r = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 20, "height": 20})).unwrap()["id"].clone();
+            app.run("select.set", json!({"ids": [r]})).unwrap();
+            app.run("graph.design", json!({"new": true})).unwrap();
+            select_graph(&mut app, graph_kind);
+            assert_eq!(app.session.active().unwrap().selection.objects[0].0, graph);
+            let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+            let design = |app: &mut VectorcraftApp, id| app.session.execute(command, &json!({"id": id})).unwrap()["design"].clone();
+
+            activate(&mut app, 0);
+            crate::menus::invoke(&mut app, command, json!({}));
+            set(&app, &ctx, "selected", json!("New Design")).unwrap();
+            activate(&mut app, 1);
+            let undo = app.session.active().unwrap().history.undo.len();
+            app.dialogs().unwrap().with(|host| host.confirm::<GraphDesignDialog>(&ctx));
+            super::pump(&mut app, &ctx);
+            assert_eq!(design(&mut app, graph), Value::Null);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+            assert_eq!(fields(&app)["selected"], "New Design");
+
+            activate(&mut app, 0);
+            select_graph(&mut app, graph_kind);
+            let selected = app.session.active().unwrap().selection.objects[0].0;
+            assert_ne!(selected, graph);
+            ok(&mut app, &ctx);
+            assert_eq!(design(&mut app, graph), "New Design");
+            assert_eq!(design(&mut app, selected), Value::Null);
+        }
+    }
+
+    fn a_graph_design_draft_after_file_revert(graph_kind: &str, command: &str) {
+        struct SavedFile(std::path::PathBuf);
+        impl Drop for SavedFile {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+
+        let (mut app, ctx) = app_with_design();
+        select_graph(&mut app, graph_kind);
+        let graph = app.session.active().unwrap().selection.objects[0].0;
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let path = SavedFile(std::env::temp_dir().join(format!("vc-ui-graph-design-revert-{}-{graph_kind}.vectorcraft", std::process::id())));
+        app.run("file.saveAs", json!({"path": path.0})).unwrap();
+        assert!(path.0.is_file());
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 20, "height": 20})).unwrap();
+        app.run("select.set", json!({"ids": [graph]})).unwrap();
+        crate::menus::invoke(&mut app, command, json!({}));
+        set(&app, &ctx, "selected", json!("New Design")).unwrap();
+        let state = app.session.active().unwrap();
+        let (uid, reverts) = (state.uid, state.reverts);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let state = app.session.active().unwrap();
+        assert_eq!((state.uid, state.reverts), (uid, reverts + 1));
+        app.run("select.set", json!({"ids": [graph]})).unwrap();
+        let selected_design = |app: &mut VectorcraftApp| app.session.execute(command, &json!({"id": graph})).unwrap()["design"].clone();
+        assert_eq!(selected_design(&mut app), Value::Null);
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        app.dialogs().unwrap().with(|host| host.confirm::<GraphDesignDialog>(&ctx));
+        super::pump(&mut app, &ctx);
+        assert_eq!(selected_design(&mut app), Value::Null, "the stale draft must leave the restored graph's design alone");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(fields(&app)["selected"], "New Design", "the refused answer still shows the draft");
+
+        crate::menus::invoke(&mut app, command, json!({}));
+        set(&app, &ctx, "selected", json!("New Design")).unwrap();
+        ok(&mut app, &ctx);
+        assert_eq!(selected_design(&mut app), "New Design", "a fresh draft applies to the restored graph");
+    }
+
+    #[test]
+    fn graph_column_draft_after_file_revert_leaves_the_restored_columns_alone() {
+        a_graph_design_draft_after_file_revert("column", "graph.column");
+    }
+
+    #[test]
+    fn graph_marker_draft_after_file_revert_leaves_the_restored_markers_alone() {
+        a_graph_design_draft_after_file_revert("line", "graph.marker");
+    }
+
+    #[test]
+    fn graph_design_footer_ok_applies_column_and_marker_designs_unless_dismissed() {
+        for (graph_type, command, dismiss) in [("column", "graph.column", false), ("line", "graph.marker", false), ("column", "graph.column", true)] {
+            let (mut app, ctx) = app_with_design();
+            select_graph(&mut app, graph_type);
+            crate::menus::invoke(&mut app, command, json!({}));
+            set(&app, &ctx, "selected", json!("New Design")).unwrap();
+
+            let mut fonts = false;
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
+                move |ui, app: &mut VectorcraftApp| {
+                    if !std::mem::replace(&mut fonts, true) {
+                        crate::testing::install(ui.ctx());
+                        return;
+                    }
+                    app.dialogs().unwrap().with(|host| host.run(ui));
+                    super::pump(app, ui.ctx());
+                },
+                app,
+            );
+            h.run_steps(4);
+            if dismiss {
+                h.get_by_label("OK").click_accesskit();
+                h.input_mut().events.push(egui::Event::Key {
+                    key: egui::Key::Escape,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Default::default(),
+                });
+            } else {
+                h.get_by_label("OK").click();
+            }
+            h.run_steps(4);
+
+            let app = h.state_mut();
+            assert!(!app.dialogs().unwrap().with(|host| host.is_open::<GraphDesignDialog>()));
+            let expected = if dismiss { Value::Null } else { json!("New Design") };
+            assert_eq!(app.session.execute(command, &json!({})).unwrap()["design"], expected);
+        }
     }
 
     #[test]
     fn marker_lists_the_designs_and_applies_the_one_picked() {
-        let mut app = app_with_design();
-        let g = app.run("graph.create", json!({"type": "line", "x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [g]})).unwrap();
+        let (mut app, ctx) = app_with_design();
+        select_graph(&mut app, "line");
         super::open_marker(&mut app).unwrap();
-        let mut d: Dialog = app.ui.dialog.take().unwrap();
-        assert_eq!(d.fields["selected"], json!(null), "None: the default marker");
-        d.fields.insert("selected".into(), json!("New Design"));
-        (super::MARKER_SPEC.confirm)(&mut app, &d).unwrap();
+        assert_eq!(fields(&app)["selected"], json!(null), "None: the default marker");
+        set(&app, &ctx, "selected", json!("New Design")).unwrap();
+        ok(&mut app, &ctx);
         assert_eq!(app.session.execute("graph.marker", &json!({})).unwrap()["design"], "New Design");
         super::open_marker(&mut app).unwrap();
-        let mut d: Dialog = app.ui.dialog.take().unwrap();
-        assert_eq!(d.str("selected"), "New Design");
+        assert_eq!(fields(&app)["selected"], "New Design");
         // None goes back to the default marker.
-        d.fields.insert("selected".into(), json!(null));
-        (super::MARKER_SPEC.confirm)(&mut app, &d).unwrap();
+        set(&app, &ctx, "selected", json!(null)).unwrap();
+        ok(&mut app, &ctx);
         assert_eq!(app.session.execute("graph.marker", &json!({})).unwrap()["design"], json!(null));
     }
 
     #[test]
     fn column_opens_from_the_graph_menu_and_applies_the_design_and_its_options() {
-        let mut app = app_with_design();
-        let g = app.run("graph.create", json!({"type": "column", "x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [g]})).unwrap();
+        let (mut app, ctx) = app_with_design();
+        select_graph(&mut app, "column");
         crate::menus::invoke(&mut app, "graph.column", json!({}));
-        let mut d: Dialog = app.ui.dialog.clone().unwrap();
-        assert_eq!(d.kind, super::COLUMN);
+        let f = fields(&app);
         assert_eq!(
-            (d.fields["selected"].clone(), d.str("columnType"), d.f64("each", 0.0), d.str("fractions")),
-            (json!(null), "vertical".into(), 10.0, "chop".into())
+            (f["selected"].clone(), f["columnType"].clone(), f["each"].clone(), f["fractions"].clone()),
+            (json!(null), json!("vertical"), json!(10.0), json!("chop"))
         );
-        frame(&mut app);
-        assert!(app.ui.dialog.is_some());
-        d.fields.insert("selected".into(), json!("New Design"));
-        d.fields.insert("columnType".into(), json!("repeating"));
-        d.fields.insert("each".into(), json!(0.5));
-        d.fields.insert("fractions".into(), json!("scale"));
-        (super::COLUMN_SPEC.confirm)(&mut app, &d).unwrap();
+        // Each Design Represents and For Fractions take input for a repeating design only.
+        assert!(set(&app, &ctx, "each", json!(0.5)).is_err());
+        assert!(set(&app, &ctx, "fractions", json!("scale")).is_err());
+        set(&app, &ctx, "selected", json!("New Design")).unwrap();
+        set(&app, &ctx, "columnType", json!("repeating")).unwrap();
+        set(&app, &ctx, "each", json!(0.5)).unwrap();
+        set(&app, &ctx, "fractions", json!("scale")).unwrap();
+        ok(&mut app, &ctx);
         let v = app.session.execute("graph.column", &json!({})).unwrap();
         assert_eq!(v, json!({"designs": ["New Design"], "design": "New Design", "columnType": "repeating", "each": 0.5, "fractions": "scale"}));
         // It opens again on what the series draw with, and None goes back to plain columns.
         super::open_column(&mut app).unwrap();
-        let mut d: Dialog = app.ui.dialog.take().unwrap();
-        assert_eq!((d.str("selected"), d.str("columnType"), d.f64("each", 0.0)), ("New Design".into(), "repeating".into(), 0.5));
-        d.fields.insert("selected".into(), json!(null));
-        (super::COLUMN_SPEC.confirm)(&mut app, &d).unwrap();
+        let f = fields(&app);
+        assert_eq!((f["selected"].clone(), f["columnType"].clone(), f["each"].clone()), (json!("New Design"), json!("repeating"), json!(0.5)));
+        set(&app, &ctx, "selected", json!(null)).unwrap();
+        ok(&mut app, &ctx);
         assert_eq!(app.session.execute("graph.column", &json!({})).unwrap()["design"], json!(null));
+    }
+
+    #[test]
+    fn marker_lists_a_loaded_documents_designs_and_ok_copies_the_one_picked_in() {
+        // A document with design "New Design", loaded as a swatch library (Other Library…).
+        let (src, _) = app_with_design();
+        let bytes = vectorcraft_format::save_file(&src.session.active().unwrap().doc);
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = crate::testing::ui_context();
+        app.ui_ctx = Some(ctx.clone());
+        let p = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "Dots.vectorcraft"});
+        app.run("swatch.library.load", p).unwrap();
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        select_graph(&mut app, "line");
+        let libraries = super::library_designs(&app);
+        assert_eq!(libraries.len(), 1);
+        let (id, _, designs) = &libraries[0];
+        assert_eq!(designs, &["New Design".to_string()]);
+        crate::menus::invoke(&mut app, "graph.marker", json!({}));
+        set(&app, &ctx, "selected", json!("New Design")).unwrap();
+        assert_eq!(fields(&app)["library"], json!(id), "the design is found in its library");
+        ok(&mut app, &ctx);
+        assert_eq!(app.session.execute("graph.marker", &json!({})).unwrap()["design"], "New Design");
+        assert_eq!(super::names(&app).unwrap(), ["New Design"]);
+        // The document has it now, so the library lists it no more.
+        assert!(super::library_designs(&app).is_empty());
     }
 }

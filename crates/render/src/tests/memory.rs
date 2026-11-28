@@ -10,6 +10,30 @@ use crate::blobs::blob_key;
 use crate::tests_fontchange::fonts_steady;
 use crate::*;
 
+#[test]
+fn geometry_from_measurement_only_frames_releases_old_node_versions() {
+    let mut doc = Document::new(100.0, 100.0);
+    let layer = doc.layers[0].id;
+    let id = doc.alloc_id();
+    let path = Node::path(
+        id,
+        vectorcraft_geom::shapes::rectangle(Rect::new(5.0, 10.0, 25.0, 30.0)),
+        vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(layer), 0, path).unwrap();
+    let oldest = Arc::downgrade(&doc.layers[0].children().unwrap()[0]);
+    let mut renderer = Renderer::new();
+    let opts = RenderOptions::default();
+    for _ in 0..12 {
+        let mut next = doc.clone();
+        next.node_mut(id).unwrap().transform(Affine::translate((1.0, 0.0)), false);
+        assert!(matches!(renderer.changed(&doc, &next, &opts), Changed::Area(_)));
+        renderer.finish_measurement_only();
+        doc = next;
+    }
+    assert!(oldest.upgrade().is_none(), "obsolete measured nodes must be released without a full draw");
+}
+
 /// A `w`×`h` PNG whose pixels depend on `seed` (each test its own image: the store is shared by
 /// the tests running alongside).
 fn png(w: u32, h: u32, seed: u8) -> Vec<u8> {
@@ -18,7 +42,41 @@ fn png(w: u32, h: u32, seed: u8) -> Vec<u8> {
         image::Rgba([v ^ seed, v.wrapping_mul(3), seed, 255])
     });
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -320,13 +378,13 @@ fn kept_glyphs(r: &mut Renderer, d: &Document) -> Vec<Option<Arc<TextGeom>>> {
         .collect()
 }
 
-/// `f`'s result from a run during which the fonts did not change: other tests add fonts, and the
-/// renderer lays all type out again when the fonts change.
+/// `f`'s result from a run during which the fonts and the hyphenation exceptions did not change:
+/// other tests change them, and the renderer lays all type out again when they change.
 fn fonts_unchanged<T>(mut f: impl FnMut() -> T) -> T {
     loop {
-        let fonts = vectorcraft_text::FontDb::global().generation();
+        let inputs = vectorcraft_text::layout_inputs();
         let t = f();
-        if vectorcraft_text::FontDb::global().generation() == fonts {
+        if vectorcraft_text::layout_inputs() == inputs {
             return t;
         }
     }
@@ -931,6 +989,8 @@ fn brush_art_draws_edits_of_the_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
@@ -997,6 +1057,8 @@ fn brush_art_draws_renamed_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
@@ -1252,7 +1314,7 @@ fn art_with_live_objects_draws_pattern_layout_edits() {
     d.patterns.push(def);
     let band = vectorcraft_geom::shapes::rectangle(Rect::new(-80.0, -40.0, 80.0, 40.0));
     let filled = Node::path(d.alloc_id(), band, vectorcraft_doc::Appearance::basic(pattern_paint("Checks"), Paint::None, 0.0));
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let options = EnvelopeOptions { distort_appearance: true, distort_pattern_fills: true, ..Default::default() };
     let envelope = Node::new(
         d.alloc_id(),
@@ -1398,7 +1460,7 @@ fn live_objects_in_symbol_art_draw_symbol_and_pattern_edits() {
 /// An envelope of `d` bending `content` with an arc warp (30%); with `patterns`, Distort
 /// Appearance and Distort Pattern Fills are on, and the tiles of its pattern fills bend with it.
 fn arc_envelope(d: &mut Document, content: Vec<Node>, patterns: bool) -> Node {
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let options = vectorcraft_doc::live::EnvelopeOptions { distort_appearance: patterns, distort_pattern_fills: patterns, ..Default::default() };
     let content = content.into_iter().map(Arc::new).collect();
     Node::new(
@@ -1663,6 +1725,16 @@ fn objects_with_plugin_effects_follow_the_plugins_installed() {
     plugin_change_draws_as_new(alone(20.0, vec![drop_shadow()]), ID, small.clone(), big.clone());
     let blur = effect("blur.gaussian", serde_json::json!({"radius": 1.0}));
     plugin_change_draws_as_new(alone(20.0, vec![blur]), ID, small.clone(), big.clone());
+    // A clip group whose clipping path, the square, has the plug-in effect: it clips a red
+    // rectangle over the whole view by the shape the plug-in draws.
+    let mut d = Document::new(200.0, 100.0);
+    let mut clip = square(&mut d, 20.0, 30.0, vec![]);
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let red = filled(&mut d, rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), vec![]);
+    let group = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(red)], clip: true });
+    plugin_change_draws_as_new(with_art(d, vec![group]), ID, small.clone(), big.clone());
     // An instance of symbol `Shaped`, a group of the square around the origin.
     let mut d = Document::new(200.0, 100.0);
     let art = square(&mut d, -20.0, -20.0, vec![]);
@@ -1716,7 +1788,8 @@ fn installing_a_plugin_keeps_what_is_kept_for_other_objects() {
 }
 
 /// The art drawn for an object's effects follows the plug-ins installed: in the next frame, a group
-/// with a plug-in effect, the same group feathered (Feather clips to the art's outline), an
+/// with a plug-in effect, the same group feathered (Feather clips to the art's outline), a group
+/// with a Transform effect holding a square with a plug-in effect, an
 /// instance of symbol `S` ([`symbol_art`]) and type, each with a plug-in effect, are drawn as the
 /// plug-in installed again with another shape draws them.
 #[test]
@@ -1738,6 +1811,13 @@ fn effect_art_follows_the_plugins_installed() {
     plugin_change_draws_as_new(group(vec![]), ID, small.clone(), big.clone());
     let feather = effect("stylize.feather", serde_json::json!({"radius": 2.0}));
     plugin_change_draws_as_new(group(vec![feather]), ID, small.clone(), big.clone());
+    // A group with a Transform effect holding a square with the plug-in effect: the group's art
+    // holds what the plug-in draws for the square.
+    let mut d = Document::new(200.0, 100.0);
+    let square = filled(&mut d, rectangle(Rect::new(20.0, 30.0, 60.0, 70.0)), Paint::solid(Color::BLACK), vec![plugin()]);
+    let mut moved = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    moved.appearance.effects.push(effect("distort.transform", serde_json::json!({"moveH": 10.0})));
+    plugin_change_draws_as_new(with_art(d, vec![moved]), ID, small.clone(), big.clone());
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
@@ -1822,6 +1902,44 @@ fn pattern_and_symbol_art_with_plugin_effects_follow_the_plugins_installed() {
     let mut group = Node::group(d.alloc_id(), vec![Arc::new(instance)]);
     group.appearance.effects.push(drop_shadow());
     plugin_change_draws_as_new(with_art(d, vec![group]), ID, Some(triangle(82.0, 32.0, 10.0)), Some(triangle(82.0, 32.0, 30.0)));
+}
+
+/// A document draws plug-in effects ([`draws_plugin_effects`]) when an object in its layers, in a
+/// symbol's or a pattern's art, or in a brush's art has a visible plug-in effect, and not when its
+/// objects have no effect, another effect or a hidden plug-in effect.
+#[test]
+fn a_document_draws_plugin_effects_where_any_of_its_art_has_one() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind};
+    use vectorcraft_geom::shapes::rectangle;
+    let plugin = || effect("plugin.test.render.draws", serde_json::json!({}));
+    let square = |d: &mut Document, effects: Vec<vectorcraft_doc::Effect>| {
+        filled(d, rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Paint::solid(Color::BLACK), effects)
+    };
+    let mut cases: Vec<(&str, Document, bool)> = vec![];
+    for (name, effects, draws) in [
+        ("no effect", vec![], false),
+        ("another effect", vec![drop_shadow()], false),
+        ("hidden plug-in effect", vec![vectorcraft_doc::Effect { visible: false, ..plugin() }], false),
+        ("plug-in effect", vec![plugin()], true),
+    ] {
+        let mut d = Document::new(200.0, 100.0);
+        let n = square(&mut d, effects);
+        cases.push((name, with_art(d, vec![n]), draws));
+    }
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, vec![plugin()]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Shaped".into(), art: Arc::new(art) });
+    cases.push(("symbol art", d, true));
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, vec![plugin()]);
+    d.patterns.push(vectorcraft_doc::pattern::PatternDef::new("Shaped", vec![Arc::new(art)]));
+    cases.push(("pattern art", d, true));
+    let mut d = Document::new(200.0, 100.0);
+    let art = square(&mut d, vec![plugin()]);
+    vectorcraft_brush::store(&mut d, &[Brush { name: "Shaped".into(), kind: BrushKind::Art(ArtBrush { art, ..Default::default() }) }]);
+    cases.push(("brush art", d, true));
+    let wrong: Vec<&str> = cases.iter().filter(|(_, d, draws)| draws_plugin_effects(d) != *draws).map(|(name, ..)| *name).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
 }
 
 fn effect(id: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
@@ -2111,6 +2229,74 @@ fn rasters_follow_the_view_options() {
     draws_as_new(&mut d, &isolated, &on_white, unchanged);
 }
 
+/// Overprinting white characters over red in Overprint Preview: paper white knocks out while
+/// Discard White Overprint is on and vanishes into the red when it is turned off; a white spot ink
+/// overprints with it on. In Separations Preview paper white characters knock the plate out too.
+#[test]
+fn overprinting_white_characters_follow_discard_white_overprint() {
+    let _fonts = fonts_steady();
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let typed = || {
+        let mut d = Document::new(200.0, 100.0);
+        d.swatches.push(vectorcraft_color::Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
+        let red =
+            filled(&mut d, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), vec![]);
+        let style = CharStyle { size: 50.0, fill: Paint::solid(white), overprint_fill: true, ..Default::default() };
+        let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Hamburg", style))));
+        with_art(d, vec![red, text])
+    };
+    let overprints = RenderOptions { overprint_preview: true, background: Some([255, 255, 255, 255]), ..Default::default() };
+    draws_as_new(&mut typed(), &overprints, &overprints, |d| d.setup.discard_white_overprint = false);
+    draws_as_new(&mut typed(), &overprints, &overprints, |d| {
+        let text = d.layers[0].children().unwrap()[1].id;
+        if let Some(NodeKind::Text(t)) = d.node_mut(text).map(|n| &mut n.kind) {
+            t.runs.iter_mut().for_each(|r| r.style.fill = Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 });
+        }
+    });
+    // Knocking out shows the white of the characters; overprinting leaves only the red.
+    let whites = |d: &Document, opts: &RenderOptions| {
+        Renderer::new().render(d, 200, 100, Affine::IDENTITY, opts).pixels.chunks(4).filter(|p| p[0] > 250 && p[1] > 250 && p[2] > 250).count()
+    };
+    let mut d = typed();
+    assert!(whites(&d, &overprints) > 0, "paper white knocks out");
+    d.setup.discard_white_overprint = false;
+    assert_eq!(whites(&d, &overprints), 0, "with the option off it overprints");
+    let mut d = typed();
+    let text = d.layers[0].children().unwrap()[1].id;
+    if let Some(NodeKind::Text(t)) = d.node_mut(text).map(|n| &mut n.kind) {
+        t.runs.iter_mut().for_each(|r| r.style.fill = Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 });
+    }
+    assert_eq!(whites(&d, &overprints), 0, "a white spot ink overprints");
+    // Separations Preview: paper white characters over cyan knock the Cyan plate out.
+    let mut d = Document::new(200.0, 100.0);
+    let cyan =
+        filled(&mut d, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)), Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), vec![]);
+    let style = CharStyle { size: 50.0, fill: Paint::solid(white), overprint_fill: true, ..Default::default() };
+    let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Hamburg", style))));
+    let mut d = with_art(d, vec![cyan, text]);
+    let seps = RenderOptions { background: Some([255, 255, 255, 255]), ..proof_views(&["Cyan"]).1 };
+    assert!(whites(&d, &seps) > 0, "paper white knocks the Cyan plate out");
+    d.setup.discard_white_overprint = false;
+    assert_eq!(whites(&d, &seps), 0, "with the option off the cyan shows through");
+    // Magenta characters over cyan, with only the Cyan plate shown: they put none of it down, so
+    // the cyan shows through them, as if they were not there.
+    let magenta = |with_text: bool| {
+        let mut d = Document::new(200.0, 100.0);
+        let cyan = filled(
+            &mut d,
+            vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)),
+            Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)),
+            vec![],
+        );
+        let style = CharStyle { size: 50.0, fill: Paint::solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), overprint_fill: true, ..Default::default() };
+        let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Hamburg", style))));
+        let d = with_art(d, if with_text { vec![cyan, text] } else { vec![cyan] });
+        Renderer::new().render(&d, 200, 100, Affine::IDENTITY, &proof_views(&["Cyan"]).1).pixels
+    };
+    assert!(magenta(true) == magenta(false), "the characters leave the cyan plate as it is");
+}
+
 /// A document for the proof previews: a cyan square, a magenta circle over it whose black stroke
 /// overprints, a white square over the cyan one that overprints, a blurred rectangle in spot color
 /// `Spot`, and an instance of symbol `S`, a group holding a yellow square.
@@ -2179,8 +2365,8 @@ fn proof_previews_keep_their_art_between_frames() {
 
 /// With Overprint Preview or Separations Preview on, a renderer draws what a new renderer draws
 /// after a change to the art or to what the previews read: an object recolored, Discard White
-/// Overprint turned off, a symbol's art recolored (its instance shows the plates of the new art),
-/// the spot color redefined, a spot color in a color group redefined, the Spot Colors option set
+/// Overprint turned off, an overprinting white's swatch made a spot color, a symbol's art
+/// recolored (its instance shows the plates of the new art), the spot color redefined, a spot color in a color group redefined, the Spot Colors option set
 /// to CMYK values, a plate hidden, Simulate Paper Color, another proof profile, and one preview
 /// after the other.
 #[test]
@@ -2202,6 +2388,19 @@ fn proof_previews_draw_changes_as_a_new_renderer_does() {
     for opts in [&overprint, &separations] {
         draws_as_new(&mut proof_doc(), opts, opts, recolor_square);
         draws_as_new(&mut proof_doc(), opts, opts, |d| d.setup.discard_white_overprint = false);
+        // The overprinting white square's swatch becomes a spot color, a white ink.
+        let mut linked = proof_doc();
+        let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+        linked.swatches.push(vectorcraft_color::Swatch { name: "White".into(), paint: Paint::solid(white), global: true, spot: false });
+        let square = linked.layers[0].children().unwrap()[2].id;
+        if let Some(f) = linked.node_mut(square).unwrap().appearance.fill_mut() {
+            f.paint = Paint::Solid { color: white, swatch: Some("White".into()), tint: 1.0 };
+        }
+        draws_as_new(&mut linked, opts, opts, |d| {
+            if let Some(s) = d.swatch_mut("White") {
+                s.spot = true;
+            }
+        });
     }
     draws_as_new(&mut proof_doc(), &separations, &separations, recolor_symbol);
     draws_as_new(&mut proof_doc(), &separations, &separations, |d| {
@@ -2421,4 +2620,194 @@ fn compound_paths_draw_from_kept_paths_and_let_old_ones_go() {
     drop(d);
     assert!(r.geom.len() < 1024);
     assert_eq!(Arc::strong_count(&old), 1, "the renderer no longer keeps the compound path drawn before the move");
+}
+
+/// A `w`×`h` CMYK document showing `blob` as image `key` of `w`×`h` pixels, one point a pixel.
+fn cmyk_doc_with(key: &str, blob: ImageBlob, w: u32, h: u32) -> Document {
+    let mut d = Document::new_with_mode(w as f64, h as f64, vectorcraft_doc::ColorMode::Cmyk);
+    d.images.insert(key.into(), blob);
+    let (id, layer) = (d.alloc_id(), d.layers[0].id);
+    let im = ImageObject { key: key.into(), width: w, height: h, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    d
+}
+
+/// #4155: an image drawn reduced on the ink planes is separated from the mip it draws, never at
+/// its full size. Separating a 141-megapixel image for each plane before shrinking it took
+/// seconds a frame, and its full-size planes overflowed the store, so every frame did it again.
+#[test]
+fn a_reduced_image_is_separated_from_its_mip_not_its_full_pixels() {
+    let _fonts = fonts_steady();
+    let d = cmyk_doc_with("img", ImageBlob::new("image/png", png(64, 64, 111)), 64, 64);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let _ = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 64.0, 64.0), 0.25, &on);
+    let full = blob_key(&d.images["img"]).0;
+    let quarter = images::ImageKey { mip: 2, ..full.clone() };
+    let s = images::store();
+    for plane in [Ink::Cmy, Ink::K] {
+        assert!(s.peek(&ink::ink_key(&full, plane)).is_none(), "the {plane:?} plane was made at full size");
+        let made = s.peek(&ink::ink_key(&quarter, plane)).unwrap_or_else(|| panic!("no {plane:?} plane of the quarter mip"));
+        assert_eq!((made.width(), made.height()), (16, 16));
+    }
+}
+
+/// A CMYK image drawn reduced paints its own inks, averaged, as at full size: not its displayed
+/// colours separated again, which would change how much of its dark is black ink.
+#[test]
+fn a_reduced_cmyk_image_paints_its_own_inks() {
+    let _fonts = fonts_steady();
+    // Inks a separation of their displayed colour would not give back: rich in black.
+    let ink = [0u8, 102, 255, 140];
+    let blob = ImageBlob::cmyk_tiff(&vectorcraft_doc::cmyk::Inks::new(8, 8, ink.repeat(64)).unwrap()).unwrap();
+    let d = cmyk_doc_with("inks", blob, 8, 8);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let inks = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 8.0, 8.0), 0.25, &on);
+    for px in inks.as_chunks::<4>().0 {
+        assert!(px.iter().zip(ink).all(|(a, b)| a.abs_diff(b) <= 1), "{px:?} vs {ink:?}");
+    }
+}
+
+/// On the ink planes, a reduced image shows the average of its pixels as they show at full size:
+/// 1-pixel black and white lines show as the mid grey they make. Separating the full pixels and
+/// averaging the planes made that grey a dark brown, 44 levels off.
+#[test]
+fn a_reduced_image_on_the_ink_planes_shows_its_average() {
+    let _fonts = fonts_steady();
+    let lines = image::RgbaImage::from_fn(64, 64, |x, _| image::Rgba(if x % 2 == 0 { [0, 0, 0, 255] } else { [255; 4] }));
+    let mut bytes = vec![];
+    {
+        let __dyn: image::DynamicImage = lines.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| bytes.extend_from_slice(&__b))
+    }
+    .unwrap();
+    let mut d = cmyk_doc_with("lines", ImageBlob::new("image/png", bytes), 64, 64);
+    // Transparency beside the image: the document blends in CMYK, drawing on its ink planes.
+    let shape = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 0.0, 110.0, 10.0));
+    let mut veil = Node::path(d.alloc_id(), shape, vectorcraft_doc::Appearance::basic(Paint::solid(Color::gray(0.5)), Paint::None, 0.0));
+    veil.opacity = 0.5;
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, veil).unwrap();
+    let full = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions::default()).pixels;
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let reduced = Renderer::new().render(&d, 16, 16, Affine::scale(0.25), &on).pixels;
+    for (i, px) in reduced.as_chunks::<4>().0.iter().enumerate() {
+        let (bx, by) = (i % 16 * 4, i / 16 * 4);
+        let block = |c: usize| (0..16).map(|j| u32::from(full[((by + j / 4) * 64 + bx + j % 4) * 4 + c])).sum::<u32>().div_ceil(16) as u8;
+        let want = [block(0), block(1), block(2)];
+        assert!(px.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 2), "pixel {i}: {px:?}, the full frame averages {want:?}");
+    }
+}
+
+/// A `w`×`h` PNG with a different colour in every pixel, so a pixel drawn from the wrong place
+/// shows; its pixels depend on `seed` (each test its own image: the store is shared).
+fn varied_png(w: u32, h: u32, seed: u8) -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 5 + y) as u8, (x / 3 + y * 7) as u8, (x ^ y) as u8 ^ seed, 255]));
+    let mut out = vec![];
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
+    out
+}
+
+/// #4155: an image drawn larger than a tile with its colours made again (here separated into ink
+/// planes) has them made only for the tiles in view. Zoomed in on a 141-megapixel photo, the whole
+/// photo was separated for every view, taking seconds each time.
+#[test]
+fn a_zoomed_in_image_is_separated_only_where_it_shows() {
+    let _fonts = fonts_steady();
+    let (w, h) = (2 * images::TILE + 100, 40);
+    let d = cmyk_doc_with("wide", ImageBlob::new("image/png", varied_png(w, h, 1)), w, h);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let _ = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 300.0, 40.0), 1.0, &on);
+    let full = blob_key(&d.images["wide"]).0;
+    let s = images::store();
+    for plane in [Ink::Cmy, Ink::K] {
+        assert!(s.peek(&ink::ink_key(&full, plane)).is_none(), "the whole {plane:?} plane was made");
+        let tile = |col: u16| ink::ink_key(&images::ImageKey { tile: Some((col, 0)), ..full.clone() }, plane);
+        assert!(s.peek(&tile(0)).is_some(), "the {plane:?} plane of the tile in view was made");
+        assert!(s.peek(&tile(1)).is_none() && s.peek(&tile(2)).is_none(), "tiles out of view were made");
+    }
+}
+
+/// An image drawn from tiles draws the pixels it draws whole, across the tiles' edges too.
+#[test]
+fn a_tiled_image_draws_what_the_whole_image_draws() {
+    let _fonts = fonts_steady();
+    let (w, h) = (2 * images::TILE + 100, 40);
+    let d = cmyk_doc_with("seams", ImageBlob::new("image/png", varied_png(w, h, 2)), w, h);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    // Across the edge between the first two tiles.
+    let (x0, x1) = (f64::from(images::TILE) - 150.0, f64::from(images::TILE) + 150.0);
+    let drawn = Renderer::new().render_region_inks(&d, Rect::new(x0, 0.0, x1, 40.0), 1.0, &on);
+    let (key, full) = crate::blobs::blob_pixmap(&d.images["seams"], false).unwrap();
+    let plane = |ink| ink::ink_image(&key, &full, ink, d.images.get("seams"), false).1;
+    let bytes = |pm: &Pixmap| pm.data().iter().flat_map(|p| [p.r, p.g, p.b, p.a]).collect::<Vec<u8>>();
+    let whole = ink::amounts(&bytes(&plane(Ink::Cmy)), &bytes(&plane(Ink::K)));
+    for (i, got) in drawn.as_chunks::<4>().0.iter().enumerate() {
+        let (x, y) = (x0 as usize + i % 300, i / 300);
+        let want = &whole[(y * w as usize + x) * 4..][..4];
+        assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(*b) <= 1), "pixel ({x}, {y}): {got:?}, whole {want:?}");
+    }
 }

@@ -106,6 +106,23 @@ fn image_data_comes_from_the_file_being_run() {
     );
 }
 
+/// An image whose procedure reads its rows with `readhexstring` comes out with the same pixels as
+/// the same samples given as one hexadecimal string, with the digits broken by CR LF, LF, tabs,
+/// spaces and characters that are not digits, read from the program's own file and from a file
+/// being run.
+#[test]
+fn hex_rows_read_by_a_procedure_match_a_hexadecimal_string() {
+    let rgb: Vec<u8> = (0..36u32).map(|i| (i * 37 % 256) as u8).collect();
+    let digits = hex(&rgb);
+    let breaks = ["\r\n", "\n", "\t", " z", "%"];
+    let broken: String = digits.as_bytes().chunks(5).zip(breaks.iter().cycle()).map(|(d, b)| format!("{}{b}", String::from_utf8_lossy(d))).collect();
+    let want = pixels(&read(&format!("10 10 scale 4 3 8 [4 0 0 -3 0 3] <{digits}> false 3 colorimage")), 4, 3);
+    assert_eq!(want, rgb.chunks(3).map(|p| [p[0], p[1], p[2], 255]).collect::<Vec<_>>());
+    let image = "10 10 scale 4 3 8 [4 0 0 -3 0 3] {currentfile 12 string readhexstring pop} false 3 colorimage";
+    assert_eq!(pixels(&read(&format!("{image}\r\n{broken}\n")), 4, 3), want);
+    assert_eq!(pixels(&read(&format!("currentfile 0 (endstream) /SubFileDecode filter cvx exec\n{image}\n{broken}\nendstream\n")), 4, 3), want);
+}
+
 /// A filter waits until it is first read, then reads the file it was made over, wherever the
 /// program runs by then: one over the program's own file, read in a file being run, and one over
 /// a file being run, read in a file that one runs.
@@ -181,7 +198,24 @@ fn masked_cmyk_images_keep_their_inks_and_carry_the_mask_as_an_opacity_mask() {
         assert_eq!(inks(&r).data, [10, 20, 30, 40, 0, 102, 127, 8], "the inks as they were: {program}");
         let n = first_image(&r);
         let mask = n.extras().mask.as_ref().expect("an opacity mask");
-        let gray = image::load_from_memory(&blob(&r, &mask.art).bytes).unwrap().to_luma8();
+        let gray = craft_image_codecs::decode(&blob(&r, &mask.art).bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_luma8();
         assert_eq!(gray.into_raw(), alpha, "the mask's values: {program}");
         assert_eq!(n.geometric_bounds(), mask.art.geometric_bounds(), "the mask covers the image");
     }
@@ -342,6 +376,7 @@ fn ccitt_fax_data_in_the_program_ends_at_its_end_of_block() {
     for (k, eol, aligned, params) in [
         (-1, false, false, "/K -1 /Columns 70"),
         (0, true, false, "/Columns 70 /EndOfLine true"),
+        (0, true, true, "/Columns 70 /EndOfLine true /EncodedByteAlign true"),
         (2, true, false, "/K 2 /Columns 70 /Rows 7 /EndOfLine true"),
         (3, true, true, "/K 3 /Columns 70 /EndOfLine true /EncodedByteAlign true"),
     ] {
@@ -515,4 +550,181 @@ fn tiff_predicted_rows_at_every_depth() {
         }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// An image over the reader's pixel cap is read at a lower resolution, or when its data is too
+/// large to hold left out with its data skipped; either way the program goes on after the data,
+/// as reading the whole image would leave it: the art after it is read, not the data as
+/// PostScript. Here the data ends at its `~>` (an inline image of a content stream run as a file,
+/// as PDF-reading prologs write it), at a `SubFileDecode` end string, and at the end of
+/// compressed data that is read whole.
+#[test]
+fn the_data_of_an_image_too_large_to_read_is_skipped() {
+    let after = "0 0 1 setrgbcolor 10 10 80 80 rectfill";
+    let packed = crate::ps::ascii85(&crate::ps::deflate(&[0u8; 64]));
+    for program in [
+        format!(
+            "/ID {{ << /ImageType 1 /Width 10000 /Height 10000 /BitsPerComponent 8 /Decode [0 1 0 1 0 1] /ImageMatrix [1 0 0 1 0 0] \
+             /DataSource currentfile 0 (~>) /SubFileDecode filter /ASCII85Decode filter /FlateDecode filter >> \
+             /DeviceRGB setcolorspace image }} def\n\
+             currentfile 0 (endstream) /SubFileDecode filter cvx exec\nID\n{packed}\n{after}\nendstream\n"
+        ),
+        format!("10000 10000 8 [1 0 0 1 0 0] currentfile /ASCIIHexDecode filter false 3 colorimage\n0a1b 2c3d 4e5f>\n{after}"),
+        format!(
+            "10000 10000 8 [1 0 0 1 0 0] currentfile 0 (%%EndData) /SubFileDecode filter /ASCII85Decode filter /FlateDecode filter image\n\
+             {packed}\n%%EndData\n{after}"
+        ),
+        format!("10000 10000 true [1 0 0 1 0 0] currentfile /ASCII85Decode filter imagemask\n{packed}\n{after}"),
+    ] {
+        let r = read(&program);
+        assert!(r.warnings.iter().any(|w| w.contains("too large to read") || w.contains("lower resolution")), "{program}: {:?}", r.warnings);
+        let o = super::tests::objects(&r.document);
+        let last = o.last().expect("the art after the image");
+        assert_eq!(super::tests::fill(last), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{program}");
+    }
+}
+
+/// An image of more pixels than the reader's cap (2^26) is read at a lower resolution, every
+/// second sample of every second row here, over the same area, with a note; not left out.
+#[test]
+fn an_image_over_the_pixel_cap_is_read_at_a_lower_resolution() {
+    // 9000 × 8000 one-bit samples, every row the same: its left half ones, painted.
+    let row = format!("{}{}", "ff".repeat(563), "00".repeat(562));
+    let r = read(&format!("0 0 1 setrgbcolor 90 80 scale 9000 8000 true [9000 0 0 -8000 0 8000] <{row}> imagemask"));
+    assert!(r.warnings.iter().any(|w| w.contains("lower resolution")), "{:?}", r.warnings);
+    let NodeKind::Image(im) = &all(&r.document).into_iter().find(|n| matches!(n.kind, NodeKind::Image(_))).expect("an image").kind else {
+        panic!("an image")
+    };
+    assert_eq!((im.width, im.height), (4500, 4000));
+    // Its 4500 × 4000 pixels cover the 90 × 80 points the image does.
+    let corner = im.xf * kurbo::Point::new(4500.0, 4000.0);
+    let origin = im.xf * kurbo::Point::ZERO;
+    assert!(((corner - origin).x.abs() - 90.0).abs() < 1e-6 && ((corner - origin).y.abs() - 80.0).abs() < 1e-6, "{:?}", im.xf);
+    // Left half painted, right half clear.
+    assert_eq!(pixel(&r.document, 100, 2000)[3], 255);
+    assert_eq!(pixel(&r.document, 4400, 2000)[3], 0);
+}
+
+/// An image over the pixel cap whose samples are more data than the reader holds (9500 × 9500
+/// RGB is 270 MB) is read at a lower resolution too when Flate or LZW compresses it last: only
+/// the rows it reads are kept as they are decoded.
+#[test]
+fn an_image_of_more_data_than_the_reader_holds_keeps_only_the_rows_it_reads() {
+    let (w, h) = (9500usize, 9500usize);
+    let mut samples = Vec::with_capacity(w * h * 3);
+    for y in 0..h {
+        let px: [u8; 3] = if y < h / 2 { [255, 0, 0] } else { [0, 0, 255] };
+        samples.extend(std::iter::repeat_n(px, w).flatten());
+    }
+    let data = crate::ps::ascii85(&crate::ps::deflate(&samples));
+    drop(samples);
+    let r = read(&format!(
+        "95 95 scale {w} {h} 8 [{w} 0 0 -{h} 0 {h}] currentfile /ASCII85Decode filter /FlateDecode filter false 3 colorimage\n{data}\n\
+         0 1 0 setrgbcolor 0 0 0.1 0.1 rectfill"
+    ));
+    assert!(r.warnings.iter().any(|w| w.contains("lower resolution")), "{:?}", r.warnings);
+    let NodeKind::Image(im) = &all(&r.document).into_iter().find(|n| matches!(n.kind, NodeKind::Image(_))).expect("an image").kind else {
+        panic!("an image")
+    };
+    assert_eq!((im.width, im.height), (4750, 4750));
+    // The rows read from the top half are red, from the bottom half blue.
+    assert_eq!(pixel(&r.document, 10, 10), [255, 0, 0, 255]);
+    assert_eq!(pixel(&r.document, 10, 4740), [0, 0, 255, 255]);
+    // The art after the data is read.
+    assert_eq!(super::tests::objects(&r.document).len(), 2);
+}
+
+/// An image too large to read even at a lower resolution (its samples are more data than the
+/// reader holds) is left out, and its data is skipped: when a procedure reads it, the procedure
+/// is called until the data ends; when its first filter decompresses to more than the reader
+/// holds (and can't be read a row at a time), the compressed data is measured without keeping it.
+#[test]
+fn the_data_of_an_image_too_large_to_hold_is_skipped() {
+    let after = "0 0 1 setrgbcolor 10 10 80 80 rectfill";
+    let zeros = crate::ps::deflate(&vec![0u8; 300 << 20]);
+    // Predicted rows aren't decoded a row at a time: such an image is left out.
+    let mut flate =
+        b"10000 10000 8 [1 0 0 1 0 0] currentfile << /Predictor 15 /Colors 3 /Columns 10000 >> /FlateDecode filter false 3 colorimage\n".to_vec();
+    flate.extend(&zeros);
+    flate.extend(format!("\n{after}").as_bytes());
+    for program in [
+        format!(
+            "/F currentfile 0 (%%EndData) /SubFileDecode filter def \
+             10000 10000 8 [1 0 0 1 0 0] {{ F 4096 string readstring pop }} false 3 colorimage\n@@@@ not PostScript @@@@\n%%EndData\n{after}"
+        )
+        .into_bytes(),
+        flate,
+    ] {
+        let text = String::from_utf8_lossy(program.get(..120).unwrap_or(&program)).into_owned();
+        let mut file = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+        file.extend(&program);
+        file.extend(b"\nshowpage\n%%EOF\n");
+        let r = import(&file).unwrap();
+        assert!(r.warnings.iter().any(|w| w.contains("too large to read")), "{text}: {:?}", r.warnings);
+        let o = super::tests::objects(&r.document);
+        assert_eq!(o.len(), 1, "{text}: {:?}", r.warnings);
+        assert_eq!(super::tests::fill(&o[0]), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{text}");
+    }
+}
+
+/// Measuring the data of an image too large to hold decompresses it, and that is charged to the
+/// operation budget: a program kept in a reusable stream, whose image over 300 MB of compressed
+/// zeros is left out and measured again each time a loop runs the stream from its start, runs out
+/// of the budget after it measured the data in full more than once and at most five times.
+#[test]
+fn measuring_data_too_large_to_hold_in_a_loop_runs_out_of_the_budget() {
+    let mut program =
+        b"10000 10000 8 [1 0 0 1 0 0] currentfile << /Predictor 15 /Colors 3 /Columns 10000 >> /FlateDecode filter false 3 colorimage\n".to_vec();
+    program.extend(crate::ps::deflate(&vec![0u8; 300 << 20]));
+    let hex: String = program.iter().map(|b| format!("{b:02x}")).collect();
+    let measured =
+        super::tests::runs_out_of_budget_measuring(&format!("/P <{hex}> /ReusableStreamDecode filter def {{ P 0 setfileposition P cvx exec }} loop"));
+    assert!(((300 << 20) + 1..=5 * (300 << 20)).contains(&measured), "{measured} bytes measured");
+}
+
+/// When an image too large to read is left out, the data of its mask (`InterleaveType` 3) is
+/// skipped too: unfiltered from the program's own file by its byte count, and through a filter
+/// shared with later reads, which then find the file past the data (here the second filter fails
+/// on what the first decoded) rather than decoding the program after it.
+#[test]
+fn the_mask_data_of_an_image_left_out_is_skipped() {
+    let after = "0 0 1 setrgbcolor 10 10 80 80 rectfill";
+    let masked = |source: &str| {
+        format!(
+            "<< /ImageType 3 /InterleaveType 3 /DataDict << /ImageType 1 /Width 10000 /Height 10000 /BitsPerComponent 8 \
+             /Decode [0 1 0 1 0 1] /ImageMatrix [1 0 0 1 0 0] /DataSource (x) >> \
+             /MaskDict << /ImageType 1 /Width 10 /Height 10 /BitsPerComponent 1 /Decode [0 1] /ImageMatrix [1 0 0 1 0 0] \
+             /DataSource {source} >> >> /DeviceRGB setcolorspace image"
+        )
+    };
+    for program in [
+        // 10 rows of 2 bytes, not PostScript.
+        format!("{}\n{}\n{after}", masked("currentfile"), "@".repeat(20)),
+        format!("/F currentfile /ASCIIHexDecode filter /ASCII85Decode filter def {}\n7676>\nF read {{ pop }} if {after}", masked("F")),
+    ] {
+        let r = read(&program);
+        assert!(r.warnings.iter().any(|w| w.contains("too large to read")), "{program}: {:?}", r.warnings);
+        let o = super::tests::objects(&r.document);
+        assert_eq!(o.len(), 1, "{program}: {:?}", r.warnings);
+        assert_eq!(super::tests::fill(&o[0]), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{program}");
+    }
+}
+
+/// A JPEG whose header claims far more pixels than an image may have is refused before the decoder
+/// allocates for them.
+#[test]
+fn a_jpeg_with_a_huge_header_is_refused_before_it_is_decoded() {
+    let cimg = craft_image_codecs::Image::from_raw(8, 8, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![128; 64])
+        .unwrap();
+    let mut jpeg = craft_image_codecs::encode(&cimg, craft_image_codecs::Format::Jpeg, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    // The frame header (marker, length, precision, height, width) now says 65535 × 65535.
+    let sof = jpeg.windows(2).position(|w| w == [0xFF, 0xC0]).unwrap();
+    jpeg[sof + 5..sof + 9].fill(0xFF);
+    let jpeg: String = jpeg.iter().map(|b| format!("{b:02x}")).collect();
+    let e = import(&eps(&format!(
+        "/DeviceGray setcolorspace << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8 /ImageMatrix [1 0 0 1 0 0] \
+         /DataSource currentfile /ASCIIHexDecode filter /DCTDecode filter >> image\n{jpeg}>"
+    )))
+    .unwrap_err();
+    assert!(e.contains("too large"), "{e}");
 }

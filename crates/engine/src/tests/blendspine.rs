@@ -66,6 +66,35 @@ fn a_spine_point_added_and_moved_bends_the_blend() {
     assert!(center(&steps(&s, g)[1]).distance(Point::new(55.0, 5.0)) < 1e-6);
 }
 
+/// #5285: `with` moves other spine points by as much as the one dragged, and the key objects on
+/// them along, in one undo step; it can't go with a handle or name a point the spine lacks.
+#[test]
+fn spine_points_move_together() {
+    let mut s = session();
+    let (a, b, g) = blend(&mut s);
+    s.execute("object.blend.spine.addAnchor", &json!({"x": 55, "y": 5})).unwrap();
+    let before = spec(&s, g);
+    assert!(s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": [9]})).is_err());
+    assert!(s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": [2], "handle": "in"})).is_err());
+    assert!(s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": [], "handle": "in"})).is_err());
+    assert!(s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": "2"})).is_err());
+    assert_eq!(spec(&s, g), before, "refused requests change nothing");
+    s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": [2, 1]})).unwrap();
+    let sp = spec(&s, g).spine.unwrap();
+    let pts: Vec<Point> = sp.subpaths[0].anchors.iter().map(|x| x.p).collect();
+    let want = [Point::new(5.0, 5.0), Point::new(55.0, 45.0), Point::new(105.0, 45.0)];
+    assert!(pts.len() == 3 && pts.iter().zip(want).all(|(p, w)| p.distance(w) < 1e-9), "{pts:?}");
+    let keys = match node(&s, g).kind {
+        NodeKind::Blend { children, .. } => children,
+        _ => panic!("not a blend"),
+    };
+    let at = |id: NodeId| keys.iter().find(|k| k.id == id).map(|k| center(k)).unwrap();
+    assert!(at(b).distance(Point::new(105.0, 45.0)) < 1e-9, "the key on the point went along: {:?}", at(b));
+    assert!(at(a).distance(Point::new(5.0, 5.0)) < 1e-9, "the other stayed: {:?}", at(a));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, g), before, "one undo step");
+}
+
 /// #2544: an Anchor Point drag on a blend spine must create two symmetric
 /// handles, not bend the adjacent segment and leave one handle behind.
 #[test]
@@ -401,4 +430,36 @@ fn a_spine_segment_bends_with_perpendicular_handles() {
     assert!(ha.x.abs() < 1e-9 && hb.x.abs() < 1e-9 && (ha.y - hb.y).abs() < 1e-9, "{sp:?}");
     use vectorcraft_geom::kurbo::ParamCurve;
     assert!(sp.segment(0).eval(0.5).distance(Point::new(55.0, 45.0)) < 1e-9, "{sp:?}");
+}
+
+/// `link` with `handle` makes a spine point smooth, the other handle in line opposite the moved
+/// one, without moving the keys; the same request again records no undo step, and `link` that is
+/// not a boolean, goes with `independent` or comes without `handle` is refused.
+#[test]
+fn a_linked_spine_handle_makes_the_point_smooth() {
+    let mut s = session();
+    let (_, _, g) = blend(&mut s);
+    s.execute("object.blend.spine.addAnchor", &json!({"x": 55, "y": 5})).unwrap();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let link = json!({"anchor": 1, "handle": "out", "x": 75, "y": 25, "link": true});
+    s.execute("object.blend.spine.moveAnchor", &link).unwrap();
+    let a = spec(&s, g).spine.unwrap().subpaths[0].anchors[1];
+    assert_eq!((a.kind, a.h_out), (vectorcraft_geom::AnchorKind::Smooth, Point::new(75.0, 25.0)));
+    let (din, dout) = (a.h_in - a.p, a.h_out - a.p);
+    assert!(din.hypot() > 1e-6 && (din.normalize() + dout.normalize()).hypot() < 1e-9, "{a:?}");
+    let st = steps(&s, g);
+    assert_eq!((center(&st[0]), center(&st[2])), (Point::new(5.0, 5.0), Point::new(105.0, 5.0)), "the keys stay put");
+    let done = undo(&s);
+    s.execute("object.blend.spine.moveAnchor", &link).unwrap();
+    assert_eq!(undo(&s), done, "an unchanged spine recorded an undo step");
+    let before = spec(&s, g);
+    for bad in [
+        json!({"anchor": 1, "handle": "out", "x": 75, "y": 25, "link": "yes"}),
+        json!({"anchor": 1, "handle": "out", "x": 75, "y": 25, "link": true, "independent": true}),
+        json!({"anchor": 1, "x": 75, "y": 25, "link": true}),
+    ] {
+        assert!(s.execute("object.blend.spine.moveAnchor", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(spec(&s, g), before);
+    assert_eq!(undo(&s), done);
 }

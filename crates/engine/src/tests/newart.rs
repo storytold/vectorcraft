@@ -30,6 +30,20 @@ fn undo_len(s: &Session) -> usize {
 }
 
 #[test]
+fn invalid_new_art_basic_parameters_keep_the_preference_unchanged() {
+    let mut s = session();
+    let undo = undo_len(&s);
+    for params in [json!({"on": "false"}), json!({"on": 1})] {
+        assert!(s.execute("appearance.setNewArtBasic", &params).is_err(), "accepted {params}");
+        assert!(s.prefs.new_art_basic, "changed the preference for {params}");
+        assert_eq!(undo_len(&s), undo, "recorded undo for {params}");
+    }
+    // Left out, or null as for every command, it toggles.
+    assert_eq!(s.execute("appearance.setNewArtBasic", &json!(null)).unwrap(), json!({"on": false}));
+    assert_eq!(s.execute("appearance.setNewArtBasic", &json!({"on": null})).unwrap(), json!({"on": true}));
+}
+
+#[test]
 fn stroke_options_set_with_nothing_selected_carry_to_the_next_object() {
     let mut s = session();
     let before = rect(&mut s, 20.0);
@@ -125,6 +139,214 @@ fn a_graphic_style_clicked_with_nothing_selected_styles_the_next_object() {
     let q = run(&mut s, "appearance.newArt", json!({}));
     assert_eq!((q["appearance"]["items"].as_array().unwrap().len(), q["graphicStyle"].clone()), (6, Value::Null));
     assert!(s.execute("graphicStyle.apply", &json!({"name": name, "ids": []})).is_err(), "explicit ids that match nothing");
+}
+
+/// A rectangle with this fill, stroke and weight, selected.
+fn painted(s: &mut Session, x: f64, fill: &str, stroke: &str, weight: f64) -> NodeId {
+    let id = rect(s, x);
+    run(s, "paint.setFill", json!({"color": fill}));
+    run(s, "paint.setStroke", json!({"color": stroke}));
+    run(s, "stroke.set", json!({"weight": weight}));
+    id
+}
+
+fn select(s: &mut Session, ids: &[NodeId]) {
+    run(s, "select.set", json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}));
+}
+
+#[test]
+fn selecting_an_object_gives_new_art_its_fill_stroke_and_weight_with_basic_appearance_on() {
+    let mut s = session();
+    assert!(s.prefs.new_art_basic, "on by default");
+    let green = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    painted(&mut s, 120.0, "#0000ff", "#000000", 2.0);
+    select(&mut s, &[green]);
+    run(&mut s, "select.none", json!({}));
+    let id = rect(&mut s, 220.0);
+    let (n, from) = (node(&s, id).appearance, node(&s, green).appearance);
+    assert_eq!((n.fill_paint(), n.stroke_paint(), n.stroke_width()), (from.fill_paint(), from.stroke_paint(), 5.0));
+}
+
+#[test]
+fn with_basic_appearance_on_only_the_basic_fill_and_stroke_follow_the_selection() {
+    let mut s = session();
+    let src = fancy(&mut s);
+    painted(&mut s, 120.0, "#00ff00", "#000000", 2.0);
+    select(&mut s, &[src]);
+    run(&mut s, "select.none", json!({}));
+    let id = rect(&mut s, 220.0);
+    let n = node(&s, id);
+    assert_eq!(n.appearance.fill_paint(), node(&s, src).appearance.fill_paint(), "the top fill");
+    assert_eq!((n.appearance.items.len(), n.appearance.effects.len(), n.opacity), (2, 0, 1.0), "one fill and stroke, nothing else");
+}
+
+#[test]
+fn a_paint_the_selected_objects_do_not_share_stays_as_it_was() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let b = painted(&mut s, 120.0, "#0000ff", "#00ff00", 5.0);
+    painted(&mut s, 220.0, "#ffff00", "#000000", 1.0);
+    let before = s.paint.fill.clone();
+    select(&mut s, &[a, b]);
+    assert_eq!(s.paint.fill, before, "the fills differ");
+    assert_eq!((s.paint.stroke.clone(), s.paint.stroke_width), (node(&s, a).appearance.stroke_paint(), 5.0), "the strokes are shared");
+}
+
+fn add(s: &mut Session, id: NodeId) {
+    run(s, "select.add", json!({"ids": [id.0]}));
+}
+
+/// Objects added one at a time are compared with the objects already selected: a fill and weight
+/// they all share loads, one they don't stays as it was.
+#[test]
+fn objects_added_one_at_a_time_load_only_the_paints_all_selected_objects_share() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let b = painted(&mut s, 120.0, "#ff0000", "#00ff00", 5.0);
+    let c = painted(&mut s, 220.0, "#0000ff", "#00ff00", 1.0);
+    let red = node(&s, a).appearance.fill_paint();
+    run(&mut s, "select.none", json!({}));
+    add(&mut s, a);
+    (s.paint.fill, s.paint.stroke_width) = (Paint::None, 0.5);
+    add(&mut s, b);
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (red, 5.0), "a and b share them");
+    (s.paint.fill, s.paint.stroke_width) = (Paint::None, 0.5);
+    add(&mut s, c);
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 0.5), "c's differ");
+}
+
+/// An edit of the selected objects between two additions is read: the objects selected before it
+/// are compared as the edit left them.
+#[test]
+fn an_object_added_after_an_edit_is_compared_with_the_edited_objects() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let b = painted(&mut s, 120.0, "#ff0000", "#00ff00", 5.0);
+    let c = painted(&mut s, 220.0, "#0000ff", "#00ff00", 5.0);
+    let blue = node(&s, c).appearance.fill_paint();
+    run(&mut s, "select.none", json!({}));
+    add(&mut s, a);
+    add(&mut s, b);
+    run(&mut s, "paint.setFill", json!({"color": "#0000ff", "ids": [a.0, b.0]}));
+    s.paint.fill = Paint::None;
+    add(&mut s, c);
+    assert_eq!(s.paint.fill, blue, "a, b and c are all blue now");
+}
+
+fn toggle(s: &mut Session, id: NodeId) {
+    run(s, "select.toggle", json!({"id": id.0}));
+}
+
+/// Objects taken out one at a time leave the others to be compared: a fill and weight the objects
+/// left share loads, one they don't stays as it was.
+#[test]
+fn objects_taken_out_one_at_a_time_load_only_the_paints_the_objects_left_share() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let b = painted(&mut s, 120.0, "#00ffff", "#00ff00", 5.0);
+    let c = painted(&mut s, 220.0, "#0000ff", "#00ff00", 1.0);
+    let d = painted(&mut s, 320.0, "#ff0000", "#00ff00", 5.0);
+    let red = node(&s, a).appearance.fill_paint();
+    select(&mut s, &[a, b, c, d]);
+    (s.paint.fill, s.paint.stroke_width) = (Paint::None, 0.5);
+    toggle(&mut s, c);
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 5.0), "a, b and d share the weight, not the fill");
+    s.paint.stroke_width = 0.5;
+    toggle(&mut s, b);
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (red, 5.0), "a and d share both");
+}
+
+/// Taking out every object with the fill met first leaves the other objects' fills to compare.
+#[test]
+fn taking_out_the_objects_with_the_first_fill_compares_the_fills_left() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let b = painted(&mut s, 120.0, "#0000ff", "#00ff00", 5.0);
+    let c = painted(&mut s, 220.0, "#0000ff", "#00ff00", 5.0);
+    let blue = node(&s, b).appearance.fill_paint();
+    select(&mut s, &[a, b, c]);
+    s.paint.fill = Paint::None;
+    toggle(&mut s, a);
+    assert_eq!(s.paint.fill, blue, "b and c are both blue");
+}
+
+#[test]
+fn art_without_paint_leaves_the_proxies_as_they_were() {
+    let mut s = session();
+    painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let (fill, stroke) = (s.paint.fill.clone(), s.paint.stroke.clone());
+    let dir = super::links::Folder::new("new-art-image");
+    let path = dir.file("pic.png");
+    super::links::write(&path, &super::links::png(4, 4, super::links::RED));
+    let image = super::links::place(&mut s, &path);
+    run(&mut s, "select.none", json!({}));
+    select(&mut s, &[image]);
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width), (fill, stroke, 5.0), "new art stays visible");
+}
+
+#[test]
+fn an_object_without_a_stroke_clears_the_stroke_and_keeps_the_weight() {
+    let mut s = session();
+    let bare = rect(&mut s, 20.0);
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    painted(&mut s, 120.0, "#0000ff", "#000000", 7.0);
+    select(&mut s, &[bare]);
+    assert_eq!((s.paint.stroke.clone(), s.paint.stroke_width), (Paint::None, 7.0));
+}
+
+#[test]
+fn a_selected_gradient_loads_without_its_place_on_the_object() {
+    let mut s = session();
+    let src = rect(&mut s, 20.0);
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
+    run(&mut s, "paint.setFill", json!({"gradient": {"stops": stops, "start": [20, 40], "end": [50, 40]}}));
+    painted(&mut s, 120.0, "#0000ff", "#000000", 2.0);
+    select(&mut s, &[src]);
+    assert!(matches!(s.paint.fill, Paint::Gradient(_)), "{:?}", s.paint.fill);
+    run(&mut s, "select.none", json!({}));
+    let id = rect(&mut s, 220.0);
+    assert!(matches!(node(&s, id).appearance.fill_paint(), Paint::Gradient(_)));
+}
+
+#[test]
+fn selecting_leaves_the_stroke_panels_options_for_new_art_alone() {
+    let mut s = session();
+    let plain = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    run(&mut s, "select.none", json!({}));
+    run(&mut s, "stroke.set", json!({"cap": "round", "dash": [4, 2]}));
+    select(&mut s, &[plain]);
+    run(&mut s, "select.none", json!({}));
+    let id = rect(&mut s, 120.0);
+    let st = node(&s, id).appearance.stroke().unwrap().clone();
+    assert_eq!((st.paint.clone(), st.width), (node(&s, plain).appearance.stroke_paint(), 5.0));
+    assert_eq!((st.cap, st.dash.map(|d| d.pattern)), (LineCap::Round, Some(vec![4.0, 2.0])));
+}
+
+#[test]
+fn a_sampled_paint_stays_until_the_selection_changes() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let sampled = Paint::solid(vectorcraft_color::Color::WHITE);
+    s.paint.fill = sampled.clone();
+    run(&mut s, "transparency.set", json!({"opacity": 50}));
+    assert_eq!(s.paint.fill, sampled, "not a selection command");
+    select(&mut s, &[a]);
+    assert_eq!(s.paint.fill, sampled, "the same selection again");
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(s.paint.fill, sampled, "nothing selected shows nothing to load");
+    select(&mut s, &[a]);
+    assert_eq!(s.paint.fill, node(&s, a).appearance.fill_paint(), "selected anew");
+}
+
+#[test]
+fn targeting_a_layer_loads_the_paints_of_its_contents() {
+    let mut s = session();
+    let a = painted(&mut s, 20.0, "#ff0000", "#00ff00", 5.0);
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    run(&mut s, "select.none", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#0000ff"}));
+    run(&mut s, "layer.target", json!({"id": layer.0}));
+    assert_eq!(s.paint.fill, node(&s, a).appearance.fill_paint());
 }
 
 #[test]

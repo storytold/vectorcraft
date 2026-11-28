@@ -21,7 +21,7 @@ pub(super) struct Found {
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     pub(super) non_scaling: HashSet<String>,
     /// The `data-*` attributes of elements, by id ([`user_data`]).
-    pub(super) data: HashMap<String, Vec<(String, String)>>,
+    pub(super) data: HashMap<String, Extras>,
     /// The event attributes of elements, by id ([`user_events`]).
     pub(super) events: HashMap<String, Vec<(String, String)>>,
     /// The attributes of elements in other applications' namespaces, by id ([`foreign`]).
@@ -56,6 +56,19 @@ pub(crate) struct Edits {
     styles: HashMap<roxmltree::NodeId, (usize, bool, String)>,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The numbers [`Edits::id`] has tried for a made-up id on this thread, taken or not: the
+    /// work of making up ids.
+    static TRIED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Count one number tried for a made-up id in [`TRIED`]; nothing outside tests.
+fn tried() {
+    #[cfg(test)]
+    TRIED.set(TRIED.get() + 1);
+}
+
 impl Edits {
     fn insert(&mut self, at: usize, text: String) {
         self.list.push((at..at, text));
@@ -71,8 +84,10 @@ impl Edits {
             return id.clone();
         }
         let taken = self.taken.get_or_insert_with(|| named_made_up_ids(n.document()));
+        tried();
         while taken.contains(&self.next) {
             self.next += 1;
+            tried();
         }
         let id = format!("{MADE_UP_ID}{}", self.next);
         self.next += 1;
@@ -95,6 +110,11 @@ impl Edits {
         }
     }
 
+    /// Set the value of attribute `a` to `value` (XML-escaped already).
+    pub(crate) fn set_value(&mut self, a: roxmltree::Attribute, value: &str) {
+        self.list.push((a.range_value(), value.to_string()));
+    }
+
     /// Add the declaration `decl` (XML-escaped already) to the `style` of element `n` (in `svg`),
     /// after the ones already there (so it wins over them and over style sheet rules).
     fn style(&mut self, svg: &str, n: XNode, decl: &str) {
@@ -109,7 +129,7 @@ impl Edits {
 
     /// `svg` with the edits made; overlapping ones and ranges off character boundaries are
     /// skipped.
-    fn apply(mut self, svg: &str) -> Cow<'_, str> {
+    pub(super) fn apply(mut self, svg: &str) -> Cow<'_, str> {
         self.list.append(&mut self.id_edits);
         for (at, has_style, decls) in std::mem::take(&mut self.styles).into_values() {
             self.insert(at, if has_style { decls } else { format!(" style=\"{}\"", decls.strip_prefix(';').unwrap_or(&decls)) });
@@ -163,7 +183,8 @@ fn named_made_up_ids(xml: &roxmltree::Document) -> HashSet<usize> {
 /// * so do `<circle>` and `<ellipse>` elements, recorded: usvg makes their arcs into a varying
 ///   number of curves, and they come back as the ellipse VectorCraft draws (not in a file whose
 ///   style sheet has an attribute selector);
-/// * linked files are read ([`files`]);
+/// * linked files are read, and the data URLs of `<image>` and `<feImage>` elements are each
+///   changed to a key that the resolver decodes once ([`files`]);
 /// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]);
 /// * what style sheet rules with a `:not()` set goes in `style` attributes ([`not_rules`]).
 ///
@@ -190,7 +211,7 @@ pub(super) fn prepass<'s>(
         && !events
         && !foreign_attrs
         && !ellipses
-        && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "groupmode", "script"]
+        && !["<a", "display", "<use", ":use", "<image", ":image", "feImage", vector_effect::NON_SCALING, "data-", "class", "groupmode", "script"]
             .iter()
             .any(|t| markers.contains(t))
     {
@@ -203,11 +224,12 @@ pub(super) fn prepass<'s>(
             found.links.insert(edits.id(svg, a), url.to_string());
         }
     }
-    if markers.contains("data-") {
+    if markers.contains("data-") || markers.contains("class") {
         for e in elements().filter(|e| OBJECT_ELEMENTS.contains(&e.tag_name().name())) {
             let data = user_data(e);
-            if !data.is_empty() {
-                found.data.insert(edits.id(svg, e), data);
+            let classes = user_classes(e);
+            if !data.is_empty() || !classes.is_empty() {
+                found.data.insert(edits.id(svg, e), (data, classes));
             }
         }
     }
@@ -319,6 +341,26 @@ fn hidden_objects(svg: &str, xml: &roxmltree::Document, css: &css::Styles, edits
 fn tag_name_end(svg: &str, n: XNode) -> usize {
     let start = n.range().start;
     svg.get(start + 1..).and_then(|s| s.find(|c: char| c.is_whitespace() || c == '/' || c == '>')).map_or(start + 2, |i| start + 1 + i)
+}
+
+/// What import keeps of an element's own attributes: its `data-*` attributes and CSS classes.
+pub(super) type Extras = (Vec<(String, String)>, Vec<String>);
+
+/// The most CSS classes kept per element (the file is untrusted).
+const MAX_CLASSES: usize = 64;
+
+/// The CSS classes of element `e`, in order and without repeats. Classes our own export
+/// generated (`cls-1`, with or without a prefix) aren't kept: export makes them again. A class list
+/// is split on SVG's five ASCII whitespace characters only, so a no-break space stays inside a name.
+fn user_classes(e: XNode) -> Vec<String> {
+    let generated = |c: &str| c.rsplit_once("cls-").is_some_and(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+    let mut out: Vec<String> = Vec::new();
+    for c in e.attribute("class").into_iter().flat_map(|v| v.split(['\u{20}', '\t', '\n', '\u{c}', '\r']).filter(|c| !c.is_empty())) {
+        if out.len() < MAX_CLASSES && !generated(c) && !out.iter().any(|k| k == c) {
+            out.push(c.to_string());
+        }
+    }
+    out
 }
 
 /// The elements that become objects, whose `data-*` attributes are kept.
@@ -464,7 +506,7 @@ mod tests {
     use super::*;
 
     /// A file that already holds the made-up ids does not make each new id try them all again:
-    /// 5,000 ids made up past 50,000 taken ones take a moment, not 250 million tries.
+    /// 5,000 ids made up past 50,000 taken ones try 55,000 numbers, not 250 million.
     #[test]
     fn made_up_ids_skip_the_taken_ones_once() {
         let taken: String = (0..50_000).map(|i| format!("<g id=\"{MADE_UP_ID}{i}\"/>")).collect();
@@ -473,9 +515,9 @@ mod tests {
         let doc = roxmltree::Document::parse(&svg).unwrap();
         let rects: Vec<XNode> = doc.descendants().filter(|n| n.has_tag_name("rect")).collect();
         let mut edits = Edits::default();
-        let start = std::time::Instant::now();
+        TRIED.set(0);
         let ids: Vec<String> = rects.iter().map(|n| edits.id(&svg, *n)).collect();
-        assert!(start.elapsed() < std::time::Duration::from_secs(1), "{:?}", start.elapsed());
+        assert_eq!(TRIED.get(), 55_000);
         assert_eq!(ids.first().map(String::as_str), Some(format!("{MADE_UP_ID}50000").as_str()));
         assert_eq!(ids.iter().collect::<HashSet<_>>().len(), ids.len());
     }

@@ -2,6 +2,7 @@
 //! with `<use>` a symbol and its instances, blurs and drop-shadow chains live effects; and
 //! export → import keeps them.
 
+use craft_svg::tree::draw::resvg;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -111,7 +112,9 @@ fn resvg_render(svg: &str, w: u32, h: u32) -> Image {
 
 /// The effects of the only object.
 fn effects(d: &Document) -> Vec<Effect> {
-    let a = art(d);
+    // Not the clip group a filter's region may put it in (SVG 1.1 §15.5), nor its clipping path.
+    let a: Vec<&Node> =
+        art(d).into_iter().filter(|n| !matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Path { clipping: true, .. })).collect();
     assert_eq!(a.len(), 1, "{a:?}");
     a[0].appearance.effects.clone()
 }
@@ -239,7 +242,7 @@ fn a_figma_blurred_shape_filter_becomes_gaussian_blur() {
     assert!(w.is_empty(), "{w:?}");
     let fx = effects(&d);
     assert_eq!(fx.len(), 1);
-    assert_eq!((fx[0].id.as_str(), &fx[0].params), ("blur.gaussian", &json!({"radius": 6.0})));
+    assert_eq!((fx[0].id.as_str(), &fx[0].params), ("blur.gaussian", &json!({"radius": 6.0, "linear": true})));
 }
 
 #[test]
@@ -274,12 +277,161 @@ fn a_gaussian_blur_becomes_the_effect_with_its_radius() {
     assert!(w.is_empty(), "{w:?}");
     let fx = effects(&d);
     assert_eq!(fx.len(), 1);
-    assert_eq!((fx[0].id.as_str(), &fx[0].params), ("blur.gaussian", &json!({"radius": 6.0})));
+    assert_eq!((fx[0].id.as_str(), &fx[0].params), ("blur.gaussian", &json!({"radius": 6.0, "linear": true})));
     // In a scaled group, the radius scales too.
     let (d, _) = open(
         r##"<defs><filter id="b"><feGaussianBlur stdDeviation="3"/></filter></defs><g transform="scale(2)"><rect width="30" height="20" filter="url(#b)"/></g>"##,
     );
     assert_eq!(effects(&d)[0].params["radius"], json!(12.0));
+}
+
+/// A blur that differs by direction in the document (standard deviations that differ, or an even
+/// one in a user space scaled unevenly or skewed) is kept as an SVG filter, which draws it as it
+/// is, not as an even Gaussian Blur. In a turned, flipped or evenly scaled user space an even blur
+/// stays the effect.
+#[test]
+fn a_blur_that_differs_by_direction_is_kept_as_its_filter() {
+    let ids = |body: &str| {
+        let (d, w) = open(body);
+        assert!(w.is_empty(), "{w:?}");
+        effects(&d).iter().map(|e| e.id.clone()).collect::<Vec<_>>()
+    };
+    let blur = |sd: &str, transform: &str| {
+        format!(
+            r##"<defs><filter id="b"><feGaussianBlur stdDeviation="{sd}"/></filter></defs><rect x="50" y="30" width="60" height="40" fill="#08f" transform="{transform}" filter="url(#b)"/>"##
+        )
+    };
+    assert_eq!(ids(&blur("4 1", "translate(0)")), ["svg.filter"]);
+    assert_eq!(ids(&blur("3", "scale(1 4)")), ["svg.filter"]);
+    assert_eq!(ids(&blur("3", "skewX(30)")), ["svg.filter"]);
+    assert_eq!(ids(&blur("3", "rotate(30) scale(2)")), ["blur.gaussian"]);
+    assert_eq!(ids(&blur("3", "scale(-2 2)")), ["blur.gaussian"]);
+    let shadow = |sd: &str| {
+        format!(
+            r##"<defs><filter id="s"><feDropShadow dx="2" dy="2" stdDeviation="{sd}"/></filter></defs><rect width="60" height="40" filter="url(#s)"/>"##
+        )
+    };
+    assert_eq!(ids(&shadow("3 1")), ["svg.filter"]);
+    assert_eq!(ids(&shadow("3")), ["stylize.dropShadow"]);
+}
+
+/// An SVG filter's blur in a user space scaled unevenly is written live and opens again as the
+/// same effect, which blurs more along the stretched axis, not as an even Gaussian Blur.
+#[test]
+fn an_exported_blur_in_a_stretched_user_space_opens_as_the_same_effect() {
+    let xml = r#"<filter id="b" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>"#;
+    let mut d = Document::new(200.0, 120.0);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(60.0, 40.0, 140.0, 80.0)),
+        Appearance::basic(Paint::solid(Color::rgb(0.9, 0.1, 0.1)), Paint::None, 0.0),
+    );
+    let params = json!({ "xml": xml, "scale": 2.0, "origin": [0.0, 0.0], "axes": [0.5, 0.0, 0.0, 2.0] });
+    n.appearance.effects = vec![Effect { id: "svg.filter".into(), params, visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = export(&d, &ExportOptions::default());
+    assert!(out.contains("<g filter=\"url(#") && !out.contains("<image"), "{out}");
+    let (back, w) = import_with_report(&out).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let fx = effects(&back);
+    assert_eq!(fx.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"], "{out}");
+    let num = |v: &serde_json::Value| v.as_f64().unwrap();
+    let axes: Vec<f64> = fx[0].params["axes"].as_array().unwrap().iter().map(num).collect();
+    assert!(axes.iter().zip([0.5, 0.0, 0.0, 2.0]).all(|(a, b)| (a - b).abs() < 1e-6), "{axes:?}");
+    assert_similar(&render_artboard(&d), &render_artboard(&back), 40.0, 0.02);
+}
+
+/// `color-interpolation-filters` (SVG 1.1 §15.7.6, initially linearRGB:
+/// https://www.w3.org/TR/SVG11/painting.html#ColorInterpolationFiltersProperty) picks whether the
+/// blur mixes colours in linear light; sRGB, on the primitive or the filter, keeps them as they
+/// are (#5877).
+#[test]
+fn a_gaussian_blur_keeps_its_colour_space() {
+    let blur = |filter: &str, primitive: &str| {
+        let (d, w) = open(&format!(
+            r##"<defs><filter id="b"{filter}><feGaussianBlur stdDeviation="10"{primitive}/></filter></defs><rect width="100" height="200" filter="url(#b)"/>"##
+        ));
+        assert!(w.is_empty(), "{w:?}");
+        effects(&d)[0].params.clone()
+    };
+    let linear = json!({"radius": 20.0, "linear": true});
+    let srgb = json!({"radius": 20.0});
+    assert_eq!(blur("", r#" color-interpolation-filters="linearRGB""#), linear);
+    assert_eq!(blur("", ""), linear, "linearRGB is the initial value");
+    assert_eq!(blur("", r#" color-interpolation-filters="sRGB""#), srgb);
+    assert_eq!(blur(r#" color-interpolation-filters="sRGB""#, ""), srgb, "inherited from the filter");
+    // Export writes the space back on the blur, so it survives a round trip.
+    let (d, _) =
+        open(r##"<defs><filter id="b"><feGaussianBlur stdDeviation="10"/></filter></defs><rect width="100" height="200" filter="url(#b)"/>"##);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains(r#"color-interpolation-filters="linearRGB"/>"#), "{svg}");
+    assert_eq!(effects(&import(&svg).unwrap())[0].params, linear);
+    // Drawn, black beside white meets as resvg (which blurs in either space) draws it.
+    for space in ["linearRGB", "sRGB"] {
+        let source = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><filter id="f" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10" color-interpolation-filters="{space}"/></filter></defs><g filter="url(#f)"><rect width="100" height="200"/><rect x="100" width="100" height="200" fill="white"/></g></svg>"##
+        );
+        let (ours, theirs) = (render_artboard(&import(&source).unwrap()), resvg_render(&source, 200, 200));
+        for x in [95, 99, 100, 105] {
+            let at = 4 * (100 * 200 + x) as usize;
+            assert!(ours.rgba[at].abs_diff(theirs.rgba[at]) <= 6, "{space} at {x}: {} vs {}", ours.rgba[at], theirs.rgba[at]);
+        }
+    }
+}
+
+/// The colour of pixel (`x`, `y`) of `svg` imported and drawn on white.
+fn drawn_at(svg: &str, x: u32, y: u32) -> [u8; 4] {
+    let img = render_artboard(&import(svg).unwrap());
+    let at = 4 * (y * img.width + x) as usize;
+    [img.rgba[at], img.rgba[at + 1], img.rgba[at + 2], img.rgba[at + 3]]
+}
+
+/// SVG 1.1 §15.5 (https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion): a filter's
+/// result is cut at its region, so a blurred square shows only inside it (#5876). A region that
+/// holds the whole blur adds no clip.
+#[test]
+fn a_blur_is_cut_at_its_filter_region() {
+    let doc = |width: u32| {
+        format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="{width}" height="200"><feGaussianBlur stdDeviation="5"/></filter></defs><rect width="200" height="200" fill="red" filter="url(#f)"/></svg>"##
+        )
+    };
+    let red = |p: [u8; 4]| p[0] > 240 && p[1] < 30 && p[2] < 30;
+    assert!(red(drawn_at(&doc(50), 25, 100)));
+    assert_eq!(drawn_at(&doc(50), 100, 100), [255, 255, 255, 255], "outside the region");
+    assert!(red(drawn_at(&doc(200), 100, 100)));
+    // With room for the blur all round, the object is as before: no clip group.
+    let roomy = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="200" height="200"><feGaussianBlur stdDeviation="2"/></filter></defs><rect x="50" y="50" width="100" height="100" fill="red" filter="url(#f)"/></svg>"##;
+    let d = import(roomy).unwrap();
+    assert_eq!(art(&d).len(), 1);
+    // Our own export sizes the region to the blur: it comes back unclipped.
+    let back = import(&export(&d, &ExportOptions::default())).unwrap();
+    assert_eq!(art(&back).len(), 1);
+}
+
+/// SVG 1.1 §14.4 (https://www.w3.org/TR/SVG11/masking.html#MaskElement): a mask's art counts
+/// only inside the mask's region, in user space or the object's bounding box (#5875).
+#[test]
+fn a_mask_counts_only_inside_its_region() {
+    let doc = |region: &str| {
+        format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><mask id="m" {region}><rect width="200" height="200" fill="white"/></mask></defs><rect width="200" height="200" fill="red" mask="url(#m)"/></svg>"##
+        )
+    };
+    let red = [255, 0, 0, 255];
+    for region in
+        [r#"maskUnits="userSpaceOnUse" x="0" y="0" width="50" height="200""#, r#"maskUnits="objectBoundingBox" x="0" y="0" width="0.25" height="1""#]
+    {
+        assert_eq!(drawn_at(&doc(region), 25, 100), red, "{region}");
+        assert_eq!(drawn_at(&doc(region), 100, 100), [255, 255, 255, 255], "{region}");
+    }
+    let wide = doc(r#"maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="200""#);
+    assert_eq!(drawn_at(&wide, 100, 100), red);
+    // The default region (-10% to 120% of the object) holds the art: the mask art is as before.
+    let d = import(&doc("")).unwrap();
+    let mask = art(&d)[0].extras().mask.clone().unwrap();
+    assert!(matches!(mask.art.kind, NodeKind::Path { .. }), "{:?}", mask.art.kind);
 }
 
 /// The one drop shadow of the only object: (dx, dy, blur, colour, opacity %).
@@ -318,7 +470,8 @@ fn drop_shadow_chains_become_drop_shadows() {
 }
 
 /// A proportional RGB filter is not additive Darkness. A fully black shadow remains
-/// recognizable, while other proportional transforms are reported rather than misrepresented.
+/// recognizable, while other proportional transforms are kept as SVG filters rather than
+/// misrepresented.
 #[test]
 fn proportional_filters_are_not_misread_as_additive_darkness() {
     let chain = |space: &str, transfer: &str, slope: f64| {
@@ -342,17 +495,169 @@ fn proportional_filters_are_not_misread_as_additive_darkness() {
     // Scaled on linear values, or blurred on them before an sRGB scale.
     for (space, transfer) in [(srgb, ""), ("", ""), ("", srgb)] {
         let (d, w) = open(&chain(space, transfer, 0.5));
-        assert!(w.iter().any(|w| w.contains("filter")), "{transfer}: {w:?}");
-        assert!(effects(&d).is_empty());
+        assert!(w.is_empty(), "{transfer}: {w:?}");
+        let ids: Vec<String> = effects(&d).iter().map(|e| e.id.clone()).collect();
+        assert_eq!(ids, ["svg.filter"], "{transfer}: kept as it is written, not as a shadow");
     }
 }
 
+/// Filters used by several objects keep their own XML on each, also when two filters have the same
+/// primitives with other values.
 #[test]
-fn other_filters_are_reported() {
-    let (d, w) =
-        open(r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="60" height="40" filter="url(#t)"/>"##);
+fn reused_filters_keep_their_own_xml() {
+    let body = r##"<defs><filter id="a"><feTurbulence baseFrequency="0.05"/></filter><filter id="b"><feTurbulence baseFrequency="0.2"/></filter></defs>
+        <rect width="20" height="20" filter="url(#a)"/><rect x="30" width="20" height="20" filter="url(#b)"/>
+        <rect y="30" width="20" height="20" filter="url(#a)"/><rect x="30" y="30" width="20" height="20" filter="url(#b)"/>"##;
+    let (d, w) = open(body);
+    assert!(w.is_empty(), "{w:?}");
+    let names: Vec<String> =
+        art(&d).into_iter().flat_map(|n| &n.appearance.effects).map(|e| e.params["name"].as_str().unwrap().to_string()).collect();
+    assert_eq!(names, ["a", "b", "a", "b"]);
+    // Two filters that differ only in their ids draw alike: a further use of either takes the first.
+    let same = r##"<defs><filter id="a"><feTurbulence baseFrequency="0.05"/></filter><filter id="b"><feTurbulence baseFrequency="0.05"/></filter></defs>
+        <rect width="20" height="20" filter="url(#a)"/><rect x="30" width="20" height="20" filter="url(#b)"/>
+        <rect y="30" width="20" height="20" filter="url(#a)"/><rect x="30" y="30" width="20" height="20" filter="url(#b)"/>"##;
+    let (d, w) = open(same);
+    assert!(w.is_empty(), "{w:?}");
+    let xml: Vec<String> = art(&d).into_iter().flat_map(|n| &n.appearance.effects).map(|e| e.params["xml"].as_str().unwrap().to_string()).collect();
+    assert_eq!(xml.len(), 4);
+    assert!(xml.iter().all(|x| x.contains("baseFrequency=\"0.05\"")), "{xml:?}");
+    // A `filter` element of another namespace with the same id isn't the source.
+    let foreign = r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter><o:filter xmlns:o="urn:other" id="t"><o:x/></o:filter></defs>
+        <rect width="20" height="20" filter="url(#t)"/>"##;
+    let (d, w) = open(foreign);
+    assert!(w.is_empty(), "{w:?}");
+    let fx = effects(&d);
+    assert!(fx[0].params["xml"].as_str().unwrap().contains("feTurbulence"), "{fx:?}");
+}
+
+/// An SVG image's filters are its own: one with the same id as a filter of the outer document is
+/// not imported with the outer document's XML. The image's own source isn't read, so its filter is
+/// left out with a warning.
+#[test]
+fn an_svg_images_filter_does_not_take_the_outer_filter_of_its_id() {
+    let inner = r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><filter id="f"><feTurbulence baseFrequency="0.2"/></filter><rect width="10" height="10" filter="url(#f)"/></svg>"##;
+    let data = format!("data:image/svg+xml;base64,{}", vectorcraft_svg::base64_encode(inner.as_bytes()));
+    let (d, w) = open(&format!(
+        r#"<defs><filter id="f"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="20" height="20" filter="url(#f)"/><image href="{data}" x="100" width="40" height="20"/>"#
+    ));
+    let xml: Vec<String> = art(&d)
+        .into_iter()
+        .flat_map(|n| &n.appearance.effects)
+        .filter(|e| e.id == "svg.filter")
+        .map(|e| e.params["xml"].as_str().unwrap_or_default().to_string())
+        .collect();
+    assert_eq!(xml.len(), 1, "only the outer rect: {xml:?}");
+    assert!(xml[0].contains("baseFrequency=\"0.05\""), "{xml:?}");
+    assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
+}
+
+/// A filter the document's style sheet colors would draw differently on its own: it is reported
+/// and left out.
+#[test]
+fn filters_styled_by_the_document_are_reported() {
+    let (d, w) = open(
+        r##"<style>.red{flood-color:#f00}</style><defs><filter id="t"><feFlood class="red"/><feComposite in2="SourceGraphic" operator="in"/></filter></defs><rect width="60" height="40" filter="url(#t)"/>"##,
+    );
     assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
     assert!(effects(&d).is_empty());
+}
+
+/// Among many filters, art that uses one twice keeps it both times (the second use is a copy
+/// under another id).
+#[test]
+fn a_filter_used_twice_among_many_is_kept_twice() {
+    let used = r##"<filter id="g"><feOffset dx="1"/><feFlood flood-color="#f00"/><feComposite in2="SourceGraphic" operator="in"/></filter>"##;
+    let defs: String = (0..300)
+        .map(|i| format!(r##"<filter id="f{i}"><feFlood flood-color="#00f"/><feComposite in2="SourceGraphic" operator="in"/></filter>"##))
+        .collect();
+    let (d, w) = open(&format!(
+        r#"<defs>{defs}{used}</defs><rect width="60" height="40" filter="url(#g)"/><rect x="100" width="60" height="40" filter="url(#g)"/>"#
+    ));
+    assert!(w.is_empty(), "{w:?}");
+    let named = |n: &&Node| n.appearance.effects.iter().filter(|e| e.id == "svg.filter").map(|e| e.params["name"].clone()).collect::<Vec<_>>();
+    let filters: Vec<Vec<serde_json::Value>> = art(&d).iter().map(named).collect();
+    assert_eq!(filters, vec![vec![json!("g")], vec![json!("g")]], "{:?}", art(&d));
+}
+
+/// Other filters come in as SVG filters, on a turned or skewed object too, with the object's user
+/// space in `scale`, `origin` and `axes`; one past what the effect measures is reported and left out.
+#[test]
+fn other_filters_are_kept_or_reported() {
+    let (d, w) =
+        open(r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="60" height="40" filter="url(#t)"/>"##);
+    assert!(w.is_empty(), "{w:?}");
+    let fx = effects(&d);
+    assert_eq!((fx.len(), fx[0].id.as_str(), &fx[0].params["name"]), (1, "svg.filter", &json!("t")));
+    assert!(fx[0].params.get("axes").is_none(), "the document's axes: {:?}", fx[0].params);
+    let (d, w) = open(
+        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="60" height="40" transform="translate(10 20) scale(2) rotate(30)" filter="url(#t)"/>"##,
+    );
+    assert!(w.is_empty(), "{w:?}");
+    let fx = effects(&d);
+    assert_eq!(fx.len(), 1);
+    let p = &fx[0].params;
+    let (c, s) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+    let num = |v: &serde_json::Value| v.as_f64().unwrap();
+    assert!((num(&p["scale"]) - 2.0).abs() < 1e-6 && p["origin"] == json!([10.0, 20.0]), "{p}");
+    let axes: Vec<f64> = p["axes"].as_array().unwrap().iter().map(num).collect();
+    assert!(axes.iter().zip([c, s, -s, c]).all(|(a, b)| (a - b).abs() < 1e-6), "{axes:?}");
+    // Skewed, and scaled unevenly: the axes keep both.
+    let (d, w) = open(
+        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="60" height="40" transform="skewX(45)" filter="url(#t)"/><rect width="60" height="40" transform="scale(1 4)" filter="url(#t)"/>"##,
+    );
+    assert!(w.is_empty(), "{w:?}");
+    let all: Vec<Vec<f64>> =
+        art(&d).iter().flat_map(|n| &n.appearance.effects).map(|e| e.params["axes"].as_array().unwrap().iter().map(num).collect()).collect();
+    assert_eq!(all.len(), 2);
+    assert!(all.iter().any(|a| a.iter().zip([1.0, 0.0, 1.0, 1.0]).all(|(a, b)| (a - b).abs() < 1e-6)), "{all:?}");
+    assert!(all.iter().any(|a| a.iter().zip([0.5, 0.0, 0.0, 2.0]).all(|(a, b)| (a - b).abs() < 1e-6)), "{all:?}");
+    // Skewed so far that an axis would stretch past 1000 times: reported and left out.
+    let (d, w) = open(
+        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="0.01" height="0.01" transform="skewX(89.95)" filter="url(#t)"/>"##,
+    );
+    assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
+    assert!(effects(&d).is_empty());
+    // Past the 0.001 to 1000 points a unit of the effect measures: reported and left out too.
+    let (d, w) = open(
+        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="0.04" height="0.04" transform="scale(2000)" filter="url(#t)"/>"##,
+    );
+    assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
+    assert!(effects(&d).is_empty());
+}
+
+/// A filter on a turned object runs in the object's user space (SVG 1.1 measures its lengths
+/// there): opened, it draws as the same filter does on the same art drawn unturned with its offset
+/// turned by hand.
+#[test]
+fn a_filter_on_a_turned_object_draws_in_its_user_space() {
+    let filter = |dx: f64, dy: f64| {
+        format!(
+            r#"<filter id="m" x="-1" y="-1" width="3" height="3"><feOffset dx="{dx}" dy="{dy}"/><feColorMatrix type="hueRotate" values="90"/></filter>"#
+        )
+    };
+    let turned = format!(
+        r##"<defs>{}</defs><rect x="60" y="30" width="40" height="40" fill="#08f" transform="rotate(30 80 50)" filter="url(#m)"/>"##,
+        filter(24.0, 0.0)
+    );
+    let (d, w) = open(&turned);
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&d).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+    // The same square, its corners turned by hand, with the offset 24 along the turned x axis.
+    let (c, s) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+    let corner = |x: f64, y: f64| format!("{},{}", 80.0 + c * (x - 80.0) - s * (y - 50.0), 50.0 + s * (x - 80.0) + c * (y - 50.0));
+    let reference = format!(
+        r##"<defs>{}</defs><polygon points="{} {} {} {}" fill="#08f" filter="url(#m)"/>"##,
+        filter(24.0 * c, 24.0 * s),
+        corner(60.0, 30.0),
+        corner(100.0, 30.0),
+        corner(100.0, 70.0),
+        corner(60.0, 70.0)
+    );
+    let canvas = render_artboard(&d);
+    // The moved square lies beyond where it was: its center, turned and moved, is near (100.8, 62).
+    assert!(canvas.over_white(101, 62) != [255, 255, 255], "drawn where the offset puts it");
+    assert_similar(&canvas, &resvg_render(&svg(&reference), 200, 120), 40.0, 0.02);
 }
 
 #[test]
@@ -434,6 +739,177 @@ fn an_exported_outer_glow_round_faint_art_draws_as_the_canvas_does() {
     d.insert(Some(l), 0, n).unwrap();
     let svg = export(&d, &ExportOptions::default());
     assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 40.0, 0.02);
+}
+
+/// A document with one red rectangle whose only effect is the SVG filter `xml`.
+fn filtered_rect(xml: &str) -> Document {
+    let mut d = Document::new(200.0, 120.0);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(40.0, 20.0, 100.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::rgb(0.9, 0.1, 0.1)), Paint::None, 0.0),
+    );
+    n.appearance.effects = vec![Effect { id: "svg.filter".into(), params: json!({ "xml": xml }), visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    d
+}
+
+/// An SVG filter in a scaled, turned or skewed user space is written live: the filter's user space
+/// is a group's transform, and the art is written in document coordinates in a group inside the
+/// filter that maps it back, so its stroke keeps its width. Opened again, it is the same effect
+/// and draws as the canvas drew it.
+#[test]
+fn an_exported_turned_filter_opens_as_the_same_effect() {
+    let xml = r#"<filter id="m" x="-1" y="-1" width="3" height="3"><feOffset dx="10"/><feColorMatrix type="hueRotate" values="90"/></filter>"#;
+    for (scale, axes) in [(2.0, json!([0.8, 0.6, -0.6, 0.8])), (1.0, json!([1.0, 0.0, 0.5, 1.0])), (0.5, serde_json::Value::Null)] {
+        let mut d = Document::new(200.0, 120.0);
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(40.0, 20.0, 100.0, 70.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.9, 0.1, 0.1)), Paint::solid(Color::BLACK), 4.0),
+        );
+        let mut params = json!({ "xml": xml, "scale": scale, "origin": [30.0, 10.0] });
+        if !axes.is_null() {
+            params["axes"] = axes.clone();
+        }
+        n.appearance.effects = vec![Effect { id: "svg.filter".into(), params, visible: true }];
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let out = export(&d, &ExportOptions::default());
+        assert!(out.contains("<g filter=\"url(#") && !out.contains("<image"), "{out}");
+        assert!(out.contains("stroke-width=\"4\""), "the stroke keeps its width: {out}");
+        let (back, w) = import_with_report(&out).unwrap();
+        assert!(w.is_empty(), "{w:?}");
+        let fx = effects(&back);
+        assert_eq!(fx.len(), 1, "{out}");
+        let num = |v: &serde_json::Value| v.as_f64().unwrap();
+        assert!((num(&fx[0].params["scale"]) - scale).abs() < 1e-6, "{:?}", fx[0].params);
+        let origin: Vec<f64> = fx[0].params["origin"].as_array().unwrap().iter().map(num).collect();
+        assert!((origin[0] - 30.0).abs() < 1e-6 && (origin[1] - 10.0).abs() < 1e-6, "{origin:?}");
+        match fx[0].params.get("axes") {
+            Some(got) => {
+                let got: Vec<f64> = got.as_array().unwrap().iter().map(num).collect();
+                let want: Vec<f64> = axes.as_array().unwrap().iter().map(num).collect();
+                assert!(got.iter().zip(&want).all(|(a, b)| (a - b).abs() < 1e-6), "{got:?}");
+            }
+            None => assert!(axes.is_null(), "{:?}", fx[0].params),
+        }
+        assert_similar(&render_artboard(&d), &render_artboard(&back), 40.0, 0.02);
+    }
+    // A user space stretched 10,000 times along x: the inverse transform holds 0.0001, which the
+    // export's three decimals would round to 0, and the art still opens at its place.
+    let mut d = Document::new(200.0, 120.0);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(40.0, 20.0, 100.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::rgb(0.9, 0.1, 0.1)), Paint::None, 0.0),
+    );
+    let xml = r#"<filter id="k"><feColorMatrix type="hueRotate" values="90"/></filter>"#;
+    let params = json!({ "xml": xml, "scale": 10.0, "axes": [1000.0, 0.0, 0.0, 1.0] });
+    n.appearance.effects = vec![Effect { id: "svg.filter".into(), params, visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = export(&d, &ExportOptions::default());
+    let (back, w) = import_with_report(&out).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let bounds = |d: &Document| art(d).iter().find_map(|n| n.path_data().and_then(|p| p.bounds())).unwrap();
+    let (a, b) = (bounds(&d), bounds(&back));
+    assert!((a.x0 - b.x0).abs() < 1e-3 && (a.x1 - b.x1).abs() < 1e-3 && (a.y1 - b.y1).abs() < 1e-3, "{a:?} {b:?}: {out}");
+}
+
+/// SVG 1.1 export writes an SVG filter's image reference as `xlink:href`, and it imports back.
+#[test]
+fn an_exported_filter_image_has_an_xlink_reference() {
+    let data = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+    let xml = format!(r#"<filter id="i"><feImage href="{data}"/><feComposite in2="SourceGraphic" operator="in"/></filter>"#);
+    let d = filtered_rect(&xml);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains(&format!(r#"<feImage xlink:href="{data}"/>"#)), "{svg}");
+    assert!(!svg.contains(" href="), "{svg}");
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    match vectorcraft_effects::raster_effects(&effects(&back)).as_slice() {
+        [RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(f))] => {
+            assert!(f.xml().contains(&format!(r#"<feImage href="{data}"/>"#)), "the filter as it is drawn: {}", f.xml())
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+/// SVG export writes a filter only in a form SVG import reads back. A filter at the size limit,
+/// whose id or region written out would make it longer, is left out of the SVG with the other pixel
+/// effects (exports that turn pixel effects into images draw it as an image), and the SVG opens
+/// without a filter that import can't read.
+#[test]
+fn an_exported_filter_is_one_import_reads_back() {
+    let max = vectorcraft_doc::SvgFilter::MAX_XML;
+    let close = r#""/><feComposite in2="SourceGraphic" operator="in"/></filter>"#;
+    let short_id = r##"<filter id="r"><feFlood flood-color="#ff0000" result=""##;
+    let measured =
+        r##"<filter id="r" filterUnits="userSpaceOnUse" x="-10%" y="-10%" width="120%" height="120%"><feFlood flood-color="#ff0000" result=""##;
+    for open in [short_id, measured] {
+        let xml = format!("{open}{}{close}", "a".repeat(max - open.len() - close.len()));
+        let d = filtered_rect(&xml);
+        assert_eq!(effects(&d).len(), 1);
+        let svg = export(&d, &ExportOptions::default());
+        assert!(!svg.contains("<filter"), "{open}");
+        let (_, w) = import_with_report(&svg).unwrap();
+        assert!(w.is_empty(), "{open}: {w:?}");
+    }
+    // A shorter one is written and read back.
+    let xml = format!("{short_id}{}{close}", "a".repeat(max - 64 - short_id.len() - close.len()));
+    let svg = export(&filtered_rect(&xml), &ExportOptions::default());
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&back).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+}
+
+/// With the Latin-1 encoding, export writes each character past U+00FF as a character reference,
+/// which import counts as text. A filter is measured with those references in either encoding: one
+/// that passes the limit with them is left out of both, and one that fits with them is written live
+/// in Latin-1 and read back.
+#[test]
+fn an_exported_filter_counts_the_references_latin1_writes() {
+    let open = r##"<filter id="r"><feFlood flood-color="#ff0000" result=""##;
+    let close = r#""/><feComposite in2="SourceGraphic" operator="in"/></filter>"#;
+    let max = vectorcraft_doc::SvgFilter::MAX_XML;
+    let latin1 = ExportOptions { encoding: vectorcraft_svg::Encoding::Latin1, ..ExportOptions::default() };
+    // `国` takes three bytes as UTF-8 and eight as `&#x56FD;`.
+    let xml = format!("{open}{}{close}", "\u{56FD}".repeat((max / 2 - open.len() - close.len()) / 3));
+    let d = filtered_rect(&xml);
+    assert_eq!(effects(&d).len(), 1);
+    assert!(!export(&d, &ExportOptions::default()).contains("<filter"), "its references pass the limit");
+    let svg = export(&d, &latin1);
+    assert!(!svg.contains("<filter"), "its references pass the limit");
+    let (_, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    // One that fits with its references.
+    let xml = format!("{open}{}{close}", "\u{56FD}".repeat((max - 64 - open.len() - close.len()) / 8));
+    let svg = export(&filtered_rect(&xml), &latin1);
+    assert!(svg.contains("&#x56FD;"), "the references are written");
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&back).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+}
+
+/// SVG 1.1 has no `feDropShadow`: export writes the SVG 1.1 primitives it stands for, which draw
+/// as the canvas draws the shadow and import back as a filter that draws the same.
+#[test]
+fn an_exported_svg_drop_shadow_is_svg_1_1_and_draws_as_the_canvas_does() {
+    let xml = r##"<filter id="s" filterUnits="userSpaceOnUse" x="0" y="0" width="200" height="120"><feDropShadow dx="12" dy="9" stdDeviation="3" flood-color="#0040ff" flood-opacity="0.7"/></filter>"##;
+    let d = filtered_rect(xml);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(!svg.contains("feDropShadow") && svg.contains("<feGaussianBlur") && svg.contains("<feMerge"), "{svg}");
+    let canvas = render_artboard(&d);
+    // The shadow, beside the art.
+    let [r, g, b] = canvas.over_white(105, 75);
+    assert!(b > 150 && r < 200 && g < 200, "{:?}", [r, g, b]);
+    assert_similar(&canvas, &resvg_render(&svg, 200, 120), 40.0, 0.02);
+    let (back, w) = import_with_report(&svg).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&back).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+    assert_similar(&canvas, &render_artboard(&back), 40.0, 0.02);
 }
 
 #[test]

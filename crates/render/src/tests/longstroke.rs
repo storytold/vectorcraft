@@ -2,7 +2,7 @@
 //! and for dashes `dash_kept`), and draws the same pixels as when it is outlined whole.
 
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, LineCap, LineJoin, Node, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, LineCap, LineJoin, Node, StrokeLayer, WidthProfile};
 use vectorcraft_geom::{PathData, Point, Vec2};
 
 use crate::renderer::{CROP_STROKES, crop_line};
@@ -64,6 +64,52 @@ fn zigzag() -> BezPath {
         }
     }
     bp
+}
+
+#[test]
+fn a_long_profile_stroke_keeps_its_widths_when_outlined_near_the_view() {
+    let mut lens = stroke(16.0, LineJoin::Miter, LineCap::Square);
+    lens.profile = WidthProfile::preset("lens");
+    let mut taper = stroke(12.0, LineJoin::Round, LineCap::Round);
+    taper.profile = WidthProfile::preset("taperEnd");
+    let mut asymmetric = stroke(12.0, LineJoin::Miter, LineCap::Square);
+    asymmetric.profile = Some(WidthProfile { points: vec![(0.0, 2.0, 0.1), (1.0, 0.1, 2.0)] });
+    let mut two = zigzag();
+    two.move_to(Point::new(0.0, 100.0));
+    for i in 1..3000 {
+        two.line_to(Point::new(i as f64 * 8.0, 100.0));
+    }
+    for (name, d, at, cropped) in [
+        ("open zigzag, lens at middle", doc(&zigzag(), lens), Point::new(12_000.0, 15.0), true),
+        ("open zigzag, taper at start", doc(&zigzag(), taper.clone()), Point::new(0.0, 15.0), true),
+        ("open zigzag, taper at end", doc(&zigzag(), taper.clone()), Point::new(23_990.0, 15.0), true),
+        ("open zigzag, asymmetric profile", doc(&zigzag(), asymmetric), Point::new(12_000.0, 15.0), true),
+        ("two open subpaths", doc(&two, taper.clone()), Point::new(12_000.0, 60.0), true),
+        ("closed ring at seam", doc(&ring(4000, 5000.0), taper.clone()), Point::new(5000.0, 0.0), false),
+        ("closed ring away from seam", doc(&ring(4000, 5000.0), taper), Point::new(0.0, 5000.0), false),
+    ] {
+        let mut renderer = Renderer::new();
+        let near = render(&mut renderer, &d, at);
+        assert_eq!(renderer.strokes.values().any(|e| e.crop.is_some()), cropped, "{name}: crop choice");
+        let full = whole(&d, at);
+        // The cropped outline fits cubics through the same samples, but its fit starts at the
+        // crop rather than at the subpath's end, so a cubic may put its control points
+        // differently (the same curve). The rasteriser then flattens it into a slightly
+        // different polygon, which shows as one level on an anti-aliased edge pixel. Anything
+        // more would be a wrong width.
+        let mismatched: Vec<_> = near
+            .pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(full.pixels.as_chunks::<4>().0.iter())
+            .enumerate()
+            .filter(|(_, (a, b))| a.iter().zip(b.iter()).any(|(a, b)| a.abs_diff(*b) > 1))
+            .take(8)
+            .map(|(i, (a, b))| (i % SIZE as usize, i / SIZE as usize, a.to_vec(), b.to_vec()))
+            .collect();
+        assert!(mismatched.is_empty(), "{name}: pixels differ at {mismatched:?}");
+    }
 }
 
 /// A closed polygon of `n` anchors round a circle of radius `r` about the origin.
@@ -151,6 +197,56 @@ fn a_long_dashed_stroke_draws_the_same_pixels_outlined_near_the_view() {
             assert!(render(&mut r, d, next).pixels == whole(d, next).pixels, "{what}, moved by {step:?}: the same pixels");
         }
     }
+}
+
+/// 600 half circles of radius 60 in a row along y = 0, from x = 0, each as two quarter circles and
+/// alternately above and below the row.
+fn waves() -> BezPath {
+    let k = 60.0 * 4.0 / 3.0 * (std::f64::consts::FRAC_PI_8).tan();
+    let mut bp = BezPath::new();
+    bp.move_to((0.0, 0.0));
+    for i in 0..600 {
+        let (x, s) = (f64::from(i) * 120.0, if i % 2 == 0 { -1.0 } else { 1.0 });
+        bp.curve_to((x, s * k), (x + 60.0 - k, s * 60.0), (x + 60.0, s * 60.0));
+        bp.curve_to((x + 60.0 + k, s * 60.0), (x + 120.0, s * k), (x + 120.0, 0.0));
+    }
+    bp
+}
+
+/// Whether `outline` has a curve whose control points span 32 pt or more across or down.
+fn has_long_curve(outline: &BezPath) -> bool {
+    outline.segments().any(|s| {
+        let pts = match s {
+            kurbo::PathSeg::Line(_) => return false,
+            kurbo::PathSeg::Quad(q) => vec![q.p0, q.p1, q.p2],
+            kurbo::PathSeg::Cubic(c) => vec![c.p0, c.p1, c.p2, c.p3],
+        };
+        let b = pts.iter().fold(kurbo::Rect::from_points(pts[0], pts[0]), |b, p| b.union_pt(*p));
+        b.width().max(b.height()) >= 32.0
+    })
+}
+
+/// A long wide stroke along curves, solid or dashed, outlined near the view has its long curves
+/// drawn as lines and draws the same pixels as when it is outlined whole. With a width profile,
+/// the outline made near the view keeps its curves.
+#[test]
+fn a_long_wide_curved_stroke_draws_the_same_pixels_outlined_near_the_view() {
+    let at = Point::new(36_030.0, 0.0);
+    let solid = stroke(24.0, LineJoin::Miter, LineCap::Butt);
+    for (what, d) in [("solid", doc(&waves(), solid.clone())), ("dashed", doc(&waves(), dashed(solid.clone(), &[150.0, 40.0], 0.0, false)))] {
+        let mut r = Renderer::new();
+        let near = render(&mut r, &d, at);
+        assert!(r.strokes.values().any(|e| e.crop.is_some()), "{what}: outlined near the view");
+        assert!(r.strokes.values().all(|e| !has_long_curve(&e.outline)), "{what}: its long curves drawn as lines");
+        assert!(near.pixels == whole(&d, at).pixels, "{what}: the same pixels as the whole outline");
+        assert!(near.pixels.chunks(4).any(|p| p[0] < 128), "{what}: the stroke shows");
+    }
+    let mut lens = solid;
+    lens.profile = WidthProfile::preset("lens");
+    let mut r = Renderer::new();
+    render(&mut r, &doc(&waves(), lens), at);
+    assert!(r.strokes.values().any(|e| e.crop.is_some()), "lens profile: outlined near the view");
+    assert!(r.strokes.values().all(|e| has_long_curve(&e.outline)), "lens profile: its curves kept");
 }
 
 #[test]

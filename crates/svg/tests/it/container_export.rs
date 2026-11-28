@@ -92,5 +92,5 @@ fn a_group_transform_copies_its_images() {
         .filter(|l| l.starts_with("<image") || l.starts_with("<use"))
         .filter_map(|l| l.split("transform=\"").nth(1)?.split('"').next())
         .collect();
-    assert_eq!(placed, ["matrix(1 0 0 1 20 20)", "matrix(1 0 0 1 60 20)", "matrix(1 0 0 1 100 20)"], "{svg}");
+    assert_eq!(placed, ["matrix(1 0 0 1 100 20)", "matrix(1 0 0 1 60 20)", "matrix(1 0 0 1 20 20)"], "the original on top: {svg}");
 }

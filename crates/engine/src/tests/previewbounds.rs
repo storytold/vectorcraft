@@ -1,5 +1,5 @@
 //! Use Preview Bounds: the Transform panel values, the bounding box, Align and Distribute measure
-//! visual bounds (strokes and geometry effects included) when it is on.
+//! visual bounds (strokes, geometry and projected 3D effects included) when it is on.
 
 use std::sync::Arc;
 
@@ -101,6 +101,284 @@ fn glyphs(s: &Session, id: NodeId) -> Rect {
 
 fn near(a: Rect, b: Rect, tolerance: f64) -> bool {
     [(a.x0, b.x0), (a.y0, b.y0), (a.x1, b.x1), (a.y1, b.y1)].iter().all(|(x, y)| (x - y).abs() <= tolerance)
+}
+
+const PREVIEW_3D: [&str; 4] = ["threeD.extrude", "threeD.revolve", "threeD.inflate", "threeD.rotate"];
+
+/// A live projected rectangle, with the effect on the object or its painted fill.
+fn projected_rect(s: &mut Session, effect: &str, item: bool) -> NodeId {
+    let id = rect(s, 100.0, 80.0, 0.0);
+    run(s, "effect.apply", json!({"ids": [id.0], "effect": effect, "params": params_3d(effect), "item": if item { json!(0) } else { Value::Null }}));
+    id
+}
+
+/// Settings for `effect` that turn the art and give it depth.
+fn params_3d(effect: &str) -> Value {
+    let mut params = json!({"rotationX": -20, "rotationY": 35, "rotationZ": 15, "perspectiveAngle": 0, "shade": false});
+    match effect {
+        "threeD.revolve" => {
+            params["segments"] = json!(8);
+            params["angle"] = json!(240);
+            params["offset"] = json!(12);
+        }
+        "threeD.extrude" => {
+            params["depth"] = json!(40);
+            params["bevel"] = json!("rounded");
+        }
+        "threeD.inflate" => params["depth"] = json!(20),
+        _ => {}
+    }
+    params
+}
+
+/// Measure the renderer's projected vector art, including any geometry effects left after 3D.
+fn projected(s: &Session, id: NodeId) -> Rect {
+    let d = &s.doc().unwrap().doc;
+    let n = d.node(id).unwrap();
+    let art = vectorcraft_render::effects::revolve_art(n).or_else(|| vectorcraft_render::effects::solid_art(n)).unwrap();
+    vectorcraft_render::effects::preview::visual_bounds(&d.symbol_boxes(), &art).unwrap()
+}
+
+/// All four projected effects contribute at object and item scope; off and hidden keep source bounds.
+#[test]
+fn preview_3d_measures_the_projected_art_at_object_and_item_scope() {
+    for effect in PREVIEW_3D {
+        for item in [false, true] {
+            let mut s = session();
+            let id = projected_rect(&mut s, effect, item);
+            let expected = projected(&s, id);
+            let source = geometric(&s, id);
+            assert!(!near(expected, source, 1e-3), "the fixture must change its bounds: {effect}");
+            preview(&mut s, true);
+            assert!(near(s.transform_bounds(&[id]).unwrap(), expected, 1e-6), "{effect}, item={item}");
+            preview(&mut s, false);
+            assert_eq!(s.transform_bounds(&[id]), Some(source));
+            preview(&mut s, true);
+            run(&mut s, "effect.setParams", json!({"ids": [id.0], "index": 0, "item": if item { json!(0) } else { Value::Null }, "visible": false}));
+            assert_eq!(s.transform_bounds(&[id]), Some(source), "hidden {effect}, item={item}");
+        }
+    }
+}
+
+/// Align and spacing use projected edges, with one undo step and no repeat-alignment edit.
+#[test]
+fn preview_3d_align_and_spacing_measure_projected_edges() {
+    for effect in PREVIEW_3D {
+        let mut s = session();
+        let a = projected_rect(&mut s, effect, false);
+        let b = rect(&mut s, 20.0, 30.0, 0.0);
+        preview(&mut s, true);
+        run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+        let before = s.doc().unwrap().doc.clone();
+        let history = s.doc().unwrap().history.undo.len();
+        run(&mut s, "object.align", json!({"horizontal": "left"}));
+        assert!((projected(&s, a).x0 - geometric(&s, b).x0).abs() < 1e-6, "{effect}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), history + 1);
+        let aligned = s.doc().unwrap().doc.clone();
+        run(&mut s, "object.align", json!({"horizontal": "left"}));
+        assert_eq!(s.doc().unwrap().history.undo.len(), history + 1, "already aligned {effect}");
+        assert_eq!(s.doc().unwrap().doc, aligned);
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(s.doc().unwrap().doc, before);
+        run(&mut s, "edit.redo", json!({}));
+        assert_eq!(s.doc().unwrap().doc, aligned);
+
+        let mut s = session();
+        let a = projected_rect(&mut s, effect, false);
+        let b = rect(&mut s, 350.0, 30.0, 0.0);
+        preview(&mut s, true);
+        run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+        let before = s.doc().unwrap().doc.clone();
+        run(&mut s, "object.distributeSpacing", json!({"axis": "horizontal", "spacing": 0}));
+        assert!((projected(&s, a).x1 - geometric(&s, b).x0).abs() < 1e-6, "{effect}");
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+}
+
+/// A group's and a symbol's projected members are measured as art rather than flat source paths.
+#[test]
+fn preview_3d_measures_projected_group_and_symbol_members() {
+    for effect in PREVIEW_3D {
+        let mut source = session();
+        let source_id = projected_rect(&mut source, effect, false);
+        let expected = projected(&source, source_id);
+        let mut d = Document::new(600.0, 400.0);
+        let mut shape = source.doc().unwrap().doc.node(source_id).unwrap().clone();
+        shape.id = d.alloc_id();
+        let group = Node::group(d.alloc_id(), vec![Arc::new(shape.clone())]);
+        let group_id = group.id;
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, group).unwrap();
+        shape.id = d.alloc_id();
+        d.symbols.push(Symbol { dynamic: false, name: "3D / Bounds".into(), art: Arc::new(shape) });
+        let shift = Affine::translate((250.0, 0.0));
+        let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "3D / Bounds".into(), xf: shift });
+        let instance_id = instance.id;
+        d.insert(Some(layer), 1, instance).unwrap();
+        let mut s = Session::new();
+        s.add_document(d, None);
+        preview(&mut s, true);
+        assert!(near(s.transform_bounds(&[group_id]).unwrap(), expected, 1e-6), "group {effect}");
+        assert!(near(s.transform_bounds(&[instance_id]).unwrap(), shift.transform_rect_bbox(expected), 1e-6), "symbol {effect}");
+    }
+}
+
+/// A symbol instance with a 3D effect of its own is measured by the art the renderer projects from its symbol.
+#[test]
+fn preview_3d_measures_an_instance_with_its_own_effect() {
+    for effect in PREVIEW_3D {
+        let mut d = Document::new(600.0, 400.0);
+        let square = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 80.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        d.symbols.push(Symbol { dynamic: false, name: "3D / Own".into(), art: Arc::new(square) });
+        let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "3D / Own".into(), xf: Affine::translate((50.0, 40.0)) });
+        let (layer, id) = (d.layers[0].id, instance.id);
+        d.insert(Some(layer), 0, instance).unwrap();
+        let mut s = Session::new();
+        s.add_document(d, None);
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "params": params_3d(effect)}));
+        let d = &s.doc().unwrap().doc;
+        let n = d.node(id).unwrap();
+        let art = vectorcraft_render::effects::revolve_art_in(Some(d), n).or_else(|| vectorcraft_render::effects::solid_art_in(Some(d), n)).unwrap();
+        let expected = vectorcraft_render::effects::preview::visual_bounds(&d.symbol_boxes(), &art).unwrap();
+        let source = geometric(&s, id);
+        assert!(!near(expected, source, 1e-3), "the fixture must change its bounds: {effect}");
+        preview(&mut s, true);
+        assert!(near(s.transform_bounds(&[id]).unwrap(), expected, 1e-6), "{effect}");
+    }
+}
+
+/// Dynamic instance overrides are applied before deciding which painted 3D surfaces remain.
+#[test]
+fn preview_3d_dynamic_symbol_overrides_precede_projection() {
+    for effect in PREVIEW_3D {
+        let mut source = session();
+        let source_id = projected_rect(&mut source, effect, false);
+        let full = projected(&source, source_id);
+        let mut d = Document::new(600.0, 400.0);
+        let mut art = source.doc().unwrap().doc.node(source_id).unwrap().clone();
+        art.id = d.alloc_id();
+        d.symbols.push(Symbol { dynamic: true, name: "3D / Dynamic".into(), art: Arc::new(art) });
+        let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "3D / Dynamic".into(), xf: Affine::IDENTITY });
+        instance
+            .extras_mut()
+            .symbol_overrides
+            .push(vectorcraft_doc::symbol_overrides::SymbolOverride { fill: Some(Paint::None), ..Default::default() });
+        let id = instance.id;
+        let changed = vectorcraft_doc::symbol_overrides::dynamic_art(&d.symbols[0].art, &instance);
+        let expected = vectorcraft_render::effects::preview::visual_bounds(&d.symbol_boxes(), &changed);
+        if effect == "threeD.extrude" {
+            assert!(expected.is_some(), "the Extrude fixture must retain its source bounds");
+        }
+        assert!(expected.is_none_or(|b| !near(b, full, 1e-3)), "the override must remove the projected surface: {effect}");
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, instance).unwrap();
+        let mut s = Session::new();
+        s.add_document(d, None);
+        preview(&mut s, true);
+        let actual = s.transform_bounds(&[id]);
+        assert!(
+            match (actual, expected) {
+                (Some(a), Some(b)) => near(a, b, 1e-6),
+                (None, None) => true,
+                _ => false,
+            },
+            "overridden {effect}: {actual:?}, expected {expected:?}"
+        );
+        run(&mut s, "symbol.instance.reset", json!({"ids": [id.0]}));
+        assert!(near(s.transform_bounds(&[id]).unwrap(), full, 1e-6), "reset {effect}");
+    }
+}
+
+/// Geometry after projection remains part of the measured stack at object and item scope.
+#[test]
+fn preview_3d_applies_geometry_after_the_projected_surface() {
+    for effect in PREVIEW_3D {
+        for item in [false, true] {
+            let mut s = session();
+            let id = projected_rect(&mut s, effect, item);
+            run(
+                &mut s,
+                "effect.apply",
+                json!({"ids": [id.0], "effect": "path.offsetPath", "params": {"offset": 5}, "item": if item { json!(0) } else { Value::Null }}),
+            );
+            let expected = projected(&s, id);
+            preview(&mut s, true);
+            assert!(near(s.transform_bounds(&[id]).unwrap(), expected, 1e-6), "{effect}, item={item}");
+        }
+    }
+}
+
+/// Typed width sizes the projected art and remains one undoable edit.
+#[test]
+fn preview_3d_set_bounds_sizes_the_projected_width() {
+    for effect in PREVIEW_3D {
+        let mut s = session();
+        let id = projected_rect(&mut s, effect, false);
+        let target = projected(&s, id).width() * 1.25;
+        preview(&mut s, true);
+        let before = s.doc().unwrap().doc.clone();
+        let history = s.doc().unwrap().history.undo.len();
+        run(&mut s, "object.setBounds", json!({"width": target, "reference": 0, "proportional": true, "strokes": false}));
+        assert!((projected(&s, id).width() - target).abs() < 1e-4, "{effect}: {:?}, target {target}", projected(&s, id));
+        assert_eq!(s.doc().unwrap().history.undo.len(), history + 1);
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+}
+
+/// A rotated selection measures the projected surface in its own bounding-box frame.
+#[test]
+fn preview_3d_oriented_box_follows_projected_art() {
+    for effect in PREVIEW_3D {
+        let mut s = session();
+        let id = projected_rect(&mut s, effect, false);
+        run(&mut s, "object.rotate", json!({"angle": 30}));
+        let d = &s.doc().unwrap().doc;
+        let angle = d.bbox_angle(&[id]);
+        assert!(angle.abs() > 0.1);
+        let n = d.node(id).unwrap();
+        let art = vectorcraft_render::effects::revolve_art(n).or_else(|| vectorcraft_render::effects::solid_art(n)).unwrap();
+        let frame = vectorcraft_doc::OrientedBox { angle, rect: Rect::ZERO }.to_doc().inverse();
+        let expected = vectorcraft_render::effects::preview::bounds_in(&d.symbol_boxes(), &art, frame).unwrap();
+        preview(&mut s, true);
+        let measured = s.transform_box(&[id]).unwrap();
+        assert_eq!(measured.angle, angle);
+        assert!(near(measured.rect, expected, 1e-6), "{effect}: {measured:?} vs {expected:?}");
+    }
+}
+
+/// A click on a member of a layer with a 3D effect selects that member, with Use Preview Bounds on
+/// or off, and the layer is still measured by its projected art.
+#[test]
+fn a_click_selects_the_member_of_a_layer_with_a_3d_effect() {
+    for effect in PREVIEW_3D {
+        for on in [false, true] {
+            let mut s = session();
+            let id = rect(&mut s, 100.0, 80.0, 0.0);
+            run(&mut s, "paint.setFill", json!({"color": "#0000ff"}));
+            let layer = s.doc().unwrap().doc.layers[0].id;
+            run(&mut s, "effect.apply", json!({"ids": [layer.0], "effect": effect, "params": params_3d(effect), "item": null}));
+            preview(&mut s, on);
+            run(&mut s, "select.none", json!({}));
+            let v = ViewInfo::default();
+            s.select_tool("selection", v).unwrap();
+            for k in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(k, 140.0, 125.0), v).unwrap();
+            }
+            assert_eq!(s.active().unwrap().selection.objects, [id], "{effect}, preview={on}");
+            let d = &s.doc().unwrap().doc;
+            let art =
+                vectorcraft_render::effects::revolve_art(&d.layers[0]).or_else(|| vectorcraft_render::effects::solid_art(&d.layers[0])).unwrap();
+            let expected = vectorcraft_render::effects::preview::visual_bounds(&d.symbol_boxes(), &art).unwrap();
+            let measured = vectorcraft_render::effects::preview::bounds_of(d, &[layer], true).unwrap();
+            assert!(near(measured, expected, 1e-6), "{effect}: {measured:?} vs {expected:?}");
+        }
+    }
 }
 
 #[test]
@@ -581,11 +859,13 @@ fn set_bounds_measures_paths_turned_together_square_to_their_box() {
 fn a_size_below_what_the_kept_strokes_of_several_paths_add_gives_them_no_width() {
     // With no width, the paths have a visual box 10 pt wide, the width of the thick stroke. A width
     // of 0 or more below 10 gives both paths no width, and the left edge of the visual box stays at
-    // -2. A negative width turns the paths over, as it does one path.
+    // -2. With no width each path turns back at its top and bottom, where the miter join bevels,
+    // so the visual box runs from y 100 to 150. A negative width turns the paths over, as it does
+    // one path.
     let mut wrong = vec![];
     for (width, paths, visual) in [
-        (8.0, [Rect::new(3.0, 100.0, 3.0, 150.0); 2], Rect::new(-2.0, 95.0, 8.0, 155.0)),
-        (0.0, [Rect::new(3.0, 100.0, 3.0, 150.0); 2], Rect::new(-2.0, 95.0, 8.0, 155.0)),
+        (8.0, [Rect::new(3.0, 100.0, 3.0, 150.0); 2], Rect::new(-2.0, 100.0, 8.0, 150.0)),
+        (0.0, [Rect::new(3.0, 100.0, 3.0, 150.0); 2], Rect::new(-2.0, 100.0, 8.0, 150.0)),
         (-37.0, [Rect::new(-44.0, 100.0, 0.0, 150.0), Rect::new(-44.0, 100.0, -13.2, 150.0)], Rect::new(-49.0, 95.0, 1.0, 155.0)),
     ] {
         let (mut s, ids) = thin_and_thick();
@@ -616,6 +896,106 @@ fn set_bounds_leaves_the_height_of_lines_with_no_height() {
     let v = s.transform_bounds(&ids).unwrap();
     assert!(close(v, Rect::new(-2.0, 95.0, 35.0, 105.0)), "{v:?}");
     assert!(close(geometric(&s, ids[1]), Rect::new(8.3, 100.0, 30.0, 100.0)), "{:?}", geometric(&s, ids[1]));
+}
+
+/// A line with a 2 pt stroke and butt caps, selected, with Use Preview Bounds on.
+fn butt_line(s: &mut Session, from: (f64, f64), to: (f64, f64)) -> NodeId {
+    let id = NodeId(run(s, "shape.line", json!({"x1": from.0, "y1": from.1, "x2": to.0, "y2": to.1}))["id"].as_u64().unwrap());
+    run(s, "stroke.set", json!({"weight": 2, "cap": "butt"}));
+    preview(s, true);
+    run(s, "select.set", json!({"ids": [id.0]}));
+    id
+}
+
+#[test]
+fn set_bounds_gives_a_butt_line_the_whole_height() {
+    // A butt cap ends at the anchor, so 10 mm (28.3465 pt) is the length of the line itself.
+    let mut s = session();
+    let id = butt_line(&mut s, (100.0, 100.0), (100.0, 140.0));
+    assert!(close(s.transform_bounds(&[id]).unwrap(), Rect::new(99.0, 100.0, 101.0, 140.0)), "{:?}", s.transform_bounds(&[id]));
+    run(&mut s, "object.setBounds", json!({"height": 28.3465, "reference": 0, "strokes": false}));
+    assert!(close(geometric(&s, id), Rect::new(100.0, 100.0, 100.0, 128.3465)), "{:?}", geometric(&s, id));
+    assert!(close(s.transform_bounds(&[id]).unwrap(), Rect::new(99.0, 100.0, 101.0, 128.3465)), "{:?}", s.transform_bounds(&[id]));
+}
+
+#[test]
+fn set_bounds_gives_a_diagonal_butt_line_the_size_out_of_proportion() {
+    // The stroke's corners follow the line's slope, which a scale out of proportion changes.
+    let mut s = session();
+    let id = butt_line(&mut s, (100.0, 100.0), (130.0, 140.0));
+    let before = s.transform_bounds(&[id]).unwrap();
+    // The stroke's corners reach 0.8 pt across x and 0.6 pt across y at this 3-4-5 slope.
+    assert!(close(before, Rect::new(99.2, 99.4, 130.8, 140.6)), "{before:?}");
+    run(&mut s, "object.setBounds", json!({"height": 100, "reference": 0, "strokes": false}));
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!((v.height() - 100.0).abs() < 1e-6, "{v:?}");
+}
+
+#[test]
+fn set_bounds_gives_a_butt_path_with_slanted_corners_the_size_out_of_proportion() {
+    // Square ends, but the bevel join at the apex sets the top edge by the slanted segments'
+    // corners, which a scale out of proportion moves.
+    let mut s = session();
+    let anchors = json!([{"x": 100, "y": 150}, {"x": 100, "y": 140}, {"x": 110, "y": 100}, {"x": 120, "y": 140}, {"x": 120, "y": 150}]);
+    let id = NodeId(run(&mut s, "path.create", json!({"anchors": anchors}))["id"].as_u64().unwrap());
+    run(&mut s, "stroke.set", json!({"weight": 2, "cap": "butt", "join": "bevel"}));
+    preview(&mut s, true);
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.setBounds", json!({"width": 60, "height": 20, "reference": 0, "strokes": false}));
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!((v.width() - 60.0).abs() < 1e-6 && (v.height() - 20.0).abs() < 1e-6, "{v:?}");
+}
+
+#[test]
+fn set_bounds_gives_a_closed_path_with_beveled_or_mitered_corners_the_size_out_of_proportion() {
+    // The bevel at the triangle's tip, the miter the limit bevels there and the miter spikes it
+    // keeps reach past the path by margins that follow the slanted segments' directions, which a
+    // scale out of proportion changes. The miter spikes of a stroke whose dashes have round or
+    // projecting caps reach past the path too.
+    let mut wrong = vec![];
+    for (join, limit, cap, dash) in [
+        ("bevel", 10.0, "round", Value::Null),
+        ("miter", 2.0, "round", Value::Null),
+        ("miter", 10.0, "round", Value::Null),
+        ("miter", 10.0, "round", json!([6, 3])),
+        ("miter", 10.0, "projecting", json!([6, 3])),
+    ] {
+        let mut s = session();
+        let anchors = json!([{"x": 100, "y": 150}, {"x": 110, "y": 100}, {"x": 120, "y": 150}]);
+        let id = NodeId(run(&mut s, "path.create", json!({"anchors": anchors, "closed": true}))["id"].as_u64().unwrap());
+        run(&mut s, "stroke.set", json!({"weight": 2, "cap": cap, "join": join, "miterLimit": limit, "dash": dash}));
+        preview(&mut s, true);
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        run(&mut s, "object.setBounds", json!({"width": 60, "height": 20, "reference": 0, "strokes": false}));
+        let v = s.transform_bounds(&[id]).unwrap();
+        if (v.width() - 60.0).abs() > 1e-6 || (v.height() - 20.0).abs() > 1e-6 {
+            wrong.push(format!("{join} {limit} {cap} {dash}: {v:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
+#[test]
+fn set_bounds_gives_a_symbol_instance_of_a_diagonal_butt_line_the_size_out_of_proportion() {
+    let mut s = session();
+    butt_line(&mut s, (100.0, 100.0), (130.0, 140.0));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Line"}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.setBounds", json!({"width": 20, "height": 100, "reference": 0, "strokes": false}));
+    let v = s.transform_bounds(&[id]).unwrap();
+    assert!((v.width() - 20.0).abs() < 1e-6 && (v.height() - 100.0).abs() < 1e-6, "{v:?}");
+}
+
+#[test]
+fn align_places_a_vertical_butt_line_by_its_end_points() {
+    // With Use Preview Bounds on, a butt line's ends line up with the top of a rectangle without
+    // a stroke.
+    let mut s = session();
+    rect(&mut s, 20.0, 50.0, 0.0);
+    let id = butt_line(&mut s, (200.0, 160.0), (200.0, 190.0));
+    run(&mut s, "select.all", json!({}));
+    run(&mut s, "object.align", json!({"vertical": "top"}));
+    assert!(close(geometric(&s, id), Rect::new(200.0, 100.0, 200.0, 130.0)), "{:?}", geometric(&s, id));
 }
 
 /// The rectangles of [`thin_and_thick`] in a group, the thick one in a group of its own inside it
@@ -876,6 +1256,31 @@ fn a_handle_drag_keeps_the_opposite_edge_of_the_offset_shape() {
         let (_, g) = drag_box(&mut s, id, (300.0, 200.0), (350.0, 250.0), Mods::default());
         assert_eq!(g, Rect::new(100.0, 100.0, 350.0, 250.0), "strokes {strokes}");
     }
+}
+
+#[test]
+fn a_hover_checks_the_memo_as_often_however_many_objects_are_selected() {
+    let checks = |objects: u32| {
+        let mut s = session();
+        for i in 0..objects {
+            rect(&mut s, f64::from(i), 1.0, 0.0);
+        }
+        run(&mut s, "select.all", json!({}));
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        // Off the art, so the hover walks every selected object and finds no anchor or center.
+        let hover = |s: &mut Session| {
+            s.pointer(&PointerEvent::new(PointerKind::Move, 350.0, 350.0), v).unwrap();
+            s.cursor(Point::new(350.0, 350.0), Mods::default(), v)
+        };
+        hover(&mut s);
+        let before = s.preview_memo.checks();
+        hover(&mut s);
+        s.preview_memo.checks() - before
+    };
+    let few = checks(3);
+    assert!(few > 0, "a hover asks the memo");
+    assert_eq!(checks(60), few, "a check compares the whole selection: one per object is quadratic");
 }
 
 #[test]

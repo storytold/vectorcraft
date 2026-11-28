@@ -1,17 +1,142 @@
-use super::axis::{MAX_TICK_MARKS, count_param, one_line};
+use vectorcraft_doc::graph::graph_art_without_type as art_bounds;
+
+use super::axis::{MAX_TICK_MARKS, count_given, one_line};
 use super::data::apply_data;
-use super::generate::{children_bounds, generate};
+use super::generate::{calculated_axes, children_bounds, generate};
 use super::series::{picked_series, reselect_series};
 use super::{
-    Affine, Document, EngineError, GraphKind, GraphSpec, Node, NodeId, Rect, Result, Session, TickLength, Value, ValueAxisSide, bad, bool_or, f64_or,
-    f64_req, json, named_id, str_param,
+    Affine, Document, EngineError, GraphKind, GraphSpec, Node, NodeId, Rect, Result, Session, TickLength, Value, ValueAxisSide, bad, f64_req, json,
+    named_id, number_or, switch_or, text_param,
 };
 
+/// An axis bound `p` gives for `key`: `None` when left out, `Some(None)` for null (calculated from the data), or the
+/// number. Any other value, such as `"10"`, is an error.
+fn bound_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Option<f64>>> {
+    match p.get(key) {
+        None => Ok(None),
+        Some(Value::Null) => Ok(Some(None)),
+        Some(v) => v.as_f64().map(|x| Some(Some(x))).ok_or_else(|| bad(cmd, format!("`{key}` must be a number or null, not {v}"))),
+    }
+}
+
+/// The bounds a redraw of graph `n` measures a move or scale on, as kept at the last generation and as they are now:
+/// those of its art without type ([`GraphSpec::placed_art`]), or those of all its art when the graph keeps no such
+/// bounds with a width and a height. `None` when the art measured has no width or no height now, or the graph keeps
+/// bounds of its art without type and has no such art now.
+fn measured(n: &Node) -> Option<(Rect, Rect)> {
+    let kept = n.extras().graph.as_deref()?;
+    let c = n.children()?;
+    let solid = |r: &Rect| r.width() > 1e-9 && r.height() > 1e-9;
+    match kept.placed_art.filter(solid) {
+        Some(placed) => art_bounds(c).filter(solid).map(|now| (placed, now)),
+        None => kept.placed.zip(children_bounds(c).filter(solid)),
+    }
+}
+
+/// `r` carried by the change from bounds `from` to bounds `to`: each edge stays at the same place relative to them.
+/// `None` when `from` has no width or no height.
+fn carried(r: Rect, from: Rect, to: Rect) -> Option<Rect> {
+    if from.width() <= 1e-9 || from.height() <= 1e-9 {
+        return None;
+    }
+    let (sx, sy) = (to.width() / from.width(), to.height() / from.height());
+    Some(Rect::new(to.x0 + (r.x0 - from.x0) * sx, to.y0 + (r.y0 - from.y0) * sy, to.x0 + (r.x1 - from.x0) * sx, to.y0 + (r.y1 - from.y0) * sy))
+}
+
+/// The graphs holding objects `ids`, that are among them or that are inside them, each with the bounds of its art
+/// without type and of all its art. Give them to [`keep_placed`] after an edit that changes a graph's art without
+/// moving the graph.
+pub(crate) fn graphs_holding(d: &Document, ids: &[NodeId]) -> Vec<(NodeId, Option<Rect>, Option<Rect>)> {
+    let is_graph = |n: &Node| n.extras().graph.is_some();
+    let mut found: Vec<NodeId> = vec![];
+    for id in ids {
+        let Some(chain) = d.ancestry(*id) else { continue };
+        found.extend(chain.iter().rev().copied().find(|a| d.node(*a).is_some_and(is_graph)));
+        if let Some(n) = d.node(*id) {
+            n.walk(&mut |c| {
+                if is_graph(c) {
+                    found.push(c.id);
+                }
+            });
+        }
+    }
+    let mut out: Vec<(NodeId, Option<Rect>, Option<Rect>)> = vec![];
+    for gid in found {
+        if out.iter().any(|(o, ..)| *o == gid) {
+            continue;
+        }
+        let children = d.node(gid).and_then(Node::children);
+        out.push((gid, children.and_then(|c| art_bounds(c)), children.and_then(|c| children_bounds(c))));
+    }
+    out
+}
+
+/// After an edit that changed the art of `graphs` (from [`graphs_holding`]) without moving them, set the bounds each
+/// keeps so that its next redraw measures the same move or scale as it would have before the edit.
+pub(crate) fn keep_placed(d: &mut Document, graphs: &[(NodeId, Option<Rect>, Option<Rect>)]) {
+    for &(gid, art_was, whole_was) in graphs {
+        let Some(n) = d.node(gid) else { continue };
+        let children = n.children();
+        let (art_now, whole_now) = (children.and_then(|c| art_bounds(c)), children.and_then(|c| children_bounds(c)));
+        let Some(spec) = d.node_mut(gid).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        if let (Some(placed), Some(was), Some(now)) = (spec.placed_art, art_was, art_now) {
+            spec.placed_art = carried(now, was, placed).or(spec.placed_art);
+        }
+        if let (Some(placed), Some(was), Some(now)) = (spec.placed, whole_was, whole_now) {
+            spec.placed = carried(now, was, placed).or(spec.placed);
+        }
+    }
+}
+
+/// Let `edit` change the art of graph node `n` (a copy outside any document) without the next redraw reading the
+/// change as a move or scale: the plot rect first takes any move or scale of the art since it was generated, as a
+/// redraw measures it, and the bounds the graph keeps become those of the changed art (also for a graph that had none,
+/// so a later move is followed).
+pub(crate) fn edit_graph_art(n: &mut Node, edit: impl FnOnce(&mut Node)) {
+    let moved = measured(n).and_then(|(placed, now)| n.extras().graph.as_deref().and_then(|g| carried(g.rect, placed, now)));
+    if let (Some(rect), Some(g)) = (moved, n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) {
+        g.rect = rect;
+    }
+    edit(n);
+    let children = n.children();
+    let (whole, art) = (children.and_then(|c| children_bounds(c)), children.and_then(|c| art_bounds(c)));
+    if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+        (g.placed, g.placed_art) = (whole, art);
+    }
+}
+
 /// Regenerate graph `id` from `spec` (adjusting the plot rect for any move/scale since the last
-/// generation, which is recorded in the spec's `placed` bounds).
+/// generation, which is recorded in the spec's `placed_art` bounds, or `placed` in graphs saved without them).
 pub(super) fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> Result<()> {
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
-    if let (Some(placed), Some(now)) = (n.extras().graph.as_ref().and_then(|g| g.placed), n.children().and_then(|c| children_bounds(c)))
+    carry_moves(n, &mut spec);
+    let children = generate(d, &spec);
+    spec.placed = children_bounds(&children);
+    spec.placed_art = art_bounds(&children);
+    let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
+    if let Some(ch) = n.children_mut() {
+        *ch = children;
+    }
+    n.extras_mut().graph = Some(Box::new(spec));
+    Ok(())
+}
+
+/// [`regenerate`] graph `n` from its own spec, where `n` is outside `d`'s layers (in a symbol's art).
+pub(super) fn regenerate_detached(d: &mut Document, n: &mut Node) {
+    let Some(mut spec) = n.extras().graph.as_deref().cloned() else { return };
+    carry_moves(n, &mut spec);
+    let children = generate(d, &spec);
+    spec.placed = children_bounds(&children);
+    spec.placed_art = art_bounds(&children);
+    if let Some(ch) = n.children_mut() {
+        *ch = children;
+    }
+    n.extras_mut().graph = Some(Box::new(spec));
+}
+
+/// Adjust `spec`'s plot rect for any move or scale of graph `n` since its last generation.
+fn carry_moves(n: &Node, spec: &mut GraphSpec) {
+    if let Some((placed, now)) = measured(n)
         && placed.width() > 1e-9
         && placed.height() > 1e-9
         && (placed.x0 - now.x0).abs() + (placed.y0 - now.y0).abs() + (placed.x1 - now.x1).abs() + (placed.y1 - now.y1).abs() > 1e-6
@@ -21,24 +146,18 @@ pub(super) fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> R
             * Affine::translate(-placed.origin().to_vec2());
         spec.rect = a.transform_rect_bbox(spec.rect);
     }
-    let children = generate(d, &spec);
-    spec.placed = children_bounds(&children);
-    let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
-    if let Some(ch) = n.children_mut() {
-        *ch = children;
-    }
-    n.extras_mut().graph = Some(Box::new(spec));
-    Ok(())
 }
 
 pub(super) fn create(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graph.create";
-    let kind =
-        str_param(p, "type").map(|t| GraphKind::parse(t).ok_or_else(|| bad(C, format!("unknown graph type `{t}`")))).transpose()?.unwrap_or_default();
+    let kind = text_param(p, "type", C)?
+        .map(|t| GraphKind::parse(t).ok_or_else(|| bad(C, format!("unknown graph type `{t}`"))))
+        .transpose()?
+        .unwrap_or_default();
     let (x, y) = (f64_req(p, "x", C)?, f64_req(p, "y", C)?);
-    let (w, h) = (f64_or(p, "width", 200.0).abs().max(1.0), f64_or(p, "height", 150.0).abs().max(1.0));
+    let (w, h) = (number_or(p, "width", 200.0, C)?.abs().max(1.0), number_or(p, "height", 150.0, C)?.abs().max(1.0));
     let mut spec = GraphSpec { kind, rect: Rect::new(x, y, x + w, y + h), ..GraphSpec::default() };
-    if !apply_data(&mut spec, p) {
+    if !apply_data(&mut spec, p, C)? {
         // Starter data so the new graph shows something (edit it with Object → Graph → Data…).
         spec.series = vec!["Series 1".into(), "Series 2".into()];
         spec.categories = vec!["A".into(), "B".into(), "C".into(), "D".into()];
@@ -58,12 +177,16 @@ pub(super) fn create(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The graph `id` names (or the graph containing it), else the selected graph (or the graph
-/// containing the selection).
+/// containing the selection). Refused while an object of a dynamic symbol instance's art is
+/// selected.
 pub(super) fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
     let st = s.doc()?;
     let start = match named_id(p)? {
         Some(id) => vec![id],
-        None => st.selection.objects.clone(),
+        None => {
+            crate::cmd::edit::refuse_symbol_part(s)?;
+            st.selection.objects.clone()
+        }
     };
     for id in start {
         let mut cur = Some(id);
@@ -79,6 +202,28 @@ pub(super) fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
 
 pub(super) fn spec_of(s: &Session, id: NodeId) -> Result<GraphSpec> {
     s.doc()?.doc.node(id).and_then(|n| n.extras().graph.as_deref().cloned()).ok_or(EngineError::NoNode(id))
+}
+
+/// What `graph.setType` without `id` or `seriesIndexes` acts on, for the Graph Type dialog.
+pub struct GraphTypeSubject {
+    /// The selected graph, or the graph that holds the selection.
+    pub id: NodeId,
+    /// The series picked in it with Group Selection, in order; empty when the type goes to the whole graph.
+    pub series: Vec<usize>,
+    /// The least value, the greatest and the number of divisions each value axis is drawn with while its tick values
+    /// are calculated: the left (or only) axis, then the right axis' own scale (the left one's without Separate Scales).
+    pub calculated: [(f64, f64, usize); 2],
+}
+
+/// The graph and series that `graph.setType {}` reads its options from, as [`GraphTypeSubject`]. An error without a
+/// selected graph, as the command gives.
+pub fn graph_type_subject(s: &Session) -> Result<GraphTypeSubject> {
+    const C: &str = "graph.setType";
+    let p = json!({});
+    let id = target(s, &p, C)?;
+    let spec = spec_of(s, id)?;
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
+    Ok(GraphTypeSubject { id, series: picked_series(s, &p, id, count, C)?, calculated: calculated_axes(&spec) })
 }
 
 fn query_type_options(spec: &GraphSpec, count: usize, picked: &[usize]) -> Value {
@@ -103,6 +248,7 @@ fn query_type_options(spec: &GraphSpec, count: usize, picked: &[usize]) -> Value
         "prefix": one_line(&spec.prefix), "suffix": one_line(&spec.suffix), "rightPrefix": one_line(&spec.right_prefix),
         "rightSuffix": one_line(&spec.right_suffix), "dropShadow": spec.drop_shadow, "legendAcrossTop": spec.legend_across_top,
         "firstRowInFront": spec.first_row_in_front, "firstColumnInFront": spec.first_column_in_front, "filledLines": spec.filled_lines,
+        "lineWidth": spec.filled_line_width(),
     });
     // Only the options this graph's types use: overlap order for columns and bars, filled lines for lines.
     let kinds: Vec<GraphKind> = (0..count.max(1)).map(|i| spec.series_kind(i)).collect();
@@ -114,6 +260,7 @@ fn query_type_options(spec: &GraphSpec, count: usize, picked: &[usize]) -> Value
         }
         if !has(&[GraphKind::Line, GraphKind::Scatter, GraphKind::Radar]) {
             o.remove("filledLines");
+            o.remove("lineWidth");
         }
     }
     // Pie graphs: Legend, Position and Sort (their Legend stands for the legend checkbox).
@@ -139,6 +286,7 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graph.setType";
     let id = target(s, p, C)?;
     let mut spec = spec_of(s, id)?;
+    let stored = spec.clone();
     // The series to retype: `seriesIndexes`, else, with no `id`, a selection made only of this graph's series (Group
     // Selection). Anything else selected, the graph itself for one, is the whole graph.
     let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
@@ -146,7 +294,8 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     spec.right_series.retain(|i| *i < count);
     spec.right_series.sort_unstable();
     spec.right_series.dedup();
-    if p.get("seriesIndexes").is_some() && str_param(p, "type").is_none() && str_param(p, "valueAxis").is_none() {
+    let (new_type, new_axis) = (text_param(p, "type", C)?, text_param(p, "valueAxis", C)?);
+    if p.get("seriesIndexes").is_some() && new_type.is_none() && new_axis.is_none() {
         return Err(bad(C, "`seriesIndexes` needs a `type` or a `valueAxis`"));
     }
     let picked = picked_series(s, p, id, count, C)?;
@@ -183,6 +332,7 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
         "firstRowInFront",
         "firstColumnInFront",
         "filledLines",
+        "lineWidth",
         "pieLegend",
         "piePosition",
         "pieSort",
@@ -192,7 +342,7 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Series picked with Group Selection stay selected through the regeneration (their groups are new nodes).
     let reselect: Vec<u32> = if p.get("seriesIndexes").is_none() { picked.iter().filter_map(|i| u32::try_from(*i).ok()).collect() } else { vec![] };
-    if let Some(t) = str_param(p, "type") {
+    if let Some(t) = new_type {
         let kind = GraphKind::parse(t).ok_or_else(|| bad(C, format!("unknown graph type `{t}`")))?;
         if picked.is_empty() {
             spec.kind = kind;
@@ -211,7 +361,7 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    if let Some(v) = str_param(p, "valueAxis") {
+    if let Some(v) = new_axis {
         let side = ValueAxisSide::parse(v).ok_or_else(|| bad(C, format!("unknown value axis `{v}` (left, right or both)")))?;
         if picked.is_empty() {
             spec.value_axis = side;
@@ -227,54 +377,67 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    spec.separate_scales = bool_or(p, "separateScales", spec.separate_scales);
+    spec.separate_scales = switch_or(p, "separateScales", spec.separate_scales, C)?;
     for (key, slot) in [
         ("tickLength", &mut spec.tick_length),
         ("rightTickLength", &mut spec.right_tick_length),
         ("categoryTickLength", &mut spec.category_tick_length),
     ] {
-        if let Some(v) = str_param(p, key) {
+        if let Some(v) = text_param(p, key, C)? {
             *slot = TickLength::parse(v).ok_or_else(|| bad(C, format!("unknown {key} `{v}` (none, short or full)")))?;
         }
     }
     for (key, slot) in
         [("tickMarks", &mut spec.tick_marks), ("rightTickMarks", &mut spec.right_tick_marks), ("categoryTickMarks", &mut spec.category_tick_marks)]
     {
-        *slot = count_param(p, key, MAX_TICK_MARKS as u64).map_or(*slot, |n| n.max(1));
+        *slot = count_given(p, key, MAX_TICK_MARKS as u64, C)?.map_or(*slot, |n| n.max(1));
     }
-    spec.ticks_between_labels = bool_or(p, "ticksBetweenLabels", spec.ticks_between_labels);
-    if let Some(v) = str_param(p, "piePosition") {
+    spec.ticks_between_labels = switch_or(p, "ticksBetweenLabels", spec.ticks_between_labels, C)?;
+    if let Some(v) = text_param(p, "piePosition", C)? {
         spec.pie_position =
             vectorcraft_doc::PiePosition::parse(v).ok_or_else(|| bad(C, format!("unknown piePosition `{v}` (even, ratio or stacked)")))?;
     }
-    if let Some(v) = str_param(p, "pieSort") {
+    if let Some(v) = text_param(p, "pieSort", C)? {
         spec.pie_sort = vectorcraft_doc::PieSort::parse(v).ok_or_else(|| bad(C, format!("unknown pieSort `{v}` (none, all or first)")))?;
     }
     for (key, slot) in
         [("prefix", &mut spec.prefix), ("suffix", &mut spec.suffix), ("rightPrefix", &mut spec.right_prefix), ("rightSuffix", &mut spec.right_suffix)]
     {
-        if let Some(v) = str_param(p, key) {
+        if let Some(v) = text_param(p, key, C)? {
             // A label, not a paragraph: one line, at most MAX_AFFIX characters.
             *slot = one_line(v);
         }
     }
-    spec.right_ticks = count_param(p, "rightTicks", 100).unwrap_or(spec.right_ticks);
-    if let Some(v) = p.get("rightAxisMin") {
-        spec.right_axis_min = v.as_f64();
+    spec.right_ticks = count_given(p, "rightTicks", 100, C)?.unwrap_or(spec.right_ticks);
+    for (key, slot) in [
+        ("rightAxisMin", &mut spec.right_axis_min),
+        ("rightAxisMax", &mut spec.right_axis_max),
+        ("axisMin", &mut spec.axis_min),
+        ("axisMax", &mut spec.axis_max),
+    ] {
+        if let Some(v) = bound_param(p, key, C)? {
+            *slot = v;
+        }
     }
-    if let Some(v) = p.get("rightAxisMax") {
-        spec.right_axis_max = v.as_f64();
+    spec.column_width = number_or(p, "columnWidth", spec.column_width, C)?.clamp(1.0, 1000.0);
+    spec.cluster_width = number_or(p, "clusterWidth", spec.cluster_width, C)?.clamp(1.0, 1000.0);
+    spec.legend = switch_or(p, "legend", spec.legend, C)?;
+    spec.drop_shadow = switch_or(p, "dropShadow", spec.drop_shadow, C)?;
+    spec.first_row_in_front = switch_or(p, "firstRowInFront", spec.first_row_in_front, C)?;
+    spec.first_column_in_front = switch_or(p, "firstColumnInFront", spec.first_column_in_front, C)?;
+    spec.filled_lines = switch_or(p, "filledLines", spec.filled_lines, C)?;
+    if let Some(w) = p.get("lineWidth").filter(|v| !v.is_null()) {
+        let w = w.as_f64().ok_or_else(|| bad(C, format!("`lineWidth` must be a number, not {w}")))?;
+        let (min, max) = (vectorcraft_doc::MIN_FILLED_LINE_WIDTH, vectorcraft_doc::MAX_FILLED_LINE_WIDTH);
+        if !(min..=max).contains(&w) {
+            return Err(bad(C, format!("`lineWidth` must be from {min} to {max} pt, not {w}")));
+        }
+        // The default width is stored as no width.
+        spec.line_width = (w != vectorcraft_doc::DEFAULT_FILLED_LINE_WIDTH).then_some(w);
     }
-    spec.column_width = f64_or(p, "columnWidth", spec.column_width).clamp(1.0, 1000.0);
-    spec.cluster_width = f64_or(p, "clusterWidth", spec.cluster_width).clamp(1.0, 1000.0);
-    spec.legend = bool_or(p, "legend", spec.legend);
-    spec.drop_shadow = bool_or(p, "dropShadow", spec.drop_shadow);
-    spec.first_row_in_front = bool_or(p, "firstRowInFront", spec.first_row_in_front);
-    spec.first_column_in_front = bool_or(p, "firstColumnInFront", spec.first_column_in_front);
-    spec.filled_lines = bool_or(p, "filledLines", spec.filled_lines);
-    spec.legend_across_top = bool_or(p, "legendAcrossTop", spec.legend_across_top);
+    spec.legend_across_top = switch_or(p, "legendAcrossTop", spec.legend_across_top, C)?;
     // After `legend`, which the Graph Type dialog sends too.
-    if let Some(v) = str_param(p, "pieLegend") {
+    if let Some(v) = text_param(p, "pieLegend", C)? {
         (spec.legend, spec.pie_legend_in_wedges) = match v.to_ascii_lowercase().as_str() {
             "none" => (false, false),
             "standard" => (true, false),
@@ -282,15 +445,13 @@ pub(super) fn set_type(s: &mut Session, p: &Value) -> Result<Value> {
             _ => return Err(bad(C, format!("unknown pieLegend `{v}` (none, standard or wedges)"))),
         };
     }
-    spec.mark_points = bool_or(p, "markPoints", spec.mark_points);
-    spec.connect_points = bool_or(p, "connectPoints", spec.connect_points);
-    spec.edge_to_edge = bool_or(p, "edgeToEdge", spec.edge_to_edge);
-    spec.ticks = count_param(p, "ticks", 100).unwrap_or(spec.ticks);
-    if let Some(v) = p.get("axisMin") {
-        spec.axis_min = v.as_f64();
-    }
-    if let Some(v) = p.get("axisMax") {
-        spec.axis_max = v.as_f64();
+    spec.mark_points = switch_or(p, "markPoints", spec.mark_points, C)?;
+    spec.connect_points = switch_or(p, "connectPoints", spec.connect_points, C)?;
+    spec.edge_to_edge = switch_or(p, "edgeToEdge", spec.edge_to_edge, C)?;
+    spec.ticks = count_given(p, "ticks", 100, C)?.unwrap_or(spec.ticks);
+    // Options that leave the graph as it is record no step of history.
+    if spec == stored {
+        return Ok(json!({ "id": id.0 }));
     }
     let label = format!("{} Graph", spec.kind.label());
     s.edit("Graph Type", |d, sel| {

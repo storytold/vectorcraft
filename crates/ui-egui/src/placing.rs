@@ -11,20 +11,25 @@
 //! that do not set `off_the_ui_thread` ([`available`]).
 
 use std::collections::HashMap;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
+use craft::ui::dialog::{DialogId, dialog_id};
 use serde_json::{Value, json};
+use vectorcraft_engine::cancel::{self, CancelToken};
 use vectorcraft_engine::cmd::clipboard::{Clipboard, Flavour, ImageRead, read_image};
 use vectorcraft_engine::cmd::place::{PlaceRead, QueueRead};
 use vectorcraft_engine::file_access::ScopeHandle;
 
 use crate::VectorcraftApp;
+use crate::background::Lane;
+use crate::export_progress::Shown;
 
-/// What was read: one file to place, the files to load the place cursor with, or a bitmap to paste.
+/// What was read: one file to place (and where new art went when it was placed), the files to load
+/// the place cursor with (and whether they ask for their import options when placed), or a bitmap
+/// to paste.
 enum Read {
-    Place(Box<PlaceRead>),
-    Queue(QueueRead),
+    Place(Box<PlaceRead>, Insertion),
+    Queue(QueueRead, bool),
     Paste(Box<Paste>),
 }
 
@@ -55,7 +60,8 @@ struct Paste {
 }
 
 /// Where new art goes in the active document: the current layer, the isolated group or object, and
-/// the drawing mode with the object Draw Inside draws into.
+/// the drawing mode with the object Draw Inside draws into. A paste and a placed file read off the
+/// UI thread keep the one from when they were given.
 #[derive(Clone, PartialEq)]
 struct Insertion {
     layer: Option<vectorcraft_doc::NodeId>,
@@ -80,9 +86,34 @@ impl Insertion {
         Some(Self { layer, isolation, draw_mode, draw_inside })
     }
 
+    /// Whether new art can still go where `self` says in `app`'s active document: the isolated group
+    /// or object when it names one, else the object Draw Inside draws into when it names one and
+    /// `draws_inside` (a paste draws inside it, a placed file does not), else its layer, which must
+    /// still be a layer, is still there, shown and unlocked. A paste or a placed file whose layer or
+    /// group was deleted, hidden or locked meanwhile goes where new art goes now.
+    fn usable(&self, app: &VectorcraftApp, draws_inside: bool) -> bool {
+        app.session.doc().is_ok_and(|st| {
+            let inside = self.draw_inside.filter(|_| draws_inside && self.draw_mode == vectorcraft_engine::DrawMode::Inside);
+            match (self.isolation, inside, self.layer) {
+                (Some(target), ..) | (None, Some(target), _) => st.doc.is_editable(target),
+                (None, None, Some(l)) => st.doc.node(l).is_some_and(|n| n.is_layer()) && st.doc.is_editable(l),
+                (None, None, None) => true,
+            }
+        })
+    }
+
+    /// `self` when new art can still go there ([`Self::usable`]), else `now`: where new art went
+    /// before the paste or the place selected anything again.
+    fn or_now(self, now: Option<&Self>, app: &VectorcraftApp, draws_inside: bool) -> Self {
+        match now {
+            Some(now) if !self.usable(app, draws_inside) => now.clone(),
+            _ => self,
+        }
+    }
+
     /// Put back each part of `self` (where new art went before [`Self::set`] set `started`) that
-    /// differs from `started`, what the user changed meanwhile; a part the paste itself changed
-    /// stays as the paste left it.
+    /// differs from `started`, what the user changed meanwhile; a part the paste or the place
+    /// itself changed stays as it left it.
     fn restore_changed(self, started: &Self, app: &mut VectorcraftApp) {
         if let Ok(st) = app.session.doc_mut() {
             if self.layer != started.layer {
@@ -111,6 +142,9 @@ struct Chain {
     left: Option<Vec<vectorcraft_doc::NodeId>>,
     /// How many of its pastes wait.
     waiting: usize,
+    /// The document's [`vectorcraft_engine::DocState::reverts`] when the chain started: a paste
+    /// given after a File → Revert does not join it.
+    reverts: u64,
 }
 
 /// What a paste whose bitmap was decoded off the UI thread pastes.
@@ -129,21 +163,25 @@ pub struct Pending {
     pub label: String,
     /// The document they are placed in ([`vectorcraft_engine::DocState::uid`]).
     doc: u64,
+    /// Its [`vectorcraft_engine::DocState::reverts`] when the read started: a read for content that
+    /// File → Revert has since thrown away is dropped.
+    reverts: u64,
     /// Whether the file was dropped on the canvas (its messages say so, as
     /// [`crate::place::drop_files`]'s do).
     dropped: bool,
     /// Whether it is a paste's bitmap ([`adopt_for_paste`]) rather than a file.
-    paste: bool,
+    pub(crate) paste: bool,
     /// The number of the paste's chain ([`Placing::chains`]).
     chain: Option<u64>,
     done: Receiver<Result<Read, String>>,
     /// The automation roots in force when the read started, kept in force when it is placed: a
     /// DXF placed against an artboard that changed meanwhile is read again then.
     scope: ScopeHandle,
+    token: CancelToken,
+    pub hidden: bool,
+    /// [`crate::export_progress::now`] when the read started.
+    pub(crate) started: f64,
 }
-
-/// A read waiting for the thread that reads the files.
-type Job = Box<dyn FnOnce() + Send>;
 
 /// The files being read for Place, in the order they were started.
 #[derive(Default)]
@@ -164,12 +202,65 @@ pub struct Placing {
     latest_chain: HashMap<u64, u64>,
     /// The number the next chain takes.
     next_chain: u64,
-    /// The thread that reads the files, one at a time in the order they were started: started with
-    /// the first read, it ends when the app does.
-    reader: Option<Sender<Job>>,
+    /// Reads the files one at a time in the order they were started.
+    lane: Lane,
     /// Unit tests: how many reads run now, and the most that ran at once.
     #[cfg(test)]
-    pub(crate) reading: std::sync::Arc<[std::sync::atomic::AtomicUsize; 2]>,
+    pub(crate) reading: std::sync::Arc<Reading>,
+}
+
+/// Unit tests: how many reads run now and the most that ran at once, and a signal each time a read
+/// starts or ends.
+#[cfg(test)]
+#[derive(Default)]
+pub(crate) struct Reading {
+    counts: std::sync::Mutex<[usize; 2]>,
+    changed: std::sync::Condvar,
+}
+
+#[cfg(test)]
+impl Reading {
+    fn counts(&self) -> std::sync::MutexGuard<'_, [usize; 2]> {
+        self.counts.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn started(&self) {
+        let mut counts = self.counts();
+        counts[0] += 1;
+        counts[1] = counts[1].max(counts[0]);
+        self.changed.notify_all();
+    }
+
+    fn ended(&self) {
+        self.counts()[0] -= 1;
+        self.changed.notify_all();
+    }
+
+    /// The most reads that ran at once.
+    pub(crate) fn most(&self) -> usize {
+        self.counts()[1]
+    }
+
+    /// Waits until a read has run and none runs now.
+    pub(crate) fn wait_ended(&self) {
+        let mut counts = self.counts();
+        while !(counts[1] >= 1 && counts[0] == 0) {
+            counts = self.changed.wait(counts).unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+}
+
+/// Unit tests: waits until the first file read for Place has been read, and leaves the result for
+/// [`poll`].
+#[cfg(test)]
+pub(crate) fn wait(app: &mut VectorcraftApp) {
+    let Some(p) = app.placing.pending.first_mut() else { return };
+    let (tx, done) = channel();
+    // A read that stopped without a result leaves the new channel closed too.
+    if let Ok(r) = p.done.recv() {
+        let _ = tx.send(r);
+    }
+    p.done = done;
 }
 
 struct PendingSwatch {
@@ -177,7 +268,11 @@ struct PendingSwatch {
     insertion: Insertion,
     selection: Vec<vectorcraft_doc::NodeId>,
     doc: u64,
+    /// The document's [`vectorcraft_engine::DocState::reverts`] when the dialog opened.
+    reverts: u64,
     chain: u64,
+    /// The question the paste waits on, on the dialog host.
+    asked: DialogId,
 }
 
 /// Does `app` read a file the user places off the UI thread? Where documents open off it
@@ -189,38 +284,25 @@ pub fn available(app: &VectorcraftApp) -> bool {
 /// `file.place` with `p` for the active document, its file read and decoded off the UI thread
 /// ([`vectorcraft_engine::Session::prepare_place`], [`vectorcraft_engine::cmd::place::PlaceJob::read`])
 /// → `{background: true, status}`; `dropped` when it was dropped on the canvas. The params are
-/// checked here first, so a bad one is an error at once. When no thread could start, the file is
-/// placed at once → `file.place`'s reply.
+/// checked here first, so a bad one is an error at once.
 pub fn start(app: &mut VectorcraftApp, p: &Value, dropped: bool) -> Result<Value, String> {
+    // The edit the tool computes on another thread comes first: the object Replace swaps is the
+    // one selected after it.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
     let job = app.session.prepare_place(p).map_err(|e| e.to_string())?;
     let name = job.name();
-    let started = spawn(app, name.clone(), name, dropped, move || job.read().map(|r| Read::Place(Box::new(r))).map_err(|e| e.to_string()))?;
-    started.map_or_else(
-        || {
-            let r = app.session.execute("file.place", p).map_err(|e| e.to_string());
-            app.sync_views();
-            r
-        },
-        Ok,
-    )
+    let insertion = Insertion::of(app).ok_or("no document")?;
+    spawn(app, name.clone(), name, dropped, move || job.read().map(|r| Read::Place(Box::new(r), insertion)).map_err(|e| e.to_string()))
 }
 
 /// `file.place.queue` with `p` for the active document, its files read and their thumbnails made off
-/// the UI thread → `{background: true, status}`; the place cursor is loaded once they are ready. When no thread could start, the cursor is loaded at once → `file.place.queue`'s reply.
-pub fn start_queue(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+/// the UI thread → `{background: true, status}`; the place cursor is loaded once they are ready.
+/// `asks`: the cursor's files ask for their import options when placed ([`crate::place::show_thumbnails`]).
+pub fn start_queue(app: &mut VectorcraftApp, p: &Value, asks: bool) -> Result<Value, String> {
     let job = app.session.prepare_place_queue(p).map_err(|e| e.to_string())?;
     let names = job.names().join(", ");
-    let started = spawn(app, names.clone(), names, false, move || job.read().map(Read::Queue).map_err(|e| e.to_string()))?;
-    match started {
-        Some(r) => Ok(r),
-        None => {
-            let r = app.session.execute("file.place.queue", p).map_err(|e| e.to_string());
-            app.sync_views();
-            let r = r?;
-            crate::place::show_thumbnails(app, &r);
-            Ok(r)
-        }
-    }
+    spawn(app, names.clone(), names, false, move || job.read().map(|r| Read::Queue(r, asks)).map_err(|e| e.to_string()))
 }
 
 /// Before paste command `id` with `p`: what another app put on the system clipboard replaces the
@@ -232,10 +314,9 @@ pub fn start_queue(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
 /// ([`crate::SystemClipboard::read_deferred`]), and the bitmap is read as `clipboard.importImage`
 /// reads it ([`read_image`]). The paste runs once it is decoded, in the document it was given in,
 /// as it would at once ([`poll`]). A Paste the user gives while such a paste waits waits behind it,
-/// also when it has no bitmap to read. When no thread could start, the bitmap is read at once.
+/// also when it has no bitmap to read.
 pub fn adopt_for_paste(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Option<Value>, String> {
     if std::mem::take(&mut app.placing.adopted) {
-        app.clipboard_image_request = None;
         return Ok(None);
     }
     if !(app.placing.for_user && available(app)) {
@@ -250,25 +331,26 @@ pub fn adopt_for_paste(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<
         return Ok(None);
     }
     let copied = app.clipboard_publishing.latest();
-    let (doc, objects) = app.session.doc().map(|st| (st.uid, st.selection.objects.clone())).map_err(|e| e.to_string())?;
+    let (doc, reverts, objects) = app.session.doc().map(|st| (st.uid, st.reverts, st.selection.objects.clone())).map_err(|e| e.to_string())?;
     let insertion = Insertion::of(app).ok_or("no document")?;
     // A paste given while one of the document's latest chain waits, with the selection and the
     // insertion context that chain expects, joins it: it goes next to what the paste before it
-    // leaves selected, as at once. Otherwise it starts a chain.
+    // leaves selected, as at once. Otherwise (also when the document was reverted since the chain
+    // started) it starts a chain.
     let context = (objects, insertion.clone());
-    let joins =
-        app.placing.latest_chain.get(&doc).copied().filter(|c| app.placing.chains.get(c).is_some_and(|ch| ch.waiting > 0 && ch.context == context));
+    let joins = app
+        .placing
+        .latest_chain
+        .get(&doc)
+        .copied()
+        .filter(|c| app.placing.chains.get(c).is_some_and(|ch| ch.waiting > 0 && ch.reverts == reverts && ch.context == context));
     let (chain, selection) = match joins {
         Some(chain) => (chain, None),
         None => (app.placing.next_chain, Some(context.0.clone())),
     };
     let clipboard = app.session.clipboard.clone();
     let (id, params) = (id.to_string(), p.clone());
-    // The work stays here when no thread could start.
-    let slot = Arc::new(Mutex::new(make));
-    let work = slot.clone();
     let started = spawn_labeled(app, "clipboard".into(), "Pasting".into(), false, Some(chain), move || {
-        let make = work.lock().ok().and_then(|mut m| m.take());
         let pasted = make.and_then(|m| m()).map(|f| {
             if crate::sysclip::imports_as_image(f.mime) {
                 Pasted::Image(f.mime, read_image(&f.data).map_err(|e| e.to_string()))
@@ -278,33 +360,26 @@ pub fn adopt_for_paste(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<
         });
         Ok(Read::Paste(Box::new(Paste { id, params, pasted, center, selection, chain, insertion, copied, clipboard })))
     })?;
-    if started.is_some() {
-        if joins.is_none() {
-            app.placing.next_chain += 1;
-            app.placing.chains.insert(chain, Chain { context, left: None, waiting: 0 });
-            app.placing.latest_chain.insert(doc, chain);
-        }
-        if let Some(ch) = app.placing.chains.get_mut(&chain) {
-            ch.waiting += 1;
-        }
-        return Ok(started);
+    if joins.is_none() {
+        app.placing.next_chain += 1;
+        app.placing.chains.insert(chain, Chain { context, left: None, waiting: 0, reverts });
+        app.placing.latest_chain.insert(doc, chain);
     }
-    match slot.lock().ok().and_then(|mut m| m.take()).and_then(|m| m()) {
-        Some(f) => app.adopt_flavour(&f, center).map(|()| None),
-        None => Ok(None),
+    if let Some(ch) = app.placing.chains.get_mut(&chain) {
+        ch.waiting += 1;
     }
+    Ok(Some(started))
 }
 
-/// Run `read` for the active document on the thread that reads the files, after the reads started
-/// before it (so a batch of large pictures is decoded one at a time, as at once) →
-/// `{background: true, status}`, or `None` when that thread could not start.
+/// Run `read` for the active document on the place lane, after the reads started before it (so a
+/// batch of large pictures is decoded one at a time, as at once) → `{background: true, status}`.
 fn spawn(
     app: &mut VectorcraftApp,
     name: String,
     shown: String,
     dropped: bool,
     read: impl FnOnce() -> Result<Read, String> + Send + 'static,
-) -> Result<Option<Value>, String> {
+) -> Result<Value, String> {
     spawn_labeled(app, name, format!("Placing {shown}"), dropped, None, read)
 }
 
@@ -316,50 +391,47 @@ fn spawn_labeled(
     dropped: bool,
     chain: Option<u64>,
     read: impl FnOnce() -> Result<Read, String> + Send + 'static,
-) -> Result<Option<Value>, String> {
-    let doc = app.session.doc().map_err(|e| e.to_string())?.uid;
+) -> Result<Value, String> {
+    let (doc, reverts) = app.session.doc().map(|st| (st.uid, st.reverts)).map_err(|e| e.to_string())?;
     let (tx, done) = channel();
     // The automation roots in force here are in force there.
     let scope = ScopeHandle::capture();
     let completion = scope.clone();
     #[cfg(test)]
     let reading = app.placing.reading.clone();
-    let job: Job = Box::new(move || {
+    let token = CancelToken::new();
+    let raised = token.clone();
+    let job: Box<dyn FnOnce() + Send> = Box::new(move || {
         #[cfg(test)]
-        {
-            let now = reading[0].fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
-            reading[1].fetch_max(now, std::sync::atomic::Ordering::SeqCst);
-        }
+        reading.started();
         let r = scope
-            .run(|| vectorcraft_engine::guard::catch_panic(read))
+            .run(|| vectorcraft_engine::guard::catch_panic(|| cancel::scope(&raised, None, read)))
             .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
         #[cfg(test)]
-        reading[0].fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        reading.ended();
         // The app may have quit meanwhile: nothing to hand it to.
         let _ = tx.send(r);
     });
-    // A reader that has ended gives the job back.
-    let job = match &app.placing.reader {
-        Some(reader) => reader.send(job).err().map(|e| e.0),
-        None => Some(job),
-    };
-    if let Some(job) = job {
-        let (reader, jobs) = channel::<Job>();
-        let started = std::thread::Builder::new().name("vectorcraft-place".into()).spawn(move || {
-            for job in jobs {
-                job();
-            }
-        });
-        if started.is_err() {
-            return Ok(None);
-        }
-        let _ = reader.send(job);
-        app.placing.reader = Some(reader);
-    }
-    app.placing.pending.push(Pending { name, label: label.clone(), doc, dropped, paste: chain.is_some(), chain, done, scope: completion });
+    let jobs = app.jobs();
+    app.placing.lane.push(&*jobs, "vectorcraft-place", job);
+    let started = crate::export_progress::now(app);
+    app.placing.pending.push(Pending {
+        name,
+        label: label.clone(),
+        doc,
+        reverts,
+        dropped,
+        paste: chain.is_some(),
+        chain,
+        done,
+        scope: completion,
+        token,
+        hidden: false,
+        started,
+    });
     let status = format!("{label}…");
     app.status(status.clone());
-    Ok(Some(json!({ "background": true, "status": status })))
+    Ok(json!({ "background": true, "status": status }))
 }
 
 /// Place the files that are ready (each frame), in the order they were started: a file read
@@ -373,7 +445,7 @@ fn spawn_labeled(
 /// the file is placed unless the tool has a preview open (the Flare tool after its center drag).
 pub fn poll(app: &mut VectorcraftApp) {
     settle_swatch_paste(app);
-    while app.ui.dialog.is_none()
+    while !app.any_dialog_open()
         && !app.session.in_interaction()
         && !(app.session.tool_busy() && app.session.pointer_held())
         && let Some(p) = app.placing.pending.first()
@@ -412,6 +484,19 @@ fn finish(app: &mut VectorcraftApp, p: &Pending, r: Result<Read, String>) {
         }
         return;
     };
+    // File → Revert threw away the content the read was started for: what was read is dropped,
+    // with the document, its selection, the clipboard and the tools as they are.
+    if app.session.documents().get(i).is_some_and(|st| st.reverts != p.reverts) {
+        let name = &p.name;
+        if p.paste {
+            app.status("Couldn't paste: the document it was pasted in was reverted");
+        } else if p.dropped {
+            app.status(format!("Couldn't place {name}: the document it was dropped on was reverted"));
+        } else {
+            app.status(format!("Couldn't place {name}: the document it was placed in was reverted"));
+        }
+        return;
+    }
     if p.paste {
         let error = match &r {
             Ok(Read::Paste(paste)) => match &paste.pasted {
@@ -437,8 +522,22 @@ fn finish(app: &mut VectorcraftApp, p: &Pending, r: Result<Read, String>) {
     }
     app.session.set_active(i);
     let r = match r {
-        Ok(Read::Place(read)) => app.session.place_read(*read).map(|_| ()).map_err(|e| e.to_string()),
-        Ok(Read::Queue(read)) => app.session.place_queue_read(read).map(|r| crate::place::show_thumbnails(app, &r)).map_err(|e| e.to_string()),
+        Ok(Read::Place(read, insertion)) => {
+            // The file goes where new art went when it was placed (the current layer, the isolated
+            // group), as a paste does, and what the user changed meanwhile is kept. Where new art
+            // goes now is taken before Replace selects the object it swaps again.
+            let current = Insertion::of(app);
+            let insertion = insertion.or_now(current.as_ref(), app, false);
+            insertion.clone().set(app);
+            let r = app.session.place_read(*read).map(|_| ()).map_err(|e| e.to_string());
+            if let Some(current) = current {
+                current.restore_changed(&insertion, app);
+            }
+            r
+        }
+        Ok(Read::Queue(read, asks)) => {
+            app.session.place_queue_read(read).map(|r| crate::place::show_thumbnails(app, &r, asks)).map_err(|e| e.to_string())
+        }
         Ok(Read::Paste(paste)) => return finish_paste(app, *paste),
         Err(e) => Err(e),
     };
@@ -489,28 +588,17 @@ fn finish_paste(app: &mut VectorcraftApp, paste: Paste) {
             // The paste goes where new art went when it started (the current layer, the isolated
             // group, the object Draw Inside draws into), and what the user changed meanwhile is
             // kept.
-            paste.insertion.clone().set(app);
+            let insertion = paste.insertion.or_now(current.as_ref(), app, pastes_inside(&paste.id));
+            insertion.clone().set(app);
             let requested_selection = app.session.doc().map(|st| st.selection.objects.clone()).unwrap_or_default();
             app.placing.adopted = true;
             // `run` shows an error in the status bar.
             let _ = app.run(&paste.id, paste.params);
             // Also when the paste did not reach the clipboard (the Type tool took it).
             app.placing.adopted = false;
-            if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == crate::dialogs::swatch_conflict::KIND) {
-                d.fields.insert("__deferredPaste".into(), json!(chain));
-                if let Ok(st) = app.session.doc() {
-                    app.placing.swatch_paste = Some(PendingSwatch {
-                        clipboard: app.session.clipboard.clone(),
-                        insertion: paste.insertion.clone(),
-                        selection: requested_selection,
-                        doc: st.uid,
-                        chain,
-                    });
-                    deferred = true;
-                }
-            }
+            deferred = defer_question(app, chain, &insertion, requested_selection);
             if let Some(current) = current {
-                current.restore_changed(&paste.insertion, app);
+                current.restore_changed(&insertion, app);
             }
             app.session.doc().ok().map(|st| st.selection.objects.clone())
         }
@@ -549,25 +637,134 @@ pub(crate) fn cancel_swatch_paste(app: &mut VectorcraftApp) {
     }
 }
 
-/// Release a deferred paste once its dialog is no longer the active dialog.
-pub(crate) fn settle_swatch_paste(app: &mut VectorcraftApp) {
-    let active = app.placing.swatch_paste.as_ref().is_some_and(|waiting| {
-        app.ui.dialog.as_ref().is_some_and(|d| {
-            d.kind == crate::dialogs::swatch_conflict::KIND && d.fields.get("__deferredPaste").and_then(Value::as_u64) == Some(waiting.chain)
-        })
-    });
-    if app.placing.swatch_paste.is_some() && !active {
-        cancel_swatch_paste(app);
+/// What a question a deferred paste waits on answered this pass.
+pub(crate) enum Taken {
+    /// The user answered; the value has the keys `command`, `params`, `deferred` and `asked`.
+    Answered(Value),
+    /// The question closed without an answer.
+    Cancelled,
+    /// The question is still open.
+    Open,
+}
+
+/// The questions a paste asks before it runs, which differ in the param that holds the answer and
+/// in how the changed question is told.
+#[derive(Clone, Copy)]
+enum Question {
+    SwatchConflict,
+    ProfileMismatch,
+}
+
+/// The answer of question `id`, whichever of the two it is.
+fn take_question(app: &mut VectorcraftApp, id: DialogId) -> (Question, Taken) {
+    match crate::dialogs::swatch_conflict::take(app, id) {
+        Taken::Open => (Question::ProfileMismatch, crate::dialogs::profile_mismatch::take_paste(app, id)),
+        taken => (Question::SwatchConflict, taken),
     }
 }
 
-/// Run the command confirmed by the deferred paste's Swatch Conflict dialog.
-pub(crate) fn confirm_swatch_paste(app: &mut VectorcraftApp, id: &str, params: Value, token: Option<u64>) -> Result<Value, String> {
+/// Marks the question the paste just asked as the one chain `chain` waits on, and keeps the
+/// paste's context for its answer → whether a question is open.
+fn defer_question(app: &mut VectorcraftApp, chain: u64, insertion: &Insertion, selection: Vec<vectorcraft_doc::NodeId>) -> bool {
+    let Ok((doc, reverts)) = app.session.doc().map(|st| (st.uid, st.reverts)) else { return false };
+    let asked = if let Some(id) = crate::dialogs::swatch_conflict::id(app) {
+        crate::dialogs::swatch_conflict::defer(app, chain);
+        id
+    } else if let Some(id) = crate::dialogs::profile_mismatch::paste_id(app) {
+        crate::dialogs::profile_mismatch::defer_paste(app, chain);
+        id
+    } else {
+        return false;
+    };
+    app.placing.swatch_paste =
+        Some(PendingSwatch { clipboard: app.session.clipboard.clone(), insertion: insertion.clone(), selection, doc, reverts, chain, asked });
+    true
+}
+
+/// Runs a deferred paste whose question was answered, and releases it when the question closed
+/// without an answer or another dialog took the window over it.
+pub(crate) fn settle_swatch_paste(app: &mut VectorcraftApp) {
+    let asked = app.placing.swatch_paste.as_ref().map(|waiting| waiting.asked);
+    let (question, taken) = match asked {
+        Some(asked) => take_question(app, asked),
+        // A paste that ran at once (automation's) waits on nothing deferred: its Swatch Conflict answer runs it.
+        None => (Question::SwatchConflict, crate::dialogs::swatch_conflict::take(app, dialog_id(crate::dialogs::swatch_conflict::KIND))),
+    };
+    let answer = match taken {
+        Taken::Open => {
+            // The question is the window's one dialog: another dialog opened over it replaces it.
+            if let Some(asked) = asked
+                && crate::dialogs::host::top_dialog(app).is_some_and(|top| top != asked)
+            {
+                if let (Some(host), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) {
+                    host.with(|h| h.cancel_by_id(&ctx, asked));
+                }
+                cancel_swatch_paste(app);
+            }
+            return;
+        }
+        Taken::Cancelled => return cancel_swatch_paste(app),
+        Taken::Answered(answer) => answer,
+    };
+    let command = answer["command"].as_str().unwrap_or_default().to_string();
+    let seen = answer["asked"].clone();
+    let changed = |app: &mut VectorcraftApp, command: &str, params: &Value| match question {
+        Question::SwatchConflict => crate::dialogs::swatch_conflict::changed(app, command, params, &seen),
+        Question::ProfileMismatch => {
+            crate::dialogs::profile_mismatch::paste_changed(app, command, params, seen.as_array().map_or(&[], Vec::as_slice))
+        }
+    };
+    let key = match question {
+        Question::SwatchConflict => "swatchConflict",
+        Question::ProfileMismatch => "profileMismatch",
+    };
+    let recheck = Recheck { key, changed: &changed };
+    if let Err(e) = confirm_swatch_paste(app, &command, answer["params"].clone(), answer["deferred"].as_u64(), Some(&recheck)) {
+        app.status(e);
+    }
+}
+
+/// Does the paste command `id` paste inside the object Draw Inside draws into? Paste in Front and
+/// Paste in Back keep their own places.
+fn pastes_inside(id: &str) -> bool {
+    !matches!(id, "edit.pasteInFront" | "edit.pasteInBack")
+}
+
+/// The answer a paste question gave, checked again where the paste runs (in the document and with
+/// the clipboard it was given with): `key` is the param that holds the answer, and `changed` tells
+/// whether the question the paste command `id` with those params would ask now differs from the one
+/// answered. The paste then runs without the answer, and so asks again.
+pub(crate) struct Recheck<'a> {
+    pub key: &'static str,
+    pub changed: &'a dyn Fn(&mut VectorcraftApp, &str, &Value) -> bool,
+}
+
+/// `params` without the answer `recheck` names when the question it answered has changed.
+fn rechecked(app: &mut VectorcraftApp, id: &str, mut params: Value, recheck: Option<&Recheck<'_>>) -> Value {
+    if let Some(r) = recheck
+        && (r.changed)(app, id, &params)
+        && let Some(o) = params.as_object_mut()
+    {
+        o.remove(r.key);
+    }
+    params
+}
+
+/// Run the command confirmed by the deferred paste's Swatch Conflict or Paste Profile Mismatch
+/// dialog, asking again first when `recheck` finds that the question has changed.
+pub(crate) fn confirm_swatch_paste(
+    app: &mut VectorcraftApp,
+    id: &str,
+    params: Value,
+    token: Option<u64>,
+    recheck: Option<&Recheck<'_>>,
+) -> Result<Value, String> {
     if !app.placing.swatch_paste.as_ref().is_some_and(|waiting| Some(waiting.chain) == token) {
         if token.is_some() || app.placing.swatch_paste.is_some() {
             cancel_swatch_paste(app);
             return Err("the deferred paste is no longer available".into());
         }
+        let params = rechecked(app, id, params, recheck);
         return app.run(id, params);
     }
     let Some(waiting) = app.placing.swatch_paste.take() else { return app.run(id, params) };
@@ -575,6 +772,12 @@ pub(crate) fn confirm_swatch_paste(app: &mut VectorcraftApp, id: &str, params: V
         finish_chain(app, waiting.chain);
         return Err("Couldn't paste: the document it was pasted in was closed".into());
     };
+    // File → Revert threw away the content the paste was given in: nothing is pasted, and the
+    // clipboard, selection and insertion context stay as they are.
+    if app.session.documents().get(index).is_some_and(|st| st.reverts != waiting.reverts) {
+        finish_chain(app, waiting.chain);
+        return Err("Couldn't paste: the document it was pasted in was reverted".into());
+    }
     app.session.set_active(index);
     app.sync_views();
     let current = std::mem::replace(&mut app.session.clipboard, waiting.clipboard);
@@ -585,11 +788,22 @@ pub(crate) fn confirm_swatch_paste(app: &mut VectorcraftApp, id: &str, params: V
     if selected != now.iter().map(|id| id.0).collect::<Vec<_>>() {
         let _ = app.session.execute("select.set", &json!({"ids": selected}));
     }
-    let insertion = waiting.insertion.clone();
+    let insertion = waiting.insertion.clone().or_now(changed.as_ref(), app, pastes_inside(id));
     insertion.clone().set(app);
+    // The question checked again with the clipboard and document the paste runs with.
+    let params = rechecked(app, id, params, recheck);
     app.placing.adopted = true;
     let result = app.run(id, params);
     app.placing.adopted = false;
+    // The paste asked again (Swatch Conflict after Paste Profile Mismatch, or the same question
+    // about what changed): it stays deferred, in the context it was given in.
+    if defer_question(app, waiting.chain, &insertion, waiting.selection.clone()) {
+        if let Some(changed) = changed {
+            changed.restore_changed(&insertion, app);
+        }
+        app.session.clipboard = current;
+        return result;
+    }
     if let Some(changed) = changed {
         changed.restore_changed(&insertion, app);
     }
@@ -604,6 +818,57 @@ pub(crate) fn confirm_swatch_paste(app: &mut VectorcraftApp, id: &str, params: V
     }
     finish_chain(app, waiting.chain);
     result
+}
+
+/// The progress window's Cancel: the files being read for Place aren't placed.
+pub fn cancel_all(app: &mut VectorcraftApp) -> Value {
+    let mut cancelled = 0;
+    let mut i = 0;
+    while i < app.placing.pending.len() {
+        if !app.placing.pending[i].paste {
+            let p = app.placing.pending.remove(i);
+            p.token.cancel();
+            if app.ui.status == format!("{}…", p.label) {
+                app.ui.status.clear();
+            }
+            if let Some(chain) = p.chain
+                && !app.placing.swatch_paste.as_ref().is_some_and(|waiting| waiting.chain == chain)
+            {
+                finish_chain(app, chain);
+            }
+            cancelled += 1;
+        } else {
+            i += 1;
+        }
+    }
+    json!({ "cancelled": cancelled })
+}
+
+/// Can any placed file being read be cancelled?
+pub fn can_cancel(app: &VectorcraftApp) -> bool {
+    app.placing.pending.iter().any(|p| !p.paste)
+}
+
+/// Is a placed file being read that the progress window shows?
+pub fn any_shown(app: &VectorcraftApp) -> bool {
+    app.placing.pending.iter().any(|p| !p.paste && !p.hidden)
+}
+
+/// The progress window's entry for the first file being read for Place; it can only be cancelled.
+pub(crate) fn shown(app: &VectorcraftApp) -> Option<Shown> {
+    let waiting: Vec<&Pending> = app.placing.pending.iter().filter(|p| !p.paste && !p.hidden).collect();
+    let first = *waiting.first()?;
+    let more = waiting.len() - 1;
+    Some(Shown {
+        title: format!("{}…", crate::i18n::msg(&first.label)),
+        step: tl!("Reading the file…").to_string(),
+        fraction: None,
+        counts: None,
+        queued: (more > 0).then(|| crate::i18n::tn(more as u64, "{n} more file waiting", "{n} more files waiting").to_string()),
+        started: first.started,
+        cancel: "file.cancelPlace",
+        hide: None,
+    })
 }
 
 #[cfg(test)]

@@ -13,11 +13,15 @@ pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
         d.node(backmost).ok_or(EngineError::NoNode(backmost))?;
         let mut units: Vec<Vec<Arc<Node>>> = vec![];
         let mut appearance = None;
+        // The compound path is pixel-aligned when any of its paths was, or any compound path whose
+        // paths it takes; its paths snap with its stroke, so they do not keep the property themselves.
+        let mut aligned = false;
         for id in &ids {
             let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
             if !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Group { .. }) {
                 return Err(EngineError::Other("compound paths can only contain paths".into()));
             }
+            n.walk(&mut |c| aligned |= c.extras().pixel_aligned);
             compound_members(n, &mut appearance, &mut units);
         }
         let cid = d.alloc_id();
@@ -40,6 +44,7 @@ pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
             for mut p in unit {
                 let pn = Arc::make_mut(&mut p);
                 pn.appearance = Appearance::default().into();
+                pn.extras_mut().pixel_aligned = false;
                 if let NodeKind::Path { path, live, .. } = &mut pn.kind {
                     *live = None;
                     if flip {
@@ -48,6 +53,10 @@ pub(super) fn compound_make(s: &mut Session, _: &Value) -> Result<Value> {
                 }
                 ch.push(p);
             }
+        }
+        if aligned {
+            c.extras_mut().pixel_aligned = true;
+            super::pixelgrid::snap_if_aligned(&mut c);
         }
         d.wrap(&ids, |_| c)?;
         sel.set([cid]);
@@ -99,6 +108,10 @@ pub(super) fn compound_release(s: &mut Session, _: &Value) -> Result<Value> {
                     for c in children {
                         let mut c = (**c).clone();
                         c.appearance = n.appearance.clone();
+                        // Each path keeps the compound path's pixel-aligned property.
+                        if n.extras().pixel_aligned {
+                            c.extras_mut().pixel_aligned = true;
+                        }
                         out.push(c.id);
                         parts.push(c);
                     }
@@ -181,18 +194,31 @@ pub(super) fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
 
 pub(super) fn clip_release(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    // With no clip group selected, the document and its undo history stay as they are.
+    // With no clip group and no stray clipping path selected, the document and its undo history
+    // stay as they are.
     let d = &s.doc()?.doc;
-    if !ids.iter().any(|id| d.node(*id).is_some_and(Node::clips)) {
+    if !ids.iter().any(|id| d.node(*id).is_some_and(Node::clips) || stray_clipping_path(d, *id)) {
         return ok();
     }
     s.edit("Release Clipping Mask", |d, _| {
         for id in &ids {
+            if stray_clipping_path(d, *id)
+                && let Some(NodeKind::Path { clipping, .. }) = d.node_mut(*id).map(|n| &mut n.kind)
+            {
+                *clipping = false;
+            }
             release_clip(d, *id);
         }
         Ok(())
     })?;
     ok()
+}
+
+/// Whether `id` is a path marked as a clipping path that clips nothing: not the bottom child of a
+/// clip group or clipping layer. A paste made one before #9227; the path commands skip it.
+fn stray_clipping_path(d: &Document, id: NodeId) -> bool {
+    let marked = d.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { clipping: true, .. }));
+    marked && !d.position(id).is_some_and(|(parent, i, _)| i == 0 && parent.and_then(|p| d.node(p)).is_some_and(Node::clips))
 }
 
 /// Selects the clipping path (`mask`) or the clipped contents of every selected clip group (or of the

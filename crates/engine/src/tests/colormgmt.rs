@@ -16,7 +16,10 @@ use crate::*;
 /// Every test here reads or changes the process-wide proof view or colour settings: one at a time.
 /// Tests that switch the Color Settings away from the defaults live in `tests/color_settings.rs`
 /// (their own process): every colour shown or rendered goes through them, so no lock could cover
-/// all the tests that would see the change.
+/// all the tests that would see the change. A unit test that assigns its front document a profile
+/// other than the working space changes the active settings the same way until another document
+/// comes to the front: it starts with `crate::tests::in_own_process`, which runs it again in a
+/// child process.
 pub(crate) static GLOBAL: Mutex<()> = Mutex::new(());
 
 fn session() -> Session {
@@ -184,6 +187,26 @@ fn rgb_cmyk_converts_each_gradient_stop() {
     }
 }
 
+/// Each point of a freeform gradient converts on its own, as gradient stops do.
+#[test]
+fn rgb_cmyk_converts_each_freeform_point() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let id = rect(&mut s, 10.0, 10.0, 50.0, 50.0, json!("#000000"));
+    let stops = json!([{"offset": 0, "color": Color::rgb(0.912_345, 0.1, 0.2)}, {"offset": 1, "color": Color::rgb(0.3, 0.4, 0.654_321)}]);
+    let points = json!([{"at": [20, 20], "color": Color::rgb(0.2, 0.876_543, 0.3)}, {"at": [50, 50], "color": Color::rgb(0.6, 0.111_111, 0.9)}]);
+    let gradient = json!({"kind": "freeform", "stops": stops, "freeform": {"points": points}});
+    s.execute("paint.setFill", &json!({"ids": [id.0], "gradient": gradient})).unwrap();
+    let points = |s: &Session| match fill_of(s, id) {
+        Paint::Gradient(g) => g.freeform.map(|f| f.points.iter().map(|p| p.color).collect::<Vec<_>>()).unwrap_or_default(),
+        p => panic!("not a gradient: {p:?}"),
+    };
+    let old = points(&s);
+    assert!(!old.is_empty(), "the freeform fill has points");
+    s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    assert_eq!(points(&s), old.into_iter().map(to_cmyk).collect::<Vec<_>>());
+}
+
 /// A pattern's tile art converts, and the art filled with the pattern keeps it.
 #[test]
 fn rgb_cmyk_converts_a_pattern_tile() {
@@ -295,6 +318,45 @@ fn convert_query_and_intents() {
     assert!(s.execute("color.convert", &json!({"color": "#808080", "intent": "vivid"})).is_err());
 }
 
+/// `to: "oklch"` answers the OKLCH of the color's display sRGB, which converts back to the color;
+/// a CMYK color's display color, not its naive separation, sets them.
+#[test]
+fn convert_to_oklch_answers_lightness_chroma_and_hue() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let r = s.execute("color.convert", &json!({"color": "#ff0000", "to": "oklch"})).unwrap();
+    assert_eq!(r["model"], "oklch");
+    let v: Vec<f64> = r["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert!((v[0] - 62.80).abs() < 0.005 && (v[1] - 0.2577).abs() < 5e-5 && (v[2] - 29.23).abs() < 0.005, "{r}");
+    let (rgb, lowered) = vectorcraft_color::oklab::from_oklch(v[0] / 100.0, v[1], v[2]);
+    assert!(!lowered);
+    assert_eq!(Color::rgb(rgb[0], rgb[1], rgb[2]).to_hex(), "#ff0000");
+    assert_eq!(r["hex"], "#ff0000");
+    let gray = s.execute("color.convert", &json!({"color": "#808080", "to": "oklch"})).unwrap();
+    assert_eq!(gray["values"][2], 0.0, "{gray}");
+    let ink = json!({"c": 1.0, "m": 0.0, "y": 0.0, "k": 0.0});
+    let cyan = s.execute("color.convert", &json!({"color": ink, "to": "oklch"})).unwrap();
+    let shown = vectorcraft_color::oklab::to_oklch(cms::active().display_rgb(&Color::cmyk(1.0, 0.0, 0.0, 0.0)));
+    let naive = vectorcraft_color::oklab::to_oklch([0.0, 1.0, 1.0]);
+    let c: Vec<f64> = cyan["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    let got = [c[0] / 100.0, c[1], c[2]];
+    assert!((0..3).all(|i| (got[i] - shown[i]).abs() < 1e-9) && shown[1] > 0.05, "{cyan} {shown:?}");
+    assert!((got[0] - naive[0]).abs() > 0.02, "{cyan} {naive:?}");
+    // A Lab color outside sRGB answers the OKLCH of its color clipped to sRGB.
+    let vivid = s.execute("color.convert", &json!({"color": {"l": 50.0, "a": 100.0, "b": 0.0}, "to": "oklch"})).unwrap();
+    let w: Vec<f64> = vivid["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    let shown = cms::active().display_rgb(&Color::lab(50.0, 100.0, 0.0)).map(|v| v.clamp(0.0, 1.0));
+    let clipped = vectorcraft_color::oklab::to_oklch(shown);
+    assert!((w[0] / 100.0 - clipped[0]).abs() < 1e-9 && (w[1] - clipped[1]).abs() < 1e-9, "{vivid} {clipped:?}");
+    assert!((w[2] - clipped[2]).abs() < 1e-9 && (0.0..360.0).contains(&w[2]), "{vivid} {clipped:?}");
+    assert!(vectorcraft_color::oklab::in_srgb(vectorcraft_color::oklab::oklch_to_srgb(w[0] / 100.0, w[1], w[2])), "{vivid}");
+    // RGB numbers past 0..1 answer the OKLCH of the clipped color `hex` reports: white.
+    let past = s.execute("color.convert", &json!({"color": [2.0, 2.0, 2.0], "to": "oklch"})).unwrap();
+    assert_eq!(past["hex"], "#ffffff");
+    let l = past["values"][0].as_f64().unwrap();
+    assert!((l - 100.0).abs() < 0.01 && past["values"][1].as_f64().unwrap() < 1e-3, "{past}");
+}
+
 #[test]
 fn assign_profile_is_stored_and_undoable() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -306,6 +368,23 @@ fn assign_profile_is_stored_and_undoable() {
     assert!(s.execute("edit.assignProfile", &json!({"rgb": cms::GENERIC_CMYK})).is_err(), "kind must match");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(cmd::colormgmt::doc_profiles(&s.doc().unwrap().doc), (None, None));
+}
+
+/// Assigning the working profiles leaves the active color settings and the other documents'
+/// revisions unchanged.
+#[test]
+fn assigning_the_working_profiles_keeps_the_active_color_settings() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let working = cms::active_settings();
+    let active = cms::active();
+    let other = s.documents()[0].revision;
+    let r = s.execute("edit.assignProfile", &json!({"rgb": working.rgb, "cmyk": working.cmyk})).unwrap();
+    assert_eq!((r["rgb"].as_str(), r["cmyk"].as_str()), (Some(working.rgb.as_str()), Some(working.cmyk.as_str())));
+    assert_eq!(cmd::colormgmt::doc_profiles(&s.doc().unwrap().doc), (Some(working.rgb.clone()), Some(working.cmyk.clone())));
+    assert!(std::sync::Arc::ptr_eq(&active, &cms::active()), "the active color settings were replaced");
+    assert_eq!(s.documents()[0].revision, other, "the other document's revision changed");
 }
 
 #[test]
@@ -374,7 +453,7 @@ fn rgb_art_separates_with_gcr() {
         RenderOptions { proof: Some(ProofSetup { separations: Some(vec!["Black".into()]), ..Default::default() }), ..Default::default() },
     )
     .pixel(50, 50);
-    assert!(k[0] < 20, "RGB black is mostly K: {k:?}");
+    assert!((20..=30).contains(&k[0]), "RGB black carries 90% black: {k:?}");
     let c = render(
         &doc,
         RenderOptions { proof: Some(ProofSetup { separations: Some(vec!["Cyan".into()]), ..Default::default() }), ..Default::default() },
@@ -438,6 +517,7 @@ fn overprint_black_multiplies_in_preview() {
 #[test]
 fn view_toggles_redraw_without_dirtying() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
     let mut s = session();
     let rev = s.doc().unwrap().revision;
     let r = s.execute("view.proofColors", &json!({"on": true})).unwrap();
@@ -458,6 +538,173 @@ fn view_toggles_redraw_without_dirtying() {
     s.execute("view.overprintPreview", &json!({"on": false})).unwrap();
 }
 
+/// Sets the default proof view when made and again when dropped, also after a failed assertion,
+/// so the next test starts from the default view.
+pub(crate) struct DefaultView;
+
+impl DefaultView {
+    pub(crate) fn new() -> Self {
+        vectorcraft_render::proof::set_view(Default::default());
+        DefaultView
+    }
+}
+
+impl Drop for DefaultView {
+    fn drop(&mut self) {
+        vectorcraft_render::proof::set_view(Default::default());
+    }
+}
+
+/// Runs `cmd` with `p` twice from the default proof view: the first run changes the view and
+/// redraws, and the second asks for the view that is already showing and leaves the revision alone.
+fn repeat_keeps_revision(cmd: &str, p: Value) {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let rev = s.doc().unwrap().revision;
+    s.execute(cmd, &p).unwrap();
+    let changed = s.doc().unwrap().revision;
+    assert!(changed > rev, "{cmd} {p}: the first run changes the view");
+    s.execute(cmd, &p).unwrap();
+    assert_eq!(s.doc().unwrap().revision, changed, "{cmd} {p}: the same view again");
+}
+
+/// Runs `cmd` with `p` once from the default proof view, which `p` leaves as it is.
+fn default_view_keeps_revision(cmd: &str, p: Value) {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let rev = s.doc().unwrap().revision;
+    s.execute(cmd, &p).unwrap();
+    assert_eq!(s.doc().unwrap().revision, rev, "{cmd} {p}");
+    assert_eq!(vectorcraft_render::proof::view(), Default::default(), "{cmd} {p}");
+}
+
+#[test]
+fn proof_setup_with_nothing_changed_keeps_the_revision() {
+    repeat_keeps_revision("view.proofSetup", json!({"target": "deuteranopia"}));
+    repeat_keeps_revision("view.proofSetup", json!({"simulatePaper": true, "proof": true}));
+    default_view_keeps_revision("view.proofSetup", json!({}));
+    default_view_keeps_revision("view.proofSetup", json!({"target": "workingCmyk", "proof": false}));
+}
+
+#[test]
+fn proof_colors_with_nothing_changed_keeps_the_revision() {
+    repeat_keeps_revision("view.proofColors", json!({"on": true}));
+    default_view_keeps_revision("view.proofColors", json!({"on": false}));
+}
+
+#[test]
+fn overprint_preview_with_nothing_changed_keeps_the_revision() {
+    repeat_keeps_revision("view.overprintPreview", json!({"on": true}));
+    default_view_keeps_revision("view.overprintPreview", json!({"on": false}));
+}
+
+#[test]
+fn separations_preview_with_nothing_changed_keeps_the_revision() {
+    repeat_keeps_revision("view.separationsPreview", json!({"on": true}));
+    repeat_keeps_revision("view.separationsPreview", json!({"only": "Cyan"}));
+    repeat_keeps_revision("view.separationsPreview", json!({"plates": ["Magenta", "Black"]}));
+    default_view_keeps_revision("view.separationsPreview", json!({"on": false}));
+}
+
+/// Separations Preview's visible plates are a set: the same plates in another order, or with one
+/// named twice, leave the revision alone, and a plate named twice hides with one `toggle`.
+#[test]
+fn separations_preview_compares_the_visible_plates_as_a_set() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let sep = |s: &mut Session, p: Value| {
+        s.execute("view.separationsPreview", &p).unwrap();
+        s.doc().unwrap().revision
+    };
+    let shown = sep(&mut s, json!({"plates": ["Magenta", "Black"]}));
+    assert_eq!(sep(&mut s, json!({"plates": ["Black", "Magenta"]})), shown, "another order");
+    assert_eq!(sep(&mut s, json!({"plates": ["Magenta", "Black", "Black"]})), shown, "a plate named twice");
+    // Cyan hidden and shown again goes to the end of the list; every plate is shown.
+    sep(&mut s, json!({"on": false}));
+    sep(&mut s, json!({"on": true}));
+    sep(&mut s, json!({"toggle": "Cyan"}));
+    let all = sep(&mut s, json!({"toggle": "Cyan"}));
+    assert_eq!(sep(&mut s, json!({"plates": ["Cyan", "Magenta", "Yellow", "Black"]})), all, "every plate in plate order");
+    sep(&mut s, json!({"plates": ["Cyan", "Cyan"]}));
+    let r = s.execute("view.separationsPreview", &json!({"toggle": "Cyan"})).unwrap();
+    assert!(r["plates"].as_array().unwrap().iter().all(|p| p["visible"] == false), "{r}");
+}
+
+/// Each plate's visibility in a `view.separationsPreview` or `color.plates` reply, in plate order.
+fn visible_plates(r: &Value) -> Vec<bool> {
+    r["plates"].as_array().unwrap().iter().map(|p| p["visible"].as_bool().unwrap()).collect()
+}
+
+/// A session whose document has the process plates and the spot plate `Brand Orange`.
+fn session_with_spot_plate() -> Session {
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Brand Orange", "color": {"c": 0, "m": 60, "y": 100, "k": 0}, "global": true})).unwrap();
+    s.execute("swatch.setSpot", &json!({"name": "Brand Orange"})).unwrap();
+    let a = NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [a.0], "swatch": "Brand Orange"})).unwrap();
+    s
+}
+
+/// `soloToggle` (the panel's Alt-click on a plate's eye) shows that plate alone, and every plate
+/// when it already shows alone. A hidden plate, a plate among others, another solo plate and an
+/// empty set of plates all give the named plate alone. It leaves the document's undo list and
+/// modified state alone.
+#[test]
+fn separations_preview_solo_toggle_shows_every_plate_the_second_time() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session_with_spot_plate();
+    let undo = s.doc().unwrap().history.undo.len();
+    let dirty = s.doc().unwrap().is_dirty();
+    let solo = |s: &mut Session, n: &str| visible_plates(&s.execute("view.separationsPreview", &json!({"soloToggle": n})).unwrap());
+    // Off: the preview turns on with the plate alone.
+    assert_eq!(solo(&mut s, "Cyan"), [true, false, false, false, false]);
+    assert_eq!(vectorcraft_render::proof::view().separations, Some(vec!["Cyan".to_string()]));
+    // The same plate again: every plate, the spot plate included, and the preview stays on.
+    assert_eq!(solo(&mut s, "Cyan"), [true; 5]);
+    assert!(vectorcraft_render::proof::view().separations.is_some(), "the preview stays on");
+    // A plate shown among others, then another plate while one shows alone.
+    assert_eq!(solo(&mut s, "Magenta"), [false, true, false, false, false]);
+    assert_eq!(solo(&mut s, "Cyan"), [true, false, false, false, false]);
+    // A hidden plate.
+    s.execute("view.separationsPreview", &json!({"toggle": "Black"})).unwrap();
+    assert_eq!(solo(&mut s, "Yellow"), [false, false, true, false, false]);
+    // No plate shown.
+    s.execute("view.separationsPreview", &json!({"plates": []})).unwrap();
+    assert_eq!(solo(&mut s, "Black"), [false, false, false, true, false]);
+    // The spot plate alone, then every plate.
+    assert_eq!(solo(&mut s, "Brand Orange"), [false, false, false, false, true]);
+    assert_eq!(solo(&mut s, "Brand Orange"), [true; 5]);
+    // A plate the document doesn't have is an error and leaves the view as it is.
+    let before = vectorcraft_render::proof::view();
+    assert!(s.execute("view.separationsPreview", &json!({"soloToggle": "Mauve"})).is_err());
+    assert_eq!(vectorcraft_render::proof::view(), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    assert_eq!(s.doc().unwrap().is_dirty(), dirty, "not marked modified");
+    // `only` stays a setter: the same plate again keeps it alone.
+    s.execute("view.separationsPreview", &json!({"only": "Cyan"})).unwrap();
+    let r = s.execute("view.separationsPreview", &json!({"only": "Cyan"})).unwrap();
+    assert_eq!(visible_plates(&r), [true, false, false, false, false]);
+}
+
+/// A plate counts as shown alone when no other plate of the active document shows: names left in
+/// the visible set by another document's plates don't count.
+#[test]
+fn separations_preview_solo_toggle_counts_the_active_documents_plates() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session_with_spot_plate();
+    s.execute("view.separationsPreview", &json!({"plates": ["Cyan", "Brand Orange"]})).unwrap();
+    // A new document without the spot plate: Cyan is the only one of its plates shown.
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    assert_eq!(visible_plates(&s.execute("color.plates", &json!({})).unwrap()), [true, false, false, false]);
+    let r = s.execute("view.separationsPreview", &json!({"soloToggle": "Cyan"})).unwrap();
+    assert_eq!(visible_plates(&r), [true; 4]);
+}
+
 #[test]
 fn proof_setup_simulates_tritanopia() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -472,6 +719,273 @@ fn proof_setup_simulates_tritanopia() {
     // A tritanope sees blue as a dark teal.
     assert!(px[0] < 8 && px[1] > 80 && px[2] > 110 && px[2] < 150, "{px:?}");
     s.execute("view.proofSetup", &json!({"target": "workingCmyk", "proof": false})).unwrap();
+}
+
+/// View › Proof Setup › Customize's settings: an RGB profile as the device, Preserve Numbers and
+/// Simulate Black Ink, kept in the proof view, read back and drawn; bad values are refused and
+/// leave the view as it was.
+#[test]
+fn proof_setup_takes_the_custom_proof_settings() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0, json!("#000000"));
+    let r = s.execute("view.proofSetup", &json!({})).unwrap();
+    assert_eq!((r["preserveNumbers"].as_bool(), r["simulateBlack"].as_bool()), (Some(false), Some(false)));
+    let device = format!("cmyk:{}", cms::GENERIC_CMYK);
+    let r = s.execute("view.proofSetup", &json!({"target": device, "simulateBlack": true, "proof": true})).unwrap();
+    assert_eq!((r["target"].as_str(), r["simulateBlack"].as_bool(), r["proofColors"].as_bool()), (Some(device.as_str()), Some(true), Some(true)));
+    let setup = vectorcraft_render::proof::active_proof().unwrap();
+    assert!(setup.simulate_black && !setup.preserve_numbers);
+    let doc = s.doc().unwrap().doc.clone();
+    let gray = render(&doc, RenderOptions { proof: Some(setup.clone()), ..Default::default() }).pixel(50, 50);
+    let black = render(&doc, RenderOptions { proof: Some(ProofSetup { simulate_black: false, ..setup }), ..Default::default() }).pixel(50, 50);
+    assert!(gray[0] > black[0] + 10, "the press black shows as a gray: {gray:?} vs {black:?}");
+    let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+    let r = s.execute("view.proofSetup", &json!({"target": rgb, "preserveNumbers": true})).unwrap();
+    assert_eq!((r["target"].as_str(), r["preserveNumbers"].as_bool()), (Some(rgb.as_str()), Some(true)));
+    assert_eq!(vectorcraft_render::proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()));
+    // Unchanged settings leave the revision alone.
+    let rev = s.doc().unwrap().revision;
+    s.execute("view.proofSetup", &json!({"target": rgb, "preserveNumbers": true, "simulateBlack": true})).unwrap();
+    assert_eq!(s.doc().unwrap().revision, rev);
+    let view = vectorcraft_render::proof::view();
+    refused(&mut s, "view.proofSetup", json!({"target": "rgb:Nope"}), "unknown RGB profile `Nope`");
+    refused(&mut s, "view.proofSetup", json!({"target": format!("rgb:{}", cms::GENERIC_CMYK)}), "unknown RGB profile");
+    refused(&mut s, "view.proofSetup", json!({"target": "rgb:"}), "unknown RGB profile");
+    refused(&mut s, "view.proofSetup", json!({"target": "workingCmyk", "preserveNumbers": "yes"}), "`preserveNumbers` must be true or false");
+    refused(&mut s, "view.proofSetup", json!({"simulateBlack": 1}), "`simulateBlack` must be true or false");
+    assert_eq!(vectorcraft_render::proof::view(), view, "the proof view is unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+}
+
+/// A custom proof setup saved to a file loads back as the same setup with Proof Colors on; saving
+/// leaves the proof view as it is, and `view.proofSetup.read` only reads the file.
+#[test]
+fn a_saved_proof_setup_loads_back() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-file");
+    let path = dir.join("press.vcproof").to_string_lossy().to_string();
+    let mut s = session();
+    let device = format!("cmyk:{}", cms::GENERIC_CMYK);
+    let r = s
+        .execute(
+            "view.proofSetup.save",
+            &json!({"path": path, "target": device, "intent": "perceptual", "preserveNumbers": true, "simulateBlack": true}),
+        )
+        .unwrap();
+    assert_eq!((r["path"].as_str(), r["target"].as_str(), r["intent"].as_str()), (Some(path.as_str()), Some(device.as_str()), Some("perceptual")));
+    assert_eq!(vectorcraft_render::proof::view(), Default::default(), "saving leaves the proof view alone");
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("\"format\": \"vectorcraft-proof-setup\"") && text.contains("\"version\": 1"), "{text}");
+    let r = s.execute("view.proofSetup.read", &json!({"path": path})).unwrap();
+    assert_eq!((r["target"].as_str(), r["preserveNumbers"].as_bool(), r["simulateBlack"].as_bool()), (Some(device.as_str()), Some(true), Some(true)));
+    assert_eq!(vectorcraft_render::proof::view(), Default::default(), "reading changes nothing");
+    assert!(!crate::waits_for_tool_edit("view.proofSetup.read"), "reading does not finish a tool's edit");
+    let rev = s.doc().unwrap().revision;
+    let r = s.execute("view.proofSetup.load", &json!({"path": path})).unwrap();
+    assert_eq!((r["proofColors"].as_bool(), r["path"].as_str()), (Some(true), Some(path.as_str())));
+    let v = vectorcraft_render::proof::view();
+    assert!(v.proof_colors);
+    let want = ProofSetup {
+        target: ProofTarget::Cmyk(cms::GENERIC_CMYK.into()),
+        intent: Intent::Perceptual,
+        simulate_paper: false,
+        preserve_numbers: true,
+        simulate_black: true,
+        ..Default::default()
+    };
+    assert_eq!(v.setup, want);
+    assert!(s.doc().unwrap().revision > rev, "the canvas redraws");
+    // Saved from the current setup, the file holds that setup: the round trip keeps every field.
+    let again = dir.join("again.vcproof").to_string_lossy().to_string();
+    s.execute("view.proofSetup.save", &json!({"path": again, "simulatePaper": true})).unwrap();
+    s.execute("view.proofSetup", &json!({"target": "workingCmyk"})).unwrap();
+    s.execute("view.proofSetup.load", &json!({"path": again})).unwrap();
+    assert_eq!(vectorcraft_render::proof::view().setup, ProofSetup { simulate_paper: true, ..want });
+}
+
+/// Saving refuses a target that is not a device, bad params, a bad name and a file larger than
+/// loading reads; loading refuses a file
+/// that is too large, not a proof setup, newer, or whose device is a profile that is not loaded,
+/// and the proof view stays as it was.
+#[test]
+fn proof_setup_files_refuse_what_they_cannot_use() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-refused");
+    let file = |n: &str| dir.join(n).to_string_lossy().to_string();
+    let mut s = session();
+    let path = file("a.vcproof");
+    refused(&mut s, "view.proofSetup.save", json!({"path": path, "target": "protanopia"}), "`protanopia` is not a device to simulate");
+    refused(&mut s, "view.proofSetup.save", json!({"path": path, "target": "rgb:Nope"}), "unknown RGB profile `Nope`");
+    refused(&mut s, "view.proofSetup.save", json!({"path": path, "simulateBlack": "yes"}), "`simulateBlack` must be true or false");
+    refused(&mut s, "view.proofSetup.save", json!({}), "missing `path` or `name`");
+    refused(&mut s, "view.proofSetup.save", json!({"path": path, "name": "x"}), "not both");
+    refused(&mut s, "view.proofSetup.save", json!({"path": " "}), "`path` is empty");
+    refused(&mut s, "view.proofSetup.save", json!({"name": "x"}), "need the preferences folder");
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written");
+    s.attach_proof_setups(dir.join("Proof Setups"));
+    for bad_name in ["", "  ", "../up", "a/b", "a\\b", ".hidden", "c:d"] {
+        refused(&mut s, "view.proofSetup.save", json!({"name": bad_name}), "`name`");
+    }
+    refused(&mut s, "view.proofSetup.save", json!({"name": "x".repeat(101)}), "longer than 100 characters");
+    // A device whose name makes the file larger than load reads is refused, and nothing is written.
+    let long = "Long Profile Name ".repeat(4000);
+    cms::register_icc(&cms::icc_bytes(cms::DISPLAY_P3).unwrap(), Some(long.clone())).unwrap();
+    let refusal = s.execute("view.proofSetup.save", &json!({"path": path, "target": format!("rgb:{long}")}));
+    cms::unregister_icc(&long);
+    assert!(refusal.unwrap_err().to_string().contains("larger than 65536 bytes"), "a setup load can't read is refused");
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written");
+    let before = vectorcraft_render::proof::view();
+    let write = |n: &str, text: &str| {
+        let p = file(n);
+        std::fs::write(&p, text).unwrap();
+        p
+    };
+    let ok = r#"{"format": "vectorcraft-proof-setup", "version": 1, "target": "workingCmyk", "intent": "relative"}"#;
+    let cases = [
+        (write("big.vcproof", &format!("{ok}{}", " ".repeat(64 << 10))), "larger than 65536 bytes"),
+        (write("junk.vcproof", "not json"), "not a proof setup file"),
+        (write("other.vcproof", r#"{"format": "other", "version": 1}"#), "not a VectorCraft proof setup file"),
+        (write("newer.vcproof", &ok.replace("\"version\": 1", "\"version\": 2")), "made by a newer VectorCraft"),
+        (write("missing.vcproof", &ok.replace("workingCmyk", "cmyk:Not Loaded")), "the CMYK profile `Not Loaded`, which is not loaded"),
+        (write("blind.vcproof", &ok.replace("workingCmyk", "deuteranopia")), "not a device to simulate"),
+        (write("intent.vcproof", &ok.replace("relative", "vivid")), "unknown intent `vivid`"),
+        (write("flag.vcproof", &ok.replace("}", r#", "simulatePaper": 1}"#)), "`simulatePaper` must be true or false"),
+    ];
+    for (p, msg) in cases {
+        for cmd in ["view.proofSetup.load", "view.proofSetup.read"] {
+            refused(&mut s, cmd, json!({"path": p}), msg);
+        }
+    }
+    refused(&mut s, "view.proofSetup.load", json!({"path": file("gone.vcproof")}), "gone.vcproof");
+    assert_eq!(vectorcraft_render::proof::view(), before, "the proof view is unchanged");
+    // A file of the limit's size is read.
+    let padded = format!("{ok}{}", " ".repeat((64 << 10) - ok.len()));
+    s.execute("view.proofSetup.load", &json!({"path": write("limit.vcproof", &padded)})).unwrap();
+}
+
+/// Setups saved by name go in the Proof Setups folder, made on the first save, and are listed by
+/// name; other files there are left out, and a run without the folder lists none.
+#[test]
+fn proof_setups_saved_by_name_are_listed() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    assert_eq!(s.execute("view.proofSetup.list", &json!({})).unwrap(), json!({"folder": null, "setups": [], "truncated": false}));
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-list");
+    let folder = dir.join("Proof Setups");
+    s.attach_proof_setups(folder.clone());
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!(r["setups"], json!([]), "no folder yet: none saved");
+    let r = s.execute("view.proofSetup.save", &json!({"name": " Coated Press ", "target": format!("rgb:{}", cms::DISPLAY_P3)})).unwrap();
+    let saved = folder.join("Coated Press.vcproof");
+    assert_eq!(r["path"].as_str(), Some(saved.to_string_lossy().as_ref()));
+    s.execute("view.proofSetup.save", &json!({"name": "Bright"})).unwrap();
+    std::fs::write(folder.join("notes.txt"), "x").unwrap();
+    std::fs::create_dir(folder.join("Sub.vcproof")).unwrap();
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    let names: Vec<&str> = r["setups"].as_array().unwrap().iter().filter_map(|e| e["name"].as_str()).collect();
+    assert_eq!(names, ["Bright", "Coated Press"]);
+    assert_eq!(r["truncated"], false);
+    s.execute("view.proofSetup.load", &json!({"name": "Coated Press"})).unwrap();
+    assert_eq!(vectorcraft_render::proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()));
+    for i in 0..101 {
+        std::fs::write(folder.join(format!("z{i:03}.vcproof")), "x").unwrap();
+    }
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!((r["setups"].as_array().unwrap().len(), r["truncated"].as_bool()), (100, Some(true)));
+    assert_eq!((r["setups"][0]["name"].as_str(), r["setups"][99]["name"].as_str()), (Some("Bright"), Some("z097")), "the first 100 by name");
+}
+
+/// Other files in the Proof Setups folder, however many, do not keep its setups from the listing.
+#[test]
+fn proof_setups_are_listed_among_many_other_files() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-list-crowded");
+    let folder = dir.join("Proof Setups");
+    std::fs::create_dir_all(&folder).unwrap();
+    for i in 0..5000 {
+        std::fs::write(folder.join(format!("a{i:04}.txt")), "").unwrap();
+    }
+    s.attach_proof_setups(folder.clone());
+    s.execute("view.proofSetup.save", &json!({"name": "Press"})).unwrap();
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!((r["setups"].as_array().unwrap().len(), r["truncated"].as_bool()), (1, Some(false)));
+    assert_eq!(r["setups"][0]["name"], "Press");
+}
+
+/// The listing names only files that `name` loads (`<name>.vcproof`, a name `save` can give), in
+/// the order of those names, and the limit keeps the first by name; a folder that can't be read is
+/// an error, not an empty listing.
+#[test]
+fn proof_setups_are_listed_by_names_that_load_them() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-list-names");
+    let folder = dir.join("Proof Setups");
+    std::fs::create_dir_all(&folder).unwrap();
+    s.attach_proof_setups(folder.clone());
+    let ok = r#"{"format": "vectorcraft-proof-setup", "version": 1, "target": "workingCmyk", "intent": "relative"}"#;
+    for file in ["Press.vcproof", "Press Matte.vcproof", "Loud.VCPROOF", " Lead.vcproof"] {
+        std::fs::write(folder.join(file), ok).unwrap();
+    }
+    let names = |r: &Value| r["setups"].as_array().unwrap().iter().filter_map(|e| e["name"].as_str().map(str::to_string)).collect::<Vec<_>>();
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!((names(&r), r["truncated"].as_bool()), (vec!["Press".to_string(), "Press Matte".to_string()], Some(false)));
+    for name in names(&r) {
+        s.execute("view.proofSetup.read", &json!({ "name": name })).unwrap();
+    }
+    // `Press` and `Press Matte` compete for the last place: the first by name keeps it.
+    for i in 0..99 {
+        std::fs::write(folder.join(format!("A{i:02}.vcproof")), "x").unwrap();
+    }
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    let listed = names(&r);
+    assert_eq!((listed.len(), listed.last().map(String::as_str), r["truncated"].as_bool()), (100, Some("Press"), Some(true)));
+    // A folder that is not one can't be listed.
+    let file = dir.join("not a folder");
+    std::fs::write(&file, "x").unwrap();
+    s.attach_proof_setups(file);
+    refused(&mut s, "view.proofSetup.list", json!({}), "not a folder");
+}
+
+/// A file name that is not valid Unicode is left out of the listing, which then says it is
+/// incomplete: a path made from a lossy copy of the name would name another file.
+#[test]
+fn proof_setup_names_that_are_not_unicode_are_left_out() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-list-bytes");
+    let folder = dir.join("Proof Setups");
+    std::fs::create_dir_all(&folder).unwrap();
+    #[cfg(unix)]
+    let odd = {
+        use std::os::unix::ffi::OsStringExt;
+        std::ffi::OsString::from_vec(b"Odd\xff.vcproof".to_vec())
+    };
+    #[cfg(windows)]
+    let odd = {
+        use std::os::windows::ffi::OsStringExt;
+        std::ffi::OsString::from_wide(&"Odd?.vcproof".encode_utf16().map(|u| if u == u16::from(b'?') { 0xD800 } else { u }).collect::<Vec<_>>())
+    };
+    // A file system that refuses such a name has nothing to leave out.
+    if std::fs::write(folder.join(odd), "x").is_err() {
+        return;
+    }
+    std::fs::write(folder.join("Press.vcproof"), "x").unwrap();
+    s.attach_proof_setups(folder);
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!(
+        (r["setups"].as_array().map(Vec::len), r["setups"][0]["name"].as_str(), r["truncated"].as_bool()),
+        (Some(1), Some("Press"), Some(true))
+    );
 }
 
 /// Whether the content has a DeviceCMYK fill/stroke operator (`c m y k k` / `K`).
@@ -541,4 +1055,284 @@ fn intents_reach_the_document_conversion() {
     };
     assert_ne!(first(&a), first(&b));
     let _ = Intent::Perceptual;
+}
+
+/// The error `cmd` gives for `params`: it must name `msg`.
+fn refused(s: &mut Session, cmd: &str, params: Value, msg: &str) {
+    let e = match s.execute(cmd, &params) {
+        Ok(r) => panic!("{cmd} {params} gave {r}"),
+        Err(e) => e.to_string(),
+    };
+    assert!(e.contains(msg), "{cmd} {params}: {e}");
+}
+
+#[test]
+fn color_settings_refuse_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let before = cms::active_settings();
+    let rev = s.doc().unwrap().revision;
+    let c = "edit.colorSettings";
+    refused(&mut s, c, json!({"bpc": "no"}), "`bpc` must be true or false");
+    refused(&mut s, c, json!({"rgb": 5}), "`rgb` must be a string");
+    refused(&mut s, c, json!({"cmyk": true}), "`cmyk` must be a string");
+    refused(&mut s, c, json!({"intent": 2}), "`intent` must be a string");
+    assert_eq!(cms::active_settings(), before, "the settings are unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+    // Omitted and null params keep the settings.
+    s.execute(c, &json!({"bpc": null, "rgb": null})).unwrap();
+    assert_eq!(cms::active_settings(), before);
+    refused(&mut s, "color.convert", json!({"color": "#808080", "to": 1}), "`to` must be a string");
+    refused(&mut s, "color.convert", json!({"color": "#808080", "intent": ["relative"]}), "`intent` must be a string");
+    assert_eq!(s.execute("color.convert", &json!({"color": "#808080", "to": null})).unwrap()["model"], "rgb");
+    let profiles = || cms::profiles().into_iter().map(|i| i.name).collect::<Vec<_>>();
+    let listed = profiles();
+    refused(&mut s, "color.loadProfile", json!({"path": 7}), "`path` must be a string");
+    refused(&mut s, "color.removeProfile", json!({"name": 7}), "`name` must be a string");
+    assert_eq!(profiles(), listed, "no profile is loaded or removed");
+    assert_eq!(cms::active_settings(), before, "the settings are unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+}
+
+#[test]
+fn document_color_mode_refuses_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#ff0000"));
+    let fill = fill_of(&s, a);
+    let undo = s.doc().unwrap().history.undo.len();
+    for c in ["file.documentColorMode", "object.convertDocumentColorMode"] {
+        refused(&mut s, c, json!({"mode": "cmyk", "convert": "no"}), "`convert` must be true or false");
+        refused(&mut s, c, json!({"mode": "rgb", "convert": 0}), "`convert` must be true or false");
+        refused(&mut s, c, json!({"mode": "cmyk", "grays": 1}), "`grays` must be a string");
+        refused(&mut s, c, json!({"mode": "cmyk", "intent": false}), "`intent` must be a string");
+    }
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.color_mode, ColorMode::Rgb);
+    assert_eq!(st.history.undo.len(), undo, "no undo step");
+    assert_eq!(fill_of(&s, a), fill, "the colors are unchanged");
+}
+
+#[test]
+fn proof_views_refuse_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let view = vectorcraft_render::proof::view();
+    let rev = s.doc().unwrap().revision;
+    refused(&mut s, "view.proofSetup", json!({"simulatePaper": "yes"}), "`simulatePaper` must be true or false");
+    refused(&mut s, "view.proofSetup", json!({"proof": 1}), "`proof` must be true or false");
+    refused(&mut s, "view.proofSetup", json!({"target": 3}), "`target` must be a string");
+    refused(&mut s, "view.proofColors", json!({"on": "true"}), "`on` must be true or false");
+    refused(&mut s, "view.overprintPreview", json!({"on": 1}), "`on` must be true or false");
+    refused(&mut s, "view.separationsPreview", json!({"on": "false"}), "`on` must be true or false");
+    refused(&mut s, "view.separationsPreview", json!({"plates": "Cyan"}), "`plates` must be an array of these names: Cyan, Magenta");
+    refused(&mut s, "view.separationsPreview", json!({"plates": ["Cyan", 2]}), "`plates` must be an array of these names");
+    refused(&mut s, "view.separationsPreview", json!({"only": 0}), "`only` must be a string");
+    refused(&mut s, "view.separationsPreview", json!({"toggle": ["Cyan"]}), "`toggle` must be a string");
+    assert_eq!(vectorcraft_render::proof::view(), view, "the proof view is unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+    // A null `on` toggles, as an omitted one does.
+    let r = s.execute("view.proofColors", &json!({"on": null})).unwrap();
+    assert_eq!(r["proofColors"], !view.proof_colors);
+    s.execute("view.proofColors", &json!({"on": view.proof_colors})).unwrap();
+}
+
+#[test]
+fn set_spot_refuses_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": {"c": 0, "m": 60, "y": 100, "k": 0}, "global": true})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    refused(&mut s, "swatch.setSpot", json!({"name": "Ink", "spot": "true"}), "`spot` must be true or false");
+    refused(&mut s, "swatch.setSpot", json!({"name": 1}), "`name` must be a string");
+    assert!(!s.doc().unwrap().doc.swatch("Ink").unwrap().spot, "the swatch stays a process color");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    s.execute("swatch.setSpot", &json!({"name": "Ink", "spot": null})).unwrap();
+    assert!(s.doc().unwrap().doc.swatch("Ink").unwrap().spot, "a null `spot` is the default, true");
+}
+
+#[test]
+fn gamut_check_refuses_colors_that_are_not_a_list() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#0000ff"));
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    refused(&mut s, "color.gamutCheck", json!({"colors": "#00ff00"}), "`colors` must be an array of colors, not \"#00ff00\"");
+    refused(&mut s, "color.gamutCheck", json!({"colors": 5}), "`colors` must be an array of colors, not 5");
+    refused(&mut s, "color.gamutCheck", json!({"colors": {"c": 100, "m": 0, "y": 0, "k": 0}}), "`colors` must be an array of colors");
+    // A null list checks the document, as an omitted one does.
+    let r = s.execute("color.gamutCheck", &json!({"colors": null})).unwrap();
+    assert_eq!(r, s.execute("color.gamutCheck", &json!({})).unwrap());
+    assert!(r["outOfGamut"].as_array().unwrap().iter().any(|v| v["hex"] == "#0000ff"), "{r}");
+}
+
+fn mode_index_swatch(name: &str, paint: Paint, global: bool) -> vectorcraft_color::Swatch {
+    vectorcraft_color::Swatch { name: name.into(), paint, global, spot: false }
+}
+
+fn mode_index_link(color: Color, name: &str, tint: f32) -> Paint {
+    Paint::Solid { color, swatch: Some(name.into()), tint }
+}
+
+fn mode_index_gradient() -> Paint {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, Color::rgb(0.1, 0.2, 0.3)), GradientStop::new(1.0, Color::rgb(0.8, 0.7, 0.6))],
+    ))))
+}
+
+/// A later global cannot replace the first exact-name record, even when that first record
+/// cannot supply a global base. These legacy palettes exercise the public conversion command.
+#[test]
+fn document_mode_index_keeps_ineligible_first_name_shadowing() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let stored = Color::rgb(0.123_457, 0.456_789, 0.789_123);
+    let shadows = [
+        (Paint::solid(Color::rgb(0.8, 0.1, 0.2)), false),
+        (mode_index_link(Color::rgb(0.6, 0.3, 0.4), "Underlying", 0.5), true),
+        (mode_index_gradient(), true),
+    ];
+    for grouped in [false, true] {
+        for (paint, global) in &shadows {
+            let mut s = session();
+            let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!(stored));
+            s.edit("legacy duplicate palette", |d, _| {
+                let first = mode_index_swatch("Shadow", paint.clone(), *global);
+                let later = mode_index_swatch("Shadow", Paint::solid(Color::rgb(0.1, 0.8, 0.2)), true);
+                d.swatches = vec![mode_index_swatch("Underlying", Paint::solid(Color::rgb(0.2, 0.4, 0.6)), true)].into();
+                d.swatch_groups.clear();
+                if grouped {
+                    d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "First".into(), swatches: vec![first] });
+                } else {
+                    d.swatches.push(first);
+                }
+                d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Later".into(), swatches: vec![later] });
+                d.node_mut(id).unwrap().appearance.set_fill(mode_index_link(stored, "Shadow", 0.25));
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(s.doc().unwrap().doc.global_color("Shadow"), None);
+            s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+            assert_eq!(fill_of(&s, id), mode_index_link(to_cmyk(stored), "Shadow", 0.25), "grouped={grouped}, first={paint:?}");
+        }
+    }
+}
+
+/// A first eligible record wins over later groups, and its converted base supplies art,
+/// gradient-stop and tint-swatch colors. Undo/Redo retain the complete duplicate palette.
+#[test]
+fn document_mode_index_uses_the_first_global_base_across_groups() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let base = Color::rgb(0.271_937, 0.314_773, 0.583_119);
+    let other = Color::rgb(0.812_345, 0.234_567, 0.456_789);
+    for grouped in [false, true] {
+        let mut s = session();
+        let filled = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!(base));
+        let gradient = rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!(other));
+        s.edit("legacy grouped palette", |d, _| {
+            let first = mode_index_swatch("Shared", Paint::solid(base), true);
+            let later = mode_index_swatch("Shared", Paint::solid(other), true);
+            d.swatches = vec![mode_index_swatch("Shared tint", mode_index_link(base.tinted(0.3), "Shared", 0.3), false)].into();
+            d.swatch_groups.clear();
+            if grouped {
+                d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "First".into(), swatches: vec![first] });
+            } else {
+                d.swatches.push(first);
+            }
+            d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Later".into(), swatches: vec![later] });
+            d.node_mut(filled).unwrap().appearance.set_fill(mode_index_link(base.tinted(0.25), "Shared", 0.25));
+            let stop = GradientStop { swatch: Some("Shared".into()), tint: 0.6, ..GradientStop::new(0.0, base.tinted(0.6)) };
+            d.node_mut(gradient).unwrap().appearance.set_fill(Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+                GradientKind::Linear,
+                vec![stop, GradientStop::new(1.0, other)],
+            )))));
+            Ok(())
+        })
+        .unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let history = s.doc().unwrap().history.undo.len();
+        s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+        let converted = to_cmyk(base);
+        assert_eq!(fill_of(&s, filled), mode_index_link(converted.tinted(0.25), "Shared", 0.25));
+        assert_eq!(s.doc().unwrap().doc.swatch("Shared").unwrap().paint.color(), Some(converted));
+        assert_eq!(s.doc().unwrap().doc.swatch("Shared tint").unwrap().paint, mode_index_link(converted.tinted(0.3), "Shared", 0.3));
+        let Paint::Gradient(paint) = fill_of(&s, gradient) else { panic!("gradient lost") };
+        assert_eq!(
+            (paint.gradient.stops[0].color, paint.gradient.stops[0].swatch.as_deref(), paint.gradient.stops[0].tint),
+            (converted.tinted(0.6), Some("Shared"), 0.6)
+        );
+        assert_eq!(paint.gradient.stops[1].color, to_cmyk(other));
+        assert_eq!(s.doc().unwrap().history.undo.len(), history + 1);
+        let after = s.doc().unwrap().doc.clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *before);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *after);
+    }
+}
+
+/// Grouped Lab spots keep their definitions; both Spot Colors choices supply their own linked
+/// base to document art, tint swatches and the new-art fill when the document mode changes.
+#[test]
+fn document_mode_index_keeps_grouped_lab_spot_options_and_new_art() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let lab = Color::Lab { l: 61.5, a: 42.25, b: -17.75 };
+    for use_lab in [false, true] {
+        let mut s = session();
+        s.execute("swatch.new", &json!({"name": "Indexed Lab", "color": lab, "spot": true})).unwrap();
+        s.execute("swatch.new", &json!({"swatch": "Indexed Lab", "tint": 70})).unwrap();
+        s.edit("group the spot", |d, _| {
+            let ink = d.remove_swatch("Indexed Lab").unwrap();
+            d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Spot group".into(), swatches: vec![ink] });
+            Ok(())
+        })
+        .unwrap();
+        s.execute("swatch.spotOptions", &json!({"useLab": use_lab})).unwrap();
+        let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#000000"));
+        s.execute("paint.setFill", &json!({"ids": [id.0], "swatch": "Indexed Lab", "tint": 40})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let old_paint = s.paint.clone();
+        let base = if use_lab { lab } else { to_cmyk(lab) };
+        s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+        let ink = s.doc().unwrap().doc.swatch("Indexed Lab").unwrap();
+        assert!(ink.global && ink.spot);
+        assert_eq!(ink.paint, Paint::solid(lab));
+        let expected = mode_index_link(base.tinted(0.4), "Indexed Lab", 0.4);
+        assert_eq!(fill_of(&s, id), expected);
+        assert_eq!(s.paint.fill, expected, "new art follows the same spot choice");
+        assert_eq!(s.doc().unwrap().doc.swatch("Indexed Lab 70%").unwrap().paint, mode_index_link(base.tinted(0.7), "Indexed Lab", 0.7));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *before);
+        assert_eq!(s.paint, old_paint);
+    }
+}
+
+/// The implicit Registration lookup is not a stored palette record. Only an explicit global
+/// record supplies its tint base here; an unresolved link keeps conversion of its stored color.
+#[test]
+fn document_mode_index_keeps_registration_and_missing_link_fallbacks() {
+    use vectorcraft_color::swatch::{REGISTRATION, registration};
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let stored = Color::rgb(0.321_987, 0.654_321, 0.876_543);
+    for explicit in [false, true] {
+        let mut s = session();
+        let mark = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!(stored));
+        let missing = rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!(stored));
+        s.edit("legacy registration and missing link", |d, _| {
+            d.swatches = (if explicit { vec![registration().clone()] } else { vec![] }).into();
+            d.swatch_groups.clear();
+            d.node_mut(mark).unwrap().appearance.set_fill(mode_index_link(stored, REGISTRATION, 0.25));
+            d.node_mut(missing).unwrap().appearance.set_fill(mode_index_link(stored, "Missing", 0.5));
+            Ok(())
+        })
+        .unwrap();
+        assert!(s.doc().unwrap().doc.swatch(REGISTRATION).is_some(), "the implicit lookup exists in both fixtures");
+        assert_eq!(s.doc().unwrap().doc.swatches_iter().count(), usize::from(explicit));
+        s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+        let color = if explicit { Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.25) } else { to_cmyk(stored) };
+        assert_eq!(fill_of(&s, mark), mode_index_link(color, REGISTRATION, 0.25));
+        assert_eq!(fill_of(&s, missing), mode_index_link(to_cmyk(stored), "Missing", 0.5));
+    }
 }

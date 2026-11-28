@@ -93,7 +93,7 @@ fn too_many_guide_pieces_are_refused() {
     let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
     for i in 1..3000 {
         for vertical in [true, false] {
-            doc.guides.push(vectorcraft_doc::Guide::new(vertical, f64::from(i) * 0.1));
+            doc.add_ruler_guide(&vectorcraft_doc::Guide::new(vertical, f64::from(i) * 0.1));
         }
     }
     assert!(s.execute("object.slice.fromGuides", &json!({})).unwrap_err().to_string().contains("more than"));
@@ -440,9 +440,9 @@ fn a_canceled_undo_scope_leaves_locked_or_hidden_slices_deselected() {
 
 /// Select slice `id` and the first ruler guide together, through [`Session::select`].
 fn pick_slice_and_guide(s: &mut Session, id: u64) {
-    s.select(|_, sel| {
+    s.select(|d, sel| {
         sel.slices = vec![NodeId(id)];
-        sel.guides = vec![0];
+        sel.guides = d.ruler_guides().first().and_then(|g| g.id).into_iter().collect();
     })
     .unwrap();
 }
@@ -592,4 +592,28 @@ fn slice_commands_check_their_params() {
     assert_eq!(run(&mut s, "object.slice.delete", json!({"slices": [a]}))["count"], 1);
     assert!(s.doc().unwrap().doc.node(NodeId(a)).is_some(), "deleting an object slice keeps its object");
     assert_eq!(run(&mut s, "object.slice.select", json!({}))["selected"], json!([]));
+}
+
+#[test]
+fn invalid_slice_toggle_flags_do_not_change_state_or_selection() {
+    for (command, params) in [
+        ("object.slice.clipToArtboard", json!({"on": "false"})),
+        ("view.slices.hide", json!({"hidden": 0})),
+        ("view.slices.lock", json!({"locked": 1})),
+    ] {
+        let mut s = session();
+        let id = user_slice(&mut s, [10.0, 10.0, 20.0, 20.0]);
+        run(&mut s, "select.object.slices", json!({}));
+        let before_undo = s.doc().unwrap().history.undo.len();
+        assert!(s.execute(command, &params).is_err(), "{command} accepted {params}");
+        assert!(s.doc().unwrap().doc.slices_clip_to_artboard, "{command} changed the document");
+        assert!(!s.slices_hidden(), "{command} hid slices");
+        assert!(!s.slices_locked(), "{command} locked slices");
+        assert_eq!(s.doc().unwrap().selection.slices, vec![NodeId(id)], "{command} cleared the selection");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "{command} recorded an undo step");
+    }
+    // Left out, or null as for every command, the flag toggles.
+    let mut s = session();
+    assert_eq!(run(&mut s, "view.slices.hide", Value::Null)["hidden"], true);
+    assert_eq!(run(&mut s, "view.slices.hide", json!({"hidden": null}))["hidden"], false);
 }

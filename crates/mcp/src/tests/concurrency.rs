@@ -3,6 +3,7 @@
 //! client on stdio drives it, with a backend that works until it is told to stop.
 
 use std::io::{BufReader, Write};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -10,15 +11,36 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use vectorcraft_engine::cancel;
 
+use super::TempFolder;
 use crate::{Backend, Server};
 
-/// A backend whose `engine.execute` runs until cancelled (or for `limit`), like a long export.
+/// A clock the test moves, in milliseconds, and the server's view of it.
+fn manual_clock() -> (Arc<AtomicU64>, crate::server::Clock) {
+    let ms = Arc::new(AtomicU64::new(0));
+    let read = ms.clone();
+    (ms, Arc::new(move || Duration::from_millis(read.load(Ordering::SeqCst))))
+}
+
+/// A backend whose `engine.execute` runs until the test releases it or the call is cancelled,
+/// like a long export. Commands whose id starts with `quick` return at once.
 struct Slow {
-    limit: Duration,
+    /// One message lets one command finish. The test dropping its end lets every command finish.
+    go: Receiver<()>,
     /// Commands that ran to the end, and the ones that were cancelled.
     log: Arc<Mutex<Vec<String>>>,
     /// Told when a command starts.
     started: Sender<String>,
+    /// Told what [`Slow::log`] records, when it records it.
+    ended: Sender<String>,
+    /// The server's clock, which `progress.demo` moves between its pages.
+    clock: Arc<AtomicU64>,
+}
+
+impl Slow {
+    fn end(&self, line: String) {
+        self.log.lock().unwrap().push(line.clone());
+        self.ended.send(line).ok();
+    }
 }
 
 impl Backend for Slow {
@@ -30,22 +52,26 @@ impl Backend for Slow {
         self.started.send(id.clone()).ok();
         if id == "progress.demo" {
             for page in 1..=3 {
-                // Enough apart to pass the sender's throttle.
-                std::thread::sleep(Duration::from_millis(230));
+                // Far enough apart on the server's clock to pass the sender's throttle.
+                self.clock.fetch_add(230, Ordering::SeqCst);
                 cancel::progress(page, 3, &format!("page {page}"));
             }
             return Ok(json!({"ran": id}));
         }
-        let limit = if id.starts_with("quick") { Duration::ZERO } else { self.limit };
-        let start = Instant::now();
-        while start.elapsed() < limit {
-            if let Err(e) = cancel::check() {
-                self.log.lock().unwrap().push(format!("cancelled {id}"));
-                return Err(e.to_string());
+        if !id.starts_with("quick") {
+            loop {
+                if let Err(e) = cancel::check() {
+                    self.end(format!("cancelled {id}"));
+                    return Err(e.to_string());
+                }
+                // The token has no wait of its own: look at it again between waits for the release.
+                match self.go.recv_timeout(Duration::from_millis(5)) {
+                    Ok(()) | Err(RecvTimeoutError::Disconnected) => break,
+                    Err(RecvTimeoutError::Timeout) => {}
+                }
             }
-            std::thread::sleep(Duration::from_millis(5));
         }
-        self.log.lock().unwrap().push(format!("done {id}"));
+        self.end(format!("done {id}"));
         Ok(json!({"ran": id}))
     }
 
@@ -83,22 +109,38 @@ struct Rig {
     to_server: std::io::PipeWriter,
     replies: Receiver<String>,
     started: Receiver<String>,
+    ended: Receiver<String>,
     log: Arc<Mutex<Vec<String>>>,
+    go: Sender<()>,
+    clock: Arc<AtomicU64>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Rig {
-    fn new(limit: Duration, busy_after: Duration) -> Self {
+    fn new(busy_after: Duration) -> Self {
         let (read, to_server) = std::io::pipe().unwrap();
         let (tx, replies) = mpsc::channel();
         let (started_tx, started) = mpsc::channel();
+        let (ended_tx, ended) = mpsc::channel();
+        let (go, go_rx) = mpsc::channel();
         let log = Arc::new(Mutex::new(vec![]));
-        let backend = Slow { limit, log: log.clone(), started: started_tx };
+        let (clock, server_clock) = manual_clock();
+        let backend = Slow { go: go_rx, log: log.clone(), started: started_tx, ended: ended_tx, clock: clock.clone() };
         let thread = std::thread::spawn(move || {
-            let mut server = Server::new(Box::new(backend)).with_busy_after(busy_after);
+            let mut server = Server::new(Box::new(backend)).with_busy_after(busy_after).with_clock(server_clock);
             server.serve(BufReader::new(read), Lines(tx, vec![])).unwrap();
         });
-        Self { to_server, replies, started, log, thread: Some(thread) }
+        Self { to_server, replies, started, ended, log, go, clock, thread: Some(thread) }
+    }
+
+    /// Lets the running command (or the next one to run) finish.
+    fn release(&self) {
+        self.go.send(()).unwrap();
+    }
+
+    /// Moves the server's clock on by `by`.
+    fn advance(&self, by: Duration) {
+        self.clock.fetch_add(u64::try_from(by.as_millis()).unwrap(), Ordering::SeqCst);
     }
 
     fn send(&mut self, msg: Value) {
@@ -139,7 +181,8 @@ impl Rig {
 
     fn finish(mut self) {
         let thread = self.thread.take().unwrap();
-        drop(self.to_server);
+        // The input closes and every command still waiting for a release finishes.
+        drop(self);
         thread.join().unwrap();
     }
 }
@@ -147,17 +190,17 @@ impl Rig {
 /// How long a test waits for the server to start a command, to answer or to log. The wait only ends
 /// a test whose server never does. A machine busy with other builds can hold a thread for seconds.
 const WAIT: Duration = Duration::from_secs(20);
-/// How long [`Slow`]'s long command runs unless it is cancelled: longer than [`WAIT`], so a request
-/// that waits behind it is not answered within the wait.
+/// How long [`Gated`] waits for its cancel before it lets the export run anyway: longer than
+/// [`WAIT`], so it only ends a test whose cancel never arrives.
 const LONG: Duration = Duration::from_secs(60);
 
 #[test]
 fn ping_is_answered_while_a_command_runs() {
-    let mut rig = Rig::new(LONG, Duration::from_millis(50));
+    let mut rig = Rig::new(Duration::from_millis(50));
     rig.run(1, "document.export");
     assert_eq!(rig.started.recv_timeout(WAIT).unwrap(), "document.export");
     // Past `busy_after` the call counts as long-running.
-    std::thread::sleep(Duration::from_millis(120));
+    rig.advance(Duration::from_millis(120));
     rig.request(2, "ping", json!({}));
     let pong = rig.reply(2, WAIT).expect("ping must not wait for the running command");
     assert_eq!(pong["result"], json!({}));
@@ -167,32 +210,34 @@ fn ping_is_answered_while_a_command_runs() {
 
 #[test]
 fn cancelling_stops_the_running_command_and_sends_no_reply() {
-    let mut rig = Rig::new(LONG, Duration::from_secs(60));
+    let mut rig = Rig::new(Duration::from_secs(60));
     rig.run(1, "document.export");
     rig.started.recv_timeout(WAIT).unwrap();
     rig.notify("notifications/cancelled", json!({"requestId": 1, "reason": "user"}));
     // The engine is free again: the next command runs and answers.
     rig.run(2, "pdf.preset.list");
-    let end = Instant::now() + WAIT;
+    let ended = rig.ended.recv_timeout(WAIT);
+    assert_eq!(ended.as_deref(), Ok("cancelled document.export"), "the export kept running: {:?}", rig.log.lock().unwrap());
+    rig.notify("notifications/cancelled", json!({"requestId": 2}));
+    // Request 1 was cancelled: nothing answers it (MCP: the receiver should not reply). Requests are
+    // answered in order, so every reply to request 1 comes before the answer to a later ping.
+    rig.request(3, "ping", json!({}));
     loop {
-        if rig.log.lock().unwrap().iter().any(|l| l == "cancelled document.export") {
+        let v = rig.next(WAIT).expect("an answer to the ping");
+        assert_ne!(v.get("id"), Some(&json!(1)), "the cancelled request was answered: {v}");
+        if v.get("id") == Some(&json!(3)) {
             break;
         }
-        assert!(Instant::now() < end, "the export kept running: {:?}", rig.log.lock().unwrap());
-        std::thread::sleep(Duration::from_millis(10));
     }
-    rig.notify("notifications/cancelled", json!({"requestId": 2}));
-    // Request 1 was cancelled: nothing answers it (MCP: the receiver should not reply).
-    assert!(rig.reply(1, Duration::from_millis(300)).is_none());
     rig.finish();
 }
 
 #[test]
 fn a_request_that_would_wait_behind_a_long_call_is_refused_as_busy() {
-    let mut rig = Rig::new(LONG, Duration::from_millis(50));
+    let mut rig = Rig::new(Duration::from_millis(50));
     rig.run(1, "document.export");
     rig.started.recv_timeout(WAIT).unwrap();
-    std::thread::sleep(Duration::from_millis(120));
+    rig.advance(Duration::from_millis(120));
     rig.run(2, "pdf.preset.list");
     let busy = rig.reply(2, WAIT).expect("a busy answer, not a wait");
     assert_eq!(busy["error"]["code"], -32003, "{busy}");
@@ -207,21 +252,33 @@ fn a_request_that_would_wait_behind_a_long_call_is_refused_as_busy() {
 
 #[test]
 fn quick_calls_pipelined_together_queue_and_answer_in_order() {
-    let mut rig = Rig::new(Duration::from_millis(30), Duration::from_secs(60));
+    let mut rig = Rig::new(Duration::from_secs(60));
+    // A call holds the engine while the quick calls arrive behind it.
+    rig.run(9, "document.export");
+    assert_eq!(rig.started.recv_timeout(WAIT).unwrap(), "document.export");
     for id in 1..=4 {
         rig.run(id, &format!("cmd{id}"));
+    }
+    // The reader takes lines in order, so once it has cancelled the call ahead it has taken in the
+    // four calls behind it, while that call was still short of the busy limit.
+    rig.notify("notifications/cancelled", json!({"requestId": 9}));
+    assert_eq!(rig.ended.recv_timeout(WAIT).unwrap(), "cancelled document.export");
+    // Each command holds the engine until it is released.
+    for id in 1..=4 {
+        assert_eq!(rig.started.recv_timeout(WAIT).unwrap(), format!("cmd{id}"));
+        rig.release();
     }
     for id in 1..=4 {
         let r = rig.reply(id, WAIT).unwrap_or_else(|| panic!("no reply to {id}"));
         assert!(r.get("error").is_none(), "{r}");
     }
-    assert_eq!(*rig.log.lock().unwrap(), ["done cmd1", "done cmd2", "done cmd3", "done cmd4"]);
+    assert_eq!(*rig.log.lock().unwrap(), ["cancelled document.export", "done cmd1", "done cmd2", "done cmd3", "done cmd4"]);
     rig.finish();
 }
 
 #[test]
 fn a_queued_request_that_is_cancelled_never_runs() {
-    let mut rig = Rig::new(LONG, Duration::from_secs(60));
+    let mut rig = Rig::new(Duration::from_secs(60));
     rig.run(1, "document.export");
     rig.started.recv_timeout(WAIT).unwrap();
     rig.run(2, "never.runs");
@@ -241,7 +298,7 @@ fn a_queued_request_that_is_cancelled_never_runs() {
 
 #[test]
 fn cancelling_an_unknown_or_finished_request_changes_nothing() {
-    let mut rig = Rig::new(Duration::from_millis(10), Duration::from_secs(60));
+    let mut rig = Rig::new(Duration::from_secs(60));
     rig.run(1, "quick");
     assert!(rig.reply(1, WAIT).unwrap().get("result").is_some());
     rig.notify("notifications/cancelled", json!({"requestId": 1}));
@@ -255,7 +312,7 @@ fn cancelling_an_unknown_or_finished_request_changes_nothing() {
 
 #[test]
 fn initialize_cannot_be_cancelled() {
-    let mut rig = Rig::new(LONG, Duration::from_secs(60));
+    let mut rig = Rig::new(Duration::from_secs(60));
     rig.request(1, "initialize", json!({}));
     rig.notify("notifications/cancelled", json!({"requestId": 1}));
     assert!(rig.reply(1, WAIT).unwrap().get("result").is_some());
@@ -264,7 +321,7 @@ fn initialize_cannot_be_cancelled() {
 
 #[test]
 fn progress_reaches_a_client_that_gave_a_token_before_the_reply() {
-    let mut rig = Rig::new(LONG, Duration::from_secs(60));
+    let mut rig = Rig::new(Duration::from_secs(60));
     rig.request(1, "tools/call", json!({"name": "command_run", "arguments": {"id": "progress.demo"}, "_meta": {"progressToken": "tok"}}));
     let mut seen = vec![];
     let reply = loop {
@@ -318,8 +375,8 @@ impl Backend for Gated {
 
 #[test]
 fn a_cancelled_export_through_the_real_engine_writes_nothing_and_leaves_the_session_usable() {
-    let path = vectorcraft_testkit::temp_dir("mcp-cancel").join("out.pdf");
-    std::fs::remove_file(&path).ok();
+    let dir = TempFolder::new("cancel");
+    let path = dir.file("out.pdf");
     let (read, mut to_server) = std::io::pipe().unwrap();
     let (tx, replies) = mpsc::channel();
     let (started_tx, started) = mpsc::channel();
@@ -345,25 +402,50 @@ fn a_cancelled_export_through_the_real_engine_writes_nothing_and_leaves_the_sess
 }
 
 #[test]
+fn a_change_while_a_script_runs_is_refused_as_busy() {
+    let mut backend = crate::Headless::with_document();
+    backend.session.script_frames = true;
+    backend.session.execute("script.run", &json!({"source": "while (true) {}"})).unwrap();
+    let mut s = Server::new(Box::new(backend));
+    let call = |id: &str, params: Value| json!({"name": "command_run", "arguments": {"id": id, "params": params}});
+    let reply = super::rpc(&mut s, 1, "tools/call", call("shape.rectangle", json!({"x": 0, "y": 0, "width": 1, "height": 1})));
+    assert_eq!(reply["error"]["code"], -32003, "{reply}");
+    assert!(reply["error"]["message"].as_str().unwrap().contains("a script is running"), "{reply}");
+    let reply = super::rpc(&mut s, 2, "tools/call", json!({"name": "doc_inspect", "arguments": {}}));
+    assert_eq!(reply["result"]["isError"], false, "reading the document is not refused: {reply}");
+    let reply = super::rpc(&mut s, 3, "tools/call", call("no.such", json!({})));
+    assert_eq!(reply["result"]["isError"], true, "any other failure stays a tool error: {reply}");
+    assert!(reply.get("error").is_none(), "{reply}");
+}
+
+#[test]
 fn a_remote_call_stops_waiting_for_the_app_when_cancelled() {
     use std::io::BufRead;
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
-    // An app that takes the request and never answers.
+    // An app that answers the connection's token, then takes the request and never answers.
     let (done, held) = mpsc::channel::<()>();
+    let (asked, request_read) = mpsc::channel::<()>();
     let app = std::thread::spawn(move || {
         let (conn, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(conn.try_clone().unwrap());
         let mut line = String::new();
-        BufReader::new(conn.try_clone().unwrap()).read_line(&mut line).unwrap();
+        reader.read_line(&mut line).unwrap();
+        let auth: Value = serde_json::from_str(&line).unwrap();
+        writeln!(&conn, "{}", json!({"id": auth["id"], "ok": true})).unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        asked.send(()).ok();
         // Hold the connection open until the test is done with it (or for `WAIT`).
         let _ = held.recv_timeout(WAIT);
         drop(conn);
     });
-    let mut remote = crate::Remote::connect(&addr).unwrap();
+    let mut remote = crate::Remote::connect(&addr, "test").unwrap();
     let token = cancel::CancelToken::new();
     let raise = token.clone();
+    // Cancel once the app holds the request (or has stopped, which ends the call by itself).
     std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(200));
+        let _ = request_read.recv();
         raise.cancel();
     });
     let r = cancel::scope(&token, None, || remote.call("engine.execute", json!({"command": "document.export"})));

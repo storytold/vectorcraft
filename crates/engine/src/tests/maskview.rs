@@ -69,3 +69,23 @@ fn view_opacity_mask_shows_its_luminance_and_hides_the_artwork() {
     assert!(s.execute("transparency.viewOpacityMask", &json!({"on": true, "id": other.0})).is_err());
     assert!(s.doc().unwrap().mask_view.is_none());
 }
+
+#[test]
+fn invalid_view_opacity_mask_parameters_leave_the_view_unchanged() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let obj = rect(&mut s, 0.0, 200.0, "#ff0000");
+    let m = rect(&mut s, 0.0, 100.0, "#00ff00");
+    s.execute("select.set", &json!({"ids": [obj.0, m.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    for params in [json!({"on": "true"}), json!({"on": 1})] {
+        assert!(s.execute("transparency.viewOpacityMask", &params).is_err(), "accepted {params}");
+        let st = s.doc().unwrap();
+        assert!(st.doc.mask_edit.is_none() && st.shown_mask().is_none(), "showed the mask for {params}");
+        assert_eq!(st.history.undo.len(), undo, "recorded undo for {params}");
+    }
+    // Left out, or null as for every command, it toggles.
+    assert_eq!(s.execute("transparency.viewOpacityMask", &json!(null)).unwrap(), json!({"on": true, "id": obj.0}));
+    assert_eq!(s.execute("transparency.viewOpacityMask", &json!({"on": null})).unwrap(), json!({"on": false, "id": obj.0}));
+}

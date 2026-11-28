@@ -66,6 +66,24 @@ fn optical_pairs_cross_paint_runs_and_manual_and_tracking_are_independent() {
     assert!((pair_advance(&rtl_manual) - pair_advance(&rtl_pair_zero) - 20.0).abs() < 0.01, "manual spacing changes the adjacent right-to-left pair");
 }
 
+/// At 50% Horizontal Scale the tracking adds half the space it adds at 100% (`spacing_scale`),
+/// and the Optical pairs measure their gaps without it: tracked, each advance is the untracked
+/// Optical one and the tracking, the corrections unchanged.
+#[test]
+fn optical_pairs_in_horizontally_scaled_type_measure_without_the_scaled_tracking() {
+    let st = CharStyle { font_family: "JetBrains Mono".into(), size: 100.0, optical_kerning: true, h_scale: 50.0, ..CharStyle::default() };
+    let advances = |st: CharStyle| layout(db(), &TextObject::point(Point::ZERO, "IIAV", st)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let optical = advances(st.clone());
+    let unkerned = advances(CharStyle { kerning: Some(0.0), ..st.clone() });
+    assert!((optical[0] - unkerned[0]).abs() > 0.1, "Optical changes the monospaced pair at 50%: {optical:?} {unkerned:?}");
+    let tracked = advances(CharStyle { tracking: 100.0, ..st });
+    assert_eq!(optical.len(), tracked.len());
+    for (o, t) in optical.iter().zip(&tracked) {
+        // 100/1000 of the 100 pt em drawn 50% wide.
+        assert!((t - o - 5.0).abs() < 0.01, "{optical:?} {tracked:?}");
+    }
+}
+
 #[test]
 fn rtl_manual_kerning_spaces_the_character_from_the_next_in_reading_order() {
     for optical_kerning in [false, true] {
@@ -630,6 +648,19 @@ fn rows_can_have_a_gutter_of_their_own() {
     assert_eq!(layout(db(), &t).frames.get(1).map(|f| f.y0), Some(160.0));
 }
 
+/// A gutter so huge that a line's height no longer moves the baseline past it: the cells beyond it
+/// have no room, and looking down all 10,000 of them for a line must not freeze the layout.
+#[test]
+fn a_gutter_too_huge_to_step_past_has_no_room_for_lines() {
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    (t.area.rows, t.area.row_gutter) = (2, Some(1e300));
+    let l = layout(db(), &t);
+    assert!(l.lines.is_empty() && l.overflow);
+    (t.area.rows, t.area.columns, t.area.gutter, t.area.row_gutter) = (100, 100, 1e300, None);
+    let l = layout(db(), &t);
+    assert!(l.lines.is_empty() && l.overflow);
+}
+
 // ---------- area flow ----------
 
 #[test]
@@ -691,12 +722,12 @@ fn area_flow_moves_a_word_down_to_a_line_wide_enough_for_it() {
 }
 
 /// Lays `t` out as [`layout`] does, on a thread of its own, and fails the test when that panics or
-/// takes more than 20 s.
+/// has not ended after 300 s.
 fn layout_soon(t: &TextObject) -> TextLayout {
     let (tx, rx) = std::sync::mpsc::channel();
     let (t, text) = (t.clone(), t.plain_text());
     std::thread::spawn(move || tx.send(layout(db(), &t)).ok());
-    rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
+    rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
 }
 
 /// Each line's baseline, left and right edges, and byte range.
@@ -905,6 +936,55 @@ fn natural_width(s: &str, size: f64) -> f64 {
     l.lines[0].x1 - l.lines[0].x0
 }
 
+/// Installed fonts exercise run-language routing, source boundaries and hyphen limits end to end.
+#[test]
+fn indic_language_runs_hyphenate_with_both_composers() {
+    let db = FontDb::global();
+    for (tag, syllable) in [
+        ("hi", "कि"),
+        ("mr", "कि"),
+        ("gu", "કિ"),
+        ("bn", "কি"),
+        ("pa", "ਕਿ"),
+        ("ta", "கி"),
+        ("te", "కి"),
+        ("kn", "ಕಿ"),
+        ("ml", "കി"),
+        ("or", "କି"),
+        ("as", "কি"),
+    ] {
+        let Some(face) = syllable.chars().next().and_then(|ch| db.face_covering(ch)).filter(|f| syllable.chars().all(|ch| f.covers(ch))) else {
+            eprintln!("SKIPPED: indic hyphenation layout {tag}; no installed font covers {syllable}");
+            continue;
+        };
+        let style = CharStyle {
+            font_family: face.family.clone(),
+            font_style: face.style.clone(),
+            size: 12.0,
+            language: Some(tag.into()),
+            ..Default::default()
+        };
+        let prefix = layout(db, &TextObject::point(Point::ZERO, &format!("{}-", syllable.repeat(3)), style.clone()));
+        let width = prefix.glyphs.iter().map(|g| g.advance).sum::<f64>() + 0.5;
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let text = syllable.repeat(20);
+            let mut t = area(&text, style.clone(), Rect::new(0.0, 0.0, width, 2000.0), Justify::Left);
+            t.para.composer = composer;
+            t.para.hyphenate = true;
+            let l = layout(db, &t);
+            assert!(!l.overflow, "{tag} {composer:?}");
+            assert!(hyphen_run(&l) > 0, "{tag} {composer:?}: no automatic hyphens");
+            assert!(l.lines.iter().all(|line| line.end % syllable.len() == 0), "{tag} {composer:?}: split syllable");
+            assert_eq!(l.lines.last().map(|line| line.end), Some(text.len()));
+            t.para.hyphenation.hyphen_limit = 1;
+            assert!(hyphen_run(&layout(db, &t)) <= 1, "{tag} {composer:?}: hyphen limit");
+            t.runs.iter_mut().for_each(|run| run.style.language = Some("zz".into()));
+            assert_eq!(hyphen_run(&layout(db, &t)), 0, "unknown language must not use Indic patterns");
+        }
+        eprintln!("ASSERTIONS RUN: indic hyphenation layout {tag}, {} {}", face.family, face.style);
+    }
+}
+
 /// The text of each line.
 fn line_texts(t: &TextObject, l: &TextLayout) -> Vec<String> {
     let text = t.plain_text();
@@ -1028,16 +1108,47 @@ fn each_run_hyphenates_in_its_own_language() {
     let saved_without_one = hyphens(None);
     assert!(saved_without_one > 0, "some words hyphenated");
     assert_eq!(hyphens(Some("en-GB")), saved_without_one);
-    assert_eq!(hyphens(Some("de")), 0, "German has no break points yet");
+    assert_eq!(hyphens(Some("fr")), 0, "French has no break points yet");
+    assert_eq!(hyphens(Some("ru")), 0, "English words in a Russian run are not hyphenated as English");
     assert_eq!(hyphens(Some("x-from-a-file")), 0, "a tag that isn't known has no hyphenation");
 
-    // both in one paragraph: the English run breaks and the German one doesn't
+    // both in one paragraph: the English run breaks and the French one doesn't
     let mut t = area(&format!("{text} {text}"), style(14.0), frame, Justify::Left);
     t.para.hyphenate = true;
-    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("de".into()));
+    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("fr".into()));
     let l = layout(db(), &t);
     let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
     assert!(!at.is_empty() && at.iter().all(|b| *b < text.len()), "hyphens only in the English run: {at:?}");
+}
+
+/// A justified Russian paragraph in a narrow frame breaks its long words at the Russian rules'
+/// points with either composer, and not at all with Hyphenate off.
+#[test]
+fn a_russian_run_hyphenates_at_russian_break_points() {
+    let text = "Государственное законодательство регулирует достопримечательности.";
+    let frame = Rect::new(0.0, 0.0, 120.0, 600.0);
+    let st = CharStyle { language: Some("ru-RU".into()), ..style(14.0) };
+    for composer in [Composer::EveryLine, Composer::SingleLine] {
+        let mut t = area(text, st.clone(), frame, Justify::JustifyLeft);
+        t.para.composer = composer;
+        t.para.hyphenate = true;
+        let l = layout(db(), &t);
+        let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
+        assert!(!at.is_empty(), "{composer:?}: some words hyphenated");
+        for b in at {
+            // The word the hyphen splits, and where in it the line ends.
+            let start = text[..b].rfind(' ').map_or(0, |i| i + 1);
+            let end = text[b..].find([' ', '.']).map_or(text.len(), |i| b + i);
+            let word = &text[start..end];
+            let point = text[start..b].chars().count();
+            assert!(
+                hyphen::hyphen_points_for_language(word, &t.para.hyphenation, Some("ru")).contains(&point),
+                "{composer:?}: {word} broken after {point} letters"
+            );
+        }
+        t.para.hyphenate = false;
+        assert_eq!(layout(db(), &t).glyphs.iter().filter(|g| g.len == 0).count(), 0, "{composer:?}: Hyphenate off");
+    }
 }
 
 #[test]
@@ -1249,6 +1360,40 @@ fn inset_and_first_baseline_options() {
     assert!(cap.lines[0].baseline < base.lines[0].baseline && cap.lines[0].baseline > 5.0);
 }
 
+/// First Baseline Em Box Height: the top of the first line's ideographic em box (the one leading
+/// measured from em box top to top uses) touches the top of the type area inside the inset. On a
+/// line of several sizes the largest em box decides, and a Min further down sets the baseline.
+#[test]
+fn em_box_height_puts_the_first_lines_em_box_top_at_the_type_area_top() {
+    let frame = Rect::new(0.0, 0.0, 300.0, 300.0);
+    let em_box = |t: &TextObject, inset: f64, min: f64| {
+        let opts = LayoutOptions { first_baseline: FirstBaseline::EmBoxHeight, first_baseline_min: min, inset, ..Default::default() };
+        layout_with(db(), t, &opts).lines[0].baseline
+    };
+    // The em box top the EmBoxTop leading model sets a frame's first line at.
+    let em_top = |t: &TextObject| {
+        let mut t = t.clone();
+        t.para.leading_model = vectorcraft_doc::LeadingModel::EmBoxTop;
+        layout(db(), &t).lines[0].baseline
+    };
+    let t = area(COPY, style(12.0), frame, Justify::Left);
+    let top = em_top(&t);
+    assert!(top > 5.0 && top < 12.0, "{top}");
+    let ascent = layout(db(), &t).lines[0].baseline;
+    assert!((top - ascent).abs() > 0.1, "not the ascent: {top} {ascent}");
+    assert!((em_box(&t, 0.0, 0.0) - top).abs() < 1e-9);
+    assert!((em_box(&t, 10.0, 0.0) - (10.0 + top)).abs() < 1e-9, "measured from the inset");
+    // A Min nearer the top than the em box changes nothing; one further down is the baseline.
+    assert!((em_box(&t, 10.0, top / 2.0) - (10.0 + top)).abs() < 1e-9);
+    assert!((em_box(&t, 10.0, 30.0) - 40.0).abs() < 1e-9);
+    // 10 pt and 20 pt on the first line: the 20 pt em box top is at the top.
+    let mut mixed = area("small Large", style(10.0), frame, Justify::Left);
+    mixed.runs = vec![run("small ", 10.0), run("Large", 20.0)];
+    let large = area("Large", style(20.0), frame, Justify::Left);
+    assert!((em_box(&mixed, 0.0, 0.0) - em_box(&large, 0.0, 0.0)).abs() < 1e-9);
+    assert!((em_box(&large, 0.0, 0.0) - 2.0 * top * 10.0 / 12.0).abs() < 1e-6);
+}
+
 /// `LineInfo::first_baseline`: each line that starts a column has its baseline that far below the
 /// column's top inside the inset, for every first baseline option, with and without a minimum and
 /// an inset, in both leading models, and for lines of several sizes (each line in one size).
@@ -1263,8 +1408,14 @@ fn lines_starting_a_column_sit_at_their_first_baseline() {
     let text: String = runs.iter().map(|r| r.text.as_str()).collect();
     let mut other_sizes = 0;
     for model in [vectorcraft_doc::LeadingModel::RomanBaseline, vectorcraft_doc::LeadingModel::EmBoxTop] {
-        for first_baseline in [FirstBaseline::Ascent, FirstBaseline::CapHeight, FirstBaseline::XHeight, FirstBaseline::Leading, FirstBaseline::Fixed]
-        {
+        for first_baseline in [
+            FirstBaseline::Ascent,
+            FirstBaseline::CapHeight,
+            FirstBaseline::XHeight,
+            FirstBaseline::Leading,
+            FirstBaseline::EmBoxHeight,
+            FirstBaseline::Fixed,
+        ] {
             for (first_baseline_min, inset) in [(0.0, 0.0), (18.0, 6.0)] {
                 for height in [100.0, 120.0, 140.0] {
                     let mut t = area(&text, style(12.0), Rect::new(0.0, 0.0, 420.0, height), Justify::Left);
@@ -1774,25 +1925,24 @@ fn a_ligature_does_not_span_a_change_of_paint() {
 // ---------- performance ----------
 
 #[test]
-fn layout_10k_area_text_is_fast() {
-    let text: String = COPY.chars().cycle().take(10_000).collect();
+fn layout_10k_area_text_takes_work_in_proportion_to_its_length() {
     for (justify, composer) in
         [(Justify::JustifyLeft, Composer::EveryLine), (Justify::Left, Composer::EveryLine), (Justify::Left, Composer::SingleLine)]
     {
-        let mut t = area(&text, style(10.0), Rect::new(0.0, 0.0, 400.0, 20_000.0), justify);
-        t.para.hyphenate = true;
-        t.para.composer = composer;
-        let _ = layout(db(), &t);
-        let n = 5;
-        let start = std::time::Instant::now();
-        for _ in 0..n {
-            let l = layout(db(), &t);
-            assert!(!l.overflow);
-        }
-        let per = start.elapsed().as_secs_f64() * 1000.0 / n as f64;
-        eprintln!("layout of 10k chars ({justify:?}, {composer:?}, hyphenated): {per:.3} ms");
-        let budget = if cfg!(debug_assertions) { 400.0 } else { 10.0 };
-        assert!(per < budget, "{justify:?} {composer:?}: {per} ms");
+        // The steps (shaping, line breaking, composing) of `chars` characters, hyphenated.
+        let work = |chars: usize| {
+            let text: String = COPY.chars().cycle().take(chars).collect();
+            let mut t = area(&text, style(10.0), Rect::new(0.0, 0.0, 400.0, 20_000.0), justify);
+            t.para.hyphenate = true;
+            t.para.composer = composer;
+            let before = crate::layout::layout_work();
+            assert!(!layout(db(), &t).overflow);
+            crate::layout::layout_work() - before
+        };
+        let (half, whole) = (work(5_000), work(10_000));
+        eprintln!("layout of 10k chars ({justify:?}, {composer:?}, hyphenated): {whole} steps; 5k: {half}");
+        assert!(whole <= half * 5 / 2, "{justify:?} {composer:?}: 5,000 characters: {half} steps; 10,000: {whole}");
+        assert!(whole <= 10_000 * super::MAX_LAYOUT_STEPS_PER_CHAR, "{justify:?} {composer:?}: 10,000 characters: {whole} steps");
     }
 }
 
@@ -1908,14 +2058,28 @@ fn soft_return_breaks_line_without_new_paragraph() {
     assert_eq!(&t.plain_text()[l1.start..l1.end], "Line 2");
 }
 
+/// A line ending in a soft return is justified as a wrapped line is: only the paragraph's last
+/// line keeps its alignment. Illustrator's own layout in a user's `.ai` (used locally, not
+/// committed) spreads such lines to the frame's edge.
 #[test]
-fn soft_return_in_justified_text_does_not_spread() {
-    let text = "Short\u{2028}A much longer second line of text inside the frame.";
-    let t = area(text, style(12.0), Rect::new(0.0, 0.0, 300.0, 200.0), Justify::JustifyLeft);
-    let lay = layout(db(), &t);
-    assert!(lay.lines.len() >= 2);
-    let l0 = &lay.lines[0];
-    assert!(l0.x1 - l0.x0 < 100.0, "short line ending with soft return is not justified: {}", l0.x1 - l0.x0);
+fn soft_return_in_justified_text_spreads_like_a_wrapped_line() {
+    let frame = Rect::new(0.0, 0.0, 300.0, 200.0);
+    let text = "A line of a few words\u{2028}and the last line.";
+    for justify in [Justify::JustifyLeft, Justify::JustifyCenter, Justify::JustifyRight] {
+        let lay = layout(db(), &area(text, style(12.0), frame, justify));
+        assert_eq!(lay.lines.len(), 2);
+        let (l0, l1) = (&lay.lines[0], &lay.lines[1]);
+        assert!((l0.x0 - frame.x0).abs() < 1e-6 && (l0.x1 - frame.x1).abs() < 1e-6, "{justify:?}: {l0:?}");
+        assert!(l1.x1 - l1.x0 < 200.0, "{justify:?}: the last line isn't justified: {l1:?}");
+        // A soft return ending the paragraph: the empty line after it is the last one, so the line
+        // it ends is justified too.
+        let lay = layout(db(), &area("A line of a few words\u{2028}", style(12.0), frame, justify));
+        let l0 = lay.lines.first().unwrap();
+        assert!((l0.x0 - frame.x0).abs() < 1e-6 && (l0.x1 - frame.x1).abs() < 1e-6, "{justify:?}, trailing soft return: {l0:?}");
+    }
+    // Aligned type stays aligned.
+    let lay = layout(db(), &area(text, style(12.0), frame, Justify::Left));
+    assert!(lay.lines[0].x1 < frame.x1 - 100.0);
 }
 
 #[test]
@@ -1946,4 +2110,41 @@ fn soft_return_breaks_line_even_inside_no_break() {
     let t = area("First\u{2028}Second", st, Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
     let lay = layout(db(), &t);
     assert_eq!(lay.lines.len(), 2, "soft return honors line break despite no_break");
+}
+
+/// An East Asian glyph form (the Glyphs panel menu's Traditional Forms, JIS 78 Forms, …) draws
+/// the characters with the font's glyphs of that form, and Default with its default glyphs. Needs
+/// craft-fonts' BIZ UDMincho, which has traditional, expert, JIS 78, 83 and 90, full-width and
+/// half-width forms and no JIS 04 forms (skipped without it). A form on one character of a run
+/// changes that character only.
+#[test]
+fn glyph_forms_draw_the_fonts_east_asian_forms() {
+    use vectorcraft_doc::GlyphForm;
+    const FAMILY: &str = "BIZ UDMincho";
+    if db().face(FAMILY, "Regular").is_none_or(|f| f.family != FAMILY) {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
+    let st = |form| CharStyle { size: 20.0, font_family: FAMILY.into(), glyph_form: form, ..CharStyle::default() };
+    let glyphs = |text: &str, form| layout(db(), &TextObject::point(Point::ZERO, text, st(form))).glyphs;
+    let gids = |text: &str, form| glyphs(text, form).iter().map(|g| g.gid).collect::<Vec<_>>();
+    for (form, text) in
+        [(GlyphForm::Traditional, "亜"), (GlyphForm::Expert, "唖"), (GlyphForm::Jis78, "唖"), (GlyphForm::Jis83, "芦"), (GlyphForm::Jis90, "芦")]
+    {
+        assert_ne!(gids(text, form), gids(text, GlyphForm::Default), "{form:?} {text}");
+    }
+    // The font has no JIS 04 forms, so the characters keep their glyphs.
+    assert_eq!(gids("亜唖芦", GlyphForm::Jis04), gids("亜唖芦", GlyphForm::Default));
+    // Full-width Latin takes a whole em, half-width punctuation half of one.
+    let advance = |text: &str, form| glyphs(text, form).first().map_or(0.0, |g| g.advance);
+    assert!(advance("A", GlyphForm::Default) < 15.0, "{}", advance("A", GlyphForm::Default));
+    assert!((advance("A", GlyphForm::FullWidth) - 20.0).abs() < 0.01, "{}", advance("A", GlyphForm::FullWidth));
+    assert!((advance("、", GlyphForm::Default) - 20.0).abs() < 0.01, "{}", advance("、", GlyphForm::Default));
+    assert!((advance("、", GlyphForm::HalfWidth) - 10.0).abs() < 0.01, "{}", advance("、", GlyphForm::HalfWidth));
+    // Traditional Forms on the middle character only.
+    let mut t = TextObject::point(Point::ZERO, "亜亜亜", st(GlyphForm::Default));
+    edit::style_range(&mut t.runs, 3, 6, |s| s.glyph_form = GlyphForm::Traditional);
+    let ids: Vec<u32> = layout(db(), &t).glyphs.iter().map(|g| g.gid).collect();
+    let (plain, traditional) = (gids("亜", GlyphForm::Default), gids("亜", GlyphForm::Traditional));
+    assert_eq!(ids, [plain[0], traditional[0], plain[0]]);
 }

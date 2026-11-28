@@ -16,7 +16,8 @@
 //! ([`crate::placed_area`]). Bitmaps drawn since a frame began are not dropped to make room for
 //! the ones it asks for, up to [`MAX_BYTES`], and a bitmap that can't be made is not asked for
 //! again. Past [`MAX_SIDE`] pixels, past [`MAX_BYTES`], and in outline, proofing and ink frames,
-//! it is drawn exactly.
+//! it is drawn exactly. An outline frame draws only its box, crossed from corner to corner, unless
+//! Document Setup → Show Images in Outline Mode is on.
 //!
 //! A document opened with only its placed documents' previews ([`ImageBlob::is_proxy`]) shows them
 //! up to their resolution; past it the file is read again in the background
@@ -27,7 +28,7 @@
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard, PoisonError};
 
 use vectorcraft_doc::placed_document::MAX_DEPTH;
 use vectorcraft_doc::{ImageBlob, Node, PlacedDocument};
@@ -68,6 +69,8 @@ struct Bitmaps {
 static BITMAPS: LazyLock<Mutex<Bitmaps>> = LazyLock::new(Default::default);
 /// Bitmaps being made.
 static PENDING: LazyLock<Mutex<HashSet<BitmapKey>>> = LazyLock::new(Default::default);
+/// Signaled, under [`PENDING`]'s lock, when the last bitmap being made stops being pending.
+static IDLE: Condvar = Condvar::new();
 /// Bitmaps that could not be made (neither the file nor a preview could be read): not asked for
 /// again.
 static FAILED: LazyLock<Mutex<HashSet<BitmapKey>>> = LazyLock::new(Default::default);
@@ -120,6 +123,24 @@ fn made(key: &str) {
 /// Are bitmaps being made in the background?
 pub fn busy() -> bool {
     !lock(&PENDING).is_empty()
+}
+
+/// Bitmap `key` stops being pending; when none is left, [`IDLE`] is signaled.
+fn finish(key: &BitmapKey) {
+    let mut pending = lock(&PENDING);
+    pending.remove(key);
+    if pending.is_empty() {
+        IDLE.notify_all();
+    }
+}
+
+/// Wait until no bitmap is being made ([`busy`] is false).
+#[cfg(test)]
+pub(crate) fn wait_idle() {
+    let mut pending = lock(&PENDING);
+    while !pending.is_empty() {
+        pending = IDLE.wait(pending).unwrap_or_else(PoisonError::into_inner);
+    }
 }
 
 /// Is a bitmap of file `key` being made?
@@ -236,12 +257,32 @@ thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The deepest this thread has drawn inside placed documents since [`reset_deepest`].
+    static DEEPEST: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Start counting how deep this thread draws inside placed documents ([`deepest`]).
+#[cfg(test)]
+pub(crate) fn reset_deepest() {
+    DEEPEST.with(|d| d.set(0));
+}
+
+/// The deepest this thread has drawn inside placed documents since [`reset_deepest`].
+#[cfg(test)]
+pub(crate) fn deepest() -> usize {
+    DEEPEST.with(Cell::get)
+}
+
 /// While alive: drawing inside a placed document, one level deeper.
 struct Inside;
 
 impl Inside {
     fn enter() -> Self {
         DEPTH.with(|d| d.set(d.get() + 1));
+        #[cfg(test)]
+        DEEPEST.with(|d| d.set(d.get().max(depth())));
         Inside
     }
 }
@@ -254,6 +295,74 @@ impl Drop for Inside {
 
 fn depth() -> usize {
     DEPTH.with(Cell::get)
+}
+
+/// How a frame draws art ([`Renderer::layer_mode`]): whether Layer Options apply (on screen;
+/// exports and thumbnails ignore them), whether the art draws in Outline mode, and whether Show
+/// Images in Outline Mode is on for it ([`Renderer::shows_outline_images`]). Layers are measured
+/// in the mode they draw in, and placed documents are their crossed box in Outline mode without
+/// Show Images in Outline Mode ([`vectorcraft_doc::placed_document::Crossed`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LayerMode {
+    pub(crate) options: bool,
+    pub(crate) outline: bool,
+    pub(crate) images: bool,
+}
+
+thread_local! {
+    /// The mode of the frame being drawn or measured on this thread ([`LayerMode::enter`]).
+    static MODE: Cell<Option<LayerMode>> = const { Cell::new(None) };
+}
+
+impl LayerMode {
+    /// The mode layer `n` draws its art in when its Layer Options change it: a template layer stays
+    /// in Preview in Outline mode (#1486), and a layer whose Preview is off draws in outline.
+    /// `None` for other objects and for a layer that draws in this mode.
+    pub(crate) fn inside(self, n: &Node) -> Option<Self> {
+        let vectorcraft_doc::NodeKind::Layer { preview, template, .. } = &n.kind else { return None };
+        if !self.options {
+            return None;
+        }
+        let outline = if *template && self.outline {
+            false
+        } else if !preview && !template && !self.outline {
+            true
+        } else {
+            return None;
+        };
+        Some(Self { outline, ..self })
+    }
+
+    /// The mode of the frame being drawn or measured on this thread, if any.
+    pub(crate) fn now() -> Option<Self> {
+        MODE.with(Cell::get)
+    }
+
+    /// Draw and measure in this mode on this thread until the guard returned is dropped.
+    pub(crate) fn enter(self) -> InMode {
+        let crossed = vectorcraft_doc::placed_document::Crossed::set(self.outline && !self.images);
+        InMode { was: MODE.with(|m| m.replace(Some(self))), _crossed: crossed }
+    }
+}
+
+/// While alive: art on this thread is drawn and measured in a [`LayerMode`]; once dropped, in the
+/// mode before it.
+#[must_use]
+pub(crate) struct InMode {
+    was: Option<LayerMode>,
+    _crossed: vectorcraft_doc::placed_document::Crossed,
+}
+
+impl Drop for InMode {
+    fn drop(&mut self) {
+        MODE.with(|m| m.set(self.was));
+    }
+}
+
+/// Measure layer `n` in the mode its Layer Options draw it in, inside the mode on this thread
+/// ([`LayerMode::inside`]), until the guard returned is dropped; `None` when that is the same mode.
+pub(crate) fn enter_layer(n: &Node) -> Option<InMode> {
+    LayerMode::now()?.inside(n).map(LayerMode::enter)
 }
 
 /// Render `art` of a placed document's file (`doc`, its resources) into `w`×`h` transparent
@@ -322,7 +431,7 @@ fn run(r: &mut Renderer, mut job: Job) {
                 lock(&FAILED).insert(job.key.clone());
             }
         }
-        lock(&PENDING).remove(&job.key);
+        finish(&job.key);
     };
     match scope {
         Some(scoped) => scoped(&mut body),
@@ -355,7 +464,7 @@ mod workers {
                     let key = job.key.clone();
                     if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| super::run(&mut r, *job))).is_err() {
                         super::lock(&super::FAILED).insert(key.clone());
-                        super::lock(&super::PENDING).remove(&key);
+                        super::finish(&key);
                     }
                 }
             });
@@ -390,28 +499,37 @@ fn schedule(job: Job) {
     run(&mut Renderer::new(), job);
 }
 
+/// The file `p` shows (its bytes `blob`) read as art, and kept for
+/// [`vectorcraft_doc::placed_document::read_cached`]: from its bytes stored, read again already,
+/// or (inside another placed document, while not too deep) read again now.
+fn read_placed(p: &PlacedDocument, blob: &ImageBlob) -> Option<Arc<vectorcraft_doc::placed_document::ReadDocument>> {
+    let full = match depth() {
+        0 => vectorcraft_doc::placed_document::full_bytes_cached(p, blob),
+        d if d < MAX_DEPTH => vectorcraft_doc::placed_document::full_bytes(p, blob),
+        _ => None,
+    };
+    full.and_then(|bytes| vectorcraft_doc::placed_document::read(p, &bytes))
+}
+
 /// The mean scale of `a`.
 fn mean_scale(a: Affine) -> f64 {
     a.determinant().abs().sqrt()
 }
 
 impl Renderer {
-    /// Draw placed document `p` in frame `f`: from a cached bitmap on screen, else exactly.
+    /// Draw placed document `p` in frame `f`: from a cached bitmap on screen, else exactly; in
+    /// Outline mode without Document Setup → Show Images in Outline Mode, its box crossed from
+    /// corner to corner ([`Self::draw_crossed_box`]) and none of its art.
     pub(crate) fn draw_placed(&mut self, ctx: &mut RenderContext, f: &Frame, p: &PlacedDocument) {
+        if self.crosses_placed(f) {
+            return self.draw_crossed_placed(ctx, f, p);
+        }
         let plain = f.ink == Ink::Display && !f.opts.outline && f.opts.proof.is_none() && !f.opts.overprint_preview;
         if f.opts.progressive_placed && plain && depth() == 0 && self.draw_placed_bitmap(ctx, f, p) {
             return;
         }
         let Some(blob) = f.doc.images.get(&p.key) else { return };
-        // The file's bytes: stored, read again already, or (inside another placed document, while
-        // not too deep) read again now.
-        let full = match depth() {
-            0 => vectorcraft_doc::placed_document::full_bytes_cached(p, blob),
-            d if d < MAX_DEPTH => vectorcraft_doc::placed_document::full_bytes(p, blob),
-            _ => None,
-        };
-        let read = full.and_then(|bytes| vectorcraft_doc::placed_document::read(p, &bytes));
-        let Some(e) = read else {
+        let Some(e) = read_placed(p, blob) else {
             // Only the preview: drawn scaled into the box.
             if blob.is_proxy()
                 && let Some(im) = p.preview_image(&blob.bytes)
@@ -425,12 +543,33 @@ impl Renderer {
         if !k.is_finite() || k <= 1e-12 {
             return;
         }
-        // The art in its own coordinates, with its own resources.
+        // The art in its own coordinates, with its own resources (its composite fonts included, and
+        // none of the host document's).
+        let _lent = vectorcraft_text::FontDb::global().lend_document_composite_fonts(&e.doc.composite_fonts);
         let symbols = e.doc.symbol_boxes().quick();
         let visible = m.inverse().transform_rect_bbox(f.visible);
-        let inner = Frame { doc: &e.doc, symbols: &symbols, view: f.view * m, visible, px: f.px / k, ..*f };
+        let inner = Frame { doc: &e.doc, symbols: &symbols, view: f.view * m, visible, px: f.px / k, output: f.output * m, ..*f };
         let _inside = Inside::enter();
+        // Its art follows this document's Show Images in Outline Mode, not the file's.
+        let host = self.host_outline_images.replace(self.shows_outline_images(f));
         self.draw_arc(ctx, &inner, &e.art);
+        self.host_outline_images = host;
+    }
+
+    /// Draw placed document `p` as its box crossed from corner to corner ([`Self::crosses_placed`]).
+    /// Its file is still read, as when its art is drawn: once the frame shows images again, the art
+    /// its effects and its group's effects make comes from the read kept.
+    pub(crate) fn draw_crossed_placed(&mut self, ctx: &mut RenderContext, f: &Frame, p: &PlacedDocument) {
+        if let Some(blob) = f.doc.images.get(&p.key) {
+            let _ = read_placed(p, blob);
+        }
+        self.draw_crossed_box(ctx, f, p.corners());
+    }
+
+    /// Whether `f` draws a placed document as its box crossed from corner to corner and none of
+    /// its art: in Outline mode without Show Images in Outline Mode ([`Self::shows_outline_images`]).
+    pub(crate) fn crosses_placed(&self, f: &Frame) -> bool {
+        f.opts.outline && !self.shows_outline_images(f)
     }
 
     /// Draw `p` from its bitmap at this zoom step, or (while that is made, or when it can't be)

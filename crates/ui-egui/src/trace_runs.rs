@@ -2,13 +2,14 @@
 //! window froze while it did. A trace the user asks for (Object › Image Trace › Make and Make and
 //! Expand, the task bar's Image Trace, the Image Trace panel's Trace and presets) is prepared at
 //! once, so a bad setting fails before anything runs, and traced on a thread of its own ([`start`])
-//! while editing goes on: the status bar shows it, and after [`DELAY`] a progress window shows how
+//! while editing goes on: the status bar shows it, and after the progress window's delay it shows how
 //! many of its colours are traced, with Cancel (also Esc, `imageTrace.cancelRuns`) and Continue in
 //! Background (`imageTrace.hideRuns`). A new trace of the same object cancels the one before it.
 //!
 //! When it is done, what it traced is handed to its command with the same parameters
 //! ([`Traced::hand_in`]), so the edit is one undo step like any trace, unless the image or the
-//! settings changed meanwhile: then nothing changes and the status bar says to trace it again. The
+//! settings changed meanwhile or File › Revert replaced the document's content: then nothing
+//! changes and the status bar says to trace it again. The
 //! control channel, MCP and scripts run the commands at once, and so does every trace on the web,
 //! in unit tests that don't set `off_the_ui_thread`, and with `VECTORCRAFT_SYNC_OPEN` set
 //! ([`available`]).
@@ -23,10 +24,7 @@ use vectorcraft_doc::cancel::CancelToken;
 use vectorcraft_engine::EngineError;
 use vectorcraft_engine::cmd::{TraceRun, Traced};
 
-use crate::VectorcraftApp;
-use crate::export_progress::{self, Pressed};
-
-pub use crate::export_progress::DELAY;
+use crate::{VectorcraftApp, export_progress};
 
 /// What the status bar and the progress window say.
 const LABEL: &str = "Tracing the image";
@@ -36,7 +34,8 @@ type Done = (TraceRun, Result<Traced, String>);
 
 /// A trace running.
 pub struct Running {
-    id: u64,
+    /// [`crate::export_progress::now`] when it started: the progress window's delay counts from it.
+    pub(crate) started: f64,
     /// The document it traces in ([`vectorcraft_engine::DocState::uid`]) and the object.
     doc: u64,
     target: NodeId,
@@ -44,7 +43,8 @@ pub struct Running {
     token: CancelToken,
     /// A newer trace of the same object took its place: it ends without a word.
     superseded: bool,
-    /// Colour layers traced and in all (0 while the image is prepared).
+    /// How far the trace has got and in all, as the trace counts it (color layers, or finer steps for Overlapping
+    /// with Fills; 0 in all while the image is prepared).
     steps: Arc<[AtomicU64; 2]>,
     /// The Image Trace panel started it, and takes its result ([`crate::panels::image_trace::traced`]).
     from_panel: bool,
@@ -59,7 +59,7 @@ impl Running {
         !self.hidden && !self.token.is_cancelled()
     }
 
-    /// The share of its colour layers traced, once they are known.
+    /// The share of the trace done, once its steps are known.
     fn fraction(&self) -> Option<f32> {
         let [done, total] = &*self.steps;
         let (done, total) = (done.load(Ordering::Relaxed), total.load(Ordering::Relaxed));
@@ -71,9 +71,16 @@ impl Running {
 #[derive(Default)]
 pub struct TraceRuns {
     pub running: Vec<Running>,
-    next_id: u64,
     /// Set by unit tests whose app traces off the UI thread.
     pub(crate) off_the_ui_thread: bool,
+    /// The status bar's message the latest Image Trace with notes left, with
+    /// [`crate::state::UiState::status_sets`] then.
+    pub(crate) notes_status: Option<(String, u64)>,
+}
+
+/// The status bar's line after an Image Trace with `n` notes, the first of them `first`.
+pub(crate) fn traced_with_notes(n: usize, first: &str) -> String {
+    crate::i18n::msg_n(n as u64, "Traced with {n} note: {first}", "Traced with {n} notes: {first}", &[("first", first)])
 }
 
 /// Does `app` trace off the UI thread? Where documents open off it ([`crate::opening::available`]),
@@ -118,9 +125,8 @@ pub fn start(app: &mut VectorcraftApp, command: &str, p: Value, from_panel: bool
             let _ = tx.send((run, traced));
         })
         .map_err(|e| e.to_string())?;
-    let runs = &mut app.trace_runs;
-    runs.next_id += 1;
-    runs.running.push(Running { id: runs.next_id, doc, target, token, superseded: false, steps, from_panel, hidden: false, done });
+    let started = crate::export_progress::now(app);
+    app.trace_runs.running.push(Running { started, doc, target, token, superseded: false, steps, from_panel, hidden: false, done });
     // This frame may have asked for its next one before the trace started (`tick`): ask now.
     if let Some(ctx) = &app.ui_ctx {
         ctx.request_repaint();
@@ -134,7 +140,7 @@ pub fn start(app: &mut VectorcraftApp, command: &str, p: Value, from_panel: bool
 /// dialog is open (its OK acts on the active document, which a trace's result changes), nor while
 /// an interaction is open or a tool drags with the pointer button held, as [`crate::placing::poll`].
 pub fn poll(app: &mut VectorcraftApp) {
-    if app.ui.dialog.is_some() || app.session.in_interaction() || (app.session.tool_busy() && app.session.pointer_held()) {
+    if app.any_dialog_open() || app.session.in_interaction() || (app.session.tool_busy() && app.session.pointer_held()) {
         return;
     }
     let mut i = 0;
@@ -157,8 +163,8 @@ pub fn poll(app: &mut VectorcraftApp) {
 }
 
 /// Applies trace `r`'s result in its document, which becomes the active one again, as its command
-/// would while the object, its image and the settings are as they were; else why it has none, in
-/// the status bar.
+/// would while the object, its image and the settings are as they were and the document was not
+/// reverted; else why it has none, in the status bar.
 fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
     // Cancel changes nothing, even when the trace ended just before it.
     if r.token.is_cancelled() {
@@ -183,6 +189,10 @@ fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
         return;
     };
     app.session.set_active(i);
+    if run.reverted(&app.session) {
+        app.status("Image Trace finished, but its document was reverted: trace it again");
+        return;
+    }
     if !run.current(&app.session) {
         app.status("Image Trace finished, but the image or its settings changed meanwhile: trace it again");
         return;
@@ -227,44 +237,20 @@ pub fn any_shown(app: &VectorcraftApp) -> bool {
     app.trace_runs.running.iter().any(Running::shown)
 }
 
-/// The progress window of the first trace it shows, once that has run for [`DELAY`]. Not while a
-/// dialog, the export progress window or a plug-in's is open: never two modals at once.
-pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(first) = app.trace_runs.running.iter().find(|r| r.shown()) else { return };
-    let now = ctx.input(|i| i.time);
-    let since = ctx.data_mut(|m| {
-        let seen = m.get_temp_mut_or_insert_with(egui::Id::unique("trace-run-seen"), || (first.id, now));
-        if seen.0 != first.id {
-            *seen = (first.id, now);
-        }
-        seen.1
-    });
-    let exporting = app.background.jobs.iter().any(|j| j.progress.is_some() && !j.hidden && !j.cancelled());
-    if now - since < DELAY || app.ui.dialog.is_some() || exporting || crate::plugin_runs::any_shown(app) {
-        return;
-    }
+/// The progress window of the first trace it shows; `export_progress::show` decides when it
+/// shows and runs the command of the button pressed.
+pub(crate) fn shown(app: &VectorcraftApp) -> Option<export_progress::Shown> {
+    let first = app.trace_runs.running.iter().find(|r| r.shown())?;
     let fraction = first.fraction();
-    let t = crate::theme::Tokens::get(ctx);
-    let heading = format!("{}…", crate::i18n::msg(LABEL));
-    let pressed = export_progress::window(ctx, "trace-run-progress", &heading, |ui| match fraction {
-        Some(frac) => {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(tl!("Tracing the colors…")).color(t.text_dim));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(egui::RichText::new(format!("{:.0} %", frac * 100.0)).color(t.text_dim));
-                });
-            });
-            ui.add_space(4.0);
-            ui.add(egui::ProgressBar::new(frac).desired_width(360.0).desired_height(6.0).fill(t.accent));
-        }
-        None => export_progress::busy(ui, tl!("Preparing the image…")),
-    });
-    let id = match pressed {
-        Some(Pressed::Cancel) => "imageTrace.cancelRuns",
-        Some(Pressed::Hide) => "imageTrace.hideRuns",
-        None => return,
-    };
-    if let Err(e) = app.run(id, json!({})) {
-        app.status(e);
-    }
+    let step = if fraction.is_some() { tl!("Tracing the colors…") } else { tl!("Preparing the image…") };
+    Some(export_progress::Shown {
+        title: format!("{}…", crate::i18n::msg(LABEL)),
+        step: step.to_string(),
+        fraction,
+        counts: None,
+        queued: None,
+        started: first.started,
+        cancel: "imageTrace.cancelRuns",
+        hide: Some("imageTrace.hideRuns"),
+    })
 }

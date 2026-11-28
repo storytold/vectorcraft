@@ -1,24 +1,149 @@
-//! A caller's params are checked against the command's description, but a journal replays as it
-//! was recorded (#1442).
+//! `Session::execute` checks params against the command's description, but a journal replays as
+//! it was recorded (#1442).
 
 use serde_json::json;
 use vectorcraft_engine::{Session, check_params};
 
-/// `Session::execute` takes what it is given: the journal of an older version, an action recorded
-/// with a key a command no longer reads, still plays. The check is the caller's.
+/// The open document's art and undo history, and the session's journal length.
+fn state(s: &Session) -> (Option<vectorcraft_doc::Document>, usize, usize) {
+    let st = s.active();
+    (st.map(|st| (*st.doc).clone()), st.map_or(0, |st| st.history.undo.len()), s.journal.len())
+}
+
+/// `Session::execute` answers a key the command's description doesn't name with a parameter
+/// error, in a release build too, and the document, its undo history and the journal stay as
+/// they were.
+#[test]
+fn execute_refuses_a_key_its_command_does_not_name() {
+    let mut s = Session::new();
+    let e = s.execute("file.new", &json!({"width": 300, "widht": 1})).unwrap_err().to_string();
+    assert!(e.contains("widht"), "{e}");
+    assert!(s.active().is_none());
+    s.execute("file.new", &json!({})).unwrap();
+    let before = state(&s);
+    let e = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40, "cornerStyle": "round"})).unwrap_err();
+    assert!(e.to_string().contains("cornerStyle"), "{e}");
+    assert!(state(&s) == before);
+}
+
+/// A step of a `command.batch` with such a key fails the batch before any step runs, and a step
+/// whose `effect.setParams` gives an effect a parameter it doesn't take fails it too, though that
+/// effect is only there once the steps before it ran. Nothing the batch did stays.
+#[test]
+fn execute_refuses_a_batch_step_with_a_key_its_command_does_not_name() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let before = state(&s);
+    let rect = json!({"command": "shape.rectangle", "params": {"x": 10, "y": 10, "width": 50, "height": 40}});
+    let bad_step = json!({"commands": [rect, {"command": "object.move", "params": {"dx": 5, "dyy": 5}}]});
+    let e = s.execute("command.batch", &bad_step).unwrap_err().to_string();
+    assert!(e.contains("dyy"), "{e}");
+    assert!(state(&s) == before);
+    let bad_effect = json!({"commands": [
+        rect,
+        {"command": "effect.apply", "params": {"effect": "blur.gaussian"}},
+        {"command": "effect.setParams", "params": {"index": 0, "params": {"blurr": 3}}},
+    ]});
+    assert!(check_params("command.batch", &bad_effect).is_ok());
+    let e = s.execute("command.batch", &bad_effect).unwrap_err().to_string();
+    assert!(e.contains("blurr"), "{e}");
+    assert!(state(&s) == before);
+}
+
+/// The steps of a `command.batch` step aren't checked, however deep they go: batches can't nest,
+/// which running the batch reports.
+#[test]
+fn the_steps_of_a_nested_batch_are_not_checked() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let mut batch = json!({"commands": [{"command": "object.move", "params": {"dyy": 5}}]});
+    assert!(check_params("command.batch", &batch).is_err());
+    for _ in 0..3 {
+        batch = json!({"commands": [{"command": "command.batch", "params": batch}]});
+    }
+    assert!(check_params("command.batch", &batch).is_ok());
+    let e = s.execute("command.batch", &batch).unwrap_err().to_string();
+    assert!(e.contains("batches cannot nest"), "{e}");
+}
+
+/// An `action.batch` with a step that has such a key fails before it opens a source file or runs
+/// a step.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn execute_refuses_an_action_batch_step_with_a_key_its_command_does_not_name() {
+    let dir = std::env::temp_dir().join(format!("vc-param-keys-action-batch-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="10" height="10"/></svg>"#;
+    std::fs::write(dir.join("a.svg"), svg).unwrap();
+    let mut s = Session::new();
+    let batch = json!({
+        "source": "folder",
+        "folder": dir.to_string_lossy(),
+        "commands": [{"command": "select.all", "params": {}}, {"command": "object.move", "params": {"dx": 5, "dyy": 5}}],
+    });
+    let e = s.execute("action.batch", &batch).unwrap_err().to_string();
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(e.contains("dyy"), "{e}");
+    assert!(s.documents().is_empty());
+    assert!(s.journal.is_empty());
+}
+
+/// `Session::replay` takes what it is given: the journal of an older version, an action recorded
+/// with a key a command no longer reads, still plays, as a step of a `command.batch` too.
 #[test]
 fn a_journal_with_a_key_no_longer_read_still_replays() {
     let old = [
         ("file.new", json!({"width": 300, "height": 200, "widht": 1})),
         ("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40, "cornerStyle": "round"})),
+        ("command.batch", json!({"commands": [{"command": "object.move", "params": {"dx": 5, "dy": 5, "dyy": 5}}]})),
     ];
     let mut s = Session::new();
     for (id, params) in &old {
         assert!(check_params(id, params).is_err(), "{id}");
-        s.execute(id, params).unwrap();
+        s.replay(id, params).unwrap();
     }
+    assert!(!s.replaying());
     let st = s.active().unwrap();
     assert_eq!((st.doc.artboards[0].rect.width(), st.doc.layers[0].children().unwrap().len()), (300.0, 1));
+    assert_eq!(s.journal.len(), 3);
+    assert!(s.execute("object.move", &json!({"dx": 5, "dyy": 5})).is_err());
+}
+
+/// `Session::replay` still runs an export with an option that is no longer read, and a preset
+/// file that holds one still loads and exports. `Session::execute` refuses the same options.
+#[test]
+fn an_export_step_or_preset_with_a_key_no_longer_read_still_runs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let old = json!({"format": "pdf", "noSuchOption": true, "marks": {"useDocumentBleed": true}});
+    assert!(check_params("document.export", &old).is_err());
+    assert!(s.execute("document.export", &old).is_err());
+    s.replay("document.export", &old).unwrap();
+    let file = json!({"format": "vcpdfpresets", "presets": [{"name": "Old", "settings": {"standard": "none", "noLongerRead": 1, "marks": {"retired": true}}}]});
+    s.execute("pdf.preset.import", &json!({"data": file.to_string()})).unwrap();
+    check_params("document.export", &json!({"format": "pdf", "preset": "Old"})).unwrap();
+    s.execute("document.export", &json!({"format": "pdf", "preset": "Old"})).unwrap();
+}
+
+/// So does a save, or an Export for Screens, with a key that is no longer read, and an Export for
+/// Screens preset file that holds one in a row still loads and exports. `Session::execute`
+/// refuses the same options.
+#[test]
+fn a_save_or_screens_step_with_a_key_no_longer_read_still_runs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let save = json!({"format": "pdf", "noSuchOption": true, "options": {"retired": 1, "marks": {"useDocumentBleed": true}}});
+    assert!(check_params("file.saveCopy", &save).is_err());
+    assert!(s.execute("file.saveCopy", &save).is_err());
+    s.replay("file.saveCopy", &save).unwrap();
+    let screens = json!({"noSuchOption": true, "formats": [{"format": "png", "retired": 1}], "settings": {"pdf": {"marks": {"retired": true}}}});
+    assert!(check_params("document.exportForScreens", &screens).is_err());
+    assert!(s.execute("document.exportForScreens", &screens).is_err());
+    s.replay("document.exportForScreens", &screens).unwrap();
+    let file = json!({"format": "vcexportpresets", "presets": [{"name": "Old", "settings": {"formats": [{"format": "png", "noLongerRead": 1}]}}]});
+    s.execute("document.exportPresets.import", &json!({"data": file.to_string()})).unwrap();
+    check_params("document.exportForScreens", &json!({"exportPreset": "Old"})).unwrap();
+    s.execute("document.exportForScreens", &json!({"exportPreset": "Old"})).unwrap();
 }
 
 /// So do an effect's own parameters (#1592): a journal or a file with a key the effect doesn't
@@ -34,7 +159,8 @@ fn effect_params_no_longer_taken_still_replay_and_open() {
     ];
     for (id, params) in &old {
         assert!(s.check_params(id, params).is_err(), "{id}");
-        s.execute(id, params).unwrap();
+        assert!(s.execute(id, params).is_err(), "{id}");
+        s.replay(id, params).unwrap();
     }
     let doc = &s.active().unwrap().doc;
     let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
@@ -135,6 +261,56 @@ fn a_tone_curve_channel_it_does_not_have_is_refused() {
     doc.node_mut(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["channel"] = json!("alpha");
     let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
     assert_eq!(back.layers[0].children().unwrap()[0].appearance.effects[0].params["channel"], json!("alpha"));
+}
+
+/// A Drop Shadow's or glow's `mode` that names no blend mode (which it drew as Normal) is refused
+/// in new calls to `effect.apply`, `appearance.addEffect` and `effect.setParams`, with the modes it
+/// takes, and the document and its undo history stay as they were. Blend-mode names in any
+/// spelling pass, an omitted `mode` keeps the default, and an older saved step still plays.
+#[test]
+fn a_shadow_or_glow_mode_that_is_no_blend_mode_is_refused() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].clone();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "params": {"opacity": 50}})).unwrap();
+    let state = |s: &Session| {
+        let st = s.active().unwrap();
+        (st.doc.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    let why = "`mode` must be one of normal, darken, multiply, colorBurn";
+    for bad in [json!("multipy"), json!(""), json!("passThrough"), json!(null), json!(["multiply"]), json!(1), json!(false)] {
+        for (cmd, params) in [
+            ("effect.setParams", json!({"index": 0, "params": {"mode": bad}})),
+            ("effect.apply", json!({"effect": "stylize.innerGlow", "params": {"mode": bad}})),
+            ("effect.apply", json!({"effect": null, "id": "stylize.dropShadow", "ids": [id], "params": {"mode": bad}})),
+            ("appearance.addEffect", json!({"effect": "stylize.outerGlow", "params": {"mode": bad}})),
+        ] {
+            let e = s.execute(cmd, &params).unwrap_err().to_string();
+            assert!(e.contains(why), "{cmd} {params}: {e}");
+            let checked = s.check_params(cmd, &params).unwrap_err().to_string();
+            assert!(checked.contains(why), "{cmd} {params}: {checked}");
+            assert!(state(&s) == before, "{cmd} {params} changed the document or its undo history");
+        }
+    }
+    let effect = |s: &Session| s.active().unwrap().doc.layers[0].children().unwrap()[0].appearance.effects[0].clone();
+    let shadow = effect(&s);
+    let drawn = vectorcraft_render::effects::merged_params(&shadow.id, &shadow.params);
+    assert_eq!(drawn["mode"], json!("multiply"), "an omitted mode keeps the default");
+    for good in ["screen", "Color Burn", "color-burn", "COlor!!Burn#", "softLight", "LUMINOSITY"] {
+        let params = json!({"index": 0, "params": {"mode": good}});
+        s.check_params("effect.setParams", &params).unwrap_or_else(|e| panic!("{good}: {e}"));
+        s.execute("effect.setParams", &params).unwrap_or_else(|e| panic!("{good}: {e}"));
+        assert_eq!(effect(&s).params["mode"], json!(good));
+    }
+    s.replay("effect.setParams", &json!({"index": 0, "params": {"mode": "multipy"}})).unwrap();
+    assert_eq!(effect(&s).params["mode"], json!("multipy"));
+    assert_eq!(vectorcraft_render::effects::blend_mode("multipy"), vectorcraft_color::BlendMode::Normal);
+    for mode in vectorcraft_color::BlendMode::ALL {
+        let id = vectorcraft_render::effects::blend_mode_id(mode);
+        assert_eq!(vectorcraft_render::effects::parse_blend_mode(&id), Some(mode));
+        assert_eq!(vectorcraft_render::effects::blend_mode(&id), mode);
+    }
 }
 
 /// What a command adds to its own journal entry passes the check, so a recorded journal can be

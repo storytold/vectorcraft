@@ -1,7 +1,4 @@
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
-
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft");
 
 /// Invalid roots must exit before desktop initialization on every platform, including a CI
 /// machine with no display. A regression must fail rather than hang with a window open.
@@ -9,9 +6,14 @@ fn rejects(args: &[&str], message: &str) {
     rejects_with_env(args, &[], message);
 }
 
+/// Runs the desktop binary without a display, so on Linux a regression exits with a display
+/// error, which the exact stderr check rejects, instead of opening a window.
 fn rejects_with_env(args: &[&str], env: &[(&str, &str)], message: &str) {
-    let mut child = Command::new(BIN)
+    let child = Command::new(crate::bin())
         .args(args)
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("WAYLAND_SOCKET")
         .env_remove("VECTORCRAFT_CONTROL_PORT")
         .env_remove("VECTORCRAFT_AUTOMATION_READ_ROOT")
         .env_remove("VECTORCRAFT_AUTOMATION_WRITE_ROOT")
@@ -22,21 +24,7 @@ fn rejects_with_env(args: &[&str], env: &[(&str, &str)], message: &str) {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    // Long enough for the binary to start on a loaded machine (the workspace's other tests run
-    // meanwhile), short enough to catch a desktop that started instead of exiting.
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let timed_out = loop {
-        if child.try_wait().unwrap().is_some() {
-            break false;
-        }
-        if Instant::now() >= deadline {
-            child.kill().unwrap();
-            break true;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    };
-    let out = child.wait_with_output().unwrap();
-    assert!(!timed_out, "{args:?}: desktop started or did not exit promptly");
+    let out = crate::exit_output(child, &format!("{args:?}: the desktop started instead of exiting"));
     assert!(!out.status.success(), "{args:?}");
     assert!(out.stdout.is_empty(), "{args:?}: {:?}", out.stdout);
     // Exact stderr excludes unrelated startup warnings or display errors that could otherwise
@@ -62,7 +50,7 @@ fn missing_empty_or_option_operands_fail_before_startup() {
 #[test]
 fn repeated_roots_are_accepted_for_both_spellings() {
     for flag in ["--automation-read-root", "--automation-write-root"] {
-        let out = Command::new(BIN).args([flag, ".", format!("{flag}=.").as_str(), flag, "./", "--version"]).output().unwrap();
+        let out = Command::new(crate::bin()).args([flag, ".", format!("{flag}=.").as_str(), flag, "./", "--version"]).output().unwrap();
         assert!(out.status.success(), "{flag}: {}", String::from_utf8_lossy(&out.stderr));
         assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("vectorcraft {}\n", env!("CARGO_PKG_VERSION")));
         assert!(out.stderr.is_empty());
@@ -73,29 +61,33 @@ fn repeated_roots_are_accepted_for_both_spellings() {
 
 #[test]
 fn explicit_dash_folder_does_not_consume_version() {
-    let out = Command::new(BIN).args(["--automation-read-root=-folder", "--automation-write-root", "./-folder", "--version"]).output().unwrap();
+    let out =
+        Command::new(crate::bin()).args(["--automation-read-root=-folder", "--automation-write-root", "./-folder", "--version"]).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("vectorcraft {}\n", env!("CARGO_PKG_VERSION")));
     assert!(out.stderr.is_empty());
 }
 
 /// `--control` without a port no longer starts the app without a control server, and the
-/// argument after it isn't reinterpreted (#1373).
+/// argument after it isn't reinterpreted (#1373). The port's wording and range are the framework's
+/// (`control_port`; port 0 picks a free port).
 #[test]
 fn control_without_a_valid_port_fails_before_startup() {
-    let need = "--control needs a port number from 1 to 65535";
-    rejects(&["--control", "--automation-read-root", ".", "--automation-write-root", "."], &format!("{need}, not `--automation-read-root`"));
-    rejects(&["--control"], need);
-    rejects(&["--control", "abc"], &format!("{need}, not `abc`"));
-    rejects(&["--control=0"], &format!("{need}, not `0`"));
-    rejects(&["--control="], &format!("{need}, not ``"));
-    rejects(&["--control", "7979", "--control", "7980"], "--control given twice");
-    rejects_with_env(&[], &[("VECTORCRAFT_CONTROL_PORT", "abc")], "VECTORCRAFT_CONTROL_PORT needs a port number from 1 to 65535, not `abc`");
+    use craft::automation::args::OptionsError;
+    let not_a_port = |value: &str, shown: &str| OptionsError::NotAPort { value: value.into(), shown: shown.into() }.to_string();
+    let flag = "--control <PORT>";
+    rejects(&["--control", "--automation-read-root", ".", "--automation-write-root", "."], &not_a_port("--automation-read-root", flag));
+    rejects(&["--control"], "a value is required for '--control' but none was supplied");
+    rejects(&["--control", "abc"], &not_a_port("abc", flag));
+    rejects(&["--control=65536"], &not_a_port("65536", flag));
+    rejects(&["--control="], &not_a_port("", flag));
+    rejects(&["--control", "7979", "--control", "7980"], "the argument '--control' cannot be used multiple times");
+    rejects_with_env(&[], &[("VECTORCRAFT_CONTROL_PORT", "abc")], &not_a_port("abc", "VECTORCRAFT_CONTROL_PORT"));
 }
 
 #[test]
 fn version_wins_over_a_bad_control_port_variable() {
-    let out = Command::new(BIN).arg("--version").env("VECTORCRAFT_CONTROL_PORT", "abc").output().unwrap();
+    let out = Command::new(crate::bin()).arg("--version").env("VECTORCRAFT_CONTROL_PORT", "abc").output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("vectorcraft {}\n", env!("CARGO_PKG_VERSION")));
 }

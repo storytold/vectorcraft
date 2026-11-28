@@ -7,7 +7,16 @@ pub(super) struct SysFallback {
     pub(super) misses: std::collections::HashSet<char>,
     /// Counts the scans of the font folders: a search that a scan overtook doesn't record its miss.
     pub(super) scans: u64,
+    /// Characters that went on to read every cataloged font file (and found nothing, or a face).
+    /// Each such search rereads the catalog, so only [`MAX_FILE_SEARCHES`] are made per scan.
+    pub(super) file_searches: u32,
 }
+
+/// The most characters searched for in the font files themselves between two scans of the font
+/// folders. Real text has a few uncovered characters; a document of thousands of distinct
+/// private-use code points would reread the whole catalog for each.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) const MAX_FILE_SEARCHES: u32 = 1024;
 
 /// Fonts made for Thai, tried first (when installed) for Thai the font in use lacks: Windows
 /// (Leelawadee UI; Tahoma before Windows 8), macOS (Thonburi, Sukhumvit Set) and Linux (Noto,
@@ -27,7 +36,7 @@ pub const THAI_FAMILIES: &[&str] = &[
 ];
 
 /// The families tried first for character `c`, in a script whose text only fonts made for it set
-/// well (Thai, Lao, Khmer, Myanmar); none for other characters.
+/// well (Thai, Lao, Khmer, Myanmar, Devanagari); none for other characters.
 pub(super) fn script_families(c: char) -> &'static [&'static str] {
     use unicode_script::{Script, UnicodeScript};
     match c.script() {
@@ -35,6 +44,16 @@ pub(super) fn script_families(c: char) -> &'static [&'static str] {
         Script::Lao => &["Lao UI", "Leelawadee UI", "Lao Sangam MN", "Noto Sans Lao", "Noto Sans Lao UI", "Phetsarath OT"],
         Script::Khmer => &["Khmer UI", "Khmer Sangam MN", "Noto Sans Khmer", "Noto Sans Khmer UI", "Khmer OS"],
         Script::Myanmar => &["Myanmar Text", "Myanmar Sangam MN", "Noto Sans Myanmar", "Noto Sans Myanmar UI", "Padauk"],
+        Script::Devanagari => &[
+            "Nirmala UI",
+            "Kohinoor Devanagari",
+            "Devanagari Sangam MN",
+            "Noto Sans Devanagari",
+            "Noto Sans Devanagari UI",
+            "Lohit Devanagari",
+            "Mangal",
+        ],
+        Script::Gujarati => &["Gujarati Sangam MN", "GujaratiMT", "Nirmala UI", "Shruti", "Noto Sans Gujarati", "Noto Sans Gujarati UI"],
         _ => &[],
     }
 }
@@ -137,6 +156,21 @@ pub(super) fn norm(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Devanagari takes a font made for it, not whichever face covering it loaded first.
+    #[test]
+    fn devanagari_prefers_fonts_made_for_it() {
+        assert_eq!(script_families('ह').first(), Some(&"Nirmala UI"));
+        assert!(script_families('ह').contains(&"Noto Sans Devanagari"));
+        assert!(script_families('a').is_empty());
+    }
+
+    /// Gujarati takes a font that draws it (macOS Gujarati Sangam MN, Windows Nirmala UI or Shruti).
+    #[test]
+    fn gujarati_prefers_fonts_made_for_it() {
+        assert_eq!(script_families('ગ').first(), Some(&"Gujarati Sangam MN"));
+        assert!(script_families('ગ').contains(&"Nirmala UI"));
+    }
 
     #[test]
     fn a_name_table_of_many_records_is_cut_short() {

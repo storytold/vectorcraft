@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use kurbo::ParamCurveNearest;
-use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile, StrokeLayer};
+use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, CubicBez, ParamCurve, PathData, PathEl, Point, Rect, SubPath, Vec2};
 
 use crate::track::{Rng, Track, normal, seed_of, tracks};
@@ -465,17 +465,8 @@ fn art_runs(t: &Track) -> Vec<(f64, f64)> {
     bounds.windows(2).map(|w| (w[0], w[1])).collect()
 }
 
-/// The art on [s0, s1] of `t`, `cross` across where `widen` (0..=1, by arc length) is 1, and
-/// `width` the width (%) there.
-fn art_on_run(
-    t: &Track,
-    (s0, s1): (f64, f64),
-    a: &ArtBrush,
-    (art, b): (&Node, Rect),
-    cross: f64,
-    width: f64,
-    widen: &dyn Fn(f64) -> f64,
-) -> Option<Node> {
+/// The art on [s0, s1] of `t`, `cross` across where `widen` (0..=1, by arc length) is 1.
+fn art_on_run(t: &Track, (s0, s1): (f64, f64), a: &ArtBrush, (art, b): (&Node, Rect), cross: f64, widen: &dyn Fn(f64) -> f64) -> Option<Node> {
     let l = s1 - s0;
     if l <= 1e-9 {
         return None;
@@ -483,10 +474,8 @@ fn art_on_run(
     let w = b.width();
     let (along, cross) = match a.scale {
         ArtScale::Stretch => (AlongMap::linear(w, s0, s1), cross),
-        ArtScale::Proportional => {
-            let k = l / w;
-            (AlongMap::linear(w, s0, s1), k * width / 100.0)
-        }
+        // Scaled across as much as along, times the stroke weight and the width, as the other modes are.
+        ArtScale::Proportional => (AlongMap::linear(w, s0, s1), l / w * cross),
         ArtScale::BetweenGuides { start, end } => {
             let (g0, g1) = (start.clamp(0.0, 1.0) * w, end.clamp(0.0, 1.0) * w);
             let (g0, g1) = (g0.min(g1), g0.max(g1));
@@ -503,9 +492,10 @@ fn art_on_run(
     bend_widened(t, art, b, along, cross, widen)
 }
 
-/// An art brush's art along `bp`. With a width that follows the pen's pressure, the art is as
-/// wide as the pressure recorded at each point of the stroke gives (half way without a recording).
-pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>) -> Vec<Node> {
+/// An art brush's art along `bp`. With a width that follows the pen (its pressure, tilt, bearing
+/// or rotation), the art is as wide as what `stroke` recorded at each point gives (half way
+/// without a recording).
+pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, stroke: &StrokeLayer) -> Vec<Node> {
     let Some((art, b)) = oriented(&a.art, a.direction, a.flip_along, a.flip_across) else { return vec![] };
     let (light, heavy) = a.width_range();
     let width = light.max(heavy);
@@ -522,12 +512,12 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&Pre
             }
             // A run past the start of a closed track wraps round to it.
             let at = if s > l { s - l } else { s };
-            let p = pressure.map_or(PressureProfile::MID, |p| p.at(at / l)).clamp(0.0, 1.0);
+            let p = a.width_mode.and_then(|m| PenAt::of(stroke, at / l).control(m)).unwrap_or(0.5);
             (light + (heavy - light) * p) / width
         };
         let runs = if a.overlap { art_runs(&t) } else { vec![(0.0, l)] };
         for run in runs {
-            if let Some(n) = art_on_run(&t, run, a, (&art, b), cross, width, &widen) {
+            if let Some(n) = art_on_run(&t, run, a, (&art, b), cross, &widen) {
                 out.push(n);
             }
         }
@@ -550,7 +540,10 @@ fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pen: PenAt) -> f64 {
 
 pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let Some(b) = sc.art.geometric_bounds() else { return vec![] };
-    let (aw, ah) = (b.width().max(1e-3), b.height().max(1e-3));
+    // Copies are spaced by the width of the art with its strokes, so at 100% spacing stroked
+    // copies touch instead of overlapping by the stroke.
+    let aw = sc.art.visual_bounds().unwrap_or(b).width().max(1e-3);
+    let ah = b.height().max(1e-3);
     let mut rng = Rng::new(seed_of(bp, name));
     let [size_mode, spacing_mode, scatter_mode, rotation_mode] = sc.modes();
     let mut out = Budget::default();
@@ -879,12 +872,16 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
             };
             trims.push(None);
             corner_half = corner_half.max(bb.width() * k / 2.0);
-            let bis = a + b;
-            let bis = if bis.hypot() < 1e-9 { a } else { bis / bis.hypot() };
-            let xf = Affine::translate(t.verts[i].to_vec2())
-                * Affine::rotate(bis.y.atan2(bis.x))
-                * Affine::scale(k)
-                * Affine::translate(-bb.center().to_vec2());
+            // Inner and outer corner art is the corner that joins a side tile on its right to one
+            // below it, so its arms point along +x and +y (as the flips leave them). The tile is
+            // turned so that the line halving its arms lies on the line halving the sides at the
+            // corner, back along the incoming side and on along the outgoing one: at a right angle
+            // the arms meet the side tiles, and at other angles the difference is split between
+            // the two sides (#6110).
+            let arms = Vec2::new(if pb.flip_along { -1.0 } else { 1.0 }, if pb.flip_across { -1.0 } else { 1.0 });
+            let sides = b - a;
+            let angle = sides.y.atan2(sides.x) - arms.y.atan2(arms.x);
+            let xf = Affine::translate(t.verts[i].to_vec2()) * Affine::rotate(angle) * Affine::scale(k) * Affine::translate(-bb.center().to_vec2());
             let mut n = art.clone();
             n.transform(xf, true);
             out.take(Some(n));
@@ -1135,11 +1132,23 @@ mod tests {
     /// Fitting is bounded however badly the map behaves: where it gives points that are not finite
     /// the tile falls back to chords with those points left out (or to nothing), and where it never
     /// fits (a map that jumps everywhere) the halving stops at its depth and anchor count. Either
-    /// way the call comes back promptly with finite geometry.
+    /// way the call comes back with finite geometry, having called the map a bounded number of
+    /// times.
     #[test]
     fn a_map_that_misbehaves_still_returns_promptly_and_finite() {
         let b = Rect::new(0.0, -20.0, 40.0, 20.0);
         let tile = circle_tile(b);
+        // Each piece the fitting tries reads its two ends, the derivatives there and the checks
+        // between them. Fitted pieces are at most the chords, so the halving tries at most twice
+        // as many pieces plus those on the way down to the one that gives up. The chord route
+        // maps each chord point once more.
+        let NodeKind::Path { path, .. } = &tile.kind else { panic!("the tile is a path") };
+        let allowed: usize = path
+            .subpaths
+            .iter()
+            .filter_map(|sp| densified(sp, 0.25, 1.5))
+            .map(|dense| 1 + (FIT_CHECKS + 3) * (2 * dense.len() + FIT_DEPTH as usize + 1) + dense.len())
+            .sum();
         let finite = |n: &Node| match &n.kind {
             NodeKind::Path { path, .. } => {
                 path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite())
@@ -1153,9 +1162,14 @@ mod tests {
             &|_| Point::new(f64::NAN, f64::NAN),
         ];
         for (i, f) in maps.iter().enumerate() {
-            let t0 = std::time::Instant::now();
-            let out = warp_node(&tile, f, 0.25, 1.5, 0.25, 1.0);
-            assert!(t0.elapsed() < std::time::Duration::from_secs(2), "map {i} took {:?}", t0.elapsed());
+            // Past the allowance the map places nothing, so a warp that keeps calling it stops.
+            let calls = std::cell::Cell::new(0usize);
+            let counted = |p: Point| {
+                calls.set(calls.get() + 1);
+                if calls.get() > allowed { Point::new(f64::NAN, f64::NAN) } else { f(p) }
+            };
+            let out = warp_node(&tile, &counted, 0.25, 1.5, 0.25, 1.0);
+            assert!(calls.get() <= allowed, "map {i} was called {} times, {allowed} allowed", calls.get());
             match (i, &out) {
                 (3, out) => assert!(out.is_none(), "a map that places nothing draws nothing"),
                 (_, Some(n)) => assert!(finite(n), "map {i} drew non-finite geometry"),
