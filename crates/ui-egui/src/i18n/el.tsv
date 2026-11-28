@@ -2639,6 +2639,14 @@ axis	Both	Και τα δύο
 	The script asks to read and write a folder you choose, with everything in it.	Το σενάριο ζητά να διαβάσει και να γράψει έναν φάκελο που θα επιλέξετε, με όλο το περιεχόμενό του.
 	Allow Once	Να επιτραπεί μία φορά
 	Always Allow This Script	Να επιτρέπεται πάντα αυτό το σενάριο
+	No script has kept file access.	Κανένα σενάριο δεν έχει αποθηκευμένη πρόσβαση σε αρχεία.
+	Read file	Ανάγνωση αρχείου
+	Read and write file	Ανάγνωση και εγγραφή αρχείου
+	Read and write folder	Ανάγνωση και εγγραφή φακέλου
+	Revoke	Ανάκληση
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Η ανάκληση αφαιρεί την πρόσβαση που έχει αποθηκευτεί για κάθε έκδοση του σεναρίου. Η πρόσβαση σε φάκελο καλύπτει όλο το περιεχόμενό του.
+@msg	Script file access revoked	Η πρόσβαση του σεναρίου σε αρχεία ανακλήθηκε
+@msg	The script file access was already revoked	Η πρόσβαση του σεναρίου σε αρχεία είχε ήδη ανακληθεί
 	Deny	Άρνηση
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
 	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
@@ -2837,6 +2845,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	το `answer` για το παράθυρο διαλόγου αρχείων ενός σεναρίου πρέπει να είναι ένα από: once, always, deny, stop
 @msg	choose a file or folder first, or deny	επιλέξτε πρώτα ένα αρχείο ή έναν φάκελο, ή απορρίψτε
 @msg	the script file permissions could not be saved: {e}	δεν ήταν δυνατή η αποθήκευση των αδειών αρχείων των σεναρίων: {e}
+@msg	the script file permissions could not be read: {e}	δεν ήταν δυνατή η ανάγνωση των αδειών αρχείων των σεναρίων: {e}
 @msg	this script's file access can be allowed only once	η πρόσβαση αυτού του σεναρίου σε αρχεία μπορεί να επιτραπεί μόνο μία φορά
 @msg	Only the person at the keyboard can allow a script's file access	Μόνο το άτομο στο πληκτρολόγιο μπορεί να επιτρέψει την πρόσβαση ενός σεναρίου σε αρχεία
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Ένα σενάριο λαμβάνει το πολύ 2.048 αρχεία: τα αρχεία που επιλέχθηκαν μετά από αυτά παραλείφθηκαν
@@ -7422,6 +7431,15 @@ axis	Y Axis	Άξονας Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε
 @msg	a string	συμβολοσειρά
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap` και `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` και `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` και `effects`
+@msg	`appearanceOutput` may only be true	Το `appearanceOutput` μπορεί να είναι μόνο true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	το `appearanceOutput` ισχύει μόνο για ζωντανό εφέ που δηλώνει `paintOutput`, με `api` 3
+@msg	`opacity` must be a number from 0 to 1	το `opacity` πρέπει να είναι αριθμός από 0 έως 1
+@msg	unknown blending mode; `blend` is one of {_1}	άγνωστη λειτουργία ανάμειξης· το `blend` είναι ένα από τα {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	το `effects` πρέπει να είναι πίνακας με το πολύ {MAX_LOOK_EFFECTS} εγγραφές
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	ένα αποτέλεσμα φέρει το πολύ {MAX_RESULT_EFFECTS} εγγραφές εφέ
+@msg	this host takes no effects here	αυτό το κεντρικό σύστημα δεν δέχεται εφέ εδώ
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	ένα περίγραμμα πρέπει να είναι {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	ένα εφέ πρέπει να είναι {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ένα εφέ σε γέμισμα επιστρέφει μόνο `fills`
@@ -7573,6 +7591,21 @@ axis	Y Axis	Άξονας Y
 @msg	time budget	χρονικός προϋπολογισμός
 @msg	memory budget (the selection is too large to hand over)	προϋπολογισμός μνήμης (η επιλογή είναι πολύ μεγάλη για να παραδοθεί)
 @msg	output size ({what} is {len} bytes, limit {max})	μέγεθος εξόδου ({what}: {len} byte, όριο {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} γραμμή {line}, στήλη {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	προϋπολογισμός μνήμης
+@msg	call depth	βάθος κλήσεων
+@msg	run(input, params) returned no output object	η run(input, params) δεν επέστρεψε αντικείμενο εξόδου
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	το `runtime` "js" χρειάζεται `script`: το όνομα του αρχείου .js του προσθέτου, δίπλα στο αρχείο δηλώσεων
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	το `script` πρέπει να είναι το όνομα ενός αρχείου .js στον φάκελο του αρχείου δηλώσεων: 1-128 byte, χωρίς φάκελο, χωρίς `:`, χωρίς να αρχίζει με `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	το `source` είναι το κείμενο του σεναρίου και δίνεται μόνο στο JSON που δέχεται το dataBase64 της plugin.install: ένα αρχείο .vcplugin ονομάζει το σενάριό του στο `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	το αρχείο δηλώσεων ενός προσθέτου JavaScript δίνει `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	το `runtime` "js" είναι για φίλτρο αντικειμένων (`kind` "filter"), όχι για `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	ένα πρόσθετο JavaScript δεν μπορεί να δηλώσει την άδεια `{name}`: από τις άδειες του κεντρικού υπολογιστή μπορεί να δηλώσει την `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	το αρχείο δηλώσεων μιας μονάδας WebAssembly παραλείπει το `runtime`: το "js" είναι για πρόσθετο JavaScript
+@msg	a JavaScript plug-in makes no command calls	ένα πρόσθετο JavaScript δεν καλεί εντολές
+@msg	vc.progress(done, total) takes two numbers	η vc.progress(done, total) δέχεται δύο αριθμούς
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	η vc.log(level, text) δέχεται ένα επίπεδο, 0 (σφάλμα), 1 (προειδοποίηση), 2 (πληροφορία) ή 3 (εντοπισμός σφαλμάτων), και μια συμβολοσειρά
 @msg	the plug-in's grant can't be removed from the plug-in store	η άδεια του πρόσθετου δεν μπορεί να αφαιρεθεί από τον χώρο αποθήκευσης πρόσθετων
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	το δικαίωμα `{shown}` είναι δεσμευμένο για μεταγενέστερο API προσθέτων· αυτός ο κεντρικός υπολογιστής δεν το παραχωρεί
 @msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
@@ -8463,6 +8496,7 @@ breakText	Glyphs	Γλύφοι
 	Place Brush Art	Τοποθέτηση σχεδίου πινέλου
 	Replace Brush Art	Αντικατάσταση σχεδίου πινέλου
 	Replace Pattern Art	Αντικατάσταση σχεδίου μοτίβου
+	Place Pattern Art	Τοποθέτηση σχεδίου μοτίβου
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Περιγράμματα χρησιμοποιούν αυτό το πινέλο. Να εφαρμοστεί το νέο σχέδιο σε αυτά τα περιγράμματα ή να μείνουν ως έχουν και να προστεθεί αντίγραφο του πινέλου με το νέο σχέδιο;
 	Apply to Strokes	Εφαρμογή στα περιγράμματα
 	Leave Strokes	Διατήρηση περιγραμμάτων
@@ -8532,6 +8566,8 @@ breakText	Glyphs	Γλύφοι
 	Tangent Circle	Εφαπτόμενος κύκλος
 	Tangent Circle Tool	Εφαπτόμενος κύκλος (Tangent Circle Tool)
 	No tangent circle here	Δεν υπάρχει εφαπτόμενος κύκλος εδώ
+	Ask For Circle Radius	Ερώτηση για την ακτίνα του κύκλου
+	Auto-Update Default	Αυτόματη ενημέρωση προεπιλογής
 	Circle:	Κύκλος:
 @msg	`ids` names an object twice	το `ids` αναφέρει ένα αντικείμενο δύο φορές
 @msg	select two or three paths or compound paths	επιλέξτε δύο ή τρεις διαδρομές ή σύνθετες διαδρομές

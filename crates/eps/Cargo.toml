@@ -8,6 +8,11 @@ description = "VectorCraft Encapsulated PostScript: a hand-written EPS writer (P
 [lints]
 workspace = true
 
+[features]
+# `vectorcraft_eps::blend_work` and `vectorcraft_eps::included_eps_reads` for other crates' tests
+# (dev-dependencies only).
+work-count = []
+
 [dependencies]
 craft-eps = { workspace = true }
 craft-ps = { workspace = true }
@@ -48,3 +53,6 @@ vectorcraft-testkit = { workspace = true }
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 # Tests: a Group 4 encoder and the T.4 run codes, to write CCITT test images.
 fax = "0.2"
+# The counters vectorcraft-engine's tests turn on, also when this crate is tested without
+# vectorcraft-engine (`cargo xtask ci shard`).
+vectorcraft-eps = { path = ".", features = ["work-count"] }

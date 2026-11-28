@@ -18,7 +18,12 @@
 //! segment's shape differs from the one they were found on. With the `addPoints` option on (Alt at
 //! the release turns it the other way, and a dot beside the pointer shows when it is in effect), the
 //! segments the circle touches get an anchor point at each touch, which splits them without changing
-//! their shape, in the same undo step as the circle; a touch at an existing anchor adds none.
+//! their shape, in the same undo step as the circle; a touch at an existing anchor adds none. With the
+//! `askRadius` option on, a click on the second segment (not a drag, which sets the radius itself)
+//! opens the [`RADIUS_DIALOG`] instead of drawing: it starts at the radius of the circle found and
+//! draws the circle of the radius typed ([`radius_circle`]); the first segment stays picked until it
+//! does. While the dialog is open, an edit to either segment leaves it without a circle
+//! ([`segments_unchanged`]).
 //!
 //! The tool's options (its options dialog, `tool.setOption`; kept with the preferences): `radius`;
 //! `addPoints`; `center` and `radii` show or hide the circle's center cross and the lines from its center to the
@@ -29,11 +34,12 @@
 //! within the selection tolerance, as a click on a path picks it, and that is also the least reach
 //! snapping has. Of the segments within reach the nearest is picked ([`pick_at`]). By default
 //! `addPoints` is off, the cross and the lines show, the color is red, the tolerance is 3 px and
-//! `snapWithoutGuides` is on.
+//! `snapWithoutGuides` is on. `askRadius` (above) and `autoUpdateDefault`, which makes the radius
+//! given in the dialog the tool's `radius`, are off by default.
 
 use kurbo::{CubicBez, ParamCurveNearest, Shape};
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeId;
+use vectorcraft_doc::{Document, NodeId};
 use vectorcraft_geom::{BezPath, ParamCurve, Point};
 use vectorcraft_pathops::addons::pathtools::{SegmentCircle, circles_of_radius, circles_through};
 
@@ -53,6 +59,9 @@ const STEP_PX: f64 = 4.0;
 const SLOW: f64 = 0.1;
 /// The note shown over a second segment that gives no circle.
 pub const NO_CIRCLE: &str = "No tangent circle here";
+/// The dialog a click on the second segment opens with `askRadius` on: its parameters hold the two
+/// segments, the click and the circle found ([`radius_circle`]).
+pub const RADIUS_DIALOG: &str = "tangentCircleRadius";
 const BLUE: [u8; 3] = [0x4f, 0x9d, 0xff];
 const RED: [u8; 3] = [0xe0, 0x3c, 0x3c];
 const GREY: [u8; 3] = [0x80, 0x80, 0x80];
@@ -77,7 +86,7 @@ pub const SNAP_PX: f64 = 3.0;
 /// The snapping tolerance the `snapTolerance` option takes (screen pixels).
 pub const SNAP_RANGE: (f64, f64) = (0.0, 25.0);
 /// The option keys that are true or false.
-const SWITCHES: &[&str] = &["addPoints", "center", "radii", "snapWithoutGuides"];
+const SWITCHES: &[&str] = &["addPoints", "center", "radii", "snapWithoutGuides", "askRadius", "autoUpdateDefault"];
 
 /// A segment under the pointer: where on it, and the segment itself.
 #[derive(Clone, Debug, PartialEq)]
@@ -124,6 +133,10 @@ pub struct TangentCircleTool {
     /// The snapping tolerance (screen pixels), and whether the tool snaps with Smart Guides off.
     snap_px: f64,
     snap_without_guides: bool,
+    /// Whether a click on the second segment asks for the radius (`askRadius`), and whether the
+    /// radius given there becomes `radius` (`autoUpdateDefault`, which the dialog reads).
+    ask_radius: bool,
+    auto_update: bool,
     first: Option<Pick>,
     hover: Option<Pick>,
     press: Option<Press>,
@@ -153,6 +166,8 @@ impl Default for TangentCircleTool {
             color: 0,
             snap_px: SNAP_PX,
             snap_without_guides: true,
+            ask_radius: false,
+            auto_update: false,
             first: None,
             hover: None,
             press: None,
@@ -193,10 +208,24 @@ fn pick_at(cx: &ToolContext, p: Point, reach: f64) -> Option<Pick> {
     Some(Pick { id, subpath, segment, t, p: curve.eval(t), curve })
 }
 
+/// A segment's place in the document: its path, subpath and index.
+type Place = (NodeId, usize, usize);
+
+impl Pick {
+    fn place(&self) -> Place {
+        (self.id, self.subpath, self.segment)
+    }
+}
+
 /// The document's segment at `pick` as it is now: none when its path, subpath or segment is gone.
 fn segment_now(cx: &ToolContext, pick: &Pick) -> Option<CubicBez> {
-    let sp = cx.doc.node(pick.id)?.path_data()?.subpaths.get(pick.subpath)?;
-    (pick.segment < sp.segment_count()).then(|| sp.segment(pick.segment))
+    segment_at(cx.doc, pick.place())
+}
+
+/// The segment of `doc` at `place`: none when its path, subpath or segment is gone.
+fn segment_at(doc: &Document, (id, subpath, segment): Place) -> Option<CubicBez> {
+    let sp = doc.node(id)?.path_data()?.subpaths.get(subpath)?;
+    (segment < sp.segment_count()).then(|| sp.segment(segment))
 }
 
 /// Whether the document's segment at `pick` still has the shape it had when it was picked.
@@ -207,17 +236,31 @@ fn unchanged(cx: &ToolContext, pick: &Pick) -> bool {
 /// The segments a circle may touch when `second` is picked: it and the segments on either side of
 /// it, without `first`. None when `second` is the first segment again.
 fn second_set(cx: &ToolContext, first: &Pick, second: &Pick) -> Vec<CubicBez> {
-    second_segments(cx, first, second).into_iter().map(|(_, c)| c).collect()
+    second_set_at(cx.doc, first.place(), second.place())
+}
+
+/// [`second_set`] for the segments of `doc` at `first` and `second`.
+fn second_set_at(doc: &Document, first: Place, second: Place) -> Vec<CubicBez> {
+    second_segments_at(doc, first, second).into_iter().map(|(_, c)| c).collect()
 }
 
 /// [`second_set`] with each segment's index on the second pick's subpath.
 fn second_segments(cx: &ToolContext, first: &Pick, second: &Pick) -> Vec<(usize, CubicBez)> {
-    if (first.id, first.subpath, first.segment) == (second.id, second.subpath, second.segment) {
+    second_segments_at(cx.doc, first.place(), second.place())
+}
+
+/// [`second_segments`] for the segments of `doc` at `first` and `second`.
+fn second_segments_at(doc: &Document, first: Place, second: Place) -> Vec<(usize, CubicBez)> {
+    if first == second {
         return vec![];
     }
-    let Some(sp) = cx.doc.node(second.id).and_then(|n| n.path_data()).and_then(|p| p.subpaths.get(second.subpath)) else { return vec![] };
+    let (id, subpath, i) = second;
+    let Some(sp) = doc.node(id).and_then(|n| n.path_data()).and_then(|p| p.subpaths.get(subpath)) else { return vec![] };
+    // A subpath edited down to no segments (while the radius dialog is open) has nothing to touch.
     let n = sp.segment_count();
-    let i = second.segment;
+    if n == 0 {
+        return vec![];
+    }
     let mut indices = vec![i];
     if i > 0 || sp.closed {
         indices.push((i + n - 1) % n);
@@ -227,7 +270,7 @@ fn second_segments(cx: &ToolContext, first: &Pick, second: &Pick) -> Vec<(usize,
     }
     indices.sort_unstable();
     indices.dedup();
-    let is_first = |k: usize| first.id == second.id && first.subpath == second.subpath && first.segment == k;
+    let is_first = |k: usize| first == (id, subpath, k);
     indices.into_iter().filter(|k| *k < n && !is_first(*k)).map(|k| (k, sp.segment(k))).collect()
 }
 
@@ -323,6 +366,93 @@ fn segment_path(c: &CubicBez) -> BezPath {
     bp.move_to(c.p0);
     bp.curve_to(c.p1, c.p2, c.p3);
     bp
+}
+
+fn point_json(p: Point) -> Value {
+    json!([p.x, p.y])
+}
+
+fn curve_json(c: &CubicBez) -> Value {
+    json!([point_json(c.p0), point_json(c.p1), point_json(c.p2), point_json(c.p3)])
+}
+
+/// A finite point written by [`point_json`].
+fn point_of(v: &Value) -> Option<Point> {
+    let [x, y] = v.as_array()?.as_slice() else { return None };
+    let p = Point::new(x.as_f64()?, y.as_f64()?);
+    (p.x.is_finite() && p.y.is_finite()).then_some(p)
+}
+
+/// A segment written by [`curve_json`].
+fn curve_of(v: &Value) -> Option<CubicBez> {
+    let [a, b, c, d] = v.as_array()?.as_slice() else { return None };
+    Some(CubicBez::new(point_of(a)?, point_of(b)?, point_of(c)?, point_of(d)?))
+}
+
+fn place_json((id, subpath, segment): Place) -> Value {
+    json!([id.0, subpath, segment])
+}
+
+/// A place written by [`place_json`].
+fn place_of(v: &Value) -> Option<Place> {
+    let [id, subpath, segment] = v.as_array()?.as_slice() else { return None };
+    let index = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok());
+    Some((NodeId(id.as_u64()?), index(subpath)?, index(segment)?))
+}
+
+/// The [`RADIUS_DIALOG`]'s parameters for circle `c`, found by a click at `at` on `first` and on
+/// `picked`, whose segments a circle may touch are `second`, which `points` (from [`draw`]) draws:
+/// the segments and their places, the click, the circle's radius and points, and the tolerance
+/// [`draw`] checked them with.
+fn dialog_params(first: &Pick, picked: &Pick, second: &[CubicBez], at: Point, c: &SegmentCircle, points: &Value, tol: f64) -> Value {
+    json!({
+        "first": curve_json(&first.curve),
+        "second": second.iter().map(curve_json).collect::<Vec<_>>(),
+        "places": [place_json(first.place()), place_json(picked.place())],
+        "at": point_json(at),
+        "radius": c.circle.radius,
+        "points": points,
+        "tol": tol,
+    })
+}
+
+/// Whether the segments the [`RADIUS_DIALOG`] opened with parameters `p` holds are still those of
+/// `doc`: false when a path was edited or removed since the click, in another document, or for
+/// parameters the tool did not write.
+pub fn segments_unchanged(doc: &Document, p: &Value) -> bool {
+    let check = || -> Option<bool> {
+        let [first, second] = p.get("places")?.as_array()?.as_slice() else { return None };
+        let (first, second) = (place_of(first)?, place_of(second)?);
+        let second_then: Vec<CubicBez> = p.get("second")?.as_array()?.iter().map(curve_of).collect::<Option<_>>()?;
+        Some(segment_at(doc, first)? == curve_of(p.get("first")?)? && second_then == second_set_at(doc, first, second))
+    };
+    check() == Some(true)
+}
+
+/// The `shape.circleThroughPoints` parameters that draw the circle of `radius` the [`RADIUS_DIALOG`]
+/// opened with parameters `p` gives: at the radius the click found, the circle found; at any other,
+/// the circle of `radius` touching the second segments nearest the click, anywhere along the first
+/// segment (as with Shift). None for a radius that is not a finite number above 0, when no circle of
+/// that radius can be drawn there, or for parameters the tool did not write.
+pub fn radius_circle(p: &Value, radius: f64) -> Option<Value> {
+    if !(radius.is_finite() && radius > 0.0) {
+        return None;
+    }
+    if p.get("radius").and_then(Value::as_f64) == Some(radius) {
+        let points = p.get("points")?;
+        let [a, b, c] = points.as_array()?.as_slice() else { return None };
+        return [a, b, c].into_iter().all(|q| point_of(q).is_some()).then(|| json!({ "points": points }));
+    }
+    let first = curve_of(p.get("first")?)?;
+    // The second segment and at most one on either side of it.
+    let second: Vec<CubicBez> = p.get("second")?.as_array().filter(|s| (1..=3).contains(&s.len()))?.iter().map(curve_of).collect::<Option<_>>()?;
+    let at = point_of(p.get("at")?)?;
+    let tol = p.get("tol").and_then(Value::as_f64).filter(|t| t.is_finite() && *t > 0.0)?;
+    let c = nearest_to(circles_of_radius(first, &second, radius), at, tol)?;
+    match draw(&c, tol)? {
+        Action::Exec(_, params) => Some(params),
+        _ => None,
+    }
 }
 
 impl TangentCircleTool {
@@ -490,9 +620,20 @@ impl Tool for TangentCircleTool {
                 // No circle, or one the three points cannot draw: the first segment stays picked,
                 // for another try. It also stays when the command fails: only a drawn circle tells
                 // the tool (`notify`) to forget it.
+                let tol = cx.tol(DRAW_PX);
                 let Some(c) = self.found.take() else { return vec![] };
-                let Some(params) = circle_params(&c, cx.tol(DRAW_PX)) else { return vec![] };
+                let Some(params) = circle_params(&c, tol) else { return vec![] };
                 self.looked = false;
+                // Asked for: a click, not a drag (which set the radius), opens the radius dialog,
+                // which draws the circle. Until then the first segment stays picked, so Cancel
+                // leaves it for another try.
+                if self.ask_radius
+                    && press.radius.is_none()
+                    && let Some(first) = &self.first
+                {
+                    let params = dialog_params(first, &press.pick, &press.second, press.at, &c, &params["points"], tol);
+                    return vec![Action::Dialog(RADIUS_DIALOG.into(), params)];
+                }
                 // Alt at the release turns `addPoints` the other way.
                 let steps = match &self.first {
                     Some(first) if self.add_points != ev.mods.alt => {
@@ -628,6 +769,8 @@ impl Tool for TangentCircleTool {
             "color": COLORS.get(self.color).map_or("red", |(name, _)| *name),
             "snapTolerance": self.snap_px,
             "snapWithoutGuides": self.snap_without_guides,
+            "askRadius": self.ask_radius,
+            "autoUpdateDefault": self.auto_update,
         })
     }
 
@@ -644,6 +787,8 @@ impl Tool for TangentCircleTool {
             "color" => self.color = v.as_str().and_then(|s| COLORS.iter().position(|(name, _)| *name == s)).unwrap_or(self.color),
             "snapTolerance" => self.snap_px = v.as_f64().unwrap_or(self.snap_px),
             "snapWithoutGuides" => self.snap_without_guides = v.as_bool().unwrap_or(self.snap_without_guides),
+            "askRadius" => self.ask_radius = v.as_bool().unwrap_or(self.ask_radius),
+            "autoUpdateDefault" => self.auto_update = v.as_bool().unwrap_or(self.auto_update),
             _ => {}
         }
     }
@@ -719,6 +864,121 @@ mod tests {
 
     fn close(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> bool {
         [(a.0, b.0), (a.1, b.1), (a.2, b.2), (a.3, b.3)].iter().all(|(x, y)| (x - y).abs() < 1e-4)
+    }
+
+    /// The circle `shape.circleThroughPoints` parameters `p` draw, as [`drawn`] gives it.
+    fn boxed(p: &Value) -> (f64, f64, f64, f64) {
+        drawn(&[Action::Exec("shape.circleThroughPoints".into(), p.clone()), Action::Notify(DRAWN.into())])
+    }
+
+    /// The radius dialog's parameters in `actions`, which hold nothing else.
+    fn asked(actions: &[Action]) -> Value {
+        let [Action::Dialog(kind, p)] = actions else { panic!("{actions:?}") };
+        assert_eq!(kind, RADIUS_DIALOG);
+        p.clone()
+    }
+
+    #[test]
+    fn ask_for_circle_radius_opens_the_dialog_after_a_click_but_not_after_a_drag() {
+        let d = doc();
+        let (sel, p) = (Selection::default(), paint());
+        let cx = cx(&d, &sel, &p);
+        let mut t = TangentCircleTool::default();
+        assert_eq!((t.options()["askRadius"].clone(), t.options()["autoUpdateDefault"].clone()), (json!(false), json!(false)));
+        for key in ["askRadius", "autoUpdateDefault"] {
+            assert_eq!(t.check_option(key, &json!(true)), Ok(()));
+            for bad in [json!(1), json!("true"), Value::Null] {
+                assert_eq!(t.check_option(key, &bad), Err(format!("`{key}` must be true or false")), "{bad}");
+                t.set_option(key, &bad);
+                assert_eq!(t.options()[key], json!(false), "{bad}");
+            }
+            t.set_option(key, &json!(true));
+            assert_eq!(t.options()[key], json!(true));
+        }
+        // A click on the second line: the dialog, at the click's circle (radius 20), and nothing
+        // drawn yet; the first segment stays picked.
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Down, 200.0, 139.0));
+        let p = asked(&up(&mut t, &cx, &ev(PointerKind::Up, 200.0, 139.0)));
+        assert!((p["radius"].as_f64().unwrap() - 20.0).abs() < 1e-6, "{p}");
+        assert!(t.first.is_some() && !t.busy());
+        let r = p["radius"].as_f64().unwrap();
+        assert!(close(boxed(&radius_circle(&p, r).unwrap()), (130.0, 100.0, 40.0, 40.0)), "{p}");
+        // Lines 40 pt apart take no other radius; nor is there a circle without a radius above 0.
+        for no in [25.0, 0.0, -20.0, f64::NAN, f64::INFINITY] {
+            assert_eq!(radius_circle(&p, no), None, "{no}");
+        }
+        // Shift on the L's corner: the dialog at the tool's radius, and another radius gives that
+        // radius's fillet.
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 300.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 300.0));
+        t.pointer(&cx, &shifted(PointerKind::Down, 300.0, 350.0));
+        let p = asked(&up(&mut t, &cx, &shifted(PointerKind::Up, 300.0, 350.0)));
+        assert_eq!(p["radius"], json!(RADIUS));
+        assert!(close(boxed(&radius_circle(&p, RADIUS).unwrap()), (300.0 - 72.0, 300.0, 72.0, 72.0)), "{p}");
+        assert!(close(boxed(&radius_circle(&p, 10.0).unwrap()), (280.0, 300.0, 20.0, 20.0)), "{p}");
+        // Parameters the tool did not write give no circle.
+        assert_eq!(radius_circle(&json!({}), 10.0), None);
+        let second = p["second"].as_array().unwrap()[0].clone();
+        for (key, bad) in [
+            ("second", json!([])),
+            ("second", json!([second, second, second, second])),
+            ("at", json!([1.0])),
+            ("tol", json!(0)),
+            ("first", json!("x")),
+            ("points", json!([[0, 0]])),
+        ] {
+            let mut q = p.clone();
+            q[key] = bad;
+            let r = if key == "points" { RADIUS } else { 10.0 };
+            assert_eq!(radius_circle(&q, r), None, "{key}");
+        }
+        // A drag sets the radius itself: drawn at once, with no dialog.
+        t.pointer(&cx, &ev(PointerKind::Down, 300.0, 350.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 365.0));
+        let released = up(&mut t, &cx, &ev(PointerKind::Up, 300.0, 365.0));
+        assert!(close(drawn(&released), (300.0 - 30.0, 300.0, 30.0, 30.0)), "{released:?}");
+        assert!(t.first.is_none());
+        // A click that finds no circle opens no dialog.
+        t.set_option("radius", &json!(5));
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
+        t.pointer(&cx, &shifted(PointerKind::Down, 200.0, 139.0));
+        assert!(t.pointer(&cx, &shifted(PointerKind::Up, 200.0, 139.0)).is_empty());
+        assert!(t.first.is_some());
+    }
+
+    #[test]
+    fn the_radius_dialog_knows_when_its_segments_changed() {
+        let d = doc();
+        let (sel, p) = (Selection::default(), paint());
+        let cx = cx(&d, &sel, &p);
+        let mut t = TangentCircleTool::default();
+        t.set_option("askRadius", &json!(true));
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Down, 200.0, 139.0));
+        let p = asked(&up(&mut t, &cx, &ev(PointerKind::Up, 200.0, 139.0)));
+        assert!(segments_unchanged(&d, &p));
+        assert!(segments_unchanged(&doc_at(100.0, 140.0), &p), "the same paths");
+        // Either line moved, or another document: changed.
+        for (a, b) in [(100.0, 150.0), (110.0, 140.0)] {
+            assert!(!segments_unchanged(&doc_at(a, b), &p), "{a} {b}");
+        }
+        assert!(!segments_unchanged(&Document::new(500.0, 500.0), &p));
+        // The second line edited down to a closed subpath without segments: changed.
+        let mut emptied = d.clone();
+        let (second, ..) = place_of(&p["places"][1]).unwrap();
+        emptied.node_mut(second).and_then(|n| n.path_data_mut()).unwrap().subpaths[0] = SubPath::polyline(&[], true);
+        assert!(!segments_unchanged(&emptied, &p));
+        // Parameters the tool did not write.
+        for key in ["places", "first", "second"] {
+            let mut q = p.clone();
+            q[key] = json!("x");
+            assert!(!segments_unchanged(&d, &q), "{key}");
+        }
     }
 
     #[test]

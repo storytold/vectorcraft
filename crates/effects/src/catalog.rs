@@ -58,10 +58,61 @@ pub fn raster_px_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f
     documented_range(id, key, "px")
 }
 
+/// The range parameter `key` of effect `id` is documented with, after any number of unit words
+/// (`key: lo..hi`, `key: unit lo..hi`, `key: screen angle deg lo..hi`) or as the first word of its
+/// description in parentheses (`key: unit (lo..hi, default)`), and before the rest of that
+/// description or the next parameter; `None` when its documentation gives none.
+pub(crate) fn any_documented_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    let doc = catalog_index().get(id)?.params;
+    let starts = |at: usize| starts_key(doc, at);
+    doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
+        let rest = doc.get(at + key.len()..)?;
+        let rest = rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?;
+        for word in rest.split_whitespace() {
+            let opens = word.starts_with('(');
+            if let Some((lo, hi)) = word.trim_start_matches('(').split_once("..") {
+                let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches([',', ';', ')', '}']).parse::<f64>().ok()?);
+                return (lo.is_finite() && hi.is_finite() && lo <= hi).then_some(lo..=hi);
+            }
+            if opens {
+                return None;
+            }
+            if word.ends_with([',', '}']) {
+                return None;
+            }
+        }
+        None
+    })
+}
+
+/// The choices parameter `key` of effect `id` is documented with (`key: "a"|"b"`, a note in
+/// parentheses allowed after a choice: `key: "a" (note)|"b"`); `None` when its documentation gives
+/// fewer than two.
+pub(crate) fn documented_choices(id: &str, key: &str) -> Option<Vec<&'static str>> {
+    let doc = catalog_index().get(id)?.params;
+    doc.match_indices(key).map(|(at, _)| at).filter(|at| starts_key(doc, *at)).find_map(|at| {
+        let rest = doc.get(at + key.len()..)?;
+        let mut rest = rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?;
+        let mut choices = vec![];
+        while let Some((choice, after)) = rest.strip_prefix('"').and_then(|r| r.split_once('"')) {
+            choices.push(choice);
+            let after = match after.strip_prefix(" (") {
+                Some(note) => note.get(note.find(')')? + 1..)?,
+                None => after,
+            };
+            match after.strip_prefix('|') {
+                Some(next) => rest = next,
+                None => break,
+            }
+        }
+        (choices.len() >= 2).then_some(choices)
+    })
+}
+
 /// The range parameter `key` of effect `id` is documented with in `unit` (`key: unit lo..hi`).
 fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeInclusive<f64>> {
     let doc = catalog_index().get(id)?.params;
-    let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
+    let starts = |at: usize| starts_key(doc, at);
     let rest = doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
         let rest = doc.get(at + key.len()..)?;
         rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?.strip_prefix(unit)?.strip_prefix(' ')
@@ -69,6 +120,12 @@ fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeIn
     let (lo, hi) = rest.split_whitespace().next()?.split_once("..")?;
     let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches(',').parse::<f64>().ok()?);
     (lo.is_finite() && hi.is_finite() && lo <= hi).then_some(lo..=hi)
+}
+
+/// Can a parameter name start at byte `at` of parameter documentation `doc`: after `{`, a space or
+/// a comma?
+fn starts_key(doc: &str, at: usize) -> bool {
+    doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| matches!(c, '{' | ' ' | ','))
 }
 
 /// The distance parameters of effect `id` (none for unknown effects).
@@ -257,7 +314,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "{corners: [[x,y]×4] (new positions of the bounding-box corners TL, TR, BR, BL in unit box coordinates; identity [[0,0],[1,0],[1,1],[0,1]]; placed gradients move and scale from the object's bounds to its distorted bounds)}",
             json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]}),
         ),
-        g("distort.puckerBloat", "Pucker & Bloat…", DT, "{amount: % (-200 pucker … 200 bloat, default 0)}", json!({"amount": 0.0})),
+        g("distort.puckerBloat", "Pucker & Bloat…", DT, "{amount: % -200..200 (0; -200 puckers, 200 bloats)}", json!({"amount": 0.0})),
         g(
             "distort.roughen",
             "Roughen…",
@@ -808,7 +865,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "adjust.temperatureTint",
             "Temperature/Tint…",
             ADJUST,
-            "{temperature: -100 (cooler) .. 100 (warmer) (0), tint: -100 (greener) .. 100 (more magenta) (0)} recolours as Brightness/Contrast does",
+            "{temperature: -100..100 (0; -100 cooler, 100 warmer), tint: -100..100 (0; -100 greener, 100 more magenta)} recolours as Brightness/Contrast does",
             json!({"temperature": 0.0, "tint": 0.0}),
         ),
     ]);
@@ -873,6 +930,12 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
 pub(crate) fn catalog_index() -> &'static std::collections::HashMap<&'static str, EffectInfo> {
     static INDEX: std::sync::OnceLock<std::collections::HashMap<&'static str, EffectInfo>> = std::sync::OnceLock::new();
     INDEX.get_or_init(|| effect_catalog().into_iter().map(|e| (e.id, e)).collect())
+}
+
+/// The id and menu label of built-in effect `id`, as the catalog holds them (no plug-in
+/// effects).
+pub fn built_in_effect(id: &str) -> Option<(&'static str, &'static str)> {
+    catalog_index().get(id).map(|e| (e.id, e.label))
 }
 
 /// Catalogue entry for `id` (built-in, or an installed plug-in effect).

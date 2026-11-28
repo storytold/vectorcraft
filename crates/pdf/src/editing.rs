@@ -212,7 +212,14 @@ fn is_editing_name(name: &PdfString<'_>) -> bool {
 }
 
 /// The most decoded page content [`page_hash`] reads in all (bytes).
-const MAX_HASHED: usize = 256 << 20;
+pub(crate) const MAX_HASHED: usize = 256 << 20;
+
+#[cfg(test)]
+thread_local! {
+    /// The bytes of page content [`page_hash`] has decoded on this thread, at most the limit it
+    /// asked for when a stream decodes past it: the hash's work.
+    pub(crate) static DECODED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
 
 /// FNV-1a of the pages' media boxes and decoded content, as 16 hex digits. Past [`MAX_HASHED`]
 /// bytes of content in all (pages sharing a stream count it each time) a marker stands for the
@@ -221,8 +228,13 @@ fn page_hash(pdf: &Pdf) -> String {
     let fnv = |h: u64, bytes: &[u8]| bytes.iter().fold(h, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x100000001b3));
     let mut left = MAX_HASHED;
     let mut content = |h: u64, stream: &Stream<'_>| {
-        if left > 0
-            && let Ok(data) = stream.decoded_within(left)
+        let decoded = (left > 0).then(|| stream.decoded_within(left));
+        #[cfg(test)]
+        if let Some(decoded) = &decoded {
+            let bytes = decoded.as_ref().map_or(left, |data| data.len());
+            DECODED.set(DECODED.get().saturating_add(u64::try_from(bytes).unwrap_or(u64::MAX)));
+        }
+        if let Some(Ok(data)) = decoded
             && data.len() < left
         {
             left -= data.len();

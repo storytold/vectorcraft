@@ -125,7 +125,9 @@ mod catalog;
 mod geometry;
 mod params;
 
-pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, length_range, plugin_effects, raster_px_range};
+pub use catalog::{
+    EffectInfo, Lengths, WARP_STYLES, built_in_effect, effect_catalog, effect_info, is_length, length_range, plugin_effects, raster_px_range,
+};
 pub(crate) use geometry::{Budget, apply_one};
 pub use geometry::{
     Carry, GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_bez_carrying, apply_geometry_carrying, apply_geometry_with,
@@ -133,6 +135,6 @@ pub use geometry::{
 #[cfg(test)]
 pub(crate) use geometry::{MAX_EFFECT_LINES, apply_geometry_within};
 pub use params::{
-    any_plugin_paints_output, default_params, has_geometry, has_painted_plugin_effect, has_plugin_effect, is_geometry, is_raster, merged_params,
-    new_effect, plugin_revision, scale_effect, upgrade_params,
+    any_plugin_paints_output, check_returned_effect, default_params, has_geometry, has_painted_plugin_effect, has_plugin_effect, is_geometry,
+    is_raster, merged_params, new_effect, plugin_revision, scale_effect, upgrade_params,
 };

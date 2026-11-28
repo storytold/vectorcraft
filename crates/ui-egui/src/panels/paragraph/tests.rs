@@ -25,8 +25,174 @@ fn editing_text(text: &str) -> (VectorcraftApp, Value) {
     (app, id)
 }
 
+/// The minimum-width Paragraph dock keeps translated alignment and spacing controls usable.
+#[test]
+fn compact_paragraph_dock_keeps_localized_alignment_and_spacing_usable() {
+    use craft::behavior::dock::{DockEdge, Node, Workspace};
+    use egui::accesskit::Role;
+    use egui::{Event, Key, Modifiers, PointerButton, Pos2, pos2};
+    use std::sync::Arc;
+
+    let width = crate::panel_docking::PANEL_MIN_WIDTH;
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1000.0));
+    let mut untranslated = Vec::new();
+    for lang in ["en", "de", "fr", "pt-br"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.prefs.interface_language = lang.into();
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let id =
+            app.run("text.create", json!({"x": 20, "y": 50, "text": "First\nSecond", "area": {"width": 180, "height": 100}})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run("window.panel", json!({"panel": "paragraph"})).unwrap();
+        app.run("window.panel.dock", json!({"panel": "paragraph", "column": true})).unwrap();
+        app.run("window.panel.activate", json!({"panel": "paragraph"})).unwrap();
+
+        let ws = &app.ui.dock_workspace;
+        let mut layout = ws.layout().clone();
+        let path = layout.dock_path(DockEdge::End).unwrap();
+        let mut node = layout.root.as_mut().unwrap();
+        for second_child in path {
+            let Node::Split { first, second, .. } = node else { panic!("end dock path") };
+            node = if second_child { second } else { first };
+        }
+        let Node::Dock { columns, .. } = node else { panic!("end dock") };
+        let column = columns.iter_mut().find(|column| column.groups.iter().any(|group| group.panels.iter().any(|p| p == "paragraph"))).unwrap();
+        assert!(!column.iconic);
+        column.width = Some(width);
+        let next = Workspace::from_parts(layout, ws.hidden().to_vec(), ws.floated().to_vec());
+        Arc::make_mut(&mut app.ui.dock_workspace).replace(next);
+
+        let ctx = crate::testing::ui_context();
+        ctx.enable_accesskit();
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, mut events: Vec<Event>, modifiers| {
+            time += 0.05;
+            events.insert(0, Event::ModifiersChanged(modifiers));
+            let input = egui::RawInput { time: Some(time), events, screen_rect: Some(screen), ..Default::default() };
+            crate::testing::app_frame(app, &ctx, input).platform_output.accesskit_update.map_or_else(Vec::new, |update| update.nodes)
+        };
+        for _ in 0..7 {
+            frame(&mut app, Vec::new(), Modifiers::NONE);
+        }
+        let nodes = frame(&mut app, Vec::new(), Modifiers::NONE);
+        let rect =
+            |node: &egui::accesskit::Node| node.bounds().map(|b| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)));
+        let title = crate::i18n::t("Paragraph");
+        let (_, body_node) = nodes.iter().find(|(_, node)| node.role() == Role::TabPanel && node.label() == Some(title)).unwrap();
+        let body = rect(body_node).unwrap();
+        assert!((body.width() - width).abs() < 1.0, "{lang}: {body:?}");
+
+        let mut descendants = Vec::new();
+        let mut todo = body_node.children().to_vec();
+        while let Some(id) = todo.pop() {
+            let Some((_, node)) = nodes.iter().find(|(key, _)| *key == id) else { continue };
+            todo.extend(node.children());
+            if let (Some(label), Some(bounds)) = (node.label(), rect(node)) {
+                descendants.push((label, node.role(), bounds));
+            }
+        }
+        let mut control = |names: [&str; 2], role: Option<Role>| {
+            let (label, _, bounds) = descendants
+                .iter()
+                .find(|(label, kind, _)| {
+                    role.is_none_or(|expected| *kind == expected) && names.iter().any(|name| *label == *name || *label == crate::i18n::t(name))
+                })
+                .unwrap_or_else(|| panic!("{lang}: no {names:?} with role {role:?}"));
+            assert!(bounds.is_positive() && body.expand(0.5).contains_rect(*bounds), "{lang}: {label} {bounds:?} outside {body:?}");
+            let expected = crate::i18n::t(names[1]);
+            if expected != names[1] && *label != expected {
+                untranslated.push(format!("{lang}: {label:?}, expected {expected:?}"));
+            }
+            bounds.center()
+        };
+        for names in [
+            ["Left align text", "Align left"],
+            ["Right align text", "Align right"],
+            ["Justify last left", "Justify with last line aligned left"],
+            ["Justify last centered", "Justify with last line aligned center"],
+            ["Justify last right", "Justify with last line aligned right"],
+            ["Justify all", "Justify all lines"],
+        ] {
+            control(names, None);
+        }
+        let center = control(["Center text", "Align center"], None);
+        let before = control(["Add space before paragraph", "Space Before Paragraph"], Some(Role::SpinButton));
+        let after = control(["Add space after paragraph", "Space After Paragraph"], Some(Role::SpinButton));
+        let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        let key = |key, modifiers, pressed| Event::Key { key, physical_key: None, pressed, repeat: false, modifiers };
+        frame(&mut app, vec![Event::PointerMoved(center), button(center, true)], Modifiers::NONE);
+        frame(&mut app, vec![button(center, false)], Modifiers::NONE);
+        frame(&mut app, Vec::new(), Modifiers::NONE);
+        assert_eq!(selected(&app), [Justify::Center], "{lang}: pointer changed alignment");
+        for (at, input) in [(before, "12"), (after, "18")] {
+            frame(&mut app, vec![Event::PointerMoved(at), button(at, true)], Modifiers::NONE);
+            frame(&mut app, vec![button(at, false)], Modifiers::NONE);
+            frame(&mut app, vec![key(Key::A, Modifiers::COMMAND, true)], Modifiers::COMMAND);
+            frame(&mut app, vec![key(Key::A, Modifiers::COMMAND, false), Event::Text(input.to_owned())], Modifiers::NONE);
+            frame(&mut app, vec![key(Key::Enter, Modifiers::NONE, true)], Modifiers::NONE);
+            frame(&mut app, vec![key(Key::Enter, Modifiers::NONE, false)], Modifiers::NONE);
+        }
+        assert_eq!(shared_para_field(&app, |p| p.space_before), Some(12.0), "{lang}: keyboard updated before");
+        assert_eq!(shared_para_field(&app, |p| p.space_after), Some(18.0), "{lang}: keyboard updated after");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+    }
+    assert!(untranslated.is_empty(), "lost Paragraph translations: {untranslated:?}");
+}
+
 fn select_range(app: &mut VectorcraftApp, start: usize, end: usize) {
     app.session.set_tool_option("select", &json!({"start": start, "end": end}));
+}
+
+#[test]
+fn canceling_paragraph_dropdown_choices_preserves_text_and_undo_history() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+
+    enum Setting {
+        Kashida,
+        Mojikumi,
+        Kinsoku,
+    }
+
+    for (label, setting) in [("Insert Kashidas", Setting::Kashida), ("Mojikumi Set", Setting::Mojikumi), ("Kinsoku Set", Setting::Kinsoku)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "One\nTwo"})).unwrap()["id"].clone();
+        app.run("text.setFormat", json!({"id": id, "kashida": "none", "mojikumi": "none", "kinsoku": "none"})).unwrap();
+        app.session.prefs.show_indic_options = true;
+        app.session.prefs.show_east_asian_options = true;
+        app.ui.paragraph_hide_options = false;
+        let original = app.session.active().unwrap().doc.clone();
+        let revision = app.session.active().unwrap().revision;
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, show);
+        panel.room(egui::vec2(400.0, 1000.0));
+        panel.click_role(label, Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "highlighting {label} does not apply formatting");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        {
+            let app = panel.app();
+            let state = app.session.active().unwrap();
+            assert_eq!(state.doc, original, "canceling {label} keeps the text");
+            assert_eq!(state.revision, revision);
+            assert_eq!(state.history.undo.len(), undo);
+        }
+        panel.click_role(label, Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        {
+            let app = panel.app();
+            match setting {
+                Setting::Kashida => assert_eq!(shared_para(&app, |para| para.kashida), Some(Kashida::Short)),
+                Setting::Mojikumi => assert_eq!(shared_para(&app, |para| para.mojikumi), Some(Mojikumi::YakumonoHankaku)),
+                Setting::Kinsoku => assert_eq!(shared_para(&app, |para| para.kinsoku), Some(Kinsoku::Hard)),
+            }
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "accepting {label} is one formatting edit");
+        }
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "one Undo restores the original paragraph after {label}");
+    }
 }
 
 #[test]

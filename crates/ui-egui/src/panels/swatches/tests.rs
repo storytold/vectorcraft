@@ -96,12 +96,98 @@ fn dropped_below(app: &mut VectorcraftApp, drag: PanelDrag, mods: Mods) {
 
 /// The drag the row `name` starts, carrying rows `names`.
 fn rows_drag(app: &VectorcraftApp, name: &str, names: &[&str]) -> PanelDrag {
-    dnd::drag_of(&doc(app), &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
+    let document = app.session.active().unwrap().uid;
+    dnd::drag_of(&doc(app), document, &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
+}
+
+#[test]
+fn only_unlinked_process_swatches_can_travel_as_canvas_color() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Global red", "color": "#ff0000", "global": true})).unwrap();
+    app.run("swatch.new", json!({"name": "Spot blue", "color": "#0000ff", "spot": true})).unwrap();
+    let tint = app.run("swatch.new", json!({"swatch": "Spot blue", "tint": 40})).unwrap();
+    let can_travel = |name| {
+        let PanelDrag::Paint { rows: Some(rows), .. } = rows_drag(&app, name, &[name]) else { panic!("a swatch row drag") };
+        rows.unlinked_process_color
+    };
+    assert!(can_travel("Red"));
+    for name in ["Global red", "Spot blue", tint["name"].as_str().unwrap(), "[None]", "[Registration]"] {
+        assert!(!can_travel(name), "{name}");
+    }
+}
+
+#[test]
+fn a_swatch_row_drag_reorders_only_its_source_document() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::{ListDrag, Role};
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    let mut app = app();
+    let source = app.session.active().unwrap().uid;
+    let before_source = names_of(&app, None);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    let before_destination = names_of(&app, None);
+    app.run("window.previousDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source);
+
+    let mut panel = Panel::new(app, show);
+    let drag_red = |panel: &mut Panel| {
+        let red = "Red, #ed1c24";
+        let from = panel.rect(red).center();
+        let to = panel.rect("Green, #39b54a").center();
+        panel.drag_hold_role(red, Role::LIST_ITEM, to - from);
+        let grabbed = drag::active::<ListDrag<SwatchKey>>(panel.ctx()).map(|d| d.grabbed.clone());
+        assert_eq!(grabbed, Some(SwatchKey::Swatch("Red".into())));
+    };
+    drag_red(&mut panel);
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, destination);
+    panel.release();
+    assert_eq!(names_of(&panel.app(), None), before_destination);
+
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, source);
+    assert_eq!(names_of(&panel.app(), None), before_source);
+    drag_red(&mut panel);
+    panel.release();
+    assert_ne!(names_of(&panel.app(), None), before_source);
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(names_of(&panel.app(), None), before_source);
+}
+
+#[test]
+fn a_foreign_swatch_row_payload_cannot_move_or_replace_local_swatches() {
+    let mut app = app();
+    let drag = rows_drag(&app, "Red", &["Red"]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let before = doc(&app);
+    let state = app.session.active().unwrap();
+    assert!(!dnd::accepts(&drag, state.uid, state.reverts));
+    dropped_below(&mut app, drag.clone(), none());
+    dropped(&mut app, drag, "Green", alt());
+    assert_eq!(doc(&app).swatches, before.swatches);
+}
+
+#[test]
+fn the_footer_menu_buttons_report_that_they_open_a_menu() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::PopupKind;
+
+    let panel = Panel::new(app(), show);
+    for name in [SwatchLibraries::MENU, "Show Swatch Kinds"] {
+        assert_eq!(panel.popup_kind(name), Some(PopupKind::Menu), "{name}");
+    }
+    for name in ["Delete Swatch", "New Swatch", "New Color Group"] {
+        assert_eq!(panel.popup_kind(name), None, "{name}");
+    }
 }
 
 /// Art `ids` dragged off the canvas.
 fn art_drag(app: &VectorcraftApp, ids: Vec<vectorcraft_doc::NodeId>) -> PanelDrag {
-    PanelDrag::Art { document: app.session.active().map(|st| st.uid).unwrap_or_default(), ids }
+    let (document, reverts) = app.session.active().map_or((0, 0), |st| (st.uid, st.reverts));
+    PanelDrag::Art { document, reverts, ids }
 }
 
 /// The browser's reorder committing `names` before row `before` (a colour group: into it).
@@ -305,6 +391,54 @@ fn delete_asks_then_removes_the_selection_and_unlinks_art() {
     delete(&mut app, vec!["Orange".into()], true);
     assert!(!dialog_open(&app, confirm_key) && doc(&app).swatch("Orange").is_none());
     assert_eq!(deletable(&app, &["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
+}
+
+#[test]
+fn delete_confirmation_keeps_matching_swatches_in_another_drawing() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    let source = app.session.active().unwrap().uid;
+    delete(&mut app, vec!["Red".into()], false);
+    assert!(dialog_open(&app, key));
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    assert_ne!(app.session.active().unwrap().uid, source);
+    let undo = app.session.active().unwrap().history.undo.len();
+    assert!(doc(&app).swatch("Red").is_some());
+
+    confirm(&mut app, key);
+    assert!(doc(&app).swatch("Red").is_some(), "the other tab keeps its identically named swatch");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "This dialog was opened in a different document.");
+    assert!(app.session.set_active(0));
+    assert!(doc(&app).swatch("Red").is_some(), "the source swatch still needs a fresh confirmation");
+}
+
+#[test]
+fn delete_confirmation_keeps_the_swatch_restored_by_revert() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    let file = std::env::temp_dir().join(format!("vectorcraft-swatch-delete-revert-{}.vectorcraft", std::process::id()));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+    let saved_color = doc(&app).swatch("Red").unwrap().paint.color();
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("swatch.edit", json!({"name": "Red", "color": "#00ff00"})).unwrap();
+    assert_ne!(doc(&app).swatch("Red").unwrap().paint.color(), saved_color);
+    delete(&mut app, vec!["Red".into()], false);
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert_eq!(doc(&app).swatch("Red").unwrap().paint.color(), saved_color);
+    let undo = st.history.undo.len();
+
+    confirm(&mut app, key);
+    assert_eq!(doc(&app).swatch("Red").expect("the restored swatch stays").paint.color(), saved_color);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
 }
 
 /// Only None and Registration are reserved: a user swatch or color group whose name starts with
@@ -548,6 +682,22 @@ fn drops_on_the_buttons_and_the_panel_run_their_commands() {
         let drag = rows_drag(&app, name, &[name]);
         dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
         assert_eq!(doc(&app), kept, "{name}");
+    }
+}
+
+#[test]
+fn footer_drops_ignore_rows_from_another_document() {
+    let mut app = app();
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("swatch.new", json!({"name": "Orange", "color": "#ff8000"})).unwrap();
+    let before = doc(&app);
+    let undo = undo_steps(&app);
+    for target in [dnd::FooterTarget::New, dnd::FooterTarget::Delete] {
+        dnd::on_footer_drop(&mut app, target, &drag);
+        assert_eq!(doc(&app), before);
+        assert_eq!(undo_steps(&app), undo);
+        assert!(!dialog_open(&app, crate::dialogs::confirm::KIND));
     }
 }
 
@@ -1198,4 +1348,37 @@ fn show_recent_colors_keeps_collecting_and_reads_as_on_unless_false() {
         serde_json::from_value::<crate::UiState>(prefs).unwrap().swatches_show_recent_colors
     };
     assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
+}
+
+/// The footer's Swatch Libraries menu is as wide as the same rows in a swatch library panel's menu: the menu fits its
+/// rows.
+#[test]
+fn the_swatch_libraries_menu_fits_its_rows_like_a_library_panels_menu() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    fn library(app: &mut VectorcraftApp, ui: &mut Ui) {
+        let panel = library_panel::last_open(&app.ui).expect("a library panel is open").panel();
+        library_panel::show(app, ui, &panel);
+    }
+    let with_library = || {
+        let mut app = app();
+        let id = library_panel::tests::menu_library_ids::<SwatchLibraries>(&app).into_iter().next().expect("a swatch library");
+        app.run("window.swatchLibrary", json!({"library": id})).unwrap();
+        app
+    };
+    // Space on the focused footer button opens its menu; the Swatches panel's footer sits below the harness's room.
+    let open = |panel: &mut Panel| {
+        panel.focus("Swatch Libraries Menu");
+        panel.key(Key::Space, Modifiers::NONE);
+        panel.frame();
+    };
+    let mut footer = Panel::new(with_library(), show);
+    open(&mut footer);
+    let footer_menu = footer.rect_role("Swatch Libraries", Role::MENU);
+    let mut panel = Panel::new(with_library(), library);
+    open(&mut panel);
+    let panel_menu = panel.rect_role("Swatch Libraries Menu", Role::MENU);
+    assert_eq!(footer_menu.width(), panel_menu.width(), "footer menu {footer_menu:?}, library panel menu {panel_menu:?}");
 }

@@ -74,7 +74,8 @@ fn tidy(degrees: f64) -> f64 {
 
 /// The X, Y and Z angles of rotation `m`. Of the two sets of angles that make it, the one nearest
 /// `near` (so a turn moves the fields as little as it can); with Y at ±90°, where X and Z turn about
-/// the same axis, X keeps its value from `near`.
+/// the same axis, X keeps its value from `near`. An unchanged axis keeps its original precision;
+/// only an angle that actually turned is tidied to the fields' precision.
 fn angles_of(m: M3, near: [f64; 3]) -> [f64; 3] {
     let y = (-m[2][0]).clamp(-1.0, 1.0).asin().to_degrees();
     let candidates = if m[2][1].hypot(m[2][2]) < 1e-9 {
@@ -87,7 +88,11 @@ fn angles_of(m: M3, near: [f64; 3]) -> [f64; 3] {
         [Some([x, y, z]), Some([x + 180.0, 180.0 - y, z + 180.0])]
     };
     let distance = |a: &[f64; 3]| a.iter().zip(near).map(|(a, b)| tidy(a - b).abs()).sum::<f64>();
-    candidates.into_iter().flatten().min_by(|a, b| distance(a).total_cmp(&distance(b))).unwrap_or(near).map(tidy)
+    let chosen = candidates.into_iter().flatten().min_by(|a, b| distance(a).total_cmp(&distance(b))).unwrap_or(near);
+    std::array::from_fn(|i| {
+        let delta = (chosen[i] - near[i] + 180.0).rem_euclid(360.0) - 180.0;
+        if delta.abs() <= 1e-9 { near[i] } else { tidy(chosen[i]) }
+    })
 }
 
 /// Where corner `i` of the cube (bit 0 for +X, bit 1 for +Y, bit 2 for +Z) is drawn.
@@ -304,7 +309,7 @@ impl Component for TrackCube<'_> {
         let center = cx.rect.center();
         let mut held = *cx.press_slot::<CubeDrag>();
         let result = cx.part(CUBE);
-        let (press, hover) = (result.press, result.hover_pos.filter(|_| result.hovered));
+        let (press, hover) = (result.press, cx.hover_pos(CUBE));
         match press.phase {
             PressPhase::Down { start, .. } if start.button == PointerButton::Primary => {
                 cx.focus_part(CUBE);
@@ -392,6 +397,7 @@ impl Component for TrackCube<'_> {
 /// The track cube's row on the Rotation page of the 3D (Classic) effects. It reads and writes `rotationX`, `rotationY` and
 /// `rotationZ` (a missing one reads the effect's default) and only writes an angle that changes; the dialog's preview applies
 /// them and OK records them as one undo step. Its control's events go to the rows, so a drag previews and Escape restores.
+/// A screen-plane turn changes Z while retaining the original precision of X and Y.
 pub(crate) fn row() -> Param {
     Param::custom("__trackCube", tl!("Track cube"), |ui, fields, cx| {
         let defaults = vectorcraft_effects::default_params(fields.text("__effect").unwrap_or_default()).unwrap_or(json!({}));
@@ -455,3 +461,70 @@ fn paint_cube(painter: &egui::Painter, s: &RowStyle, rect: Rect, m: M3, active: 
 #[cfg(test)]
 #[path = "tests_track_cube.rs"]
 mod tests;
+
+#[cfg(test)]
+mod precision_tests {
+    use super::*;
+    use crate::VectorcraftApp;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
+    use egui::{Key, Modifiers};
+    use serde_json::Value;
+    use vectorcraft_effects::CLASSIC_ROTATE;
+
+    fn fields(panel: &Panel) -> DialogFields {
+        panel.app().dialogs().unwrap().with(|host| host.get::<HostedParamDialog>().unwrap().fields().clone())
+    }
+
+    fn stored(panel: &Panel, node: u64) -> Value {
+        panel.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(node)).unwrap().appearance.effects[0].params.clone()
+    }
+
+    #[test]
+    fn screen_plane_keys_preserve_the_untouched_rotation_axes_through_preview_and_ok() {
+        let initial = [17.234567, 23.456789, 9.06];
+        for (key, z) in [(Key::PageDown, 10.06), (Key::PageUp, 8.06)] {
+            for save in [false, true] {
+                let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+                app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+                let node = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 80, "height": 80})).unwrap()["id"].as_u64().unwrap();
+                app.run("select.set", json!({"ids": [node]})).unwrap();
+                app.run(
+                    "effect.apply",
+                    json!({"effect": CLASSIC_ROTATE, "ids": [node], "item": null,
+                    "params": {"rotationX": initial[0], "rotationY": initial[1], "rotationZ": initial[2]}}),
+                )
+                .unwrap();
+                let original = app.session.active().unwrap().doc.clone();
+                let undo = app.session.active().unwrap().history.undo.len();
+                let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+                panel.room(egui::vec2(1100.0, 1100.0));
+                panel.app().run("effect.dialog", json!({"effect": CLASSIC_ROTATE, "index": 0, "item": null})).unwrap();
+                panel.frame();
+                panel.frame();
+                assert!(panel.app().dialogs().unwrap().with(|host| host.get::<HostedParamDialog>().unwrap().is_previewing()));
+                let read = |value: &DialogFields| ROTATION_KEYS.map(|key| value.number(key).unwrap());
+                assert_eq!(read(&fields(&panel)), initial, "the real dialog opens on the exact fractional rotations");
+                panel.click_role("Track cube", Role::SLIDER);
+                assert_eq!(read(&fields(&panel)), initial, "a click without a drag moves no axis");
+                panel.key(key, Modifiers::NONE);
+                let expected = [initial[0], initial[1], z];
+                assert_eq!(read(&fields(&panel)), expected, "a screen-plane turn changes only Euler Z");
+                let preview = stored(&panel, node);
+                assert_eq!(ROTATION_KEYS.map(|key| preview[key].as_f64().unwrap()), expected);
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+                panel.click(if save { "OK" } else { "Cancel" });
+                panel.frame();
+                panel.frame();
+                assert!(!panel.app().dialogs().unwrap().with(|host| host.is_open::<HostedParamDialog>()));
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + usize::from(save));
+                if save {
+                    let applied = stored(&panel, node);
+                    assert_eq!(ROTATION_KEYS.map(|key| applied[key].as_f64().unwrap()), expected);
+                    panel.app().run("edit.undo", json!({})).unwrap();
+                }
+                assert_eq!(panel.app().session.active().unwrap().doc, original);
+            }
+        }
+    }
+}

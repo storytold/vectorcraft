@@ -21,6 +21,9 @@ There are four kinds of plug-in:
   paths and compound paths. File › Open lists their files, File › Open With lists the importers by name, and the host
   hands them the file's bytes.
 
+An object filter may also be written in JavaScript, as a manifest and a `.js` file ([JavaScript
+filters](#javascript-filters)).
+
 This page is the contract for plug-in authors and the reference for the host (`crates/plugins`, the `plugin.*` commands
 in `crates/engine/src/cmd/plugin.rs`).
 
@@ -28,17 +31,39 @@ in `crates/engine/src/cmd/plugin.rs`).
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, context?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `context` lists the [document information](#document-information) it reads; `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, context?, size, source, api, paintOutput?, appearanceOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `context` lists the [document information](#document-information) it reads; `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects), and `appearanceOutput: true` one whose pieces carry [opacity, blending and effects](#opacity-blending-and-effects-on-pieces); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `runtime: "js"` and `script` mark a [JavaScript filter](#javascript-filters); `cacheBytes` is the size of its [cache](#settings-and-cache)), `"failed": [{file, error, from}]` (the plug-in files that [didn't load](#plug-ins-that-didnt-load)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. An output that changes no object and none of the data it keeps with the document ([`documentData`](#output)) records no undo step and leaves the document unmodified. |
-| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
+| `plugin.install` | `{"path": "/x/y.wasm"}` or a [JavaScript filter's](#javascript-filters) `.vcplugin` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
 | `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when installing it needs a person's approval), `needsReplace` (true when `plugin.install` needs `replace: true`), and the `commandAllowlist` ids no command has (`unknownCommands`) and those no plug-in may call (`refusedCommands`). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder with its [settings and cache](#settings-and-cache). |
 | `plugin.clearCache` | `{"id"?}` | Deletes every entry in the [cache](#settings-and-cache) of plug-in `id`, or of every installed plug-in; settings stay. Returns `{"cleared": [id], "bytesFreed"}`. |
-| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder, the first 1,000 by file name; a bad module is reported and skipped, and so are an entry that is not a regular file, a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). Returns `{"folder", "loaded", "failed": [{file, error}], "leftOut"}`; `leftOut` counts the `*.wasm` files past the first 1,000, which were not tried. |
+| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` and `*.vcplugin` in a folder, the first 1,000 by file name; a bad module is reported and skipped, and so are an entry that is not a regular file, a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). Returns `{"folder", "loaded", "failed": [{file, error}], "leftOut"}`; `leftOut` counts the `*.wasm` and `*.vcplugin` files past the first 1,000, which were not tried. |
+| `plugin.retry` | `{"file"?}` (a file `plugin.list`'s `failed` names; default: every one) | Loads a plug-in file that [didn't load](#plug-ins-that-didnt-load) again, with the same checks as the load it failed in. Returns `{"retried": [{file, loaded, id?, error?}]}`. |
 
 Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>", "params": {…}}`, edited with
 `effect.setParams`, listed by `effect.list` (menu `Effect › Plug-ins`) and baked by Object › Expand Appearance.
+
+### Plug-ins that didn't load
+
+`plugin.list`'s `failed` lists each plug-in file that didn't load in this process, with why and where it was loaded
+from (`from`: `"store"` for the `Plug-ins` folder, `"folder"` for the Additional Plug-ins Folder or the folder
+`plugin.reload` loaded last). A file of the `Plug-ins` folder stays listed until it installs or the folder is loaded
+again. The folder's files are the ones its last load report lists as failed, so a `plugin.reload` replaces them and
+leaves the `Plug-ins` folder's files listed. A `plugin.reload` of the `Plug-ins` folder itself lists a file that failed
+in both loads once, as a `"store"` file. Disabled plug-ins (listed in `disabled`, also a file turned off with
+`plugin.setEnabled {"file"}` after it failed) and modules skipped because the plug-in with their id was installed or
+removed elsewhere while they loaded are not listed.
+
+`plugin.retry {"file"}` loads one of those files again, and `plugin.retry {}` loads all of them: a file of the
+`Plug-ins` folder loads as that folder's files load at startup, and a folder file as `plugin.reload` loads it, with the
+same permission and budget checks. A folder file's row in the folder report then moves to `loaded`, or keeps its new
+error. Each row of the reply says whether this retry installed the file. Under automation read roots, a file outside
+them is not read again and stays listed, and its row says why, naming the file and its folder by their names.
+Installing or removing a plug-in whose module is stored in a file that didn't load, or a later load that installs it,
+takes that file off the list. In Safe Mode `plugin.retry` returns an error. Object › Plug-ins › Plug-ins That Didn't
+Load… lists the files by name with why, and its Retry All loads them again under the read roots the list opened
+under; the status bar says how many loaded. The item is disabled while no plug-in failed to load.
 
 An exporter adds a write-only format, `plugin.<id>`, which `document.formats` lists with its `plugin` id.
 `document.export {"format": "plugin.<id>", "params"?: {…}, "path"?}` writes it, and so does a `path` ending in one of
@@ -196,8 +221,8 @@ finish. Plug-in commands, commands that edit a document, exports, File › Open,
 opened at launch wait for them first; view commands and queries chosen from a menu do not. Until then a live effect
 whose plug-in is still loading is drawn as if it weren't there, and another window's `plugin.list` reports the folder
 as `{"folder", "loading": true}`. A folder set later in Preferences, `vectorcraft-cli` and `plugin.reload` wait for
-the loads before they go on. A module whose load panics is reported as failed or skipped with a log record, and the
-others install. So is a module whose read and load take 10 s or longer (VectorCraft's own limit), also one that would have
+the loads before they go on. A module whose load panics is skipped with a log record and listed as one that
+[didn't load](#plug-ins-that-didnt-load), and the others install. So is a module whose read and load take 10 s or longer (VectorCraft's own limit), also one that would have
 finished later, such as a module on a slow network share. The launch marker names every module still loading, so when
 the app stops during the loads, the next launch's Safe Mode choice lists all of them. A module whose load panicked or
 failed is no longer named; one past its 10 s limit is named until its load returns. A module is also skipped when the
@@ -282,10 +307,41 @@ how much there is only once the run has ended.
   thread of its own while editing goes on, shown in the status bar and, after a moment, in a progress window with
   Cancel (also Esc) and Continue in Background (`plugin.cancelRuns`, `plugin.hideRuns`). When it is done its result is
   applied as `plugin.run` with the same parameters and objects, as one undo step, unless the document or the plug-in
-  changed meanwhile: then nothing changes, and the status bar says to run it again. On the web, which has no threads,
-  it runs at once, under the same instruction budget and 300 s limit.
+  changed meanwhile: then nothing changes, and the status bar says to run it again. On the web it runs in a worker of
+  its own, under the same instruction budget and 300 s limit ([The web build](#the-web-build)).
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
+
+### The web build
+
+The web build checks plug-ins in Web Workers, and runs there the filters and plug-in commands that the menus and
+their dialogs start, so that code of a plug-in does not run on the page (the last item below lists the runs that
+still do). Trunk
+builds the worker, `vectorcraft-plugin-worker` (`apps/vectorcraft-plugin-worker`), beside the app, and the page starts
+one worker for each check and each run (`vectorcraft_plugins::worker` describes the messages).
+
+- **Installing.** Install Plug-in… and File › Open send the module to a worker, which loads it as the desktop app
+  does: its start function, `vc_abi_version` and `vc_manifest` run there. The page then makes the checks that run
+  none of the module's code and installs it with the manifest the worker read. A module that fails in the worker is
+  not installed, and the status bar says why. `ui.installPlugin` with module bytes that no worker has checked yet
+  returns `{"pending": true}` while the worker checks them, before it is known whether the install needs approval.
+  The install then goes on in the app: an approval question, if one is needed, shows in its dialog, and the reply
+  to that `ui.installPlugin` does not report it.
+- **Running a filter.** A filter's item in Object › Plug-ins, a plug-in command, or OK in their dialog, runs the
+  filter in a worker, shown in the status bar and the progress window as a heavy filter is. The dialogs have no
+  Preview. A command's run is one undo step named after the command, as on the desktop. The page terminates the
+  worker at once on Cancel, when the document or the plug-in changes before the run ends (the status bar says to run
+  it again), and 5 s past the run's time budget when the worker has not answered (`Limit("time budget")`). The
+  budget counts from when the page starts the worker, so the worker's start-up counts toward it.
+- **Command calls.** A filter that calls commands sends each call to the page, which makes it and sends back the
+  answer before the filter goes on. The calls and the output are one undo step. While it runs, every other command
+  and edit is refused with "a plug-in is running: cancel it or wait for it to finish", and the progress window shows
+  at once, with Cancel only. Cancel undoes the calls it made.
+- At most 4 workers run at once; a fifth check or run is refused with the same message. A worker that sends more than
+  8 messages between two frames (progress reports aside), a message the page can't read, or a message of another
+  version is terminated, and the run fails.
+- Other plug-in runs still run on the page: live effects, exporters, importers, and `plugin.run`, `plugin.inspect`,
+  `plugin.install` and plug-in commands that automation runs as commands, which return their result when they end.
 
 ### Permissions
 
@@ -428,8 +484,9 @@ capability model proposed for PhotoCraft plug-ins
 - `api` is the plug-in API level the manifest is written for: `1` (the default); `2`, which adds the [host
   imports](#host-imports-api-level-2), a filter's `inputs` ([reading type, images and
   symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects); or `3`, which
-  adds a filter's `writes` ([writing type, images and symbols](#writing-type-images-and-symbols)) and `context`
-  ([document information](#document-information)). A higher one is refused. `plugin.list` and
+  adds a filter's `writes` ([writing type, images and symbols](#writing-type-images-and-symbols)), a painted live
+  effect's [`appearanceOutput`](#opacity-blending-and-effects-on-pieces) and `context` ([document
+  information](#document-information)). A higher one is refused. `plugin.list` and
   `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for are read under `doc.read`, which
   a filter that lists `inputs` must list in `permissions`, so installing it asks the user to grant them. `context` is
   not a permission either: it is read under `doc.read` in the same way, and the install prompt says that the plug-in
@@ -705,7 +762,8 @@ the module's start function, in a run that isn't a filter's run on a document, o
   of arguments and results a run. Each call costs 10,000 instructions of the run's budget, plus one for every 64 bytes
   of its arguments and its result, and the run checks Cancel and its time budget before and after each call.
 - A filter that calls commands runs on the app's main thread, so it can't ask for a heavy budget: a manifest with
-  `commandAllowlist` and `budget: "heavy"` is refused.
+  `commandAllowlist` and `budget: "heavy"` is refused. On the web it runs in a worker, and the page makes each call
+  ([The web build](#the-web-build)).
 
 ### Manifest
 
@@ -757,7 +815,13 @@ the module's start function, in a run that isn't a filter's run on a document, o
   instead of geometry alone. `true` is the only value the key takes; `false`, `null`, another type, another kind or
   `api` 1 is refused when the module is installed, and the error names `paintOutput`. Without the key the effect returns
   geometry, at any level. Hosts at `api` 1 refuse the manifest for its `api`, so such an effect never draws unpainted
-  there.
+  there. A painted effect may say `"api": 3` without other changes.
+- `appearanceOutput` (painted live effects at `api` 3 only): `true` lets the pieces, and the fills and strokes they
+  return, carry [opacity, a blending mode and effects](#opacity-blending-and-effects-on-pieces). `true` is the only
+  value the key takes; `false`, `null`, another type, an effect without `paintOutput`, another kind or an `api` below 3
+  is refused when the module is installed, and the error names `appearanceOutput`. It needs no permission beyond
+  `doc.read` and `effect.render`, which every live effect already has. Hosts at `api` 2 refuse the manifest for its
+  `api`, so such an effect never draws without its looks.
 - `extensions` (exporters and importers only, and required): 1–8 file extensions, lower-case letters and digits
   without the dot (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both
   list (`svg`): `document.export` then writes the exporter's format only when asked for by its format id, and
@@ -1150,9 +1214,9 @@ is a piece drawn by itself, in the order returned, with paints of its own:
 
 - `path` is required; `fillRule` defaults to the object's. `type` and `bounds` may be handed back as given and are
   ignored, as is a top-level `notice`. Any other key (`opacity`, `effects`, `guide`, `locked`, `name`, a top-level
-  `documentData`…) refuses the
-  result, as does a key that a paint, its color, a gradient stop, a gradient's placement or a freeform point does not
-  have, such as `opacity` on a solid paint.
+  `documentData`…) refuses the result (an effect that declares `appearanceOutput` also takes `opacity`, `blend` and
+  `effects`, [below](#opacity-blending-and-effects-on-pieces)), as does a key that a paint, its color, a gradient stop,
+  a gradient's placement or a freeform point does not have, such as `opacity` on a solid paint.
 - `fills` and `strokes` take the forms a filter returns ([Input](#input)). A piece without `fills` (or `strokes`) is
   painted with the ones the effect was given; an empty list paints none. Given ones replace the object's in order, as
   a filter's output sets them: an existing fill or stroke keeps its own effects, opacity and blending, and a new stroke
@@ -1198,11 +1262,61 @@ that fails the checks opens nothing, and neither does a decline (`{"error": …}
 returns the same output when `_context.mode` is `"place"`; an output that fails, or whose objects other than guides draw
 nothing of any width or height, places nothing.
 
+#### Opacity, blending and effects on pieces
+
+A painted live effect whose manifest also has `"api": 3` and `"appearanceOutput": true` may give each piece, and each
+fill and stroke the piece returns, three more keys:
+
+```json
+{"objects": [
+  {"path": {…}, "opacity": 0.5, "blend": "Multiply", "effects": [{"id": "path.offsetPath", "params": {"offset": 4}}],
+   "fills": [{"type": "solid", …}, {"paint": {"type": "solid", …}, "opacity": 0.25, "blend": "Screen"}],
+   "strokes": [{"paint": {…}, "width": 2, "effects": [{"id": "stylize.dropShadow"}]}]}
+]}
+```
+
+- `opacity` is a number from 0 to 1 (nothing is clamped). `blend` is one of `Normal`, `Darken`, `Multiply`,
+  `ColorBurn`, `Lighten`, `Screen`, `ColorDodge`, `Overlay`, `SoftLight`, `HardLight`, `Difference`, `Exclusion`, `Hue`,
+  `Saturation`, `Color` and `Luminosity`, spelled exactly so. `effects` is a list of at most 16 effect records
+  `{"id", "params"?, "visible"?}`, and one result carries at most 4,096 of them over all its pieces, fills and strokes.
+- A fill that carries any of them is written `{"paint": <paint>, "opacity"?, "blend"?, "effects"?}`; a fill without
+  them may stay a bare paint. A stroke takes them beside its `paint`, `width`, `join`, `cap` and `miterLimit`.
+- An effect record names a built-in effect that `effect.list` lists, other than a 3D effect or a Pathfinder effect
+  (`pathfinder.*`, which has nothing to combine on a piece's one path), with parameters that effect takes, each of the
+  type of its default, within the range `effect.list` gives for it, where it gives one, and one of the choices it
+  lists for it, where it lists them (Roughen's `points` is `"smooth"` or `"corner"`). Curves' `points` is
+  `"x,y x,y …"` or `[[x, y], …]`, each number from 0 to 255, and a Transform's `copies` and `reference` are whole numbers. The values
+  `effect.apply` checks for one effect are checked the same way: an SVG filter's `xml`, `scale`, `origin`, `axes` and
+  `name`, a Warp's `version`, a `color` (`"#rrggbb"`, `[r, g, b]` with each component from 0 to 1, or a color object
+  whose RGB, CMYK or Gray components are each from 0 to 1, or whose Lab `l` is from 0 to 100 and `a` and `b` are any
+  finite numbers), a Levels or Curves `channel` and a Radial Blur's
+  center. A Drop Shadow's, Inner Glow's or Outer Glow's `mode` must name a blend mode (`"multiply"`, `"color-burn"`).
+  Omitted parameters take the effect's defaults. On a fill or stroke only raster effects are taken, and only from an effect in the object's stack:
+  the fills or strokes that an effect on a fill or a stroke returns take `opacity` and `blend` but no `effects` (its
+  pieces still take them). A plug-in effect (`plugin.<id>`), this effect's own included, is refused, so the effects a
+  piece carries never run a plug-in.
+- Left out, a piece's opacity is 100%, its blending mode Normal and its effects none; a fill or stroke keeps
+  the opacity, blending and effects it would have without the keys. Given, a piece's opacity multiplies the object's,
+  and its effects and a fill's or stroke's come after the ones it already has. The object's own opacity, blending mode
+  and later effects still apply once to all the pieces together.
+- A piece's geometry effects reshape it before the effects after this one in the object's stack, which then run on
+  the reshaped piece once. Its raster effects draw on the piece, and those listed before a Transform effect follow it
+  as an object's do: a Drop Shadow before a scale of 200% draws at twice its offset. What the geometry effects make
+  counts against the budget of the object's geometry effects, with the pieces: each piece's effects run within what
+  the pieces and the pieces before it leave of it. When a piece's effects would go past that, or a Transform effect
+  would make fewer copies than it asks for, the pieces after it are not built, none of the effect's pieces are drawn,
+  and the object, or the fill or stroke the effect is on, draws the geometry it was given.
+- A bad value refuses the whole result as any other fault does, naming the field: for example
+  `objects[1].blend: unknown blending mode; …` or `objects[0].fills[1].effects[2]: plug-in effects are not allowed in
+  returned effects`. Without `appearanceOutput`, the three keys are refused as before.
+- The effect stays live: the document holds only the effect record, and the looks are drawn, exported and expanded
+  (Object › Expand Appearance) as the pieces are.
+
 ## Writing a plug-in in Rust
 
 [`crates/plugins/example`](../crates/plugins/example) is a complete object filter, **Desaturate**: it moves every
-colour of the selection towards grey, in each colour's own model, using `serde_json` (no imports, no WASI). Build it
-with:
+colour of the selection towards grey, in each colour's own model, using `serde_json` (no imports, no WASI). It hands
+each object back without its `path`, so the geometry stays exactly as it was. Build it with:
 
 ```sh
 rustup target add wasm32-unknown-unknown
@@ -1224,6 +1338,61 @@ and `wat::when_given` a plug-in whose output depends on whether its input or par
 in a live effect's geometry. `wat::reporting` and `wat::cooperating` build level 2 plug-ins that import the host
 functions.
 
+## JavaScript filters
+
+An object filter may also be written in JavaScript (ECMAScript 5.1, the language VectorCraft's scripts use). The
+plug-in is two files in one folder: a manifest, `<name>.vcplugin`, and the `.js` file it names in `script`.
+
+```json
+{"id": "org.example.tint", "name": "Tint Blue", "kind": "filter", "runtime": "js", "script": "tint.js",
+ "params": {"blue": {"type": "number", "min": 0, "max": 1, "default": 1}}}
+```
+
+```js
+function run(input, params) {
+  return {objects: input.objects.map(function (o) {
+    return {id: o.id, fills: [{type: "solid", color: {model: "rgb", r: 0, g: 0, b: params.blue}}]};
+  })};
+}
+```
+
+The manifest has the keys of a module's [manifest](#manifest), with `"runtime": "js"` and `script`, a file name of 1 to
+128 bytes ending in `.js`, without a folder or `:`, and not starting with `.`. Left out, `runtime` is WebAssembly, so
+existing modules load as before; a module's own manifest may not give `"js"`. A JavaScript plug-in is a filter (`kind`
+`"filter"`), and of the host's [permissions](#permissions) it may list `progress` but not `settings`, `cache` or
+`commands`, so it has no `commandAllowlist`.
+
+`plugin.install {path}` and `plugin.inspect {path}` take the `.vcplugin` file, and File › Open and `plugin.reload`
+install it like a `.wasm` file. The host refuses a manifest without `script`, with `source`, or with a `runtime` other
+than `"js"`, and refuses a manifest file over 64 KiB or a script over 8 MiB by its size before reading it; under
+automation read roots the script must be inside them too. The host reads the two files into one JSON object, the
+manifest with the script's text in `source`: `plugin.install {dataBase64}` takes that object, the `Plug-ins` folder keeps
+it as the plug-in's file, and `hash` is its SHA-256, so a changed manifest or script needs a new approval. Installing
+parses the script and runs none of it; a syntax error is an install error with its line and column.
+
+Each run gets a new interpreter with its own heap, so nothing one run defines or changes, the built-ins' prototypes
+included, reaches the next. The script's top level runs, then `run(input, params)` is called with the parsed
+[input](#input) and [parameters](#parameters), and what it returns is written as JSON and checked
+as a module's [output](#output) is, before anything in the document changes. The global object holds the language's
+built-ins and `vc`:
+
+| Member | What it is |
+|---|---|
+| `vc.input`, `vc.params` | The input and parameter JSON as text. |
+| `vc.progress(done, total)` | As `vc_progress` ([host imports](#host-imports-api-level-2)); with `progress` only. |
+| `vc.cancelled()` | `true` once the user cancelled or the time budget ran out; with `progress` only. |
+| `vc.log(level, text)` | Writes a log line as `vc_log` does: `level` 0 (error) to 3 (debug), `true` when written and `false` when the run's log budget dropped it; with `progress` only. |
+
+The realm has no `$`, `File`, `Folder`, `app`, `#include` or other part of the script runner, no file, network or
+command access, and no clock: `Date.now()` is `NaN`. A run gets a filter's instruction budget (one budget for the top
+level and the call, plus the budget per byte of input) and wall-clock budget, checked between slices of 1,000,000
+instructions, where Cancel stops it too; its heap is at most the interpreter's default heap and the plug-in's memory cap (512 MiB), whichever is smaller, and
+an input and parameters larger than an eighth of the heap fail the run with the memory-budget error for a selection
+too large to hand over. A thrown error, a limit, a missing `run`, a result that is not an object JSON can write, or an
+output larger than 64 MiB fails the run, and the document and undo history stay as they were. The error names the
+plug-in, its script and, for an error in the script, the line and column, for example `plug-in exceeded its
+instruction budget (org.example.tint, tint.js line 3, column 5)`.
+
 ## Performance
 
 The interpreter costs roughly 10–100× native speed per instruction. Filters handle a selection in one call, so a
@@ -1234,8 +1403,7 @@ per change of their input, parameters or paints (results are cached), not per fr
 
 - Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, importers
   that make type, images, layers or artboards, and placed importer files that stay linked to their file.
-- Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
-  it returns), filters that add or delete type, images or symbol instances or change their pixels and other fields
-  (a filter at `api` 3 changes [some of their fields](#writing-type-images-and-symbols)).
+- Filters that add or delete type, images or symbol instances or change their pixels and other fields (a filter at
+  `api` 3 changes [some of their fields](#writing-type-images-and-symbols)).
 - Scripts can't run object filters (`plugin.*` commands are refused there), so a script doesn't change what Apply
   Last Filter runs.

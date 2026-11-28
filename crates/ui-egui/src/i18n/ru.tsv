@@ -4956,6 +4956,14 @@ axis	Both	Оба
 	The script asks to read and write a folder you choose, with everything in it.	Скрипт запрашивает чтение и запись выбранной вами папки со всем её содержимым.
 	Allow Once	Разрешить один раз
 	Always Allow This Script	Всегда разрешать этот скрипт
+	No script has kept file access.	Ни у одного скрипта нет сохранённого доступа к файлам.
+	Read file	Чтение файла
+	Read and write file	Чтение и запись файла
+	Read and write folder	Чтение и запись папки
+	Revoke	Отозвать
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	«Отозвать» удаляет доступ, сохранённый для каждой версии скрипта. Доступ к папке распространяется на всё её содержимое.
+@msg	Script file access revoked	Доступ скрипта к файлам отозван
+@msg	The script file access was already revoked	Доступ скрипта к файлам уже был отозван
 	Deny	Запретить
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт может изменять открытые документы и записывать файлы с помощью выполняемых команд. Запускайте только те скрипты, которым доверяете.
 	Do not show this warning again	Больше не показывать это предупреждение
@@ -5140,6 +5148,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` для файлового диалога скрипта должен быть одним из: once, always, deny, stop
 @msg	choose a file or folder first, or deny	сначала выберите файл или папку либо откажите
 @msg	the script file permissions could not be saved: {e}	не удалось сохранить разрешения скриптов на файлы: {e}
+@msg	the script file permissions could not be read: {e}	не удалось прочитать разрешения скриптов на файлы: {e}
 @msg	this script's file access can be allowed only once	доступ этого скрипта к файлам можно разрешить только один раз
 @msg	Only the person at the keyboard can allow a script's file access	Разрешить скрипту доступ к файлам может только человек за клавиатурой
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Скрипт получает не больше 2 048 файлов: файлы, выбранные после них, пропущены
@@ -7052,6 +7061,15 @@ axis	Y Axis	Ось Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущен объект только для чтения: верните его как один {{"id": …}} или в том виде, в каком он был передан
 @msg	a string	строка
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	у обводки есть только `paint`, `width`, `join`, `cap` и `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	у части рисующего динамического эффекта есть только `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` и `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	у обводки есть только `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` и `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` может быть только true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` допустим только для динамического эффекта, который объявляет `paintOutput`, с `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` должно быть числом от 0 до 1
+@msg	unknown blending mode; `blend` is one of {_1}	неизвестный режим наложения; `blend` принимает одно из значений {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` должен быть массивом не более чем из {MAX_LOOK_EFFECTS} записей
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	результат содержит не более {MAX_RESULT_EFFECTS} записей эффектов
+@msg	this host takes no effects here	этот хост здесь не принимает эффекты
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обводка должна иметь вид {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	эффект должен иметь вид {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	эффект на заливке возвращает только `fills`
@@ -7203,6 +7221,21 @@ axis	Y Axis	Ось Y
 @msg	time budget	бюджет времени
 @msg	memory budget (the selection is too large to hand over)	бюджет памяти (выделение слишком велико для передачи)
 @msg	output size ({what} is {len} bytes, limit {max})	размер вывода ({what}: {len} байт, предел {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script}, строка {line}, столбец {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	бюджет памяти
+@msg	call depth	глубина вызовов
+@msg	run(input, params) returned no output object	run(input, params) не вернула объект вывода
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	для `runtime` "js" нужен `script`: имя файла .js модуля рядом с манифестом
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` должен быть именем файла .js в папке манифеста: 1-128 байт, без папки, без `:`, не начинаясь с `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` содержит текст скрипта и задаётся только в JSON, который принимает dataBase64 команды plugin.install: файл .vcplugin называет свой скрипт в `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	манифест модуля JavaScript задаёт `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" предназначен для фильтра объектов (`kind` "filter"), а не для `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	модуль JavaScript не может перечислять разрешение `{name}`: из разрешений хоста он может перечислить `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	манифест модуля WebAssembly не указывает `runtime`: "js" предназначен для модуля JavaScript
+@msg	a JavaScript plug-in makes no command calls	модуль JavaScript не вызывает команды
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) принимает два числа
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) принимает уровень, 0 (ошибка), 1 (предупреждение), 2 (информация) или 3 (отладка), и строку
 @msg	the plug-in's grant can't be removed from the plug-in store	разрешение модуля нельзя удалить из хранилища модулей
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешение `{shown}` зарезервировано для будущего API модулей; этот хост его не выдаёт
 @msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
@@ -8463,6 +8496,7 @@ breakText	Glyphs	Глифы
 	Place Brush Art	Поместить рисунок кисти
 	Replace Brush Art	Заменить рисунок кисти
 	Replace Pattern Art	Заменить рисунок узора
+	Place Pattern Art	Поместить рисунок узора
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обводки используют эту кисть. Применить новый рисунок к этим обводкам или оставить их как есть и добавить копию кисти с новым рисунком?
 	Apply to Strokes	Применить к обводкам
 	Leave Strokes	Оставить обводки
@@ -8532,6 +8566,8 @@ breakText	Glyphs	Глифы
 	Tangent Circle	Касательная окружность
 	Tangent Circle Tool	Инструмент «Касательная окружность»
 	No tangent circle here	Здесь нет касательной окружности
+	Ask For Circle Radius	Запрашивать радиус окружности
+	Auto-Update Default	Автоматически обновлять значение по умолчанию
 	Circle:	Окружность:
 @msg	`ids` names an object twice	`ids` указывает объект дважды
 @msg	select two or three paths or compound paths	выделите два или три контура или составных контура

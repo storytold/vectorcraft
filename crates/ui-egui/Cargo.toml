@@ -101,6 +101,7 @@ egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 egui_extras = { workspace = true }
 vectorcraft-apischema = { workspace = true }
 vectorcraft-testkit = { workspace = true }
+vectorcraft-tools = { workspace = true, features = ["testing"] }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 wat = { workspace = true }

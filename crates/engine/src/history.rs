@@ -25,6 +25,9 @@ pub struct HistoryEntry {
     next: usize,
     /// The template and name `label` was made from ([`Session::edit_named`]).
     pub(crate) named: Option<NamedStep>,
+    /// The built-in effect the step applied or edited, when the step is named after it
+    /// ([`Session::edit_effect`]).
+    pub(crate) effect: Option<&'static str>,
     /// A number no other step takes ([`History::step`]).
     serial: u64,
     /// Original and changed new-art paints, only for steps that change them: a document color mode
@@ -49,6 +52,7 @@ impl Clone for HistoryEntry {
             next_bytes: self.next_bytes,
             next: self.next,
             named: self.named.clone(),
+            effect: self.effect,
             serial: self.serial,
             color_mode_paints: self.color_mode_paints.clone(),
             color_mode_bytes: self.color_mode_bytes,
@@ -61,6 +65,12 @@ impl Clone for HistoryEntry {
 fn next_serial() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The name of the undo step that applies or edits built-in effect `id`: its menu label without
+/// the ellipsis. `None` for an id no built-in effect has.
+pub(crate) fn effect_step_label(id: &str) -> Option<&'static str> {
+    vectorcraft_render::effects::built_in_effect(id).map(|(_, label)| label.trim_end_matches('…'))
 }
 
 /// A step name made by filling the `{name}` placeholder of a template with a name
@@ -95,6 +105,7 @@ impl HistoryEntry {
             next_bytes,
             next: std::ptr::from_ref(next) as usize,
             named: None,
+            effect: None,
             serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,
@@ -107,6 +118,13 @@ impl HistoryEntry {
     /// since it was recorded.
     pub fn named(&self) -> Option<&NamedStep> {
         self.named.as_ref().filter(|n| n.label() == self.label)
+    }
+
+    /// The id of the built-in effect the step applied or edited, while the step's label is still
+    /// the effect's name: `None` for any other step, and for one whose label was changed since it
+    /// was recorded.
+    pub fn effect(&self) -> Option<&'static str> {
+        self.effect.filter(|id| effect_step_label(id) == Some(self.label.as_str()))
     }
 
     /// The step that undoing (redoing) the step `costs` came from makes: it keeps `doc`, the
@@ -128,6 +146,7 @@ impl HistoryEntry {
             next_bytes: costs.bytes,
             next: Arc::as_ptr(now) as usize,
             named: None,
+            effect: None,
             serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,

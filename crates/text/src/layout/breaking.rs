@@ -582,6 +582,8 @@ pub(super) fn break_line<'k>(
     let first = i + g.get(i..).unwrap_or_default().iter().take_while(|h| h.len == 0).count();
     let mut j = i;
     while j < g.len() {
+        #[cfg(test)]
+        super::count_layout_work(1);
         let gl = &g[j];
         let mut cluster_end = j + 1;
         while g.get(cluster_end).is_some_and(|next| next.byte == gl.byte && (next.len == 0) == (gl.len == 0)) {

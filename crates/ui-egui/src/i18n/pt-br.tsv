@@ -6127,6 +6127,14 @@ variable-list-end	{0}, {1}	{0} e {1}
 	The script asks to read and write a folder you choose, with everything in it.	O script pede para ler e gravar uma pasta que você escolher, com todo o seu conteúdo.
 	Allow Once	Permitir uma vez
 	Always Allow This Script	Sempre permitir este script
+	No script has kept file access.	Nenhum script manteve acesso a arquivos.
+	Read file	Ler arquivo
+	Read and write file	Ler e gravar arquivo
+	Read and write folder	Ler e gravar pasta
+	Revoke	Revogar
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revogar remove o acesso mantido para cada versão do script. O acesso a uma pasta abrange tudo o que ela contém.
+@msg	Script file access revoked	Acesso do script a arquivos revogado
+@msg	The script file access was already revoked	O acesso do script a arquivos já estava revogado
 	Deny	Negar
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Um script pode alterar os documentos abertos e gravar arquivos pelos comandos que executa. Execute apenas scripts em que você confia.
 	Do not show this warning again	Não mostrar este aviso novamente
@@ -6292,6 +6300,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` para a caixa de diálogo de arquivo de um script deve ser um destes: once, always, deny, stop
 @msg	choose a file or folder first, or deny	escolha primeiro um arquivo ou uma pasta, ou negue
 @msg	the script file permissions could not be saved: {e}	não foi possível salvar as permissões de arquivos dos scripts: {e}
+@msg	the script file permissions could not be read: {e}	não foi possível ler as permissões de arquivos dos scripts: {e}
 @msg	this script's file access can be allowed only once	o acesso a arquivos deste script só pode ser permitido uma vez
 @msg	Only the person at the keyboard can allow a script's file access	Somente a pessoa ao teclado pode permitir o acesso a arquivos de um script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Um script recebe no máximo 2.048 arquivos: os arquivos escolhidos depois deles foram deixados de fora
@@ -7331,6 +7340,15 @@ axis	Y Axis	Eixo Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {{"id": …}} sozinho ou como foi recebido
 @msg	a string	uma string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	um traçado tem apenas `paint`, `width`, `join`, `cap` e `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	uma peça de um efeito dinâmico de pintura tem apenas `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` e `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	um traçado tem apenas `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` e `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` só pode ser true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` é só para um efeito dinâmico que declara `paintOutput`, com `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` deve ser um número de 0 a 1
+@msg	unknown blending mode; `blend` is one of {_1}	modo de mesclagem desconhecido; `blend` é um de {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` deve ser uma lista de no máximo {MAX_LOOK_EFFECTS} registros
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	um resultado leva no máximo {MAX_RESULT_EFFECTS} registros de efeito
+@msg	this host takes no effects here	este host não aceita efeitos aqui
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	um traçado deve ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	um efeito deve ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	um efeito em um preenchimento retorna apenas `fills`
@@ -7482,6 +7500,21 @@ axis	Y Axis	Eixo Y
 @msg	time budget	orçamento de tempo
 @msg	memory budget (the selection is too large to hand over)	orçamento de memória (a seleção é grande demais para ser entregue)
 @msg	output size ({what} is {len} bytes, limit {max})	tamanho da saída ({what} tem {len} bytes, limite {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} linha {line}, coluna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	orçamento de memória
+@msg	call depth	profundidade de chamadas
+@msg	run(input, params) returned no output object	run(input, params) não retornou nenhum objeto de saída
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" precisa de `script`: o nome do arquivo .js do plug-in, ao lado do manifesto
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` deve ser o nome de um arquivo .js na pasta do manifesto: 1-128 bytes, sem pasta, sem `:`, sem começar com `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` é o texto do script, dado só no JSON que o dataBase64 de plugin.install recebe: um arquivo .vcplugin indica seu script em `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	o manifesto de um plug-in JavaScript indica `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" é para um filtro de objetos (`kind` "filter"), não para `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	um plug-in JavaScript não pode listar a permissão `{name}`: das permissões do host, ele pode listar `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	o manifesto de um módulo WebAssembly omite `runtime`: "js" é para um plug-in JavaScript
+@msg	a JavaScript plug-in makes no command calls	um plug-in JavaScript não chama comandos
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) recebe dois números
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) recebe um nível, 0 (erro), 1 (aviso), 2 (informação) ou 3 (depuração), e uma string
 @msg	the plug-in's grant can't be removed from the plug-in store	a permissão do plug-in não pode ser removida do armazenamento de plug-ins
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a permissão `{shown}` está reservada para uma API de plug-in futura; este host não a concede
 @msg	unknown permission `{shown}`	permissão desconhecida `{shown}`
@@ -8491,6 +8524,7 @@ breakText	Glyphs	Glifos
 	Place Brush Art	Colocar Arte do Pincel
 	Replace Brush Art	Substituir Arte do Pincel
 	Replace Pattern Art	Substituir Arte do Padrão
+	Place Pattern Art	Colocar Arte do Padrão
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Traçados usam este pincel. Aplicar a nova arte a esses traçados, ou deixá-los como estão e adicionar uma cópia do pincel com a nova arte?
 	Apply to Strokes	Aplicar aos Traçados
 	Leave Strokes	Manter Traçados
@@ -8560,6 +8594,8 @@ breakText	Glyphs	Glifos
 	Tangent Circle	Círculo tangente
 	Tangent Circle Tool	Ferramenta Círculo tangente
 	No tangent circle here	Nenhum círculo tangente aqui
+	Ask For Circle Radius	Perguntar o Raio do Círculo
+	Auto-Update Default	Atualizar o Padrão Automaticamente
 	Circle:	Círculo:
 @msg	`ids` names an object twice	`ids` indica um objeto duas vezes
 @msg	select two or three paths or compound paths	selecione dois ou três caminhos ou caminhos compostos

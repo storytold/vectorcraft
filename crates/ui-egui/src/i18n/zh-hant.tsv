@@ -2806,6 +2806,14 @@ file-filter	Templates	範本
 	The script asks to read and write a folder you choose, with everything in it.	指令碼要求讀寫您選擇的資料夾及其中的所有內容。
 	Allow Once	允許一次
 	Always Allow This Script	一律允許此指令碼
+	No script has kept file access.	沒有指令碼保留檔案存取權。
+	Read file	讀取檔案
+	Read and write file	讀取和寫入檔案
+	Read and write folder	讀取和寫入資料夾
+	Revoke	收回權限
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	「收回權限」會移除為指令碼每個版本保留的存取權。資料夾的存取權包含其中的所有內容。
+@msg	Script file access revoked	已收回指令碼的檔案存取權
+@msg	The script file access was already revoked	指令碼的檔案存取權已被收回
 	Deny	拒絕
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	指令碼可以變更開啟的文件，並可透過其執行的命令寫入檔案。請只執行您信任的指令碼。
 	Do not show this warning again	不再顯示此警告
@@ -2980,6 +2988,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	指令碼檔案對話框的 `answer` 必須是下列之一：once、always、deny、stop
 @msg	choose a file or folder first, or deny	請先選擇檔案或資料夾，或拒絕
 @msg	the script file permissions could not be saved: {e}	無法儲存指令碼的檔案權限：{e}
+@msg	the script file permissions could not be read: {e}	無法讀取指令碼的檔案權限：{e}
 @msg	this script's file access can be allowed only once	此指令碼的檔案存取只能允許一次
 @msg	Only the person at the keyboard can allow a script's file access	只有鍵盤前的人才能允許指令碼存取檔案
 @msg	A script is given at most 2,048 files: the files picked after them were left out	指令碼最多取得 2,048 個檔案：之後選擇的檔案已略去
@@ -7083,6 +7092,15 @@ axis	Y Axis	Y 軸
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一個唯讀物件：請以單獨的 {{"id": …}} 或原樣傳回它
 @msg	a string	字串
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	筆畫只有 `paint`、`width`、`join`、`cap` 和 `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	繪製型即時效果的片段只有 `path`、`fillRule`、`fills`、`strokes`、`opacity`、`blend` 和 `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	筆畫只有 `paint`、`width`、`join`、`cap`、`miterLimit`、`opacity`、`blend` 和 `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` 只能為 true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` 僅適用於宣告了 `paintOutput` 的 `api` 3 即時效果
+@msg	`opacity` must be a number from 0 to 1	`opacity` 必須是 0 到 1 之間的數字
+@msg	unknown blending mode; `blend` is one of {_1}	未知的混合模式；`blend` 是 {_1} 之一
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` 必須是最多 {MAX_LOOK_EFFECTS} 筆記錄的陣列
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	一個結果最多帶 {MAX_RESULT_EFFECTS} 筆效果記錄
+@msg	this host takes no effects here	此主機不在此處接受效果
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	筆畫必須是 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 形式
 @msg	an effect must be {{"id", "params"?, "visible"?}}	效果必須是 {{"id", "params"?, "visible"?}} 形式
 @msg	an effect on a fill returns only `fills`	填色上的效果只傳回 `fills`
@@ -7234,6 +7252,21 @@ axis	Y Axis	Y 軸
 @msg	time budget	時間預算
 @msg	memory budget (the selection is too large to hand over)	記憶體預算（所選內容太大，無法傳遞）
 @msg	output size ({what} is {len} bytes, limit {max})	輸出大小（{what} 為 {len} 位元組，上限 {max}）
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason}（{id}，{script} 第 {line} 行，第 {column} 欄）
+@msg	{reason} ({id}, {script})	{reason}（{id}，{script}）
+@msg	memory budget	記憶體預算
+@msg	call depth	呼叫深度
+@msg	run(input, params) returned no output object	run(input, params) 未傳回輸出物件
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" 需要 `script`：資訊清單旁增效模組 .js 檔案的名稱
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` 必須是資訊清單所在資料夾中 .js 檔案的名稱：1-128 位元組，不含資料夾，不含 `:`，不以 `.` 開頭
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` 是指令碼的文字，只在 plugin.install 的 dataBase64 接受的 JSON 中提供：.vcplugin 檔案在 `script` 中指定其指令碼
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript 增效模組的資訊清單指定 `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" 用於物件濾鏡（`kind` "filter"），而不是 `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript 增效模組不能列出權限 `{name}`：在主機的權限中，它可以列出 `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly 模組的資訊清單不填寫 `runtime`："js" 用於 JavaScript 增效模組
+@msg	a JavaScript plug-in makes no command calls	JavaScript 增效模組不呼叫命令
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) 接受兩個數字
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) 接受一個層級（0（錯誤）、1（警告）、2（資訊）或 3（偵錯））和一個字串
 @msg	the plug-in's grant can't be removed from the plug-in store	無法從增效模組存放區移除該增效模組的授權
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	權限 `{shown}` 保留給日後的增效模組 API；此主機不授予該權限
 @msg	unknown permission `{shown}`	未知權限 `{shown}`
@@ -8163,6 +8196,7 @@ breakText	Glyphs	字符
 	Place Brush Art	置入筆刷圖稿
 	Replace Brush Art	取代筆刷圖稿
 	Replace Pattern Art	取代圖樣圖稿
+	Place Pattern Art	置入圖樣圖稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有筆畫使用了此筆刷。要將新圖稿套用到這些筆畫，還是保留筆畫不變並加入一個使用新圖稿的筆刷複本？
 	Apply to Strokes	套用至筆畫
 	Leave Strokes	保留筆畫
@@ -8232,6 +8266,8 @@ breakText	Glyphs	字符
 	Tangent Circle	相切圓
 	Tangent Circle Tool	相切圓工具
 	No tangent circle here	此處沒有相切圓
+	Ask For Circle Radius	詢問圓半徑
+	Auto-Update Default	自動更新預設值
 	Circle:	圓：
 @msg	`ids` names an object twice	`ids` 將同一個物件指定了兩次
 @msg	select two or three paths or compound paths	請選取兩個或三個路徑或複合路徑

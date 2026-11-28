@@ -101,6 +101,50 @@ fn corner_widgets_hide_above_the_preference_angle() {
     assert!(corners(&app, app.session.tool_id(), app.view_info().zoom).is_none());
 }
 
+/// #1232: the pointer within 5 screen points of a corner widget gives the cut of the corner it controls, in the
+/// layer colour, with Direct Selection, the Selection tool and the Rectangle tool. It gives none with a mouse button
+/// down (a press on the widget or a pan), during a drag from the widget, off the canvas, away from the widgets, or
+/// where the widget is hidden by Hide Corner Widget for angles greater than.
+#[test]
+fn hovering_a_corner_widget_highlights_its_corner() {
+    let mut app = new_app(&[]);
+    let id = make(&mut app, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100}));
+    app.session.execute("object.setLiveShape", &json!({"id": id, "radius": 20})).unwrap();
+    let color = layer(&app, id);
+    let zoom = app.view_info().zoom;
+    let bounds = |cut: &vectorcraft_geom::BezPath| {
+        let b = vectorcraft_geom::Shape::bounding_box(cut);
+        [b.x0, b.y0, b.x1, b.y1].map(|v| (v * 1e6).round() / 1e6)
+    };
+    let mut top_left = vectorcraft_geom::Point::ZERO;
+    for tool in ["directSelection", "selection", "rectangle"] {
+        app.select_tool(tool);
+        let st = app.session.active().unwrap();
+        top_left =
+            vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, zoom, tool == "directSelection").unwrap().visible().next().unwrap();
+        let (got, cut) = corner_hover(&app, tool, zoom, Some(top_left), false).unwrap_or_else(|| panic!("{tool}: over the widget"));
+        assert_eq!(got, color, "{tool}");
+        assert_eq!(bounds(&cut), [100.0, 100.0, 120.0, 120.0], "{tool}: the top-left arc");
+        let near = top_left + vectorcraft_geom::Vec2::new(3.0 / zoom, -3.0 / zoom);
+        assert!(corner_hover(&app, tool, zoom, Some(near), false).is_some(), "{tool}: within reach");
+        let far = top_left + vectorcraft_geom::Vec2::new(7.0 / zoom, 0.0);
+        assert!(corner_hover(&app, tool, zoom, Some(far), false).is_none(), "{tool}: past a press's reach");
+        assert!(corner_hover(&app, tool, zoom, Some(vectorcraft_geom::Point::new(150.0, 150.0)), false).is_none(), "{tool}: away from the widgets");
+        assert!(corner_hover(&app, tool, zoom, None, false).is_none(), "{tool}: off the canvas");
+        assert!(corner_hover(&app, tool, zoom, Some(top_left), true).is_none(), "{tool}: a button down");
+        let inward = (top_left.x + 8.0, top_left.y + 8.0);
+        drag(&mut app, (top_left.x, top_left.y), inward);
+        assert!(app.session.tool_busy(), "{tool}");
+        assert!(corner_hover(&app, tool, zoom, Some(top_left), false).is_none(), "{tool}: during the drag");
+        pointer(&mut app, PointerKind::Up, inward);
+        app.session.execute("edit.undo", &json!({})).unwrap();
+    }
+    app.select_tool("directSelection");
+    assert!(corner_hover(&app, "directSelection", zoom, Some(top_left), false).is_some(), "Direct Selection, before the preference");
+    app.session.execute("prefs.set", &json!({"key": "hideCornerWidgetAbove", "value": 80})).unwrap();
+    assert!(corner_hover(&app, "directSelection", zoom, Some(top_left), false).is_none(), "hidden above the angle");
+}
+
 #[test]
 fn a_resize_drag_keeps_the_bounding_box_at_the_new_bounds() {
     for real_time in [true, false] {

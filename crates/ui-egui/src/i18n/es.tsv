@@ -4918,6 +4918,14 @@ axis	Both	Ambos
 	The script asks to read and write a folder you choose, with everything in it.	El script pide leer y escribir una carpeta que usted elija, con todo su contenido.
 	Allow Once	Permitir una vez
 	Always Allow This Script	Permitir siempre este script
+	No script has kept file access.	Ningún script tiene acceso a archivos guardado.
+	Read file	Leer archivo
+	Read and write file	Leer y escribir archivo
+	Read and write folder	Leer y escribir carpeta
+	Revoke	Revocar
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revocar quita el acceso guardado para cada versión del script. El acceso a una carpeta abarca todo su contenido.
+@msg	Script file access revoked	Acceso del script a archivos revocado
+@msg	The script file access was already revoked	El acceso del script a archivos ya estaba revocado
 	Deny	Denegar
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script puede cambiar los documentos abiertos y escribir archivos mediante los comandos que ejecuta. Ejecute solo scripts de confianza.
 	Do not show this warning again	No volver a mostrar esta advertencia
@@ -5115,6 +5123,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` para el cuadro de diálogo de archivo de un script debe ser uno de: once, always, deny, stop
 @msg	choose a file or folder first, or deny	elija primero un archivo o una carpeta, o deniegue
 @msg	the script file permissions could not be saved: {e}	no se pudieron guardar los permisos de archivos de los scripts: {e}
+@msg	the script file permissions could not be read: {e}	no se pudieron leer los permisos de archivos de los scripts: {e}
 @msg	this script's file access can be allowed only once	el acceso a archivos de este script solo se puede permitir una vez
 @msg	Only the person at the keyboard can allow a script's file access	Solo la persona que está en el teclado puede permitir el acceso a archivos de un script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Un script recibe como máximo 2.048 archivos: los archivos elegidos después de ellos se omitieron
@@ -7408,6 +7417,15 @@ axis	Y Axis	Eje Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	se omitió un objeto de solo lectura: devuélvalo como {{"id": …}} solo o tal como se recibió
 @msg	a string	una cadena
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un trazo solo tiene `paint`, `width`, `join`, `cap` y `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	una pieza de un efecto dinámico de pintura solo tiene `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` y `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	un trazo solo tiene `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` y `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` solo puede ser true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` solo es para un efecto dinámico que declara `paintOutput`, con `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` debe ser un número de 0 a 1
+@msg	unknown blending mode; `blend` is one of {_1}	modo de fusión desconocido; `blend` es uno de {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` debe ser una lista de {MAX_LOOK_EFFECTS} registros como máximo
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	un resultado lleva como máximo {MAX_RESULT_EFFECTS} registros de efecto
+@msg	this host takes no effects here	este host no admite efectos aquí
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un trazo debe ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	un efecto debe ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un efecto en un relleno solo devuelve `fills`
@@ -7559,6 +7577,21 @@ axis	Y Axis	Eje Y
 @msg	time budget	presupuesto de tiempo
 @msg	memory budget (the selection is too large to hand over)	presupuesto de memoria (la selección es demasiado grande para entregarla)
 @msg	output size ({what} is {len} bytes, limit {max})	tamaño de salida ({what} ocupa {len} bytes, límite {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} línea {line}, columna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	presupuesto de memoria
+@msg	call depth	profundidad de llamadas
+@msg	run(input, params) returned no output object	run(input, params) no devolvió ningún objeto de salida
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" necesita `script`: el nombre del archivo .js del plugin, junto al manifiesto
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` debe ser el nombre de un archivo .js en la carpeta del manifiesto: 1-128 bytes, sin carpeta, sin `:`, sin empezar por `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` es el texto del script y solo se da en el JSON que toma el dataBase64 de plugin.install: un archivo .vcplugin nombra su script en `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	el manifiesto de un plugin de JavaScript indica `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" es para un filtro de objetos (`kind` "filter"), no para `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	un plugin de JavaScript no puede incluir el permiso `{name}`: de los permisos del host puede incluir `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	el manifiesto de un módulo WebAssembly omite `runtime`: "js" es para un plugin de JavaScript
+@msg	a JavaScript plug-in makes no command calls	un plugin de JavaScript no llama a comandos
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) recibe dos números
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) recibe un nivel, 0 (error), 1 (advertencia), 2 (información) o 3 (depuración), y una cadena
 @msg	the plug-in's grant can't be removed from the plug-in store	el permiso del plugin no se puede quitar del almacén de plugins
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permiso `{shown}` está reservado para una API de plugins posterior; este host no lo concede
 @msg	unknown permission `{shown}`	permiso desconocido `{shown}`
@@ -8449,6 +8482,7 @@ breakText	Glyphs	Glifos
 	Place Brush Art	Colocar ilustración del pincel
 	Replace Brush Art	Reemplazar ilustración del pincel
 	Replace Pattern Art	Reemplazar ilustración del motivo
+	Place Pattern Art	Colocar ilustración del motivo
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Algunos trazos usan este pincel. ¿Aplicar la nueva ilustración a esos trazos, o dejarlos como están y añadir una copia del pincel con la nueva ilustración?
 	Apply to Strokes	Aplicar a los trazos
 	Leave Strokes	Dejar los trazos
@@ -8518,6 +8552,8 @@ breakText	Glyphs	Glifos
 	Tangent Circle	Círculo tangente
 	Tangent Circle Tool	Herramienta Círculo tangente
 	No tangent circle here	No hay círculo tangente aquí
+	Ask For Circle Radius	Preguntar el radio del círculo
+	Auto-Update Default	Actualizar automáticamente el valor predeterminado
 	Circle:	Círculo:
 @msg	`ids` names an object twice	`ids` indica un objeto dos veces
 @msg	select two or three paths or compound paths	seleccione dos o tres trazados o trazados compuestos

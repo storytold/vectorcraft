@@ -50,6 +50,10 @@
 //! also given the parts of the active document it names in `_context.document`, whether or not
 //! anything is selected: the settings, artboards, layers and swatches, as plain values
 //! ([`context`]).
+//!
+//! A filter may be written in JavaScript ([`vectorcraft_plugins::js`]): `plugin.install {path}`
+//! takes its `.vcplugin` manifest and reads the `.js` file the manifest names beside it, and the
+//! plug-in store keeps the two as one module.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
@@ -124,6 +128,13 @@ pub fn describe(p: &Plugin) -> Value {
     if m.paint_output {
         v["paintOutput"] = json!(true);
     }
+    if m.appearance_output {
+        v["appearanceOutput"] = json!(true);
+    }
+    if let Some(script) = p.script() {
+        v["runtime"] = json!(m.runtime.name());
+        v["script"] = json!(script);
+    }
     if !m.command_allowlist.is_empty() {
         v["commandAllowlist"] = json!(m.command_allowlist);
     }
@@ -195,6 +206,36 @@ pub struct FilterRun {
     /// The plug-in's limits with the Plug-in Instruction Budget in force when it was made.
     limits: vectorcraft_plugins::Limits,
 }
+
+/// What running a [`FilterRun`] away from the session takes ([`FilterRun::job`]).
+pub struct FilterJob {
+    pub plugin: Arc<Plugin>,
+    pub input: Vec<u8>,
+    pub params: Vec<u8>,
+    pub limits: vectorcraft_plugins::Limits,
+}
+
+/// The run of a filter that calls commands that holds the documents ([`FilterRun::begin_calls`]):
+/// the run, what its calls keep fixed, and its open undo step.
+pub(crate) struct Calling {
+    /// The command that applies its output: `plugin.run`, or the plug-in command it runs, and the
+    /// params it was started with, which that command must be given.
+    cmd: String,
+    params: Value,
+    run: FilterRun,
+    calls: super::plugin_call::Calls,
+    tx: super::plugin_call::Transaction,
+}
+
+/// A module that a load in another place checked ([`Session::hand_in_checked_plugin`]): its
+/// SHA-256 and the manifest JSON that load read.
+pub(crate) struct Checked {
+    hash: String,
+    manifest: Vec<u8>,
+}
+
+/// How many checked modules the session keeps.
+const MAX_CHECKED: usize = 4;
 
 /// A filter's output handed in by a [`FilterRun`] made away from `plugin.run`, with what the run
 /// was made of: only a run of the same installation of the plug-in on the same input with the same
@@ -328,6 +369,53 @@ impl FilterRun {
     /// it was made, less what its document context costs.
     pub fn limits(&self) -> &vectorcraft_plugins::Limits {
         &self.limits
+    }
+
+    /// The input JSON it gives the plug-in: the objects.
+    pub fn input(&self) -> &[u8] {
+        &self.input
+    }
+
+    /// The parameters JSON it gives the plug-in, `_context` included.
+    pub fn params(&self) -> &[u8] {
+        &self.params
+    }
+
+    /// What running it away from the session takes: the plug-in, its input and parameters, and the
+    /// limits it runs under.
+    pub fn job(&self) -> FilterJob {
+        FilterJob { plugin: Arc::clone(&self.plugin), input: self.input.clone(), params: self.params.clone(), limits: self.limits.clone() }
+    }
+
+    /// [`FilterRun::prepare_for`] command `c` (`plugin.run` or a plug-in command) of a filter that
+    /// calls commands, which runs away from the session (the web build's plug-in worker) while the
+    /// session makes its command calls ([`Session::plugin_call`]). The edit in progress is kept
+    /// first, as `c` keeps it. The session then holds the run's undo step open and refuses every
+    /// command but queries and `c` ([`EngineError::PluginBusy`]) until `c` applies the output handed
+    /// in for it ([`Session::hand_in_plugin_calls`]) or [`Session::end_plugin_calls`] ends it → what
+    /// running it takes.
+    pub fn begin_calls(s: &mut Session, c: &str, p: &Value) -> Result<FilterJob> {
+        if s.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
+        }
+        let r = FilterRun::prepare_for(s, c, p)?;
+        let r = if super::plugin_call::settle(s)? { FilterRun::prepare_for(s, c, p)? } else { r };
+        let tx = super::plugin_call::Transaction::begin(s, &r.label())?;
+        let may = r.plugin.manifest().permissions();
+        let calls = super::plugin_call::Calls::of(s, may.contains(&Permission::DocRead), may.contains(&Permission::DocWrite));
+        let job = r.job();
+        s.plugin_calling = Some(Calling { cmd: c.to_string(), params: p.clone(), run: r, calls, tx });
+        Ok(job)
+    }
+
+    /// The run command `c`'s params `p` ask for: `plugin.run`'s ([`FilterRun::prepare`]), or a
+    /// plug-in command's (`plugin.<id>.<command>`), on the active document.
+    pub fn prepare_for(s: &Session, c: &str, p: &Value) -> Result<FilterRun> {
+        if c == "plugin.run" {
+            return FilterRun::prepare(s, p);
+        }
+        let (plugin, command) = command_of(c).ok_or_else(|| EngineError::UnknownCommand(c.into()))?;
+        FilterRun::prepare_with(s, plugin, Some(command), c, p)
     }
 
     /// The parameters it hands the plug-in, `_context` included.
@@ -512,7 +600,10 @@ pub fn keep_unapplied_typing(s: &mut Session) -> Result<bool> {
 /// was applied, with the plug-in's name.
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
     // An output handed in is for this run only (the app hands it in just before), whatever it does.
-    let handed = s.plugin_output.take();
+    let mut handed = s.plugin_output.take();
+    if let Some(r) = end_held(s, "plugin.run", p, &mut handed) {
+        return r;
+    }
     let r = FilterRun::prepare(s, p)?;
     // One that calls commands runs here, where it can make them, on the document with any edit in
     // progress committed.
@@ -530,6 +621,32 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         None => r.run()?,
     };
     r.finish(s, &output)
+}
+
+/// Ends the run that holds the documents ([`FilterRun::begin_calls`]) when command `c` (with params
+/// `p`, the params the run was started with) is the one that applies its output and `handed` is
+/// that output: applied in the run's own undo step, to the objects the run was given → the
+/// command's result. Any other command, or other params, is refused while a run holds them, and so
+/// is the output once the plug-in is no longer installed as the run had it. `None`: no run holds
+/// them.
+fn end_held(s: &mut Session, c: &str, p: &Value, handed: &mut Option<HandedIn>) -> Option<Result<Value>> {
+    let held = s.plugin_calling.take()?;
+    let serial = held.run.plugin.serial();
+    let installed = registry::get(held.run.plugin.id()).is_some_and(|plugin| plugin.serial() == serial);
+    let same = held.cmd == c && *p == held.params && installed;
+    let mine = handed.take().filter(|h| same && (h.serial, &h.input, &h.params) == (serial, &held.run.input, &held.run.params));
+    let Some(h) = mine else {
+        s.plugin_calling = Some(held);
+        return Some(Err(EngineError::PluginBusy));
+    };
+    let Calling { cmd, run, calls, tx, .. } = held;
+    // A panic applying the output still ends the run, so what its calls did is undone.
+    let r = if calls.kept(s) {
+        crate::guard::catch_panic(|| run.finish(s, &h.output)).unwrap_or_else(|msg| Err(EngineError::Internal { cmd, msg }))
+    } else {
+        Err(EngineError::Cancelled)
+    };
+    Some(tx.end(s, r))
 }
 
 /// The command id of plug-in `plugin`'s command `command`: `plugin.<plugin>.<command>`.
@@ -860,6 +977,7 @@ pub const DESKTOP_MENU_ITEMS: &[(&[&str], &str)] = &[
     (&["View"], "Snap to Pixel"),
     (&["View"], "Snap to Point"),
     (&["View"], "Snap to Glyph"),
+    (&["View"], "Snapping"),
     (&["View"], "Saved View"),
 ];
 
@@ -922,10 +1040,11 @@ fn unrouted(_: &mut Session, _: &Value) -> Result<Value> {
 /// `_context.command`, under the plug-in's permissions and budget, applied as one undo step named
 /// after the command → `{plugin, command, ids, notice?, pluginName?}`. A run that fails (a trap, an exhausted
 /// budget, an output it may not make) leaves the document as it was, and the error names the
-/// plug-in and the command.
+/// plug-in and the command. An output handed in for this very run ([`FilterRun::hand_in`]) is
+/// applied instead of running the plug-in, as `plugin.run` applies one.
 pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
-    // An output handed in is for `plugin.run` alone.
-    s.plugin_output = None;
+    // An output handed in is for this run only, whatever it does.
+    let mut handed = s.plugin_output.take();
     let (plugin, command) = command_of(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
     let failed = {
         let (name, label) = (permissions::display_text(&plugin.manifest().name, permissions::MAX_SHOWN_NAME), command.shown_label());
@@ -934,6 +1053,9 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
             e => EngineError::Other(format!("“{name}” › {label}: {e}")),
         }
     };
+    if let Some(r) = end_held(s, id, p, &mut handed) {
+        return r.map_err(failed);
+    }
     let r = FilterRun::prepare_with(s, plugin, Some(command), id, p)?;
     if r.calls() {
         let r = match super::plugin_call::settle(s)? {
@@ -952,7 +1074,11 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
         }
         false => r,
     };
-    let output = r.run().map_err(&failed)?;
+    let handed = handed.filter(|h| (h.serial, &h.input, &h.params) == (r.plugin.serial(), &r.input, &r.params));
+    let output = match handed {
+        Some(h) => h.output,
+        None => r.run().map_err(&failed)?,
+    };
     r.finish(s, &output).map_err(failed)
 }
 
@@ -1008,19 +1134,27 @@ pub(crate) fn admit_effects_for(cmd: &str, fx: &[Effect], n: &Node) -> std::resu
 /// Largest base64 payload `plugin.install` accepts (the module limit, encoded).
 const MAX_DATA_CHARS: usize = (32 << 20) / 3 * 4 + 4;
 
-/// The `.wasm` extension plug-in files have (File › Open installs them).
-pub const EXTS: &[&str] = &["wasm"];
+/// The extensions plug-in files have (File › Open installs them): a WebAssembly module, and a
+/// JavaScript plug-in's manifest.
+pub const EXTS: &[&str] = &["wasm", vectorcraft_plugins::js::PACKAGE_EXT];
 
 /// The plug-in module command `c`'s params give, loaded and checked, and its bytes: `path` (a
-/// `.wasm` file) or `dataBase64` (the module, with `name` shown as its source).
-fn load_given(c: &str, p: &Value) -> Result<(Plugin, Vec<u8>)> {
+/// `.wasm` file) or `dataBase64` (the module, with `name` shown as its source). A module that a
+/// load in another place checked ([`Session::hand_in_checked_plugin`]) runs none of its code here.
+fn load_given(s: &Session, c: &str, p: &Value) -> Result<(Plugin, Vec<u8>)> {
     match (str_param(p, "path").filter(|s| !s.is_empty()), str_param(p, "dataBase64")) {
         (_, Some(data)) => {
             if data.len() > MAX_DATA_CHARS {
                 return Err(bad(c, "`dataBase64` is larger than the module limit"));
             }
             let bytes = vectorcraft_format::base64_decode(data).ok_or_else(|| bad(c, "`dataBase64` is not valid base64"))?;
-            let plugin = Plugin::load(&bytes, vectorcraft_plugins::Limits::default()).map_err(err)?;
+            let limits = vectorcraft_plugins::Limits::default();
+            let hash = permissions::sha256_hex(&bytes);
+            let plugin = match s.plugin_checked.iter().find(|k| k.hash == hash) {
+                Some(k) => Plugin::load_checked(&bytes, limits, &k.manifest),
+                None => Plugin::load(&bytes, limits),
+            }
+            .map_err(err)?;
             let plugin = match str_param(p, "name") {
                 Some(name) => plugin.with_source(name),
                 None => plugin,
@@ -1068,6 +1202,93 @@ impl InstallApproval {
 }
 
 impl Session {
+    /// Hands in the manifest JSON `manifest` that a load of the module with SHA-256 `hash` read in
+    /// another place (the web build's plug-in worker, [`vectorcraft_plugins::worker`]): a
+    /// `plugin.inspect` or `plugin.install` of those very bytes (`dataBase64`) then loads the module
+    /// with [`Plugin::load_checked`], which runs none of its code here. The newest
+    /// [`MAX_CHECKED`] are kept.
+    pub fn hand_in_checked_plugin(&mut self, hash: &str, manifest: Vec<u8>) {
+        self.plugin_checked.retain(|c| c.hash != hash);
+        if self.plugin_checked.len() >= MAX_CHECKED {
+            self.plugin_checked.remove(0);
+        }
+        self.plugin_checked.push(Checked { hash: hash.to_string(), manifest });
+    }
+
+    /// Has a load in another place checked the module with SHA-256 `hash`
+    /// ([`Session::hand_in_checked_plugin`])?
+    pub fn plugin_checked(&self, hash: &str) -> bool {
+        self.plugin_checked.iter().any(|c| c.hash == hash)
+    }
+
+    /// Does a plug-in run that calls commands hold the documents ([`FilterRun::begin_calls`])?
+    pub fn plugin_calls_open(&self) -> bool {
+        self.plugin_calling.is_some()
+    }
+
+    /// Applies the edit the active tool computes on another thread (a Shape Builder merge), as a
+    /// command that edits waits for it, and keeps the edit in progress (a drag, a preview, typing)
+    /// as its own undo step, as a run that calls commands does before it starts, so a run made away
+    /// from the session is given the document with them and applies as an undo step of its own →
+    /// whether that changed the document or the selection.
+    pub fn settle_for_plugin_run(&mut self) -> Result<bool> {
+        let before = self.active().map(|d| (Arc::clone(&d.doc), d.selection.clone()));
+        self.finish_tool_edit_later()?;
+        let finished = match (&before, self.active()) {
+            (Some((doc, selection)), Some(d)) => !Arc::ptr_eq(doc, &d.doc) || *selection != d.selection,
+            (None, None) => false,
+            _ => true,
+        };
+        Ok(super::plugin_call::settle(self)? || finished)
+    }
+
+    /// Is command `id` the one that applies the output of the run that holds the documents?
+    pub fn plugin_calls_end_with(&self, id: &str) -> bool {
+        self.plugin_calling.as_ref().is_some_and(|c| c.cmd == id)
+    }
+
+    /// Makes the command call `id` with `args` that the run [`FilterRun::begin_calls`] started asked
+    /// for, as a call of that run on the page makes it → its result, or why it didn't run. With no
+    /// such run, nothing runs.
+    pub fn plugin_call(&mut self, id: &str, args: &Value) -> std::result::Result<Value, vectorcraft_plugins::host::CallFailure> {
+        let Some(c) = self.plugin_calling.take() else {
+            return Err(vectorcraft_plugins::host::CallFailure {
+                code: vectorcraft_plugins::host::CALL_NO_CONTEXT,
+                why: EngineError::Cancelled.to_string(),
+            });
+        };
+        // As a step of `plugin.run`: not journaled on its own, and a panic fails the call.
+        let depth = self.depth;
+        self.depth += 1;
+        let r = crate::guard::catch_panic(|| super::plugin_call::call(self, &c.calls, id, args));
+        self.depth = depth;
+        self.plugin_calling = Some(c);
+        r.unwrap_or_else(|msg| {
+            let why = EngineError::Internal { cmd: id.to_string(), msg }.to_string();
+            Err(vectorcraft_plugins::host::CallFailure { code: vectorcraft_plugins::host::CALL_COMMAND_FAILED, why })
+        })
+    }
+
+    /// Hands in `output`, the output of the run [`FilterRun::begin_calls`] started, for the next run
+    /// of the command that started it, with that run's params, to apply in its undo step.
+    pub fn hand_in_plugin_calls(&mut self, output: Vec<u8>) {
+        if let Some(c) = &self.plugin_calling {
+            let r = &c.run;
+            self.plugin_output = Some(HandedIn { serial: r.plugin.serial(), input: r.input.clone(), params: r.params.clone(), output });
+        }
+    }
+
+    /// Ends the run [`FilterRun::begin_calls`] started, which has no output (it failed, or was
+    /// canceled): every document and the session state go back to how they were before it.
+    pub fn end_plugin_calls(&mut self) {
+        if let Some(c) = self.plugin_calling.take() {
+            // An output handed in for it is dropped with it: a later run with the same input and
+            // params is not given it.
+            self.plugin_output = None;
+            let _ = c.tx.end(self, Err(EngineError::Cancelled));
+        }
+    }
+
     /// Lets the next `plugin.install` take its `grant` and `allowHeavy`, for the module `approval`
     /// describes. Call it only with what a person approved, just before that install.
     pub fn approve_plugin_install(&mut self, approval: InstallApproval) {
@@ -1177,7 +1398,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let allow_heavy = switch_or(p, "allowHeavy", false, C)?;
     let grant = grant_param(C, p)?;
-    let (plugin, bytes) = load_given(C, p)?;
+    let (plugin, bytes) = load_given(s, C, p)?;
     // `hash` pins the module the user was shown: one with other bytes is refused.
     if let Some(h) = p.get("hash").filter(|v| !v.is_null())
         && h.as_str() != Some(plugin.hash())
@@ -1374,7 +1595,7 @@ pub(crate) fn keep_installed(s: &Session, turn: &StoreTurn, id: &str, bytes: &[u
 /// needs the user to grant its permissions first (`needsApproval`) and whether it would take
 /// another module's place (`needsReplace`).
 fn inspect(s: &mut Session, p: &Value) -> Result<Value> {
-    load_given("plugin.inspect", p).map(|(plugin, _)| {
+    load_given(s, "plugin.inspect", p).map(|(plugin, _)| {
         let mut v = describe(&plugin);
         v["needsApproval"] = json!(!s.plugin_approved(&plugin));
         v["needsReplace"] = json!(takes_over(s, &plugin));
@@ -1389,12 +1610,23 @@ fn inspect(s: &mut Session, p: &Value) -> Result<Value> {
     })
 }
 
-/// The plug-in in the `.wasm` file `path`, and its module.
+/// The plug-in in the `.wasm` file `path`, or in the `.vcplugin` manifest `path` and the `.js` file
+/// it names, and its module: for a JavaScript plug-in, the manifest with the script's text
+/// ([`registry::read_js_package`]). Under automation read roots the script must be inside them too.
 #[cfg(not(target_arch = "wasm32"))]
 fn load_path(path: &str) -> Result<(Plugin, Vec<u8>)> {
     crate::file_access::check_read(path).map_err(EngineError::Other)?;
     let limits = vectorcraft_plugins::Limits::default();
-    let bytes = crate::store::read_capped(std::path::Path::new(path), limits.max_module_bytes as u64).map_err(EngineError::Other)?;
+    let file = std::path::Path::new(path);
+    let bytes = if registry::is_js_package(file) {
+        let allow = |script: &std::path::Path| match script.to_str() {
+            Some(script) => crate::file_access::check_read(script),
+            None => Err(format!("automation path rejected: {} isn't valid text", script.display())),
+        };
+        registry::read_js_package(file, &allow).map_err(err)?
+    } else {
+        crate::store::read_capped(file, limits.max_module_bytes as u64).map_err(EngineError::Other)?
+    };
     Ok((Plugin::load(&bytes, limits).map_err(err)?.with_source(path), bytes))
 }
 
@@ -1594,8 +1826,14 @@ impl Drop for FolderPending {
 
 /// Starts loading the plug-ins in `folder` on worker threads ([`registry::FolderLoad`]); `record`:
 /// the load's number in [`FOLDER`], whose record [`end_folder`] replaces with the report.
-#[cfg(not(target_arch = "wasm32"))]
 fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending {
+    start_folder_files(s, folder, None, record)
+}
+
+/// [`start_folder`] for the one file `only` of `folder` when it is given, without listing the
+/// folder ([`registry::FolderLoad::list_file`]).
+#[cfg(not(target_arch = "wasm32"))]
+fn start_folder_files(s: &Session, folder: &str, only: Option<&std::path::Path>, record: Option<u64>) -> FolderPending {
     let pending =
         |load| FolderPending { folder: folder.to_string(), store: s.plugin_dir.clone(), record, reload: false, load: Some(load), canceled: false };
     if let Err(e) = crate::file_access::check_read(folder) {
@@ -1616,11 +1854,15 @@ fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending
         })
     };
     // The modules start loading once the loads queued before them are done.
-    pending(registry::FolderLoad::list(std::path::Path::new(folder), allow).map_err(|e| json!({"folder": folder, "error": e.to_string()})))
+    let listed = match only {
+        Some(file) => registry::FolderLoad::list_file(file, allow),
+        None => registry::FolderLoad::list(std::path::Path::new(folder), allow),
+    };
+    pending(listed.map_err(|e| json!({"folder": folder, "error": e.to_string()})))
 }
 
 #[cfg(target_arch = "wasm32")]
-fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending {
+fn start_folder_files(s: &Session, folder: &str, _: Option<&std::path::Path>, record: Option<u64>) -> FolderPending {
     let load = Err(json!({"folder": folder, "error": "plug-in folders are not available on the web"}));
     FolderPending { folder: folder.to_string(), store: s.plugin_dir.clone(), record, reload: false, load: Some(load), canceled: false }
 }
@@ -1638,6 +1880,13 @@ pub(crate) fn install_folder(s: &mut Session, load: &mut FolderPending, turn: &S
     {
         for id in load.install_ready(s.plugin_folder_approver()) {
             s.attach_plugin_storage(turn, &id);
+            // A `plugin.reload` of the plug-in store's own folder installed a stored file that
+            // failed before.
+            if let Some(p) = registry::get(&id)
+                && let Some(source) = p.source()
+            {
+                crate::store::clear_stored_failure(std::path::Path::new(source));
+            }
         }
         // A disabled plug-in's file matched by its id is saved in the same turn.
         if load.disabled_changed() && s.store_disabled_plugins_in(turn) {
@@ -1769,12 +2018,206 @@ fn shown_report(mut report: Value) -> Value {
     report
 }
 
-fn list(_: &mut Session, _: &Value) -> Result<Value> {
+fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r, _, _)| shown_report(r.clone()));
     let disabled: Vec<Value> = safe_mode::disabled().iter().map(shown_item).collect();
-    Ok(
-        json!({"plugins": registry::list().iter().map(|p| describe_installed(p)).collect::<Vec<_>>(), "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled}),
-    )
+    let failed: Vec<Value> = failed_loads(s).iter().map(shown_failure).collect();
+    Ok(json!({
+        "plugins": registry::list().iter().map(|p| describe_installed(p)).collect::<Vec<_>>(),
+        "folder": folder,
+        "failed": failed,
+        "safeMode": safe_mode::active(),
+        "disabled": disabled,
+    }))
+}
+
+/// Where a plug-in that didn't load was loaded from.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum LoadedFrom {
+    /// The session's plug-in store.
+    Store,
+    /// The Additional Plug-ins Folder, or the folder `plugin.reload` loaded last.
+    Folder,
+}
+
+impl LoadedFrom {
+    fn name(self) -> &'static str {
+        match self {
+            LoadedFrom::Store => "store",
+            LoadedFrom::Folder => "folder",
+        }
+    }
+}
+
+/// A plug-in file that didn't load in this process: the file, why, and where it was loaded from.
+type FailedLoad = (String, String, LoadedFrom);
+
+/// The plug-in files that didn't load in this process and that a retry may load: those of the
+/// session's plug-in store ([`crate::store::failed_stored_plugins`]), then those of the folder last
+/// loaded ([`FOLDER`]). A disabled plug-in (it is listed in `disabled`) and one that another install
+/// or removal of its id replaced while it loaded are left out.
+fn failed_loads(s: &Session) -> Vec<FailedLoad> {
+    let mut failed: Vec<FailedLoad> = s
+        .plugin_dir
+        .as_deref()
+        .map(crate::store::failed_stored_plugins)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(path, why)| (path.display().to_string(), why, LoadedFrom::Store))
+        .collect();
+    if let Some((_, _, report, _, _)) = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+        && let Some(rows) = report.get("failed").and_then(Value::as_array)
+    {
+        for row in rows {
+            let (Some(file), Some(why)) = (row.get("file").and_then(Value::as_str), row.get("error").and_then(Value::as_str)) else { continue };
+            // A `plugin.reload` of the plug-in store's own folder lists its stored files once, as
+            // stored files.
+            let stored = failed.iter().any(|(f, _, from)| *from == LoadedFrom::Store && std::path::Path::new(f) == std::path::Path::new(file));
+            if why != registry::DISABLED && why != registry::SUPERSEDED && !stored {
+                failed.push((file.to_string(), why.to_string(), LoadedFrom::Folder));
+            }
+        }
+    }
+    // A file turned off since it failed (`plugin.setEnabled`, listed in `disabled`) or skipped in this
+    // launch, and a stored file whose plug-in id is, are left out.
+    let off = safe_mode::disabled();
+    let stems: std::collections::BTreeSet<String> =
+        off.iter().filter_map(|i| i.id.clone()).chain(safe_mode::skipped_ids()).map(|id| crate::store::file_stem(&id)).collect();
+    failed.retain(|(file, _, from)| {
+        let item = safe_mode::Item::file(file.clone());
+        let by_id =
+            *from == LoadedFrom::Store && std::path::Path::new(file).file_stem().is_some_and(|s| stems.contains(s.to_string_lossy().as_ref()));
+        !by_id && !safe_mode::skipped(&item) && !off.iter().any(|i| i.same(&item))
+    });
+    failed
+}
+
+/// How many plug-in files didn't load in this process and may load on a retry ([`failed_loads`]):
+/// Object › Plug-ins › Plug-ins That Didn't Load… is enabled while there is one.
+pub fn failed_load_count(s: &Session) -> usize {
+    failed_loads(s).len()
+}
+
+/// A [`FailedLoad`] as a reply shows it: a file outside the automation read roots by its file name,
+/// in its error too.
+fn shown_failure((file, why, from): &FailedLoad) -> Value {
+    json!({"file": shown_file(file), "error": shown_error(file, why), "from": from.name()})
+}
+
+/// The error `why` about the plug-in file `file` as a reply shows it: the file, and then its folder,
+/// outside the automation read roots by their names, as [`shown_report`] shows a folder's errors.
+fn shown_error(file: &str, why: &str) -> String {
+    let folder = std::path::Path::new(file).parent().map(|f| f.display().to_string()).filter(|f| !f.is_empty());
+    let why = why.replace(file, &shown_file(file));
+    match folder {
+        Some(folder) => why.replace(folder.as_str(), &shown_file(&folder)),
+        None => why,
+    }
+}
+
+/// `plugin.retry`: loads again the plug-in file `file` that didn't load (as `plugin.list`'s `failed`
+/// names it), or every one of them without `file`, each as the load it failed in loads it: a stored
+/// file as the plug-in store loads its files, and a folder file as `plugin.reload` loads the folder's
+/// → `{retried: [{file, loaded, id?, error?}]}`.
+fn retry(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "plugin.retry";
+    let failed = failed_loads(s);
+    let picked: Vec<FailedLoad> = match p.get("file") {
+        None => failed,
+        Some(v) => {
+            let file =
+                v.as_str().map(str::trim).filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "`file` must be a file plugin.list's failed names"))?;
+            // A file outside the automation read roots is named by its file name, when no other
+            // failed file has it.
+            let exact: Vec<&FailedLoad> = failed.iter().filter(|(f, _, _)| f == file).collect();
+            let named: Vec<&FailedLoad> = failed.iter().filter(|(f, _, _)| shown_file(f) == file).collect();
+            match (exact.as_slice(), named.as_slice()) {
+                ([one], _) | ([], [one]) => vec![(*one).clone()],
+                _ => return Err(bad(C, format!("{file} is not a plug-in that failed to load (see plugin.list's failed)"))),
+            }
+        }
+    };
+    safe_mode::check().map_err(err)?;
+    // Loads started earlier install first, so a retry's module replaces theirs.
+    s.finish_plugin_loads();
+    let mut retried = Vec::with_capacity(picked.len());
+    for (file, _, from) in &picked {
+        let outcome = match from {
+            LoadedFrom::Store => retry_stored(s, file),
+            LoadedFrom::Folder => retry_folder_file(s, file),
+        };
+        let shown = shown_file(file);
+        retried.push(match outcome {
+            Ok(id) => json!({"file": shown, "loaded": true, "id": id}),
+            Err(why) => json!({"file": shown, "loaded": false, "error": shown_error(file, &why)}),
+        });
+    }
+    Ok(json!({ "retried": retried }))
+}
+
+/// Loads the stored plug-in `file` again → the id it installed with, or why it didn't.
+fn retry_stored(s: &mut Session, file: &str) -> std::result::Result<String, String> {
+    let path = std::path::Path::new(file);
+    // Under automation read roots, a file outside them is not read again, as a folder file isn't.
+    crate::file_access::check_read(file)?;
+    let installed = s.retry_stored_plugin(path);
+    if let Some(why) = crate::store::stored_failure(path) {
+        return Err(why);
+    }
+    match installed {
+        Some(id) => {
+            clear_folder_failure(path);
+            Ok(id)
+        }
+        None if !path.is_file() => Err("the file is no longer in the plug-in store".into()),
+        // Disabled, or replaced by another install of its id while it loaded.
+        None => Err("it didn't install".into()),
+    }
+}
+
+/// Takes `path` out of the folder report's failed files: a stored module may also have failed in
+/// a `plugin.reload` of the store's own folder.
+pub(crate) fn clear_folder_failure(path: &std::path::Path) {
+    if let Some((_, _, report, _, _)) = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_mut()
+        && let Some(rows) = report.get_mut("failed").and_then(Value::as_array_mut)
+    {
+        rows.retain(|row| row.get("file").and_then(Value::as_str).is_none_or(|f| std::path::Path::new(f) != path));
+    }
+}
+
+/// Loads the file `file` of the folder last loaded again, as `plugin.reload` loads each file, and
+/// updates that folder's report: the file is listed as loaded or, with the new error, as failed →
+/// the id it installed with, or why it didn't.
+fn retry_folder_file(s: &mut Session, file: &str) -> std::result::Result<String, String> {
+    let path = std::path::Path::new(file);
+    let folder = path.parent().map(|f| f.display().to_string()).unwrap_or_default();
+    let load = start_folder_files(s, &folder, Some(path), None);
+    let report = s.finish_plugin_load(PluginLoad::Folder(load));
+    let loaded: Vec<Value> = report.get("loaded").and_then(Value::as_array).cloned().unwrap_or_default();
+    let failed: Vec<Value> = report.get("failed").and_then(Value::as_array).cloned().unwrap_or_default();
+    // A retry that couldn't load the file (its folder can't be read) reports only an error and
+    // leaves its row as it is.
+    if report.get("failed").is_some()
+        && let Some((last, _, r, _, _)) = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_mut()
+        && std::path::Path::new(last.as_str()) == std::path::Path::new(&folder)
+    {
+        if let Some(rows) = r.get_mut("failed").and_then(Value::as_array_mut) {
+            rows.retain(|row| row.get("file").and_then(Value::as_str) != Some(file));
+            rows.extend(failed.iter().cloned());
+        }
+        if let Some(ids) = r.get_mut("loaded").and_then(Value::as_array_mut) {
+            for id in &loaded {
+                if !ids.contains(id) {
+                    ids.push(id.clone());
+                }
+            }
+        }
+    }
+    if let Some(id) = loaded.first().and_then(Value::as_str) {
+        return Ok(id.to_string());
+    }
+    let why = failed.first().and_then(|row| row.get("error")).and_then(Value::as_str).or_else(|| report.get("error").and_then(Value::as_str));
+    Err(why.unwrap_or("it didn't install").to_string())
 }
 
 /// `plugin.safeMode`: whether Safe Mode is on and why, the plug-ins disabled for the next launch,
@@ -1790,15 +2233,16 @@ fn safe_mode_state(_: &mut Session, _: &Value) -> Result<Value> {
     }))
 }
 
-/// The file of a plug-in `plugin.safeMode` lists as `file`, or `plugin.list` as `source`: one they name
+/// The file of a plug-in `plugin.safeMode` lists as `file`, or `plugin.list` as `source` or in `failed`: one they name
 /// by its file name (outside the automation read roots) is found by that name, when no other listed
 /// file has it.
-fn listed_file(file: String) -> String {
+fn listed_file(s: &Session, file: String) -> String {
     let mut listed: Vec<String> = safe_mode::disabled()
         .into_iter()
         .chain(safe_mode::previous())
         .filter_map(|i| i.file)
         .chain(registry::list().iter().filter_map(|p| p.source().map(str::to_string)))
+        .chain(failed_loads(s).into_iter().map(|(f, _, _)| f))
         .collect();
     listed.sort();
     listed.dedup();
@@ -1833,7 +2277,7 @@ fn set_enabled(s: &mut Session, p: &Value) -> Result<Value> {
             let stored = if enabled { s.stored_plugin_file(&id).map(safe_mode::Item::file) } else { None };
             (registry::get(&id).map(|p| safe_mode::Item::of(&p)).unwrap_or(safe_mode::Item { id: Some(id), ..Default::default() }), stored)
         }
-        (None, Some(file)) => (safe_mode::Item::file(listed_file(file)), None),
+        (None, Some(file)) => (safe_mode::Item::file(listed_file(s, file)), None),
         (None, None) => return Err(bad(C, "give `id` or `file` (see plugin.safeMode)")),
     };
     let items: Vec<&safe_mode::Item> = std::iter::once(&item).chain(stored.as_ref()).collect();
@@ -1950,7 +2394,7 @@ fn clear_cache(_: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// This module's commands: `plugin.list`, `.info`, `.run`, `.install`, `.inspect`, `.remove`,
-/// `.reload`, `.clearCache`, `.safeMode` and `.setEnabled`.
+/// `.reload`, `.retry`, `.clearCache`, `.safeMode` and `.setEnabled`.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -1958,7 +2402,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), place?: true (an importer whose files file.place also reads, see file.place's importer), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), writes?: [\"type\"|\"image\"|\"symbolInstance\"] (the kinds among inputs a filter may change, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), place?: true (an importer whose files file.place also reads, see file.place's importer), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), writes?: [\"type\"|\"image\"|\"symbolInstance\"] (the kinds among inputs a filter may change, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), runtime?: \"js\" and script?: its .js file name (a JavaScript filter, see docs/plugins.md), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), appearanceOutput?: true (a live effect whose pieces, fills and strokes may also have opacity, a blending mode and effects), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), failed: [{file, error, from: \"store\"|\"folder\"}] (the plug-in files that didn't load in this process and that plugin.retry loads again: those of the plug-in store that didn't install, until they install or the store is loaded again, then those of the folder report's failed, without the disabled ones and ones skipped because another install or removal of their id came first), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1985,7 +2429,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count, and a grants.json without VectorCraft's MAC for that folder grants nothing; when the system key store can't be reached, the grant lasts for this session only; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session (with a plug-in store, the install waits while another window or process changes the store and writes the module and its grant before that window or process changes it again; when the store's disabled.lock can't be locked, nothing is installed) (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
+            "{path: a .wasm file or a JavaScript plug-in's .vcplugin manifest (read with the .js file its script names) (desktop) | dataBase64: the module or a JavaScript plug-in as one JSON object (its manifest, with the script's text in source) (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count, and a grants.json without VectorCraft's MAC for that folder grants nothing; when the system key store can't be reached, the grant lasts for this session only; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a plug-in for this session (with a plug-in store, the install waits while another window or process changes the store and writes the module and its grant before that window or process changes it again; when the store's disabled.lock can't be locked, nothing is installed) (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
             always,
             install
         ),
@@ -1994,7 +2438,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Inspect Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true), unknownCommands?: [id] (commandAllowlist ids no command has) and refusedCommands?: [id] (commandAllowlist ids no plug-in may call: plugin.install refuses the module)",
+            "{path: a .wasm file or a .vcplugin manifest (desktop) | dataBase64: the module or a JavaScript plug-in's JSON, name?: the file name shown as its source (with dataBase64)} validate a plug-in without installing it, running none of its code → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true), unknownCommands?: [id] (commandAllowlist ids no command has) and refusedCommands?: [id] (commandAllowlist ids no plug-in may call: plugin.install refuses the module)",
             always,
             inspect
         ),
@@ -2021,9 +2465,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reload Plug-ins",
             ["Object", "Plug-ins"],
             None,
-            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it, the first 1,000 by file name (desktop; a bad module, one that isn't a regular file, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}], leftOut: the count of *.wasm files past the first 1,000, not tried}",
+            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm and *.vcplugin in it, the first 1,000 by file name (desktop; a bad module, one that isn't a regular file, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}], leftOut: the count of *.wasm and *.vcplugin files past the first 1,000, not tried}",
             always,
             reload
+        ),
+        cmd!(
+            query "plugin.retry",
+            "Retry Plug-in",
+            [],
+            None,
+            "{file?: a file plugin.list's failed names (under automation read roots, a file outside them by the file name shown, when no other failed file has it)} load again the plug-in file that didn't load, or every file plugin.list's failed names when file is left out (desktop; a stored file loads as the plug-in store loads its files, and a folder file as plugin.reload loads the folder's, with the same checks; under automation read roots, a file outside them is not read and reports why; a folder file's row in plugin.list's folder report changes to loaded or to its new error; an error in Safe Mode, or when file isn't one that failed) → {retried: [{file, loaded: bool, id? (the plug-in it installed), error? (why it didn't load again)}]}",
+            always,
+            retry
         ),
         cmd!(
             query "plugin.safeMode",
@@ -2039,7 +2492,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Enable on Re-launch",
             [],
             None,
-            "{id | file: a plug-in as plugin.safeMode's disabled lists it or as plugin.list's source (under automation read roots, a file outside them by the file name shown, when no other listed file has it), enabled: bool} turn a plug-in on or off for the next launch (Help › Safe Mode's Enable on Re-launch); nothing loads, unloads or is uninstalled now. Turning on by id also turns on the file the plug-in is stored in. Turning on one that isn't disabled is an error. plugin.install of a disabled plug-in turns it on → {changed, saved: false when the change isn't in the plug-in folder for the next launch (a session without one, or the list there can't be read or written or is full; it is saved with the next change that saves), disabled}",
+            "{id | file: a plug-in as plugin.safeMode's disabled lists it or as plugin.list's source or failed names it (under automation read roots, a file outside them by the file name shown, when no other listed file has it), enabled: bool} turn a plug-in on or off for the next launch (Help › Safe Mode's Enable on Re-launch); nothing loads, unloads or is uninstalled now. Turning on by id also turns on the file the plug-in is stored in. Turning on one that isn't disabled is an error. plugin.install of a disabled plug-in turns it on → {changed, saved: false when the change isn't in the plug-in folder for the next launch (a session without one, or the list there can't be read or written or is full; it is saved with the next change that saves), disabled}",
             always,
             set_enabled
         ),
