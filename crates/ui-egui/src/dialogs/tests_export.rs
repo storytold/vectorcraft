@@ -170,6 +170,32 @@ pub(super) fn names(w: &Written) -> Vec<String> {
     w.borrow().iter().map(|(p, _)| p.clone()).collect()
 }
 
+/// #7916: Export As remembers the format and Use Artboards it was last left on, so the next one
+/// opens there instead of resetting to PNG and no artboards.
+#[test]
+fn export_as_remembers_its_last_format_and_use_artboards() {
+    let (mut app, _) = app(2);
+    app.run("file.exportAs", json!({})).unwrap();
+    let d = fields(&app);
+    assert_eq!((&d["format"], &d["useArtboards"]), (&json!("png"), &json!(false)));
+    frame(&mut app);
+    set(&mut app, "format", json!("jpg"));
+    set(&mut app, "useArtboards", json!(true));
+    frame(&mut app);
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("jpgOptions"), "JPEG Options follow");
+    cancel(&mut app);
+    // The next Export As opens on the same format and Use Artboards.
+    app.run("file.exportAs", json!({})).unwrap();
+    let d = fields(&app);
+    assert_eq!((&d["format"], &d["useArtboards"]), (&json!("jpg"), &json!(true)));
+    cancel(&mut app);
+    // An explicit format or option still wins over the remembered one.
+    app.run("file.exportAs", json!({"format": "svg", "useArtboards": false})).unwrap();
+    let d = fields(&app);
+    assert_eq!((&d["format"], &d["useArtboards"]), (&json!("svg"), &json!(false)));
+}
+
 /// The picture a raster file holds.
 pub(super) fn rgba(bytes: &[u8]) -> image::RgbaImage {
     craft_image_codecs::decode(bytes)

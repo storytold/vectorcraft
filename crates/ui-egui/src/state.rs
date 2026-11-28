@@ -1023,6 +1023,13 @@ pub struct UiState {
     /// Trace object again at once. Off, the changes wait in the panel until Trace applies them.
     #[serde(default = "yes")]
     pub image_trace_preview: bool,
+    /// Export As…'s format id the last export chose, so the dialog opens on it again
+    /// (`dialogs::export_as::open`); none before the first export, which opens on PNG.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_as_format: Option<String>,
+    /// Export As…'s Use Artboards option as it was last left, so the next export starts there.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub export_as_use_artboards: bool,
     /// The Glyphs panel's category, zoom and recent glyphs.
     #[serde(default)]
     pub glyphs_panel: craft::font_manager::glyphs::GlyphsPanelSettings,
@@ -1580,6 +1587,8 @@ impl Default for UiState {
             symbols_view: Default::default(),
             image_trace_advanced: true,
             image_trace_preview: true,
+            export_as_format: None,
+            export_as_use_artboards: false,
             glyphs_panel: Default::default(),
             glyphs_font: None,
             glyphs_marked: None,
@@ -1610,6 +1619,11 @@ impl Default for UiState {
 
 fn yes() -> bool {
     true
+}
+
+/// A `false` boolean left out of the saved UI state (its default).
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 fn no_rect() -> egui::Rect {

@@ -101,8 +101,8 @@ fn summary(fields: &DialogFields) -> String {
     }
 }
 
-/// Open the dialog on `format` (an id or extension, default PNG); `p` may preset `useArtboards`
-/// and `range`.
+/// Open the dialog on `format` (an id or extension, else the format the last export used, else
+/// PNG); `p` may preset `useArtboards` and `range`.
 pub fn open(app: &mut VectorcraftApp, format: Option<&str>, p: &Value) {
     if let Err(e) = open_dialog(app, format, p) {
         app.status(e);
@@ -114,15 +114,18 @@ fn open_dialog(app: &mut VectorcraftApp, format: Option<&str>, p: &Value) -> Res
     let source = app.session.active();
     let document = source.map(|source| (source.uid, source.reverts));
     let n = source.map_or(0, |source| source.doc.artboards.len());
-    let missing = format.and_then(|f| UNAVAILABLE.iter().find(|u| u.0.eq_ignore_ascii_case(f.trim_start_matches('.'))));
+    // The dialog opens on the format it was asked for, else the one the last export chose.
+    let remembered = app.ui.export_as_format.clone();
+    let wanted = format.or(remembered.as_deref());
+    let missing = wanted.and_then(|f| UNAVAILABLE.iter().find(|u| u.0.eq_ignore_ascii_case(f.trim_start_matches('.'))));
     let format = match missing {
         Some((id, _)) => id,
-        None => format.and_then(fileio::format).filter(|f| formats().iter().any(|g| g.id == f.id)).map_or("png", |f| f.id),
+        None => wanted.and_then(fileio::format).filter(|f| formats().iter().any(|g| g.id == f.id)).map_or("png", |f| f.id),
     };
     let range = p.get("range").and_then(Value::as_str);
     let initial = json!({
         "format": format,
-        "useArtboards": p.get("useArtboards").and_then(Value::as_bool).unwrap_or(false),
+        "useArtboards": p.get("useArtboards").and_then(Value::as_bool).unwrap_or(app.ui.export_as_use_artboards),
         "all": range.is_none(),
         "range": range.map_or_else(|| if n > 1 { format!("1-{n}") } else { "1".into() }, str::to_string),
     });
@@ -173,6 +176,9 @@ pub(super) fn confirm(app: &mut VectorcraftApp, document: Option<(u64, u64)>, fi
     {
         return Err("nothing to export: the document has no visible art (or turn on Use Artboards)".into());
     }
+    // The next Export As opens on what this one was left on (its format and Use Artboards).
+    app.ui.export_as_format = Some(f.id.to_string());
+    app.ui.export_as_use_artboards = fields.bool("useArtboards").unwrap_or(false);
     let range = if all { "all".to_string() } else { range };
     let pages = Pages { use_artboards, all, range, selection: false };
     Ok(Some(Box::new(move |app| {
