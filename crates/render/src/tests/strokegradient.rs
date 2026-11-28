@@ -47,6 +47,18 @@ fn along_a_quarter_of_the_length_is_a_quarter_of_the_gradient_in_any_direction()
     }
 }
 
+/// A gradient that reflects twice runs its stops twice along the stroke, the second run
+/// backwards.
+#[test]
+fn along_a_reflecting_gradient_runs_its_stops_that_many_times() {
+    let g = Gradient { spread: vectorcraft_color::GradientSpread::Reflect, repeats: 2, ..Gradient::default() };
+    let img = render(&line((20.0, 100.0), (180.0, 100.0)), g, StrokeGradientMode::Along, true);
+    for (f, want) in [(0.125, 0.75), (0.375, 0.25), (0.625, 0.25), (0.875, 0.75)] {
+        let x = 20.0 + 160.0 * f;
+        assert!((grey(&img, x, 100.0) - want).abs() < 0.03, "at {f}: {} vs {want}", grey(&img, x, 100.0));
+    }
+}
+
 #[test]
 fn across_runs_from_the_left_edge_to_the_right() {
     // Travelling right, the left edge is the top one (y 90), the right edge the bottom (y 110).

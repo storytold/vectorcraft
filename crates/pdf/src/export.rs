@@ -4,17 +4,16 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use craft_pdf::write::backend as krilla;
-use craft_pdf::write::{self, Metadata};
+use craft::pdf::write::backend as krilla;
+use craft::pdf::write::{self, Metadata};
 use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
 use krilla::color::{cmyk, luma, rgb};
 use krilla::configure::{Archival, PdfVersion};
-use krilla::geom::{Path, PathBuilder, Size, Transform};
+use krilla::geom::{Path, PathBuilder, Size};
 use krilla::image::Image;
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
-use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash};
-use krilla::surface::Surface;
+use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash, SweepGradient};
 use krilla::text::{Glyph, GlyphId, KrillaGlyph};
 use kurbo::{PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
@@ -28,6 +27,7 @@ use crate::forms::Mark;
 use crate::lab_spot::{find, rfind};
 use crate::marks::PageBoxes;
 use crate::output::ColorOut;
+use crate::surface::Surface;
 use crate::{Compatibility, ExportReport, PdfError, PdfOptions, Standard};
 
 mod entry;
@@ -40,13 +40,13 @@ mod text;
 mod writer;
 
 pub(crate) use entry::{RgbInCmyk, leaving_out_undecodable};
-pub use entry::{export, export_with_report, page_areas};
+pub use entry::{check_page_sizes, export, export_with_report, page_areas};
 #[cfg(test)]
 use exporter::{MAX_COORD, writable, xf};
 #[cfg(test)]
 use images::{png_8_bit, png_16_bit};
 #[cfg(test)]
-pub(crate) use nodes::MEASURES;
+pub(crate) use nodes::{KNOCKOUT_BRUSHES, KNOCKOUT_SHAPES, MAX_KNOCKOUT_MASK_OBJECTS, MEASURES};
 pub(crate) use writer::{Sheet, Writer};
 
 pub(crate) struct Exporter<'a> {
@@ -60,6 +60,12 @@ pub(crate) struct Exporter<'a> {
     images: HashMap<String, Option<Image>>,
     /// `Some` while opacity mask art is written: whether an image in it was left out.
     image_left_out: Option<bool>,
+    /// While the pieces of a distorted image whose opacity mask is its own pixel grid are written:
+    /// its image key and the image written with the mask as its alpha, which each piece draws.
+    piece_image: Option<(String, Image)>,
+    /// While the pieces of a mesh-warped image are written: the size its pixels are resampled for
+    /// ([`Exporter::warp_image_size`]).
+    warp_size: Option<images::SharedSize>,
     /// The brush library, parsed when the first brushed stroke is written.
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Whether the group being written is a knockout group (what its neutral children inherit).
@@ -68,6 +74,9 @@ pub(crate) struct Exporter<'a> {
     lab_spots: Vec<(String, vectorcraft_color::cms::Lab)>,
     /// Images may ask viewers to smooth them (not in PDF/A).
     interpolate: bool,
+    /// Conic gradients may be written as sweep shadings, whose PostScript calculator functions
+    /// PDF/A forbids; otherwise they are drawn as images ([`Self::area_paint`]).
+    sweeps: bool,
     /// Images may have 16 bits a sample (PDF 1.5 and later); in earlier files they are written at
     /// 8 bits ([`embed`]).
     sixteen_bit: bool,
@@ -102,6 +111,12 @@ pub(crate) struct Exporter<'a> {
     paper: Rect,
     /// Overprinting fills and strokes are drawn as forms marked to overprint.
     pub overprint: bool,
+    /// Overprinting characters' fills and strokes are drawn with Darken, as a separation's plate
+    /// draws its overprinting fills and strokes ([`vectorcraft_doc::overprint::darken_overprints`]).
+    pub darken_overprints: bool,
+    /// Document Setup → Discard White Overprint as it applies to the document's paints, read from
+    /// the document on first use ([`Self::paper_white`]).
+    discard_white: Option<vectorcraft_doc::overprint::DiscardWhite>,
     /// An overprinting fill or stroke was drawn so.
     pub overprinted: bool,
     /// Characters with neither fill nor stroke, or whose fill is drawn as art (outlines filled
@@ -121,6 +136,14 @@ pub(crate) struct Exporter<'a> {
     /// The most [`Self::symbol_nodes`] may reach: [`vectorcraft_doc::MAX_SYMBOL_NODES`], or less
     /// while one of the copies on a sheet is drawn ([`Writer::page`]).
     pub(crate) symbol_limit: u64,
+    /// Objects the symbol instances in the copies drawn in knockout masks held, together: counted
+    /// apart from [`Self::symbol_nodes`], within [`vectorcraft_doc::MAX_SYMBOL_NODES`] of their own.
+    mask_symbol_nodes: u64,
+    /// Whether a knockout mask is being drawn: [`Self::symbol_nodes`] then counts
+    /// [`Self::mask_symbol_nodes`].
+    in_knockout_mask: bool,
+    /// Whether a knockout mask left out symbol art because the objects its copies may hold ran out.
+    mask_art_left_out: bool,
 }
 
 #[cfg(test)]
@@ -131,7 +154,7 @@ mod tests {
     fn writable_bounds_values_the_transform_and_values_through_it() {
         let mut pdf = krilla::Document::new();
         let mut page = pdf.start_page_with(PageSettings::new(Size::from_wh(100.0, 100.0).unwrap()));
-        let mut s = page.surface();
+        let mut s = Surface::page(page.surface(), 100.0);
         let r = Rect::new(0.0, 0.0, 10.0, 10.0);
         assert!(writable(&s, Affine::IDENTITY, r));
         assert!(!writable(&s, Affine::IDENTITY, Rect::new(-2_147_483_649.0, 0.0, 10.0, 10.0)));
@@ -150,19 +173,22 @@ mod tests {
 
     #[test]
     fn a_16_bit_png_at_8_bits_keeps_its_color_type_and_icc_profile() {
-        use image::{ImageDecoder, ImageEncoder};
+        use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image as CodecImage, SampleType};
         let icc = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::GRAY).unwrap().to_vec();
-        let gray = image::DynamicImage::ImageLuma16(image::ImageBuffer::from_fn(4, 2, |x, y| image::Luma([x as u16 * 20000 + y as u16])));
-        let mut png = vec![];
-        let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
-        encoder.set_icc_profile(icc.clone()).unwrap();
-        gray.write_with_encoder(encoder).unwrap();
+        let u16_samples: Vec<u16> = (0..2).flat_map(|y| (0..4).map(move |x| x as u16 * 20000 + y as u16)).collect();
+        let raw_u16: Vec<u8> = u16_samples.iter().flat_map(|v| v.to_ne_bytes()).collect();
+        let mut src = CodecImage::from_raw(4, 2, ChannelLayout::Gray, SampleType::U16, raw_u16).unwrap();
+        src.icc = Some(icc.clone());
+        let png = craft_image_codecs::encode(&src, Format::Png, &EncodeOptions::default()).unwrap();
         assert!(png_16_bit(&png));
         let out = png_8_bit(&png).unwrap();
         assert!(!png_16_bit(&out));
-        let mut decoder = image::codecs::png::PngDecoder::new(std::io::Cursor::new(out.as_slice())).unwrap();
-        assert_eq!(decoder.icc_profile().unwrap(), Some(icc));
-        assert_eq!(decoder.color_type(), image::ColorType::L8);
-        assert_eq!(image::DynamicImage::from_decoder(decoder).unwrap().to_luma8(), gray.to_luma8());
+        let decoded = craft_image_codecs::decode_as_with(Format::Png, &out, &craft_image_codecs::DecodeOptions::default()).unwrap();
+        assert_eq!(decoded.icc, Some(icc));
+        assert_eq!(decoded.layout(), ChannelLayout::Gray);
+        assert_eq!(decoded.sample_type(), SampleType::U8);
+        // Rounded to the nearest 8-bit level, as the 8-bit copy is made.
+        let want: Vec<u8> = u16_samples.into_iter().map(|v| ((u32::from(v) * 255 + 32_767) / 65_535) as u8).collect();
+        assert_eq!(decoded.data(), want);
     }
 }

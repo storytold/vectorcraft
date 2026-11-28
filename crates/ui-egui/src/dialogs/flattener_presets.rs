@@ -4,273 +4,184 @@
 //! (the selected preset) under the list. Close keeps everything: each change is saved at once.
 //!
 //! Fields: `selected` (a preset's name), then the selected preset's `name` and option keys
-//! (setting them on a saved preset saves it; a new `name` renames it once the field isn't being
-//! edited; on a built-in preset they go back).
+//! (setting them on a saved preset saves it; a new `name` renames it; a built-in preset refuses
+//! them).
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::flatten::{PRESET_EXTS, PRESET_FORMAT};
 use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset};
 
-use super::flatten::{options_editor, put_options};
-use super::{DialogSpec, form};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, widgets};
+use super::preset_manager::{self, Detail, ManagerAction, ManagerEvent, ManagerRow, Source};
+use super::{flatten, form};
+use crate::VectorcraftApp;
 
-/// The dialog kind of Transparency Flattener Presets.
-pub const KIND: &str = "flattenerPresets";
+/// The dialog key of Transparency Flattener Presets.
+const KEY: &str = "flattenerPresets";
 
-/// The preset whose name and options the fields hold.
-const SHOWN: &str = "__shown";
-
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Transparency Flattener Presets").into(),
-    body,
-    confirm: |app, _| {
-        app.ui.dialog = None;
-        Ok(Value::Null)
-    },
-    ok: None,
-    min_width: 620.0,
-    ..DialogSpec::FORM
+/// How the preset manager reads and changes flattener presets.
+pub(super) static SOURCE: Source = Source {
+    key: KEY,
+    title: || tl!("Transparency Flattener Presets").to_string(),
+    actions: &[ManagerAction::New, ManagerAction::Delete, ManagerAction::Import, ManagerAction::Export],
+    editor: false,
+    renames: true,
+    rows,
+    stored,
+    detail,
+    run,
 };
 
-/// Open the presets manager on `selected` (default: the first preset), holding its name and
-/// options.
+/// Open the presets manager on `selected` (default: the first preset), showing its name and options.
 pub fn open(app: &mut VectorcraftApp, selected: Option<&str>) {
     let first = FlattenOptions::preset_label(FlattenOptions::PRESETS[0]).unwrap_or_default();
-    let mut d = Dialog::new(KIND, json!({ "selected": selected.unwrap_or(first) }));
-    show_selected(&app.session.flattener_presets(), &mut d);
-    app.ui.dialog = Some(d);
+    preset_manager::open(app, &SOURCE, selected.unwrap_or(first));
 }
 
-/// The index in `presets` of the preset `selected` names (the first when none), whose name and
-/// options the fields take when they hold another preset's.
-fn show_selected(presets: &[FlattenerPreset], d: &mut Dialog) -> usize {
-    let i = presets.iter().position(|p| p.name.eq_ignore_ascii_case(d.str("selected").trim())).unwrap_or(0);
-    if let Some(preset) = presets.get(i)
-        && d.str(SHOWN) != preset.name
-    {
-        put_options(&mut d.fields, &preset.options);
-        for k in ["selected", "name", SHOWN] {
-            d.fields.insert(k.into(), json!(preset.name));
-        }
-    }
-    i
+/// The presets, the built-in ones first.
+fn rows(app: &VectorcraftApp) -> Vec<ManagerRow> {
+    let built_ins = FlattenOptions::PRESETS.len();
+    app.session.flattener_presets().iter().enumerate().map(|(i, preset)| ManagerRow::new(preset.name.clone(), i < built_ins)).collect()
 }
 
-/// What a button asked for, done once the list and fields are drawn.
-enum Action {
-    Select(String),
-    New,
-    Delete,
-    Import,
-    Export,
+/// The stored preset `name`.
+fn stored(app: &VectorcraftApp, name: &str) -> Value {
+    let found = app.session.flattener_presets().into_iter().find(|preset| preset.name == name);
+    found.and_then(|preset| serde_json::to_value(preset).ok()).unwrap_or_default()
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
+/// The details of the preset `name`: its options, read only on a built-in preset.
+fn detail(app: &VectorcraftApp, name: &str) -> Vec<Detail> {
     let presets = app.session.flattener_presets();
-    let builtins = FlattenOptions::PRESETS.len();
-    let i = show_selected(&presets, d);
-    let (preset, builtin) = (&presets[i], i < builtins);
-    let mut act = None;
-    let mut renaming = false;
-    ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
-            ui.set_width(232.0);
-            widgets::dim_label(ui, tl!("Presets:"));
-            widgets::list_box(ui, |ui| {
-                egui::ScrollArea::vertical().id_salt("flattener-presets").min_scrolled_height(250.0).max_height(250.0).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.set_min_height(250.0);
-                    for (k, p) in presets.iter().enumerate() {
-                        let label = if k < builtins { format!("[{}]", tl!(&p.name)) } else { p.name.clone() };
-                        if ui.selectable_label(k == i, label).clicked() {
-                            act = Some(Action::Select(p.name.clone()));
-                        }
-                    }
-                });
-            });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 4.0;
-                if widgets::flat_button(ui, tl!("New"), 44.0).on_hover_text(tl!("A saved copy of the selected preset")).clicked() {
-                    act = Some(Action::New);
-                }
-                if ui.add_enabled_ui(!builtin, |ui| widgets::flat_button(ui, tl!("Delete"), 52.0)).inner.clicked() {
-                    act = Some(Action::Delete);
-                }
-                if widgets::flat_button(ui, tl!("Import…"), 62.0).clicked() {
-                    act = Some(Action::Import);
-                }
-                if widgets::flat_button(ui, tl!("Export…"), 62.0).on_hover_text(tl!("Save the selected preset to a file")).clicked() {
-                    act = Some(Action::Export);
-                }
-            });
-        });
-        ui.add_space(18.0);
-        ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                widgets::dim_label(ui, tl!("Name:"));
-                if builtin {
-                    ui.label(egui::RichText::new(&preset.name).color(t.text_strong));
-                } else {
-                    renaming = form::text_edit(ui, d, "name", 220.0).has_focus();
-                }
-            });
-            ui.add_space(8.0);
-            let mut o = FlattenOptions::from_params(&Value::Object(d.fields.clone())).unwrap_or_else(|_| preset.options.clone());
-            if options_editor(ui, "flattener-presets", &mut o, !builtin) {
-                put_options(&mut d.fields, &o);
-            }
-            if builtin {
-                ui.add_space(6.0);
-                ui.label(egui::RichText::new(tl!("Built-in presets don't change: New makes a copy you can edit.")).color(t.text_dim).size(11.5));
-            }
-        });
-    });
-    // The fields (whether a widget or `ui.dialog.set` changed them) against the stored preset.
-    let fields = FlattenOptions::from_params(&Value::Object(d.fields.clone()));
-    if builtin {
-        if fields.as_ref() != Ok(&preset.options) {
-            put_options(&mut d.fields, &preset.options);
-        }
-    } else {
-        match fields {
-            Ok(o) if o != preset.options => {
-                if let Err(e) = app.run("flattener.presets.save", json!({"name": preset.name, "options": o})) {
-                    app.status(e);
-                }
-            }
-            Ok(_) => {}
-            Err(e) => app.status(e),
-        }
-        let name = d.str("name");
-        if !renaming && name.trim() != preset.name {
-            match app.run("flattener.presets.save", json!({"name": preset.name, "newName": name})) {
-                Ok(r) => select(d, r["name"].as_str().unwrap_or_default()),
-                Err(e) => {
-                    app.status(e);
-                    d.fields.insert("name".into(), json!(preset.name));
-                }
-            }
-        }
+    let Some((at, preset)) = presets.iter().enumerate().find(|(_, preset)| preset.name == name) else { return Vec::new() };
+    let built_in = at < FlattenOptions::PRESETS.len();
+    let params = flatten::option_params(&[], "");
+    let mut map = Map::new();
+    flatten::put_options(&mut map, &preset.options);
+    let mut out = Vec::new();
+    // A saved preset's name is the manager's Name field.
+    if built_in {
+        out.push(Detail::Line(tl!("Name").to_string(), preset.name.clone()));
     }
-    if let Some(a) = act {
-        let r = match a {
-            // Their file dialogs, shown off the UI thread, import into or export from the dialog
-            // as it is then.
-            Action::Import | Action::Export => {
-                let (current, export) = (preset.name.clone(), matches!(a, Action::Export));
-                crate::picks::in_dialog(app, d, move |app, d| run(app, d, if export { Action::Export } else { Action::Import }, &current))
-            }
-            a => run(app, d, a, &preset.name),
-        };
-        if let Err(e) = r {
-            app.status(e);
-        }
+    let fields = form::fields_of(&params, &map);
+    out.push(Detail::Rows(params, fields, built_in));
+    if built_in {
+        out.push(Detail::Note(tl!("Built-in presets don't change: New makes a copy you can edit.").to_string()));
     }
-    false
+    out
 }
 
-/// Select the preset `name` (its values load on the next frame).
-fn select(d: &mut Dialog, name: &str) {
-    d.fields.insert("selected".into(), json!(name));
-    d.fields.remove(SHOWN);
+/// The saved or built-in preset `name`, with whether it is a built-in one.
+fn find(app: &VectorcraftApp, name: &str) -> Option<(FlattenerPreset, bool)> {
+    let presets = app.session.flattener_presets();
+    let (at, preset) = presets.into_iter().enumerate().find(|(_, preset)| preset.name == name)?;
+    Some((preset, at < FlattenOptions::PRESETS.len()))
 }
 
-fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action, current: &str) -> Result<(), String> {
-    match act {
-        Action::Select(name) => select(d, &name),
-        Action::New => {
-            let r = app.run("flattener.presets.save", json!({ "preset": current }))?;
-            select(d, r["name"].as_str().unwrap_or_default());
-        }
-        Action::Delete => {
+/// Carries out `event` on the preset `current`.
+fn run(app: &mut VectorcraftApp, event: &ManagerEvent, current: &str) -> Result<Option<String>, String> {
+    let select = |saved: Value| saved["name"].as_str().map(str::to_owned);
+    match event {
+        ManagerEvent::Select(_) | ManagerEvent::Action(ManagerAction::Edit) => Ok(None),
+        ManagerEvent::Action(ManagerAction::New) => Ok(select(app.run("flattener.presets.save", json!({ "preset": current }))?)),
+        ManagerEvent::Action(ManagerAction::Delete) => {
             let i = app.session.prefs.flattener_presets.iter().position(|p| p.name == current);
             app.run("flattener.presets.delete", json!({ "name": current }))?;
-            // The one above it takes its place (the last built-in one above the first saved one).
-            let next =
-                app.session.flattener_presets().get((i.unwrap_or(0) + FlattenOptions::PRESETS.len()).saturating_sub(1)).map(|p| p.name.clone());
-            select(d, &next.unwrap_or_default());
+            let above = preset_manager::above(i, FlattenOptions::PRESETS.len());
+            Ok(app.session.flattener_presets().get(above).map(|p| p.name.clone()))
         }
-        Action::Import => {
-            // On the web the picked file arrives later and imports through `io::open_bytes`.
-            if let Some(f) = app.services.open_async.as_mut() {
-                f();
-                return Ok(());
+        ManagerEvent::Action(ManagerAction::Import) => preset_manager::import(app, KEY, "flattener.presets.import", "Flattener presets", PRESET_EXTS),
+        ManagerEvent::Action(ManagerAction::Export) => preset_manager::export(app, "flattener.presets.export", PRESET_FORMAT, current),
+        // A new name that is taken or a built-in one is refused by the command.
+        ManagerEvent::Rename(name) if name.trim() == current => Ok(None),
+        ManagerEvent::Rename(name) => Ok(select(app.run("flattener.presets.save", json!({ "name": current, "newName": name }))?)),
+        ManagerEvent::Edited(fields) => {
+            let Some((preset, false)) = find(app, current) else { return Ok(None) };
+            let params = flatten::option_params(&[], "");
+            let options = FlattenOptions::from_params(&Value::Object(form::json_of(&params, fields))).map_err(|e| e.to_string())?;
+            if options != preset.options {
+                app.run("flattener.presets.save", json!({ "name": current, "options": options }))?;
             }
-            let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Flattener presets", PRESET_EXTS)], ..Default::default() };
-            let path = crate::picks::open(app, &pick).ok_or("cancelled")?;
-            let r = app.run("flattener.presets.import", json!({ "path": path }))?;
-            if let Some(first) = r["imported"].get(0).and_then(Value::as_str) {
-                select(d, first);
-            }
-        }
-        Action::Export => {
-            crate::io::save_command_output(app, "flattener.presets.export", PRESET_FORMAT, json!({ "names": [current] }))?;
+            Ok(None)
         }
     }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use craft::ui::dialog::{StackDialog as _, dialog_id};
     use vectorcraft_engine::Session;
 
-    fn frame(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(app, ui.ctx()));
-        out.textures_delta.clear();
+    use super::super::preset_manager::PresetManager;
+
+    /// An app with a window, whose dialog host the manager opens on.
+    fn app() -> VectorcraftApp {
+        crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
     }
 
-    fn set(app: &mut VectorcraftApp, k: &str, v: Value) {
-        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+    fn ctx(app: &VectorcraftApp) -> egui::Context {
+        app.ui_ctx.clone().expect("a window")
+    }
+
+    fn host(app: &VectorcraftApp) -> craft::ui::shell::WindowDialogs {
+        app.dialogs().expect("a window")
+    }
+
+    /// One app frame: the host's pump carries out what the manager queued, and answered panels are taken.
+    fn frame(app: &mut VectorcraftApp) {
+        let ctx = ctx(app);
+        crate::testing::app_frame(app, &ctx, egui::RawInput::default());
+    }
+
+    /// Press a manager button as the user does: the manager queues it and the pump carries it out.
+    fn press(app: &mut VectorcraftApp, action: ManagerAction) {
+        host(app).with(|h| h.get_mut_by_id::<PresetManager>(dialog_id(KEY)).expect("manager is open").queue(ManagerEvent::Action(action)));
         frame(app);
     }
 
-    fn field(app: &VectorcraftApp, k: &str) -> Value {
-        app.ui.dialog.as_ref().unwrap().fields.get(k).cloned().unwrap_or_default()
+    fn fields(app: &mut VectorcraftApp) -> Value {
+        host(app).with(|h| h.get_by_id::<PresetManager>(dialog_id(KEY)).and_then(|m| m.json_fields())).expect("manager is open")
+    }
+
+    /// `ui.dialog.set` on the open manager, then a frame.
+    fn set(app: &mut VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
+        let ctx = ctx(app);
+        let set = host(app).with(|h| h.set_json_field(&ctx, dialog_id(KEY), field, value));
+        frame(app);
+        set
     }
 
     #[test]
     fn edits_save_saved_presets_and_leave_built_in_ones() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("ui.flattenerPresetsDialog", json!({})).unwrap();
-        frame(&mut app);
-        assert_eq!((field(&app, "selected"), field(&app, "lineArtPpi")), (json!("High Resolution"), json!(1200.0)));
-        // Built-in presets go back to their values.
-        set(&mut app, "balance", json!(10));
-        assert_eq!(field(&app, "balance"), json!(100.0));
-        frame(&mut app);
+        let mut app = app();
+        open(&mut app, None);
+        let shown = fields(&mut app);
+        assert_eq!((shown["selected"].clone(), shown["lineArtPpi"].as_f64()), (json!("High Resolution"), Some(1200.0)));
+        // Built-in presets refuse edits and keep their values.
+        assert!(set(&mut app, "balance", json!(10)).is_err());
+        assert_eq!(fields(&mut app)["balance"].as_f64(), Some(100.0));
         assert!(app.session.prefs.flattener_presets.is_empty());
         // New makes an editable copy of the selected preset and selects it.
-        let mut d = app.ui.dialog.clone().unwrap();
-        run(&mut app, &mut d, Action::New, "High Resolution").unwrap();
-        app.ui.dialog = Some(d);
-        frame(&mut app);
-        assert_eq!(field(&app, "selected"), json!("Flattener Preset 1"));
+        press(&mut app, ManagerAction::New);
+        assert_eq!(fields(&mut app)["selected"], "Flattener Preset 1");
         assert_eq!(app.session.prefs.flattener_presets[0].options, FlattenOptions::preset("high").unwrap());
         // Its options and name save as they change.
-        set(&mut app, "balance", json!(10));
+        set(&mut app, "balance", json!(10)).unwrap();
         assert_eq!(app.session.prefs.flattener_presets[0].options.balance, 10.0);
-        set(&mut app, "name", json!("Coarse"));
+        set(&mut app, "name", json!("Coarse")).unwrap();
         assert_eq!(app.session.prefs.flattener_presets[0].name, "Coarse");
-        frame(&mut app);
-        assert_eq!((field(&app, "selected"), field(&app, "balance")), (json!("Coarse"), json!(10.0)));
-        // A taken name is refused and the field goes back.
-        set(&mut app, "name", json!("Low Resolution"));
-        assert_eq!(field(&app, "name"), json!("Coarse"));
+        let shown = fields(&mut app);
+        assert_eq!((shown["selected"].clone(), shown["balance"].as_f64()), (json!("Coarse"), Some(10.0)));
+        // A taken name is refused and the name goes back.
+        set(&mut app, "name", json!("Low Resolution")).unwrap();
+        assert_eq!(fields(&mut app)["name"], "Coarse");
         // Delete selects the preset above it; Close keeps what was saved.
-        let mut d = app.ui.dialog.clone().unwrap();
-        run(&mut app, &mut d, Action::Delete, "Coarse").unwrap();
-        assert_eq!(d.str("selected"), "Low Resolution");
+        press(&mut app, ManagerAction::Delete);
+        assert_eq!(fields(&mut app)["selected"], "Low Resolution");
         assert!(app.session.prefs.flattener_presets.is_empty());
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        let (id, ctx) = (dialog_id(KEY), ctx(&app));
+        host(&app).with(|h| h.confirm_by_id(&ctx, id));
+        assert!(host(&app).with(|h| h.get_by_id::<PresetManager>(id).is_none()), "Close");
     }
 
     #[test]
@@ -294,17 +205,19 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("vc-flattener-ui-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("mine.vcflattener").to_string_lossy().to_string();
-        let picked = file.clone();
-        let services = crate::Services {
-            pick_save: Some(Box::new(move |_: &crate::FilePick| Some(picked.clone()))),
-            write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
-            ..Default::default()
-        };
+        let services =
+            crate::Services { write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))), ..Default::default() };
         let mut app = VectorcraftApp::new(Session::new(), services);
         app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20})).unwrap();
-        app.run("ui.flattenerPresetsDialog", json!({"selected": "Mine"})).unwrap();
-        let mut d = app.ui.dialog.clone().unwrap();
-        run(&mut app, &mut d, Action::Export, "Mine").unwrap();
+        // The scripted file service gives the app its window too.
+        let picker = crate::tests::picks::scripted(&mut app);
+        open(&mut app, Some("Mine"));
+        press(&mut app, ManagerAction::Export);
+        // The save panel suggests the preset's name.
+        assert_eq!(picker.requests().last().and_then(|r| r.file_name.clone()).as_deref(), Some("Mine.vcflattener"));
+        // The answered save panel writes the file in the next frame.
+        picker.answer_saved(&file, None);
+        frame(&mut app);
         // Opening the file imports it (also how the web's picked file arrives).
         let bytes = std::fs::read(&file).unwrap();
         crate::io::open_bytes(&mut app, &file, &bytes, Some(file.clone())).unwrap();

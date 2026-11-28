@@ -1,9 +1,10 @@
 //! What a plug-in may import from the host ([`IMPORTS`]), from plug-in API level 2 on:
 //! `vc_progress` reports how far a run has got, `vc_cancelled` tells it the user or a host limit
 //! asked it to stop, and `vc_log` writes a log line (the `progress` permission); `vc_settings_*`
-//! read and write its settings (`settings`) and `vc_cache_*` its cache (`cache`, [`crate::storage`]).
-//! A module may import one only when its manifest gives `api` 2 and lists the import's permission,
-//! and the host checks each import when the module is loaded ([`check_imports`], [`check_granted`]):
+//! read and write its settings (`settings`) and `vc_cache_*` its cache (`cache`, [`crate::storage`]);
+//! `vc_call` runs a command its manifest's `commandAllowlist` names and `vc_call_result` reads that
+//! command's result (`commands`, through the [`Bridge`] the run is given). A module may import one
+//! only when its manifest gives `api` 2 and lists the import's permission, and the host checks each import when the module is loaded ([`check_imports`], [`check_granted`]):
 //! one it doesn't offer, one with another signature and one the manifest doesn't allow are refused
 //! by name.
 //!
@@ -13,8 +14,9 @@
 //! each line ([`MAX_LOG_LINE`]) and each run ([`MAX_LOG_LINES`], [`MAX_LOG_BYTES`],
 //! [`MAX_LOG_READ`]) are capped. Keys and values must lie inside the module's memory, keys must be
 //! [`crate::storage::valid_name`]s, values are capped, and so are each run's storage calls
-//! ([`MAX_STORAGE_CALLS`]) and the bytes they move ([`MAX_STORAGE_BYTES`]). Nothing a module passes
-//! can panic the host.
+//! ([`MAX_STORAGE_CALLS`]) and the bytes they move ([`MAX_STORAGE_BYTES`]). Command calls are capped
+//! per call ([`MAX_CALL_DATA`]) and per run ([`MAX_CALLS`], [`MAX_CALL_BYTES`]). Nothing a module
+//! passes can panic the host.
 
 use std::sync::Arc;
 
@@ -95,6 +97,89 @@ pub const MAX_STORAGE_CALLS: usize = 10_000;
 /// pass it returns [`STORAGE_BUDGET`].
 pub const MAX_STORAGE_BYTES: usize = 1 << 30;
 
+/// Bytes a storage call reads or writes for each instruction it costs the run, counted as for
+/// [`MAX_STORAGE_BYTES`]: the 1 GiB a run may move costs 16,777,216 instructions.
+pub const STORAGE_BYTES_PER_FUEL: u64 = 64;
+
+/// What `vc_call` returns: the command ran, and `vc_call_result` reads its result.
+pub const CALL_OK: i32 = 0;
+/// What `vc_call` or `vc_call_result` returns: the id, the arguments or the buffer doesn't lie
+/// inside the module's memory.
+pub const CALL_OUTSIDE_MEMORY: i32 = -1;
+/// What `vc_call` returns: the id or the arguments are not UTF-8.
+pub const CALL_BAD_UTF8: i32 = -2;
+/// What `vc_call` returns: the arguments are not a JSON object.
+pub const CALL_BAD_JSON: i32 = -3;
+/// What `vc_call` returns: the manifest's `commandAllowlist` doesn't list the command.
+pub const CALL_NOT_ALLOWED: i32 = -4;
+/// What `vc_call` returns: no command has the id.
+pub const CALL_UNKNOWN_COMMAND: i32 = -5;
+/// What `vc_call` returns: a plug-in may not call the command, whatever its manifest lists.
+pub const CALL_DENIED_COMMAND: i32 = -6;
+/// What `vc_call` returns: the command can't run now (no document, nothing selected).
+pub const CALL_DISABLED: i32 = -7;
+/// What `vc_call` returns: the command ran and failed.
+pub const CALL_COMMAND_FAILED: i32 = -8;
+/// What `vc_call` returns: the arguments or the result are larger than [`MAX_CALL_DATA`], or the
+/// run made [`MAX_CALLS`] calls or moved [`MAX_CALL_BYTES`] with them.
+pub const CALL_LIMIT: i32 = -9;
+/// What `vc_call_result` returns: no call has a result yet.
+pub const CALL_NO_RESULT: i32 = -10;
+/// What `vc_call` returns: nothing can be called now (while the module is being loaded, in a run
+/// that isn't a filter's run on a document, or after a call in the run failed). In a run, this
+/// fails it too.
+pub const CALL_NO_CONTEXT: i32 = -11;
+
+/// Most `vc_call` calls one run makes.
+pub const MAX_CALLS: usize = 1_000;
+
+/// Largest arguments or result of one `vc_call`, in bytes.
+pub const MAX_CALL_DATA: usize = 8 << 20;
+
+/// Most bytes of arguments and results one run's `vc_call` calls move, all together.
+pub const MAX_CALL_BYTES: usize = 64 << 20;
+
+/// Instructions each `vc_call` costs the run, besides one for every 64 bytes of its arguments and
+/// result: [`MAX_CALLS`] calls cost a fifth of a filter's usual budget.
+pub const CALL_FUEL: u64 = 10_000;
+
+/// Why a command a plug-in called with `vc_call` didn't run, or failed: the code `vc_call` returns
+/// and the reason, which the run's error gives.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CallFailure {
+    pub code: i32,
+    pub why: String,
+}
+
+/// What runs the commands a plug-in calls: a command id and its arguments (a JSON object) → the
+/// command's result, or why it didn't run.
+pub type Bridge<'a> = dyn FnMut(&str, &serde_json::Value) -> std::result::Result<serde_json::Value, CallFailure> + 'a;
+
+/// What `vc_call` pauses the run with, for the host to make the call ([`Run::pending`]).
+#[derive(Debug)]
+pub(crate) struct CallPending;
+
+impl std::fmt::Display for CallPending {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("vc_call")
+    }
+}
+
+impl wasmi::errors::HostError for CallPending {}
+
+/// What a storage call ends the run with when the instructions it may take can't pay for its bytes
+/// ([`STORAGE_BYTES_PER_FUEL`]); the host reports why ([`Run::storage_stop`]).
+#[derive(Debug)]
+pub(crate) struct StorageStop;
+
+impl std::fmt::Display for StorageStop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("storage call")
+    }
+}
+
+impl wasmi::errors::HostError for StorageStop {}
+
 /// One host import: its name, its type and the permission it needs.
 pub struct Import {
     pub name: &'static str,
@@ -134,7 +219,17 @@ const fn storage_import(name: &'static str, params: &'static [ValType], signatur
 /// A storage call that fails returns [`STORAGE_NOT_FOUND`], [`STORAGE_OUTSIDE_MEMORY`],
 /// [`STORAGE_BAD_NAME`], [`STORAGE_FULL`], [`STORAGE_UNAVAILABLE`], [`STORAGE_FAILED`] or
 /// [`STORAGE_BUDGET`].
-pub const IMPORTS: [Import; 9] = [
+///
+/// With `commands`, for a filter whose manifest's `commandAllowlist` names the command:
+///
+/// - `vc_call(id, id_len, args, args_len) -> i32`: runs the command with the UTF-8 id of `id_len`
+///   bytes at `id` and the arguments at `args` (a UTF-8 JSON object; no bytes: `{}`) on the document
+///   the run is for → [`CALL_OK`] or why it didn't run or failed. A failed call fails the run, and
+///   nothing the run did stays;
+/// - `vc_call_result(out, out_cap) -> i32`: the length of the last successful call's result (JSON),
+///   copied to `out` when it fits in `out_cap` (nothing is copied otherwise), or
+///   [`CALL_NO_RESULT`].
+pub const IMPORTS: [Import; 11] = [
     Import {
         name: "vc_progress",
         params: &[ValType::I64, ValType::I64],
@@ -156,6 +251,8 @@ pub const IMPORTS: [Import; 9] = [
     storage_import("vc_cache_read", &[I32, I32, I32, I32], "(param i32 i32 i32 i32) (result i32)", Permission::Cache),
     storage_import("vc_cache_write", &[I32, I32, I32, I32], "(param i32 i32 i32 i32) (result i32)", Permission::Cache),
     storage_import("vc_cache_clear", &[I32, I32], "(param i32 i32) (result i32)", Permission::Cache),
+    storage_import("vc_call", &[I32, I32, I32, I32], "(param i32 i32 i32 i32) (result i32)", Permission::Commands),
+    storage_import("vc_call_result", &[I32, I32], "(param i32 i32) (result i32)", Permission::Commands),
 ];
 
 /// Which of a plug-in's stores a storage import reads or writes.
@@ -206,7 +303,7 @@ impl LogLevel {
         }
     }
 
-    fn log_level(self) -> log::Level {
+    pub(crate) fn log_level(self) -> log::Level {
         match self {
             LogLevel::Error => log::Level::Error,
             LogLevel::Warn => log::Level::Warn,
@@ -238,33 +335,27 @@ pub struct Report {
     pub truncated: bool,
 }
 
-/// When a run must stop (native: a wall-clock deadline).
+/// The limit a run past its wall-clock deadline exceeded ([`Error::Limit`]).
+pub(crate) const TIME_BUDGET: &str = "time budget";
+
+/// When a run must stop: a deadline on the monotonic clock (`web_time::Instant`, the page's
+/// `performance.now()` in the web build).
 #[derive(Clone, Copy)]
 pub(crate) struct Deadline {
-    #[cfg(not(target_arch = "wasm32"))]
-    at: std::time::Instant,
+    at: web_time::Instant,
 }
 
 impl Deadline {
     pub(crate) fn new(wall_time_ms: u64) -> Self {
-        #[cfg(target_arch = "wasm32")]
-        let _ = wall_time_ms;
-        Self {
-            #[cfg(not(target_arch = "wasm32"))]
-            at: std::time::Instant::now() + std::time::Duration::from_millis(wall_time_ms),
-        }
+        Self { at: web_time::Instant::now() + std::time::Duration::from_millis(wall_time_ms) }
     }
 
     pub(crate) fn passed(&self) -> bool {
-        #[cfg(not(target_arch = "wasm32"))]
-        if std::time::Instant::now() >= self.at {
-            return true;
-        }
-        false
+        web_time::Instant::now() >= self.at
     }
 
     pub(crate) fn check(&self) -> Result<()> {
-        if self.passed() { Err(Error::Limit("time budget".into())) } else { Ok(()) }
+        if self.passed() { Err(Error::Limit(TIME_BUDGET.into())) } else { Ok(()) }
     }
 }
 
@@ -291,6 +382,30 @@ pub(crate) struct Run {
     storage: Option<Arc<dyn Storage>>,
     storage_calls: usize,
     storage_bytes: usize,
+    /// The instructions of the call's budget not yet handed to the store, which storage calls also
+    /// pay from; the host keeps it up to date around each slice.
+    pub(crate) fuel_left: u64,
+    /// Bytes storage reads copied into the module's memory beyond the bytes the storage counted for
+    /// them, such as a settings value answered from memory; they cost instructions at the same rate.
+    copied_bytes: u64,
+    /// Instructions the last storage call cost ([`STORAGE_BYTES_PER_FUEL`]), still to be taken.
+    fuel_owed: u64,
+    /// Why the call ends after a storage call: the instruction budget when it needed more
+    /// instructions than it could take, or the deadline or Cancel, checked before a storage call
+    /// takes from [`Run::fuel_left`] and after every storage call.
+    pub(crate) storage_stop: Option<Error>,
+    /// The commands `vc_call` may run (the manifest's `commandAllowlist`), once the module has
+    /// loaded and when the run has something to run them ([`Run::allow_calls`]); `None` otherwise.
+    allowed: Option<Vec<String>>,
+    /// How many `vc_call` calls the run made, and the bytes of arguments and results they moved.
+    calls: usize,
+    call_bytes: usize,
+    /// The call `vc_call` paused the run for: its command id, its arguments and their size in bytes.
+    pub(crate) pending: Option<(String, serde_json::Value, usize)>,
+    /// The last successful call's result, as JSON text.
+    pub(crate) call_result: Option<Vec<u8>>,
+    /// The run's first failed call, which fails the run.
+    pub(crate) call_failure: Option<Error>,
     pub(crate) report: Report,
 }
 
@@ -309,6 +424,16 @@ impl Run {
             storage: None,
             storage_calls: 0,
             storage_bytes: 0,
+            fuel_left: 0,
+            copied_bytes: 0,
+            fuel_owed: 0,
+            storage_stop: None,
+            allowed: None,
+            calls: 0,
+            call_bytes: 0,
+            pending: None,
+            call_result: None,
+            call_failure: None,
             report: Report::default(),
         }
     }
@@ -319,19 +444,164 @@ impl Run {
         self
     }
 
+    /// From now on, `vc_call` runs the commands in `allowed`.
+    pub(crate) fn allow_calls(&mut self, allowed: Vec<String>) {
+        self.allowed = Some(allowed);
+    }
+
+    /// Records the run's first failed call, `e`, and returns `code`.
+    fn fail(&mut self, code: i32, e: Error) -> i32 {
+        self.call_failure.get_or_insert(e);
+        code
+    }
+
+    /// `vc_call`: checks the call to the command at `id` with the arguments at `args` in `memory`
+    /// and leaves it in [`Run::pending`] for the host to make, or → the code for why it can't be
+    /// made, which fails the run. The size of the arguments is checked before they are read. After
+    /// the run's first failed call, every call returns [`CALL_NO_CONTEXT`] and none is made.
+    fn call_request(&mut self, memory: &[u8], id: (usize, usize), args: (usize, usize)) -> std::result::Result<(), i32> {
+        self.call_result = None;
+        // No call is made after the run's first failed call.
+        if self.call_failure.is_some() {
+            return Err(CALL_NO_CONTEXT);
+        }
+        if self.allowed.is_none() {
+            let why = "vc_call: no command can be called here (while the module loads, or in a run that can't make calls)";
+            return Err(self.fail(CALL_NO_CONTEXT, Error::Abi(why.into())));
+        }
+        let shown = || {
+            id.0.checked_add(id.1)
+                .filter(|_| id.1 <= crate::manifest::MAX_ALLOWED_ID)
+                .and_then(|end| memory.get(id.0..end))
+                .map_or_else(|| "?".to_string(), |b| permissions::display_text(&String::from_utf8_lossy(b), permissions::MAX_SHOWN_FIELD))
+        };
+        if args.1 > MAX_CALL_DATA {
+            let (shown, len) = (shown(), args.1);
+            return Err(self.fail(CALL_LIMIT, Error::Limit(format!("command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})"))));
+        }
+        if self.calls >= MAX_CALLS || self.call_bytes.saturating_add(args.1) > MAX_CALL_BYTES {
+            return Err(self.fail(CALL_LIMIT, Error::Limit(format!("command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)"))));
+        }
+        self.calls += 1;
+        self.call_bytes += args.1;
+        let slice = |(at, len): (usize, usize)| at.checked_add(len).and_then(|end| memory.get(at..end));
+        let (Some(id_bytes), Some(arg_bytes)) = (slice(id).filter(|_| id.1 <= crate::manifest::MAX_ALLOWED_ID), slice(args)) else {
+            if id.1 > crate::manifest::MAX_ALLOWED_ID {
+                let shown = shown();
+                return Err(self.fail(CALL_NOT_ALLOWED, Error::Abi(format!("vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it"))));
+            }
+            let shown = shown();
+            return Err(
+                self.fail(CALL_OUTSIDE_MEMORY, Error::Abi(format!("vc_call `{shown}`: the id or the arguments lie outside the module's memory")))
+            );
+        };
+        let (Ok(name), Ok(text)) = (std::str::from_utf8(id_bytes), std::str::from_utf8(arg_bytes)) else {
+            let shown = shown();
+            return Err(self.fail(CALL_BAD_UTF8, Error::Abi(format!("vc_call `{shown}`: the id or the arguments are not UTF-8"))));
+        };
+        if !self.allowed.as_ref().is_some_and(|allowed| allowed.iter().any(|a| a == name)) {
+            let shown = shown();
+            return Err(self.fail(CALL_NOT_ALLOWED, Error::Abi(format!("vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it"))));
+        }
+        let parsed = if text.is_empty() { Ok(serde_json::Value::Object(serde_json::Map::new())) } else { serde_json::from_str(text) };
+        match parsed {
+            Ok(v @ serde_json::Value::Object(_)) => {
+                self.pending = Some((name.to_string(), v, args.1));
+                Ok(())
+            }
+            _ => {
+                let shown = shown();
+                Err(self.fail(CALL_BAD_JSON, Error::Abi(format!("vc_call `{shown}`: the arguments are not a JSON object"))))
+            }
+        }
+    }
+
+    /// Takes the host's answer to the call in [`Run::pending`], to command `id`: keeps its result for
+    /// `vc_call_result`, or records the failure → what `vc_call` returns.
+    pub(crate) fn call_answered(&mut self, id: &str, answer: std::result::Result<serde_json::Value, CallFailure>) -> i32 {
+        let shown = permissions::display_text(id, permissions::MAX_SHOWN_FIELD);
+        let value = match answer {
+            Ok(value) => value,
+            Err(f) => {
+                let why = f.why;
+                return self.fail(f.code, Error::Failed(format!("vc_call `{shown}`: {why}")));
+            }
+        };
+        let text = serde_json::to_vec(&value).unwrap_or_default();
+        let len = text.len();
+        if len > MAX_CALL_DATA {
+            return self.fail(CALL_LIMIT, Error::Limit(format!("command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})")));
+        }
+        if self.call_bytes.saturating_add(len) > MAX_CALL_BYTES {
+            return self.fail(CALL_LIMIT, Error::Limit(format!("command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)")));
+        }
+        self.call_bytes += len;
+        self.call_result = Some(text);
+        CALL_OK
+    }
+
+    /// `vc_call_result`: copies the last successful call's result into the `out_cap` bytes at `out`
+    /// when it fits → its length, or [`CALL_NO_RESULT`] or [`CALL_OUTSIDE_MEMORY`]. Neither fails
+    /// the run: a plug-in asks again with a larger buffer.
+    fn call_result(&self, memory: &mut [u8], out: (usize, usize)) -> i32 {
+        let Some(result) = &self.call_result else { return CALL_NO_RESULT };
+        if out.1 > 0 && out.0.checked_add(out.1).is_none_or(|end| end > memory.len()) {
+            return CALL_OUTSIDE_MEMORY;
+        }
+        if result.len() <= out.1
+            && let Some(dest) = memory.get_mut(out.0..out.0 + result.len())
+        {
+            dest.copy_from_slice(result);
+        }
+        // At most MAX_CALL_DATA, which an i32 holds.
+        i32::try_from(result.len()).unwrap_or(CALL_LIMIT)
+    }
+
     /// Makes one storage call with `call`, on the plug-in's storage and a [`Meter`] holding the
     /// run's storage bytes left, and counts the call and the bytes it read and wrote → the code for
     /// a run that has used up its calls or has no storage, else what `call` returns.
-    fn metered<T>(&mut self, call: impl FnOnce(&dyn Storage, &mut Meter) -> std::result::Result<T, StorageError>) -> std::result::Result<T, i32> {
+    ///
+    /// The run's storage bytes cost one instruction for each whole [`STORAGE_BYTES_PER_FUEL`]
+    /// bytes, counted over the run, so splitting a transfer into calls costs the same. The meter
+    /// also holds no more bytes than the `held` instructions in the store pay for, with
+    /// [`Run::fuel_left`] too while the deadline and Cancel have not come ([`Meter::gated`]), so
+    /// the call stops before a read or write they can't pay for; one the storage bytes left would
+    /// allow sets [`Run::storage_stop`]. What the call costs goes to [`Run::fuel_owed`].
+    fn metered<T>(
+        &mut self,
+        held: u64,
+        call: impl FnOnce(&dyn Storage, &mut Meter) -> std::result::Result<T, StorageError>,
+    ) -> std::result::Result<T, i32> {
         if self.storage_calls >= MAX_STORAGE_CALLS {
             return Err(STORAGE_BUDGET);
         }
         self.storage_calls += 1;
         let Some(store) = self.storage.clone() else { return Err(STORAGE_UNAVAILABLE) };
-        let mut meter = Meter::new(MAX_STORAGE_BYTES.saturating_sub(self.storage_bytes) as u64);
+        let before = self.storage_bytes as u64;
+        let by_bytes = MAX_STORAGE_BYTES.saturating_sub(self.storage_bytes) as u64;
+        // Bytes up to the end of the last whole unit `fuel` instructions pay for.
+        let by_fuel = |fuel: u64| {
+            let units = (before / STORAGE_BYTES_PER_FUEL).saturating_add(fuel).saturating_add(1);
+            units.saturating_mul(STORAGE_BYTES_PER_FUEL).saturating_sub(before).saturating_sub(1)
+        };
+        // Bytes past what the store's fuel pays for are read or written only before the deadline
+        // and Cancel, as the host hands out the rest of the budget only then.
+        let left = by_bytes.min(by_fuel(held.saturating_add(self.fuel_left)));
+        let mut meter = Meter::gated(left, by_fuel(held), self.deadline.at);
         let done = call(store.as_ref(), &mut meter);
         // What the call read before it failed counts too.
         self.storage_bytes = self.storage_bytes.saturating_add(usize::try_from(meter.used()).unwrap_or(usize::MAX));
+        self.fuel_owed = (self.storage_bytes as u64 / STORAGE_BYTES_PER_FUEL).saturating_sub(before / STORAGE_BYTES_PER_FUEL);
+        // A read or write the run's storage bytes alone allow was refused for its instructions, or
+        // for the deadline or Cancel.
+        let refused = meter.refused();
+        if matches!(done, Err(StorageError::Budget)) && refused > 0 && refused <= by_bytes.saturating_sub(meter.used()) {
+            self.storage_stop = Some(match meter.stopped() {
+                Some(storage::Gate::Cancel) => Error::Cancelled,
+                Some(storage::Gate::Deadline) => Error::Limit(TIME_BUDGET.into()),
+                None => Error::Limit("instruction budget".into()),
+            });
+        }
         done.map_err(|e| storage_code(&e))
     }
 
@@ -344,8 +614,8 @@ impl Run {
     }
 
     /// `vc_settings_get` and `vc_cache_read`: copies the value of the key at `name` into the
-    /// `out_cap` bytes at `out` when it fits → its length.
-    fn storage_read(&mut self, area: Area, memory: &mut [u8], name: (usize, usize), out: (usize, usize)) -> i32 {
+    /// `out_cap` bytes at `out` when it fits → its length. The store holds `held` instructions.
+    fn storage_read(&mut self, area: Area, memory: &mut [u8], name: (usize, usize), out: (usize, usize), held: u64) -> i32 {
         let key = match Self::storage_name(memory, name.0, name.1) {
             Ok(key) => key,
             Err(code) => return code,
@@ -354,7 +624,8 @@ impl Run {
             return STORAGE_OUTSIDE_MEMORY;
         }
         // The storage counts what it read whether or not the value fits the buffer.
-        let got = self.metered(|store, meter| match area {
+        let counted = self.storage_bytes;
+        let got = self.metered(held, |store, meter| match area {
             Area::Settings => store.setting(&key, meter),
             Area::Cache => store.cache_entry(&key, meter),
         });
@@ -368,12 +639,18 @@ impl Run {
             && let Some(dest) = memory.get_mut(out.0..out.0 + value.len())
         {
             dest.copy_from_slice(&value);
+            // Bytes copied that the storage didn't count, counted over the run like the others.
+            let uncounted = (value.len() as u64).saturating_sub(self.storage_bytes.saturating_sub(counted) as u64);
+            let before = self.copied_bytes / STORAGE_BYTES_PER_FUEL;
+            self.copied_bytes = self.copied_bytes.saturating_add(uncounted);
+            self.fuel_owed = self.fuel_owed.saturating_add(self.copied_bytes / STORAGE_BYTES_PER_FUEL - before);
         }
         len
     }
 
-    /// `vc_settings_set` and `vc_cache_write`: sets the key at `name` to the `value` bytes.
-    fn storage_write(&mut self, area: Area, memory: &[u8], name: (usize, usize), value: (usize, usize)) -> i32 {
+    /// `vc_settings_set` and `vc_cache_write`: sets the key at `name` to the `value` bytes. The
+    /// store holds `held` instructions.
+    fn storage_write(&mut self, area: Area, memory: &[u8], name: (usize, usize), value: (usize, usize), held: u64) -> i32 {
         let key = match Self::storage_name(memory, name.0, name.1) {
             Ok(key) => key,
             Err(code) => return code,
@@ -382,7 +659,7 @@ impl Run {
         if bytes.len() > area.max_value() {
             return STORAGE_FULL;
         }
-        let written = self.metered(|store, meter| match area {
+        let written = self.metered(held, |store, meter| match area {
             Area::Settings => store.set_setting(&key, bytes, meter),
             Area::Cache => store.set_cache_entry(&key, bytes, meter),
         });
@@ -390,8 +667,8 @@ impl Run {
     }
 
     /// `vc_settings_delete` and `vc_cache_clear`: removes the key at `name`, or with `vc_cache_clear`
-    /// and a `name` of no bytes, every cache entry.
-    fn storage_remove(&mut self, area: Area, memory: &[u8], name: (usize, usize)) -> i32 {
+    /// and a `name` of no bytes, every cache entry. The store holds `held` instructions.
+    fn storage_remove(&mut self, area: Area, memory: &[u8], name: (usize, usize), held: u64) -> i32 {
         let key = match (area, name.1) {
             (Area::Cache, 0) => None,
             _ => match Self::storage_name(memory, name.0, name.1) {
@@ -399,7 +676,7 @@ impl Run {
                 Err(code) => return code,
             },
         };
-        let removed = self.metered(|store, meter| match (area, key) {
+        let removed = self.metered(held, |store, meter| match (area, key) {
             (Area::Settings, Some(key)) => store.delete_setting(&key, meter),
             (Area::Cache, Some(key)) => store.remove_cache_entry(&key),
             (_, None) => store.clear_cache().map(|_| true),
@@ -411,7 +688,7 @@ impl Run {
         }
     }
 
-    fn progress(&mut self, done: i64, total: i64) {
+    pub(crate) fn progress(&mut self, done: i64, total: i64) {
         let total = u64::try_from(total).unwrap_or(0);
         let done = u64::try_from(done).unwrap_or(0);
         let done = if total > 0 { done.min(total) } else { done };
@@ -433,12 +710,12 @@ impl Run {
         vectorcraft_doc::cancel::progress(done, total, PROGRESS_STEP);
     }
 
-    fn cancelled(&self) -> i32 {
+    pub(crate) fn cancelled(&self) -> i32 {
         i32::from(vectorcraft_doc::cancel::is_cancelled() || self.deadline.passed())
     }
 
     /// Writes the `len` bytes at `ptr` in `memory` as a line of `level` → what `vc_log` returns.
-    fn log(&mut self, level: i32, memory: &[u8], ptr: usize, len: usize) -> i32 {
+    pub(crate) fn log(&mut self, level: i32, memory: &[u8], ptr: usize, len: usize) -> i32 {
         let Some(level) = LogLevel::from_code(level) else { return LOG_BAD_LEVEL };
         let Some(bytes) = ptr.checked_add(len).and_then(|end| memory.get(ptr..end)) else { return LOG_OUTSIDE_MEMORY };
         if self.report.truncated {
@@ -495,6 +772,35 @@ fn memory_and_host<'a>(caller: &'a mut Caller<'_, Host>) -> Option<(&'a mut [u8]
     Some(memory.data_and_store_mut(caller))
 }
 
+/// Takes what the last storage call cost ([`Run::fuel_owed`]) from the `held` instructions in the
+/// store, then from [`Run::fuel_left`]. A call that needed more instructions than those, or that
+/// ended after the deadline or Cancel (checked in that order, as after a `vc_call`), ends the run
+/// with [`StorageStop`] and the reason in [`Run::storage_stop`].
+fn pay_storage(caller: &mut Caller<'_, Host>, held: u64) -> std::result::Result<(), wasmi::Error> {
+    let run = &mut caller.data_mut().run;
+    let owed = std::mem::take(&mut run.fuel_owed);
+    if run.storage_stop.is_none() {
+        run.storage_stop = if owed > held.saturating_add(run.fuel_left) {
+            Some(Error::Limit("instruction budget".into()))
+        } else if run.deadline.passed() {
+            Some(Error::Limit(TIME_BUDGET.into()))
+        } else if vectorcraft_doc::cancel::is_cancelled() {
+            Some(Error::Cancelled)
+        } else {
+            None
+        };
+    }
+    if run.storage_stop.is_some() {
+        return Err(wasmi::Error::host(StorageStop));
+    }
+    let from_store = owed.min(held);
+    run.fuel_left = run.fuel_left.saturating_sub(owed - from_store);
+    if from_store > 0 {
+        caller.set_fuel(held - from_store)?;
+    }
+    Ok(())
+}
+
 /// An i32 argument as the unsigned offset or length it stands for.
 fn offset(v: i32) -> usize {
     v as u32 as usize
@@ -521,17 +827,52 @@ pub(crate) fn linker(engine: &Engine, granted: &[Permission]) -> Linker<Host> {
         if !granted.contains(&permission) {
             continue;
         }
-        let _ = linker.func_wrap(MODULE, get, move |mut caller: Caller<'_, Host>, key: i32, key_len: i32, out: i32, out_cap: i32| -> i32 {
-            let Some((data, host)) = memory_and_host(&mut caller) else { return STORAGE_OUTSIDE_MEMORY };
-            host.run.storage_read(area, data, (offset(key), offset(key_len)), (offset(out), offset(out_cap)))
-        });
-        let _ = linker.func_wrap(MODULE, set, move |mut caller: Caller<'_, Host>, key: i32, key_len: i32, value: i32, value_len: i32| -> i32 {
-            let Some((data, host)) = memory_and_host(&mut caller) else { return STORAGE_OUTSIDE_MEMORY };
-            host.run.storage_write(area, data, (offset(key), offset(key_len)), (offset(value), offset(value_len)))
-        });
-        let _ = linker.func_wrap(MODULE, remove, move |mut caller: Caller<'_, Host>, key: i32, key_len: i32| -> i32 {
-            let Some((data, host)) = memory_and_host(&mut caller) else { return STORAGE_OUTSIDE_MEMORY };
-            host.run.storage_remove(area, data, (offset(key), offset(key_len)))
+        // A storage call pays for its bytes before it returns ([`pay_storage`]).
+        let _ = linker.func_wrap(
+            MODULE,
+            get,
+            move |mut caller: Caller<'_, Host>, key: i32, key_len: i32, out: i32, out_cap: i32| -> std::result::Result<i32, wasmi::Error> {
+                let held = caller.get_fuel().unwrap_or(0);
+                let Some((data, host)) = memory_and_host(&mut caller) else { return Ok(STORAGE_OUTSIDE_MEMORY) };
+                let code = host.run.storage_read(area, data, (offset(key), offset(key_len)), (offset(out), offset(out_cap)), held);
+                pay_storage(&mut caller, held).map(|()| code)
+            },
+        );
+        let _ = linker.func_wrap(
+            MODULE,
+            set,
+            move |mut caller: Caller<'_, Host>, key: i32, key_len: i32, value: i32, value_len: i32| -> std::result::Result<i32, wasmi::Error> {
+                let held = caller.get_fuel().unwrap_or(0);
+                let Some((data, host)) = memory_and_host(&mut caller) else { return Ok(STORAGE_OUTSIDE_MEMORY) };
+                let code = host.run.storage_write(area, data, (offset(key), offset(key_len)), (offset(value), offset(value_len)), held);
+                pay_storage(&mut caller, held).map(|()| code)
+            },
+        );
+        let _ =
+            linker.func_wrap(MODULE, remove, move |mut caller: Caller<'_, Host>, key: i32, key_len: i32| -> std::result::Result<i32, wasmi::Error> {
+                let held = caller.get_fuel().unwrap_or(0);
+                let Some((data, host)) = memory_and_host(&mut caller) else { return Ok(STORAGE_OUTSIDE_MEMORY) };
+                let code = host.run.storage_remove(area, data, (offset(key), offset(key_len)), held);
+                pay_storage(&mut caller, held).map(|()| code)
+            });
+    }
+    if granted.contains(&Permission::Commands) {
+        // A call that can be made pauses the run: the host makes it with what the run was given to
+        // make calls with ([`crate::Plugin::run_calling`]), and resumes the run with the code.
+        let _ = linker.func_wrap(
+            MODULE,
+            "vc_call",
+            |mut caller: Caller<'_, Host>, id: i32, id_len: i32, args: i32, args_len: i32| -> std::result::Result<i32, wasmi::Error> {
+                let Some((data, host)) = memory_and_host(&mut caller) else { return Ok(CALL_OUTSIDE_MEMORY) };
+                match host.run.call_request(data, (offset(id), offset(id_len)), (offset(args), offset(args_len))) {
+                    Ok(()) => Err(wasmi::Error::host(CallPending)),
+                    Err(code) => Ok(code),
+                }
+            },
+        );
+        let _ = linker.func_wrap(MODULE, "vc_call_result", |mut caller: Caller<'_, Host>, out: i32, out_cap: i32| -> i32 {
+            let Some((data, host)) = memory_and_host(&mut caller) else { return CALL_OUTSIDE_MEMORY };
+            host.run.call_result(data, (offset(out), offset(out_cap)))
         });
     }
     linker
@@ -581,6 +922,15 @@ mod tests {
 
     fn run() -> Run {
         Run::new("test", true, false, Deadline::new(60_000))
+    }
+
+    /// A deadline reads the monotonic clock that the web build also reads: one of 0 ms has
+    /// passed, and one a day away has not.
+    #[test]
+    fn a_deadline_passes_on_the_monotonic_clock() {
+        assert!(Deadline::new(0).passed());
+        assert!(matches!(Deadline::new(0).check(), Err(Error::Limit(l)) if l == TIME_BUDGET));
+        assert!(!Deadline::new(86_400_000).passed());
     }
 
     /// Progress is clamped: negative counts are 0 and `done` never passes a known total.

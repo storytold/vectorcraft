@@ -23,6 +23,8 @@ fn extras_are_written_flat_in_order() {
         e.shape_mode = crate::ShapeMode::Exclude;
         e.envelope_edit_margin = Some([0.5, 0.5, 0.25, 0.25]);
         e.pixel_aligned = true;
+        e.warp_piece = true;
+        e.clip_pieces = true;
     }
     /// The top-level keys of a JSON object, in the order written.
     struct Keys(Vec<String>);
@@ -69,10 +71,14 @@ fn extras_are_written_flat_in_order() {
         "shape_mode",
         "envelope_edit_margin",
         "pixel_aligned",
+        "warp_piece",
+        "clip_pieces",
     ];
     assert_eq!(keys, order);
     assert_eq!(v["shape_mode"], "exclude");
     assert_eq!(v["pixel_aligned"], true);
+    assert_eq!(v["warp_piece"], true);
+    assert_eq!(v["clip_pieces"], true);
     assert_eq!(serde_json::from_value::<Node>(v).unwrap(), n);
     let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
     let back: Node = serde_json::from_value(serde_json::to_value(&plain).unwrap()).unwrap();
@@ -176,6 +182,20 @@ fn a_polygon_reports_and_takes_its_radius_angle_and_equal_sides() {
     // Other shapes have none of it.
     let e = LiveShape::Ellipse { w: 1.0, h: 1.0, pie: (0.0, 360.0), xf: Affine::IDENTITY };
     assert_eq!((e.polygon_radius(), e.polygon_angle()), (None, None));
+}
+
+/// A very large angle turns a rectangle to that angle modulo 360, whatever angle it had before.
+#[test]
+fn a_shape_takes_a_very_large_angle() {
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let want = 1e20f64.rem_euclid(360.0);
+    for turned in [0.0, 90.0] {
+        let xf = Affine::translate((50.0, 50.0)) * Affine::rotate(-f64::to_radians(turned));
+        let mut r = LiveShape::Rectangle { w: 100.0, h: 50.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf };
+        assert!(close(r.shape_angle().unwrap(), turned), "{:?}", r.shape_angle());
+        r.set_shape_angle(1e20);
+        assert!(close(r.shape_angle().unwrap(), want), "from {turned}°: {:?}, not {want}", r.shape_angle());
+    }
 }
 
 /// A node holding a live rectangle (`w` × `h`, all radii `r`, placed by `xf`) and its path.
@@ -449,6 +469,60 @@ fn visual_bounds_include_stroke() {
     assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
 }
 
+/// A lone anchor 20 points right of a stroked square widens the path's geometric box, and its
+/// visual box only where the stroke draws it: as the dot of a round or projecting cap on a closed
+/// subpath. An open lone anchor, or a closed one under a butt cap, draws nothing.
+#[test]
+fn a_lone_anchor_widens_the_visual_box_only_where_its_cap_draws_a_dot() {
+    use crate::appearance::LineCap;
+    use vectorcraft_geom::{Point, SubPath};
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    let node = |closed: bool, cap: LineCap| {
+        let mut subpaths = square.subpaths.clone();
+        subpaths.push(SubPath::polyline(&[Point::new(30.0, 5.0)], closed));
+        let mut p = Node::path(NodeId(2), PathData::new(subpaths), Appearance::default_art());
+        let s = p.appearance.stroke_mut().unwrap();
+        (s.cap, s.join) = (cap, crate::appearance::LineJoin::Round);
+        p
+    };
+    for closed in [false, true] {
+        for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+            let p = node(closed, cap);
+            let geometric = p.geometric_bounds().unwrap();
+            let visual = p.visual_bounds().unwrap();
+            assert!(geometric.x1 >= 30.0, "{closed} {cap:?}: the geometric box {geometric:?} leaves out the lone anchor");
+            let dot = closed && cap != LineCap::Butt;
+            assert_eq!(visual.x1 > 30.0, dot, "{closed} {cap:?}: the visual box {visual:?}");
+            assert!(dot || visual.x1 < 11.0, "{closed} {cap:?}: the visual box {visual:?} reaches toward the lone anchor");
+        }
+    }
+}
+
+/// The dot a round or projecting cap draws for a closed lone anchor reaches half the stroke's
+/// width round the anchor under every join, miter and bevel joins included, which measure the
+/// stroke along its segments.
+#[test]
+fn a_lone_anchors_dot_reaches_half_the_stroke_width_under_every_join() {
+    use crate::appearance::{LineCap, LineJoin};
+    use vectorcraft_geom::{Point, SubPath};
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    for join in [LineJoin::Miter, LineJoin::Bevel, LineJoin::Round] {
+        for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+            let mut subpaths = square.subpaths.clone();
+            subpaths.push(SubPath::polyline(&[Point::new(30.0, 5.0)], true));
+            let mut p = Node::path(NodeId(2), PathData::new(subpaths), Appearance::default_art());
+            let s = p.appearance.stroke_mut().unwrap();
+            (s.cap, s.join, s.width) = (cap, join, 4.0);
+            let visual = p.visual_bounds().unwrap();
+            if cap == LineCap::Butt {
+                assert!(visual.x1 < 13.0, "{join:?} {cap:?}: the visual box {visual:?} reaches toward a lone anchor that draws nothing");
+            } else {
+                assert!(visual.x1 >= 32.0 - 1e-9 && visual.y1 >= 10.0, "{join:?} {cap:?}: the visual box {visual:?} leaves out the dot's reach");
+            }
+        }
+    }
+}
+
 /// A group's box from its members' boxes grows by the group's own strokes, leaves out members
 /// without a box, and is `None` when none has one.
 #[test]
@@ -461,6 +535,52 @@ fn visual_of_members_unions_the_members_and_grows_by_the_group_stroke() {
     assert_eq!(g.visual_of_members([Some(a), None, Some(b)].into_iter()), Some(Rect::new(0.0, 0.0, 30.0, 10.0).inflate(o, o)));
     assert_eq!(g.visual_of_members([None, None].into_iter()), None);
     assert_eq!(g.visual_of_members([].into_iter()), None);
+}
+
+/// A group's or layer's own miter-joined stroke is measured along its members' shapes, as a
+/// path's is: a 10 pt stroke round a square reaches 5 pt past it, not the 50 pt a miter spike
+/// could reach, through nested groups and in a turned frame too. It paints nothing round a hidden
+/// member or an image.
+#[test]
+fn a_containers_own_miter_stroke_is_measured_along_its_members() {
+    use vectorcraft_color::{Color, Paint};
+    let path = |id, r: Rect| Arc::new(Node::path(NodeId(id), shapes::rectangle(r), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0)));
+    let stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 10.0);
+    assert_eq!(stroke.outset(), 50.0, "a 10 pt miter-joined stroke can reach 50 pt");
+    let stroked = |mut n: Node| {
+        n.appearance = stroke.clone().into();
+        n
+    };
+    let square = Rect::new(100.0, 100.0, 200.0, 200.0);
+    let around = Some(Rect::new(95.0, 95.0, 205.0, 205.0));
+    assert_eq!(stroked(Node::group(NodeId(1), vec![path(2, square)])).visual_bounds(), around, "a group");
+    let nested = Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(3), vec![path(2, square)]))]);
+    assert_eq!(stroked(nested.clone()).visual_bounds(), around, "a nested group");
+    // Measured in a turned frame, as a box square to a turned selection is.
+    let turned = stroked(nested).bounds_in(&crate::Document::new(400.0, 400.0).symbol_boxes(), Affine::rotate(std::f64::consts::FRAC_PI_2), true);
+    let want = Rect::new(-205.0, 95.0, -95.0, 205.0);
+    assert!(
+        turned.is_some_and(|b| (b.x0 - want.x0).abs() + (b.y0 - want.y0).abs() + (b.x1 - want.x1).abs() + (b.y1 - want.y1).abs() < 1e-9),
+        "{turned:?}"
+    );
+    let mut layer = Node::layer(NodeId(1), "Layer 1", LayerColor::Preset(0));
+    if let NodeKind::Layer { children, .. } = &mut layer.kind {
+        children.push(path(2, square));
+    }
+    assert_eq!(stroked(layer).visual_bounds(), around, "a layer");
+    let mut hidden = (*path(3, Rect::new(100.0, 300.0, 200.0, 400.0))).clone();
+    hidden.visible = false;
+    let image = ImageObject {
+        key: "k".into(),
+        width: 10,
+        height: 10,
+        xf: Affine::translate((500.0, 100.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let kids = vec![path(2, square), Arc::new(hidden), Arc::new(Node::new(NodeId(4), NodeKind::Image(Box::new(image))))];
+    assert_eq!(stroked(Node::group(NodeId(1), kids)).visual_bounds(), Some(Rect::new(95.0, 95.0, 510.0, 400.0)), "a hidden member and an image");
 }
 
 /// Type's visual bounds grow by how far its character strokes paint past the glyphs: half the
@@ -594,4 +714,236 @@ fn compound_stroke_path_is_its_members_in_order() {
     let bp = n.stroke_path().unwrap();
     assert_eq!(bp.elements(), expected.elements());
     assert!(!bp.elements().is_empty());
+}
+
+/// The sublayers in [`guide_layers`]'s chain, each inside the one before.
+const GUIDE_CHAIN: u64 = 30;
+
+/// How many children the layers of [`guide_layers`] hold: the layer's 6, 1 in the sublayer
+/// without a guide, 2 at each of the two places the shared sublayer lies, the innermost
+/// sublayer's 2 and 3 in each sublayer around it.
+const GUIDE_LAYER_CHILDREN: usize = 6 + 1 + 2 * 2 + 2 + (GUIDE_CHAIN as usize - 1) * 3;
+
+/// How many ruler guides the layers of [`guide_layers`] hold: one in each sublayer of the chain,
+/// one at each place the shared sublayer lies and the layer's own.
+const GUIDE_LAYER_GUIDES: usize = GUIDE_CHAIN as usize + 2 + 1;
+
+/// A layer holding, in order: [`GUIDE_CHAIN`] sublayers, each inside the one before and holding an
+/// object and a ruler guide; a sublayer with an object only; a sublayer with an object and a
+/// guide; an object; that last sublayer again; and a guide. Guides differ in direction, artboard
+/// and lock. Returns the layer, the sublayer without a guide and the one that lies twice.
+fn guide_layers() -> (Node, Arc<Node>, Arc<Node>) {
+    let rect = |id| Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art()));
+    let guide = |id: u64| {
+        let kind = NodeKind::RulerGuide { vertical: id.is_multiple_of(2), pos: id as f64, artboard: id.is_multiple_of(3).then_some(7) };
+        let mut g = Node::new(NodeId(id), kind);
+        g.locked = id.is_multiple_of(5);
+        Arc::new(g)
+    };
+    let sublayer = |id, children: Vec<Arc<Node>>| {
+        let mut l = Node::layer(NodeId(id), "Sub", LayerColor::Preset(1));
+        if let Some(ch) = l.children_mut() {
+            *ch = children;
+        }
+        Arc::new(l)
+    };
+    let mut chain = sublayer(100, vec![rect(150), guide(200)]);
+    for depth in 1..GUIDE_CHAIN {
+        chain = sublayer(100 + depth, vec![rect(600 + depth), chain, guide(300 + depth)]);
+    }
+    let still = sublayer(500, vec![rect(501)]);
+    let twice = sublayer(510, vec![rect(511), guide(512)]);
+    let mut layer = Node::layer(NodeId(1), "Layer", LayerColor::Preset(0));
+    if let Some(ch) = layer.children_mut() {
+        *ch = vec![chain, Arc::clone(&still), Arc::clone(&twice), rect(2), Arc::clone(&twice), guide(3)];
+    }
+    (layer, still, twice)
+}
+
+/// Whether `a` and `b` hold the same children, none of them copied.
+fn same_children(a: &Node, b: &Node) -> bool {
+    let (a, b) = (a.children().unwrap(), b.children().unwrap());
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| Arc::ptr_eq(a, b))
+}
+
+/// Stripping the ruler guides of a layer looks at each child of the layer and of its sublayers
+/// once, however deep the sublayers nest. The art and its order stay, a sublayer without a guide is
+/// not copied, and a copy of the layer held elsewhere keeps its guides.
+#[test]
+fn stripping_ruler_guides_looks_at_each_child_of_nested_layers_once() {
+    use std::cell::Cell;
+    let (whole, still, twice) = guide_layers();
+    let ids = |n: &Node| {
+        let mut out = vec![];
+        n.walk(&mut |c| out.push(c.id));
+        out
+    };
+    let mut art = vec![];
+    whole.walk(&mut |c| {
+        if !c.is_ruler_guide() {
+            art.push(c.id);
+        }
+    });
+    assert_eq!(ids(&whole).len(), art.len() + GUIDE_LAYER_GUIDES);
+
+    let mut n = whole.clone();
+    let looked = Cell::new(0_usize);
+    let pick = |c: &Node| {
+        looked.set(looked.get() + 1);
+        c.is_ruler_guide()
+    };
+    let held = super::ops::held_guides(&n, &pick).unwrap();
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "each child of the layers is looked at once");
+    super::ops::strip_held(&mut n, held);
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "removing looks at nothing again");
+    assert_eq!(ids(&n), art, "the art stays, in its order");
+    let ch = n.children().unwrap();
+    assert!(Arc::ptr_eq(&ch[1], &still), "a sublayer without a guide is not copied");
+    assert!(Arc::ptr_eq(&ch[3], &whole.children().unwrap()[3]), "an object is not copied");
+    assert!(!Arc::ptr_eq(&ch[2], &twice) && !Arc::ptr_eq(&ch[4], &twice) && !Arc::ptr_eq(&ch[2], &ch[4]));
+    assert_eq!(
+        (ch[2].children().map(Vec::len), ch[4].children().map(Vec::len)),
+        (Some(1), Some(1)),
+        "a sublayer lying twice is stripped at both places"
+    );
+    // The copies held elsewhere (an undo step's, say) keep their guides.
+    assert_eq!(twice.children().map(Vec::len), Some(2));
+    assert_eq!(ids(&whole).len(), art.len() + GUIDE_LAYER_GUIDES);
+
+    // The method strips the same guides.
+    let mut same = whole.clone();
+    same.strip_ruler_guides();
+    assert_eq!(same, n);
+    assert!(Arc::ptr_eq(&same.children().unwrap()[1], &still));
+    // With no guide left there is nothing to remove, and nothing is copied.
+    let before = n.clone();
+    n.strip_ruler_guides();
+    assert!(same_children(&n, &before));
+    let mut empty = Node::layer(NodeId(900), "Empty", LayerColor::Preset(0));
+    empty.strip_ruler_guides();
+    assert_eq!(empty.children().map(Vec::len), Some(0));
+    // Only a layer holds ruler guides: a group is left as it is, on its own and in a layer.
+    let mut group = Node::group(NodeId(901), vec![Arc::clone(&twice)]);
+    assert!(super::ops::held_guides(&group, &Node::is_ruler_guide).is_none());
+    group.strip_ruler_guides();
+    assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
+    let group = Arc::new(group);
+    let mut around = Node::layer(NodeId(902), "Around", LayerColor::Preset(0));
+    around.children_mut().unwrap().push(Arc::clone(&group));
+    around.strip_ruler_guides();
+    assert!(Arc::ptr_eq(&around.children().unwrap()[0], &group));
+}
+
+/// Changing the positions of the ruler guides of a layer looks at each child of the layer and of
+/// its sublayers once, however deep the sublayers nest. Each guide is changed once, in the order
+/// the guides lie in, and keeps everything else about it; the art is unchanged, a sublayer without
+/// a guide is not copied, and a copy of the layer held elsewhere keeps its positions.
+#[test]
+fn mapping_ruler_guide_positions_looks_at_each_child_of_nested_layers_once() {
+    use std::cell::Cell;
+    let (whole, still, twice) = guide_layers();
+    let mut lines = vec![];
+    whole.walk(&mut |c| {
+        if let NodeKind::RulerGuide { vertical, pos, .. } = c.kind {
+            lines.push((vertical, pos));
+        }
+    });
+    assert_eq!(lines.len(), GUIDE_LAYER_GUIDES);
+    assert!(lines.iter().any(|l| l.0) && lines.iter().any(|l| !l.0), "guides in both directions");
+
+    let mut n = whole.clone();
+    let looked = Cell::new(0_usize);
+    let pick = |c: &Node| {
+        looked.set(looked.get() + 1);
+        c.is_ruler_guide()
+    };
+    let held = super::ops::held_guides(&n, &pick).unwrap();
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "each child of the layers is looked at once");
+    let mut seen = vec![];
+    super::ops::map_held(&mut n, held, &mut |vertical, pos| {
+        seen.push((vertical, *pos));
+        *pos = *pos * 2.0 + 1.0;
+    });
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "changing looks at nothing again");
+    assert_eq!(seen, lines, "each guide once, in the order the guides lie in");
+
+    // The same nodes in the same order: a guide differs in its position alone, and the art not
+    // at all.
+    let (mut was, mut now) = (vec![], vec![]);
+    whole.walk(&mut |c| was.push(c));
+    n.walk(&mut |c| now.push(c));
+    assert_eq!(was.len(), now.len());
+    for (a, b) in was.into_iter().zip(now) {
+        if a.is_layer() {
+            assert_eq!((b.id, b.is_layer(), b.children().map(Vec::len)), (a.id, true, a.children().map(Vec::len)));
+            continue;
+        }
+        let mut want = a.clone();
+        if let NodeKind::RulerGuide { pos, .. } = &mut want.kind {
+            *pos = *pos * 2.0 + 1.0;
+        }
+        assert_eq!(b, &want);
+    }
+    let ch = n.children().unwrap();
+    assert!(Arc::ptr_eq(&ch[1], &still), "a sublayer without a guide is not copied");
+    assert!(Arc::ptr_eq(&ch[3], &whole.children().unwrap()[3]), "an object is not copied");
+    assert!(!Arc::ptr_eq(&ch[2], &twice) && !Arc::ptr_eq(&ch[4], &twice) && !Arc::ptr_eq(&ch[2], &ch[4]));
+    // The copy held elsewhere keeps its position.
+    assert!(matches!(twice.children().unwrap()[1].kind, NodeKind::RulerGuide { pos, .. } if pos == 512.0));
+
+    // The method changes the same guides, each once.
+    let mut same = whole.clone();
+    let mut calls = 0;
+    same.map_ruler_guide_positions(&mut |_, pos| {
+        calls += 1;
+        *pos = *pos * 2.0 + 1.0;
+    });
+    assert_eq!((calls, &same), (GUIDE_LAYER_GUIDES, &n));
+    assert!(Arc::ptr_eq(&same.children().unwrap()[1], &still));
+    // A function that leaves the positions as they are is still called on each guide.
+    let mut kept = whole.clone();
+    let mut calls = 0;
+    kept.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    assert_eq!((calls, &kept), (GUIDE_LAYER_GUIDES, &whole));
+    // A layer without a guide, an empty layer and a group: nothing to change, nothing copied.
+    let mut bare = whole.clone();
+    bare.strip_ruler_guides();
+    let before = bare.clone();
+    let mut calls = 0;
+    bare.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    assert!(same_children(&bare, &before));
+    let mut empty = Node::layer(NodeId(900), "Empty", LayerColor::Preset(0));
+    empty.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    let mut group = Node::group(NodeId(901), vec![Arc::clone(&twice)]);
+    group.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
+    assert_eq!(calls, 0);
+}
+
+/// `try_walk` visits in `walk`'s order and visits nothing after the node that breaks it: not its
+/// children, its later siblings or its ancestors' later siblings.
+#[test]
+fn try_walk_ends_at_the_break() {
+    use std::ops::ControlFlow;
+    let leaf = |id| Arc::new(Node::group(NodeId(id), vec![]));
+    let inner = Node::group(NodeId(2), vec![leaf(3), leaf(4), leaf(5)]);
+    let root = Node::group(NodeId(1), vec![Arc::new(inner), leaf(6), leaf(7)]);
+    let mut all = vec![];
+    root.walk(&mut |n| all.push(n.id));
+    let mut seen = vec![];
+    assert_eq!(
+        root.try_walk(&mut |n| {
+            seen.push(n.id);
+            ControlFlow::<()>::Continue(())
+        }),
+        ControlFlow::Continue(())
+    );
+    assert_eq!(seen, all, "without a break it visits what walk visits, in the same order");
+    seen.clear();
+    let flow = root.try_walk(&mut |n| {
+        seen.push(n.id);
+        if n.id == NodeId(3) { ControlFlow::Break(n.id) } else { ControlFlow::Continue(()) }
+    });
+    assert_eq!(flow, ControlFlow::Break(NodeId(3)));
+    assert_eq!(seen, [NodeId(1), NodeId(2), NodeId(3)]);
 }

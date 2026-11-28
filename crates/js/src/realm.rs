@@ -14,7 +14,8 @@ use crate::{Options, SyntaxError};
 /// cannot catch it, and their `finally` blocks do not run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// Instructions a run may execute.
+    /// Instructions a run may execute. Source that `eval`, `Function` or a host evaluator
+    /// compiles during the run also takes one unit for each UTF-16 code unit, before it is parsed.
     pub fuel: u64,
     /// Estimated bytes the heap (objects, environments and the strings they hold) may reach
     /// after a collection. A string longer than a quarter of this many code units cannot be
@@ -56,6 +57,37 @@ pub enum LimitKind {
     Unbroken,
     /// A host function ended the run ([`crate::HostError::Abort`]).
     Host,
+    /// More promise jobs were waiting to run than a run may queue.
+    Jobs,
+}
+
+/// A promise the last run rejected that still had no rejection handler when the run ended
+/// ([`Realm::unhandled_rejections`]). `line` and `column` are where it was rejected: the `throw`,
+/// or the call to its reject function or `Promise.reject`; they are 0 when that is not known.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rejection {
+    /// The reason, described as an uncaught exception's message is.
+    pub message: String,
+    pub line: u32,
+    pub column: u32,
+    /// The source tag of the code `line` and `column` are in ([`Realm::error_tag`]).
+    pub tag: u32,
+    /// `message` is text the script supplied ([`RunError::authored`]).
+    pub authored: bool,
+}
+
+/// The tag [`Realm::error_source`] gives for a source that is neither the realm's script nor an
+/// evaluator's: code that `eval` or `Function` compiled, or an error with no place.
+pub const UNKNOWN_SOURCE: u32 = u32::MAX;
+
+/// The file and line that line `line` of the source with tag `tag` ([`Realm::error_tag`]) came
+/// from, as `$.line` and `$.stack` give them ([`Realm::set_source_locator`]).
+pub type SourceLocator = std::rc::Rc<dyn Fn(u32, u32) -> (String, u32)>;
+
+/// The source tag after `tag`. Once the tags are used up, every later source gets
+/// [`UNKNOWN_SOURCE`], so no two sources share a tag.
+pub(crate) fn next_tag(tag: u32) -> u32 {
+    if tag >= UNKNOWN_SOURCE - 1 { UNKNOWN_SOURCE } else { tag + 1 }
 }
 
 /// The fuel [`Realm::advance`] lets a slice spend, past the slice it was asked for, in a nested run
@@ -94,7 +126,9 @@ impl Interrupt {
     }
 }
 
-/// A value passed between a script and the host. An object is given by its class name.
+/// A value passed between a script and the host. An object is given by its class name, and a
+/// Symbol by its description; a Symbol the host passes in is a new Symbol each time, and one a
+/// host function returns in a realm without [`Options::es2015`] throws a `TypeError`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsValue {
     Undefined,
@@ -103,6 +137,7 @@ pub enum JsValue {
     Number(f64),
     String(String),
     Object(String),
+    Symbol(Option<String>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -124,6 +159,10 @@ pub struct RunError {
     pub message: String,
     pub line: u32,
     pub column: u32,
+    /// `message` is text the script supplied: a value it threw, or an error object it made or whose
+    /// name or message it changed. False for the interpreter's and host functions' own errors,
+    /// syntax errors and limits, even when a script caught one and threw it again.
+    pub authored: bool,
 }
 
 impl std::fmt::Display for RunError {
@@ -136,7 +175,7 @@ impl std::error::Error for RunError {}
 
 impl From<SyntaxError> for RunError {
     fn from(e: SyntaxError) -> Self {
-        RunError { kind: RunErrorKind::Syntax, message: e.to_string(), line: e.line, column: e.column }
+        RunError { kind: RunErrorKind::Syntax, message: e.to_string(), line: e.line, column: e.column, authored: false }
     }
 }
 
@@ -144,6 +183,14 @@ impl From<SyntaxError> for RunError {
 pub struct Realm {
     interp: Interp,
     unbroken_fuel: u64,
+    /// The source tag of the script the last [`Realm::run`] or [`Realm::start`] compiled. Each
+    /// script gets a new one, and the sources an evaluator gives during its run get the ones after
+    /// it, so code that an earlier script defined keeps a tag of its own. [`UNKNOWN_SOURCE`]
+    /// before the first script, for a script the realm did not compile, and once the tags are used
+    /// up.
+    script_tag: u32,
+    /// The unhandled rejections of the last run that ended successfully, and how many there were.
+    rejections: (Vec<Rejection>, usize),
 }
 
 impl Default for Realm {
@@ -161,13 +208,21 @@ impl Realm {
     /// `options`; [`Options::max_source_units`] caps the source parsed in one run, all of it
     /// counted together.
     pub fn with_options(options: Options, limits: Limits) -> Self {
-        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL }
+        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL, script_tag: UNKNOWN_SOURCE, rejections: (Vec::new(), 0) }
     }
 
     /// Sets the fuel [`Realm::advance`] lets a nested run spend past its slice (by default
     /// [`MAX_UNBROKEN_FUEL`]).
     pub fn set_unbroken_fuel(&mut self, fuel: u64) {
         self.unbroken_fuel = fuel;
+    }
+
+    /// With `on`, the scripts run next (and the code they define and evaluate) throw a
+    /// `TypeError` when they assign to a read-only or getter-only property or add a property to
+    /// an object that is not extensible, as strict mode code does, without the rest of strict
+    /// mode. Off by default.
+    pub fn set_strict_writes(&mut self, on: bool) {
+        self.interp.strict_writes = on;
     }
 
     pub fn limits(&self) -> &Limits {
@@ -180,6 +235,27 @@ impl Realm {
     pub fn set_limits(&mut self, limits: Limits) {
         self.interp.limits = limits;
         self.interp.reset_gc_threshold();
+    }
+
+    /// Gives a realm made without [`Options::es2015`] the `Promise` that option adds, for its next
+    /// runs; a realm that has it already is left as it is. It does not take it away again, and it
+    /// does not add the option's other built-ins (`Symbol` and the iterators). Call it between
+    /// runs.
+    pub fn add_es2015(&mut self) {
+        crate::builtins::promise::add_to(&mut self.interp);
+    }
+
+    /// Sets [`Options::es2015`] for the next runs, and for the code they evaluate. The `let` and
+    /// `const` names earlier runs declared stay visible when it is turned off. A run begun with
+    /// [`Realm::start`] that is still going keeps the language it started with for the code it
+    /// evaluates; the new one applies once it ends.
+    pub fn set_es2015(&mut self, es2015: bool) {
+        if self.is_running() || self.interp.waiting {
+            self.interp.next_es2015 = Some(es2015);
+        } else {
+            self.interp.next_es2015 = None;
+            self.interp.set_es2015(es2015);
+        }
     }
 
     /// The realm's interrupt flag. Setting it stops a running script, or the next one to start.
@@ -198,59 +274,133 @@ impl Realm {
         let _ = interp.define(global, key(name), Prop::Data { value: Value::Object(o), flags: HIDDEN });
     }
 
-    /// Runs `source` as a script in the global environment and returns its completion value (the
-    /// value of the last expression statement that ran). A realm whose built-ins could not be
-    /// installed runs nothing and gives an internal error.
+    /// Runs `source` as a script in the global environment, then the promise jobs it queued, and
+    /// returns its completion value (the value of the last expression statement that ran). A realm
+    /// whose built-ins could not be installed runs nothing and gives an internal error.
+    /// A paused or waiting run ends first; its globals remain available.
     pub fn run(&mut self, source: &str) -> Result<JsValue, RunError> {
         let code = self.compile(source)?;
-        let result = self.interp.run_global(code, false);
+        let result = self.interp.run_global(code, false).and_then(|v| self.interp.drain_jobs(v));
         self.outcome(result)
     }
 
     /// Compiles `source` and readies the realm for a run.
     fn compile(&mut self, source: &str) -> Result<std::rc::Rc<crate::bytecode::Code>, RunError> {
+        self.end();
+        self.script_tag = UNKNOWN_SOURCE;
+        self.rejections = (Vec::new(), 0);
         let interp = &mut self.interp;
+        interp.end_jobs(false);
         if let Some(message) = &interp.install_error {
-            return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0 });
+            return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0, authored: false });
         }
         interp.fuel = interp.limits.fuel;
+        interp.flattened_fuel.set(0);
         interp.source_units = 0;
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;
+        interp.last_error = Value::Null;
         interp.host_abort = None;
+        interp.waiting = false;
+        interp.waiting_hosted = false;
+        interp.constructing = false;
+        interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
+        interp.error_tag = UNKNOWN_SOURCE;
+        interp.thrown_mark = None;
+        interp.finally_marks.clear();
+        interp.finally_sites.clear();
+        interp.error_mark = None;
+        // The first run with ECMAScript 2015 names the built-in functions; a run whose heap has no
+        // room for the names ends with the heap limit, and the next run tries again.
+        if interp.options.es2015
+            && let Err(e) = crate::builtins::es2015_names(interp)
+        {
+            return match self.outcome(Err(e)) {
+                Err(e) => Err(e),
+                Ok(_) => Err(RunError {
+                    kind: RunErrorKind::Internal,
+                    message: "the built-in function names could not be set".into(),
+                    line: 0,
+                    column: 0,
+                    authored: false,
+                }),
+            };
+        }
+        let interp = &mut self.interp;
         let strict = interp.options.strict;
-        match interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global)) {
+        interp.evaluated = next_tag(interp.evaluated);
+        self.script_tag = interp.evaluated;
+        interp.source_tag = self.script_tag;
+        let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
+        interp.source_tag = UNKNOWN_SOURCE;
+        match code {
             Ok(code) => Ok(code),
-            Err(CompileError::Syntax(e)) => Err(e.into()),
-            Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0 }),
+            Err(CompileError::Syntax(e)) => {
+                interp.error_tag = self.script_tag;
+                Err(e.into())
+            }
+            Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0, authored: false }),
         }
     }
 
     /// The end of a run: its completion value or error, with the interpreter's stacks emptied.
     fn outcome(&mut self, result: Result<Value, Abrupt>) -> Result<JsValue, RunError> {
         let interp = &mut self.interp;
-        let (line, column) = interp.throw_site.take().map_or((0, 0), |(code, pc)| code.line_column(pc));
+        let site = interp.throw_site.take();
+        interp.error_tag = site.as_ref().map_or(UNKNOWN_SOURCE, |(code, _)| code.source.tag);
+        let (line, column) = site.map_or((0, 0), |(code, pc)| code.line_column(pc));
+        interp.error_mark = interp.thrown_mark.take().filter(|_| matches!(result, Err(Abrupt::Throw(_) | Abrupt::Limit(LimitKind::Host))));
+        interp.finally_marks.clear();
+        interp.finally_sites.clear();
         interp.stack.clear();
+        // A generator whose body was running when the run ended cannot go on.
+        let running: Vec<_> = interp.frames.iter().filter_map(|f| f.generator).collect();
+        running.into_iter().for_each(|g| interp.end_generator(Some(g)));
         interp.frames.clear();
         interp.temp_roots.clear();
         interp.join_stack.clear();
+        interp.waiting = false;
+        interp.waiting_hosted = false;
+        interp.constructing = false;
+        interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
+        interp.passing = Value::Undefined;
+        interp.end_jobs(result.is_ok());
+        if let Some(es2015) = interp.next_es2015.take() {
+            interp.set_es2015(es2015);
+        }
         match result {
-            Ok(v) => Ok(interp.to_js_value(&v)),
+            Ok(v) => {
+                self.rejections = interp.take_unhandled();
+                Ok(interp.to_js_value(&v))
+            }
             Err(Abrupt::Throw(v)) => {
                 let message = interp.describe(&v);
+                let authored = interp.thrown_by_script(&v);
                 interp.last_thrown = v;
-                Err(RunError { kind: RunErrorKind::Thrown, message, line, column })
+                Err(RunError { kind: RunErrorKind::Thrown, message, line, column, authored })
             }
             Err(Abrupt::Limit(LimitKind::Host)) => {
                 let message = interp.host_abort.take().unwrap_or_else(|| format!("limit reached: {:?}", LimitKind::Host));
-                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line, column })
+                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line, column, authored: false })
             }
-            Err(Abrupt::Limit(kind)) => Err(RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line, column }),
-            Err(Abrupt::Internal(message)) => Err(RunError { kind: RunErrorKind::Internal, message, line, column }),
+            Err(Abrupt::Limit(LimitKind::Jobs)) => {
+                let max = interp.promises.max_jobs;
+                let message = format!("limit reached: Jobs (more than {max} promise jobs were waiting to run)");
+                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Jobs), message, line, column, authored: false })
+            }
+            Err(Abrupt::Limit(kind)) => {
+                Err(RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line, column, authored: false })
+            }
+            Err(Abrupt::Internal(message)) => Err(RunError { kind: RunErrorKind::Internal, message, line, column, authored: false }),
         }
     }
 
     /// Begins a run that [`Realm::advance`] carries on: compiles `source` and enters it.
+    /// A paused or waiting run ends first; its globals remain available.
     pub fn start(&mut self, source: &str) -> Result<(), RunError> {
         let code = self.compile(source)?;
         match self.interp.enter_global(code, false) {
@@ -262,17 +412,31 @@ impl Realm {
     /// Runs the script begun with [`Realm::start`] for about `slice` units of fuel (at least one
     /// instruction), and pauses where it can resume: between two instructions of the script's own
     /// code. A getter, a built-in's callback or another nested run has native frames under it, so
-    /// it runs on to its end, for at most [`Realm::set_unbroken_fuel`] more. Once this has returned
-    /// [`Progress::Done`] or an error, the run is over.
+    /// it runs on to its end, for at most [`Realm::set_unbroken_fuel`] more. After the script's code
+    /// ends, the slices run the promise jobs it queued, pausing between jobs and inside a callback
+    /// written in JavaScript, and the run is done once the queue is empty. Once this has returned
+    /// [`Progress::Done`] or an error, the run is over. While a host function's call waits for its
+    /// result ([`Realm::waits`]), the run does not advance: this gives an internal error.
     pub fn advance(&mut self, slice: u64) -> Result<Progress, RunError> {
         let interp = &mut self.interp;
-        if interp.frames.is_empty() {
-            return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0 });
+        if !interp.running() {
+            return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0, authored: false });
+        }
+        if interp.waiting {
+            return Err(RunError {
+                kind: RunErrorKind::Internal,
+                message: "the run waits for a host function's result".into(),
+                line: 0,
+                column: 0,
+                authored: false,
+            });
         }
         let total = interp.fuel;
         let cap = slice.saturating_add(self.unbroken_fuel).min(total);
         interp.fuel = cap;
-        let r = interp.execute_slice(cap - slice.min(cap));
+        interp.in_slice = true;
+        let r = interp.execute_run_slice(cap - slice.min(cap));
+        interp.in_slice = false;
         let used = cap - interp.fuel;
         interp.fuel = total - used;
         match r {
@@ -286,7 +450,37 @@ impl Realm {
 
     /// Is a run begun with [`Realm::start`] still going?
     pub fn is_running(&self) -> bool {
-        !self.interp.frames.is_empty()
+        self.interp.running()
+    }
+
+    /// The promises the last run rejected that still had no rejection handler when it ended
+    /// successfully, in the order they were rejected: the first 20 of them. Empty after a run that
+    /// ended with an error, and until a run ends.
+    pub fn unhandled_rejections(&self) -> &[Rejection] {
+        &self.rejections.0
+    }
+
+    /// How many unhandled rejections the last run that ended successfully had, the ones
+    /// [`Realm::unhandled_rejections`] leaves out included.
+    pub fn unhandled_rejection_count(&self) -> usize {
+        self.rejections.1
+    }
+
+    /// Which source the code with tag `tag` is, as [`Realm::error_source`] gives it for an error.
+    pub fn source_of(&self, tag: u32) -> u32 {
+        match tag {
+            UNKNOWN_SOURCE => UNKNOWN_SOURCE,
+            tag => tag.checked_sub(self.script_tag).unwrap_or(UNKNOWN_SOURCE),
+        }
+    }
+
+    /// Ends a run begun with [`Realm::start`] where it is, paused or waiting for a host function's
+    /// result, as an interrupt would: its stacks are emptied, so the realm can start another run.
+    /// The globals the run set stay.
+    pub fn end(&mut self) {
+        if self.is_running() || self.interp.waiting {
+            let _ = self.outcome(Err(Abrupt::Limit(LimitKind::Interrupted)));
+        }
     }
 
     /// The flag a host function sets to end the current slice at the next point it can pause.
@@ -294,9 +488,101 @@ impl Realm {
         self.interp.pause.clone()
     }
 
+    /// The flag that is set while a host function runs where it may return
+    /// [`crate::HostError::Wait`]: called by the script's own code in a run [`Realm::advance`]
+    /// carries on, and not from a getter, a conversion or a built-in's callback.
+    pub fn wait_flag(&self) -> std::rc::Rc<std::cell::Cell<bool>> {
+        self.interp.can_wait.clone()
+    }
+
+    /// Does a host function's call wait for the result [`Realm::answer`] gives it?
+    pub fn waits(&self) -> bool {
+        self.interp.waiting
+    }
+
+    /// Gives the call that waits ([`crate::HostError::Wait`]) its result `d`; the next
+    /// [`Realm::advance`] goes on from there. When a built-in such as `File.openDialog` made the
+    /// call, the built-in takes `d` first and gives its own result, and what it throws is thrown
+    /// at its call. A result past the heap limit ends the run with that
+    /// limit, and with no call waiting this gives an internal error.
+    pub fn answer(&mut self, d: crate::Data) -> Result<(), RunError> {
+        let interp = &mut self.interp;
+        if !interp.waiting {
+            return Err(RunError {
+                kind: RunErrorKind::Internal,
+                message: "no host function waits for a result".into(),
+                line: 0,
+                column: 0,
+                authored: false,
+            });
+        }
+        interp.waiting = false;
+        // A member of a host class gets its answer as it gets an immediate result.
+        let hosted = std::mem::take(&mut interp.waiting_hosted);
+        // The value on top of the stack stood in for the result.
+        let written = if hosted { interp.write_hosted(d) } else { interp.write_data(d, 0, false) };
+        let r = written.and_then(|v| {
+            interp.stack.pop();
+            interp.push(v)
+        });
+        match r {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Has this realm stop when `interrupt` is set, in place of its own flag.
     pub fn share_interrupt(&mut self, interrupt: &Interrupt) {
         self.interp.interrupt = interrupt.0.clone();
+    }
+
+    /// Has `$.line` give the line `locate` maps the running line to, and `$.stack` give each
+    /// frame's line that way, after the file `locate` names: `function@file:line`. Without a
+    /// locator they give the line of the compiled source, and `$.stack` names no file.
+    pub fn set_source_locator(&mut self, locate: SourceLocator) {
+        self.interp.locator = Some(locate);
+    }
+
+    /// Has `$.stack` start with a line `[name]` that names the running script, before its frames;
+    /// `None` leaves the line out.
+    pub fn set_script_name(&mut self, name: Option<String>) {
+        self.interp.script_name = name;
+    }
+
+    /// Which source the last error's `line` and `column` are in: 0 for the script last given to
+    /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
+    /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which
+    /// includes code from an earlier script and from the sources given during its run.
+    pub fn error_source(&self) -> u32 {
+        self.source_of(self.interp.error_tag)
+    }
+
+    /// The source tag of the code the last error's `line` and `column` are in, which stays the same
+    /// from run to run: each script given to [`Realm::run`] or [`Realm::start`] and each source a
+    /// [`crate::HostItem::Evaluator`] gives gets the next tag, so a function an earlier script
+    /// defined has its script's tag. [`UNKNOWN_SOURCE`] for code that `eval` or `Function`
+    /// compiled, an error with no place, and sources given once the tags are used up.
+    pub fn error_tag(&self) -> u32 {
+        self.interp.error_tag
+    }
+
+    /// The source tag ([`Realm::error_tag`]) of the script the last [`Realm::run`] or
+    /// [`Realm::start`] compiled; the `n`th source an evaluator gave during that run has this tag
+    /// plus `n`. [`UNKNOWN_SOURCE`] when that call compiled nothing.
+    pub fn script_tag(&self) -> u32 {
+        self.script_tag
+    }
+
+    /// Tests: makes `tag` the last source tag given out.
+    #[cfg(test)]
+    pub(crate) fn set_last_tag(&mut self, tag: u32) {
+        self.interp.evaluated = tag;
+    }
+
+    /// The mark of the host error ([`crate::HostError::Marked`]) the last run ended with, when no
+    /// `catch` clause took that error's exception on its way out; `None` otherwise.
+    pub fn error_mark(&self) -> Option<u32> {
+        self.interp.error_mark
     }
 
     /// Fuel the run has left.
@@ -317,6 +603,127 @@ impl Realm {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }
+    }
+
+    /// Adds ScriptUI's global constructor `Window` ([`crate::scriptui`]), whose dialogs the host
+    /// functions in `items` show: `open` and `wait`, each given the dialog's description, and
+    /// `end`, given the result of `show()` and whether `show()` ended normally. A run that ends
+    /// while `show()` waits for `wait`'s answer, because it is stopped or the host does not resume
+    /// it, ends without a call to `end`: the host releases what it holds for the dialog when the run
+    /// ends, and does not wait for `end`.
+    pub fn define_script_ui(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
+        match crate::scriptui::install(&mut self.interp, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
+    /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
+    /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
+    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `setHidden`,
+    /// `createAlias`, `pick` (the file dialogs, where a run may wait), `encode`, `decode`,
+    /// `encodingAvailable`, `current` and `locations`, with the values `system` and `lineFeed` and
+    /// the messages `text.notOpen` and `text.badMode`. Each object keeps its path, its `error`
+    /// text, its open file's id, its encoding and its line feed in properties that are not
+    /// enumerable.
+    pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
+        match crate::file_classes::install(&mut self.interp, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global `ExternalObject`. `new ExternalObject("lib:AdobeXMPScript")` defines the
+    /// globals `XMPMeta`, `XMPFile` and `XMPConst`; any other library name throws. `XMPFile` reads
+    /// and writes files through the host functions `xmpOpen` and `xmpWrite` of
+    /// [`Realm::define_file_classes`], which the host adds first; without `File` and `Folder`,
+    /// `XMPFile` throws. An `XMPFile` is open only in the run that opened it: each
+    /// [`Realm::reset_folder_current`] begins a new run for it, and [`Realm::run`] and
+    /// [`Realm::start`] do not. A successful close or a new file run releases its packet buffers.
+    /// Registered namespace storage counts toward the realm's heap limit.
+    /// After a successful installation, another call fails with an internal
+    /// error and preserves `ExternalObject` and registered namespaces. A failed installation can be retried.
+    pub fn define_external_object(&mut self) -> Result<(), RunError> {
+        match crate::xmp_classes::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the host classes `classes` ([`crate::HostClass`]), each a global constructor whose
+    /// prototype holds its members, and the global objects `instances`, each made from the
+    /// [`crate::host_ref`] given. Prototypes and constructors are frozen; the instances cannot be
+    /// replaced. A heap too small for them ends with the error the realm's next run would give.
+    pub fn define_host_classes(&mut self, classes: Vec<crate::HostClass>, instances: Vec<(String, crate::Data)>) -> Result<(), RunError> {
+        match crate::host_classes::install(&mut self.interp, classes, instances) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global properties `globals`: a name, the function that answers a read, and the
+    /// function that answers an assignment, each called with `undefined` as `this` (and the value
+    /// assigned). Assigning one without a setter keeps its value, and throws in strict mode code.
+    pub fn define_host_globals(&mut self, globals: Vec<(String, crate::HostFunction, Option<crate::HostFunction>)>) -> Result<(), RunError> {
+        match crate::host_classes::install_globals(&mut self.interp, globals) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Sets `Folder.current` back to the host's `current`, for the next run of a realm that has
+    /// `File` and `Folder` ([`Realm::define_file_classes`]); a realm without them keeps its
+    /// `Folder.current`. The files an earlier run opened are no longer open. The last run's uncaught
+    /// exception and `$.error` are dropped first, as [`Realm::start`] drops them, so memory that only
+    /// they held is free for the reset.
+    pub fn reset_folder_current(&mut self) -> Result<(), RunError> {
+        self.interp.last_thrown = Value::Undefined;
+        self.interp.last_error = Value::Null;
+        match crate::file_classes::reset_current(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the script extensions: the global `localize(object, ...values)`, which gives a
+    /// localization object's text for the locale of [`Realm::localization`], the global
+    /// `toSource(value)` and `Object.prototype.toSource()`, which write plain data as source text,
+    /// `Object.prototype.reflect`, which describes an object's properties and methods (a host
+    /// class's from its [`crate::HostClass`]), and the localized `Object.prototype.toString` while
+    /// [`crate::Localization::enabled`].
+    pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
+        match crate::builtins::extensions::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global constructor `UnitValue`, measurements with a magnitude and a unit, and has
+    /// the arithmetic, comparison and unary operators calculate with its objects
+    /// ([`crate::unit_value`]). A realm without it keeps the standard operators. A second call
+    /// after one that succeeded changes nothing; after one that failed, it installs everything
+    /// again.
+    pub fn add_unit_values(&mut self) -> Result<(), RunError> {
+        match crate::unit_value::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Defines the global function `name`, whose arguments arrive converted as `args` says
+    /// ([`crate::HostItem::Converted`]). Unlike a host object, a script may replace or delete it, as
+    /// it may a built-in function.
+    pub fn define_host_function(&mut self, name: &str, args: Vec<crate::Arg>, f: crate::HostFunction) -> Result<(), RunError> {
+        match self.interp.install_host_function(name, args, f) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// The locale `localize` reads, which the host's functions may change during a run.
+    pub fn localization(&self) -> std::rc::Rc<crate::Localization> {
+        self.interp.localization.clone()
     }
 
     /// Defines the global variable `name` holding the exception the last run did not catch
@@ -341,6 +748,14 @@ impl Realm {
     /// default local time is UTC.
     pub fn set_time_zone(&mut self, offset: impl Fn(f64) -> f64 + 'static) {
         self.interp.date_host.offset = std::rc::Rc::new(offset);
+    }
+
+    /// Calls `observe` with the text of each source the realm's scripts evaluate at run time, before
+    /// it is compiled: a string given to `eval` (direct or indirect), the parameters and body
+    /// `Function` joins, and a source an evaluator host function
+    /// ([`crate::HostItem::Evaluator`]) gives. Replaces an earlier observer.
+    pub fn observe_code(&mut self, observe: impl Fn(&[u16]) + 'static) {
+        self.interp.code_observer = Some(std::rc::Rc::new(observe));
     }
 
     /// Collects garbage now and returns the heap's estimated size in bytes afterwards.

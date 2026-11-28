@@ -5,10 +5,11 @@
 //!
 //! - **no host imports but those of API level 2** ([`host`]: progress, Cancel and log lines with
 //!   the `progress` permission, and settings and a cache of its own with the `settings` and `cache`
-//!   permissions, [`storage`]): no WASI, file system, network, clock or randomness. A module that
+//!   permissions, [`storage`], and the commands its `commandAllowlist` names with the `commands`
+//!   permission): no WASI, file system, network, clock or randomness. A module that
 //!   imports anything else is rejected;
 //! - an **instruction budget** (fuel) per call, metered in slices so a wall-clock deadline is
-//!   also enforced (native builds), so infinite loops end with an error. A filter may ask for a
+//!   also enforced, so infinite loops end with an error. A filter may ask for a
 //!   larger one ([`Budget::Heavy`]), which the host lets the user allow before installing it;
 //! - a **linear-memory cap**, a **recursion-depth cap** and wasmi's strict module limits;
 //! - a **fresh instance per run**, so no state leaks between calls; what a plug-in keeps is only
@@ -25,19 +26,29 @@
 //! time it is drawn, from an appearance stack, and at `api` 2 may paint what it returns
 //! ([`painted`]); an **exporter** ([`export`]) writes the whole
 //! document in a file format of its own; an **importer** ([`import`]) reads a file in a format of
-//! its own into a new document. The process-wide [`registry`] holds the installed
+//! its own into a new document; a **generator** ([`generate`]) draws art from its parameters alone,
+//! which the document keeps with them so the art can be drawn again. The process-wide [`registry`] holds the installed
 //! plug-ins; in [`safe_mode`] none of them loads or runs. A plug-in's parameters ([`manifest`]) come with what the host's dialogs need to show
 //! them well: labels, units, groups, help and conditions ([`dialog`]). What a plug-in may do is
 //! the set of [`permissions`] its manifest lists, which the user approves when it is installed. A
 //! filter or a live effect may also add menu commands of its own ([`Command`]), which the host
-//! runs through `vc_run` with the command's id in `_context`.
+//! runs through `vc_run` with the command's id in `_context`. The web build checks modules and
+//! runs filters in a worker of its own ([`worker`]).
+//!
+//! An object filter may also be written in JavaScript ([`js`]): its manifest gives
+//! `"runtime": "js"` and names a `.js` file, which runs in a fresh `vectorcraft-js` realm for each
+//! run, with the same input, output, permissions and budgets.
 #![forbid(unsafe_code)]
 
+pub mod deferred;
 pub mod dialog;
 pub mod effect;
 pub mod export;
+pub mod generate;
 pub mod host;
 pub mod import;
+pub mod js;
+pub mod loader;
 pub mod manifest;
 pub mod objects;
 pub mod painted;
@@ -45,13 +56,20 @@ pub mod permissions;
 pub mod registry;
 mod runtime;
 pub mod safe_mode;
+#[cfg(any(test, feature = "test-steady"))]
+pub mod steady;
 pub mod storage;
 pub mod wat;
+pub mod worker;
 
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
-pub use manifest::{Budget, Command, InputKind, Kind, Manifest, Param, ParamSpec};
-pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Limits, Plugin, heavy_terms};
+pub use manifest::{
+    Budget, Command, ContextMenu, ContextPlace, ContextSection, ContextWhen, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec, Runtime,
+};
+pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, RunJob, Step, heavy_terms, keep_modules};
+#[doc(hidden)]
+pub use runtime::{BYTES_COPIED_PER_FUEL, FUEL_SLICE};
 
 /// What the host puts before a plug-in's id to name what it adds: its live effect
 /// (`plugin.<id>`, [`effect`]) or its file format ([`export`], [`import`]).
@@ -85,6 +103,10 @@ pub enum Error {
     /// Safe Mode is on ([`safe_mode`]): no plug-in loads or runs.
     #[error("Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally")]
     SafeMode,
+    /// The module lists permissions that no recorded grant gives this very module
+    /// ([`registry::approved`]): it names them, comma-separated.
+    #[error("needs approval: it asks for {0}, which the user grants when installing it on its own")]
+    NeedsApproval(String),
     #[error("{0}")]
     Io(String),
 }

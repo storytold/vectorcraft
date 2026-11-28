@@ -9,7 +9,7 @@ use vectorcraft_doc::clipnest::MAX_NEST;
 use vectorcraft_doc::{LayerColor, LineCap, Node, NodeKind};
 use vectorcraft_geom::Rect;
 
-use crate::import::import;
+use crate::import::{import, import_ai};
 
 /// A minimal file in Illustrator's format: its header comments, a prolog of our own defining the
 /// operators `body` uses (`u` and `U` as `ugroup` and `Ugroup`), and `body`.
@@ -54,6 +54,19 @@ fn tree(nodes: &[Arc<Node>]) -> String {
         k => format!("{k:?}"),
     };
     nodes.iter().map(one).collect::<Vec<_>>().join(" ")
+}
+
+/// Placed EPS files drawn as the app draws them: the art of the file read as it opens, in its
+/// bounding box (the engine registers the app's own loader).
+fn draw_placed_eps() {
+    fn load(_: &vectorcraft_doc::PlacedDocument, bytes: &[u8]) -> Option<(vectorcraft_doc::Document, Node, Rect)> {
+        let mut doc = import(bytes).ok()?.document;
+        let frame = doc.artboards.first()?.rect;
+        let layers = std::mem::take(&mut doc.layers);
+        let children = layers.iter().flat_map(|l| l.children().map(|c| c.to_vec()).unwrap_or_default()).collect();
+        Some((doc, Node::new(vectorcraft_doc::NodeId(0), NodeKind::Group { children, clip: false }), frame))
+    }
+    vectorcraft_doc::placed_document::set_loader(load);
 }
 
 fn read(header: &str, ugroup: &str, body: &str) -> (String, Vec<String>) {
@@ -208,15 +221,15 @@ fn a_postscript_ai_with_a_multi_layer_mask_opens_with_its_layers() {
     assert!(r.warnings.iter().any(|w| w.contains("clipping group in each layer")), "{:?}", r.warnings);
 }
 
-/// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation and
-/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`Xe`/`XB` (a tab definition) and `Th`
-/// (hyphen control). The reader drops `XL` and keeps the tab definition as the paragraph's tab
-/// stops rather than failing the file the way it did before (the symptom seen on Illustrator 6/8
-/// EPS files whose `Adobe_level2_AI5` program can't be run).
+/// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation, tab-ruler
+/// and kerning attributes: `XL` (hyphenation language), `Xb`/`Xe`/`XB` (a tab definition), `Th`
+/// (hyphen control), `Tk` (a manual kerning pair) and `T+` (a discretionary hyphen). The reader
+/// keeps the language, the tab definition as the paragraph's tab stops, the pair's kerning and the
+/// soft hyphen.
 #[test]
 fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 9 Tf\n\
-        %_ 0 XL\n36 1 Xb\n0 0 3 72 Xe\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
+        %_ 3 XL\n36 1 Xb\n0 0 3 72 Xe\nXB\n0 1 2 2 99 Th\n0 Ta\n(h) Tx\n0 -40 Tk\n(i) Tx\nT+\n(ho) Tx\nTO\n";
     // The operators sit on a visible layer (so they'd be reported as unknown, not quietly skipped
     // on a hidden one), beside the square so the layer is never empty.
     let src = NAMED_PROLOG.replace("S\nLB\n%AI5_EndLayer--\n%AI5_BeginLayer", &format!("S\n{text}LB\n%AI5_EndLayer--\n%AI5_BeginLayer"));
@@ -228,10 +241,14 @@ fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let mut texts = vec![];
     r.document.walk(|n| {
         if let NodeKind::Text(t) = &n.kind {
-            texts.push(t.para_at(0).clone());
+            texts.push((**t).clone());
         }
     });
-    let [p] = texts.as_slice() else { panic!("{texts:?}") };
+    let [t] = texts.as_slice() else { panic!("{texts:?}") };
+    assert_eq!(t.plain_text(), "hi\u{ad}ho");
+    let runs: Vec<_> = t.runs.iter().map(|r| (r.text.as_str(), r.style.kerning, r.style.language.as_deref())).collect();
+    assert_eq!(runs, [("h", Some(-40.0), Some("de")), ("i\u{ad}ho", None, Some("de"))]);
+    let p = t.para_at(0);
     assert!(!p.hyphenate);
     assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (2, 2, 25));
     let tabs: Vec<_> = p.tabs.iter().map(|t| (t.position, t.align)).collect();
@@ -325,10 +342,105 @@ fn a_legacy_file_with_its_prolog_comes_in_through_its_layers() {
     assert_eq!(page.document.layers[0].name.as_deref(), Some("Layer 1"));
 }
 
+/// A `.ai` in the legacy format (version 8, `%AI5_FileFormat 4.0`) whose prolog is included: a
+/// square on its 200-point artboard and one far to its right. Its bounding box is the box of that
+/// art; its artboard is its art size around the template box's center (version 7 specification
+/// §2.2). Its first line names the EPSF version, as the format's files may.
+const LEGACY_AI_ART_OFF_ITS_ARTBOARD: &str = "%!PS-Adobe-2.0 EPSF-1.2\n%%Creator: a script\n%%BoundingBox: 10 10 320 30\n\
+    %%HiResBoundingBox: 10 10 320 30\n%AI5_FileFormat 4.0\n%AI3_TemplateBox: 100.5 99.5 100.5 99.5\n%AI5_ArtSize: 200 200\n\
+    %%EndComments\n%%BeginProlog\n/m {moveto} def /L {lineto} def /f {closepath fill} def\n\
+    /Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /k {setcmykcolor} def\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n\
+    %AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Art) Ln\n0 A\n0 0 0 1 k\n\
+    10 10 m\n30 10 L\n30 30 L\n10 30 L\nf\n300 10 m\n320 10 L\n320 30 L\n300 30 L\nf\nLB\n%AI5_EndLayer--\n\
+    %%PageTrailer\nshowpage\n%%Trailer\n%%EOF\n";
+
+/// `bytes` opened as a `.ai`.
+fn open_ai(bytes: &[u8]) -> crate::Imported {
+    import_ai(bytes, true, false, crate::NameEncoding::default()).unwrap()
+}
+
+/// Such a `.ai` keeps the artboard its header gives, with the square outside it, when it comes in
+/// through its layers. The same program opened as an EPS comes in on its page, its art's box
+/// (#1102).
+#[test]
+fn a_legacy_ai_keeps_its_artboard_and_the_art_outside_it() {
+    let r = open_ai(LEGACY_AI_ART_OFF_ITS_ARTBOARD.as_bytes());
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let d = &r.document;
+    let boards: Vec<_> = d.artboards.iter().map(|a| a.rect).collect();
+    assert_eq!(boards, [Rect::new(0.0, 0.0, 200.0, 200.0)]);
+    let art: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| n.geometric_bounds().unwrap()).collect();
+    // Art space has y up from the artboard's bottom: (10, 10) is 10 above it.
+    assert_eq!(art, [Rect::new(10.0, 170.0, 30.0, 190.0), Rect::new(300.0, 170.0, 320.0, 190.0)]);
+    let eps = import(LEGACY_AI_ART_OFF_ITS_ARTBOARD.as_bytes()).unwrap();
+    let boards: Vec<_> = eps.document.artboards.iter().map(|a| a.rect.size()).collect();
+    assert_eq!(boards, [kurbo::Size::new(310.0, 20.0)], "{:?}", eps.warnings);
+}
+
+/// A version 3 `.ai` doesn't give its artboard's size (`%AI5_ArtSize` came with version 5): its
+/// artboard is VectorCraft's own default, a US Letter page, around the template box's center, the
+/// artboard's center (version 7 specification §2.2). Without a template box it is the art's box,
+/// and so is the page of the same file opened as an EPS.
+#[test]
+fn a_version_3_ai_has_a_letter_artboard_around_its_template_boxs_center() {
+    let v3 = PATHS_ONLY.replace("%AI3_Cropmarks: 0 0 200 100\n", "%AI3_TemplateBox: 100 100 100 100\n");
+    let r = open_ai(v3.as_bytes());
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let d = &r.document;
+    let boards: Vec<_> = d.artboards.iter().map(|a| a.rect).collect();
+    assert_eq!(boards, [Rect::new(0.0, 0.0, 612.0, 792.0)]);
+    // The artboard runs from -206 to 406 across and from -296 to 496 up in art space.
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(art[1].geometric_bounds(), Some(Rect::new(226.0, 446.0, 266.0, 476.0)));
+    // The center of a template box with a size (a file with a template image).
+    let r = open_ai(PATHS_ONLY.replace("%AI3_Cropmarks: 0 0 200 100\n", "%AI3_TemplateBox: 50 50 150 150\n").as_bytes());
+    assert_eq!(r.document.layers[0].children().unwrap()[1].geometric_bounds(), Some(Rect::new(226.0, 446.0, 266.0, 476.0)));
+    let r = open_ai(PATHS_ONLY.replace("%AI3_Cropmarks: 0 0 200 100\n", "%AI3_ColorUsage: Color\n").as_bytes());
+    assert_eq!(r.document.artboards[0].rect, Rect::new(0.0, 0.0, 200.0, 100.0), "{:?}", r.warnings);
+    let r = import(v3.as_bytes()).unwrap();
+    assert_eq!(r.document.artboards[0].rect, Rect::new(0.0, 0.0, 200.0, 100.0), "{:?}", r.warnings);
+    // A newer file (`%AI5_FileFormat`, version 5 on) without an art size keeps the art's box too.
+    let r = open_ai(v3.replace("%%EndComments", "%AI5_FileFormat 1.0\n%%EndComments").as_bytes());
+    assert_eq!(r.document.artboards[0].rect, Rect::new(0.0, 0.0, 200.0, 100.0), "{:?}", r.warnings);
+}
+
+/// A version 3 `.ai` whose prolog is included and whose program has no layers: its page draws, and
+/// its art comes in on one layer around a US Letter artboard, the square far to the right outside
+/// it.
+#[test]
+fn a_version_3_ai_that_draws_keeps_its_letter_artboard_and_the_art_outside_it() {
+    let v3 = "%!PS-Adobe-2.0 EPSF-1.2\n%%Creator: a script\n%%BoundingBox: 10 10 720 30\n%AI3_TemplateBox: 100 100 100 100\n\
+        %%EndComments\n%%BeginProlog\n/m {moveto} def /L {lineto} def /f {closepath fill} def /k {setcmykcolor} def\n\
+        %%EndProlog\n%%BeginSetup\n%%EndSetup\n0 0 0 1 k\n10 10 m\n30 10 L\n30 30 L\n10 30 L\nf\n\
+        700 10 m\n720 10 L\n720 30 L\n700 30 L\nf\n%%PageTrailer\nshowpage\n%%Trailer\n%%EOF\n";
+    let r = open_ai(v3.as_bytes());
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let boards: Vec<_> = r.document.artboards.iter().map(|a| a.rect).collect();
+    assert_eq!(boards, [Rect::new(0.0, 0.0, 612.0, 792.0)]);
+    assert_eq!(r.document.layers.len(), 1);
+    let art: Vec<_> = r.document.layers[0].children().unwrap().iter().map(|n| n.geometric_bounds().unwrap()).collect();
+    // The artboard runs from -206 to 406 across and from -296 to 496 up in art space.
+    assert_eq!(art, [Rect::new(216.0, 466.0, 236.0, 486.0), Rect::new(906.0, 466.0, 926.0, 486.0)]);
+    let eps = import(v3.as_bytes()).unwrap();
+    assert_eq!(eps.document.artboards[0].rect, Rect::new(0.0, 0.0, 710.0, 20.0), "{:?}", eps.warnings);
+}
+
+/// A `.ai` another app wrote (#1027) that gives a template box but no art size opens on a US Letter
+/// artboard around the box's center, from -18 to 594 across and -12 to 780 up in art space (as an
+/// EPS it opens on its bounding box, see above).
+#[test]
+fn a_postscript_ai_with_a_template_box_and_no_art_size_opens_on_a_letter_artboard() {
+    let r = open_ai(NAMED_PROLOG.as_bytes());
+    assert_eq!(r.document.artboards[0].rect, Rect::new(0.0, 0.0, 612.0, 792.0), "{:?}", r.warnings);
+    let square = &r.document.layers[0].children().unwrap()[0];
+    assert_eq!(square.geometric_bounds(), Some(Rect::new(28.0, 690.0, 108.0, 770.0)));
+}
+
 /// A placed EPS in the legacy format (version 7 specification §16, no `%AI5_BeginPlace`), its file
-/// included whole: the layers come in, the placed file as the art the page draws in its box.
+/// included whole: the layers come in, the placed file as a placed document of its bytes in its box.
 #[test]
 fn a_legacy_file_with_a_placed_eps_comes_in_through_its_layers() {
+    draw_placed_eps();
     // `` ` `` takes the file's user space into the page's (`concat`); `~` restores it.
     let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /k {setcmykcolor} def\n\
                   /` {gsave 5 {pop} repeat concat} def /~ {grestore} def";
@@ -342,14 +454,35 @@ fn a_legacy_file_with_a_placed_eps_comes_in_through_its_layers() {
     let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
     assert_eq!(names, ["Back"], "{:?}", r.warnings);
     let art = r.document.layers[0].children().unwrap();
-    assert_eq!(tree(art), "p g[p]", "{:?}", r.warnings);
+    let NodeKind::PlacedDocument(p) = &art[1].kind else { panic!("{}: {:?}", tree(art), r.warnings) };
+    assert_eq!(r.document.images[&p.key].bytes.as_slice(), eps.as_bytes(), "the file's bytes");
+    assert_eq!(p.link.path, "art.eps");
     // The file's box, moved by the matrix: 20 40 60 70 on the page, y up.
     let bounds = art[1].geometric_bounds().unwrap();
     assert!(
         (bounds.x0 - 20.0).abs() < 0.01 && (bounds.y0 - 30.0).abs() < 0.01 && (bounds.x1 - 60.0).abs() < 0.01 && (bounds.y1 - 60.0).abs() < 0.01,
         "{bounds:?}"
     );
-    assert!(r.warnings.iter().any(|w| w.contains("placed files")), "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+/// A legacy file whose placed EPS file, included whole, has type: the page's type is the placed
+/// file's, so the layers come in with it as a placed document.
+#[test]
+fn a_legacy_file_with_a_placed_eps_with_type_comes_in_through_its_layers() {
+    draw_placed_eps();
+    let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /k {setcmykcolor} def\n\
+                  /` {gsave 5 {pop} repeat concat} def /~ {grestore} def";
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n\
+               /Helvetica findfont 12 scalefont setfont 15 30 moveto (Hi) show\n%%EOF\n";
+    let placed = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}%%EndDocument\n~\n");
+    let body = format!("%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Back) Ln\n0 A\n0 0 0 1 k\n{} {placed}LB\n%AI5_EndLayer--\n", tri(10));
+    let file = String::from_utf8(ai(AI8, "", &body)).unwrap().replace("%%EndProlog", &format!("{prolog}\n%%EndProlog"));
+    let r = import(file.as_bytes()).unwrap();
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Back"], "{:?}", r.warnings);
+    let art = r.document.layers[0].children().unwrap();
+    assert!(matches!(art[1].kind, NodeKind::PlacedDocument(_)), "{}: {:?}", tree(art), r.warnings);
 }
 
 /// A legacy file with a linked image (version 7 specification §8.2, §8.3: `(path) modified XG`, then

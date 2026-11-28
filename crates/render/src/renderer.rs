@@ -19,7 +19,7 @@ use super::{
 };
 
 #[cfg(test)]
-pub(crate) use paint::{SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
+pub(crate) use paint::{CONTROL_BOXES_MEASURED, SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
 
 mod images;
 mod nodes;
@@ -56,6 +56,8 @@ impl Renderer {
             fx_owner: None,
             live_root: None,
             fx_geom: PtrMap::default(),
+            fx_stages: PtrMap::default(),
+            fx_placement: None,
             stamp: 0,
             alpha: 1.0,
             contexts: Vec::new(),
@@ -96,6 +98,8 @@ impl Renderer {
             moved_slices: PtrMap::default(),
             adjusts: HashMap::new(),
             dim_images: None,
+            host_outline_images: None,
+            in_warp_piece: false,
             inline_depth: 0,
             raster: vello_cpu::RasterizerSettings::default(),
             isolation: None,
@@ -105,10 +109,36 @@ impl Renderer {
         }
     }
 
-    /// Render `doc` into a `width`×`height` image using `view` (document → pixel transform).
+    /// Render `doc` into a `width`×`height` image using `view` (document → pixel transform). Type
+    /// set in one of the document's composite fonts draws in the document's definition, also when
+    /// no session has registered it (a document that is not in front, or read from a file).
     pub fn render(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions) -> Rendered {
+        self.render_document(doc, width, height, view, opts, None)
+    }
+
+    /// Render a plain RGB canvas patch using a separate renderer. Raster effects and offscreen
+    /// group compositing require the full render.
+    pub fn render_plain_patch(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
+        if doc.color_mode != vectorcraft_doc::ColorMode::Rgb || opts.mask_view.is_some() || opts.supersample {
+            return None;
+        }
+        let hit = std::cell::Cell::new(false);
+        let image = self.render_document(doc, width, height, view, opts, Some(&hit));
+        (!hit.get()).then_some(image)
+    }
+
+    fn render_document(
+        &mut self,
+        doc: &Document,
+        width: u32,
+        height: u32,
+        view: Affine,
+        opts: &RenderOptions,
+        patch: Option<&std::cell::Cell<bool>>,
+    ) -> Rendered {
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
-        self.render_as(doc, width, height, view, opts, false, 1)
+        self.render_as(doc, width, height, view, opts, false, 1, patch)
     }
 
     /// [`Self::render`], or with `inks` the ink amounts in the working CMYK space instead of
@@ -116,14 +146,24 @@ impl Renderer {
     /// pixel of the output in pixels of this render: the supersampling factor while an export
     /// draws its art at several times its size, else 1 ([`Frame::output`]).
     #[allow(clippy::too_many_arguments)]
-    fn render_as(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions, inks: bool, cell: u32) -> Rendered {
+    fn render_as(
+        &mut self,
+        doc: &Document,
+        width: u32,
+        height: u32,
+        view: Affine,
+        opts: &RenderOptions,
+        inks: bool,
+        cell: u32,
+        patch: Option<&std::cell::Cell<bool>>,
+    ) -> Rendered {
         let start = now();
         if opts.supersample && opts.anti_alias == AntiAlias::Art && opts.mask_view.is_none() {
             let (w, h) = (width.clamp(1, MAX_CONTEXT_SIDE), height.clamp(1, MAX_CONTEXT_SIDE));
             if let Some(k) = supersample_factor(w, h) {
                 let hard = RenderOptions { anti_alias: AntiAlias::None, supersample: false, ..opts.clone() };
                 let hairline = std::mem::replace(&mut self.hairline, f64::from(k));
-                let big = self.render_as(doc, w * k, h * k, Affine::scale(f64::from(k)) * view, &hard, inks, k);
+                let big = self.render_as(doc, w * k, h * k, Affine::scale(f64::from(k)) * view, &hard, inks, k, patch);
                 self.hairline = hairline;
                 let pixels = downsample(&big.pixels, big.width as usize, big.height as usize, k as usize);
                 self.stats.micros = now().saturating_sub(start);
@@ -144,11 +184,21 @@ impl Renderer {
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
-        let screen = if opts.rich_black { Ink::RichBlack } else { Ink::Display };
+        // A proof that preserves the colors' numbers proofs each colour as it is painted; the hold
+        // keeps that proof registered until the frame is drawn.
+        let (screen, _proof) = match proof::preserving(opts) {
+            Some(p) => {
+                let (ink, hold) = ink::proofed_ink(p);
+                (ink, Some(hold))
+            }
+            None if opts.rich_black => (Ink::RichBlack, None),
+            None => (Ink::Display, None),
+        };
         let symbols = doc.symbol_boxes().quick();
         let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
-        let plates = proof::plate_lut(opts);
-        let frame = Frame { mt: threads > 0, doc, symbols: &symbols, view, visible, px, opts, ink: screen, output, plates: plates.as_deref() };
+        let plates = proof::plate_lut(opts, doc);
+        let frame = Frame { mt: threads > 0, patch, doc, symbols: &symbols, view, visible, px, opts, ink: screen, output, plates: plates.as_deref() };
+        let _crossed = self.cross_placed(&frame);
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.extras().mask.as_deref()) {
@@ -164,10 +214,13 @@ impl Renderer {
             return Rendered { width: w as u32, height: h as u32, pixels };
         }
         let mut pixels = if inks || self.blends_in_cmyk(doc, opts) {
-            // Blending in CMYK: one frame per ink plane, then their inks shown on screen.
-            let cmy = self.draw_frame(&Frame { ink: Ink::Cmy, ..frame }, w, h);
+            // Blending in CMYK: one frame per ink plane, then their inks shown on screen (through a
+            // proof that preserves the numbers, when one is on: the planes hold the inks as they
+            // are, images included).
+            let planes = if proof::preserving(opts).is_some() { None } else { frame.plates };
+            let cmy = self.draw_frame(&Frame { ink: Ink::Cmy, plates: planes, ..frame }, w, h);
             let stats = self.stats;
-            let k = self.draw_frame(&Frame { ink: Ink::K, ..frame }, w, h);
+            let k = self.draw_frame(&Frame { ink: Ink::K, plates: planes, ..frame }, w, h);
             self.stats = stats;
             if inks {
                 ink::amounts(&cmy, &k)
@@ -180,7 +233,7 @@ impl Renderer {
             self.draw_frame(&frame, w, h)
         };
         self.end_frame();
-        if !inks {
+        if !inks && !pixels.is_empty() {
             proof::post(&mut pixels, opts);
         }
         self.stats.symbol_art = symbols.art_measured();
@@ -199,9 +252,8 @@ impl Renderer {
         self.placed_frame = None;
     }
 
-    /// End a frame: drop cache entries not used for a few frames (every render, thumbnails too,
-    /// so the nodes they hold go with them).
-    fn end_frame(&mut self) {
+    /// Drop stale bounds and paths, including old versions of edited nodes.
+    fn sweep_node_geometry(&mut self) {
         let g = self.stamp;
         // Swept however few the entries: each keeps its node alive, and an object dragged or
         // edited makes a new node (with its layer) in every frame. Kept until there were 1,024 of
@@ -211,6 +263,23 @@ impl Renderer {
         // A kept path stays while its object is in `geom`, which keeps the objects still drawn.
         let geom = &self.geom;
         self.kept.retain(|_, e| g - e.stamp <= 3 || geom.get(&(Arc::as_ptr(&e.node) as usize)).is_some_and(|k| Arc::ptr_eq(&k.node, &e.node)));
+    }
+
+    /// Finish measuring an edit whose frame is drawn elsewhere or needs no pixel update.
+    /// Age the measurement caches and keep the previous draw's effect rasters available.
+    pub fn finish_measurement_only(&mut self) {
+        self.stamp += 1;
+        self.sweep_node_geometry();
+        let g = self.stamp;
+        self.blends.retain(|_, e| g - e.2 <= 3);
+        self.let_go_of_measured();
+    }
+
+    /// End a frame: drop cache entries not used for a few frames (every render, thumbnails too,
+    /// so the nodes they hold go with them).
+    fn end_frame(&mut self) {
+        let g = self.stamp;
+        self.sweep_node_geometry();
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
             let strokes = &self.strokes;
@@ -226,6 +295,9 @@ impl Renderer {
         }
         if self.fx_geom.len() > 256 {
             self.fx_geom.retain(|_, e| g - e.stamp <= 3);
+        }
+        if self.fx_stages.len() > 256 {
+            self.fx_stages.retain(|_, e| g - e.3 <= 3);
         }
         // Filtered rasters are large: only those of the last frame stay.
         self.pixel_fx.retain(|_, e| e.stamp == g);
@@ -258,12 +330,18 @@ impl Renderer {
         };
         // `reset` keeps the threshold of the previous render: set it every time.
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
-        let render_mode = if opts.precise { vello_cpu::RenderMode::OptimizeQuality } else { vello_cpu::RenderMode::OptimizeSpeed };
-        self.raster = vello_cpu::RasterizerSettings { render_mode, ..Default::default() };
+        self.raster = raster_settings(opts);
         if opts.artboards && !opts.outline {
-            // Paper: white on screen, no ink on the ink planes.
+            // Paper: white on screen, no ink on the ink planes; with a proof that preserves the
+            // colors' numbers, the device's paper.
             ctx.set_transform(f.view);
-            ctx.set_paint(peniko::Color::WHITE);
+            match screen_under_art(f, [255; 4]) {
+                [255, 255, 255, _] => ctx.set_paint(peniko::Color::WHITE),
+                paper => {
+                    let [r, g, b, a] = f.ink.fixed8(paper);
+                    ctx.set_paint(peniko::Color::from_rgba8(r, g, b, a));
+                }
+            }
             for ab in &f.doc.artboards {
                 ctx.fill_rect(&ab.rect);
             }
@@ -281,14 +359,20 @@ impl Renderer {
         } else {
             self.draw_page(&mut ctx, f);
         }
-        let pm = self.finish(&mut ctx, self.raster);
+        let pm = if f.patch_rejected() {
+            self.picture = None;
+            None
+        } else {
+            Some(self.finish(&mut ctx, self.raster))
+        };
         self.contexts.push((threads, ctx));
         if self.contexts.len() > 2 {
             self.contexts.remove(0);
         }
+        let Some(pm) = pm else { return Vec::new() };
         let mut pixels = pm.data_as_u8_slice().to_vec();
         if let Some(bg) = opts.background {
-            over_background(&mut pixels, f.ink.fixed8(bg));
+            over_background(&mut pixels, f.ink.fixed8(screen_under_art(f, bg)));
         }
         pixels
     }
@@ -340,8 +424,9 @@ impl Renderer {
     pub fn render_region_inks(&mut self, doc: &Document, region: Rect, scale: f64, opts: &RenderOptions) -> Vec<u8> {
         let (w, h) = region_pixels(region, scale);
         let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
-        self.render_as(doc, w, h, view, opts, true, 1).pixels
+        self.render_as(doc, w, h, view, opts, true, 1, None).pixels
     }
 
     /// Render a single node (thumbnails, previews) fitted into `size`×`size` pixels.
@@ -356,22 +441,63 @@ impl Renderer {
 
     /// [`Self::render_node`] with `opts` (e.g. [`RenderOptions::mark_undecoded_images`]).
     pub fn render_node_with(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         self.check_plugins(doc);
         self.check_symbols(doc);
-        let inv = view.inverse();
-        let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let pixels = self.node_pixels(doc, n, (w, h), view, visible, opts, false, 1);
+        Some(Rendered { width: w as u32, height: h as u32, pixels })
+    }
+
+    /// Node `n` drawn into `w`×`h` transparent pixels through `view`, culled to `visible` (document
+    /// space); `forced` draws it whatever its visibility and bounds. With [`RenderOptions::supersample`]
+    /// and Art Optimized edges the art is drawn with hard edges at several times the size and
+    /// averaged down, and [`RenderOptions::precise`] picks the quality render mode, as in a page
+    /// render ([`Self::render_as`], [`Self::draw_frame`]). `cell` is as in [`Self::render_as`].
+    #[allow(clippy::too_many_arguments)]
+    fn node_pixels(
+        &mut self,
+        doc: &Document,
+        n: &Arc<Node>,
+        (w, h): (u16, u16),
+        view: Affine,
+        visible: Rect,
+        opts: &RenderOptions,
+        forced: bool,
+        cell: u32,
+    ) -> Vec<u8> {
+        if opts.supersample
+            && opts.anti_alias == AntiAlias::Art
+            && let Some(k) = supersample_factor(u32::from(w), u32::from(h))
+        {
+            let hard = RenderOptions { anti_alias: AntiAlias::None, supersample: false, ..opts.clone() };
+            // `supersample_factor` keeps each side within MAX_CONTEXT_SIDE, so it fits in a u16.
+            let (bw, bh) = (u32::from(w) * k, u32::from(h) * k);
+            let hairline = std::mem::replace(&mut self.hairline, f64::from(k));
+            let big = self.node_pixels(doc, n, (bw as u16, bh as u16), Affine::scale(f64::from(k)) * view, visible, &hard, forced, k);
+            self.hairline = hairline;
+            return downsample(&big, bw as usize, bh as usize, k as usize);
+        }
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let mut ctx = single_threaded_context(w, h);
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         let symbols = doc.symbol_boxes().quick();
-        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, output: view, plates: None };
+        let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
+        let frame = Frame { mt: false, patch: None, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, output, plates: None };
+        let raster = std::mem::replace(&mut self.raster, raster_settings(opts));
+        let _crossed = self.cross_placed(&frame);
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
-        self.draw_arc(&mut ctx, &frame, n);
-        let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
+        if forced {
+            self.draw_forced_arc(&mut ctx, &frame, n);
+        } else {
+            self.draw_arc(&mut ctx, &frame, n);
+        }
+        let pm = self.finish(&mut ctx, self.raster);
         self.end_frame();
-        Some(Rendered { width: w as u32, height: h as u32, pixels: pm.data_as_u8_slice().to_vec() })
+        self.raster = raster;
+        pm.data_as_u8_slice().to_vec()
     }
 
     /// Render any node (also one outside the tree, e.g. opacity-mask art) fitted into
@@ -395,6 +521,7 @@ impl Renderer {
         background: Option<[u8; 4]>,
         opts: &RenderOptions,
     ) -> Option<Rendered> {
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         self.check_plugins(doc);
         self.check_symbols(doc);
         let b = brush_fx::cull_bounds(&doc.symbol_boxes(), n)?;
@@ -402,33 +529,25 @@ impl Renderer {
         // A 1-pixel margin on each side, unless the thumbnail is too small to keep one.
         let s = (w as f64 - 2.0).max(1.0) / b.width().max(b.height()).max(1e-6);
         let view = Affine::translate((w as f64 / 2.0, w as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
-        let mut ctx = single_threaded_context(w, w);
-        ctx.set_aliasing_threshold(opts.anti_alias.threshold());
-        let symbols = doc.symbol_boxes().quick();
-        let frame = Frame {
-            mt: false,
-            doc,
-            symbols: &symbols,
-            view,
-            visible: b.inflate(1.0, 1.0),
-            px: 1.0 / s,
-            opts,
-            ink: Ink::Display,
-            output: view,
-            plates: None,
-        };
-        self.begin_frame();
-        (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
-        self.clip_paths.clear();
-        self.draw_forced_arc(&mut ctx, &frame, &Arc::new(n.clone()));
-        let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
-        self.end_frame();
-        let mut pixels = pm.data_as_u8_slice().to_vec();
+        let mut pixels = self.node_pixels(doc, &Arc::new(n.clone()), (w, w), view, b.inflate(1.0, 1.0), opts, true, 1);
         if let Some(bg) = background {
             over_background(&mut pixels, bg);
         }
         Some(Rendered { width: w as u32, height: w as u32, pixels })
     }
+}
+
+/// The rasterizer settings for `opts`: the quality render mode when [`RenderOptions::precise`] is set.
+fn raster_settings(opts: &RenderOptions) -> vello_cpu::RasterizerSettings {
+    let render_mode = if opts.precise { vello_cpu::RenderMode::OptimizeQuality } else { vello_cpu::RenderMode::OptimizeSpeed };
+    vello_cpu::RasterizerSettings { render_mode, ..Default::default() }
+}
+
+/// Solid color `rgba` (straight alpha) under the art of frame `f`: on screen as
+/// [`proof::under_art`] gives it; the ink planes paint it as it is, and [`ink::compose`] shows it
+/// through the proof.
+fn screen_under_art(f: &Frame, rgba: [u8; 4]) -> [u8; 4] {
+    if matches!(f.ink.base(), Ink::Cmy | Ink::K) { rgba } else { proof::under_art(f.opts, rgba) }
 }
 
 /// Premultiplied RGBA `pixels` drawn over the solid color `background` (`[r, g, b, a]`, straight).

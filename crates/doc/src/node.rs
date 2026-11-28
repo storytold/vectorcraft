@@ -24,7 +24,7 @@ mod opacity;
 mod ops;
 mod wire;
 
-pub use attributes::{ForeignAttribute, ImageMap, MAX_SVG_SCRIPTS, ObjectAttributes, SVG_EVENTS};
+pub use attributes::{ForeignAttribute, ImageMap, MAX_SVG_SCRIPTS, MAX_TAG_TEXT, MAX_TAGS, ObjectAttributes, ObjectTag, SVG_EVENTS};
 pub use clip::{ClipPaint, Uniter};
 pub use extras::{Extras, ExtrasMut, NodeExtras};
 pub use ids::{LAYER_COLORS, LayerColor, NodeId};
@@ -32,7 +32,9 @@ pub use kind::{ImageObject, MAX_BUFFERED_VALUES, NodeKind, with_buffered_value_b
 pub use live_shape::{LiveShape, Scaling};
 pub use opacity::{Knockout, OpacityMask, whiten};
 pub use ops::{flattens, keeps_gradient_fit};
+pub(crate) use ops::{held_guides, map_held, strip_held};
 use wire::NodeWire;
+pub(crate) use wire::counted_list;
 pub use wire::{MAX_READ_NODES, with_node_budget};
 
 fn yes() -> bool {

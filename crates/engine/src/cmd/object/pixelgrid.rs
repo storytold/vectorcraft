@@ -1,6 +1,9 @@
 //! Transform panel › Align to Pixel Grid: an object's pixel-aligned property, and the snapping that
 //! keeps the horizontal and vertical segments of a pixel-aligned object on the pixel grid
-//! (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/pixel-preview-mode-for-web-graphics.html>).
+//! (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/pixel-preview-mode-for-web-graphics.html>),
+//! and Symbol Options › Align to Pixel Grid, which keeps a symbol's instances on the pixel grid.
+
+use std::collections::HashMap;
 
 use vectorcraft_doc::{AppearanceItem, LiveShape, StrokeAlign};
 
@@ -20,6 +23,16 @@ const EPS: f64 = 1e-6;
 /// Type, images, groups and other objects cannot.
 pub(crate) fn can_align(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
+}
+
+/// For an object being drawn into `d`: when the document's Align New Objects to Pixel Grid is on
+/// and [`can_align`] accepts `n`, turn `n`'s pixel-aligned property on. The edit that adds it snaps
+/// it to the pixel grid ([`refresh`]). Pasted, duplicated, placed and imported objects do not come
+/// through here.
+pub(crate) fn align_new_object(d: &Document, n: &mut Node) {
+    if d.setup.align_new_objects_to_pixel_grid && can_align(n) {
+        n.extras_mut().pixel_aligned = true;
+    }
 }
 
 /// `object.setPixelAligned`: turn the pixel-aligned property of the objects given (or the selected
@@ -140,16 +153,268 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) {
             keep_pixel_aligned(n, Scaling::default());
         }
     }
+    refresh_symbols(before, doc);
+}
+
+/// How far the linear part of an instance's transform may be from its symbol's natural size, as a
+/// fraction of that size, for the instance to count as placed at actual size.
+const ACTUAL_SIZE_TOLERANCE: f64 = 1e-9;
+
+/// After any edit: Symbol Options › Align to Pixel Grid. The art of a pixel-aligned symbol snaps to
+/// the pixel grid at the symbol's natural size ([`snap_symbol_art`]) when the symbol becomes
+/// pixel-aligned, when its art or natural size changes, and when symbol editing mode for it ends
+/// (while it is edited, the art snaps as the editing layer is written back to it). Every instance
+/// of such a symbol then goes to whole points ([`snap_instance`]), and so does each instance of a
+/// pixel-aligned symbol in an object the edit changed or added, the art of opacity masks included.
+/// An instance in another symbol's art, the art on the symbol editing layer included, is placed by
+/// that symbol's instances and is left as it is. A document without pixel-aligned symbols is not walked.
+fn refresh_symbols(before: &Document, doc: &mut Document) {
+    let aligned = doc.pixel_aligned_symbols();
+    if aligned.is_empty() {
+        return;
+    }
+    let was = before.pixel_aligned_symbols();
+    // The symbol whose editing mode this edit ended, if any.
+    let edited_before = before.symbol_edit.as_ref().map(|e| e.symbol.as_str());
+    let edited_now = doc.symbol_edit.as_ref().map(|e| e.symbol.as_str());
+    let edit_ended = edited_before.filter(|b| edited_now != Some(*b)).map(str::to_owned);
+    let mut every = false;
+    for name in &aligned {
+        let art_before = before.symbols.iter().find(|s| &s.name == name).map(|s| &s.art);
+        let art_now = doc.symbols.iter().find(|s| &s.name == name).map(|s| &s.art);
+        let art_changed = match (art_before, art_now) {
+            (Some(b), Some(a)) => !Arc::ptr_eq(b, a),
+            _ => true,
+        };
+        let size_changed = before.symbol_natural_xf(name) != doc.symbol_natural_xf(name);
+        if !was.contains(name) || edit_ended.as_deref() == Some(name.as_str()) || art_changed || size_changed {
+            snap_symbol_art(doc, name);
+            every = true;
+        }
+    }
+    let natural: HashMap<String, Affine> = aligned.iter().map(|name| (name.clone(), doc.symbol_natural_xf(name))).collect();
+    // The symbol editing layer holds another symbol's art.
+    let editing = doc.symbol_edit.as_ref().map(|e| e.layer);
+    if every {
+        for layer in doc.layers.iter_mut() {
+            if Some(layer.id) != editing && holds_instance(layer, &natural) {
+                snap_instances_in(Arc::make_mut(layer), &natural);
+            }
+        }
+        return;
+    }
+    let (mut ids, mut masked) = (vec![], vec![]);
+    if let Some(layer) = editing {
+        let outside = |layers: &[Arc<Node>]| layers.iter().filter(|l| l.id != layer).cloned().collect::<Vec<_>>();
+        changed_instances(&outside(&before.layers), &outside(&doc.layers), &natural, &mut ids, &mut masked);
+    } else {
+        changed_instances(&before.layers, &doc.layers, &natural, &mut ids, &mut masked);
+    }
+    for id in ids {
+        if let Some(n) = doc.node_mut(id) {
+            snap_instance(n, &natural);
+        }
+    }
+    for id in masked {
+        if let Some(m) = doc.node_mut(id).and_then(|n| n.extras_if_any()).and_then(|e| e.mask.as_mut()) {
+            snap_instances_in(Arc::make_mut(&mut m.art), &natural);
+        }
+    }
+}
+
+/// Among the objects of `after` that differ from their counterparts in `before` (or are new), in
+/// groups too: the instances of the symbols in `natural` (`ids`), and the objects whose opacity
+/// mask art holds such instances (`masked`).
+fn changed_instances(before: &[Arc<Node>], after: &[Arc<Node>], natural: &HashMap<String, Affine>, ids: &mut Vec<NodeId>, masked: &mut Vec<NodeId>) {
+    let mut by_id: Option<HashMap<NodeId, &Arc<Node>>> = None;
+    for (i, a) in after.iter().enumerate() {
+        let b = match before.get(i) {
+            Some(b) if b.id == a.id => Some(b),
+            _ => by_id.get_or_insert_with(|| before.iter().map(|b| (b.id, b)).collect()).get(&a.id).copied(),
+        };
+        if b.is_some_and(|b| Arc::ptr_eq(b, a)) {
+            continue;
+        }
+        if a.extras().mask.as_ref().is_some_and(|m| holds_instance(&m.art, natural)) {
+            masked.push(a.id);
+        }
+        if let NodeKind::SymbolInstance { symbol, .. } = &a.kind {
+            if natural.contains_key(symbol) {
+                ids.push(a.id);
+            }
+        } else if let Some(children) = a.children() {
+            changed_instances(b.and_then(|b| b.children()).map_or(&[], Vec::as_slice), children, natural, ids, masked);
+        }
+    }
+}
+
+/// Whether `n`, an object in it or the art of an opacity mask in it is an instance of a symbol in
+/// `natural`.
+fn holds_instance(n: &Node, natural: &HashMap<String, Affine>) -> bool {
+    matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if natural.contains_key(symbol))
+        || n.extras().mask.as_ref().is_some_and(|m| holds_instance(&m.art, natural))
+        || n.children().is_some_and(|ch| ch.iter().any(|c| holds_instance(c, natural)))
+}
+
+/// [`snap_instance`] on every instance of a symbol in `natural` in `n`, the art of its opacity
+/// masks included. Only what holds such an instance is copied for editing.
+fn snap_instances_in(n: &mut Node, natural: &HashMap<String, Affine>) {
+    snap_instance(n, natural);
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+        && holds_instance(&m.art, natural)
+    {
+        snap_instances_in(Arc::make_mut(&mut m.art), natural);
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children.iter_mut() {
+            if holds_instance(c, natural) {
+                snap_instances_in(Arc::make_mut(c), natural);
+            }
+        }
+    }
+}
+
+/// Snap the art of pixel-aligned symbol `name` to the pixel grid as it is drawn at the symbol's
+/// natural size: each path and compound path in it snaps as a pixel-aligned object does
+/// ([`snap_object`]), measured from the symbol's origin. The art is stored again only when
+/// something in it moved, and the answer says whether it did.
+pub(crate) fn snap_symbol_art(doc: &mut Document, name: &str) -> bool {
+    let natural = doc.symbol_natural_xf(name);
+    let det = natural.determinant();
+    if !det.is_finite() || det.abs() < 1e-18 {
+        return false;
+    }
+    let Some(sym) = doc.symbols.iter_mut().find(|s| s.name == name) else { return false };
+    // Instances draw the art's strokes at their stored width, and the art of unlinked opacity
+    // masks, which `Node::transform` leaves alone, at the natural size too.
+    let mut art = (*sym.art).clone();
+    art.transform(natural, false);
+    transform_unlinked_masks(&mut art, natural);
+    if !snap_art(&mut art) {
+        return false;
+    }
+    let inverse = natural.inverse();
+    art.transform(inverse, false);
+    transform_unlinked_masks(&mut art, inverse);
+    sym.art = Arc::new(art);
+    true
+}
+
+/// Transform the art of every unlinked opacity mask in `n` by `xf`, in the art of other masks
+/// too. Only what holds such a mask is copied for editing.
+fn transform_unlinked_masks(n: &mut Node, xf: Affine) {
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+        && holds_unlinked_mask(&m.art, !m.linked)
+    {
+        let linked = m.linked;
+        let art = Arc::make_mut(&mut m.art);
+        if !linked {
+            art.transform(xf, false);
+        }
+        transform_unlinked_masks(art, xf);
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children.iter_mut() {
+            if holds_unlinked_mask(c, false) {
+                transform_unlinked_masks(Arc::make_mut(c), xf);
+            }
+        }
+    }
+}
+
+/// Whether `n` is the art of an unlinked mask (`unlinked`), or it or an object in it, in the art of
+/// its masks too, has an unlinked opacity mask.
+fn holds_unlinked_mask(n: &Node, unlinked: bool) -> bool {
+    unlinked
+        || n.extras().mask.as_ref().is_some_and(|m| holds_unlinked_mask(&m.art, !m.linked))
+        || n.children().is_some_and(|ch| ch.iter().any(|c| holds_unlinked_mask(c, false)))
+}
+
+/// Snap every path and compound path in `n` ([`can_align`]) with [`snap_object`], the art of
+/// opacity masks included (those of a compound path's paths too). Returns whether anything
+/// changed.
+fn snap_art(n: &mut Node) -> bool {
+    let mut moved = false;
+    if can_align(n) {
+        let was = n.clone();
+        snap_object(n, Scaling::default());
+        moved = *n != was;
+        if let Some(children) = n.children_mut() {
+            for c in children.iter_mut() {
+                if c.extras().mask.is_some() {
+                    moved |= snap_mask(Arc::make_mut(c));
+                }
+            }
+        }
+    } else if let Some(children) = n.children_mut() {
+        for c in children.iter_mut() {
+            moved |= snap_art(Arc::make_mut(c));
+        }
+    }
+    // After the object itself, which a linked mask follows.
+    snap_mask(n) || moved
+}
+
+/// [`snap_art`] on the art of `n`'s opacity mask. Returns whether anything changed.
+fn snap_mask(n: &mut Node) -> bool {
+    let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) else { return false };
+    let mut art = (*m.art).clone();
+    if !snap_art(&mut art) {
+        return false;
+    }
+    m.art = Arc::new(art);
+    true
+}
+
+/// Move symbol instance `n` to whole points when its transform places its symbol's art at the
+/// symbol's natural size (`natural`, by symbol name), reflected across one axis or not. A scaled,
+/// rotated (a half turn included) or sheared instance stays where it is. The instance moves as any
+/// move moves it ([`Node::transform`]), so the art of a linked opacity mask moves with it.
+fn snap_instance(n: &mut Node, natural: &HashMap<String, Affine>) {
+    let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return };
+    let Some(nat) = natural.get(symbol.as_str()) else { return };
+    let [a, b, c, d, e, f] = xf.as_coeffs();
+    let [na, _, _, nd, _, _] = nat.as_coeffs();
+    let near = |v: f64, to: f64| (v.abs() - to.abs()).abs() <= ACTUAL_SIZE_TOLERANCE * to.abs().max(1.0);
+    let actual =
+        near(a, na) && near(d, nd) && b.abs() <= ACTUAL_SIZE_TOLERANCE * na.abs().max(1.0) && c.abs() <= ACTUAL_SIZE_TOLERANCE * nd.abs().max(1.0);
+    // Flipped along both axes is a half turn, which counts as rotated.
+    let half_turn = a * na < 0.0 && d * nd < 0.0;
+    if !actual || half_turn || !e.is_finite() || !f.is_finite() {
+        return;
+    }
+    let (x, y) = (e.round(), f.round());
+    if x == e && y == f {
+        return;
+    }
+    n.transform(Affine::translate((x - e, y - f)), Scaling::default());
+    // Whole points exactly, which adding the offset to the old position need not give.
+    if let NodeKind::SymbolInstance { xf, .. } = &mut n.kind {
+        *xf = Affine::new([a, b, c, d, x, y]);
+    }
 }
 
 /// After a pass that moved what objects `ids` hold (Objects on Path placing its members): snap the
-/// pixel-aligned objects in them to the pixel grid again.
+/// pixel-aligned objects and the instances of pixel-aligned symbols in them to the pixel grid
+/// again.
 pub(crate) fn keep_aligned_in(doc: &mut Document, ids: &[NodeId]) {
     for id in ids {
         if doc.node(*id).is_some_and(holds_aligned)
             && let Some(n) = doc.node_mut(*id)
         {
             keep_pixel_aligned(n, Scaling::default());
+        }
+    }
+    let aligned = doc.pixel_aligned_symbols();
+    if aligned.is_empty() {
+        return;
+    }
+    let natural: HashMap<String, Affine> = aligned.iter().map(|name| (name.clone(), doc.symbol_natural_xf(name))).collect();
+    for id in ids {
+        if doc.node(*id).is_some_and(|n| holds_instance(n, &natural))
+            && let Some(n) = doc.node_mut(*id)
+        {
+            snap_instances_in(n, &natural);
         }
     }
 }
@@ -178,10 +443,18 @@ fn changed_aligned(before: &[Arc<Node>], after: &[Arc<Node>], out: &mut Vec<Node
 /// After an edit that replaces object `id`'s geometry: snap it, or the pixel-aligned compound path
 /// that holds it, to the pixel grid again when it is pixel-aligned.
 pub(crate) fn resnap(d: &mut Document, id: NodeId) {
-    if let Some(n) = d.node_mut(id) {
-        snap_if_aligned(n);
+    resnap_with(d, id, Scaling::default());
+}
+
+/// [`resnap`] with `sc`: the patterns of an object that the snap moves move with it when `sc`
+/// transforms patterns.
+pub(crate) fn resnap_with(d: &mut Document, id: NodeId, sc: Scaling) {
+    if let Some(n) = d.node_mut(id)
+        && n.extras().pixel_aligned
+    {
+        snap_object(n, sc);
     }
-    keep_compound_aligned(d, id, Scaling::default());
+    keep_compound_aligned(d, id, sc);
 }
 
 /// After an edit of `n`'s strokes: when `n` is pixel-aligned, round its stroke weights and snap it to

@@ -188,6 +188,77 @@ fn align_stroke_reaches_the_characters_stroke() {
     assert!(aligns.contains(&StrokeAlign::Inside) && aligns.contains(&StrokeAlign::Outside), "{aligns:?}");
 }
 
+/// The bounds of type `t`'s glyph outlines in text space.
+fn glyph_bounds(t: &TextObject) -> kurbo::Rect {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let mut all = kurbo::BezPath::new();
+    for g in &lay.glyphs {
+        all.extend(g.outline.iter());
+    }
+    kurbo::Shape::bounding_box(&all)
+}
+
+/// Create Outlines on type scaled 300% across and 100% down: the canvas strokes the characters in
+/// text space and then scales them, so the outlined stroke is filled art three times as thick
+/// across upright stems as across level bars, not a live stroke of one mean weight.
+#[test]
+fn create_outlines_keeps_the_character_strokes_thickness_under_an_uneven_scale() {
+    let mut s = session();
+    let id = stroked_text(&mut s);
+    run(&mut s, "stroke.set", json!({"weight": 4, "join": "round", "cap": "round"}));
+    run(&mut s, "object.scale", json!({"ids": [id.0], "sx": 300, "sy": 100}));
+    let t = text(&s, id);
+    let [a, b, c, d, ..] = t.xf.as_coeffs();
+    assert!((a - 3.0).abs() < 1e-9 && b.abs() < 1e-9 && c.abs() < 1e-9 && (d - 1.0).abs() < 1e-9, "{:?}", t.xf);
+    let w = t.runs[0].style.stroke_width;
+    let gb = glyph_bounds(&t);
+    run(&mut s, "select.set", json!({ "ids": [id.0] }));
+    let g = run(&mut s, "type.createOutlines", json!({}))["ids"][0].as_u64().unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let group = doc.node(NodeId(g)).unwrap();
+    let mut strokes: Option<kurbo::Rect> = None;
+    for c in group.children().unwrap() {
+        assert!(c.appearance.stroke().is_none(), "no live stroke of one weight is left");
+        if c.appearance.fill_paint() == Paint::solid(Color::rgb8(255, 0, 0)) {
+            let cb = c.geometric_bounds().unwrap();
+            strokes = Some(strokes.map_or(cb, |s| s.union(cb)));
+        }
+    }
+    // Round joins and caps reach half the weight past the glyphs in text space, then scale.
+    let want = t.xf.transform_rect_bbox(gb.inflate(w / 2.0, w / 2.0));
+    let got = strokes.expect("filled character strokes");
+    assert!((got.width() - want.width()).abs() < 0.1 && (got.height() - want.height()).abs() < 0.1, "{got:?} for {want:?}");
+    assert!((got.height() - (gb.height() + w)).abs() < 0.1, "level bars keep the weight: {got:?}");
+}
+
+/// Under a uniform scale and a rotation the outlined characters keep a live stroke, its weight
+/// and dashes scaled with them.
+#[test]
+fn create_outlines_keeps_a_live_character_stroke_under_a_uniform_scale_and_rotation() {
+    let mut s = session();
+    let id = stroked_text(&mut s);
+    run(&mut s, "stroke.set", json!({"weight": 4, "dash": [6, 2]}));
+    run(&mut s, "object.scale", json!({"ids": [id.0], "sx": 200, "sy": 200}));
+    run(&mut s, "object.rotate", json!({"angle": 30}));
+    let t = text(&s, id);
+    let k = t.xf.determinant().abs().sqrt();
+    assert!((k - 2.0).abs() < 1e-9, "{:?}", t.xf);
+    let st = t.runs[0].style.clone();
+    let dash = st.stroke_dash.as_ref().unwrap().pattern.clone();
+    let glyphs = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).glyphs.len();
+    run(&mut s, "select.set", json!({ "ids": [id.0] }));
+    let g = run(&mut s, "type.createOutlines", json!({}))["ids"][0].as_u64().unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let pieces = doc.node(NodeId(g)).unwrap().children().unwrap().to_vec();
+    assert_eq!(pieces.len(), glyphs, "one path for each glyph, no filled strokes");
+    for p in &pieces {
+        let ps = p.appearance.stroke().expect("a live stroke");
+        assert!((ps.width - st.stroke_width * k).abs() < 1e-6, "{} for {}", ps.width, st.stroke_width * k);
+        let got = &ps.dash.as_ref().unwrap().pattern;
+        assert!(got.iter().zip(&dash).all(|(g, d)| (g - d * k).abs() < 1e-6), "{got:?} for {dash:?}");
+    }
+}
+
 /// Copying type's appearance onto a path keeps its characters' stroke alignment (the Eyedropper's
 /// own stroke attributes have none, on paths as on type).
 #[test]

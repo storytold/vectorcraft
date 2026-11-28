@@ -13,6 +13,7 @@ use std::collections::HashSet;
 use super::{Builder, ELEMENT_BYTES, arg, data, key_of, length_of, method, new_array, new_string, to_integer};
 use crate::heap::{Class, Key, OBJECT_BYTES, OPEN, ObjId, Object, Prop, key, string_bytes};
 use crate::interp::{Desc, ErrorType, Hint, Interp, JsResult};
+use crate::string_builtins::flat_charged;
 use crate::value::{Str, Value, number_to_str};
 
 pub(super) fn install(interp: &mut Interp) -> JsResult<()> {
@@ -473,7 +474,7 @@ fn settings(interp: &mut Interp, replacer: &Value, space: &Value) -> JsResult<Se
             let n = to_integer(interp, &space)?.clamp(0.0, 10.0) as usize;
             s.gap = vec![u16::from(b' '); n];
         }
-        Value::String(t) => s.gap = t.flat().iter().take(10).copied().collect(),
+        Value::String(t) => s.gap = flat_charged(interp, &t)?.iter().take(10).copied().collect(),
         _ => {}
     }
     Ok(s)
@@ -537,7 +538,7 @@ fn resolve_rooted(interp: &mut Interp, settings: &Settings, holder: ObjId, k: &K
     keep(interp, &v);
     let name = Value::String(Str::from_rc(k.clone()));
     if let Value::Object(o) = v {
-        let to_json = interp.get_from(o, &key("toJSON"), &v)?;
+        let to_json = interp.get_property_only(o, &key("toJSON"), &v)?;
         if interp.is_callable(&to_json) {
             v = interp.call(&to_json, &v, std::slice::from_ref(&name))?;
             keep(interp, &v);
@@ -555,7 +556,7 @@ fn resolve_rooted(interp: &mut Interp, settings: &Settings, holder: ObjId, k: &K
         }
     }
     Ok(match v {
-        Value::Undefined => Item::Skip,
+        Value::Undefined | Value::Symbol(_) => Item::Skip,
         Value::Object(_) if interp.is_callable(&v) => Item::Skip,
         Value::Object(o) => Item::Container(o),
         other => Item::Primitive(other),
@@ -564,39 +565,19 @@ fn resolve_rooted(interp: &mut Interp, settings: &Settings, holder: ObjId, k: &K
 
 /// ToNumber of a Number object, or ToString of a String object (of either when `as_string` is
 /// set), as section 15.12.3 applies them in Str step 4, step 4.b.ii and step 5. Returns `None`
-/// for any other value. When the method that [[DefaultValue]] (section 8.12.8) calls first is not
-/// found on the object or on its prototype chain before the object's standard prototype, the
-/// result is the object's [[PrimitiveValue]] (sections 8.6.2 and 9.9), the value that
-/// `Number.prototype.valueOf` (15.7.4.4), `Number.prototype.toString` (15.7.4.2) and
-/// `String.prototype.toString` (15.5.4.2) return. Otherwise ToPrimitive calls the method found.
+/// for any other value. The conversion is ToPrimitive (section 9.1) with the Number or String
+/// hint, so `valueOf` and `toString` are looked up along the object's whole prototype chain, and
+/// in a realm with [`crate::Options::es2015`] an `@@toPrimitive` method on the object is called
+/// first (ECMA-262 11th edition, section 7.1.1).
 fn unwrap_primitive(interp: &mut Interp, v: &Value, as_string: bool) -> JsResult<Option<Value>> {
     let Value::Object(o) = v else { return Ok(None) };
-    let (primitive, proto, string) = match interp.heap.object(*o).map(|x| &x.class) {
-        Some(Class::Number(n)) => (Value::Number(*n), interp.intrinsics.number_proto, as_string),
-        Some(Class::String(s)) => (Value::String(s.clone()), interp.intrinsics.string_proto, true),
+    let string = match interp.heap.object(*o).map(|x| &x.class) {
+        Some(Class::Number(_)) => as_string,
+        Some(Class::String(_)) => true,
         _ => return Ok(None),
     };
-    let (hint, name) = if string { (Hint::String, "toString") } else { (Hint::Number, "valueOf") };
-    let p = if reaches_prototype(interp, *o, proto, name)? { primitive } else { interp.to_primitive(v, hint)? };
-    Ok(Some(if string { Value::String(interp.primitive_to_str(&p)) } else { Value::Number(interp.to_number(&p)?) }))
-}
-
-/// Whether looking up `name` from `o` reaches the object `proto` on the prototype chain before
-/// any object on the way, `proto` included, has its own property `name`.
-fn reaches_prototype(interp: &mut Interp, o: ObjId, proto: ObjId, name: &str) -> JsResult<bool> {
-    let k = key(name);
-    let mut cur = Some(o);
-    while let Some(id) = cur {
-        interp.use_fuel()?;
-        if interp.get_own_property(id, &k)?.is_some() {
-            return Ok(false);
-        }
-        if id == proto {
-            return Ok(true);
-        }
-        cur = interp.heap.object(id).and_then(|x| x.proto);
-    }
-    Ok(false)
+    let p = interp.to_primitive(v, if string { Hint::String } else { Hint::Number })?;
+    Ok(Some(if string { Value::String(interp.to_str(&p)?) } else { Value::Number(interp.to_number(&p)?) }))
 }
 
 /// Quote (section 15.12.3): the string in double quotes with the characters JSON escapes.
@@ -632,8 +613,11 @@ fn write_primitive(interp: &mut Interp, out: &mut Builder, v: &Value) -> JsResul
         Value::Bool(b) => out.push_str(interp, if *b { "true" } else { "false" }),
         Value::Number(n) if n.is_finite() => out.push_units(interp, &number_to_str(*n).flat()),
         Value::Number(_) => out.push_str(interp, "null"),
-        Value::String(s) => write_quoted(interp, out, &s.flat()),
-        Value::Undefined | Value::Object(_) => Ok(()),
+        Value::String(s) => interp.rooted(std::slice::from_ref(v), |i| {
+            let units = flat_charged(i, s)?;
+            write_quoted(i, out, &units)
+        }),
+        Value::Undefined | Value::Object(_) | Value::Symbol(_) => Ok(()),
     }
 }
 

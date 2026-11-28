@@ -1,5 +1,6 @@
 //! Colorized gray and bilevel image export, checked as pixels as well as markup.
 
+use craft_svg::tree::draw::resvg;
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, LinkInfo, Node, NodeKind};
 use vectorcraft_geom::Affine;
@@ -23,6 +24,7 @@ fn bilevel() -> Vec<u8> {
 }
 
 fn png(img: image::DynamicImage) -> Vec<u8> {
+    // Through the image crate, so a gray image stays gray (colorizing reads gray images only).
     let mut out = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
     out
@@ -131,7 +133,8 @@ fn bilevel_process_and_spot_use_coverage_in_embed_link_and_tiny() {
             assert_eq!(linked.linked.len(), 1);
             let file = &linked.linked[0];
             assert!(linked.svg.contains(&file.name));
-            let rgba = image::load_from_memory(&file.bytes).unwrap().to_rgba8();
+            let decoded = craft_image_codecs::decode(&file.bytes).unwrap();
+            let rgba = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
             assert_eq!((rgba.get_pixel(0, 0).0[3], rgba.get_pixel(1, 0).0[3]), (255, 0));
             let inlined = linked.svg.replace(&file.name, &format!("data:image/png;base64,{}", base64_encode(&file.bytes)));
             assert_eq!(rendered(&inlined), rendered(&embedded.svg));

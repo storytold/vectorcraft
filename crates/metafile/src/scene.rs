@@ -14,7 +14,7 @@ use vectorcraft_doc::{AppearanceItem, Dash, Document, ImageObject, LineCap, Line
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Shape};
 
-use crate::dib::Rgba;
+use craft_metafile::write::Image;
 
 /// How deep symbols, brush art and pattern tiles may nest in one another (deeper art is left out).
 const MAX_NEST: u32 = 8;
@@ -31,6 +31,7 @@ const BLENDING: &str = "blending modes are left out";
 const MASKS: &str = "opacity masks are left out";
 const RASTER_FX: &str = "raster effects (shadows, glows, blurs, feathering) are left out";
 const CLIPPING: &str = "clipping masks are not applied: the art they clip is written whole";
+const DISTORTED_IMAGES: &str = "images changed by Perspective Distort or Free Distort are written as the nearest parallelogram";
 const FLAT_GRADIENTS: &str = "gradients are written as one colour, the average of their stops";
 const FLAT_PATTERNS: &str = "pattern fills are written as one colour";
 const TOO_MANY_TILES: &str = "pattern fills past 250,000 tiles in all are written as one colour";
@@ -43,11 +44,15 @@ const INSIDE_TOL: f64 = 1e-6;
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
+/// The warning about how distorted images are written.
+pub(crate) const DISTORTED_IMAGES_NOTE: &str = DISTORTED_IMAGES;
 
 /// A stroke as a pen draws it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Pen {
     pub rgb: [u8; 3],
+    /// The solid paint `rgb` comes from (`None`: a gradient's or pattern's one colour).
+    pub paint: Option<Paint>,
     /// Points.
     pub width: f64,
     pub cap: LineCap,
@@ -64,6 +69,8 @@ pub(crate) enum Op {
         path: BezPath,
         rule: FillRule,
         rgb: [u8; 3],
+        /// The solid paint `rgb` comes from (`None`: a gradient's or pattern's one colour).
+        paint: Option<Paint>,
     },
     Stroke {
         path: BezPath,
@@ -72,7 +79,7 @@ pub(crate) enum Op {
     /// An image: its pixel space (0..w, 0..h) maps into the document by `xf`; its alpha times
     /// `opacity`.
     Image {
-        image: Arc<Rgba>,
+        image: Arc<Image>,
         xf: Affine,
         opacity: f32,
     },
@@ -103,9 +110,9 @@ fn first_solid(n: &Node) -> Option<vectorcraft_color::Color> {
     own.or_else(|| n.children().into_iter().flatten().find_map(|c| first_solid(c)))
 }
 
-/// `bp` cut into its dashes (as it is when `dash` draws none), for pens that can't draw them.
-pub(crate) fn dashed(bp: &BezPath, dash: Option<&Dash>) -> BezPath {
-    dash.and_then(|d| stroke::dash(bp, d)).map_or_else(|| bp.clone(), |d| d.path)
+/// `p` when it is a solid paint.
+fn solid(p: &Paint) -> Option<Paint> {
+    matches!(p, Paint::Solid { .. }).then(|| p.clone())
 }
 
 fn q(v: f32) -> u8 {
@@ -123,7 +130,7 @@ pub(crate) struct Scene<'a> {
     ops: Vec<Op>,
     warnings: Vec<String>,
     /// Decoded images by key (`None`: can't be decoded, left out).
-    images: HashMap<String, Option<Arc<Rgba>>>,
+    images: HashMap<String, Option<Arc<Image>>>,
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// The opacity of the containers around the current object.
     opacity: f32,
@@ -134,6 +141,9 @@ pub(crate) struct Scene<'a> {
     /// Pattern tiles being written that may be merged: their parts aren't left out off the page,
     /// so each tile draws the same parts (the fill's clip still trims them).
     whole_tiles: bool,
+    /// While the pieces of a distorted image are written: the box of the clips around the current
+    /// object (`Some(None)` before the first), to which each piece's image is cropped.
+    crop: Option<Option<Rect>>,
 }
 
 impl<'a> Scene<'a> {
@@ -151,6 +161,7 @@ impl<'a> Scene<'a> {
             nest: 0,
             tiles_left: MAX_TILES,
             whole_tiles: false,
+            crop: None,
         }
     }
 
@@ -169,6 +180,18 @@ impl<'a> Scene<'a> {
         (self.ops, self.warnings)
     }
 
+    /// The operations of each top-level layer of the document, in its paint order, and the
+    /// warnings. Unlike [`Scene::run`], nothing is clipped to the region.
+    pub fn run_by_layer(mut self) -> (Vec<Vec<Op>>, Vec<String>) {
+        let doc = self.doc;
+        let mut layers = Vec::with_capacity(doc.layers.len());
+        for l in &doc.layers {
+            self.node(l, false);
+            layers.push(std::mem::take(&mut self.ops));
+        }
+        (layers, self.warnings)
+    }
+
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
@@ -176,7 +199,8 @@ impl<'a> Scene<'a> {
     }
 
     fn node(&mut self, n: &Node, force: bool) {
-        if let NodeKind::Layer { template: true, .. } = n.kind {
+        // Ruler guides draw on screen only: no record and no loss warning.
+        if n.is_ruler_guide() || n.is_template() {
             return;
         }
         if !force && !n.visible {
@@ -212,11 +236,28 @@ impl<'a> Scene<'a> {
                     self.node(&o, true);
                 }
             }
-            NodeKind::Image(im) => self.image(im),
+            NodeKind::Image(im) => match vectorcraft_doc::image_quad::nearest_affine(n) {
+                // A format that clips writes a distorted image as the pieces of its mesh; one that
+                // doesn't, at the affine placement nearest its corners.
+                // Each piece stores only the pixels inside its clips.
+                Some(_) if self.clips => {
+                    let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                    let outer = self.crop.replace(None);
+                    for c in g.children().into_iter().flatten() {
+                        self.node(c, false);
+                    }
+                    self.crop = outer;
+                }
+                Some(xf) => {
+                    self.warn(DISTORTED_IMAGES);
+                    self.image(&ImageObject { xf, ..self.doc.shown_image(n, im).into_owned() });
+                }
+                None => self.image(&self.doc.shown_image(n, im)),
+            },
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n)
+                    && let art = vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n)
                     && let Some(art) =
                         if self.clips { self.doc.place_symbol_art(symbol, &art, *xf) } else { self.doc.place_symbol_art_unclipped(symbol, &art, *xf) }
                 {
@@ -237,6 +278,8 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         self.opacity = opacity;
     }
@@ -258,13 +301,19 @@ impl<'a> Scene<'a> {
             None
         };
         let clipped = outline.is_some();
+        let outer_crop = self.crop;
         if let Some((path, rule)) = outline {
+            if let Some(c) = self.crop {
+                let b = path.bounding_box();
+                self.crop = Some(Some(c.map_or(b, |c| c.intersect(b))));
+            }
             self.ops.push(Op::Clip { path, rule });
         }
         if let Some(f) = &paint.fill {
             self.node(f, false);
         }
         rest.iter().for_each(|c| self.node(c, false));
+        self.crop = outer_crop;
         if clipped {
             self.ops.push(Op::Unclip);
         }
@@ -371,7 +420,7 @@ impl<'a> Scene<'a> {
     fn flat_fill(&mut self, bp: &BezPath, rule: FillRule, paint: &Paint, opacity: f32) {
         let Some(rgb) = self.flat(paint) else { return };
         self.check_opacity(opacity);
-        self.ops.push(Op::Fill { path: bp.clone(), rule, rgb });
+        self.ops.push(Op::Fill { path: bp.clone(), rule, rgb, paint: solid(paint) });
     }
 
     /// One colour for a paint: a solid colour, the average of a gradient's stops, or a pattern's
@@ -412,20 +461,20 @@ impl<'a> Scene<'a> {
             field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect()
         } else {
             let geom = g.resolve(bounds);
-            let sample = g.gradient.sampler();
+            let (sample, spread) = (g.gradient.sampler(), g.gradient.spreader());
             let (cw, ch) = (area.width() / f64::from(cols), area.height() / f64::from(rows));
             (0..usize::from(rows) * usize::from(cols))
                 .flat_map(|i| {
                     let (x, y) = (i % usize::from(cols), i / usize::from(cols));
                     let p = Point::new(area.x0 + (x as f64 + 0.5) * cw, area.y0 + (y as f64 + 0.5) * ch);
-                    let t = geom.param_at(g.gradient.kind, p);
+                    let t = spread(geom.param_at(g.gradient.kind, p));
                     let t = if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.0 };
                     let (c, a) = sample(t as f32);
                     c.to_rgba8(a)
                 })
                 .collect()
         };
-        let image = Rgba { width: u32::from(cols), height: u32::from(rows), pixels };
+        let image = Image { width: u32::from(cols), height: u32::from(rows), rgba: pixels };
         let xf =
             Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width() / f64::from(cols), area.height() / f64::from(rows));
         self.ops.push(Op::Clip { path: bp.clone(), rule });
@@ -459,7 +508,15 @@ impl<'a> Scene<'a> {
         }
         let Some(rgb) = self.flat(&st.paint) else { return };
         self.check_opacity(st.opacity);
-        let pen = Pen { rgb, width: st.width, cap: st.cap, join: st.join, miter: st.miter_limit, dash: st.dash.clone().filter(|d| d.is_dashed()) };
+        let pen = Pen {
+            rgb,
+            paint: solid(&st.paint),
+            width: st.width,
+            cap: st.cap,
+            join: st.join,
+            miter: st.miter_limit,
+            dash: st.dash.clone().filter(|d| d.is_dashed()),
+        };
         self.ops.push(Op::Stroke { path: bp.clone(), pen });
     }
 
@@ -475,20 +532,28 @@ impl<'a> Scene<'a> {
         let Some(img) = self.decoded(im) else { return };
         let (dw, dh) = (f64::from(img.width), f64::from(img.height));
         let xf = im.xf * Affine::scale_non_uniform(f64::from(im.width.max(1)) / dw, f64::from(im.height.max(1)) / dh);
+        let (img, xf) = match self.crop.flatten() {
+            Some(c) => match cropped(&img, xf, c) {
+                Some((part, x0, y0)) => (Arc::new(part), xf * Affine::translate((f64::from(x0), f64::from(y0)))),
+                None => return,
+            },
+            None => (img, xf),
+        };
         self.ops.push(Op::Image { image: img, xf, opacity: self.opacity.clamp(0.0, 1.0) });
     }
 
     /// Image `im`'s pixels (scaled down to what a metafile stores), `None` with a warning when it
     /// has none or can't be decoded.
-    fn decoded(&mut self, im: &ImageObject) -> Option<Arc<Rgba>> {
+    fn decoded(&mut self, im: &ImageObject) -> Option<Arc<Image>> {
         let key = im.key.as_str();
         if let Some(i) = self.images.get(key) {
             return i.clone();
         }
         let blob = self.doc.image_blob(im).filter(|b| !b.bytes.is_empty());
         let img = blob
-            .and_then(|b| image::load_from_memory(&b.bytes).ok())
-            .map(|i| Rgba::fitted(i.to_rgba8()))
+            .and_then(|b| craft_image_codecs::decode(&b.bytes).ok())
+            .and_then(|i| image::RgbaImage::from_raw(i.width(), i.height(), i.to_rgba8()))
+            .map(crate::dib::fitted)
             .filter(|i| i.width > 0 && i.height > 0)
             .map(Arc::new);
         if img.is_none() {
@@ -497,6 +562,37 @@ impl<'a> Scene<'a> {
         self.images.insert(key.to_string(), img.clone());
         img
     }
+}
+
+/// The pixels of `img`, drawn by `xf`, that `clip` (a box in the document) shows, with one pixel
+/// more on each side: the part and its top left pixel. The whole image when `xf` cannot be
+/// inverted; `None` when `clip` shows none of it.
+fn cropped(img: &Image, xf: Affine, clip: Rect) -> Option<(Image, u32, u32)> {
+    if xf.determinant().abs() < 1e-12 || !xf.determinant().is_finite() {
+        return Some((img.clone(), 0, 0));
+    }
+    let inv = xf.inverse();
+    let corners =
+        [Point::new(clip.x0, clip.y0), Point::new(clip.x1, clip.y0), Point::new(clip.x1, clip.y1), Point::new(clip.x0, clip.y1)].map(|p| inv * p);
+    let (w, h) = (f64::from(img.width), f64::from(img.height));
+    let lo = |f: fn(&Point) -> f64| corners.iter().map(f).fold(f64::INFINITY, f64::min);
+    let hi = |f: fn(&Point) -> f64| corners.iter().map(f).fold(f64::NEG_INFINITY, f64::max);
+    let (x0, y0) = ((lo(|p| p.x).floor() - 1.0).max(0.0), (lo(|p| p.y).floor() - 1.0).max(0.0));
+    let (x1, y1) = ((hi(|p| p.x).ceil() + 1.0).min(w), (hi(|p| p.y).ceil() + 1.0).min(h));
+    if !(x0 < x1 && y0 < y1) {
+        return None;
+    }
+    let (x0, y0, x1, y1) = (x0 as u32, y0 as u32, x1 as u32, y1 as u32);
+    if (x0, y0, x1, y1) == (0, 0, img.width, img.height) {
+        return Some((img.clone(), 0, 0));
+    }
+    let row = img.width as usize * 4;
+    let mut pixels = Vec::with_capacity((x1 - x0) as usize * (y1 - y0) as usize * 4);
+    for y in y0..y1 {
+        let start = y as usize * row + x0 as usize * 4;
+        pixels.extend_from_slice(img.rgba.get(start..start + (x1 - x0) as usize * 4)?);
+    }
+    Some((Image { width: x1 - x0, height: y1 - y0, rgba: pixels }, x0, y0))
 }
 
 /// Do the instances of `def` stay apart? A grid or brick tiling places its tiles side by side, so
@@ -536,7 +632,7 @@ fn merge_tiles(ops: &mut Vec<Op>, starts: &[usize]) -> bool {
     if shape.is_empty() || !rest.iter().all(same) {
         return false;
     }
-    let mut merged: Vec<Op> = shape.iter().map(|(_, rule, rgb)| Op::Fill { path: BezPath::new(), rule: *rule, rgb: *rgb }).collect();
+    let mut merged: Vec<Op> = shape.iter().map(|(_, rule, rgb)| Op::Fill { path: BezPath::new(), rule: *rule, rgb: *rgb, paint: None }).collect();
     for tile in &tiles {
         for (op, (path, _, _)) in merged.iter_mut().zip(tile) {
             if let Op::Fill { path: all, .. } = op {
@@ -565,7 +661,7 @@ fn plain_fills(ops: &[Op]) -> Option<Vec<(BezPath, FillRule, [u8; 3])>> {
     inner
         .iter()
         .map(|op| match op {
-            Op::Fill { path, rule, rgb } => Some((path.clone(), *rule, *rgb)),
+            Op::Fill { path, rule, rgb, .. } => Some((path.clone(), *rule, *rgb)),
             _ => None,
         })
         .collect()
@@ -676,9 +772,11 @@ mod merge_tests {
     #[test]
     fn a_clip_that_cuts_its_fill_is_kept() {
         let clip = Op::Clip { path: poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero };
-        let past = Op::Fill { path: poly(&[(0.0, 0.0), (12.0, 0.0), (12.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0] };
+        let past =
+            Op::Fill { path: poly(&[(0.0, 0.0), (12.0, 0.0), (12.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0], paint: None };
         assert!(plain_fills(&[clip.clone(), past, Op::Unclip]).is_none());
-        let within = Op::Fill { path: poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0] };
+        let within =
+            Op::Fill { path: poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0], paint: None };
         assert_eq!(plain_fills(&[clip, within, Op::Unclip]).map(|f| f.len()), Some(1));
     }
 }

@@ -1,6 +1,6 @@
 //! Raster export: render a document region with [`RasterExportOptions`] (resolution, background,
 //! anti-aliasing) and encode it as PNG ([`png`]: resolution in `pHYs`, Adam7 interlacing), JPEG
-//! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile), lossless WebP, or
+//! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile), lossless or lossy WebP, or
 //! a palette image ([`quantize`]) as PNG-8 or [`gif`], [`tiff`] (RGB, CMYK or grey, LZW, either byte
 //! order, the profile), [`bmp`] (1–32 bits, RLE) or [`tga`]; [`web`] adds what Save for Web optimises
 //! further (web snap, colour table edits, lossy GIF, comments); [`psd`] writes layered bitmaps.
@@ -10,6 +10,7 @@ pub mod gif;
 pub mod jpeg;
 pub mod png;
 pub mod psd;
+mod psd_type;
 pub mod quantize;
 pub mod tga;
 pub mod tiff;
@@ -48,8 +49,10 @@ pub struct RasterExportOptions {
     pub anti_alias: AntiAlias,
     /// PNG, PNG-8: Adam7 interlacing; GIF: interlaced rows.
     pub interlaced: bool,
-    /// JPEG quality 0–100.
+    /// JPEG quality 0–100, and lossy WebP's.
     pub quality: u8,
+    /// WebP: lossless (`true`), or lossy at [`Self::quality`].
+    pub webp_lossless: bool,
     /// JPEG colour model, coding and profile.
     pub jpeg: jpeg::JpegOptions,
     /// PNG-8 and GIF: the colour reduction (also BMP's at 1, 4 and 8 bits).
@@ -75,6 +78,7 @@ impl Default for RasterExportOptions {
             anti_alias: AntiAlias::Art,
             interlaced: false,
             quality: 90,
+            webp_lossless: true,
             jpeg: jpeg::JpegOptions::default(),
             palette: quantize::PaletteOptions::default(),
             tiff: tiff::TiffOptions::default(),
@@ -124,7 +128,7 @@ impl RasterExportOptions {
                 };
                 jpeg::encode(&px, img.width, img.height, self.quality, Some(self.ppi), &self.jpeg)
             }
-            RasterFormat::WebP => webp(img),
+            RasterFormat::WebP => webp(img, (!self.webp_lossless).then_some(self.quality)),
             RasterFormat::Png8 | RasterFormat::Gif => {
                 let ix = quantize::quantize(&img.to_straight(), img.width, img.height, &self.palette);
                 match format {
@@ -183,13 +187,51 @@ pub fn on_white(p: &[u8; 4]) -> [u8; 3] {
     [0, 1, 2].map(|i| ((u32::from(p[i]) * a + 255 * (255 - a) + 127) / 255) as u8)
 }
 
-/// Lossless WebP.
-pub(crate) fn webp(img: &Rendered) -> Result<Vec<u8>, String> {
-    let mut buf = Vec::new();
-    let enc = image::codecs::webp::WebPEncoder::new_lossless(&mut buf);
-    image::ImageEncoder::write_image(enc, &img.to_straight(), img.width, img.height, image::ExtendedColorType::Rgba8)
-        .map_err(|e| format!("WebP encoding failed: {e}"))?;
-    Ok(buf)
+/// WebP: lossless (`VP8L`) when `lossy_quality` is `None`, else lossy (`VP8 `, with an `ALPH`
+/// chunk when some pixels are not opaque) at that quality 0–100.
+pub(crate) fn webp(img: &Rendered, lossy_quality: Option<u8>) -> Result<Vec<u8>, String> {
+    let src = craft_image_codecs::Image::from_raw(
+        img.width,
+        img.height,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        img.to_straight(),
+    )
+    .map_err(|e| format!("WebP encoding failed: {e}"))?;
+    let opts = craft_image_codecs::EncodeOptions {
+        webp_lossless: lossy_quality.is_none(),
+        webp_quality: lossy_quality.unwrap_or(100).min(100),
+        ..craft_image_codecs::EncodeOptions::default()
+    };
+    let file = craft_image_codecs::encode(&src, craft_image_codecs::Format::WebP, &opts).map_err(|e| format!("WebP encoding failed: {e}"))?;
+    if lossy_quality.is_some() && vp8_partition_at_limit(&file) {
+        return Err("WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless".into());
+    }
+    Ok(file)
+}
+
+/// The largest first-partition size a VP8 key frame's 19-bit size field holds (RFC 6386 §9.1).
+const VP8_FIRST_PARTITION_LIMIT: u32 = (1 << 19) - 1;
+
+/// Does the `VP8 ` chunk of RIFF WebP `file` give its first partition the size limit? The encoder
+/// writes the limit for a larger partition too, and a decoder then reads the token partition from
+/// the wrong offset, so a frame at the limit is not written.
+fn vp8_partition_at_limit(file: &[u8]) -> bool {
+    let mut at = 12usize;
+    while let Some(head) = file.get(at..).and_then(|rest| rest.get(..8)) {
+        let len = u32::from_le_bytes([head[4], head[5], head[6], head[7]]);
+        if &head[..4] == b"VP8 " {
+            return file.get(at + 8..).and_then(|rest| rest.get(..3)).is_some_and(|tag| {
+                let tag = u32::from(tag[0]) | (u32::from(tag[1]) << 8) | (u32::from(tag[2]) << 16);
+                tag >> 5 >= VP8_FIRST_PARTITION_LIMIT
+            });
+        }
+        let Some(next) = usize::try_from(u64::from(len) + u64::from(len % 2) + 8).ok().and_then(|n| at.checked_add(n)) else {
+            break;
+        };
+        at = next;
+    }
+    false
 }
 
 /// Bounds of the art an export draws: visible objects off template layers (guides left out),
@@ -199,6 +241,22 @@ pub(crate) fn webp(img: &Rendered) -> Result<Vec<u8>, String> {
 pub fn art_bounds(doc: &Document) -> Option<Rect> {
     let symbols = doc.symbol_boxes();
     doc.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, drawn_bounds(&symbols, l)))
+}
+
+/// The first artboard (else the art, [`art_bounds`]) rendered with a transparent background, its
+/// longer side `max_side` pixels: the picture of a native file's embedded preview, and of the
+/// thumbnail `vectorcraft-cli thumbnail` writes for file managers. `None` when the document has
+/// no artboard and no art, or the region can't be rendered at that size ([`crate::raster_size`]).
+pub fn first_artboard(doc: &Document, max_side: u32) -> Option<Rendered> {
+    let r = doc.artboards.first().map(|a| a.rect).or_else(|| art_bounds(doc))?;
+    let scale = f64::from(max_side) / r.width().max(r.height());
+    crate::raster_size(r, scale).ok()?;
+    Some(Renderer::new().render_region(doc, r, scale, false))
+}
+
+/// [`first_artboard`] as a PNG.
+pub fn first_artboard_png(doc: &Document, max_side: u32) -> Result<Option<Vec<u8>>, String> {
+    first_artboard(doc, max_side).map(|img| img.to_png()).transpose()
 }
 
 /// Bounds of the art an export draws ([`art_bounds`]) that is on artboard rectangle `rect`: each
@@ -248,7 +306,7 @@ fn drawn_bounds_with(symbols: &SymbolBoxes, n: &Node, held: Option<&Arc<Node>>, 
         return None;
     }
     match &n.kind {
-        NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } => None,
+        NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => None,
         NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(n) => children
             .iter()
             .skip(usize::from(n.extras().shaper.is_some()))
@@ -289,7 +347,7 @@ fn without_undrawn(n: &Node) -> Option<Node> {
     if keeps_all || !matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
         return None;
     }
-    let undrawn = |c: &Node| !c.visible || matches!(c.kind, NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. });
+    let undrawn = |c: &Node| !c.visible || c.is_guide() || c.is_template();
     let mut changed = false;
     let kept: Vec<Arc<Node>> = n
         .children()?

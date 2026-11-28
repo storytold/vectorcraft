@@ -173,6 +173,10 @@ pub struct PatternDef {
     /// Size Tile to Art: the tile is the art bounds grown by the spacing.
     #[serde(default)]
     pub size_tile_to_art: bool,
+    /// Move Tile with Art: in pattern editing mode, a move of all of the tile art moves the tile by
+    /// the same offset.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub move_tile_with_art: bool,
     #[serde(default)]
     pub h_spacing: f64,
     #[serde(default)]
@@ -202,6 +206,7 @@ impl PatternDef {
             art,
             overlap: Overlap::default(),
             size_tile_to_art: false,
+            move_tile_with_art: false,
             h_spacing: 0.0,
             v_spacing: 0.0,
             copies: 5,
@@ -420,9 +425,13 @@ pub fn uses_pattern(n: &Node, name: Option<&str>) -> bool {
 }
 
 /// Transform Patterns without Transform Objects: `m` moves the pattern tiles of `n` and of
-/// everything inside it, and the art stays where it is.
+/// everything inside it, and the art stays where it is. A generated art object keeps the move, so
+/// its art drawn again has its tiles moved too.
 pub fn transform_patterns_only(n: &mut Node, m: Affine) {
     transform_pattern_paints(n, m);
+    if let Some(g) = n.extras_if_any().and_then(|e| e.generated.as_deref_mut()) {
+        g.pattern_transform = m * g.pattern_transform;
+    }
     for c in n.children_mut().into_iter().flatten() {
         transform_patterns_only(Arc::make_mut(c), m);
     }
@@ -584,6 +593,8 @@ impl<'a> NestedCount<'a> {
                 (NodeKind::Repeat(r), _) => r.in_all(self),
                 (NodeKind::SymbolInstance { symbol, .. }, _) => Cost { instances: self.symbol(symbol), copies: 1 },
                 (NodeKind::Path { path, .. }, _) => Cost { instances: 0, copies: path.anchor_count().saturating_add(1) },
+                // A ruler guide draws nothing, so a repeat makes no copies of it.
+                (NodeKind::RulerGuide { .. }, _) => Cost::default(),
                 (_, Some(c)) => self.nodes(c).plus(Cost { instances: 0, copies: 1 }),
                 _ => Cost { instances: 0, copies: 1 },
             };

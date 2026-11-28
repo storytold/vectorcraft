@@ -1,7 +1,7 @@
 use super::layers::closed_where_ends_meet;
 use super::slots::{
-    Content, MAX_PAIRS, OUTLINE_REACH, PAGE_TYPE_LEFT_OUT, PAGE_TYPE_UNCHECKED, SlotInfo, assign, covered, extent, join_pieces, letters, same_type,
-    word_pieces, words,
+    Content, MAX_PAIRS, OUTLINE_REACH, PAGE_TYPE_LEFT_OUT, PAGE_TYPE_UNCHECKED, SlotInfo, assign, covered, drawn_box, extent, join_pieces, letters,
+    same_type, word_pieces, words,
 };
 use super::{Affine, Arc, Node, NodeId, NodeKind, Point, Rect, Story, TextKind};
 
@@ -59,23 +59,17 @@ pub(super) fn make_slots(
     to_doc: Affine,
     warn: &mut Vec<String>,
 ) -> Vec<Option<Made>> {
-    let (mut taller, mut deeper, mut tabs_left_out) = (0, 0, false);
+    let (mut taller, mut deeper, mut tabs_left_out, mut kinsoku_left_out) = (0, 0, false, false);
     let made = infos
         .iter()
         .enumerate()
         .map(|(k, info)| {
             let t = template?;
             let story = stories.get(k)?.as_ref()?;
-            let mut node = story.node(NodeId(0), info.frame, t, to_doc)?;
+            let node = story.node(NodeId(0), info.frame, t, to_doc)?;
             tabs_left_out |= story.tabs_left_out();
-            let mut region = story.region(t, to_doc);
-            // The first line where the file has it, in the text document's frame (that of a
-            // copied object is its original's, as its lines are).
-            story.place_first_line(&mut node, info.frame, t, to_doc);
-            // Area type and type on a path in the object's own frame: the text document's frame
-            // of a copied object keeps its original's path.
-            frame_text_from_art(info, &mut node, &mut region);
-            story.flip_on_path(&mut node, info.frame);
+            kinsoku_left_out |= story.kinsoku_sets_left_out();
+            let (mut node, region) = placed(info, story, node, t, to_doc);
             if let NodeKind::Text(text) = &mut node.kind
                 && story.fit_first_line(text)
             {
@@ -102,7 +96,32 @@ pub(super) fn make_slots(
     if tabs_left_out {
         warn.push(crate::import::ate::TABS_LEFT_OUT.into());
     }
+    if kinsoku_left_out {
+        warn.push(crate::import::ate::KINSOKU_SETS_LEFT_OUT.into());
+    }
     made
+}
+
+/// The empty text object a slot of a blank story in an area frame or on a path comes in as, placed
+/// as [`make_slots`] places made type: its frame or path, the object's own where it has one
+/// ([`Story::blank_frame_node`]). `None` for any other slot.
+pub(super) fn blank_frame(info: &SlotInfo, story: &Story, template: (f64, f64), to_doc: Affine) -> Option<Made> {
+    let node = story.blank_frame_node(NodeId(0), info.frame, template, to_doc)?;
+    let (node, region) = placed(info, story, node, template, to_doc);
+    Some((Box::new(node), region))
+}
+
+/// `node`, made from `story` for slot `info`, placed where the file has it, with the region it
+/// draws in: the first line where the file has it, in the text document's frame (that of a copied
+/// object is its original's, as its lines are); area type and type on a path in the object's own
+/// frame (the text document's frame of a copied object keeps its original's path); type on a path
+/// flipped as its frame keeps it.
+fn placed(info: &SlotInfo, story: &Story, mut node: Node, template: (f64, f64), to_doc: Affine) -> (Node, Option<Rect>) {
+    let mut region = story.region(template, to_doc);
+    story.place_first_line(&mut node, info.frame, template, to_doc);
+    frame_text_from_art(info, &mut node, &mut region);
+    story.flip_on_path(&mut node, info.frame);
+    (node, region)
 }
 
 /// Does the file's text document make the type of every slot that shows (at least one does)? Type
@@ -118,9 +137,16 @@ pub(super) fn readable_all(infos: &[SlotInfo], made: &[Option<Made>]) -> bool {
 /// that no made type takes, shown or not, is left out with a note in `warn`. Slots that don't show
 /// and whose type isn't made take the page's type that doesn't show (`pages`: the page's text
 /// objects that show and that don't), by painting order.
-pub(super) fn made_only(infos: &[SlotInfo], made: Vec<Option<Made>>, pages: [&[Vec<Arc<Node>>]; 2], warn: &mut Vec<String>) -> Vec<Content> {
+pub(super) fn made_only(
+    infos: &[SlotInfo],
+    stories: &[Option<Arc<Story>>],
+    made: Vec<Option<Made>>,
+    pages: [&[Vec<Arc<Node>>]; 2],
+    warn: &mut Vec<String>,
+) -> Vec<Content> {
     let [shown, hidden] = pages;
-    let mut content = made_content(infos, made);
+    // Every text object that shows has made type: each is matched with the page's type where it draws.
+    let mut content = made_content(infos, made, true);
     // The page's type where no made type draws, in the copies that looks draw, is theirs (past
     // `MAX_PAIRS` comparisons it isn't looked for).
     let looks = infos.iter().any(|i| i.shown && i.look.is_some());
@@ -150,7 +176,7 @@ pub(super) fn made_only(infos: &[SlotInfo], made: Vec<Option<Made>>, pages: [&[V
         None => warn.push(PAGE_TYPE_UNCHECKED.into()),
     }
     drop_look_slots(infos, &mut content);
-    fill_hidden(infos, &mut content, hidden);
+    fill_hidden(infos, stories, &mut content, hidden);
     content
 }
 
@@ -290,15 +316,18 @@ fn object_words(o: &[Arc<Node>]) -> Vec<String> {
 }
 
 /// Each slot's made type as its content, else nothing yet. Made type that shows has where it draws,
-/// or where its story lies when it draws nothing.
-fn made_content(infos: &[SlotInfo], made: Vec<Option<Made>>) -> Vec<Content> {
+/// or where its story lies when it draws nothing. `laid`: point type is laid out for its box
+/// ([`drawn_box`]); without it the box is that of type without a layout, as it always was.
+fn made_content(infos: &[SlotInfo], made: Vec<Option<Made>>, laid: bool) -> Vec<Content> {
     infos
         .iter()
         .zip(made)
         .map(|(info, m)| match m {
             Some((node, region)) => {
-                let drawn = node.visual_bounds().filter(|b| !b.is_zero_area()).or(region);
-                Content::Made(node, drawn.filter(|_| info.shown), false)
+                // Type that doesn't show has no region: it isn't laid out for one.
+                let own = || if laid { drawn_box(&node) } else { node.visual_bounds() };
+                let drawn = info.shown.then(|| own().filter(|b| !b.is_zero_area() && b.is_finite()).or(region)).flatten();
+                Content::Made(node, drawn, false)
             }
             None => Content::Empty,
         })
@@ -366,8 +395,11 @@ pub(super) fn plan(
     // Where the made type that doesn't show lies, by slot.
     let hidden_at: Vec<(usize, Rect)> =
         infos.iter().zip(&made).enumerate().filter_map(|(k, (info, m))| Some((k, m.as_ref().filter(|_| !info.shown)?.1?))).collect();
-    // Type the text document makes, shown or not: the page's pieces of it aren't needed.
-    let mut content = made_content(infos, made);
+    // Type the text document makes, shown or not: the page's pieces of it aren't needed. Its box
+    // stays that of type without a layout here: with text objects whose type isn't made stacked on
+    // made type that has their words (the copies of an outlined heading), the page's pieces in the
+    // box where the made type draws are theirs too, and the made type would take them all.
+    let mut content = made_content(infos, made, false);
     // Is `object` the type of a text object that doesn't show, as the page draws it: in its frame,
     // with its words? (A copied object's lines are where its original's are, so they don't say.)
     let hidden_type = |object: &[Arc<Node>]| {
@@ -417,8 +449,10 @@ pub(super) fn plan(
     }
     fill_look_slots(infos, &mut content, &mut spare);
     // What is left of the page goes by painting order into the shown slots the file can't say.
-    let loose: Vec<usize> =
-        infos.iter().enumerate().filter(|(k, i)| i.shown && matches!(content.get(*k), Some(Content::Empty))).map(|(k, _)| k).collect();
+    let loose = readable_first(
+        stories,
+        infos.iter().enumerate().filter(|(k, i)| i.shown && matches!(content.get(*k), Some(Content::Empty))).map(|(k, _)| k).collect(),
+    );
     if loose.is_empty() {
         // Type of the page that no text object says it owns goes with the nearest text object that has
         // type of the page (never into made type); with none, it is left out.
@@ -462,17 +496,28 @@ pub(super) fn plan(
             warn.push("the text is on the layers in the order the page paints it, so a text object may be in another group than it was".into());
         }
     }
-    fill_hidden(infos, &mut content, hidden);
+    fill_hidden(infos, stories, &mut content, hidden);
     content
 }
 
+/// The slots `open` that are to take the page's type left over, by painting order: those of blank
+/// stories (nothing but spaces and line ends) only when no other slot is open, as such a story has
+/// no type of its own; the blank ones left out come in empty or not at all (see
+/// `settle_blank_stories`).
+fn readable_first(stories: &[Option<Arc<Story>>], open: Vec<usize>) -> Vec<usize> {
+    let blank = |k: &usize| stories.get(*k).and_then(Option::as_ref).is_some_and(|s| s.is_blank());
+    if open.iter().all(blank) { open } else { open.into_iter().filter(|k| !blank(k)).collect() }
+}
+
 /// The page's type that doesn't show (`hidden`) goes by painting order into the slots that don't
-/// show and have nothing yet, but for what is the type of made type that doesn't show: a page object
+/// show and have nothing yet ([`readable_first`]), but for what is the type of made type that doesn't show: a page object
 /// with words and at least half of it where such type draws, while the type has all its words left
 /// (each word an object takes is the type's no longer). Past `MAX_PAIRS` comparisons all of it goes.
-fn fill_hidden(infos: &[SlotInfo], content: &mut [Content], hidden: &[Vec<Arc<Node>>]) {
-    let unread: Vec<usize> =
-        infos.iter().enumerate().filter(|(k, i)| !i.shown && matches!(content.get(*k), Some(Content::Empty))).map(|(k, _)| k).collect();
+fn fill_hidden(infos: &[SlotInfo], stories: &[Option<Arc<Story>>], content: &mut [Content], hidden: &[Vec<Arc<Node>>]) {
+    let unread = readable_first(
+        stories,
+        infos.iter().enumerate().filter(|(k, i)| !i.shown && matches!(content.get(*k), Some(Content::Empty))).map(|(k, _)| k).collect(),
+    );
     if unread.is_empty() {
         return;
     }

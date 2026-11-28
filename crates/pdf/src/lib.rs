@@ -5,7 +5,7 @@
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
-//!   freeform and Perceptual gradients and dithered gradient fills as images at the raster
+//!   freeform and Perceptual gradients, gradients mixed around the hue wheel and dithered gradient fills as images at the raster
 //!   effects resolution (clipped to what they paint), embedded images (resampled and
 //!   compressed as the Compression settings say) and text as outlined glyph paths, or as real
 //!   text in embedded subset fonts (Advanced). Colours are converted, tagged with ICC profiles and
@@ -51,6 +51,7 @@ mod forms;
 mod images;
 mod import;
 mod import_color;
+mod import_fonts;
 mod import_image;
 mod import_lines;
 mod import_mask;
@@ -66,35 +67,42 @@ mod patch;
 mod pdfx;
 mod piece_info;
 mod post;
-mod presets;
 mod print;
 mod settings;
 mod streams;
+mod surface;
 mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
-pub use encrypt::Encryption;
-pub use export::{export, export_with_report, page_areas};
-pub use file_info::{FileInfo, file_info};
-#[cfg(any(test, feature = "read-count"))]
-pub use import::imports_of;
+pub use export::{check_page_sizes, export, export_with_report, page_areas};
+pub use file_info::{FileInfo, MAX_TEMPLATE_BYTES, file_info, metadata_template, read_template};
 pub use import::{
-    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,
-    import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
+    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, RESHAPED_TEXT_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE,
+    holds_outlines, import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
+#[cfg(any(test, feature = "read-count"))]
+pub use import::{form_content_of, function_evaluations_of, imports_of};
+#[cfg(any(test, feature = "read-count"))]
+pub use import_scan::form_content_limit;
+#[cfg(any(test, feature = "read-count"))]
+pub use import_shading::function_evaluation_limit;
+pub use marks::{leaves_out_bleed, page_bleed, printer_marks};
+pub use output::ActiveProfiles;
 #[cfg(any(test, feature = "read-count"))]
 pub use pages::reads_of;
 pub use pages::{
     IllustratorData, Opened, PageInfo, PdfInfo, TrimPages, has_illustrator_data, illustrator_data, illustrator_data_without_pdf_part, info,
-    is_postscript, open_pdf,
+    is_postscript, open_pdf, read_illustrator_data_without_pdf_part, read_illustrator_data_without_pdf_part_with,
 };
 pub use piece_info::{PRIVATE_CHUNK, PrivateData};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};
-pub use presets::*;
 pub use print::*;
 pub use settings::*;
 
 use vectorcraft_doc::Document;
+
+/// The application's name, which the built-in presets and their descriptions carry.
+pub const APP: &str = "VectorCraft";
 
 /// Export options: the Save PDF settings plus what one export run decides (pages, title, date).
 #[derive(Clone, Debug, Default)]
@@ -133,7 +141,8 @@ impl PdfOptions {
 pub struct ImportOptions {
     /// Import at most this many pages (of those picked); `None` = all of them.
     pub max_pages: Option<usize>,
-    /// Horizontal gap in points between the artboards created for consecutive pages.
+    /// Horizontal gap in points between the artboards created for consecutive pages (on trim
+    /// boxes, plus the document's bleed on both sides).
     pub artboard_gap: f64,
     /// 0-based pages to import, in this order; `None` = every page.
     pub pages: Option<Vec<usize>>,
@@ -149,6 +158,10 @@ pub struct ImportOptions {
     /// The file is an editor's own document (`.ai`): RGB in its `ICCBased` spaces keeps its numbers
     /// (see `Colors::uncalibrated_rgb`). Off for PDFs, whose profiles stand.
     pub uncalibrated_rgb: bool,
+    /// Type in a font the file embeds and this machine lacks is drawn in glyphs built from the
+    /// file's own, kept with the document (default); off, it is set in the fallback font, with the
+    /// missing-font warning, as before.
+    pub embedded_fonts: bool,
 }
 
 impl Default for ImportOptions {
@@ -162,6 +175,7 @@ impl Default for ImportOptions {
             text_as: TextAs::default(),
             layers: true,
             uncalibrated_rgb: false,
+            embedded_fonts: true,
         }
     }
 }
@@ -212,7 +226,10 @@ pub struct ImportReport {
 #[derive(Clone, Debug)]
 pub struct ExportReport {
     pub bytes: Vec<u8>,
+    /// What the file leaves out of the document or writes differently.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the export didn't apply or applied another way.
+    pub setting_notes: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]
@@ -250,9 +267,15 @@ pub enum PdfError {
     PlaceholderOnly,
 }
 
-impl From<craft_pdf::write::WriteError> for PdfError {
-    fn from(error: craft_pdf::write::WriteError) -> Self {
+impl From<craft::pdf::write::WriteError> for PdfError {
+    fn from(error: craft::pdf::write::WriteError) -> Self {
         Self::Write(error.to_string())
+    }
+}
+
+impl From<SettingsError> for PdfError {
+    fn from(e: SettingsError) -> Self {
+        Self::BadSetting(e.message)
     }
 }
 

@@ -3,6 +3,12 @@ use super::{NodeId, cancel};
 /// The text of [`EngineError::Busy`], which ends every error a frontend reports for it.
 pub const SCRIPT_BUSY: &str = "a script is running: stop it or wait for it to finish";
 
+/// The text of [`EngineError::PluginBusy`].
+pub const PLUGIN_BUSY: &str = "a plug-in is running: cancel it or wait for it to finish";
+
+/// Stable prefix for a save refused by the filesystem: choose another destination.
+pub const READ_ONLY_LOCATION: &str = "READ_ONLY_LOCATION";
+
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
     #[error("unknown command `{0}`")]
@@ -20,12 +26,20 @@ pub enum EngineError {
     NoNode(NodeId),
     #[error("{0}")]
     Other(String),
+    /// The save's terminal filesystem error refuses writes here. The reason keeps the path and
+    /// system message. This never means an automation-root refusal or a recovery-copy failure.
+    #[error("{code}: {0}", code = READ_ONLY_LOCATION)]
+    ReadOnlyLocation(String),
     /// The caller asked for the command to stop ([`cancel`]). It changed nothing.
     #[error("cancelled; nothing was changed")]
     Cancelled,
     /// A running script holds the documents until it ends. Nothing was changed.
     #[error("{}", SCRIPT_BUSY)]
     Busy,
+    /// A plug-in run that calls commands holds the documents until it ends
+    /// ([`crate::cmd::plugin::FilterRun::begin_calls`]). Nothing was changed.
+    #[error("{}", PLUGIN_BUSY)]
+    PluginBusy,
     /// A bug: the command panicked. The document was rolled back to its state before the command.
     #[error("internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)")]
     Internal { cmd: String, msg: String },

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use vectorcraft_doc::{CharStyle, TextKind};
 use vectorcraft_geom::PathData;
 
-fn devanagari_test_face(test: &str) -> Option<Arc<FontFace>> {
+pub(super) fn devanagari_test_face(test: &str) -> Option<Arc<FontFace>> {
     let db = FontDb::global();
     // The face must have OpenType (GSUB) Devanagari lookups. An AAT face such as macOS's Devanagari MT
     // shapes with `morx`, and हिन्दी comes out as three clusters because the conjunct न्दी is split in two.

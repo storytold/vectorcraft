@@ -214,6 +214,16 @@ impl Tool for SharedEdgeTool {
             _ => {}
         }
     }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "diameter" => c::number(key, v, DIAMETER_RANGE.0, DIAMETER_RANGE.1),
+            "tolerance" => c::number(key, v, 0.0, MAX_COINCIDENCE),
+            "together" => c::boolean(key, v),
+            _ => Err(c::unknown(key)),
+        }
+    }
 }
 
 #[cfg(test)]

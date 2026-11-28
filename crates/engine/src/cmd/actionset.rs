@@ -9,8 +9,9 @@
 //! text. Each action is an `/action-N` block with a hexadecimal `/name`; each step is an `/event-N`
 //! block inside one, with its `/internalName` in parentheses, the `/localizedName` it is shown with
 //! as hexadecimal text, and `/isOn` 0 when it is left out of playback; each value a step was
-//! recorded with is a `/parameter-N` block inside it, which is counted, and whose hexadecimal
-//! `/value` is checked against its byte count. The set's `/actionCount`, an action's `/eventCount`
+//! recorded with is a `/parameter-N` block inside it, which is counted, whose `/key` (a number),
+//! `/type` (text in parentheses) and `/value` (a number, text in parentheses or hexadecimal text) are
+//! kept, and whose hexadecimal `/value` is checked against its byte count. The set's `/actionCount`, an action's `/eventCount`
 //! and a step's `/parameterCount` give how many actions, steps and recorded values follow.
 //! The layout follows the README of Inventsable's Redesigning-Illustrator-Actions-in-Scripting
 //! (https://github.com/Inventsable/Redesigning-Illustrator-Actions-in-Scripting), the forum post
@@ -40,6 +41,8 @@ const MAX_STEPS: usize = 10_000;
 /// The most steps read in the set: a small text can hold hundreds of thousands of empty steps, and
 /// the answer holds an object for each.
 const MAX_SET_STEPS: usize = 100_000;
+/// The most recorded values kept in the set; the others are counted but not kept.
+const MAX_VALUES: usize = 100_000;
 /// The longest name kept (bytes).
 const MAX_NAME: usize = 1024;
 /// The most tokens listed as unread.
@@ -56,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Read Action Set File",
         [],
         None,
-        "{path? | data?: the file's text | dataBase64?, name?: the file's name (default: the path's)} read an action set another app saved as text (.aia, starting \"/version\") without changing anything → {set: the set's /name (else the file's name without its extension, else empty), version, actions: [{name, steps: [{name: the step's /internalName, label: its /localizedName, or null when it has none or it is blank, on: false when /isOn is 0, params: how many /parameter blocks it has, line}]}], unread: [{line, text}] (tokens that aren't read, at most 1000), truncated: true when a cap stopped the reading (8 MiB, 16 open blocks, 1,000 actions, 10,000 steps in an action, 100,000 steps in the set; names past 1,024 bytes are cut), when the text ends inside a block or a value or after a field's name, when /actionCount, /eventCount or a step's /parameterCount differs from the actions, steps or recorded values read (a negative count, one too large for a number and one that isn't a number always differ), or when a hexadecimal name, label or recorded /value isn't as many bytes as its count says}. Give exactly one of path, data and dataBase64. Text that doesn't start with /version and a number is an error",
+        "{path? | data?: the file's text | dataBase64?, name?: the file's name (default: the path's)} read an action set another app saved as text (.aia, starting \"/version\") without changing anything → {set: the set's /name (else the file's name without its extension, else empty), version, actions: [{name, steps: [{name: the step's /internalName, label: its /localizedName, or null when it has none or it is blank, on: false when /isOn is 0, params: how many /parameter blocks it has, values: [{key: the block's /key, or null, type: its /type, or null, value: its /value when it is a number, or text that is UTF-8 (else null), bytes?: the text's length in bytes}] (the first 100,000 recorded values in the set), line}]}], unread: [{line, text}] (tokens that aren't read, at most 1000), truncated: true when a cap stopped the reading (8 MiB, 16 open blocks, 1,000 actions, 10,000 steps in an action, 100,000 steps in the set; names past 1,024 bytes are cut), when the text ends inside a block or a value or after a field's name, when /actionCount, /eventCount or a step's /parameterCount differs from the actions, steps or recorded values read (a negative count, one too large for a number and one that isn't a number always differ), or when a hexadecimal name, label or recorded /value isn't as many bytes as its count says}. Give exactly one of path, data and dataBase64. Text that doesn't start with /version and a number is an error",
         always,
         read
     )]
@@ -73,10 +76,31 @@ pub struct AiaStep {
     pub on: Option<i64>,
     /// How many `/parameter-N` blocks it has.
     pub params: usize,
+    /// Its `/parameter-N` blocks, in order, while the set keeps at most [`MAX_VALUES`].
+    pub values: Vec<AiaValue>,
     /// Its `/parameterCount`, if it has one.
     pub declared: Option<i64>,
     /// The line its block opens on (from 1).
     pub line: usize,
+}
+
+/// A value a step was recorded with: a `/parameter-N` block.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AiaValue {
+    /// Its `/key`, if it has one that fits an `i64`.
+    pub key: Option<i64>,
+    /// Its `/type`, read as UTF-8 with replacement characters, if it has one.
+    pub kind: Option<String>,
+    /// Its `/value`, if it is a number that fits an `i64` or text.
+    pub value: Option<AiaData>,
+}
+
+/// A recorded `/value` that is kept.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AiaData {
+    Int(i64),
+    /// The bytes of text in parentheses or of hexadecimal text.
+    Text(Vec<u8>),
 }
 
 /// An action: an `/action-N` block.
@@ -106,6 +130,8 @@ pub struct AiaSet {
     pub truncated: bool,
     /// How many steps were read in all the actions.
     steps: usize,
+    /// How many recorded values were kept in all the steps.
+    values: usize,
 }
 
 /// A token of the text.
@@ -252,7 +278,8 @@ fn hex_bytes(digits: &[u8]) -> Option<Vec<u8>> {
 enum Kind {
     Action,
     Step,
-    Param,
+    /// A recorded value, and whether it is kept.
+    Param(bool),
     /// A block that isn't read, or one past a cap.
     Other,
 }
@@ -315,12 +342,18 @@ fn open_block(set: &mut AiaSet, stack: &[Kind], name: &[u8], line: usize) -> Kin
             }
         },
         Some(Kind::Step) if numbered(name, b"parameter-") => {
+            let mut kept = false;
             if let Some(s) = set.actions.last_mut().and_then(|a| a.steps.last_mut()) {
                 s.params += 1;
+                if set.values < MAX_VALUES {
+                    s.values.push(AiaValue::default());
+                    set.values += 1;
+                    kept = true;
+                }
             }
-            Kind::Param
+            Kind::Param(kept)
         }
-        Some(Kind::Param | Kind::Other) => Kind::Other,
+        Some(Kind::Param(_) | Kind::Other) => Kind::Other,
         _ => {
             unread(set, line, format!("/{} {{", String::from_utf8_lossy(name)));
             Kind::Other
@@ -355,12 +388,23 @@ fn set_hex(set: &mut AiaSet, kind: Option<&Kind>, name: Option<&[u8]>, bytes: Op
     }
 }
 
-/// Mark `set` truncated when the hexadecimal `/value` on `line` isn't as many bytes as its count
-/// says.
-fn check_value(set: &mut AiaSet, bytes: Option<Vec<u8>>, line: usize) {
-    if bytes.is_none() {
+/// Set the field `name` of the recorded value open on `line` to `token`: its `/key`, `/type` or
+/// `/value`, when the value is `kept`. A hexadecimal `/value` that isn't as many bytes as its count
+/// says marks `set` truncated, kept or not.
+fn set_param(set: &mut AiaSet, kept: bool, name: Option<&[u8]>, token: Token, line: usize) {
+    if name == Some(b"value".as_slice()) && matches!(token, Token::Hex(None)) {
         set.truncated = true;
         unread(set, line, BAD_HEX);
+        return;
+    }
+    let value = set.actions.last_mut().and_then(|a| a.steps.last_mut()).and_then(|s| s.values.last_mut());
+    let Some(v) = value.filter(|_| kept) else { return };
+    match (name, token) {
+        (Some(b"key"), Token::Int(key)) => v.key = key,
+        (Some(b"type"), Token::Text(t)) => v.kind = Some(String::from_utf8_lossy(&t).into_owned()),
+        (Some(b"value"), Token::Int(Some(n))) => v.value = Some(AiaData::Int(n)),
+        (Some(b"value"), Token::Text(t) | Token::Hex(Some(t))) => v.value = Some(AiaData::Text(t)),
+        _ => {}
     }
 }
 
@@ -448,13 +492,13 @@ pub fn read_aia(bytes: &[u8]) -> std::result::Result<AiaSet, String> {
                     unread(&mut set, line, "}");
                 }
             }
-            Token::Hex(bytes) if matches!(stack.last(), Some(Kind::Param)) => {
-                if field(&mut pending).as_deref() == Some(b"value".as_slice()) {
-                    check_value(&mut set, bytes, line);
-                }
+            _ if matches!(stack.last(), Some(Kind::Param(_))) => {
+                let kept = matches!(stack.last(), Some(Kind::Param(true)));
+                let name = field(&mut pending);
+                set_param(&mut set, kept, name.as_deref(), token, line);
             }
-            // The other values inside a recorded value, or a block that isn't read.
-            _ if matches!(stack.last(), Some(Kind::Param | Kind::Other)) => {
+            // The values inside a block that isn't read.
+            _ if matches!(stack.last(), Some(Kind::Other)) => {
                 pending = None;
             }
             Token::Hex(bytes) => {
@@ -521,6 +565,21 @@ pub fn read_aia(bytes: &[u8]) -> std::result::Result<AiaSet, String> {
     Ok(set)
 }
 
+/// A recorded value in `actionSet.read`'s answer: `{key, type, value, bytes?}`, the value a number,
+/// text that is UTF-8 (else null) with its length in bytes, or null.
+fn value_json(v: &AiaValue) -> Value {
+    let mut out = json!({ "key": v.key, "type": v.kind, "value": null });
+    match &v.value {
+        Some(AiaData::Int(n)) => out["value"] = json!(n),
+        Some(AiaData::Text(t)) => {
+            out["value"] = json!(std::str::from_utf8(t).ok());
+            out["bytes"] = json!(t.len());
+        }
+        None => {}
+    }
+    out
+}
+
 fn read(_: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "actionSet.read";
     let (path, data, b64) = (text_param(p, "path", C)?, text_param(p, "data", C)?, text_param(p, "dataBase64", C)?);
@@ -544,7 +603,8 @@ fn read(_: &mut Session, p: &Value) -> Result<Value> {
                 .iter()
                 .map(|s| {
                     let label = s.label.clone().filter(|l| !l.trim().is_empty());
-                    json!({ "name": s.name, "label": label, "on": s.on != Some(0), "params": s.params, "line": s.line })
+                    let values: Vec<Value> = s.values.iter().map(value_json).collect();
+                    json!({ "name": s.name, "label": label, "on": s.on != Some(0), "params": s.params, "values": values, "line": s.line })
                 })
                 .collect();
             json!({ "name": a.name, "steps": steps })

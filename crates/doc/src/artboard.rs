@@ -1,4 +1,4 @@
-use super::{Arc, Deserialize, Node, NodeId, NodeKind, Rect, Serialize, SymbolBoxes, skip};
+use super::{Arc, Deserialize, LayerColor, Node, NodeId, Rect, Serialize, SymbolBoxes, skip};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Artboard {
@@ -39,6 +39,18 @@ pub struct Artboard {
     /// it behind the art ([`super::Document::with_artboard_fills`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<vectorcraft_color::Color>,
+    /// Guide label (Artboard Options): the color the canvas draws the artboard's own ruler guides
+    /// in (a guide whose [`super::Guide::artboard`] is this artboard's id), a [`LayerColor`] preset
+    /// or a custom RGB. None (No label) draws them in the guide color preference, as canvas guides
+    /// are. Only the canvas uses it: the paper, exports and print don't. Written only when set; a
+    /// file's preset outside [`super::LAYER_COLORS`] reads as no label.
+    #[serde(default, deserialize_with = "label_within_palette", skip_serializing_if = "Option::is_none")]
+    pub guide_label: Option<LayerColor>,
+}
+
+/// A file's guide label: a preset index outside [`super::LAYER_COLORS`] reads as no label.
+fn label_within_palette<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<LayerColor>, D::Error> {
+    Ok(Option::<LayerColor>::deserialize(d)?.filter(|c| !matches!(c, LayerColor::Preset(i) if usize::from(*i) >= super::LAYER_COLORS.len())))
 }
 
 /// The Video Ruler Pixel Aspect Ratios an artboard takes (Artboard Options): from a pixel ten times
@@ -162,6 +174,21 @@ impl ArtboardSide {
     }
 }
 
+#[cfg(any(test, feature = "locked-artboard-count"))]
+thread_local! {
+    /// How many objects [`LockedArtboards::overlaps`] has measured on this thread.
+    static LOCKED_ARTBOARD_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many objects [`LockedArtboards::overlaps`] has measured on this thread, for other crates'
+/// tests that count how often art is measured to find what a locked artboard holds (the
+/// `locked-artboard-count` feature, dev-dependencies only).
+#[cfg(any(test, feature = "locked-artboard-count"))]
+#[doc(hidden)]
+pub fn locked_artboard_measures() -> usize {
+    LOCKED_ARTBOARD_MEASURES.with(std::cell::Cell::get)
+}
+
 /// A document's locked artboards ([`Document::locked_artboards`]).
 pub struct LockedArtboards<'a> {
     pub(crate) rects: Vec<Rect>,
@@ -192,17 +219,14 @@ impl LockedArtboards<'_> {
     /// [`LockedArtboards::holds`] for new art too: is `n` on a locked artboard, whether or not it
     /// is new art?
     pub fn overlaps(&self, n: &Node) -> bool {
-        if self.rects.is_empty()
-            || !n.visible
-            || n.is_layer()
-            || matches!(n.kind, NodeKind::Path { guide: true, .. })
-            || self.pattern_art.contains(&n.id)
-        {
+        if self.rects.is_empty() || !n.visible || n.is_layer() || n.is_guide() || self.pattern_art.contains(&n.id) {
             return false;
         }
         if let Some(held) = self.held.borrow().get(&n.id) {
             return *held;
         }
+        #[cfg(any(test, feature = "locked-artboard-count"))]
+        LOCKED_ARTBOARD_MEASURES.with(|c| c.set(c.get() + 1));
         let held =
             n.visual_bounds_with(&self.symbols).is_some_and(|b| self.rects.iter().any(|r| b.x0 < r.x1 && b.x1 > r.x0 && b.y0 < r.y1 && b.y1 > r.y0));
         self.held.borrow_mut().insert(n.id, held);

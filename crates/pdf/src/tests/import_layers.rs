@@ -446,7 +446,53 @@ fn private_data_reads_without_a_pdf_part_that_cant_be_read() {
         let pdf = pdf_with_catalog(std::slice::from_ref(&page), &[&first, &two], "", None);
         assert!(illustrator_data(&pdf, None).is_none(), "{odd}");
         assert!(illustrator_data_without_pdf_part(&pdf, None).is_none(), "{odd}");
+        let why = read_illustrator_data_without_pdf_part(&pdf, None);
+        assert_eq!(why, Err("it is stored in a form that isn't read".to_string()), "{odd}");
     }
+    // Damaged zlib data, and a file without private data or that isn't a PDF.
+    let damaged = stream("/Filter /FlateDecode", "not zlib");
+    let pdf = pdf_with_catalog(std::slice::from_ref(&page), &[&damaged, &two], "", None);
+    assert_eq!(read_illustrator_data_without_pdf_part(&pdf, None), Err("its zlib compression is damaged".to_string()));
+    let bare = pdf_with_catalog(&[PdfPage::new(100.0, 100.0, "")], &[], "", None);
+    assert_eq!(read_illustrator_data_without_pdf_part(&bare, None), Ok(None));
+    assert_eq!(read_illustrator_data_without_pdf_part(b"not a pdf", None), Ok(None));
+}
+
+/// The private data streams read one after the other, each decoded as it is reached, give what
+/// joining them gives, with the same refusals: a stream in a form that isn't read, or with damaged
+/// zlib data, stops the read with why (also after the streams before it were read), and streams
+/// that hold nothing are no private data.
+#[test]
+fn private_data_streams_read_one_after_the_other_as_when_joined() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let page = PdfPage {
+        entries: format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {a} 0 R /AIPrivateData2 {b} 0 R /NumBlock 2 >> >> >>"),
+        ..PdfPage::new(100.0, 100.0, "1 0 0 rg 10 10 30 30 re f")
+    };
+    let file = |streams: &[&str]| pdf_with_catalog(std::slice::from_ref(&page), streams, "", None);
+    let read_all = |r: &mut dyn std::io::Read| {
+        let mut data = vec![];
+        r.read_to_end(&mut data).map(|_| data).map_err(|e| e.to_string())
+    };
+    let streamed = |pdf: &[u8]| read_illustrator_data_without_pdf_part_with(pdf, None, read_all);
+    // (A file the import refuses has no PDF part to read the data of.)
+    let opened = |pdf: &[u8]| open_pdf(pdf, None).ok().and_then(|o| o.read_illustrator_data(read_all));
+    let (one, two) = (stream("", "%AI24_ZStandard_Data first "), stream("", "second"));
+    let whole = file(&[&one, &two]);
+    let joined = b"%AI24_ZStandard_Data first second".to_vec();
+    assert_eq!(streamed(&whole), Ok(Some(IllustratorData { data: Ok(joined.clone()), user_unit: 1.0, trim: (100.0, 100.0) })));
+    assert_eq!(opened(&whole), Some(Ok(joined)));
+    assert_eq!(streamed(b"not a pdf"), Ok(None));
+    for odd in ["/Filter /Bogus", "/DecodeParms << /Predictor 12 /Columns 0 >>"] {
+        let pdf = file(&[&one, &stream(odd, "second")]);
+        assert_eq!(streamed(&pdf), Err("it is stored in a form that isn't read".to_string()), "{odd}");
+        assert_eq!(opened(&pdf), None, "{odd}");
+    }
+    let damaged = file(&[&one, &stream("/Filter /FlateDecode", "not zlib")]);
+    assert_eq!(streamed(&damaged), Err("its zlib compression is damaged".to_string()));
+    assert_eq!(opened(&damaged), None);
+    let empty = file(&[&stream("", ""), &stream("", "")]);
+    assert_eq!((illustrator_data(&empty, None), streamed(&empty), opened(&empty)), (None, Ok(None), None));
 }
 
 /// Art in ordinary tags nested inside a layer's sequence goes to that layer; the group is kept

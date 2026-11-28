@@ -93,8 +93,10 @@ pub enum TextKind {
     /// Area type flowed inside `frame` (document coordinates, untransformed by `xf`).
     Area { frame: PathData },
     /// Type on a path, flowing from its start bracket `start` to its end bracket `end` (0..1 of the
-    /// path length; no `end`: the end of the path, or once round a closed path). See
-    /// [`TextKind::path_span`].
+    /// path length; no `end`: the end of the path, or once round a closed path). On an open path
+    /// `start` may be below 0: the type starts that far before the path's start, and the characters
+    /// whose middle falls before the path's start are not drawn ([`TextKind::path_text_start`]).
+    /// See [`TextKind::path_span`].
     OnPath {
         path: PathData,
         start: f64,
@@ -117,7 +119,21 @@ impl TextKind {
             (s, end.map_or(1.0, |e| fraction(e).max(s)))
         })
     }
+    /// Where type on a path's text starts, as a fraction of its path's length: its start bracket
+    /// ([`Self::path_span`]), or on an open path a start before the path's start (below 0, at most
+    /// [`PATH_LEAD_MAX`] path lengths before it). None for other type.
+    pub fn path_text_start(&self) -> Option<f64> {
+        let TextKind::OnPath { path, start, .. } = self else { return None };
+        if !path.is_closed() && start.is_finite() && *start < 0.0 { Some(start.max(-PATH_LEAD_MAX)) } else { self.path_span().map(|(s, _)| s) }
+    }
+    /// Does type on an open path start before its path's start ([`Self::path_text_start`])?
+    pub fn starts_before_path(&self) -> bool {
+        self.path_text_start().is_some_and(|s| s < 0.0)
+    }
 }
+
+/// How far before its path's start type on an open path may start, in lengths of the path.
+pub const PATH_LEAD_MAX: f64 = 1e6;
 
 /// Move anchors `refs` of `path`, in text space, by `d` in document space (`to_text`: the
 /// document → text map). False when an anchor doesn't exist.

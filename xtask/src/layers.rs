@@ -65,6 +65,8 @@ pub const TABLE: &[(&str, Class)] = &[
     ("scriptcheck", Class::Standalone),
     ("js", Class::Standalone),
     ("apischema", Class::Standalone),
+    ("plugin-worker", Class::Exempt),
+    ("thumbnail-handler", Class::Exempt),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).
@@ -85,6 +87,9 @@ pub const INTRA_LAYER_ORDER: &[&[&str]] = &[
     &["three-d", "effects"],
     // Inflate cuts its surface's grid cells to the shape with Pathfinder's booleans.
     &["pathops", "three-d"],
+    // Outline Object on an image's fill or stroke follows the outline Image Trace makes of its
+    // opaque area.
+    &["trace", "effects"],
 ];
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {

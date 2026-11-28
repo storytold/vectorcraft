@@ -127,6 +127,30 @@ fn set_bounds_moves_and_sizes_the_ink_box() {
     assert!((ink(&s, t).height() - before.height()).abs() < 1e-6, "{:?}", ink(&s, t));
 }
 
+/// The font size the panels show follows the vertical scale: a typed width alone changes the
+/// horizontal scale and keeps the font size, and a typed height alone changes the font size and
+/// keeps the width, so the horizontal scale changes the other way.
+#[test]
+fn a_typed_width_changes_the_horizontal_scale_and_a_typed_height_the_font_size() {
+    let shown = |s: &Session, t: NodeId| {
+        let o = text(s, t);
+        let st = o.effective_char_style(&o.runs[0].style).unwrap();
+        (st.size, st.h_scale)
+    };
+    let (mut s, t) = with_type(json!({"x": 100, "y": 300, "size": 100, "text": "Hg"}));
+    glyphs(&mut s, true);
+    let before = ink(&s, t);
+    run(&mut s, "object.setBounds", json!({"width": before.width() * 2.0}));
+    let (size, h_scale) = shown(&s, t);
+    assert!((size - 100.0).abs() < 1e-6 && (h_scale - 200.0).abs() < 1e-6, "{size} pt at {h_scale}%");
+    let (mut s, t) = with_type(json!({"x": 100, "y": 300, "size": 100, "text": "Hg"}));
+    glyphs(&mut s, true);
+    run(&mut s, "object.setBounds", json!({"height": before.height() * 2.0}));
+    let (size, h_scale) = shown(&s, t);
+    assert!((size - 200.0).abs() < 1e-6 && (h_scale - 50.0).abs() < 1e-6, "{size} pt at {h_scale}%");
+    assert!((ink(&s, t).width() - before.width()).abs() < 1e-6, "{:?}", ink(&s, t));
+}
+
 #[test]
 fn set_bounds_with_the_current_values_records_no_undo_step() {
     let (mut s, t) = with_type(json!({"x": 100, "y": 300, "size": 100, "text": "Hg"}));

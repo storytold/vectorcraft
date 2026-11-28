@@ -6,8 +6,8 @@ use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{AnchorRef, LiveCorners, LiveShape, NodeKind};
-use vectorcraft_geom::Affine;
 use vectorcraft_geom::shapes::CornerKind;
+use vectorcraft_geom::{Affine, Point};
 
 use crate::*;
 
@@ -59,6 +59,107 @@ fn a_whole_rectangle_rounds_all_corners_and_given_corners_alone() {
     assert_eq!(corners(&s, id).1[3], CornerKind::Chamfer);
 }
 
+/// The Corner menus of Rectangle Properties: a kind for all four corners or one, set on corners
+/// with no radius too and leaving the radii as they are, in one undo step; the kind the corners
+/// already have adds no step.
+#[test]
+fn rectangle_kind_menu_targets_all_or_one_corner_and_skips_noop_undo() {
+    let (mut s, id) = session();
+    run(&mut s, json!({"corners": [1], "radius": 12}));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let undo = steps(&s);
+    run(&mut s, json!({"corners": [0, 1, 2, 3], "kind": "invertedRound"}));
+    assert_eq!(corners(&s, id).0, [0.0, 12.0, 0.0, 0.0]);
+    assert_eq!(corners(&s, id).1, [CornerKind::InvertedRound; 4]);
+    assert_eq!(steps(&s), undo + 1);
+    run(&mut s, json!({"corners": [0, 1, 2, 3], "kind": "invertedRound"}));
+    run(&mut s, json!({"corners": [2], "kind": "invertedRound"}));
+    assert_eq!(steps(&s), undo + 1, "no step when nothing changes");
+    run(&mut s, json!({"corners": [2], "kind": "chamfer"}));
+    assert_eq!(corners(&s, id).1, [CornerKind::InvertedRound, CornerKind::InvertedRound, CornerKind::Chamfer, CornerKind::InvertedRound]);
+    assert_eq!(corners(&s, id).0, [0.0, 12.0, 0.0, 0.0]);
+    assert_eq!(steps(&s), undo + 2);
+}
+
+/// A kind the corners already have leaves a rectangle saved stretched by an older version as it
+/// is, alone or beside a rectangle the kind changes: its scale stays in its transform.
+#[test]
+fn a_kind_the_corners_have_leaves_a_stretched_rectangle() {
+    let (mut s, id) = session();
+    let other = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap());
+    let stretched = LiveShape::Rectangle {
+        w: 50.0,
+        h: 60.0,
+        radii: [10.0; 4],
+        kinds: [CornerKind::Chamfer; 4],
+        radii_relative: false,
+        xf: Affine::translate((10.0, 10.0)) * Affine::scale_non_uniform(2.0, 1.0),
+    };
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let NodeKind::Path { path, live: Some(live), .. } = &mut d.node_mut(id).unwrap().kind else { panic!("not live") };
+        **live = stretched.clone();
+        *path = live.to_path();
+    }
+    let live = |s: &Session| node_path(s, id).1;
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let undo = steps(&s);
+    run(&mut s, json!({"ids": [id.0], "kind": "chamfer"}));
+    assert_eq!(live(&s), Some(stretched.clone()));
+    assert_eq!(steps(&s), undo, "no step when nothing changes");
+    run(&mut s, json!({"ids": [id.0, other.0], "kind": "chamfer"}));
+    assert_eq!(live(&s), Some(stretched));
+    assert_eq!(corners(&s, other).1, [CornerKind::Chamfer; 4]);
+    assert_eq!(steps(&s), undo + 1);
+}
+
+/// A radius is stored on a corner that stores a larger radius drawn at the new value, alone or
+/// beside another rectangle; the radius every target already stores adds no undo step.
+#[test]
+fn a_radius_reaches_a_rectangle_that_already_draws_it() {
+    let (mut s, id) = session();
+    let other = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 100, "height": 60})).unwrap()["id"].as_u64().unwrap());
+    // 80 pt on every corner draws at 30 pt, half the 60 pt side.
+    run(&mut s, json!({"ids": [id.0], "radius": 80}));
+    assert_eq!(corners(&s, id).0, [80.0; 4]);
+    let (path, live) = node_path(&s, id);
+    let drawn = LiveCorners::new(&path, live.as_ref()).unwrap().drawn_radius(0);
+    assert!((drawn - 30.0).abs() < 1e-9, "draws at {drawn}");
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let undo = steps(&s);
+    run(&mut s, json!({"ids": [id.0], "corners": [1], "radius": 30}));
+    assert_eq!(corners(&s, id).0, [80.0, 30.0, 80.0, 80.0]);
+    assert_eq!(steps(&s), undo + 1);
+    run(&mut s, json!({"ids": [id.0, other.0], "corners": [0], "radius": 30}));
+    assert_eq!(corners(&s, id).0[0], 30.0);
+    assert_eq!(corners(&s, other).0[0], 30.0);
+    // The radius both already store adds no step.
+    run(&mut s, json!({"ids": [id.0, other.0], "corners": [0], "radius": 30}));
+    assert_eq!(steps(&s), undo + 2);
+}
+
+/// `rectanglesOnly` sets the live rectangles among the selection and leaves a polygon as it is; an
+/// action that records it holds no ids, so playing it sets the rectangles selected then.
+#[test]
+fn rectangles_only_sets_the_selected_rectangles_when_an_action_plays() {
+    let (mut s, id) = session();
+    let polygon = NodeId(s.execute("shape.polygon", &json!({"cx": 300, "cy": 300, "radius": 40, "sides": 6})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0, polygon.0]})).unwrap();
+    let start = s.journal.len();
+    run(&mut s, json!({"rectanglesOnly": true, "corners": [0], "kind": "chamfer"}));
+    assert_eq!(corners(&s, id).1[0], CornerKind::Chamfer);
+    let NodeKind::Path { live: Some(l), .. } = &s.doc().unwrap().doc.node(polygon).unwrap().kind else { panic!("not live") };
+    let LiveShape::Polygon { kinds, .. } = &**l else { panic!("not a polygon") };
+    assert!(kinds.iter().all(|k| *k == CornerKind::Round), "the polygon keeps its corners: {kinds:?}");
+    let action = s.journal_for_action(start);
+    assert_eq!(action.len(), 1);
+    assert_eq!(action[0].1.get("ids"), None);
+    let other = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [other.0, polygon.0]})).unwrap();
+    s.replay(&action[0].0, &action[0].1).unwrap();
+    assert_eq!(corners(&s, other).1[0], CornerKind::Chamfer);
+}
+
 /// #938: `items` rounds several objects in one step, each its own corners (or all of them).
 #[test]
 fn items_round_several_objects_each_its_own_corners() {
@@ -87,6 +188,67 @@ fn bad_corners_and_kinds_are_errors() {
         assert!(s.execute("object.setLiveShape", &p).is_err(), "{p}");
     }
     assert_eq!(corners(&s, id), ([0.0; 4], [CornerKind::Round; 4], 4), "nothing changed");
+}
+
+/// A side count that isn't a whole number from 3 to 1000, a negative radius and an unknown key
+/// (at the top level or in one of `items`) are errors naming the key; the shapes and the undo
+/// history stay as they were. A radius of 0 and the ends of the side range still work.
+#[test]
+fn bad_sides_radii_and_keys_are_errors() {
+    let (mut s, id) = session();
+    let poly = NodeId(s.execute("shape.polygon", &json!({"cx": 200, "cy": 200, "radius": 80, "sides": 6})).unwrap()["id"].as_u64().unwrap());
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (corners(s, id), st.doc.node(poly).unwrap().clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    for (p, key) in [
+        (json!({"ids": [poly.0], "sides": 2.5}), "`sides` must be a whole number from 3 to 1000, not 2.5"),
+        (json!({"ids": [poly.0], "sides": -1}), "`sides` must be a whole number from 3 to 1000, not -1"),
+        (json!({"ids": [poly.0], "sides": 2}), "`sides` must be a whole number from 3 to 1000, not 2"),
+        (json!({"ids": [poly.0], "sides": 1001}), "`sides` must be a whole number from 3 to 1000, not 1001"),
+        (json!({"ids": [id.0, poly.0], "radius": -4}), "`radius` must be a radius of 0 or more, not -4"),
+        (json!({"items": [{"id": id.0, "corners": [0]}], "radius": -0.5}), "`radius` must be a radius of 0 or more, not -0.5"),
+        (json!({"id": id.0, "path": [[0, 0]], "radius": 5}), "unknown parameter `path`"),
+        (json!({"items": [{"id": id.0, "corner": [0]}], "radius": 5}), "unknown parameter `items[0].corner`; did you mean `items[0].corners`?"),
+    ] {
+        match s.execute("object.setLiveShape", &p) {
+            Err(EngineError::BadParams { cmd, msg }) => assert!(cmd == "object.setLiveShape" && msg.starts_with(key), "{p}: {msg}"),
+            other => panic!("{p}: {other:?}"),
+        }
+        assert_eq!(state(&s), before, "{p}");
+    }
+    run(&mut s, json!({"ids": [poly.0], "sides": 3}));
+    assert!(matches!(node_path(&s, poly).1, Some(LiveShape::Polygon { sides: 3, .. })));
+    run(&mut s, json!({"ids": [poly.0], "sides": 1000.0}));
+    assert!(matches!(node_path(&s, poly).1, Some(LiveShape::Polygon { sides: 1000, .. })));
+    run(&mut s, json!({"id": id.0, "radius": 6}));
+    run(&mut s, json!({"id": id.0, "radius": 0}));
+    assert_eq!(corners(&s, id).0, [0.0; 4]);
+}
+
+/// Saved steps play as they did before `sides` and `radius` were checked: a negative radius
+/// removes the rounding, a whole side count outside 3 to 1000 is brought into that range, and a
+/// fractional or negative side count is ignored.
+#[test]
+fn saved_steps_with_out_of_range_sides_or_radius_still_play() {
+    let (mut s, id) = session();
+    let poly = NodeId(s.execute("shape.polygon", &json!({"cx": 200, "cy": 200, "radius": 80, "sides": 6})).unwrap()["id"].as_u64().unwrap());
+    let replay = |s: &mut Session, p: Value| s.replay("object.setLiveShape", &p).unwrap_or_else(|e| panic!("{p}: {e}"));
+    run(&mut s, json!({"id": id.0, "radius": 6}));
+    replay(&mut s, json!({"id": id.0, "radius": -4}));
+    assert_eq!(corners(&s, id).0, [0.0; 4]);
+    let sides = |s: &Session| match node_path(s, poly).1 {
+        Some(LiveShape::Polygon { sides, .. }) => sides,
+        other => panic!("{other:?}"),
+    };
+    for (n, want) in [(json!(2), 3), (json!(1001), 1000), (json!(2.5), 1000), (json!(-1), 1000), (json!(5.0), 5)] {
+        replay(&mut s, json!({"ids": [poly.0], "sides": n}));
+        assert_eq!(sides(&s), want, "{n}");
+    }
+    // A direct call still refuses them.
+    assert!(s.execute("object.setLiveShape", &json!({"id": id.0, "radius": -4})).is_err());
+    assert!(s.execute("object.setLiveShape", &json!({"ids": [poly.0], "sides": 2})).is_err());
 }
 
 #[test]
@@ -331,6 +493,67 @@ fn an_ellipse_takes_pie_angles_and_inverts() {
     assert!(s.execute("object.setLiveShape", &json!({"pieStart": "half"})).is_err());
 }
 
+/// Constrain Pie Angle (`constrainPie`): a new Pie Start or End Angle moves the other angle by as
+/// much, so each selected ellipse keeps its own span, across 0° too; a whole ellipse stays whole;
+/// after Invert Pie the inverted span is kept; one undo step for all of them; the angle each
+/// already has records nothing; and `constrainPie` with both angles, with neither, with Invert Pie
+/// or as text is an error that changes nothing.
+#[test]
+fn constrain_pie_keeps_each_ellipses_span() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+    let [a, b, c] = [0, 100, 200].map(|y| id(s.execute("shape.ellipse", &json!({"x": 0, "y": y, "width": 200, "height": 80})).unwrap()));
+    run(&mut s, json!({"ids": [a.0], "pieStart": 300, "pieEnd": 60}));
+    run(&mut s, json!({"ids": [b.0], "pieStart": 0, "pieEnd": 90}));
+    let pies = |s: &Session| {
+        [a, b, c].map(|i| match &s.doc().unwrap().doc.node(i).unwrap().kind {
+            NodeKind::Path { live: Some(l), .. } => match &**l {
+                LiveShape::Ellipse { pie, .. } => *pie,
+                k => panic!("{k:?}"),
+            },
+            k => panic!("{k:?}"),
+        })
+    };
+    let near = |p: (f64, f64), q: (f64, f64)| (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9;
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let n = undo(&s);
+    // 300° to 60° spans 120°, through 0°; 0° to 90° spans 90°; the third ellipse is whole.
+    run(&mut s, json!({"ids": [a.0, b.0, c.0], "pieStart": 350, "constrainPie": true}));
+    let [pa, pb, pc] = pies(&s);
+    assert!(near(pa, (350.0, 110.0)) && near(pb, (350.0, 80.0)), "{pa:?} {pb:?}");
+    assert!(near(pc, (350.0, 350.0)), "{pc:?}");
+    assert_eq!(s.doc().unwrap().doc.node(c).unwrap().path_data().unwrap().anchor_count(), 4, "the whole ellipse stays whole");
+    assert_eq!(undo(&s), n + 1, "one undo step");
+    run(&mut s, json!({"ids": [a.0, b.0], "pieEnd": 20, "constrainPie": true}));
+    let [pa, pb, _] = pies(&s);
+    assert!(near(pa, (260.0, 20.0)) && near(pb, (290.0, 20.0)), "{pa:?} {pb:?}");
+    let n = undo(&s);
+    run(&mut s, json!({"ids": [a.0, b.0], "pieEnd": 380, "constrainPie": true}));
+    assert_eq!(undo(&s), n, "the end each already has: no undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let [pa, pb, _] = pies(&s);
+    assert!(near(pa, (350.0, 110.0)) && near(pb, (350.0, 80.0)), "{pa:?} {pb:?}");
+    // Inverted, 80° to 350° spans 270°, and a linked edit keeps that.
+    run(&mut s, json!({"ids": [b.0], "invertPie": true}));
+    run(&mut s, json!({"ids": [b.0], "pieStart": 0, "constrainPie": true}));
+    assert!(near(pies(&s)[1], (0.0, 270.0)), "{:?}", pies(&s)[1]);
+    let before = (undo(&s), pies(&s));
+    for (p, want) in [
+        (json!({"ids": [b.0], "pieStart": 10, "pieEnd": 20, "constrainPie": true}), "needs one of"),
+        (json!({"ids": [b.0], "constrainPie": true}), "needs one of"),
+        (json!({"ids": [b.0], "pieStart": 10, "constrainPie": true, "invertPie": true}), "needs one of"),
+        (json!({"ids": [b.0], "pieStart": 10, "constrainPie": "yes"}), "`constrainPie` must be true or false"),
+    ] {
+        let r = s.execute("object.setLiveShape", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(want)), "{p}: {r:?}");
+        assert_eq!((undo(&s), pies(&s)), before, "{p}");
+    }
+    // Off, each angle is set on its own, as before.
+    run(&mut s, json!({"ids": [b.0], "pieStart": 90, "constrainPie": false}));
+    assert!(near(pies(&s)[1], (90.0, 270.0)), "{:?}", pies(&s)[1]);
+}
+
 /// Invert Pie and Make Sides Equal given as text or as another value that is not true or false are
 /// an error naming the key: the ellipse's pie, the polygon and the undo history stay as they were.
 /// True makes the change, and false and null leave the shape as it is.
@@ -463,6 +686,365 @@ fn a_polygon_takes_its_angle_radius_side_length_and_equal_sides() {
     }
 }
 
+/// Rectangle Angle and Ellipse Angle: `rectangleAngle` and `ellipseAngle` turn each selected live
+/// rectangle or ellipse about its own center, keeping its size, corners and pie, as one undo step.
+/// The angle it already has records no step, each key leaves the other kind as it is, and a value
+/// that is not a number is an error.
+#[test]
+fn a_rectangle_and_an_ellipse_take_their_angle() {
+    let (mut s, rect) = session();
+    run(&mut s, json!({"radius": 8}));
+    let ellipse = NodeId(s.execute("shape.ellipse", &json!({"x": 200, "y": 200, "width": 120, "height": 80})).unwrap()["id"].as_u64().unwrap());
+    run(&mut s, json!({"pieStart": 30, "pieEnd": 120}));
+    let live = |s: &Session, id: NodeId| {
+        let n = s.doc().unwrap().doc.node(id).unwrap();
+        (n.live_shape().unwrap().clone(), n.geometric_bounds().unwrap())
+    };
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let angle = |s: &Session, id: NodeId| live(s, id).0.shape_angle().unwrap();
+    // The ellipse's center: the middle of its untransformed box, wherever its pie leaves the path.
+    let ellipse_center = |s: &Session| match live(s, ellipse).0 {
+        LiveShape::Ellipse { w, h, xf, .. } => xf * vectorcraft_geom::Point::new(w / 2.0, h / 2.0),
+        l => panic!("{l:?}"),
+    };
+    let center = ellipse_center(&s);
+
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    let n = steps(&s);
+    run(&mut s, json!({"rectangleAngle": 90}));
+    let (l, b) = live(&s, rect);
+    assert!(close(angle(&s, rect), 90.0), "{l:?}");
+    // 100 × 60 at (10, 10) turned about (60, 40): 60 wide, 100 tall, same center.
+    assert!(close(b.width(), 60.0) && close(b.height(), 100.0) && close(b.center().x, 60.0) && close(b.center().y, 40.0), "{b:?}");
+    let LiveShape::Rectangle { w, h, radii, .. } = &l else { panic!("{l:?}") };
+    assert!(close(*w, 100.0) && close(*h, 60.0) && *radii == [8.0; 4], "{w} {h} {radii:?}");
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    for same in [json!({"rectangleAngle": 90}), json!({"rectangleAngle": 450}), json!({"rectangleAngle": -270}), json!({"ellipseAngle": 10})] {
+        run(&mut s, same.clone());
+        assert_eq!(steps(&s), n + 1, "{same} records no undo step");
+    }
+    // A turn the field gives back rounded is the angle the shape has: typing it again records no step.
+    run(&mut s, json!({"rectangleAngle": 33.3}));
+    let now = angle(&s, rect);
+    run(&mut s, json!({"rectangleAngle": now}));
+    run(&mut s, json!({"rectangleAngle": 33.3}));
+    assert_eq!(steps(&s), n + 2);
+    for bad in [json!({"rectangleAngle": "left"}), json!({"ellipseAngle": "up"}), json!({"rectangleAngle": true})] {
+        assert!(s.execute("object.setLiveShape", &bad).is_err(), "{bad}");
+        assert_eq!(steps(&s), n + 2, "{bad} changes nothing");
+    }
+
+    // The ellipse turns about its center and keeps its pie.
+    s.execute("select.set", &json!({"ids": [ellipse.0]})).unwrap();
+    run(&mut s, json!({"ellipseAngle": 90}));
+    let (l, b) = live(&s, ellipse);
+    assert!(close(angle(&s, ellipse), 90.0), "{l:?}");
+    let LiveShape::Ellipse { pie, .. } = &l else { panic!("{l:?}") };
+    assert_eq!(*pie, (30.0, 120.0));
+    let now = ellipse_center(&s);
+    assert!(close(now.x, center.x) && close(now.y, center.y), "{center:?} → {now:?}");
+    assert!(b.width() < b.height(), "120 × 80 turned a quarter turn: {b:?}");
+
+    // Both selected: each key turns its own kind only, each about its own center.
+    s.execute("select.set", &json!({"ids": [rect.0, ellipse.0]})).unwrap();
+    run(&mut s, json!({"rectangleAngle": 45}));
+    assert!(close(angle(&s, rect), 45.0) && close(angle(&s, ellipse), 90.0));
+    let b = live(&s, rect).1;
+    assert!(close(b.center().x, 60.0) && close(b.center().y, 40.0), "{b:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(close(angle(&s, rect), 33.3));
+
+    // A reflected rectangle takes the angle too, about its center.
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    let before = live(&s, rect).1.center();
+    run(&mut s, json!({"rectangleAngle": 20}));
+    let after = live(&s, rect).1.center();
+    assert!(close(angle(&s, rect), 20.0) && close(before.x, after.x) && close(before.y, after.y), "{before:?} → {after:?}");
+}
+
+/// A shape named in `ids` that a turn would take past the coordinate limit (±4,000,000 pt) is an
+/// error that changes nothing, whether or not it is selected.
+#[test]
+fn a_turn_past_the_coordinate_limit_is_an_error() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let mut add = |cmd: &str, p: Value| s.execute(cmd, &p).unwrap()["id"].as_u64().unwrap();
+    // Each reaches within 10 pt of the limit and past it when turned.
+    let rect = add("shape.rectangle", json!({"x": 3_999_890, "y": 100, "width": 100, "height": 100}));
+    let ellipse = add("shape.ellipse", json!({"x": 3_999_950, "y": 100, "width": 40, "height": 100}));
+    let polygon = add("shape.polygon", json!({"cx": 3_999_955, "cy": 200, "radius": 50, "sides": 6}));
+    for (id, key, angle) in [(rect, "rectangleAngle", 45), (ellipse, "ellipseAngle", 90), (polygon, "polygonAngle", 90)] {
+        for selected in [false, true] {
+            s.execute("select.set", &json!({"ids": if selected { vec![id] } else { vec![] }})).unwrap();
+            let (doc, steps) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+            let e = s.execute("object.setLiveShape", &json!({"ids": [id], key: angle})).unwrap_err();
+            assert!(e.to_string().contains("out of range"), "{key}, selected {selected}: {e}");
+            assert!(*s.doc().unwrap().doc == *doc && s.doc().unwrap().history.undo.len() == steps, "{key}, selected {selected}: changed");
+        }
+    }
+}
+
+/// A live line's Line Properties: Line Length keeps its first end in place, Line Angle (degrees
+/// counterclockwise, any finite value brought into 0 to 360) turns it about its midpoint, the
+/// length applies before the angle, every selected line takes them in one undo step, and a value
+/// that changes nothing records none.
+#[test]
+fn a_line_takes_its_length_and_angle() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let line = |s: &mut Session, a: (f64, f64), b: (f64, f64)| {
+        NodeId(s.execute("shape.line", &json!({"x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})).unwrap()["id"].as_u64().unwrap())
+    };
+    let id = line(&mut s, (100.0, 100.0), (200.0, 100.0));
+    let ends = |s: &Session, id: NodeId| match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Path { live: Some(l), path, .. } => {
+            let LiveShape::Line { a, b } = **l else { panic!("{l:?}") };
+            assert_eq!(*path, l.to_path(), "the path follows the line");
+            (a.x, a.y, b.x, b.y)
+        }
+        k => panic!("{k:?}"),
+    };
+    let near = |got: (f64, f64, f64, f64), want: (f64, f64, f64, f64)| {
+        assert!([got.0 - want.0, got.1 - want.1, got.2 - want.2, got.3 - want.3].iter().all(|d| d.abs() < 1e-9), "{got:?} ≠ {want:?}")
+    };
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    run(&mut s, json!({"lineLength": 50}));
+    near(ends(&s, id), (100.0, 100.0, 150.0, 100.0));
+    // 90° points up the page.
+    run(&mut s, json!({"lineAngle": 90}));
+    near(ends(&s, id), (125.0, 125.0, 125.0, 75.0));
+    let n = steps(&s);
+    for same in [json!({"lineAngle": 450}), json!({"lineAngle": -270}), json!({"lineLength": 50}), json!({"lineLength": 50, "lineAngle": 90})] {
+        run(&mut s, same.clone());
+        assert_eq!(steps(&s), n, "{same} records no undo step");
+    }
+    near(ends(&s, id), (125.0, 125.0, 125.0, 75.0));
+    run(&mut s, json!({"lineLength": 20, "lineAngle": 0}));
+    near(ends(&s, id), (115.0, 115.0, 135.0, 115.0));
+    assert_eq!(steps(&s), n + 1, "both in one step");
+    run(&mut s, json!({"lineAngle": 180}));
+    near(ends(&s, id), (135.0, 115.0, 115.0, 115.0));
+    run(&mut s, json!({"lineAngle": -90}));
+    near(ends(&s, id), (125.0, 105.0, 125.0, 125.0));
+    let LiveShape::Line { .. } = s.doc().unwrap().doc.node(id).unwrap().live_shape().unwrap() else { panic!("still live") };
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().live_shape().unwrap().line_angle(), Some(270.0));
+    // Several lines: each keeps its own first end, in one undo step.
+    let other = line(&mut s, (0.0, 0.0), (0.0, 40.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [id.0, other.0], "lineLength": 10}));
+    near(ends(&s, id), (125.0, 105.0, 125.0, 115.0));
+    near(ends(&s, other), (0.0, 0.0, 0.0, 10.0));
+    assert_eq!(steps(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    near(ends(&s, id), (125.0, 105.0, 125.0, 125.0));
+    near(ends(&s, other), (0.0, 0.0, 0.0, 40.0));
+    // Bad values, and a line that would reach past the coordinate limit, change neither line.
+    let far = line(&mut s, (3_900_000.0, 0.0), (3_900_100.0, 0.0));
+    let n = steps(&s);
+    for bad in [
+        json!({"ids": [id.0], "lineLength": 0}),
+        json!({"ids": [id.0], "lineLength": -3}),
+        json!({"ids": [id.0], "lineLength": "long"}),
+        json!({"ids": [id.0], "lineAngle": "up"}),
+        json!({"ids": [id.0], "lineLength": 1e300}),
+        json!({"ids": [id.0, far.0], "lineLength": 200_000}),
+    ] {
+        assert!(s.execute("object.setLiveShape", &bad).is_err(), "{bad}");
+        assert_eq!(steps(&s), n, "{bad}");
+    }
+    near(ends(&s, id), (125.0, 105.0, 125.0, 125.0));
+    near(ends(&s, far), (3_900_000.0, 0.0, 3_900_100.0, 0.0));
+    // A length past the coordinate limit is fine while both ends stay inside it.
+    let wide = line(&mut s, (-3_500_000.0, 0.0), (3_500_000.0, 0.0));
+    run(&mut s, json!({"ids": [wide.0], "lineLength": 6_000_000}));
+    near(ends(&s, wide), (-3_500_000.0, 0.0, 2_500_000.0, 0.0));
+    // A line whose ends meet reads 0°: an angle leaves it as it is, and a length points it right.
+    let dot = line(&mut s, (10.0, 10.0), (10.0, 10.0));
+    assert_eq!(s.doc().unwrap().doc.node(dot).unwrap().live_shape().unwrap().line_angle(), Some(0.0));
+    let n = steps(&s);
+    run(&mut s, json!({"lineAngle": 45}));
+    assert_eq!(steps(&s), n);
+    run(&mut s, json!({"lineLength": 30}));
+    near(ends(&s, dot), (10.0, 10.0, 40.0, 10.0));
+    // A very short length is applied.
+    let speck = line(&mut s, (20.0, 20.0), (20.0, 20.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [speck.0], "lineLength": 1e-12}));
+    assert_eq!(steps(&s), n + 1, "a length of 1e-12 pt is a change");
+    assert!(ends(&s, speck).2 > 20.0, "{:?}", ends(&s, speck));
+    // A length so short that the rounded ends do not move records no undo step.
+    let dust = line(&mut s, (20.0, 20.0), (20.0, 20.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [dust.0], "lineLength": 1e-20}));
+    assert_eq!(steps(&s), n, "a length of 1e-20 pt changes nothing");
+    near(ends(&s, dust), (20.0, 20.0, 20.0, 20.0));
+    // Other live shapes ignore the line params.
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [rect.0], "lineLength": 30, "lineAngle": 45}));
+    assert_eq!(steps(&s), n);
+}
+
+/// Each live shape edit that moves, turns or scales the shape (Rectangle, Ellipse and Polygon
+/// Angle, Polygon Radius, Side Length, Make Sides Equal, Line Length and Line Angle) takes a linked
+/// opacity mask and a placed gradient along, so they keep their place in the shape's own frame; a
+/// new side count or pie leaves them where they are. Scale Strokes & Effects comes from `strokes`,
+/// and the bounding box keeps its angle.
+#[test]
+fn shape_edits_take_a_linked_mask_and_placed_gradient_along() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let add = |s: &mut Session, cmd: &str, p: Value| NodeId(s.execute(cmd, &p).unwrap()["id"].as_u64().unwrap());
+    // Each shape gets a placed linear gradient fill and a linked opacity mask off its center.
+    let dress = |s: &mut Session, id: NodeId, start: [f64; 2], end: [f64; 2], mask: [f64; 2]| {
+        s.execute("paint.setFill", &json!({"ids": [id.0], "gradient": {"kind": "linear"}})).unwrap();
+        s.execute("paint.setGradientGeom", &json!({"ids": [id.0], "start": start, "end": end})).unwrap();
+        let m = s.execute("shape.rectangle", &json!({"x": mask[0], "y": mask[1], "width": 20, "height": 12})).unwrap()["id"].as_u64().unwrap();
+        s.execute("transparency.makeOpacityMask", &json!({"ids": [id.0, m]})).unwrap();
+    };
+    let rect = add(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 60}));
+    dress(&mut s, rect, [20.0, 30.0], [90.0, 50.0], [15.0, 40.0]);
+    let ellipse = add(&mut s, "shape.ellipse", json!({"x": 200, "y": 200, "width": 120, "height": 80}));
+    dress(&mut s, ellipse, [210.0, 240.0], [300.0, 220.0], [270.0, 205.0]);
+    let polygon = add(&mut s, "shape.polygon", json!({"cx": 200, "cy": 100, "radius": 50, "sides": 6}));
+    dress(&mut s, polygon, [170.0, 90.0], [230.0, 120.0], [205.0, 70.0]);
+    let line = add(&mut s, "shape.line", json!({"x1": 100, "y1": 300, "x2": 200, "y2": 300}));
+    dress(&mut s, line, [100.0, 300.0], [200.0, 300.0], [120.0, 290.0]);
+    // The shape's own frame: its untransformed unit box, a polygon's unit circle, or a line from 0 to 1 along x.
+    let frame = |l: &LiveShape| match l {
+        LiveShape::Rectangle { w, h, xf, .. } | LiveShape::Ellipse { w, h, xf, .. } => *xf * Affine::scale_non_uniform(*w, *h),
+        LiveShape::Polygon { radius, xf, .. } => *xf * Affine::scale(*radius),
+        LiveShape::Line { a, b } => {
+            let d = *b - *a;
+            Affine::new([d.x, d.y, -d.y, d.x, a.x, a.y])
+        }
+        l => panic!("{l:?}"),
+    };
+    // The mask art's center and the gradient's start in the shape's frame, the gradient's value at the
+    // frame's origin and its two unit points (a linear gradient's isolines, which a shear keeps but
+    // its end point does not), and the mask art's center in the document.
+    let local = |s: &Session, id: NodeId| {
+        let n = s.doc().unwrap().doc.node(id).unwrap();
+        let to_doc = frame(n.live_shape().unwrap());
+        let to_local = to_doc.inverse();
+        let mask = n.extras().mask.as_deref().unwrap().art.geometric_bounds().unwrap().center();
+        let vectorcraft_color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
+        let geom = g.geom.unwrap();
+        let along = geom.end - geom.start;
+        let t = |x: f64, y: f64| (to_doc * Point::new(x, y) - geom.start).dot(along) / along.hypot2();
+        ([to_local * mask, to_local * geom.start, Point::new(t(0.0, 0.0), t(1.0, 0.0)), Point::new(t(0.0, 1.0), 0.0)], mask)
+    };
+    let edits = [
+        (rect, json!({"rectangleAngle": 30})),
+        (ellipse, json!({"ellipseAngle": 50})),
+        (polygon, json!({"polygonAngle": 20})),
+        (polygon, json!({"polygonRadius": 80})),
+        (polygon, json!({"sideLength": 30})),
+        (polygon, json!({"makeSidesEqual": true})),
+        (line, json!({"lineLength": 50})),
+        (line, json!({"lineAngle": 90})),
+        (line, json!({"lineLength": 140, "lineAngle": 210})),
+    ];
+    // Every edit is checked, and the ones that leave the mask or gradient behind are listed together.
+    let mut left_behind = Vec::new();
+    for (id, edit) in edits {
+        if edit.get("makeSidesEqual").is_some() {
+            // Scaled unevenly and turned first, so Make Sides Equal has a shear and an uneven scale to drop.
+            s.execute("object.scale", &json!({"ids": [polygon.0], "sx": 200, "sy": 100})).unwrap();
+            s.execute("object.rotate", &json!({"ids": [polygon.0], "angle": 30})).unwrap();
+            s.execute("object.scale", &json!({"ids": [polygon.0], "sx": 100, "sy": 150})).unwrap();
+        }
+        let angle = s.doc().unwrap().doc.node(id).unwrap().bbox_angle;
+        let (was, _) = local(&s, id);
+        let mut p = edit.clone();
+        p["ids"] = json!([id.0]);
+        run(&mut s, p);
+        let now = local(&s, id).0;
+        if now.iter().zip(&was).any(|(now, then)| now.distance(*then) >= 1e-9) {
+            left_behind.push(format!("{edit}: {now:?} from {was:?}"));
+        }
+        assert_eq!(s.doc().unwrap().doc.node(id).unwrap().bbox_angle, angle, "{edit}: the bounding box keeps its angle");
+    }
+    assert!(left_behind.is_empty(), "moved off the shape:\n{}", left_behind.join("\n"));
+    // A new side count or pie keeps the shape's place, angle and size: the mask stays where it is.
+    for (id, edit) in [(polygon, json!({"sides": 8})), (ellipse, json!({"pieStart": 30, "pieEnd": 200}))] {
+        let (_, was) = local(&s, id);
+        let mut p = edit.clone();
+        p["ids"] = json!([id.0]);
+        run(&mut s, p);
+        assert_eq!(local(&s, id).1, was, "{edit}");
+    }
+    // With Scale Strokes & Effects off a new radius keeps the stroke's weight; on, the stroke scales with it.
+    let weight = |s: &Session| s.doc().unwrap().doc.node(polygon).unwrap().appearance.stroke_width();
+    s.execute("stroke.set", &json!({"ids": [polygon.0], "weight": 4})).unwrap();
+    run(&mut s, json!({"ids": [polygon.0], "polygonRadius": 160, "strokes": false}));
+    assert!((weight(&s) - 4.0).abs() < 1e-9, "{}", weight(&s));
+    run(&mut s, json!({"ids": [polygon.0], "polygonRadius": 320, "strokes": true}));
+    assert!((weight(&s) - 8.0).abs() < 1e-9, "the stroke scaled with the shape: {}", weight(&s));
+    for bad in [json!({"ids": [polygon.0], "polygonRadius": 50, "strokes": "yes"}), json!({"ids": [polygon.0], "polygonRadius": 50, "patterns": 1})] {
+        assert!(s.execute("object.setLiveShape", &bad).is_err(), "{bad}");
+    }
+    // An object named twice moves once, and a rounded rectangle in its mask keeps its corner radius
+    // with Scale Corners on, as the shape's own corners do.
+    let star = add(&mut s, "shape.polygon", json!({"cx": 300, "cy": 300, "radius": 40, "sides": 5}));
+    s.execute("paint.setFill", &json!({"ids": [star.0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [star.0], "start": [280, 300], "end": [320, 310]})).unwrap();
+    let m = add(&mut s, "shape.rectangle", json!({"x": 290, "y": 280, "width": 30, "height": 20, "radius": 5}));
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [star.0, m.0]})).unwrap();
+    s.prefs.scale_corners = true;
+    let (was, _) = local(&s, star);
+    run(&mut s, json!({"ids": [star.0, star.0], "polygonRadius": 80}));
+    let (now, _) = local(&s, star);
+    assert!(now.iter().zip(&was).all(|(now, then)| now.distance(*then) < 1e-9), "moved once: {now:?} from {was:?}");
+    let n = s.doc().unwrap().doc.node(star).unwrap();
+    let art = &n.extras().mask.as_deref().unwrap().art;
+    let rect = match &art.kind {
+        NodeKind::Group { children, .. } => &children[0],
+        _ => art,
+    };
+    let Some(LiveShape::Rectangle { radii, xf, w, .. }) = rect.live_shape() else { panic!("a live rectangle in the mask") };
+    assert!((w * xf.as_coeffs()[0] - 60.0).abs() < 1e-9, "the mask doubled with the shape: {w}, {xf:?}");
+    assert!((radii[0] * xf.as_coeffs()[0] - 5.0).abs() < 1e-9, "the corner keeps its radius: {radii:?}, {xf:?}");
+}
+
+/// A pixel-aligned line that a new angle carries off the pixel grid snaps back to it, and with
+/// `patterns` on its pattern moves with the snap as well as with the turn; with `patterns` off the
+/// pattern stays where it was.
+#[test]
+fn a_pixel_aligned_line_takes_its_pattern_through_the_snap() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let line = |s: &mut Session, aligned: bool| {
+        let id = NodeId(s.execute("shape.line", &json!({"x1": 0, "y1": 0.5, "x2": 100, "y2": 0.5})).unwrap()["id"].as_u64().unwrap());
+        let n = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap();
+        n.appearance.set_stroke(vectorcraft_color::Paint::Pattern { pattern: "P".into(), xf: Affine::default() });
+        n.extras_mut().pixel_aligned = aligned;
+        id
+    };
+    let node = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().clone();
+    let pattern = |s: &Session, id: NodeId| match node(s, id).appearance.stroke_paint() {
+        vectorcraft_color::Paint::Pattern { xf, .. } => xf,
+        p => panic!("a pattern stroke: {p:?}"),
+    };
+    let origin = |s: &Session, id: NodeId| node(s, id).geometric_bounds().unwrap().origin();
+    for patterns in [true, false] {
+        let (aligned, free) = (line(&mut s, true), line(&mut s, false));
+        run(&mut s, json!({"ids": [aligned.0, free.0], "lineAngle": 90, "patterns": patterns}));
+        let snapped = origin(&s, aligned) - origin(&s, free);
+        assert!(snapped.hypot() > 1e-6, "the aligned line snapped to the grid: {snapped:?}");
+        if patterns {
+            let want = Affine::translate(snapped) * pattern(&s, free);
+            let got = pattern(&s, aligned);
+            let off = got.as_coeffs().iter().zip(want.as_coeffs()).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+            assert!(off < 1e-9, "the pattern moved with the snap: {got:?}, want {want:?}");
+        } else {
+            assert_eq!(pattern(&s, aligned), Affine::default(), "the pattern stays where it was");
+        }
+    }
+}
+
 #[test]
 fn relative_corner_rounding_keeps_fraction_on_resize() {
     let (mut s, id) = session();
@@ -484,6 +1066,54 @@ fn relative_corner_rounding_keeps_fraction_on_resize() {
     assert!((radii[0] - want).abs() < 0.02, "fraction unchanged after scale: {}", radii[0]);
     let c = LiveCorners::of(n).unwrap();
     assert!((c.drawn_radius(0) / drawn - 2.0).abs() < 0.05, "drawn radius doubled with the shape");
+}
+
+/// `relativeRadii` on a plain path or an ellipse, which have no Live Corners record, leaves them
+/// as they are and adds no undo step.
+#[test]
+fn relative_rounding_without_live_corners_adds_no_undo_step() {
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.expandShape", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().live_shape().is_none(), "a plain path");
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [id.0], "relativeRadii": false}));
+    run(&mut s, json!({"ids": [id.0], "relativeRadii": true}));
+    assert_eq!(steps(&s), n, "a plain path: no change");
+    assert!(s.doc().unwrap().doc.node(id).unwrap().live_shape().is_none(), "still a plain path");
+    let e = s.execute("shape.ellipse", &json!({"x": 200, "y": 200, "width": 50, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [e], "relativeRadii": true}));
+    assert_eq!(steps(&s), n, "an ellipse: no change");
+}
+
+/// With Relative rounding, a radius is compared as the fraction it would store: a radius past the
+/// corner's maximum, typed again, and the maximum the field then shows add no undo step, while a
+/// smaller one adds one.
+#[test]
+fn a_relative_radius_that_stores_the_same_fraction_adds_no_undo_step() {
+    let (mut s, id) = session();
+    run(&mut s, json!({"relativeRadii": true}));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let max = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap().corner(0).unwrap().max_radius();
+    let n = steps(&s);
+    run(&mut s, json!({"corners": [0], "radius": max + 20.0}));
+    assert_eq!(steps(&s), n + 1, "past the maximum: one undo step");
+    let c = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
+    assert!((c.radius(0) - 1.0).abs() < 1e-9, "stored as the whole maximum: {}", c.radius(0));
+    run(&mut s, json!({"corners": [0], "radius": max + 20.0}));
+    assert_eq!(steps(&s), n + 1, "the same radius again: no undo step");
+    run(&mut s, json!({"corners": [0], "radius": max}));
+    assert_eq!(steps(&s), n + 1, "the maximum, as shown: no undo step");
+    run(&mut s, json!({"corners": [0], "radius": max / 2.0}));
+    assert_eq!(steps(&s), n + 2, "a smaller radius: one undo step");
+    // On a large shape a small radius is a fraction below 1e-9, and still a change.
+    let big = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 3_000_000, "height": 3_000_000})).unwrap()["id"].as_u64().unwrap();
+    run(&mut s, json!({"ids": [big], "relativeRadii": true}));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [big], "corners": [0], "radius": 0.001}));
+    assert_eq!(steps(&s), n + 1, "a small radius on a large shape: one undo step");
 }
 
 /// #2898: while a corner widget is pressed or dragged, Up and Down step the corners' kind (round,
@@ -551,4 +1181,63 @@ fn an_arrow_press_without_a_drag_keeps_mixed_radii() {
     let (radii, kinds, _) = corners(&s, id);
     assert_eq!(radii, before, "each corner keeps its radius");
     assert!(kinds.iter().all(|k| *k == CornerKind::InvertedRound), "{kinds:?}");
+}
+
+/// A double-click on a corner widget with the Rectangle tool asks the frontend for the Transform
+/// panel, and leaves the document, its undo history, the selection and the tool as they were.
+#[test]
+fn a_double_click_on_a_corner_widget_with_a_shape_tool_asks_for_the_transform_panel() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("rectangle", v).unwrap();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let (doc, selection, steps) = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
+    let mut asked = vec![];
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+        asked.extend(s.pointer(&PointerEvent::new(kind, at.x, at.y).with_mods(Mods::default()), v).unwrap());
+    }
+    assert_eq!(asked, vec![UiRequest::Panel("transform".into())]);
+    let st = s.doc().unwrap();
+    assert!(*st.doc == *doc, "the document is unchanged");
+    assert_eq!(st.selection, selection);
+    assert_eq!(st.history.undo.len(), steps, "no undo step");
+    assert!(st.interaction.is_none());
+    assert_eq!(s.tool_id(), "rectangle");
+}
+
+/// A double-click on a corner widget of a selected live rectangle with the Selection tool asks
+/// the frontend for the Transform panel, and leaves the document, its undo history, the
+/// selection and the tool as they were; with Direct Selection it still opens Corners.
+#[test]
+fn a_double_click_on_a_corner_widget_with_the_selection_tool_asks_for_the_transform_panel() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let (doc, selection, steps) = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
+    let double_click = |s: &mut Session, tool: &str| {
+        s.select_tool(tool, v).unwrap();
+        let mut asked = vec![];
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+            asked.extend(s.pointer(&PointerEvent::new(kind, at.x, at.y).with_mods(Mods::default()), v).unwrap());
+        }
+        asked
+    };
+    assert_eq!(double_click(&mut s, "selection"), vec![UiRequest::Panel("transform".into())]);
+    let st = s.doc().unwrap();
+    assert!(*st.doc == *doc, "the document is unchanged");
+    assert_eq!(st.selection, selection);
+    assert_eq!(st.history.undo.len(), steps, "no undo step");
+    assert!(st.interaction.is_none());
+    assert_eq!(s.tool_id(), "selection");
+    // Direct Selection opens Corners for the corner it picked with the first click.
+    let asked = double_click(&mut s, "directSelection");
+    assert!(matches!(asked.as_slice(), [UiRequest::Dialog(k, _)] if k == vectorcraft_tools::corners::DIALOG), "{asked:?}");
 }

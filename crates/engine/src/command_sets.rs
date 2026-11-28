@@ -19,16 +19,23 @@ pub const ON_ACTIVE_ARTBOARD: [&str; 8] = [
 /// The commands that resize the artboards the app passes (Object › Artboards): the app passes the
 /// selected artboards to Fit to Artwork Bounds as its `indices`, and the active artboard to Fit to
 /// Selected Art as its `index`. A `command.batch` given `artboard` passes it on, as `index`, to
-/// each of their steps that names none.
+/// each of their steps that names none; a Fit to Artwork Bounds step that names neither `index` nor
+/// `indices`, while the Artboard tool is chosen with several artboards selected, gets those as its
+/// `indices` instead.
 pub const FIT_ACTIVE_ARTBOARD: [&str; 2] = ["artboard.fitToArt", "artboard.fitToSelection"];
+
+/// The commands that the Rectangle, Rounded Rectangle, Ellipse, Polygon, Star and Line Segment
+/// tools and their dialogs, and the Shaper tool for a shape it recognizes, run to draw a shape
+/// ([`crate::Session::take_shape_drawn`]).
+pub const DRAWS_SHAPE: [&str; 5] = ["shape.rectangle", "shape.ellipse", "shape.polygon", "shape.star", "shape.line"];
 
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run
 /// (dates from the clock: `cmd::clock_date`; the artboards the app passes to the
 /// [`ON_ACTIVE_ARTBOARD`] and [`FIT_ACTIVE_ARTBOARD`] commands and to a batch; the artboards the
-/// Artboard tool had selected for its commands; the artboards and art Cut and Copy took with that
+/// Artboard tool had selected for its commands and for Paste in Place, in Front and in Back; the artboards and art Cut and Copy took with that
 /// tool chosen; the view's center the app passes to Edit Symbol); an action leaves them out
 /// ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 26] = [
+const REPLAY_ONLY: [(&str, &str); 35] = [
     ("file.new", "created"),
     ("edit.newDocumentFromState", "created"),
     ("document.save", "modified"),
@@ -36,6 +43,9 @@ const REPLAY_ONLY: [(&str, &str); 26] = [
     ("edit.pasteInPlace", "artboard"),
     ("edit.pasteInFront", "artboard"),
     ("edit.pasteInBack", "artboard"),
+    ("edit.pasteInPlace", "artboards"),
+    ("edit.pasteInFront", "artboards"),
+    ("edit.pasteInBack", "artboards"),
     ("object.align", "artboard"),
     ("object.distribute", "artboard"),
     ("object.distributeSpacing", "artboard"),
@@ -47,6 +57,12 @@ const REPLAY_ONLY: [(&str, &str); 26] = [
     ("artboard.cut", "selectedArtboards"),
     ("artboard.rename", "selectedArtboards"),
     ("artboard.switchOrientation", "selectedArtboards"),
+    ("artboard.align", "selectedArtboards"),
+    ("artboard.align", "activeArtboard"),
+    ("artboard.distribute", "selectedArtboards"),
+    ("artboard.distribute", "activeArtboard"),
+    ("artboard.distributeSpacing", "selectedArtboards"),
+    ("artboard.distributeSpacing", "activeArtboard"),
     ("edit.copy", "selectedArtboards"),
     ("edit.copy", "art"),
     ("edit.cut", "selectedArtboards"),
@@ -81,7 +97,7 @@ pub(crate) fn strip_replay_only(id: &str, p: &mut Value) {
 /// Queries that apply the edit the active tool is computing before they run, as edits do
 /// ([`Session::finish_tool_edit`]): a batch runs edits, Find Objects with `select`, Select All
 /// Instances and Lock Guides change the selection, and the proof views, the preferences and added
-/// fonts give the documents new revisions (they draw again, and type lays out again).
+/// fonts can give the documents new revisions (they draw again, and type lays out again).
 const WAIT_FOR_TOOL_EDIT: &[&str] = &[
     "script.run",
     "command.batch",
@@ -89,11 +105,13 @@ const WAIT_FOR_TOOL_EDIT: &[&str] = &[
     "symbol.selectInstances",
     "view.guides.lock",
     "view.proofSetup",
+    "view.proofSetup.load",
     "view.proofColors",
     "view.overprintPreview",
     "view.separationsPreview",
     "prefs.set",
     "prefs.reset",
+    "prefs.import",
     "text.addFontFiles",
 ];
 
@@ -105,6 +123,14 @@ const WAIT_FOR_TOOL_EDIT: &[&str] = &[
 /// its own state (the active artboard) applies them first itself.
 pub fn waits_for_tool_edit(id: &str) -> bool {
     find_command(id).is_some_and(|spec| spec.journal || WAIT_FOR_TOOL_EDIT.contains(&id))
+}
+
+/// Does command `id` first install the plug-ins still loading on other threads
+/// ([`crate::Session::finish_plugin_loads`])? Plug-in commands do, a plug-in's own commands
+/// included, and so does every command that waits for a tool edit ([`waits_for_tool_edit`]);
+/// queries that only read, and view commands, go ahead while the plug-ins load.
+pub fn waits_for_plugin_loads(id: &str) -> bool {
+    id.starts_with(vectorcraft_plugins::PREFIX) || waits_for_tool_edit(id)
 }
 
 /// Journaled commands that write a file and change nothing in the document: with an object of a
@@ -151,6 +177,11 @@ pub(crate) const SELECTS_GIVEN_IDS: &[&str] = &[
     "object.shear",
     "object.ungroup",
 ];
+
+/// Commands whose `ids` (or `id`) may name ruler guide nodes as well as objects: the Layers panel's
+/// eye and lock on a guide's row, and a drag down either column that passes guide rows. Every other
+/// command given a ruler guide's id refuses it (the guide commands take guides by index).
+pub(crate) const TAKES_GUIDE_IDS: &[&str] = &["layer.setProps"];
 
 /// The non-empty `ids` given to a command whose params description names `ids` as a key (the
 /// key callers outside the app may pass it, [`cmd::params::takes_key`]), or its `id` as `ids` of

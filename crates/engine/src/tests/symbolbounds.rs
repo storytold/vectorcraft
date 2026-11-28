@@ -185,8 +185,9 @@ fn set_bounds_measures_the_objects_in_an_instances_art_one_by_one() {
     // A symbol whose art is a group of a rectangle from x 0 to 10 with a 2 pt stroke and one from
     // x 3 to 10 with a 10 pt stroke, both 50 pt high, and an instance of it 100 pt down, in a group
     // when `grouped`, selected with an unstroked rectangle from x 100 to 110 when `plain`. The
-    // instance's visual box runs from (-2, 95) to (15, 155). With `own`, the art's group and the
-    // instance each have a 1 pt stroke of their own, which reaches 5 pt at its miter limit of 10.
+    // instance's visual box runs from (-2, 95) to (15, 155). With `own`, the art's group has a 20 pt
+    // miter-joined stroke of its own, which paints 10 pt past each rectangle's corners, and the
+    // instance a 1 pt stroke, which grows its box by the 5 pt it can reach at its miter limit of 10.
     let selection = |grouped: bool, plain: bool, own: bool| {
         let mut d = Document::new(400.0, 400.0);
         let stroked = |d: &mut Document, x0: f64, weight: f64| {
@@ -199,7 +200,7 @@ fn set_bounds_measures_the_objects_in_an_instances_art_one_by_one() {
         let mut art = Node::group(d.alloc_id(), vec![Arc::new(stroked(&mut d, 0.0, 2.0)), Arc::new(stroked(&mut d, 3.0, 10.0))]);
         let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mixed".into(), xf: Affine::translate((0.0, 100.0)) });
         if own {
-            *art.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+            *art.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 20.0);
             *instance.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
         }
         d.symbols.push(Symbol { dynamic: false, name: "Mixed".into(), art: Arc::new(art) });
@@ -221,8 +222,8 @@ fn set_bounds_measures_the_objects_in_an_instances_art_one_by_one() {
     // With the unstroked rectangle, the visual box runs from (-2, 95) to (110, 155). Set to 224 wide
     // from its left edge, it is 224 wide and its left edge stays at -2, with strokes kept or
     // scaling, and with the instance in a group. The instance alone set to 37 wide is 37 wide. With
-    // the strokes of their own, which paint around each rectangle, the visual box runs from
-    // (-12, 85) to (110, 165): set to 224 wide, it is 224 wide and its left edge stays at -12.
+    // the strokes of their own, the visual box runs from (-15, 85) to (110, 165): set to 224 wide,
+    // it is 224 wide and its left edge stays at -15.
     let mut wrong = vec![];
     for (grouped, plain, own, width, strokes) in [
         (false, true, false, 224.0, false),
@@ -233,7 +234,7 @@ fn set_bounds_measures_the_objects_in_an_instances_art_one_by_one() {
         (false, true, true, 224.0, true),
     ] {
         let (mut s, ids) = selection(grouped, plain, own);
-        let (left, top, bottom) = if own { (-12.0, 85.0, 165.0) } else { (-2.0, 95.0, 155.0) };
+        let (left, top, bottom) = if own { (-15.0, 85.0, 165.0) } else { (-2.0, 95.0, 155.0) };
         let before = s.transform_bounds(&ids);
         if !close(before, Rect::new(left, top, if plain { 110.0 } else { 15.0 }, bottom)) {
             wrong.push(format!("grouped {grouped}, plain {plain}, own {own}, before: {before:?}"));
@@ -506,7 +507,24 @@ fn a_copied_instances_png_is_cropped_to_its_art() {
     let r = run(&mut s, "clipboard.exportPng", json!({}));
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(40), Some(20)));
     let png = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
-    let img = image::load_from_memory(&png).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.get_pixel(20, 10).0, [0, 0, 0, 255], "the art fills the picture");
 }
 

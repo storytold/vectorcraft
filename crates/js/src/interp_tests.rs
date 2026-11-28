@@ -3,7 +3,7 @@ use std::rc::Rc;
 use proptest::prelude::*;
 
 use crate::bytecode::{Code, Handler, Op, Source, verify};
-use crate::{JsValue, LimitKind, Limits, Options, Realm, RunError, RunErrorKind};
+use crate::{JsValue, LimitKind, Limits, Options, Progress, Realm, RunError, RunErrorKind};
 
 fn run(src: &str) -> JsValue {
     match Realm::new().run(src) {
@@ -93,6 +93,14 @@ fn variables_functions_and_closures() {
     truth("function P() { return {a: 1}; } new P().a === 1 && new P() instanceof Object");
     truth("function P() {} var p = new P(); p instanceof P && p.constructor === P && P.prototype.isPrototypeOf(p)");
     assert_eq!(num("(function(a, b, c) {}).length"), 3.0);
+}
+
+#[test]
+fn a_trailing_comma_adds_no_argument_or_parameter() {
+    assert_eq!(num("function f(a, b,) { return arguments.length * 10 + f.length; } f(1,)"), 12.0);
+    assert_eq!(num("function P(x,) { this.n = arguments.length; } new P(5,).n"), 1.0);
+    assert_eq!(num("var f = new Function('a,', 'return arguments.length'); f(1, 2) * 10 + f.length"), 21.0);
+    assert_eq!(num("Function('a', '', 'return a')(4)"), 4.0);
 }
 
 #[test]
@@ -239,6 +247,65 @@ fn errors_carry_line_and_column() {
     assert_eq!(e.message, "42");
 }
 
+/// A run error says whether its message is the script's own text, whatever that text reads: an
+/// error the interpreter or a host function threw is not, even when a script caught it and threw
+/// it again, and a value or error the script made, or an error whose name or message it changed,
+/// is.
+#[test]
+fn script_error_origin_distinguishes_native_and_authored_values() {
+    let native = "RangeError: invalid array length";
+    for (src, message, authored) in [
+        ("new Array(-1)", native, false),
+        ("try { new Array(-1); } catch (e) { throw e; }", native, false),
+        ("try { new Array(-1); } catch (e) { e.message = 'invalid array length'; throw e; }", native, false),
+        ("nope()", "ReferenceError: nope is not defined", false),
+        ("throw new RangeError('invalid array length')", native, true),
+        ("throw new Error('invalid array length')", "Error: invalid array length", true),
+        ("throw 'invalid array length'", "invalid array length", true),
+        ("throw 17", "17", true),
+        ("throw {}", "[object Object]", true),
+        ("throw new Error()", "Error", true),
+        ("try { new Array(-1); } catch (e) { throw e.message; }", "invalid array length", true),
+        ("try { new Array(-1); } catch (e) { throw new RangeError(e.message); }", native, true),
+        ("try { new Array(-1); } catch (e) { e.message = 'mine'; throw e; }", "RangeError: mine", true),
+        ("try { nope(); } catch (e) { e.name = 'TypeError'; throw e; }", "TypeError: nope is not defined", true),
+        ("try { new Array(-1); } catch (e) { RangeError.prototype.name = 'Mine'; throw e; }", "Mine: invalid array length", true),
+        ("RangeError.prototype.name = 'Mine'; new Array(-1)", "Mine: invalid array length", true),
+        ("RangeError.prototype.name = 'RangeError'; new Array(-1)", native, false),
+    ] {
+        let e = fail(src);
+        assert_eq!((e.kind, e.message.as_str(), e.authored), (RunErrorKind::Thrown, message, authored), "{src}");
+    }
+    assert!(!fail("var x = ;").authored, "a syntax error");
+    let mut realm = Realm::new();
+    realm.define_function("add", |_| Err("add takes two numbers".into()));
+    let e = realm.run("add()").unwrap_err();
+    assert_eq!((e.message.as_str(), e.authored), ("Error: add takes two numbers", false), "a host function's error");
+    let e = realm.run("throw new Error('add takes two numbers')").unwrap_err();
+    assert_eq!((e.message.as_str(), e.authored), ("Error: add takes two numbers", true));
+}
+
+/// An error about a property of `null` or `undefined` names a computed property whose name is a
+/// primitive, and says whether the script read or set it, never naming an empty property; a
+/// member assignment, an object key and a long name leave the name out.
+#[test]
+fn errors_about_null_and_undefined_name_the_property() {
+    for (source, message) in [
+        ("null[1]", "TypeError: cannot read property '1' of null"),
+        ("var u; u['k'] += 1", "TypeError: cannot set property 'k' of undefined"),
+        ("var u; u['k']++", "TypeError: cannot read property 'k' of undefined"),
+        ("delete null[true]", "TypeError: cannot read property 'true' of null"),
+        ("var u; u['k'] = 1", "TypeError: cannot set property 'k' of undefined"),
+        ("null.x", "TypeError: cannot read property 'x' of null"),
+        ("var u; u.y = 1", "TypeError: cannot set a property of undefined"),
+        ("var u; u[{}] = 1", "TypeError: cannot set a property of undefined"),
+        ("null[new Array(300).join('a')]", "TypeError: cannot read a property of null"),
+    ] {
+        assert_eq!(fail(source).message, message, "{source}");
+    }
+    truth("var k = {toString: function () { throw 1; }}; try { null[k]; false } catch (e) { e instanceof TypeError }");
+}
+
 #[test]
 fn host_functions_receive_arguments_and_return_values() {
     let mut realm = Realm::new();
@@ -358,6 +425,58 @@ fn function_source_text_counts_toward_the_heap() {
 }
 
 #[test]
+fn a_function_that_returns_from_a_finally_block_does_not_keep_its_code() {
+    // The function's source holds a 256 Ki-unit comment. Its result stays on the stack while the
+    // second call runs, after the function was dropped. A collection then leaves its code out of
+    // the live total, as it does for a function whose finally block ran without an exception.
+    let live = |body: &str| {
+        let mut r = small(Limits::default());
+        let src = format!(
+            "var s = 'x'; for (var i = 0; i < 18; i++) s += s;\n\
+             var f = Function('/*' + s + '*/ try {{ {body} }} finally {{ return 0; }}'); s = null;\n\
+             f() + (f = null, (function () {{ var a = 0; for (var i = 0; i < 50; i++) a += i; return a; }})())"
+        );
+        if let Err(e) = r.start(&src) {
+            panic!("{e:?}");
+        }
+        let mut bytes = None;
+        loop {
+            match r.advance(1) {
+                Ok(Progress::Paused) => {
+                    let i = r.interp();
+                    if i.frames.len() == 2 && i.stack.len() > 1 {
+                        i.collect_garbage();
+                        bytes = Some(i.heap.bytes);
+                    }
+                }
+                Ok(Progress::Done(v)) => {
+                    assert_eq!(v, JsValue::Number(1225.0));
+                    break;
+                }
+                Err(e) => panic!("{e:?}"),
+            }
+        }
+        let Some(bytes) = bytes else { panic!("the second call never paused") };
+        bytes
+    };
+    let (plain, thrown) = (live(""), live("throw 1;"));
+    assert!(thrown < plain + 4096, "{thrown} > {plain}");
+}
+
+#[test]
+fn a_return_looks_only_at_the_finally_sites_of_its_own_frame() {
+    // 200 finally blocks run at once, each for its own exception, and the innermost calls a
+    // function 1,000 times. Each return looks at the last saved site only, not at all 200.
+    let src = "function g() { return 1; }\n\
+               function f(n) { try { throw n; } finally { if (n) { f(n - 1); } else { for (var i = 0; i < 1000; i++) g(); } } }\n\
+               try { f(199); } catch (e) { e; }";
+    crate::interp::SITE_CHECKS.with(|c| c.set(0));
+    assert_eq!(small(Limits::default()).run(src), Ok(JsValue::Number(0.0)));
+    let checks = crate::interp::SITE_CHECKS.with(std::cell::Cell::get);
+    assert!(checks < 10_000, "{checks} saved sites looked at");
+}
+
+#[test]
 fn for_in_names_take_fuel_and_heap_under_later_limits() {
     // The first run, under the default limits, builds an object with many properties. Later runs
     // with smaller limits list its names only within their own fuel and heap.
@@ -449,6 +568,19 @@ fn declarations_take_fuel() {
 }
 
 #[test]
+fn source_compiled_during_a_run_takes_fuel_before_it_is_parsed() {
+    // Doubling a string 17 times makes 131,072 spaces in about a hundred instructions, so only
+    // the compiled source can use up the fuel.
+    let build = "var s = ' '; for (var i = 0; i < 17; i++) s += s;";
+    let mut realm = small(Limits { fuel: 10_000, ..Limits::default() });
+    for call in ["eval(s)", "(0, eval)(s)", "Function(s)", "new Function('a', s)"] {
+        assert_eq!(limit(&mut realm, &format!("{build} {call};")), LimitKind::Fuel, "{call}");
+    }
+    let mut realm = small(Limits { fuel: 1_000_000, ..Limits::default() });
+    assert_eq!(realm.run(&format!("{build} eval(s + '1') + (0, eval)(s + '2') + Function(s + 'return 3')()")), Ok(JsValue::Number(6.0)));
+}
+
+#[test]
 fn a_lower_heap_limit_applies_to_what_is_already_live() {
     // A heap already past the new limit ends the next run.
     let mut realm = small(Limits::default());
@@ -479,6 +611,26 @@ fn apply_keeps_its_arguments_alive_while_a_native_function_runs() {
         get 1() { return {toString: function () { return 'return a * 2'; }}; }}; \
         Function.apply(null, list)(21)";
     assert_eq!(realm.run(src), Ok(JsValue::Number(42.0)));
+}
+
+#[test]
+fn successive_apply_expansions_keep_getter_receivers_alive() {
+    for queued in [false, true] {
+        let mut realm = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { heap_bytes: 1 << 20, ..Limits::default() });
+        let src = "var result; function callback(a) { result = this.kept + a; } \
+            var inner = {length: 1, get 0() { for (var i = 0; i < 20000; i++) ({i: i}); return 2; }}; \
+            var outer = {length: 2, get 0() { return {kept: 40}; }, get 1() { return inner; }};";
+        realm.run(src).unwrap();
+        let collections = realm.interp().heap.collections;
+        let call = if queued {
+            "Promise.resolve(outer).then(Function.prototype.apply.bind(Function.prototype.apply, callback));"
+        } else {
+            "Function.prototype.apply.apply(callback, outer);"
+        };
+        realm.run(call).unwrap();
+        assert!(realm.interp().heap.collections > collections);
+        assert_eq!(realm.run("result"), Ok(JsValue::Number(42.0)), "queued: {queued}");
+    }
 }
 
 #[test]
@@ -692,6 +844,61 @@ fn a_strict_realm_runs_scripts_as_strict_mode_code() {
 }
 
 #[test]
+fn strict_writes_are_separate_from_es5_strict() {
+    let setup = "var ro = {}; Object.defineProperty(ro, 'x', {value: 1}); \
+        var getter = {get g() { return 1; }}; var shut = Object.preventExtensions({a: 1}); var open = {};";
+    let mut realm = Realm::new();
+    realm.set_strict_writes(true);
+    realm.run(setup).unwrap();
+    for (src, why) in [
+        ("ro.x = 2", "cannot assign to property 'x': it is read-only"),
+        ("ro['x'] += 1", "cannot assign to property 'x': it is read-only"),
+        ("ro.x++", "cannot assign to property 'x': it is read-only"),
+        ("getter.g = 2", "cannot assign to property 'g': it has only a getter"),
+        ("shut.b = 2", "cannot assign to property 'b': the object is not extensible"),
+        ("Object.create(ro).x = 2", "cannot assign to property 'x': it is read-only"),
+        ("NaN = 1", "cannot assign to property 'NaN': it is read-only"),
+        ("(function () { ro.x = 2; })()", "cannot assign to property 'x': it is read-only"),
+        ("eval('ro.x = 2')", "cannot assign to property 'x': it is read-only"),
+        ("(0, eval)('ro.x = 2')", "cannot assign to property 'x': it is read-only"),
+        ("Function('ro.x = 2')()", "cannot assign to property 'x': it is read-only"),
+    ] {
+        let e = realm.run(src).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Thrown, "{src}");
+        assert!(e.message.contains("TypeError") && e.message.contains(why), "{src}: {}", e.message);
+    }
+    // Writes that can be made, and the rest of strict mode, are as before.
+    assert_eq!(realm.run("open.n = 1; shut.a = 5; open.n + shut.a"), Ok(JsValue::Number(6.0)));
+    assert_eq!(realm.run("with ({w: 2}) { w } "), Ok(JsValue::Number(2.0)));
+    assert_eq!(realm.run("(function (a, a) { return a; })(1, 2)"), Ok(JsValue::Number(2.0)));
+    assert_eq!(realm.run("010"), Ok(JsValue::Number(8.0)));
+    assert_eq!(realm.run("undeclared = 3; undeclared"), Ok(JsValue::Number(3.0)));
+    assert_eq!(realm.run("(function () { return typeof this; })()"), Ok(JsValue::String("object".into())));
+    assert_eq!(realm.run("delete Object.prototype"), Ok(JsValue::Bool(false)));
+    assert_eq!(realm.run("'abc'.length = 1; 'abc'.extra = 1; 1"), Ok(JsValue::Number(1.0)), "a primitive's properties as in sloppy mode");
+    // 'use strict' keeps all of ES5 strict mode.
+    assert_eq!(realm.run("'use strict'; with ({}) {}").map_err(|e| e.kind), Err(RunErrorKind::Syntax));
+    assert_eq!(realm.run("'use strict'; delete Object.prototype").map_err(|e| e.kind), Err(RunErrorKind::Thrown));
+    // Off, the same writes are ignored, as in sloppy mode code.
+    realm.set_strict_writes(false);
+    assert_eq!(realm.run("ro.x = 2; getter.g = 2; shut.b = 2; NaN = 1; ro.x + getter.g + String(shut.b)"), Ok(JsValue::String("2undefined".into())));
+    // A function compiled with the writes on keeps them when called from code without.
+    let mut realm = Realm::new();
+    realm.set_strict_writes(true);
+    realm.run(&format!("{setup} function w() {{ ro.x = 2; }}")).unwrap();
+    realm.set_strict_writes(false);
+    assert!(realm.run("w()").unwrap_err().message.contains("it is read-only"));
+    assert_eq!(realm.run("ro.x = 3; ro.x"), Ok(JsValue::Number(1.0)));
+    // An undeclared name added to a global object that is not extensible.
+    let mut realm = Realm::new();
+    realm.set_strict_writes(true);
+    let e = realm.run("Object.preventExtensions(this); newName = 1").unwrap_err();
+    assert!(e.message.contains("cannot assign to property 'newName': the object is not extensible"), "{}", e.message);
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("Object.preventExtensions(this); newName = 1; typeof newName"), Ok(JsValue::String("undefined".into())));
+}
+
+#[test]
 fn an_apply_that_throws_while_reading_its_arguments_keeps_nothing_alive() {
     // Each call reads a fresh array at index 0 before index 1 throws; the arrays must not stay
     // reachable after the call ends.
@@ -716,13 +923,14 @@ fn long_property_names_count_toward_the_heap_after_their_strings_are_collected()
     // Each name is a 16,385-unit buffer that only the object's key or the function's binding
     // holds once the string that made it is garbage, so about 32 of them fill the heap well before
     // the fuel runs out. In the second script the property lookup flattens a long string each
-    // time, so collections run.
+    // time, so collections run. Each eval there also takes fuel for its source, so that run has
+    // more fuel.
     let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 20_000, ..Limits::default() });
     let src = "var s = 'x'; while (s.length < 10000) s += s; var o = {}; for (var i = 0; ; i++) o[s + i] = 1;";
     assert_eq!(limit(&mut realm, src), LimitKind::Heap);
     let src = "var s = 'x'; while (s.length < 10000) s += s; \
         (function () { for (var i = 0; ; i++) { eval('var ' + s + i + ' = 1'); ({})[s + i]; } })();";
-    let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 20_000, ..Limits::default() });
+    let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 5_000_000, ..Limits::default() });
     assert_eq!(limit(&mut realm, src), LimitKind::Heap);
 }
 
@@ -774,7 +982,7 @@ fn deep_nesting_compiles_on_a_small_stack() {
 // ---- the verifier ----
 
 fn code(ops: Vec<Op>) -> Code {
-    let source = Rc::new(Source { lines: crate::LineTable::new(&[]), text: Rc::from(Vec::<u16>::new()) });
+    let source = Rc::new(Source { lines: crate::LineTable::new(&[]), text: Rc::from(Vec::<u16>::new()), tag: 0, strict_writes: false });
     Code {
         positions: vec![0; ops.len()],
         ops,
@@ -788,12 +996,29 @@ fn code(ops: Vec<Op>) -> Code {
         max_stack: 0,
         strict: false,
         self_name: None,
+        decl_name: None,
         params: Vec::new(),
         vars: Vec::new(),
         fun_decls: Vec::new(),
         uses_arguments: false,
         source,
         span: (0, 0),
+        scopes: Vec::new(),
+        top_scope: None,
+        templates: Vec::new(),
+        rest: None,
+        length: 0,
+        arrow: false,
+        uses_this: false,
+        param_init: false,
+        class_ctor: false,
+        derived: false,
+        uses_new_target: false,
+        pattern_names: Vec::new(),
+        es2015: false,
+        own_name: None,
+        method: false,
+        generator: false,
     }
 }
 

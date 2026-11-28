@@ -99,6 +99,88 @@ fn doc_with(r: Rect, fill: Color, effects: Vec<(&str, serde_json::Value)>) -> Do
     d
 }
 
+/// A stroked line from (10, 50) to (60, 50) beside a lone anchor at (90, 90), closed or open
+/// (`line` false: the lone anchor alone), its stroke 4 pt wide with `cap`, round joins and the
+/// object-level `object` and stroke-level `stroke` effects.
+fn lone_anchor_doc(line: bool, closed: bool, cap: vectorcraft_doc::LineCap, object: &[Effect], stroke: &[Effect]) -> Document {
+    use vectorcraft_geom::{PathData, SubPath};
+    let mut d = Document::new(100.0, 100.0);
+    let lone = SubPath::polyline(&[Point::new(90.0, 90.0)], closed);
+    let subpaths = if line { vec![SubPath::polyline(&[Point::new(10.0, 50.0), Point::new(60.0, 50.0)], false), lone] } else { vec![lone] };
+    let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+    let s = ap.stroke_mut().unwrap();
+    (s.cap, s.join) = (cap, vectorcraft_doc::LineJoin::Round);
+    s.effects = stroke.to_vec();
+    ap.effects = object.to_vec();
+    let n = Node::path(d.alloc_id(), PathData::new(subpaths), ap);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    d
+}
+
+/// The bounds the effects are measured by hold the dot a round or projecting cap draws for a
+/// lone anchor of a closed subpath, wherever the effected path is measured: the visual and cull
+/// bounds (with the object's or the stroke's own geometry effect) and what Rasterize makes its image
+/// over (the path as drawn, and a stroke with a raster effect, with and without a geometry effect
+/// of its own). A lone anchor that draws no dot (open, or under a butt cap) leaves them as the line
+/// alone has them.
+#[test]
+fn effect_bounds_hold_a_lone_anchors_dot_only_where_its_cap_draws_one() {
+    use vectorcraft_doc::LineCap;
+    let fx = |id: &str, p: serde_json::Value| Effect { id: id.into(), params: p, visible: true };
+    // The object's effect moves the dot to (91, 90), the stroke's own effect to (130, 90), and the
+    // stroke's shadow paints a copy 30 pt below.
+    let moved = fx("distort.transform", json!({"moveH": 1}));
+    let far = fx("distort.transform", json!({"moveH": 40}));
+    let shadow = fx("stylize.dropShadow", json!({"x": 0, "y": 30, "blur": 0}));
+    // (what, object effects, stroke effects, measure, the center of the lowest dot painted)
+    type Measure = fn(&Document, &Node) -> Option<Rect>;
+    let visual: Measure = |d, n| super::visual_bounds(&d.symbol_boxes(), n);
+    let cull: Measure = |d, n| super::cull_bounds(&d.symbol_boxes(), n);
+    let drawn: Measure = |d, n| crate::drawn_bounds(d, n);
+    type Case = (&'static str, Vec<Effect>, Vec<Effect>, Measure, Point);
+    let cases: [Case; 7] = [
+        ("visual, object effect", vec![moved.clone()], vec![], visual, Point::new(91.0, 90.0)),
+        ("visual, stroke effect", vec![], vec![far.clone()], visual, Point::new(130.0, 90.0)),
+        ("cull, object effect", vec![moved.clone()], vec![], cull, Point::new(91.0, 90.0)),
+        ("drawn, object effect", vec![moved.clone()], vec![], drawn, Point::new(91.0, 90.0)),
+        ("drawn, stroke effect", vec![], vec![far.clone()], drawn, Point::new(130.0, 90.0)),
+        ("drawn, stroke raster effect", vec![moved.clone()], vec![shadow.clone()], drawn, Point::new(91.0, 120.0)),
+        ("drawn, stroke geometry and raster effects", vec![], vec![far.clone(), shadow.clone()], drawn, Point::new(130.0, 120.0)),
+    ];
+    for (what, object, stroke, measure, dot) in cases {
+        for (closed, cap) in [(true, LineCap::Round), (true, LineCap::Square), (true, LineCap::Butt), (false, LineCap::Round)] {
+            let d = lone_anchor_doc(true, closed, cap, &object, &stroke);
+            let b = measure(&d, &d.layers[0].children().unwrap()[0]).unwrap();
+            if closed && cap != LineCap::Butt {
+                // The dot is 4 pt across.
+                assert!(b.x1 >= dot.x + 2.0 - 1e-6 && b.y1 >= dot.y + 2.0 - 1e-6, "{what}, {cap:?}: {b:?} leaves out the dot at {dot:?}");
+            } else {
+                assert!(b.y1 < dot.y - 2.0, "{what}, closed {closed}, {cap:?}: {b:?} reaches toward a lone anchor that draws nothing");
+            }
+        }
+    }
+}
+
+/// A path of only a lone anchor is measured at that anchor, not at the origin, and an effect that
+/// paints around what the path draws (a drop shadow) is drawn over the dot a round cap draws there.
+#[test]
+fn a_path_of_a_lone_anchor_is_measured_at_its_dot() {
+    use vectorcraft_doc::LineCap;
+    let moved = Effect { id: "distort.transform".into(), params: json!({"moveH": 1}), visible: true };
+    let d = lone_anchor_doc(false, true, LineCap::Round, std::slice::from_ref(&moved), &[]);
+    let n = &d.layers[0].children().unwrap()[0];
+    for (what, b) in [("visual", super::visual_bounds(&d.symbol_boxes(), n)), ("drawn", crate::drawn_bounds(&d, n))] {
+        let b = b.unwrap();
+        assert!(b.contains(Point::new(91.0, 90.0)) && !b.contains(Point::ZERO), "{what}: {b:?}");
+    }
+    let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({"x": 0, "y": 6, "blur": 0}), visible: true };
+    let d = lone_anchor_doc(true, true, LineCap::Round, &[moved, shadow], &[]);
+    let img = render(&d);
+    assert!(lum(img.pixel(91, 90)) < 200, "the dot is drawn");
+    assert!(lum(img.pixel(91, 96)) < 600, "the dot's shadow is drawn: {:?}", img.pixel(91, 96));
+}
+
 fn render(d: &Document) -> Rendered {
     Renderer::new().render(d, 100, 100, Affine::IDENTITY, &RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() })
 }
@@ -305,6 +387,107 @@ fn drop_shadow_darkens_outside_the_shape() {
     // The object stays on top and unshadowed; the far side has no shadow.
     assert_eq!(img.pixel(40, 40), [255, 0, 0, 255]);
     assert_eq!(lum(img.pixel(15, 15)), WHITE);
+}
+
+/// A Transform effect listed after a Drop Shadow transforms the shadow with the art: halving a
+/// 40 pt square about its center halves the shadow's 10 pt offset, with Scale Strokes & Effects
+/// off or on, and for a group as for a path.
+#[test]
+fn a_transform_after_a_drop_shadow_scales_the_shadow_with_the_art() {
+    let r = Rect::new(20.0, 20.0, 60.0, 60.0);
+    let shadow = ("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}));
+    for strokes in [false, true] {
+        let transform = ("distort.transform", json!({"scaleH": 50, "scaleV": 50, "strokes": strokes}));
+        let path = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![shadow.clone(), transform.clone()]);
+        let mut group = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![]);
+        let l = group.layers[0].id;
+        let square = group.layers[0].children().and_then(|c| c.first()).cloned().unwrap();
+        group.remove(square.id).unwrap();
+        let mut g = Node::group(group.alloc_id(), vec![square]);
+        g.appearance.effects = [shadow.clone(), transform].into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        group.insert(Some(l), 0, g).unwrap();
+        for (what, d) in [("path", path), ("group", group)] {
+            let img = render(&d);
+            // The square now covers 30..50 and its shadow 35..55.
+            assert_eq!(img.pixel(40, 40), [255, 0, 0, 255], "{what}, Scale Strokes & Effects {strokes}");
+            assert!(lum(img.pixel(53, 37)) < 100, "{what}, {strokes}: the shadow reaches up to 35: {:?}", img.pixel(53, 37));
+            assert_eq!(lum(img.pixel(57, 57)), WHITE, "{what}, {strokes}: the shadow ends at 55");
+            // The area redrawn for it takes in the 5 pt shadow around the 30..50 square.
+            let b = super::cull_bounds(&d.symbol_boxes(), &d.layers[0].children().unwrap()[0]).unwrap();
+            assert!((b.x0 - 25.0).abs() < 1e-9 && (b.x1 - 55.0).abs() < 1e-9, "{what}, {strokes}: {b:?}");
+        }
+    }
+}
+
+/// A Transform effect listed after a Bas Relief turns its light with the art: a group of a black
+/// square centered on a white one, lit from the top and turned 90° counterclockwise about its
+/// center, draws as the group lit from the left.
+#[test]
+fn a_transform_after_bas_relief_turns_its_light_with_the_art() {
+    let relieved = |effects: Vec<(&str, serde_json::Value)>| {
+        let mut d = Document::new(100.0, 100.0);
+        let mut square =
+            |r: Rect, c: Color| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::solid(c), Paint::None, 0.0)));
+        let members = vec![square(Rect::new(20.0, 20.0, 80.0, 80.0), Color::WHITE), square(Rect::new(40.0, 40.0, 60.0, 60.0), Color::BLACK)];
+        let mut g = Node::group(d.alloc_id(), members);
+        g.appearance.effects = effects.into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, g).unwrap();
+        render(&d)
+    };
+    let relief = |light: &str| ("sketch.basRelief", json!({"lightDirection": light}));
+    let turned = relieved(vec![relief("top"), ("distort.transform", json!({"rotate": 90}))]);
+    let left = relieved(vec![relief("left")]);
+    let top = relieved(vec![relief("top")]);
+    // The largest difference of a channel between two images.
+    let diff = |a: &Rendered, b: &Rendered| {
+        (0..100u32)
+            .flat_map(|y| (0..100u32).map(move |x| (x, y)))
+            .map(|(x, y)| a.pixel(x, y).iter().zip(b.pixel(x, y)).map(|(p, q)| p.abs_diff(q)).max().unwrap_or(0))
+            .max()
+            .unwrap_or(0)
+    };
+    assert!(diff(&left, &top) > 50, "the light's direction shows: {}", diff(&left, &top));
+    assert!(diff(&turned, &left) <= 2, "turned top light draws as a left light: {}", diff(&turned, &left));
+}
+
+/// An object's or a group's Transform effect transforms the raster effects of what it holds with
+/// the art: halving a 40 pt square about its center halves the 10 pt offset of its fill's shadow,
+/// and of a group member's own shadow, with Scale Strokes & Effects off or on.
+#[test]
+fn a_transform_scales_the_shadows_of_fills_and_members_with_the_art() {
+    let r = Rect::new(20.0, 20.0, 60.0, 60.0);
+    let shadow =
+        Effect { id: "stylize.dropShadow".into(), params: json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}), visible: true };
+    for strokes in [false, true] {
+        let transform = ("distort.transform", json!({"scaleH": 50, "scaleV": 50, "strokes": strokes}));
+        let mut fill = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![transform.clone()]);
+        let l = fill.layers[0].id;
+        let mut square = (*fill.layers[0].children().and_then(|c| c.first()).cloned().unwrap()).clone();
+        fill.remove(square.id).unwrap();
+        if let Some(item) = square.appearance.items.first_mut() {
+            *item.effects_mut() = vec![shadow.clone()];
+        }
+        fill.insert(Some(l), 0, square.clone()).unwrap();
+        let mut member = doc_with(r, Color::rgb(1.0, 0.0, 0.0), vec![]);
+        let l = member.layers[0].id;
+        let mut square = (*member.layers[0].children().and_then(|c| c.first()).cloned().unwrap()).clone();
+        member.remove(square.id).unwrap();
+        square.appearance.effects = vec![shadow.clone()];
+        let mut g = Node::group(member.alloc_id(), vec![Arc::new(square)]);
+        g.appearance.effects = [transform].into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        member.insert(Some(l), 0, g).unwrap();
+        for (what, d) in [("fill", fill), ("member", member)] {
+            let img = render(&d);
+            // The square now covers 30..50 and its shadow 35..55.
+            assert_eq!(img.pixel(40, 40), [255, 0, 0, 255], "{what}, Scale Strokes & Effects {strokes}");
+            assert!(lum(img.pixel(53, 37)) < 100, "{what}, {strokes}: the shadow reaches up to 35: {:?}", img.pixel(53, 37));
+            assert_eq!(lum(img.pixel(57, 57)), WHITE, "{what}, {strokes}: the shadow ends at 55");
+            // The area redrawn for it takes in the 5 pt shadow around the 30..50 square.
+            let b = super::cull_bounds(&d.symbol_boxes(), &d.layers[0].children().unwrap()[0]).unwrap();
+            assert!((b.x0 - 25.0).abs() < 1e-9 && (b.x1 - 55.0).abs() < 1e-9, "{what}, {strokes}: {b:?}");
+        }
+    }
 }
 
 /// A red square's drop shadow at Darkness `darkness` (%), opaque and sharp, 10 pt down and
@@ -612,6 +795,96 @@ fn an_export_and_rasterize_hold_the_solid_of_3d_type() {
     assert!(rasterized.width() > letters.width() + 15.0, "{letters:?} {rasterized:?}");
 }
 
+/// A symbol instance, a blend and a clipping group with Extrude & Bevel, alone or in a group, draw
+/// their solids on the canvas, in an export and in Object › Rasterize, not their flat art.
+#[test]
+fn a_symbol_instance_a_blend_and_a_clipping_group_draw_their_solids() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind, Symbol};
+    let square = |x: f64, y: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut d = Document::new(200.0, 200.0);
+    d.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: square(0.0, 0.0) });
+    let mut clip = (*square(30.0, 30.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() });
+    let instance = NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((40.0, 40.0)) };
+    let clipped = NodeKind::Group { children: vec![Arc::new(clip), square(20.0, 20.0)], clip: true };
+    let in_group = |kind: NodeKind| NodeKind::Group { children: vec![Arc::new(Node::new(NodeId(0), kind)), square(100.0, 100.0)], clip: false };
+    let kinds = [
+        ("a symbol instance", instance.clone()),
+        ("a blend", NodeKind::Blend { children: vec![square(30.0, 30.0), square(60.0, 40.0)], spec }),
+        ("a clipping group", clipped.clone()),
+        ("a group holding a symbol instance", in_group(instance)),
+        ("a group holding a clipping group", in_group(clipped)),
+    ];
+    for (what, kind) in kinds {
+        let mut n = Node::new(d.alloc_id(), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let solid_doc = doc_of(&mut d.clone(), n);
+        let n = &solid_doc.layers[0].children().unwrap()[0];
+        let (solid, rasterized) = (crate::encode::art_bounds(&solid_doc).unwrap(), crate::drawn_bounds(&solid_doc, n).unwrap());
+        let size = |r: Rect| r.width() + r.height();
+        assert!(size(solid) > size(flat) + 20.0, "{what}: {flat:?} {solid:?}");
+        assert!(size(rasterized) > size(flat) + 20.0, "{what}: {flat:?} {rasterized:?}");
+        // The renderer builds the solid from the object itself, with the document's symbols, as
+        // the effect builds it: one solid built, not the object's art drawn again with the effect.
+        let built = vectorcraft_effects::solid_art_in(Some(&solid_doc), n).and_then(|a| a.visual_bounds()).unwrap();
+        assert!((solid.x0 - built.x0).abs() < 1.0 && (solid.x1 - built.x1).abs() < 1.0, "{what}: {built:?} {solid:?}");
+        let mut r = Renderer::new();
+        r.art_bounds_on(&solid_doc, Rect::new(0.0, 0.0, 200.0, 200.0));
+        assert_eq!(r.stats.three_d_built, 1, "{what}");
+    }
+}
+
+/// A loaded file can hold a 3D effect on art past the limits commands check: a blend of more
+/// than 4,096 objects, art nested more than 64 levels deep in a clipping group. The art then draws
+/// as it does without the effect, and drawing it does not fail.
+#[test]
+fn art_past_the_three_d_limits_draws_as_without_the_effect() {
+    use vectorcraft_doc::{BlendSpacing, BlendSpec, NodeId, NodeKind};
+    let square = |x: f64| {
+        Arc::new(Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.2, 0.5, 0.8)), Paint::None, 0.0),
+        ))
+    };
+    let mut clip = (*square(0.0)).clone();
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let mut deep = (*square(0.0)).clone();
+    for _ in 0..200 {
+        deep = Node::group(NodeId(0), vec![Arc::new(deep)]);
+    }
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(1000), ..Default::default() });
+    let kinds = [
+        ("a blend of 6,000 objects", NodeKind::Blend { children: (0..6).map(|i| square(30.0 * i as f64)).collect(), spec }),
+        ("art 200 levels deep in a clip", NodeKind::Group { children: vec![Arc::new(clip), Arc::new(deep)], clip: true }),
+    ];
+    let d = Document::new(200.0, 200.0);
+    for (what, kind) in kinds {
+        let mut n = Node::new(NodeId(500), kind);
+        let flat = crate::encode::art_bounds(&doc_of(&mut d.clone(), n.clone())).unwrap();
+        n.appearance.effects =
+            vec![Effect { id: "threeD.extrude".into(), params: json!({"depth": 60.0, "position": "isometricTop"}), visible: true }];
+        let loaded = doc_of(&mut d.clone(), n);
+        let n = &loaded.layers[0].children().unwrap()[0];
+        assert!(vectorcraft_effects::validate_three_d_in(Some(&loaded), n, "threeD.extrude", &json!({})).is_err(), "{what}");
+        assert_eq!(crate::encode::art_bounds(&loaded), Some(flat), "{what}");
+        assert!(crate::drawn_bounds(&loaded, n).is_some(), "{what}");
+    }
+}
+
 fn doc_of(d: &mut Document, n: Node) -> Document {
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
@@ -819,7 +1092,7 @@ fn an_edit_out_of_sight_builds_nothing() {
     let drawn_hidden = extruded(&mut d, 70.0);
     let ids = [d.insert(Some(l), 0, hidden).unwrap(), group.children().unwrap()[0].id, d.insert(Some(l), 0, drawn_hidden).unwrap()];
     d.insert(Some(l), 0, group).unwrap();
-    let opts = RenderOptions { hidden: vec![ids[2]], ..Default::default() };
+    let opts = RenderOptions { hidden: [ids[2]].into(), ..Default::default() };
     let mut r = Renderer::new();
     r.render(&d, 100, 100, Affine::IDENTITY, &opts);
     let mut e = d.clone();
@@ -875,7 +1148,7 @@ fn a_measuring_pass_sweeps_the_bounds_of_held_art_as_they_double() {
     }
     let mut r = Renderer::new();
     // Held here, as the art kept to draw is.
-    let held: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| r.measured_fx_art(&d, n)).collect();
+    let held: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| r.measured_fx_art(&d.symbol_boxes(), n)).collect();
     assert_eq!((held.len(), r.three_d_bounds.len()), (3000, 3000));
     assert!(r.three_d_sweeps <= 2, "{} sweeps", r.three_d_sweeps);
 }
@@ -1002,7 +1275,7 @@ fn drawing_takes_measured_art_out_of_the_budget() {
     let mut r = Renderer::new();
     r.bounds_of(&d.symbol_boxes(), &n);
     assert!(r.measured_bytes > 0);
-    r.fx_art(&d, &n, true);
+    r.fx_art(&d.symbol_boxes(), &n, true);
     assert_eq!((r.measured_bytes, r.measured.len()), (0, 0), "taken out when drawn");
     let mut r = Renderer::new();
     r.render(&d, 800, 100, Affine::IDENTITY, &RenderOptions::default());
@@ -1152,11 +1425,11 @@ fn art_measured_again_takes_the_place_of_the_held() {
     let n = d.layers[0].children().unwrap()[0].clone();
     let key = Arc::as_ptr(&n) as usize;
     let mut r = Renderer::new();
-    let art = r.measured_fx_art(&d, &n);
+    let art = r.measured_fx_art(&d.symbol_boxes(), &n);
     let bytes = r.measured_bytes;
     // As if it had read something else then.
     r.measured.insert(key, (n.clone(), art, Some(7)));
-    r.measured_fx_art(&d, &n);
+    r.measured_fx_art(&d.symbol_boxes(), &n);
     assert_eq!((r.measured_bytes, r.measured.len()), (bytes, 1));
 }
 
@@ -1340,6 +1613,78 @@ fn moved_objects_draw_their_effect_rasters_while_interacting() {
 /// frame after the drag, of the same document, is what a fresh renderer draws, as is a frame
 /// rendered while interacting without a drag (a dialog's preview).
 #[test]
+fn a_plain_patch_stops_at_a_raster_effect() {
+    let mut doc = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::BLACK, vec![("texture.texturizer", json!({}))]);
+    let plain = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(94.0, 3.0, 96.0, 6.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(doc.layers[0].id), usize::MAX, plain).unwrap();
+    let (width, height) = (2000, 1600);
+    let view = Affine::scale(20.0);
+    let still = RenderOptions::default();
+    let mut renderer = Renderer::new();
+    renderer.threads = 0;
+    renderer.render(&doc, width, height, view, &still);
+    let total_drawn = renderer.stats.drawn;
+    let mut scratch = Renderer::new();
+    scratch.threads = 0;
+    let patch_view = Affine::translate((-1850.0, -50.0)) * view;
+    assert!(scratch.render_plain_patch(&doc, 100, 100, patch_view, &still).is_some(), "the distant patch does not draw the effect");
+    assert!(scratch.render_plain_patch(&doc, width, height, view, &still).is_none(), "a patch that draws the effect needs the full render");
+    assert!(scratch.stats.drawn < total_drawn, "the rejected patch does not draw the artwork after the effect");
+}
+
+#[test]
+fn a_plain_patch_does_not_build_unrelated_3d_art_to_cull_it() {
+    let mut doc = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::BLACK, vec![("threeD.extrude", json!({"depth": 10}))]);
+    let plain = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(290.0, 10.0, 300.0, 20.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(doc.layers[0].id), usize::MAX, plain).unwrap();
+    let opts = RenderOptions::default();
+    let mut whole = Renderer::new();
+    whole.threads = 0;
+    whole.render(&doc, 350, 150, Affine::IDENTITY, &opts);
+    assert!(whole.stats.three_d_built > 0, "the fixture generates 3D art");
+    let mut scratch = Renderer::new();
+    scratch.threads = 0;
+    let patch = Affine::translate((-280.0, 0.0));
+    let result = scratch.render_plain_patch(&doc, 40, 30, patch, &opts);
+    assert_eq!(scratch.stats.three_d_built, 0, "fall back before rebuilding 3D art");
+    assert!(result.is_none());
+
+    let layer = doc.layers[0].id;
+    let art = doc.layers[0].children().unwrap()[0].clone();
+    doc.remove(art.id).unwrap();
+    let mut group = Node::group(doc.alloc_id(), vec![art.clone()]);
+    group.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.innerGlow".into(), params: json!({"blur": 4}), visible: true });
+    assert!(super::has_object_fx(&group), "this group uses the alternate bounds path");
+    let group = doc.insert(Some(layer), 0, group).unwrap();
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &opts).is_none(), "alternate group bounds also need the 3D child");
+    doc.remove(group).unwrap();
+
+    let mut template = Node::layer(doc.alloc_id(), "Template", vectorcraft_doc::LayerColor::Preset(0));
+    if let vectorcraft_doc::NodeKind::Layer { template: flag, children, .. } = &mut template.kind {
+        *flag = true;
+        children.push(art.clone());
+    }
+    let template = doc.insert(Some(layer), 0, template).unwrap();
+    let hidden = RenderOptions { hide_templates: true, ..opts.clone() };
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &hidden).is_none(), "layer bounds conservatively include hidden templates");
+    assert_eq!(scratch.stats.three_d_built, 0);
+
+    doc.remove(template).unwrap();
+    doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Solid".into(), art });
+    let instance = Node::new(doc.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Solid".into(), xf: Affine::IDENTITY });
+    doc.insert(Some(layer), 0, instance).unwrap();
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &opts).is_none(), "a symbol's definition also needs 3D bounds");
+}
+
+#[test]
 fn a_drag_renders_raster_effects_within_the_drag_budget() {
     let effects = vec![("stylize.dropShadow", json!({"x": 4, "y": 3, "blur": 7, "opacity": 80})), ("texture.texturizer", json!({}))];
     let base = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::rgb(0.9, 0.4, 0.1), effects);
@@ -1388,6 +1733,31 @@ fn a_drag_renders_raster_effects_within_the_drag_budget() {
     assert_eq!((r.shadows.len(), r.stats.previewed), (kept, 1), "the scaled shadow");
     let after = r.render(&scaled, 1600, 1000, view, &still).pixels;
     assert!(after == threaded().render(&scaled, 1600, 1000, view, &still).pixels, "the frame after the drag");
+}
+
+#[test]
+fn a_drag_glow_fallback_cannot_be_spliced_into_a_still_frame() {
+    let doc = doc_with(
+        Rect::new(20.0, 20.0, 40.0, 40.0),
+        Color::BLACK,
+        vec![
+            ("stylize.outerGlow", json!({"blur": 1.3, "color": "#ff0000", "opacity": 100, "mode": "normal"})),
+            ("stylize.outerGlow", json!({"blur": 1.0, "color": "#0000ff", "opacity": 100, "mode": "normal"})),
+        ],
+    );
+    let view = Affine::translate((600.0, 600.0)) * Affine::scale(40.0) * Affine::translate((-30.0, -30.0));
+    let mut still = Renderer::new();
+    still.threads = 2;
+    let still_pixels = still.render(&doc, 1200, 1200, view, &RenderOptions::default()).pixels;
+    assert_eq!(still.stats.view_sized, 0, "the still frame draws both whole rasters");
+
+    let mut drag = Renderer::new();
+    drag.threads = 2;
+    let opts = RenderOptions { interacting: true, dragging: true, ..Default::default() };
+    let drag_pixels = drag.render(&doc, 1200, 1200, view, &opts).pixels;
+    assert_eq!(drag.stats.previewed, 0, "the fallback filter fits the drag budget without downsampling");
+    assert!(drag_pixels != still_pixels, "a glow over the first glow differs from the fallback filter");
+    assert!(drag.stats.view_sized > 0, "the fallback must replace the whole frame");
 }
 
 /// While interacting, a group holding a symbol instance whose art lies outside the 20 × 20
@@ -1832,6 +2202,32 @@ fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
             let plain = draw(&[], true);
             let past = (0..100 * 100).filter(|i| plain[i * 4 + 3] == 0 && with[i * 4 + 3] > 0).count();
             assert!(past > 0, "{what}: drawn past the object");
+        }
+    }
+}
+
+/// Geometry effects work from the object's bounds, lone anchors included, as the selection's box
+/// and Expand Appearance measure them: a Transform effect that scales a 10 pt line with a lone
+/// anchor at (100, 50) by 200% scales it about (50, 25), the center of the box that holds the
+/// anchor, and a path of one anchor stays where it is.
+#[test]
+fn geometry_effects_work_from_bounds_that_hold_lone_anchors() {
+    use vectorcraft_geom::{PathData, PathEl, SubPath};
+    let scale = Effect { id: "distort.transform".into(), params: json!({"scaleH": 200, "scaleV": 200}), visible: true };
+    let line = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0)], false);
+    let lone = SubPath::polyline(&[Point::new(100.0, 50.0)], false);
+    let d = Document::new(200.0, 200.0);
+    for (path, first) in [(PathData::new(vec![line, lone.clone()]), Point::new(-50.0, -25.0)), (PathData::single(lone), Point::new(100.0, 50.0))] {
+        let mut n = Node::path(vectorcraft_doc::NodeId(1), path.clone(), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0));
+        n.appearance.effects.push(scale.clone());
+        let bp = super::bounds::node_bezpath(&n).unwrap_or_default();
+        let want = crate::effects::apply_geometry(std::slice::from_ref(&scale), &path, path.bounds().unwrap_or_default()).to_bezpath();
+        let drawn = super::bounds::effected_path(&d, &n, &bp);
+        let (carried, _) = super::bounds::effected_path_carrying(&d, &n, &bp);
+        for g in [&drawn, &carried] {
+            assert_eq!(g, &want, "{path:?}");
+            let Some(PathEl::MoveTo(p)) = g.elements().first() else { panic!("{g:?} starts with no point") };
+            assert!((p.x - first.x).abs() < 1e-9 && (p.y - first.y).abs() < 1e-9, "{path:?} starts at {p:?}, not {first:?}");
         }
     }
 }

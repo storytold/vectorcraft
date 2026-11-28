@@ -1,17 +1,64 @@
 use super::cid::{CidText, FontInfo, comparable, font_chars, identify_glyph, matching_face, replacement, unify_radical};
 use super::entry::{
-    MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, TEXT_OUTLINES, TOO_MANY_OBJECTS, UNMATCHED_GLYPHS_NOTE,
+    MAX_NESTED, OVERPRINT_UNREAD, OVERPRINT_ZERO_MODE, PATTERN_REUSE, RESHAPED_TEXT_NOTE, TEXT_OUTLINES, TOO_MANY_OBJECTS, UNMATCHED_GLYPHS_NOTE,
     UNNAMED_CHARACTERS_NOTE, max_objects,
 };
-use super::state::{Builder, Frame, FrameKind, Saved, bounds, grouped, line_width, mean_scale, paints, round3, stroke_layer};
+use super::reshaped;
+use super::state::{
+    Builder, Frame, FrameKind, GlyphRun, HeldStroke, Saved, bounds, grouped, mean_scale, paints, round3, same_stroke, stroke_layer, type_stroke,
+};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
     FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
     PathData, PathDrawMode, Pattern, PatternDef, Placement, Rect, Scan, Shape, SoftMask, StrokeProps, TextAs, TextLine, TextOverprint, TilingPattern,
     Upright, Walked, clipped, contains, fold_stop_opacity, function_paint, gradient_shape, is_rectangle, luminance, mask_spec, shading_gradient,
 };
+use crate::import_fonts::program_facts;
+use vectorcraft_text::{FileFontInfo, FileGlyph};
+
+/// The most lines of type kept for a text-showing operator's stroke pass ([`Builder::park_text`]):
+/// beyond them the oldest is finished, and strokes over its glyphs come in as type of their own.
+/// They are the lines its fill pass finished, besides the open one: a `TJ` over up to 65 lines is
+/// filled and stroked, one over more is a filled object and a stroked one for each part. The
+/// pass's first stroke goes over a glyph finished so, which can match a glyph kept (a `TJ` that
+/// draws it again where it began): a first stroke that may go over one of them is type of its own
+/// too, and ends the pass ([`Builder::hold_stroke`]).
+const MAX_PARKED: usize = 64;
+
+/// The most strokes of a stroke pass held to be matched to the glyphs they go over
+/// ([`Builder::hold_stroke`]): beyond them, those held are matched to the last glyphs filled one
+/// after another that they go over, with as many glyphs filled from there on as strokes held
+/// ([`Builder::replayed`]), and the pass goes on from there. The reader tells no operator's
+/// start, so the last such run is taken: the operator's fill pass is the one right before its
+/// stroke pass. An operator that fills the same run of more than this many glyphs twice at the
+/// same places may have its first strokes matched to its second copy; such a pass is matched as
+/// well as it can be, not exactly.
+const MAX_HELD: usize = 4096;
+
+/// The most glyphs [`Builder::replayed`] compares to the strokes held, for bounded work on
+/// hostile input: beyond them, each stroke goes over the first glyph it may go over after the one
+/// the stroke before it goes over.
+const MAX_REPLAY_WORK: usize = 1 << 20;
+
+fn is_colour_face(face: &vectorcraft_text::FontFace) -> bool {
+    use skrifa::Tag;
+    use skrifa::raw::TableProvider;
+    let Ok(font) = skrifa::FontRef::new(face.file_data()) else {
+        return false;
+    };
+    font.colr().is_ok()
+        || font.table_data(Tag::new(b"SVG ")).is_some()
+        || font.table_data(Tag::new(b"CBDT")).is_some()
+        || font.table_data(Tag::new(b"sbix")).is_some()
+}
 
 impl<'p> Builder<'p> {
+    /// Draw type in the fonts the file embeds (the default) or not ([`crate::ImportOptions::embedded_fonts`]).
+    pub(super) fn with_embedded_fonts(mut self, on: bool) -> Self {
+        self.embedded_fonts = on;
+        self
+    }
+
     pub(super) fn new(next: u64, colors: Colors<'p>, text_as: TextAs, route: bool) -> Self {
         Self {
             colors,
@@ -21,12 +68,20 @@ impl<'p> Builder<'p> {
             blend: BlendMode::Normal,
             page: Rect::ZERO,
             glyphs: None,
+            type3_run: None,
             text: None,
+            text_glyphs: vec![],
+            parked: vec![],
+            held: vec![],
+            lost: None,
             text_as,
+            embedded_fonts: true,
             actual: Default::default(),
             images: HashMap::new(),
             image_keys: HashMap::new(),
+            raster_scales: HashMap::new(),
             cmyk_keys: HashSet::new(),
+            intent_cmyk: None,
             separation_paints: HashMap::new(),
             opaque: HashSet::new(),
             warnings: vec![],
@@ -34,6 +89,8 @@ impl<'p> Builder<'p> {
             font_names: HashMap::new(),
             families: None,
             missing_fonts: vec![],
+            file_glyphs: crate::import_fonts::FileFontGlyphs::default(),
+            file_fonts: HashMap::new(),
             cid_text: HashMap::new(),
             font_chars: HashMap::new(),
             matched: HashMap::new(),
@@ -99,7 +156,12 @@ impl<'p> Builder<'p> {
         self.root_groups.clear();
         self.blend = BlendMode::Normal;
         self.glyphs = None;
+        self.type3_run = None;
         self.text = None;
+        self.text_glyphs.clear();
+        self.parked.clear();
+        self.held.clear();
+        self.lost = None;
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
@@ -217,11 +279,46 @@ impl<'p> Builder<'p> {
         }
     }
 
-    /// Finish the open glyph runs and the art drawn through the current soft mask.
+    /// Finish the open glyph runs, type 3 runs and the art drawn through the current soft mask.
     pub(super) fn flush(&mut self) {
         self.flush_glyphs();
+        self.flush_type3();
         self.flush_text();
         self.flush_masked();
+    }
+
+    /// Finish the open Type 3 font text run as a named group `<g>`.
+    pub(super) fn flush_type3(&mut self) {
+        if let Some(run) = self.type3_run.take()
+            && !run.nodes.is_empty()
+        {
+            let Some(left) = self.objects_left.checked_sub(1) else {
+                self.warn(super::entry::TOO_MANY_OBJECTS);
+                return;
+            };
+            self.objects_left = left;
+            let mut g = Node::group(self.id(), run.nodes);
+            g.name = Some("<g>".to_string());
+            self.emit(Arc::new(g), run.group);
+        }
+    }
+
+    /// Add nodes from an interpreted Type 3 glyph to the current Type 3 run.
+    pub(super) fn push_type3_nodes(&mut self, nodes: Vec<Arc<Node>>) {
+        if nodes.is_empty() {
+            return;
+        }
+        let group = self.current_group();
+        if let Some(run) = &mut self.type3_run {
+            if run.group != group {
+                self.flush_type3();
+                self.type3_run = Some(super::state::Type3Run { nodes, group });
+            } else {
+                run.nodes.extend(nodes);
+            }
+        } else {
+            self.type3_run = Some(super::state::Type3Run { nodes, group });
+        }
     }
 
     /// The art drawn through the graphics state's soft mask so far, as one masked object.
@@ -308,8 +405,9 @@ impl<'p> Builder<'p> {
                     Some(MaskSpec::Mask(m)) => (opacity, Some(m.clone())),
                     None => (opacity, None),
                 };
-                // Isolation only shows with blending inside; knockout with several objects.
-                let isolate = isolate && Node::children_blend(&children, &mut |c| c.blends_through());
+                // Isolation only shows with blending or overprinting inside; knockout with several
+                // objects.
+                let isolate = isolate && (Node::children_blend(&children, &mut |c| c.blends_through()) || children_overprint(&children));
                 let knockout = knockout && children.len() > 1;
                 let plain = opacity >= 0.999 && blend == BlendMode::Normal && mask.is_none() && !isolate && !knockout;
                 if children.is_empty() {
@@ -334,6 +432,21 @@ impl<'p> Builder<'p> {
                         only = fold_stop_opacity(&only, &m).unwrap_or_else(|| only.with_mask(Some(Box::new(m))));
                     }
                     Some(only)
+                } else if let [only] = children.as_slice()
+                    && matches!(only.kind, NodeKind::Group { clip: false, .. })
+                    && only.knockout == Knockout::On
+                    && only.opacity >= 0.999
+                    && only.blend == BlendMode::Normal
+                    && !only.isolate
+                    && only.extras().mask.is_none()
+                    && mask.is_none()
+                    && !knockout
+                {
+                    // A knockout group drawn in a form that carries its opacity, blend mode or
+                    // isolation: one knockout group with them.
+                    let mut only = (**only).clone();
+                    (only.opacity, only.blend, only.isolate) = (opacity, blend, isolate);
+                    Some(only)
                 } else {
                     let mut g = Node::group(self.id(), children);
                     (g.opacity, g.blend, g.isolate) = (opacity, blend, isolate);
@@ -350,7 +463,10 @@ impl<'p> Builder<'p> {
         }
     }
 
+    /// Finish the open run of glyphs kept as outlines, once the strokes held are matched
+    /// ([`Self::settle_strokes`]): whatever is drawn next ends their stroke pass.
     pub(super) fn flush_glyphs(&mut self) {
+        self.settle_strokes();
         let Some(run) = self.glyphs.take() else { return };
         if run.path.elements().is_empty() {
             return;
@@ -374,19 +490,366 @@ impl<'p> Builder<'p> {
         self.push_node(n);
     }
 
+    /// Finish the open line of type ([`Self::finish_text`]) before something else is drawn: a
+    /// path, an image, a Type 3 glyph's art, or a change of blend mode or soft mask. Nothing is
+    /// drawn between a text-showing operator's fill pass and its stroke pass, so no stroke drawn
+    /// after this goes over a glyph finished before it either: the glyphs of lines finished
+    /// before their stroke pass could end are forgotten ([`Self::park_text`]).
     pub(super) fn flush_text(&mut self) {
-        let Some(mut line) = self.text.take() else { return };
+        self.finish_text();
+        self.lost = None;
+    }
+
+    /// Finish the open line of type ([`Self::end_text`]) and the outlines it was kept as. Unlike
+    /// [`Self::flush_text`] it keeps the glyphs of lines finished past the most kept: it also
+    /// runs as the next line starts ([`Self::park_text`]), which may be in the middle of a fill
+    /// pass, after one of its glyphs was kept as an outline.
+    fn finish_text(&mut self) {
+        if self.end_text() {
+            self.flush_glyphs();
+        }
+    }
+
+    /// Finish the open line of type, after the lines parked before it ([`Self::park_text`]).
+    /// `true`: the open line was kept as outlines instead ([`reshaped`]), which are left open as
+    /// the glyph run for an outline drawn next to join. It runs in the middle of a fill pass when
+    /// one of its glyphs is kept as an outline: the glyphs of lines finished past the most kept
+    /// before it are not forgotten there, as they are by [`Self::flush_text`].
+    pub(super) fn end_text(&mut self) -> bool {
+        self.settle_strokes();
+        self.release_parked(usize::MAX);
+        let glyphs = std::mem::take(&mut self.text_glyphs);
+        let Some(line) = self.text.take() else { return false };
+        self.end_line(line, glyphs)
+    }
+
+    /// Finish the first `n` parked lines ([`Self::park_text`]), in the order they were drawn.
+    pub(super) fn release_parked(&mut self, n: usize) {
+        let n = n.min(self.parked.len());
+        if n == 0 {
+            return;
+        }
+        let lines: Vec<_> = self.parked.drain(..n).collect();
+        for (line, glyphs) in lines {
+            if self.end_line(line, glyphs) {
+                self.flush_glyphs();
+            }
+        }
+    }
+
+    /// The open line ends where glyph drawn next starts another. The reader fills every glyph of
+    /// a text-showing operator before it strokes them (fill and stroke rendering): a line that a
+    /// stroke may still be drawn over is parked instead of finished, so that the operator's
+    /// stroke pass still finds the glyphs it filled when its kerning started a new line part way
+    /// through (#8543). Any other line, or with `park` false, is finished with the lines parked
+    /// before it.
+    ///
+    /// Parked lines are finished, oldest first, when the stroke pass goes past them (a stroke is
+    /// drawn over a later line or the open one: [`Self::settle_strokes`]; or over none of them:
+    /// [`Self::end_fills`]), when anything else ends the open line ([`Self::end_text`]), and
+    /// beyond [`MAX_PARKED`] lines: the glyphs of those are kept for the stroke after them
+    /// ([`Self::hold_stroke`]). A line finished here keeps them too ([`Self::finish_text`]): the
+    /// next line starting draws nothing else, and after a glyph kept as an outline there is no
+    /// open line, so the operator's next glyph comes here in the middle of its fill pass.
+    pub(super) fn park_text(&mut self, park: bool) {
+        match self.text.take() {
+            Some(line) if park && line.awaits_stroke() => {
+                let glyphs = std::mem::take(&mut self.text_glyphs);
+                self.parked.push((line, glyphs));
+                let over = self.parked.len().saturating_sub(MAX_PARKED);
+                if over > 0 {
+                    let lost = self.lost.get_or_insert_default();
+                    for (line, _) in self.parked.iter().take(over) {
+                        lost.add(line);
+                    }
+                }
+                self.release_parked(over);
+            }
+            line => {
+                self.text = line;
+                self.finish_text();
+            }
+        }
+    }
+
+    /// A boundary of stroke passes: no stroke drawn from now on goes over a glyph filled before
+    /// it. The strokes held are matched ([`Self::settle_strokes`]), the parked lines finished, and
+    /// the open line's glyphs filled so far closed to strokes ([`TextLine::end_fills`]). A stroke
+    /// that goes over no glyph filled (stroked type of its own) is one: a stroke pass replays the
+    /// glyphs its operator filled last, so a stroke after it isn't part of a pass over glyphs
+    /// filled before it, and stroking those would draw it under the type of its own. The start
+    /// and end of an ActualText span are too: a span's glyphs are stroked within it (#8543).
+    pub(super) fn end_fills(&mut self) {
+        self.lost = None;
+        self.settle_strokes();
+        self.release_parked(usize::MAX);
+        if let Some(line) = &mut self.text {
+            line.end_fills();
+        }
+    }
+
+    /// The parked line at `slot` ([`Self::park_text`]), or the open line at the slot after them.
+    fn line_at(&self, slot: usize) -> Option<&TextLine> {
+        match self.parked.get(slot) {
+            Some((line, _)) => Some(line),
+            None if slot == self.parked.len() => self.text.as_ref(),
+            None => None,
+        }
+    }
+
+    /// The glyph filled right after the one at `at` (a line's slot and its index among the line's
+    /// filled glyphs, as [`Self::next_fill`]): the next on its line, else the first of the line
+    /// after it.
+    fn after_fill(&self, (slot, i): (usize, usize)) -> (usize, usize) {
+        match self.line_at(slot) {
+            Some(line) if i.saturating_add(1) < line.filled_len() => (slot, i.saturating_add(1)),
+            _ => (slot.saturating_add(1), 0),
+        }
+    }
+
+    /// The first glyph filled after `after` that stroke `h` may go over
+    /// ([`TextLine::next_filled`]), as its line's slot ([`Self::line_at`]) and its index among
+    /// the line's filled glyphs: the lines in the order they were drawn, each line's glyphs in
+    /// the order they were filled. From the first glyph with no `after`.
+    fn next_fill(&self, after: Option<(usize, usize)>, h: &HeldStroke) -> Option<(usize, usize)> {
+        let first = after.map_or(0, |(slot, _)| slot);
+        (first..=self.parked.len()).find_map(|slot| {
+            let from = match after {
+                Some((s, i)) if s == slot => i.saturating_add(1),
+                _ => 0,
+            };
+            let i = self.line_at(slot)?.next_filled(from, h.font, h.at, h.opacity, &h.text, h.actual)?;
+            Some((slot, i))
+        })
+    }
+
+    /// The last glyph filled before `before` that stroke `h` may go over ([`Self::next_fill`]).
+    /// From the last glyph with no `before`.
+    fn last_fill(&self, before: Option<(usize, usize)>, h: &HeldStroke) -> Option<(usize, usize)> {
+        let last = before.map_or(self.parked.len(), |(slot, _)| slot);
+        (0..=last).rev().find_map(|slot| {
+            let until = match before {
+                Some((s, i)) if s == slot => i,
+                _ => usize::MAX,
+            };
+            let i = self.line_at(slot)?.last_filled(until, h.font, h.at, h.opacity, &h.text, h.actual)?;
+            Some((slot, i))
+        })
+    }
+
+    /// Hold stroke `h`, over a glyph filled on the open line or a parked one, until its stroke
+    /// pass ends ([`Self::settle_strokes`]). `false`: no glyph filled after those the strokes
+    /// held go over is one it may go over (the strokes held are matched first, and if it may go
+    /// over none then, it isn't held either: it goes over the line as it stands).
+    ///
+    /// The reader fills all the glyphs of a text-showing operator, then strokes the same glyphs
+    /// in the same order (fill and stroke rendering, #8015). Which glyph a stroke goes over is
+    /// only told once the pass has ended: a `TJ` can draw the same glyph at the same place twice
+    /// (its kerning goes back), and an operator can fill and stroke a glyph where one filled
+    /// before it stands, which the device can't tell from a glyph the operator filled (#8543).
+    ///
+    /// The first stroke after lines were finished beyond [`MAX_PARKED`] ([`Self::park_text`])
+    /// that may go over a glyph of theirs may be the start of their stroke pass, which no longer
+    /// finds its first glyphs: it ends the pass ([`Self::end_fills`]) and is type of its own, as
+    /// are the pass's strokes after it. Any other first stroke there is matched as ever: no
+    /// stroke pass is due over those lines once another stroke is drawn.
+    pub(super) fn hold_stroke(&mut self, mut h: HeldStroke) -> bool {
+        if self.lost.take().is_some_and(|lost| lost.may_stroke(h.font, h.at, h.opacity, &h.text, h.actual)) {
+            self.end_fills();
+            return false;
+        }
+        if self.held.len() >= MAX_HELD {
+            self.settle(false);
+        }
+        let mut first = self.next_fill(self.held.last().map(|l| l.first), &h);
+        if first.is_none() && !self.held.is_empty() {
+            self.settle_strokes();
+            first = self.next_fill(None, &h);
+        }
+        let Some(first) = first else { return false };
+        h.first = first;
+        self.held.push(h);
+        true
+    }
+
+    /// Match the strokes held ([`Self::hold_stroke`]) to the glyphs they go over, now that their
+    /// stroke pass has ended, and stroke them. The pass strokes the glyphs filled last, in the
+    /// order they were filled: each stroke goes over the last glyph it may go over that is filled
+    /// before the one the stroke after it goes over. So a `TJ` that draws a glyph twice at the
+    /// same place strokes each where it filled it, and a glyph filled and stroked where one
+    /// filled before it stands strokes the one filled last (#8015, #8543).
+    pub(super) fn settle_strokes(&mut self) {
+        self.settle(true);
+    }
+
+    /// The glyphs the strokes `held` go over when they are the start of a stroke pass that goes
+    /// on after them ([`MAX_HELD`]): the last glyphs filled one right after another that they
+    /// may go over, in order, with at least as many glyphs filled from the first of them on as
+    /// there are strokes held. The pass replays its operator's fill pass, the glyphs filled
+    /// last, one right after another, right before the pass, so the strokes don't go over a
+    /// glyph filled before those, nor skip one. The device isn't told where an operator starts:
+    /// an operator before it that filled the same glyphs at the same places stays unstroked, as
+    /// the first glyphs of the pass are the last such run the pass still has room for. `None`
+    /// when there are none, or beyond [`MAX_REPLAY_WORK`].
+    fn replayed(&self, held: &[HeldStroke]) -> Option<Vec<(usize, usize)>> {
+        let (head, rest) = held.split_first()?;
+        let mut work = 0usize;
+        // The glyphs filled from `at` on, up to as many as there are strokes held, each line
+        // looked at counted as work.
+        let left = |(slot, i): (usize, usize), work: &mut usize| {
+            let mut n = 0usize;
+            for s in slot..=self.parked.len() {
+                if n >= held.len() {
+                    break;
+                }
+                *work = work.saturating_add(1);
+                if let Some(line) = self.line_at(s) {
+                    n = n.saturating_add(line.filled_len().saturating_sub(if s == slot { i } else { 0 }));
+                }
+            }
+            n.min(held.len())
+        };
+        let mut start = self.last_fill(None, head);
+        while let Some(first) = start {
+            start = self.last_fill(Some(first), head);
+            work = work.saturating_add(1);
+            // Too few glyphs filled after it for the strokes held: not where the pass starts.
+            let short = left(first, &mut work) < held.len();
+            if work > MAX_REPLAY_WORK {
+                return None;
+            }
+            if short {
+                continue;
+            }
+            let mut places = Vec::with_capacity(held.len());
+            places.push(first);
+            let mut at = first;
+            for h in rest {
+                work = work.saturating_add(1);
+                if work > MAX_REPLAY_WORK {
+                    return None;
+                }
+                at = self.after_fill(at);
+                if !self.line_at(at.0).is_some_and(|line| line.fills_at(at.1, h.font, h.at, h.opacity, &h.text, h.actual)) {
+                    break;
+                }
+                places.push(at);
+            }
+            if places.len() == held.len() {
+                return Some(places);
+            }
+        }
+        None
+    }
+
+    /// [`Self::settle_strokes`], each stroke matched to the last glyph it may go over (`last`),
+    /// or, when too many are held ([`Self::hold_stroke`]), as the start of a pass that goes on
+    /// ([`Self::replayed`]).
+    fn settle(&mut self, last: bool) {
+        if self.held.is_empty() {
+            return;
+        }
+        let held = std::mem::take(&mut self.held);
+        let mut places = vec![];
+        if last {
+            let mut before = None;
+            for h in held.iter().rev() {
+                let Some(p) = self.last_fill(before, h) else { break };
+                places.push(p);
+                before = Some(p);
+            }
+            places.reverse();
+        } else if let Some(p) = self.replayed(&held) {
+            places = p;
+        }
+        // Each held stroke goes over the first glyph it may go over after the one before it
+        // does ([`Self::hold_stroke`]), so the last ones are found too: this is only a guard.
+        if places.len() != held.len() {
+            places = held.iter().map(|h| h.first).collect();
+        }
+        // The slots of the parked lines finished so far, which the later places count in.
+        let mut finished = 0usize;
+        for (h, (slot, index)) in held.into_iter().zip(places) {
+            let slot = slot.saturating_sub(finished);
+            let parked = self.parked.len();
+            // The lines before the one stroked are past the stroke pass: they are finished.
+            self.release_parked(slot);
+            finished = finished.saturating_add(slot.min(parked));
+            let target = match self.parked.first_mut() {
+                Some((line, glyphs)) if slot < parked => Some((line, glyphs)),
+                _ => self.text.as_mut().map(|line| (line, &mut self.text_glyphs)),
+            };
+            if let Some((line, glyphs)) = target
+                && line.stroke_filled_at(index, h.stroke, h.overprint)
+            {
+                // Upright glyphs aren't kept as outlines (nor are those filled only): a vertical
+                // line that came in as its outlines would lose the ones filled only.
+                glyphs.extend(h.glyph);
+            }
+        }
+    }
+
+    /// Finish `line` of type, whose `glyphs` are its outlines ([`Self::keep_glyph`]). `true`:
+    /// it was kept as them ([`Self::end_text`]).
+    fn end_line(&mut self, mut line: TextLine, glyphs: Vec<GlyphRun>) -> bool {
         let held = std::mem::take(&mut line.held);
+        let (line_conflict, line_type3) = (line.file_conflict, line.has_type3);
+        // Type the file names itself (ActualText) is in reading order as it stands.
+        let checked = !glyphs.is_empty() && line.mapped() && !line.has_type3;
+        let mut outlined = false;
         if let Some((t, opacity, facts)) = line.finish() {
-            let mut n = Node::new(self.id(), NodeKind::Text(Box::new(t)));
-            n.opacity = opacity;
-            self.lines.insert(n.id, facts);
-            self.push_node(n);
+            // A line with a glyph the file's font can't keep (another glyph for the same character)
+            // is kept as outlines too, so each glyph draws as the file does.
+            let conflict = line_conflict && !glyphs.is_empty() && !line_type3;
+            if conflict || (checked && reshaped::reshapes(&t.plain_text()) && !reshaped::draws_as(&t, &facts.ink)) {
+                outlined = true;
+                if self.mask.is_some() {
+                    self.flush_glyphs();
+                    self.flush_masked();
+                }
+                for g in glyphs {
+                    // Glyphs the file fills one by one composite where they overlap: only opaque
+                    // ones, drawn alike down to the stroke, and not under a soft mask (which
+                    // would be applied once to all of them), share a path.
+                    let same = g.opacity >= 0.999
+                        && self.mask.is_none()
+                        && self.glyphs.as_ref().is_some_and(|r| {
+                            r.paint == g.paint
+                                && r.opacity == g.opacity
+                                && r.overprint == g.overprint
+                                && same_stroke(r.stroke.as_ref(), g.stroke.as_ref())
+                                && (r.scale - g.scale).abs() < 1e-9
+                        });
+                    match &mut self.glyphs {
+                        Some(r) if same => r.path.extend(g.path.iter()),
+                        _ => {
+                            self.flush_glyphs();
+                            self.glyphs = Some(g);
+                        }
+                    }
+                    // Under a soft mask each glyph is masked on its own: the art queued for the
+                    // mask is drained at each glyph, or one group of them all takes it once.
+                    if self.mask.is_some() {
+                        self.flush_glyphs();
+                        self.flush_masked();
+                    }
+                }
+                self.warn(RESHAPED_TEXT_NOTE);
+            } else {
+                let mut n = Node::new(self.id(), NodeKind::Text(Box::new(t)));
+                n.opacity = opacity;
+                self.lines.insert(n.id, facts);
+                self.push_node(n);
+            }
+        }
+        if outlined && !held.is_empty() {
+            self.flush_glyphs();
         }
         // The strokes of its glyphs' outlines, right after it ([`import_lines`] makes them its stroke).
         for n in held {
             self.push_node(n);
         }
+        outlined
     }
 
     /// A stroke of the outline of the glyph just drawn, in the glyph's own paint, while every glyph
@@ -397,12 +860,12 @@ impl<'p> Builder<'p> {
         &mut self,
         path: &BezPath,
         transform: Affine,
-        paint: &craft_pdf::interpret::Paint<'_>,
+        paint: &craft::pdf::interpret::Paint<'_>,
         draw_mode: &PathDrawMode,
         walked: Option<Walked>,
     ) -> bool {
         let PathDrawMode::Stroke(props) = draw_mode else { return false };
-        if self.mask.is_some() || self.blend != BlendMode::Normal || matches!(paint, craft_pdf::interpret::Paint::Pattern(_)) {
+        if self.mask.is_some() || self.blend != BlendMode::Normal || matches!(paint, craft::pdf::interpret::Paint::Pattern(_)) {
             return false;
         }
         let (p, opacity) = self.paint(paint, true, walked);
@@ -430,16 +893,16 @@ impl<'p> Builder<'p> {
 
     /// Convert a hayro paint to a VectorCraft paint and opacity (`stroke`: for a stroke; `walked`:
     /// what it paints in the page's walk, which names its ink).
-    pub(super) fn paint(&mut self, p: &craft_pdf::interpret::Paint<'_>, stroke: bool, walked: Option<Walked>) -> (Paint, f32) {
-        let pattern = matches!(p, craft_pdf::interpret::Paint::Pattern(_));
+    pub(super) fn paint(&mut self, p: &craft::pdf::interpret::Paint<'_>, stroke: bool, walked: Option<Walked>) -> (Paint, f32) {
+        let pattern = matches!(p, craft::pdf::interpret::Paint::Pattern(_));
         let inks = walked.and_then(|w| self.scan.ink(w, stroke, pattern));
         match p {
-            craft_pdf::interpret::Paint::Color(c) => {
+            craft::pdf::interpret::Paint::Color(c) => {
                 let [r, g, b, a] = c.to_rgba().components();
                 let paint = self.colors.solid(c, inks).map_or_else(|| Paint::solid(Color::rgb(round3(r), round3(g), round3(b))), Native::paint);
                 (paint, a)
             }
-            craft_pdf::interpret::Paint::Pattern(pat) => match pat.as_ref() {
+            craft::pdf::interpret::Paint::Pattern(pat) => match pat.as_ref() {
                 Pattern::Shading(sp) => {
                     // The ink names outlive the walk's borrow of `self`.
                     let inks = inks.map(<[String]>::to_vec);
@@ -467,23 +930,26 @@ impl<'p> Builder<'p> {
 
     /// Read a soft mask, pattern cell or type 3 glyph (`read`) on its own: its art, in the
     /// coordinates `page` has. `None` when nested too deeply.
-    fn nested(&mut self, page: Rect, read: impl FnOnce(&mut Self)) -> Option<Vec<Arc<Node>>> {
+    pub(super) fn nested(&mut self, page: Rect, blend: BlendMode, read: impl FnOnce(&mut Self)) -> Option<Vec<Arc<Node>>> {
         if self.nested >= MAX_NESTED {
             return None;
         }
+        let outer_type3 = self.type3_run.take();
         self.flush();
         let saved = Saved {
             stack: std::mem::replace(&mut self.stack, vec![Frame::new(FrameKind::Root)]),
             root_groups: std::mem::take(&mut self.root_groups),
-            blend: std::mem::replace(&mut self.blend, BlendMode::Normal),
+            blend: std::mem::replace(&mut self.blend, blend),
             mask: self.mask.take(),
             page: std::mem::replace(&mut self.page, page),
+            type3_run: outer_type3,
         };
         self.nested += 1;
         read(self);
         let art = self.close_frames();
         self.nested -= 1;
-        (self.stack, self.root_groups, self.blend, self.mask, self.page) = (saved.stack, saved.root_groups, saved.blend, saved.mask, saved.page);
+        (self.stack, self.root_groups, self.blend, self.mask, self.page, self.type3_run) =
+            (saved.stack, saved.root_groups, saved.blend, saved.mask, saved.page, saved.type3_run);
         Some(art)
     }
 
@@ -495,7 +961,7 @@ impl<'p> Builder<'p> {
         }
         let page = self.page;
         let saved = std::mem::replace(&mut self.white_images, m.mask_type() == MaskType::Alpha);
-        let art = self.nested(page, |b| m.interpret(b));
+        let art = self.nested(page, BlendMode::Normal, |b| m.interpret(b));
         self.white_images = saved;
         let spec = match art {
             Some(art) => {
@@ -521,7 +987,7 @@ impl<'p> Builder<'p> {
 
     /// Function-based shading `sp` (painting with `inks`) as a paint, read the first time it is
     /// used and within the import's budget of function evaluations; `None` for other shadings.
-    fn function_shading(&mut self, sp: &craft_pdf::interpret::pattern::ShadingPattern, inks: Option<&[String]>) -> Option<Paint> {
+    fn function_shading(&mut self, sp: &craft::pdf::interpret::pattern::ShadingPattern, inks: Option<&[String]>) -> Option<Paint> {
         let key = (sp.cache_key(), inks.map(<[String]>::to_vec));
         if let Some(paint) = self.function_paints.get(&key) {
             return Some(paint.clone());
@@ -559,7 +1025,7 @@ impl<'p> Builder<'p> {
         // A swatch is shared with uses outside an alpha mask, and pattern paints keep their
         // colours there: its images are read as they are.
         let white = std::mem::take(&mut self.white_images);
-        let art = self.nested(Rect::ZERO, |b| {
+        let art = self.nested(Rect::ZERO, BlendMode::Normal, |b| {
             // A cell whose content can't be decoded is empty.
             let _ = t.interpret(b, Affine::IDENTITY, stroke);
         });
@@ -590,7 +1056,7 @@ impl<'p> Builder<'p> {
     /// ([`crate::import_image::tint_gray`]). `None` for another image, an ink whose colour can't
     /// be told, or tints that can't be read (with a warning): the image opens in RGB. The ink is
     /// only marked used once the tints are read.
-    pub(super) fn separation_image(&mut self, st: &craft_pdf::syntax::object::Stream<'_>, w: u32, h: u32) -> Option<(Paint, Vec<u8>)> {
+    pub(super) fn separation_image(&mut self, st: &craft::pdf::syntax::object::Stream<'_>, w: u32, h: u32) -> Option<(Paint, Vec<u8>)> {
         let space = self.colors.array_space(&crate::import_image::one_ink_space(st)?)?;
         let gray = crate::import_image::tint_gray(st, w, h).map_err(|why| self.warn(why)).ok()?;
         Some((self.colors.native(space, &[1.0])?.paint(), gray))
@@ -606,7 +1072,7 @@ impl<'p> Builder<'p> {
     pub(super) fn alpha_mask(
         &mut self,
         key: u128,
-        r: &craft_pdf::interpret::RasterImage<'_>,
+        r: &craft::pdf::interpret::RasterImage<'_>,
         w: u32,
         h: u32,
         transform: Affine,
@@ -624,8 +1090,15 @@ impl<'p> Builder<'p> {
                 self.opaque.insert(mkey);
                 return None;
             };
-            let mut png = Vec::new();
-            image::GrayImage::from_raw(a.width, a.height, a.data)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+            let raw = craft_image_codecs::Image::from_raw(
+                a.width,
+                a.height,
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U8,
+                a.data,
+            )
+            .ok()?;
+            let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
             let blob = ImageBlob::new("image/png", png);
             let k = blob.content_key();
             self.images.insert(k.clone(), blob);
@@ -695,7 +1168,7 @@ impl<'p> Builder<'p> {
     /// name, else the available family its name reads as; whether it is available.
     /// The character of glyph `glyph` of font `key` that no mapping names, found by its outline in
     /// the installed face of the font's name ([`identify_glyph`]); cached per glyph.
-    fn identified_char(&mut self, key: u128, glyph: u32, o: &craft_pdf::interpret::font::OutlineGlyph) -> Option<char> {
+    fn identified_char(&mut self, key: u128, glyph: u32, o: &craft::pdf::interpret::font::OutlineGlyph) -> Option<char> {
         if let Some(c) = self.identified.get(&(key, glyph)) {
             return *c;
         }
@@ -704,7 +1177,7 @@ impl<'p> Builder<'p> {
         c
     }
 
-    fn font_name(&mut self, key: u128, o: &craft_pdf::interpret::font::OutlineGlyph) -> FontInfo {
+    fn font_name(&mut self, key: u128, o: &craft::pdf::interpret::font::OutlineGlyph) -> FontInfo {
         if let Some(n) = self.font_names.get(&key) {
             return n.clone();
         }
@@ -736,19 +1209,156 @@ impl<'p> Builder<'p> {
         n
     }
 
-    /// Glyph `o` as type: added to the line being gathered (or starting one). `false`: it keeps
-    /// its outline (no Unicode text, mirrored, or not type mode). No `paint`: invisible text,
-    /// type with neither fill nor stroke.
-    pub(super) fn type_glyph(
+    /// Glyph `o` of the open line of type, placed by `m` and drawn with `drawn` (its paint, and its
+    /// stroke when it is stroked), as the outline it is kept as if the line is
+    /// ([`Self::end_text`]). Nothing for a glyph that shows nothing.
+    fn keep_glyph(
         &mut self,
-        o: &craft_pdf::interpret::font::OutlineGlyph,
+        o: &craft::pdf::interpret::font::OutlineGlyph,
+        m: Affine,
+        drawn: Option<(Paint, Option<StrokeProps>)>,
+        opacity: f32,
+        scale: f64,
+        overprint: bool,
+    ) {
+        if let Some(g) = glyph_run(o, m, drawn, opacity, scale, overprint) {
+            self.text_glyphs.push(g);
+        }
+    }
+
+    fn type3_font_name(&mut self, key: u128) -> FontInfo {
+        if let Some(n) = self.font_names.get(&key) {
+            return n.clone();
+        }
+        let name = self.fonts.get(&key).map(|f| f.name.clone());
+        let ps = name.as_deref().map(|n| match n.split_once('+') {
+            Some((tag, rest)) if tag.len() == 6 && tag.chars().all(|c| c.is_ascii_uppercase()) => rest.to_string(),
+            _ => n.to_string(),
+        });
+        let installed = ps.as_deref().and_then(|ps| vectorcraft_text::FontDb::global().find_postscript(ps));
+        let n = match (installed, name) {
+            (Some(face), _) => FontInfo { family: face.family.clone(), style: face.style.clone(), face: Some(face) },
+            (None, Some(name)) => {
+                let families = self.families.get_or_insert_with(Families::available);
+                let (family, style, found) = families.resolve(&name, None, false);
+                if !found && !family.is_empty() && !self.missing_fonts.contains(&family) {
+                    self.missing_fonts.push(family.clone());
+                }
+                let face = vectorcraft_text::FontDb::global().face(&family, &style);
+                FontInfo { family, style, face }
+            }
+            (None, None) => {
+                let d = vectorcraft_doc::CharStyle::default();
+                FontInfo { family: d.font_family, style: d.font_style, face: None }
+            }
+        };
+        self.font_names.insert(key, n.clone());
+        n
+    }
+
+    /// Type 3 glyph as live type: added to the line being gathered if it has a ToUnicode mapping.
+    pub(super) fn type_type3_glyph(
+        &mut self,
+        t3: &craft::pdf::interpret::font::Type3Glyph<'_>,
         m: Affine,
         scale: f64,
-        paint: Option<&craft_pdf::interpret::Paint<'_>>,
+        paint: Option<&craft::pdf::interpret::Paint<'_>>,
         stroke: Option<&StrokeProps>,
         overprint: bool,
     ) -> bool {
         if self.text_as != TextAs::Text || self.nested > 0 {
+            return false;
+        }
+        let t3_key = craft::pdf::interpret::CacheKey::cache_key(t3);
+        let Some(&(font_key, has_to_unicode)) = self.scan.type3_cache_map.get(&t3_key) else {
+            return false;
+        };
+        let (is_type3, to_unicode, is_colour) = match self.fonts.get(&font_key) {
+            Some(f) => (f.is_type3, has_to_unicode || f.to_unicode, f.is_colour),
+            None => (true, has_to_unicode, false),
+        };
+        let authored = self.actual.active();
+        if !is_type3 || (!to_unicode && !authored) || is_colour {
+            return false;
+        }
+        let unicode = t3.as_unicode().filter(|u| !super::cid::replacement(u));
+        if !authored && unicode.is_none() {
+            return false;
+        }
+        let text: String = match unicode {
+            Some(BfString::Char(c)) => c.to_string(),
+            Some(BfString::String(s)) => s,
+            None => String::new(),
+        };
+        let Some(at) = Placement::of(m) else { return false };
+        if !authored && (text.is_empty() || text.chars().any(|c| c.is_control())) {
+            return false;
+        }
+        let width = t3.advance_width().filter(|w| w.is_finite());
+        let advance = width.map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
+        let info = self.type3_font_name(font_key);
+        if info.face.as_ref().is_some_and(|f| is_colour_face(f)) {
+            return false;
+        }
+        let (paint, opacity) = match paint {
+            Some(p) => {
+                let (paint, opacity) = self.paint(p, stroke.is_some(), self.walked(true));
+                (Some(paint), opacity)
+            }
+            None => (None, 1.0),
+        };
+        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| type_stroke(paint, p, scale));
+        let look = Look {
+            font: font_key,
+            family: info.family,
+            style: info.style,
+            version: None,
+            size: at.size,
+            h_scale: at.h_scale,
+            overprint_fill: stroke.is_none() && overprint,
+            overprint_stroke: stroke.is_some() && overprint,
+            fill: if stroke.is_none() { paint } else { None },
+            stroke,
+        };
+        if authored {
+            return self.actual_type3_glyph(font_key, at, look, opacity, advance);
+        }
+        let text = visual_glyph_text(text);
+        let place = |line: &mut TextLine| line.push(&look, at, opacity, advance, &text);
+        self.flush_glyphs();
+        self.flush_type3();
+        if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
+            && look.fill.is_none()
+            && line.stroke_filled(font_key, at, opacity, &text, s.clone(), overprint)
+        {
+            return true;
+        }
+        if !self.text.as_mut().is_some_and(place) {
+            self.flush_text();
+            let mut line = TextLine::new(at, opacity);
+            place(&mut line);
+            self.text = Some(line);
+        }
+        if let Some(line) = &mut self.text {
+            line.has_type3 = true;
+        }
+        true
+    }
+
+    /// Glyph `o` as type: added to the line being gathered (or starting one). `false`: it keeps
+    /// its outline (no Unicode text, mirrored, not type mode, or in a span whose ActualText is
+    /// empty). No `paint`: invisible text,
+    /// type with neither fill nor stroke.
+    pub(super) fn type_glyph(
+        &mut self,
+        o: &craft::pdf::interpret::font::OutlineGlyph,
+        m: Affine,
+        scale: f64,
+        paint: Option<&craft::pdf::interpret::Paint<'_>>,
+        stroke: Option<&StrokeProps>,
+        overprint: bool,
+    ) -> bool {
+        if self.text_as != TextAs::Text || self.nested > 0 || self.actual.textless() {
             return false;
         }
         let authored = self.actual.active();
@@ -793,8 +1403,11 @@ impl<'p> Builder<'p> {
             return false;
         }
         let width = o.advance_width().filter(|w| w.is_finite());
-        // Set vertically (WMode 1): no horizontal advance.
-        let upright = width.is_some_and(|w| w.abs() <= 1.0);
+        // Set vertically (WMode 1): no horizontal advance. Not in a font the file says is written
+        // horizontally: there a glyph without an advance is a mark over the letter before it (a
+        // vowel sign, an anusvara), which stays on its line (#5235).
+        let horizontal = self.fonts.get(&key).is_some_and(|f| f.vertical.is_none());
+        let upright = !horizontal && width.is_some_and(|w| w.abs() <= 1.0);
         let mut info = self.font_name(key, o);
         // A font the file doesn't carry is drawn with a stand-in: its glyphs can't tell which
         // style of the installed family it is, so the name decides.
@@ -840,7 +1453,9 @@ impl<'p> Builder<'p> {
             }
             None => (None, 1.0),
         };
-        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| (paint, line_width(p, scale)));
+        // What the glyph is drawn with as an outline, should its line be kept so.
+        let drawn = paint.clone().map(|p| (p, stroke.cloned()));
+        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| type_stroke(paint, p, scale));
         let look = Look {
             font: key,
             family: info.family,
@@ -861,30 +1476,78 @@ impl<'p> Builder<'p> {
         // vector's vx (from the font's `W2`, else half its width from `W` or `DW`) to the left of
         // the column's centre (ISO 32000-1 §9.7.4.3); vertical type centres each glyph on the
         // column. Half an em only for a full-width glyph (#722).
-        let top = upright.then(|| {
-            let vx = self.fonts.get(&key).and_then(|f| f.vertical.as_ref()).map_or(500.0, |v| v.centre(glyph));
-            m * kurbo::Point::new(vx, 880.0)
-        });
+        let vx = upright.then(|| self.fonts.get(&key).and_then(|f| f.vertical.as_ref()).map_or(500.0, |v| v.centre(glyph)));
+        let top = vx.map(|vx| m * kurbo::Point::new(vx, 880.0));
+        // A horizontal line is gathered in visual order and put back in logical order as a whole:
+        // a ligature's characters (lam-alef, lam-lam-heh) go in visual order too (#6072).
+        let text = if top.is_none() { visual_glyph_text(text) } else { text };
         let place = |line: &mut TextLine| match top {
             Some(top) => line.push_upright(&look, at, opacity, Upright { top }, &text),
             None => line.push(&look, at, opacity, advance, &text),
         };
+        let stroking = look.fill.is_none() && look.stroke.is_some();
+        // A stroke over a glyph filled before it, on the open line or one the same operator's
+        // kerning finished: matched once its stroke pass ends.
+        if let Some(s) = &look.stroke
+            && stroking
+        {
+            let glyph = if top.is_none() { glyph_run(o, m, drawn.clone(), opacity, scale, overprint) } else { None };
+            let h = HeldStroke { font: key, at, opacity, text: text.clone(), stroke: s.clone(), overprint, glyph, actual: false, first: (0, 0) };
+            if self.hold_stroke(h) {
+                return true;
+            }
+        }
         self.flush_glyphs();
         // A stroke over the glyph just filled (fill and stroke rendering).
         if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
-            && look.fill.is_none()
-            && line.stroke_last(key, at, s.clone(), overprint)
+            && stroking
+            && line.stroke_filled(key, at, opacity, &text, s.clone(), overprint)
         {
+            // Upright glyphs aren't kept as outlines (nor, below, are those filled only): a
+            // vertical line that came in as its outlines would lose the ones filled only.
+            if top.is_none() {
+                self.keep_glyph(o, m, drawn, opacity, scale, overprint);
+            }
             return true;
         }
+        // Stroked type of its own ends the stroke pass of the glyphs filled before it.
+        if stroking {
+            self.end_fills();
+        }
         if !self.text.as_mut().is_some_and(place) {
-            self.flush_text();
+            self.park_text(!stroking);
             let mut line = TextLine::new(at, opacity);
             place(&mut line);
             self.text = Some(line);
         }
+        let outline = o.outline();
+        // A font the file carries for a family that isn't available: the glyph goes into the font
+        // kept with the document, which draws the line as the file does ([`crate::import_fonts`]).
+        if let Some(font) = self.file_font(key, o, &look) {
+            if let Some(line) = &mut self.text {
+                line.file_font = true;
+            }
+            let mut chars = text.chars();
+            if let (Some(ch), None) = (chars.next(), chars.next()) {
+                // A glyph set vertically has no horizontal width: its column's, twice its centre.
+                let advance = match vx {
+                    Some(vx) => 2.0 * vx,
+                    None => width.map_or(500.0, f64::from),
+                };
+                if self.file_glyphs.wants(font, ch) {
+                    self.file_glyphs.add(font, FileGlyph { ch, outline: outline.clone(), advance });
+                } else if self.file_glyphs.conflicts(font, ch, &outline, advance)
+                    && let Some(line) = &mut self.text
+                {
+                    line.file_conflict = true;
+                }
+            }
+        }
         // Its ink: a stroke the file draws as outlines of the glyphs is told by it.
-        let mut ink = o.outline();
+        let mut ink = outline;
+        if top.is_none() {
+            self.keep_glyph(o, m, drawn, opacity, scale, overprint);
+        }
         if let Some(line) = &mut self.text
             && !ink.elements().is_empty()
         {
@@ -893,4 +1556,79 @@ impl<'p> Builder<'p> {
         }
         true
     }
+
+    /// The font among the glyphs gathered for fonts kept with the document that glyphs of font
+    /// `key` (drawn with `look`) go into: when the file carries the font's program, no installed
+    /// face has its PostScript name, and its family and style aren't available as named. Decided
+    /// once per font.
+    fn file_font(&mut self, key: u128, o: &craft::pdf::interpret::font::OutlineGlyph, look: &Look) -> Option<usize> {
+        if let Some(f) = self.file_fonts.get(&key) {
+            return *f;
+        }
+        // Not the interpreter's stand-in for a font the file doesn't carry.
+        let carried = self.embedded_fonts && self.fonts.get(&key).is_some_and(|f| f.embedded) && o.font_data().is_none_or(|d| d.embedded);
+        let installed = self.font_names.get(&key).is_some_and(|i| i.face.is_some());
+        let available =
+            || vectorcraft_text::FontDb::global().resolve(&look.family, &look.style).is_some_and(|(_, m)| m == vectorcraft_text::FontMatch::Exact);
+        let font = (carried && !installed && !look.family.trim().is_empty() && !available()).then(|| {
+            let data = o.font_data();
+            let (fs_type, metrics) = data.as_ref().map_or((None, None), |d| program_facts(d.data.as_ref().as_ref(), d.index));
+            let name = self.fonts.get(&key).map(|f| f.name.clone()).or_else(|| data.and_then(|d| d.postscript_name)).unwrap_or_default();
+            // A subset's six-letter tag.
+            let postscript = match name.split_once('+') {
+                Some((tag, rest)) if tag.len() == 6 && tag.chars().all(|c| c.is_ascii_uppercase()) => rest.to_string(),
+                _ => name,
+            };
+            let (ascent, descent) = metrics.unwrap_or_default();
+            let info = || FileFontInfo { family: look.family.clone(), style: look.style.clone(), postscript, ascent, descent, fs_type };
+            self.file_glyphs.font(&look.family, &look.style, info)
+        });
+        self.file_fonts.insert(key, font);
+        font
+    }
+}
+
+/// Glyph `o` placed by `m` and drawn with `drawn` as the outline it is kept as
+/// ([`Builder::keep_glyph`]). Nothing for a glyph that shows nothing.
+fn glyph_run(
+    o: &craft::pdf::interpret::font::OutlineGlyph,
+    m: Affine,
+    drawn: Option<(Paint, Option<StrokeProps>)>,
+    opacity: f32,
+    scale: f64,
+    overprint: bool,
+) -> Option<GlyphRun> {
+    let (paint, stroke) = drawn?;
+    let mut path = o.outline();
+    if path.elements().is_empty() {
+        return None;
+    }
+    path.apply_affine(m);
+    Some(GlyphRun { path, paint, opacity, stroke, scale, overprint })
+}
+
+/// The characters of one glyph in the order they are drawn: a PDF names a ligature's characters
+/// in logical order (lam then alef for لا), while a horizontal line of type is gathered glyph by
+/// glyph in visual order and only then put back in logical order. Right-to-left characters are
+/// turned round here so that putting the line back restores them.
+fn visual_glyph_text(text: String) -> String {
+    if text.chars().nth(1).is_none() {
+        return text;
+    }
+    let Some((order, _)) = vectorcraft_text::logical_order(&text) else { return text };
+    let chars: Vec<char> = text.chars().collect();
+    order.iter().filter_map(|&i| chars.get(i)).collect()
+}
+
+/// Whether a visible fill or stroke among `children` overprints, characters' too, directly or
+/// through children that don't isolate. In an isolated group an overprinting object is drawn on
+/// the group's empty backdrop, so it covers the inks of the art below the group that it does not
+/// paint; without isolation it leaves them.
+fn children_overprint(children: &[Arc<Node>]) -> bool {
+    children.iter().any(|c| {
+        c.visible
+            && (c.appearance.items.iter().any(|i| i.visible() && i.overprint())
+                || matches!(&c.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
+                || (!c.isolate && c.children().is_some_and(|ch| children_overprint(ch))))
+    })
 }

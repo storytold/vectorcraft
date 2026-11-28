@@ -472,7 +472,7 @@ fn ink_names_never_clash_with_the_document_swatches() {
 
 #[test]
 fn colour_spaces_are_read_from_the_interpreters_debug_form() {
-    let pdf = craft_pdf::syntax::Pdf::new(pdf(&[PdfPage::new(10.0, 10.0, "")], None)).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(pdf(&[PdfPage::new(10.0, 10.0, "")], None)).unwrap();
     let mut c = Colors::new(&pdf, vec![]);
     for (text, n, want) in [
         ("ColorSpace(DeviceCmyk)", 4, Space::Cmyk),
@@ -497,14 +497,14 @@ fn colour_spaces_are_read_from_the_interpreters_debug_form() {
 /// stray `-`) is left out when the file's ink spaces are looked for, and the inks after it are found.
 #[test]
 fn inks_are_found_past_dictionary_values_the_reader_cannot_parse() {
-    use craft_pdf::interpret::Function;
-    use craft_pdf::syntax::object::{FromBytes, Object};
+    use craft::pdf::interpret::Function;
+    use craft::pdf::syntax::object::{FromBytes, Object};
     let tint = "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 1 0] /N 1 >>";
     let key = format!("{:?}", Function::new(&Object::from_bytes(tint.as_bytes()).unwrap()).unwrap());
     for junk in ["/#zz", "12-.5"] {
         let page = page_with(&format!("/A {junk} /CS0 [/Separation /Gold /DeviceCMYK {tint}]"), &[("CS0", "1")]);
         // Opened by the reader alone, without the checks of `pages::open`.
-        let pdf = craft_pdf::syntax::Pdf::new(pdf(&[page], None)).unwrap();
+        let pdf = craft::pdf::syntax::Pdf::new(pdf(&[page], None)).unwrap();
         let mut c = Colors::new(&pdf, vec![]);
         let space = c.space_of(&format!("ColorSpace(Separation(Separation {{ tint_transform: {key} }}))"), 1, None);
         assert_eq!(space, Space::Inks(0), "{junk}");

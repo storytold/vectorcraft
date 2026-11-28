@@ -167,6 +167,124 @@ fn adjust_adjoining_scales_the_neighbours() {
     assert_eq!(points(&s, id), vec![(0.5, 4.0, 1.0)]);
 }
 
+/// A line with a discontinuous point in the middle: 1× before it, 2× after it.
+fn pair_session(points: serde_json::Value) -> (Session, NodeId) {
+    let (mut s, id) = line_session();
+    s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": points})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    (s, id)
+}
+
+#[test]
+fn paired_set_edits_both_halves_in_one_step() {
+    let (mut s, id) = pair_session(json!([[0, 1, 1], [0.5, 1, 1], [0.5, 2, 2], [1, 1, 1]]));
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let p = json!({"id": id.0, "index": 1, "t": 0.5, "left": 10, "right": 5, "outIndex": 2, "outLeft": 15, "outRight": 20});
+    assert_eq!(set(&mut s, p.clone()), 1);
+    assert_eq!(points(&s, id), vec![(0.0, 1.0, 1.0), (0.5, 2.0, 1.0), (0.5, 3.0, 4.0), (1.0, 1.0, 1.0)]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let after = s.doc().unwrap().doc.clone();
+    // The same widths again change nothing and record no undo step.
+    set(&mut s, p);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, after);
+}
+
+#[test]
+fn paired_set_adjusts_the_point_before_and_the_point_after_once_each() {
+    let (mut s, id) = pair_session(json!([[0, 1, 1], [0.5, 1, 1], [0.5, 2, 2], [1, 1, 1]]));
+    // The incoming half doubles and the outgoing half halves: the start doubles, the end halves.
+    set(
+        &mut s,
+        json!({"id": id.0, "index": 1, "t": 0.5, "left": 10, "right": 10, "outIndex": 2, "outLeft": 5, "outRight": 5, "adjustAdjoining": true}),
+    );
+    assert_eq!(points(&s, id), vec![(0.0, 2.0, 2.0), (0.5, 2.0, 2.0), (0.5, 1.0, 1.0), (1.0, 0.5, 0.5)]);
+    // A discontinuous point at the start has only a point after it to adjust.
+    let (mut s, id) = pair_session(json!([[0, 1, 1], [0, 2, 2], [1, 1, 1]]));
+    set(
+        &mut s,
+        json!({"id": id.0, "index": 0, "t": 0, "left": 10, "right": 10, "outIndex": 1, "outLeft": 20, "outRight": 20, "adjustAdjoining": true}),
+    );
+    assert_eq!(points(&s, id), vec![(0.0, 2.0, 2.0), (0.0, 4.0, 4.0), (1.0, 2.0, 2.0)]);
+}
+
+/// Three points each within 1e-6 of the next: the first two are the pair, and the third, though
+/// within 1e-6 of the outgoing half, is the point after the pair that the outgoing half adjusts.
+#[test]
+fn paired_set_adjusts_the_point_after_a_chained_pair() {
+    let (mut s, id) = pair_session(json!([[0, 1, 1], [0.5, 1, 1], [0.50000075, 2, 2], [0.5000015, 1, 1], [1, 1, 1]]));
+    set(
+        &mut s,
+        json!({"id": id.0, "index": 1, "t": 0.5, "left": 5, "right": 5, "outIndex": 2, "outLeft": 5, "outRight": 5, "adjustAdjoining": true}),
+    );
+    assert_eq!(points(&s, id), vec![(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.50000075, 1.0, 1.0), (0.5000015, 0.5, 0.5), (1.0, 1.0, 1.0)]);
+}
+
+#[test]
+fn single_width_only_leaves_one_continuous_point() {
+    for (single, kept) in [("incoming", (2.0, 1.0)), ("outgoing", (3.0, 4.0))] {
+        let (mut s, id) = pair_session(json!([[0, 1, 1], [0.5, 1, 1], [0.5, 2, 2], [1, 1, 1]]));
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let p = json!({"id": id.0, "index": 1, "t": 0.5, "left": 10, "right": 5, "outIndex": 2, "outLeft": 15, "outRight": 20, "single": single});
+        assert_eq!(set(&mut s, p), 1);
+        assert_eq!(points(&s, id), vec![(0.0, 1.0, 1.0), (0.5, kept.0, kept.1), (1.0, 1.0, 1.0)], "{single}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    // With Adjust Adjoining, each neighbor follows the change of the half beside it.
+    let (mut s, id) = pair_session(json!([[0, 1, 1], [0.5, 1, 1], [0.5, 2, 2], [1, 1, 1]]));
+    let p = json!({"id": id.0, "index": 1, "t": 0.5, "left": 5, "right": 5, "outIndex": 2, "outLeft": 5, "outRight": 5, "single": "incoming", "adjustAdjoining": true});
+    set(&mut s, p);
+    assert_eq!(points(&s, id), vec![(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (1.0, 0.5, 0.5)]);
+}
+
+#[test]
+fn paired_set_refuses_what_is_not_one_discontinuous_point() {
+    let (mut s, id) = pair_session(json!([[0, 1, 1], [0.25, 1, 1], [0.5, 1, 1], [0.5, 2, 2], [0.75, 3, 3], [0.75, 3, 3], [0.75, 3, 3], [1, 1, 1]]));
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let pair = |extra: serde_json::Value| {
+        let mut p = json!({"id": id.0, "index": 2, "t": 0.5, "left": 5, "right": 5, "outIndex": 3, "outLeft": 5, "outRight": 5});
+        for (k, v) in extra.as_object().unwrap() {
+            if v.is_null() {
+                p.as_object_mut().unwrap().remove(k);
+            } else {
+                p[k] = v.clone();
+            }
+        }
+        p
+    };
+    for p in [
+        pair(json!({"index": 1, "t": 0.25, "outIndex": 2})),
+        pair(json!({"outIndex": 4})),
+        pair(json!({"index": 3, "outIndex": 2})),
+        pair(json!({"outIndex": 99})),
+        pair(json!({"outIndex": "3"})),
+        pair(json!({"outIndex": -1})),
+        pair(json!({"t": 0.6})),
+        pair(json!({"index": 4, "t": 0.75, "outIndex": 5})),
+        pair(json!({"index": null})),
+        pair(json!({"outLeft": null})),
+        pair(json!({"outRight": -1})),
+        pair(json!({"outLeft": 1.0e6})),
+        pair(json!({"single": "both"})),
+        pair(json!({"single": true})),
+        pair(json!({"outIndex": null})),
+        pair(json!({"outIndex": null, "outLeft": null})),
+        json!({"id": id.0, "index": 2, "t": 0.5, "left": 5, "right": 5, "single": "incoming"}),
+    ] {
+        assert!(s.execute("stroke.widthPoint.set", &p).is_err(), "accepted {p}");
+        assert_eq!(s.doc().unwrap().doc, before, "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    }
+}
+
 #[test]
 fn flipping_along_swaps_the_sides_of_a_discontinuous_point() {
     let (mut s, id) = line_session();
@@ -221,9 +339,9 @@ fn new_width_point_adjust_adjoining_uses_sampled_widths() {
         let (mut s, id) = line_session();
         let original = vec![(0.0, 9.0, 9.0), (0.25, 1.0, 0.0), (0.75, 3.0, 0.0), (1.0, 7.0, 7.0)];
         s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": original})).unwrap();
-        // At t=0.5 the old left side is where the profile's curve is there (#5714) and the right
-        // side is 0pt. Indexed editing of that sampled point is the existing convention: scale the
-        // nonzero side, add from zero.
+        // At t=0.5 the old left side is where the profile's curve is there and the right side is
+        // 0pt. Indexed editing of that sampled point is the existing convention: scale the nonzero
+        // side, add from zero.
         let sampled = vectorcraft_doc::WidthProfile { points: original }.at(0.5).0;
         let index = if indexed { Some(set(&mut s, json!({"id": id.0, "t": 0.5, "left": sampled * 5.0, "right": 0}))) } else { None };
         set(&mut s, json!({"id": id.0, "index": index, "t": 0.5, "left": 20, "right": 5, "adjustAdjoining": true}));

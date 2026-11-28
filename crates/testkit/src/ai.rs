@@ -338,6 +338,20 @@ pub fn ai_with_entries_and_content(private: &[u8], page: &str, entries: &str, co
     with_private(private, page, "AIPrivateData", entries, content)
 }
 
+/// [`ai_with_content`] with `streams` more in the dictionary of each private data stream
+/// (`/Filter /Bogus `).
+pub fn ai_with_private_streams(private: &[u8], page: &str, content: &str, streams: &str) -> Vec<u8> {
+    with_private_streams(private, page, "AIPrivateData", "", content, streams)
+}
+
+/// [`ai`] with its private data in `parts`, one stream each in order (`AIPrivateData1`,
+/// `AIPrivateData2`, …), each written as given with `streams` more in its dictionary
+/// (`/Filter /FlateDecode ` for parts already deflated), and `content` more in the dictionary of
+/// the page's content stream, as [`ai_with_content`].
+pub fn ai_with_parts(parts: &[&[u8]], page: &str, content: &str, streams: &str) -> Vec<u8> {
+    with_parts(parts, page, "AIPrivateData", "", content, streams)
+}
+
 /// A PDF saved with Illustrator's editing data: [`ai`]'s file with the two streams under
 /// `AIPDFPrivateData1` and `AIPDFPrivateData2`. These key names were seen in the PDF attached to
 /// #868, and nothing else of that file is used; ExifTool's PDF tag table lists them too
@@ -354,26 +368,38 @@ pub fn pdf_with_content(private: &[u8], page: &str, content: &str) -> Vec<u8> {
 /// The file of [`ai`] and [`pdf`], with `private` in the streams `{key}1` and `{key}2`, `entries`
 /// more in the page dictionary and `content` more in its content stream's dictionary.
 fn with_private(private: &[u8], page: &str, key: &str, entries: &str, content: &str) -> Vec<u8> {
+    with_private_streams(private, page, key, entries, content, "")
+}
+
+/// [`with_private`] with `streams` more in each private data stream's dictionary.
+fn with_private_streams(private: &[u8], page: &str, key: &str, entries: &str, content: &str, streams: &str) -> Vec<u8> {
     let (first, second) = private.split_at(private.len() / 2);
+    with_parts(&[first, second], page, key, entries, content, streams)
+}
+
+/// [`with_private_streams`] with the private data in `parts`, one stream each, under `{key}1`,
+/// `{key}2`, ….
+fn with_parts(parts: &[&[u8]], page: &str, key: &str, entries: &str, content: &str, streams: &str) -> Vec<u8> {
     let stream = |part: &[u8], more: &str| {
         let mut s = format!("<< /Length {} {more}>>\nstream\n", part.len()).into_bytes();
         s.extend_from_slice(part);
         s.extend_from_slice(b"\nendstream");
         s
     };
-    let objects: Vec<Vec<u8>> = vec![
+    let refs: String = (0..parts.len()).map(|i| format!("/{key}{} {} 0 R ", i + 1, i + 5)).collect();
+    let mut objects: Vec<Vec<u8>> = vec![
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
         format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] {entries} /Contents 4 0 R \
              /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> \
-             /PieceInfo << /{PIECE} << /Private << /{key}1 5 0 R /{key}2 6 0 R /NumBlock 2 >> >> >> >>"
+             /PieceInfo << /{PIECE} << /Private << {refs}/NumBlock {} >> >> >> >>",
+            parts.len()
         )
         .into_bytes(),
         stream(page.as_bytes(), content),
-        stream(first, ""),
-        stream(second, ""),
     ];
+    objects.extend(parts.iter().map(|part| stream(part, streams)));
     let mut out = b"%PDF-1.5\n".to_vec();
     let mut offsets = vec![];
     for (i, o) in objects.iter().enumerate() {

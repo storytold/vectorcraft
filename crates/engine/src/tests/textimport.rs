@@ -68,6 +68,49 @@ fn type_placed_on_an_artboard_edge_takes_that_artboards_frame() {
     }
 }
 
+/// `text` as UTF-16 without a byte-order mark, little-endian when `le` is set.
+fn utf16(text: &str, le: bool) -> Vec<u8> {
+    text.encode_utf16().flat_map(|u| if le { u.to_le_bytes() } else { u.to_be_bytes() }).collect()
+}
+
+/// Unicode text in UTF-16 without a byte-order mark is read as UTF-16 when at least half of its
+/// two-byte units hold a NUL byte, in the byte order that reads a line break, or for one line, the
+/// order its NUL bytes give. Other bytes keep today's reading.
+#[test]
+fn utf16_without_a_byte_order_mark_places_by_its_nul_bytes_and_line_breaks() {
+    let mut s = session();
+    for le in [true, false] {
+        let r = place_text(&mut s, &utf16("Hello, 世界 café!\r\nSecond line", le), json!({}));
+        assert_eq!(placed(&s, &r).0, "Hello, 世界 café!\nSecond line", "little-endian: {le}");
+        let r = place_text(&mut s, &utf16("One line, 世界", le), json!({}));
+        assert_eq!(placed(&s, &r).0, "One line, 世界", "little-endian: {le}");
+    }
+    // One line with NUL bytes in both places (U+4E00 ends in a zero byte) takes the order more of
+    // its units give, and a tie is little-endian.
+    let r = place_text(&mut s, &utf16("一AB", false), json!({}));
+    assert_eq!(placed(&s, &r).0, "一AB");
+    let r = place_text(&mut s, &utf16("一A", true), json!({}));
+    assert_eq!(placed(&s, &r).0, "一A");
+    // Not read as UTF-16, so read as UTF-8 or else Windows-1252 with NUL bytes dropped: an odd
+    // length, an unpaired surrogate, a NUL character, and line breaks in both byte orders (U+0A00).
+    let r = place_text(&mut s, b"A\0B", json!({}));
+    assert_eq!(placed(&s, &r).0, "AB");
+    let r = place_text(&mut s, b"\0a\0b\xd8\0", json!({}));
+    assert_eq!(placed(&s, &r).0, "abØ");
+    let r = place_text(&mut s, b"\0\0\xc3\xa9", json!({}));
+    assert_eq!(placed(&s, &r).0, "é");
+    let r = place_text(&mut s, &utf16("A\u{0A00}\nB", true), json!({}));
+    assert_eq!(placed(&s, &r).0, "A\n\nB");
+    // Fewer than half of the two-byte units hold a NUL byte: UTF-8, and Windows-1252.
+    let r = place_text(&mut s, "Fünf\0 Zeilen!".as_bytes(), json!({}));
+    assert_eq!(placed(&s, &r).0, "Fünf Zeilen!");
+    let r = place_text(&mut s, b"caf\xe9\0x", json!({}));
+    assert_eq!(placed(&s, &r).0, "caféx");
+    // ANSI reads each byte as a character of the 8-bit set; NUL and other control bytes are dropped.
+    let r = place_text(&mut s, &utf16("Hi, 世界", true), json!({"text": {"characterSet": "ansi"}}));
+    assert_eq!(placed(&s, &r).0, "Hi, NLu");
+}
+
 #[test]
 fn text_files_report_and_queue_with_their_options() {
     let mut s = session();
@@ -90,6 +133,36 @@ fn text_files_report_and_queue_with_their_options() {
     let (body, frame) = placed(&s, &r);
     assert_eq!(body, "Swap");
     assert!(close(frame, Rect::new(50.0, 60.0, 130.0, 100.0)), "{frame:?}");
+}
+
+/// Text Import Options' other character sets place their text as area type, and an unknown
+/// character set is refused with the list of sets and places nothing.
+#[test]
+fn text_files_place_in_the_other_character_sets() {
+    let mut s = session();
+    let cases: [(&str, &str, &[u8], &str); 11] = [
+        ("shiftJis", "windows", &[0x93, 0xFA, 0x96, 0x7B], "日本"),
+        ("gb2312", "windows", &[0xD6, 0xD0, 0xCE, 0xC4], "中文"),
+        ("chineseBig5", "mac", &[0xA4, 0xA4, 0xA4, 0xE5], "中文"),
+        ("cyrillic", "windows", &[0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2], "Привет"),
+        ("cyrillic", "mac", &[0x8F, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2], "Привет"),
+        ("gb18030", "windows", &[0x95, 0x32, 0x82, 0x36], "\u{20000}"),
+        ("greek", "windows", &[0xC5, 0xEB, 0xEB, 0xDC, 0xE4, 0xE1], "Ελλάδα"),
+        ("turkish", "mac", &[0xDD, 0x73, 0x74], "İst"),
+        ("baltic", "windows", &[0x52, 0xEE, 0x67, 0x61], "Rīga"),
+        ("centralEuropean", "windows", &[0xA3, 0xF3, 0x64, 0x9F, b'\r', b'\n', 0xA3], "Łódź\nŁ"),
+        ("shiftJis", "windows", &[0x82, 0x22], "\u{FFFD}\""),
+    ];
+    for (set, platform, bytes, text) in cases {
+        let r = place_text(&mut s, bytes, json!({"text": {"characterSet": set, "platform": platform}}));
+        assert_eq!(placed(&s, &r).0, text, "{set} on {platform}");
+    }
+    let undo = s.doc().unwrap().history.undo.len();
+    let bad = json!({"name": "a.txt", "dataBase64": "YQ==", "text": {"characterSet": "latin9"}});
+    let err = s.execute("file.place", &bad).unwrap_err().to_string();
+    let list = r#""unicode", "ansi", "shiftJis", "gb2312", "chineseBig5", "cyrillic", "gb18030", "greek", "turkish", "baltic" or "centralEuropean""#;
+    assert!(err.contains(&format!("text.characterSet `latin9`: use {list}")), "{err}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing placed");
 }
 
 /// An RTF file with a font table, a color table, a bold run, an italic run, a superscript and a
@@ -425,6 +498,15 @@ fn malformed_docx_fails_cleanly() {
     assert!(e.contains("not a WordprocessingML document"), "{e}");
     let e = place(&mut s, "a.docx", &store(&[("word/document.xml", b"<w:document><w:body>")])).unwrap_err();
     assert!(e.contains("not well-formed XML"), "{e}");
+    for xml in [
+        format!(r#"<w:document xmlns:w="{W_NS}"><w:body><w:p><w:r><w:t>partial text</w:t></w:r></w:p>"#),
+        document("<w:p><w:r><w:t>A&missing;B</w:t></w:r></w:p>"),
+        document("<w:p><w:r><w:t xml:space=\"preserve\" xml:space=\"default\">text</w:t></w:r></w:p>"),
+        document("<w:p xmlns:a=\"urn:test\" xmlns:b=\"urn:test\" a:id=\"1\" b:id=\"2\"><w:r><w:t>text</w:t></w:r></w:p>"),
+    ] {
+        let e = place(&mut s, "a.docx", &store(&[("word/document.xml", xml.as_bytes())])).unwrap_err();
+        assert!(e.contains("not well-formed XML"), "{e}");
+    }
     let e = place(&mut s, "a.docx", &store(&[("word/document.xml", document("<w:p/>").as_bytes())])).unwrap_err();
     assert!(e.contains("no text to place"), "{e}");
     // A file whose headers understate what it unpacks to, and one whose headers say it is too large.
@@ -913,25 +995,32 @@ fn doc_styles_are_worked_out_once_however_many_paragraphs_use_them() {
             styles.push(Some((stk, if i == first { 0x0FFF } else { i - 1 }, vec![], chpx)));
         }
     }
-    // 20,000 hidden paragraphs in the last paragraph style with the last character style, then one
-    // shown.
-    let text: &'static str = format!("{}x\r", "\r".repeat(20_000)).leak();
-    let doc = Word97 {
-        pieces: vec![(text, true)],
-        chpx: vec![(0, 20_000, prls(&[(0x4A30, &[63, 0]), (0x083C, &[1])])), (20_000, 20_002, prls(&[(0x4A30, &[63, 0])]))],
-        papx: vec![(20_001, 31, vec![])],
-        styles,
-        ..Word97::default()
-    }
-    .build();
+    // `hidden` hidden paragraphs in the last paragraph style with the last character style, then
+    // one shown; the Prls read placing it.
     let mut s = session();
-    let started = std::time::Instant::now();
-    let r = s.execute("file.place", &json!({"name": "a.doc", "dataBase64": vectorcraft_format::base64_encode(&doc)})).unwrap();
-    let took = started.elapsed();
-    let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
-    let NodeKind::Text(t) = &n.kind else { panic!("not type") };
-    assert_eq!((t.runs.len(), t.runs[0].text.as_str(), t.runs[0].style.font_style.as_str(), t.runs[0].style.size), (1, "x", "Italic", 12.0));
-    assert!(took < std::time::Duration::from_secs(10), "placing took {took:?}");
+    let mut place_hidden = |hidden: u32| {
+        let text: &'static str = format!("{}x\r", "\r".repeat(hidden as usize)).leak();
+        let doc = Word97 {
+            pieces: vec![(text, true)],
+            chpx: vec![(0, hidden, prls(&[(0x4A30, &[63, 0]), (0x083C, &[1])])), (hidden, hidden + 2, prls(&[(0x4A30, &[63, 0])]))],
+            papx: vec![(hidden + 1, 31, vec![])],
+            styles: styles.clone(),
+            ..Word97::default()
+        }
+        .build();
+        crate::cmd::place::PRLS_READ.set(0);
+        let r = s.execute("file.place", &json!({"name": "a.doc", "dataBase64": vectorcraft_format::base64_encode(&doc)})).unwrap();
+        let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
+        let NodeKind::Text(t) = &n.kind else { panic!("not type") };
+        assert_eq!((t.runs.len(), t.runs[0].text.as_str(), t.runs[0].style.font_style.as_str(), t.runs[0].style.size), (1, "x", "Italic", 12.0));
+        crate::cmd::place::PRLS_READ.get()
+    };
+    let one = place_hidden(1);
+    let many = place_hidden(20_000);
+    // The styles' own Prls: 21,000 in each of the 64, and the two first ones' sizes.
+    let sheet = 64 * 21_000 + 2;
+    assert!(one >= sheet && one < 2 * sheet, "each style's properties are read once: {one} Prls read, {sheet} in the styles");
+    assert!(many <= one + 20_000, "20,000 more paragraphs read {} more Prls", many - one);
     // A chain of 34 paragraph styles, each based on the next; the last is 12 pt. Styles 31 and 0
     // both take its size.
     let mut styles: Vec<_> = (0..33u16).map(|i| Some((1, i + 1, vec![], vec![]))).collect();

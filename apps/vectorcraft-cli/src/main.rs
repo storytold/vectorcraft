@@ -7,6 +7,7 @@
 //! vectorcraft-cli commands
 //! vectorcraft-cli convert IN OUT [--scale 2] [--ppi 300] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--legacy-name-encoding ENC] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
+//! vectorcraft-cli thumbnail [--size 256] IN OUT
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000] [--deep]
 //! ```
@@ -145,6 +146,15 @@ USAGE:
       read from its preview and why), title, colour mode, units, artboards, object counts by
       kind, fonts.
 
+  vectorcraft-cli thumbnail [--size N] IN OUT
+      Open IN (any readable format) and write OUT as a PNG of its first artboard (else the art),
+      N pixels on its longer side (1 to 1024, default 256), with a transparent background. Linux
+      file managers run it for .vectorcraft, .drawcraft and .vctemplate files through
+      share/thumbnailers/ai.storyteller.vectorcraft.thumbnailer, and the Windows thumbnail
+      handler (vectorcraft_thumbnail_handler.dll) runs it for Explorer. It exits with an error
+      and writes nothing when IN is larger than 256 MiB, can't be opened, shows nothing, or takes
+      longer than 20 seconds.
+
   vectorcraft-cli bench FILE [--size WxH] [--iters N]
       Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
       (warm), multithreaded and single-threaded.
@@ -217,6 +227,7 @@ fn main() -> ExitCode {
         Some("commands") => commands(),
         Some("convert") => convert(&args[1..]),
         Some("info") => info(&args[1..]),
+        Some("thumbnail") => thumbnail(&args[1..]),
         Some("bench") => bench(&args[1..]),
         Some("perf") => perf::run(&args[1..]),
         Some("-h" | "--help" | "help") | None => help(),
@@ -236,14 +247,26 @@ fn main() -> ExitCode {
 }
 
 /// A headless session that remembers what the user keeps between runs: the PDF presets saved, the
-/// ICC profiles loaded, the plug-ins installed (#2168, #2174, #2541) and the custom dictionary's words (#4936), in the folders
-/// and files next to the preferences that the desktop app uses too. `VECTORCRAFT_NO_PREFS` and `VECTORCRAFT_CONFIG_DIR` apply
-/// as they do there.
+/// ICC profiles loaded, the plug-ins installed (#2168, #2174, #2541), the custom dictionary's words (#4936) and the Color Settings (#6335), in the folders
+/// and files next to the preferences that the desktop app uses too, and lists the scripts of the Scripts folder there
+/// (`script.listInstalled`) and finds its Startup Scripts folder (`script.startup.run`, never run on its own), keeps each
+/// script's `Folder.userData` in the Script Data folder there, keeps File Info's
+/// metadata templates there and starts new documents from the New Document profiles there. `VECTORCRAFT_NO_PREFS` and
+/// `VECTORCRAFT_CONFIG_DIR` apply as they do there.
 fn with_stores(mut h: Headless) -> Headless {
+    prefs_dir::attach_scripts_dir(&mut h.session);
+    prefs_dir::attach_startup_scripts_dir(&mut h.session);
+    prefs_dir::attach_script_data(&mut h.session);
+    prefs_dir::attach_metadata_templates_dir(&mut h.session);
+    prefs_dir::attach_new_doc_profiles(&mut h.session);
+    prefs_dir::attach_proof_setups(&mut h.session);
     prefs_dir::attach_profile_store(&mut h.session);
+    prefs_dir::attach_color_settings(&mut h.session);
     prefs_dir::attach_plugin_store(&mut h.session);
     prefs_dir::attach_pdf_preset_store(&mut h.session);
     prefs_dir::attach_custom_dictionary(&mut h.session);
+    prefs_dir::attach_arrowheads(&mut h.session);
+    prefs_dir::attach_bevels(&mut h.session);
     h
 }
 
@@ -311,11 +334,13 @@ fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
         Box::new(accepting_grants(with_stores(Headless::with_document()), allow_grants))
     } else if let Some(addr) = connect {
         // Explicit address: fail loudly if the app isn't there.
-        Box::new(Remote::connect(&addr).map_err(|e| format!("cannot connect to {addr}: {e}"))?)
+        let token = vectorcraft_mcp::control_token()?;
+        Box::new(Remote::connect(&addr, &token).map_err(|e| format!("cannot connect to {addr}: {e}"))?)
     } else {
-        match Remote::connect(DEFAULT_ADDR) {
-            Ok(r) => Box::new(r),
-            Err(_) => Box::new(with_stores(Headless::with_document())),
+        // No token or no app listening: the headless session answers instead.
+        match vectorcraft_mcp::control_token().ok().and_then(|token| Remote::connect(DEFAULT_ADDR, &token).ok()) {
+            Some(r) => Box::new(r),
+            None => Box::new(with_stores(Headless::with_document())),
         }
     };
     eprintln!("vectorcraft-cli: MCP server on stdio ({})", backend.describe());
@@ -413,10 +438,18 @@ fn convert(args: &[String]) -> Result<(), String> {
         // Save as Template writes every artboard, with the .ai options.
         ("file.saveAsTemplate", json!({"path": output, "format": "ait", "outlineText": outline_text, "acknowledgeLoss": replace_lossy}))
     } else {
-        // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
-        // PSD).
-        let params = json!({"path": output, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
+        let params = json!({"path": output, "artboard": artboard, "range": range, "acknowledgeLoss": replace_lossy});
         let mut params = with_pixel_scale(params, &output, scale, ppi);
+        // An option the format doesn't read comes back in the warnings, so each goes out only
+        // when it was asked for: `outlineText` with --outline-text, and `hiddenLayers` to the
+        // formats that have it (SVG, PSD), where a conversion keeps hidden layers and objects,
+        // written hidden.
+        if outline_text {
+            params["outlineText"] = json!(true);
+        }
+        if vectorcraft_engine::cmd::fileio::writable_format(None, Some(&output)).is_ok_and(|f| f.options.iter().any(|o| o.name == "hiddenLayers")) {
+            params["hiddenLayers"] = json!(true);
+        }
         if let Some(decimals) = decimals {
             params["decimals"] = json!(decimals);
         }
@@ -484,7 +517,12 @@ fn info(args: &[String]) -> Result<(), String> {
     let base = h.call("engine.execute", json!({"command": "file.info", "params": {}}))?;
     let doc = h.session.doc().map_err(|e| e.to_string())?.doc.clone();
     let mut kinds: std::collections::BTreeMap<&'static str, usize> = Default::default();
-    doc.walk(|n| *kinds.entry(n.kind_label()).or_default() += 1);
+    // Ruler guides are not counted among the objects.
+    doc.walk(|n| {
+        if !n.is_ruler_guide() {
+            *kinds.entry(n.kind_label()).or_default() += 1;
+        }
+    });
     let fonts = h.call("engine.execute", json!({"command": "text.fonts", "params": {}})).unwrap_or(Value::Null);
     let artboards: Vec<Value> =
         doc.artboards.iter().map(|a| json!({"name": a.name, "rect": [a.rect.x0, a.rect.y0, a.rect.width(), a.rect.height()]})).collect();
@@ -492,6 +530,83 @@ fn info(args: &[String]) -> Result<(), String> {
     let v = json!({"file": file, "warnings": opened["warnings"], "info": base, "artboards": artboards, "kinds": kinds, "fonts": fonts});
     outln!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
     Ok(())
+}
+
+/// Largest file `thumbnail` opens, in bytes on disk.
+const THUMBNAIL_MAX_FILE: u64 = 256 << 20;
+/// Largest `--size` of `thumbnail`: the thumbnail standard's largest size, xx-large.
+const THUMBNAIL_MAX_SIZE: u32 = 1024;
+/// `--size` when it isn't given: the thumbnail standard's large size.
+const THUMBNAIL_DEFAULT_SIZE: u32 = 256;
+/// Longest `thumbnail` runs before it exits without writing OUT.
+const THUMBNAIL_TIME: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// `thumbnail`: the PNG a Linux file manager shows for a document, run through the
+/// `.thumbnailer` entry in `packaging/linux`
+/// (<https://specifications.freedesktop.org/thumbnail-spec/latest/creation.html>), and the
+/// picture the Windows thumbnail handler (`apps/vectorcraft-thumbnail-handler`) gives Explorer.
+fn thumbnail(args: &[String]) -> Result<(), String> {
+    if help_requested(args, &["--size", "-s"]) {
+        return help();
+    }
+    let mut files = vec![];
+    let mut size = THUMBNAIL_DEFAULT_SIZE;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--size" | "-s" => {
+                size = it
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .filter(|n| (1..=THUMBNAIL_MAX_SIZE).contains(n))
+                    .ok_or_else(|| format!("--size needs a number of pixels from 1 to {THUMBNAIL_MAX_SIZE}"))?;
+            }
+            other if other.starts_with('-') => return Err(format!("unknown thumbnail option `{other}`")),
+            f => files.push(f),
+        }
+    }
+    let [input, output] = <[&str; 2]>::try_from(files).map_err(|_| "thumbnail needs IN and OUT")?;
+    // The process ends when the time is up, wherever the work is: OUT is written whole or not at all.
+    std::thread::spawn(|| {
+        std::thread::sleep(THUMBNAIL_TIME);
+        eprintln!("vectorcraft-cli: thumbnail: took longer than {} seconds", THUMBNAIL_TIME.as_secs());
+        std::process::exit(1);
+    });
+    let len = std::fs::metadata(input).map_err(|e| format!("{input}: {e}"))?.len();
+    if len > THUMBNAIL_MAX_FILE {
+        return Err(format!("{input}: larger than {} MiB", THUMBNAIL_MAX_FILE >> 20));
+    }
+    // Opened as the app opens it: the fonts it carries, its type measured, its linked files read.
+    let mut h = Headless::new();
+    h.call("app.open", json!({"path": input})).map_err(|e| format!("{input}: {e}"))?;
+    let doc = &h.session.doc().map_err(|e| e.to_string())?.doc;
+    // A picture without a visible pixel is an error, and the file manager keeps the file's icon.
+    let img = vectorcraft_render::encode::first_artboard(doc, size)
+        .filter(|img| img.pixels.as_chunks::<4>().0.iter().any(|px| px[3] != 0))
+        .ok_or_else(|| format!("{input}: the document shows nothing"))?;
+    let png = img.to_png().map_err(|e| format!("{input}: {e}"))?;
+    write_whole(Path::new(output), &png, |tmp, out| std::fs::rename(tmp, out)).map_err(|e| format!("{output}: {e}"))
+}
+
+/// Writes `bytes` to a temporary file beside `out` and moves it over `out` with `rename`. When the
+/// temporary file can't be written or `rename` fails, this returns the error, removes the temporary
+/// file and leaves `out` unchanged; it never copies into `out`.
+fn write_whole(out: &Path, bytes: &[u8], rename: impl FnOnce(&Path, &Path) -> std::io::Result<()>) -> std::io::Result<()> {
+    let name = out.file_name().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a file name"))?;
+    let mut tmp_name = std::ffi::OsString::from(".");
+    tmp_name.push(name);
+    tmp_name.push(format!(".{}.tmp", std::process::id()));
+    let tmp = out.with_file_name(tmp_name);
+    // A file already at `tmp` is not this run's: the error leaves it in place.
+    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+    let written = f.write_all(bytes).and_then(|()| vectorcraft_format::sync_file(&f));
+    drop(f);
+    let written = written.and_then(|()| rename(&tmp, out));
+    if written.is_err() {
+        // Best effort: the temporary file is all there is to clean up.
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written
 }
 
 enum Step {
@@ -742,4 +857,42 @@ fn bench(args: &[String]) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod write_whole_tests {
+    use super::write_whole;
+
+    #[test]
+    fn a_failed_rename_leaves_out_unchanged_and_no_temporary_file() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let out = dir.path().join("out.png");
+        std::fs::write(&out, b"old").unwrap_or_else(|e| panic!("{e}"));
+        let refused = write_whole(&out, b"new picture", |_, _| Err(std::io::Error::other("refused")));
+        assert!(refused.is_err());
+        assert_eq!(std::fs::read(&out).unwrap_or_else(|e| panic!("{e}")), b"old");
+        let names: Vec<_> = std::fs::read_dir(dir.path()).unwrap_or_else(|e| panic!("{e}")).flatten().map(|e| e.file_name()).collect();
+        assert_eq!(names, ["out.png"]);
+    }
+
+    #[test]
+    fn a_file_already_at_the_temporary_name_is_kept() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let out = dir.path().join("out.png");
+        let tmp = dir.path().join(format!(".out.png.{}.tmp", std::process::id()));
+        std::fs::write(&tmp, b"someone else's").unwrap_or_else(|e| panic!("{e}"));
+        assert!(write_whole(&out, b"new picture", |tmp, out| std::fs::rename(tmp, out)).is_err());
+        assert_eq!(std::fs::read(&tmp).unwrap_or_else(|e| panic!("{e}")), b"someone else's");
+        assert!(!out.exists());
+    }
+
+    #[test]
+    fn a_rename_replaces_out() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let out = dir.path().join("out.png");
+        std::fs::write(&out, b"old").unwrap_or_else(|e| panic!("{e}"));
+        write_whole(&out, b"new picture", |tmp, out| std::fs::rename(tmp, out)).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(std::fs::read(&out).unwrap_or_else(|e| panic!("{e}")), b"new picture");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap_or_else(|e| panic!("{e}")).count(), 1);
+    }
 }

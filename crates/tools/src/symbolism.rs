@@ -23,14 +23,33 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
     })
 }
 
+/// The values of Method in the Symbolism Tools Options.
+pub const METHODS: [&str; 3] = ["userDefined", "average", "random"];
+
+/// The values of each Symbol Sprayer option in the Symbolism Tools Options.
+pub const SPRAY_MODES: [&str; 2] = ["average", "userDefined"];
+
+/// The Symbol Sprayer options: (tool option, key in `symbol.spray`'s `attributes`).
+pub const SPRAY_ATTRIBUTES: [(&str, &str); 6] = [
+    ("sprayScrunch", "scrunch"),
+    ("spraySize", "size"),
+    ("spraySpin", "spin"),
+    ("sprayScreen", "screen"),
+    ("sprayStain", "stain"),
+    ("sprayStyle", "style"),
+];
+
 pub struct SymbolismTool {
     id: &'static str,
-    points: Vec<Point>,
+    /// The drag's points, each with its pen pressure (0..1).
+    points: Vec<(Point, f64)>,
     /// How many points the last preview had ([`previews_at`] thins previews of a long drag).
     previewed: usize,
     active: bool,
     hover: Option<Point>,
     alt: bool,
+    /// Shift was held when the drag began (the Shifter, Sizer, Stainer and Styler have a Shift form).
+    shift: bool,
     /// Brush diameter in points.
     pub diameter: f64,
     /// 1..10.
@@ -41,6 +60,40 @@ pub struct SymbolismTool {
     pub symbol: Option<String>,
     /// Graphic style for the Styler (None = the document's first non-default style).
     pub style: Option<String>,
+    /// Use Pressure Pen: each point's pen pressure is the intensity there.
+    pub use_pressure: bool,
+    /// Method of the Scruncher, Sizer, Spinner, Stainer, Screener and Styler: one of [`METHODS`].
+    pub method: &'static str,
+    /// Show Brush Size and Intensity: the brush outline follows the pointer.
+    pub show_brush: bool,
+    /// The Symbol Sprayer options, in the order of [`SPRAY_ATTRIBUTES`]: each one of [`SPRAY_MODES`].
+    pub spray: [&'static str; 6],
+    /// Symbol Sizer: Proportional Resizing.
+    pub proportional: bool,
+    /// Symbol Sizer: Resizing Affects Density.
+    pub affects_density: bool,
+}
+
+/// Checks the Symbolism Tools Options in `values` before `tool.setOption` sets any, when `tool` is
+/// a symbolism tool, with the tool's own checks ([`Tool::check_option`]): a number out of its
+/// range, `method` that is not one of [`METHODS`], a Symbol Sprayer option that is not one of
+/// [`SPRAY_MODES`], and `usePressure`, `showBrush`, `proportional` or `affectsDensity` that is not
+/// true or false are errors. Ok for every other tool, and for a key the tool does not report
+/// (`tool.setOption` refuses that one as an unknown option). Saved settings go to the tool's
+/// `set_option` instead, which skips a value it cannot read.
+pub fn check_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+    if !tool.starts_with("symbol") || create(tool).is_none() {
+        return Ok(());
+    }
+    let tool = SymbolismTool::new(tool);
+    let known = tool.options();
+    values.iter().filter(|(key, _)| known.get(key.as_str()).is_some()).try_for_each(|(key, v)| tool.check_option(key, v))
+}
+
+/// `v` as one of `allowed`, when it is one.
+fn one_of(v: &Value, allowed: &[&'static str]) -> Option<&'static str> {
+    let s = v.as_str()?;
+    allowed.iter().copied().find(|a| *a == s)
 }
 
 impl SymbolismTool {
@@ -62,11 +115,18 @@ impl SymbolismTool {
             active: false,
             hover: None,
             alt: false,
+            shift: false,
             diameter: 80.0,
             intensity: 5.0,
             density: 5.0,
             symbol: None,
             style: None,
+            use_pressure: false,
+            method: "userDefined",
+            show_brush: true,
+            spray: ["average"; 6],
+            proportional: true,
+            affects_density: false,
         }
     }
 
@@ -86,14 +146,29 @@ impl SymbolismTool {
     /// The command + params for the gesture so far.
     pub fn command(&self, cx: &ToolContext) -> (String, Value) {
         let radius = self.diameter / 2.0;
-        let pts = points_json(&self.points);
         if self.id == "symbolSprayer" {
-            let mut v = json!({"points": pts, "radius": radius, "density": self.density, "alt": self.alt});
+            let pts = points_json(&self.points.iter().map(|(p, _)| *p).collect::<Vec<_>>());
+            let attributes: serde_json::Map<String, Value> =
+                SPRAY_ATTRIBUTES.iter().zip(self.spray).map(|((_, key), mode)| (key.to_string(), json!(mode))).collect();
+            let mut v = json!({"points": pts, "radius": radius, "density": self.density, "alt": self.alt, "attributes": attributes});
             if let Some(s) = &self.symbol {
                 v["name"] = json!(s);
             }
+            // Stain: User Defined stains the new instances with the fill color in its own model.
+            if self.spray[4] == "userDefined"
+                && let Some(c) = cx.paint.fill.color()
+            {
+                v["color"] = serde_json::to_value(c).unwrap_or(Value::Null);
+                v["keepModel"] = json!(true);
+            }
+            // A style the document no longer has (a deleted one) is left out: the default style applies.
+            if let Some(s) = self.style.as_ref().filter(|s| cx.doc.graphic_styles.iter().any(|g| g.name == **s)) {
+                v["style"] = json!(s);
+            }
             return ("symbol.spray".into(), v);
         }
+        let pressure = self.use_pressure;
+        let pts = Value::Array(self.points.iter().map(|(p, f)| if pressure { json!([p.x, p.y, f]) } else { json!([p.x, p.y]) }).collect());
         let tool = match self.id {
             "symbolShifter" => "shift",
             "symbolScruncher" => "scrunch",
@@ -112,6 +187,20 @@ impl SymbolismTool {
         }
         if let Some(s) = &self.style {
             v["style"] = json!(s);
+        }
+        if pressure {
+            v["usePressure"] = json!(true);
+        }
+        // The Symbol Shifter has no Method.
+        if tool != "shift" {
+            v["method"] = json!(self.method);
+        }
+        if tool == "size" {
+            v["proportional"] = json!(self.proportional);
+            v["affectsDensity"] = json!(self.affects_density);
+        }
+        if self.shift && matches!(tool, "shift" | "size" | "stain" | "style") {
+            v["shift"] = json!(true);
         }
         ("symbol.adjust".into(), v)
     }
@@ -140,23 +229,29 @@ impl Tool for SymbolismTool {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
         self.hover = Some(p);
+        let sample = (p, f64::from(ev.pressure).clamp(0.0, 1.0));
         match ev.kind {
             PointerKind::Down => {
-                self.points = vec![p];
+                self.points = vec![sample];
                 self.previewed = 1;
                 self.active = true;
                 self.alt = ev.mods.alt;
+                self.shift = ev.mods.shift;
                 let (c, v) = self.command(cx);
                 vec![Action::Begin(self.label().into()), Action::Preview(c, v)]
             }
             PointerKind::Drag if self.active => {
                 // Sprayer: thin the samples to a fraction of the brush; others: every few pixels.
                 let step = if self.id == "symbolSprayer" { (self.diameter * 0.15).max(cx.tol(3.0)) } else { cx.tol(3.0) };
+                // With Use Pressure Pen a change of pressure of at least 0.05 is kept where the pen
+                // stays (the Sprayer does not use the pressure).
+                let pressed = self.use_pressure && self.id != "symbolSprayer";
+                let thinned = self.points.last().is_some_and(|(l, f)| l.distance(p) < step && !(pressed && (sample.1 - f).abs() >= 0.05));
                 // Each preview carries every point so far: a long drag stops growing and previews less often.
-                if self.points.len() >= MAX_STROKE_SAMPLES || self.points.last().is_some_and(|l| l.distance(p) < step) {
+                if self.points.len() >= MAX_STROKE_SAMPLES || thinned {
                     return vec![];
                 }
-                self.points.push(p);
+                self.points.push(sample);
                 if !previews_at(self.points.len()) {
                     return vec![];
                 }
@@ -193,9 +288,16 @@ impl Tool for SymbolismTool {
         vec![]
     }
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        let Some(p) = self.hover else { return vec![] };
-        let circle = kurbo::Circle::new(p, self.diameter / 2.0).to_path(0.1);
-        vec![Overlay::Path { path: circle, color: FEEDBACK, width: 1.0, dashed: false }]
+        let Some(p) = self.hover.filter(|_| self.show_brush) else { return vec![] };
+        let ring = |radius: f64, dashed| Overlay::Path { path: kurbo::Circle::new(p, radius).to_path(0.1), color: FEEDBACK, width: 1.0, dashed };
+        let mut v = vec![ring(self.diameter / 2.0, false)];
+        // The intensity: a dashed ring that fills the brush at 10. A pen's pressure sets it instead
+        // with Use Pressure Pen, so no ring is drawn then. The Symbol Sprayer uses neither, so it
+        // draws no ring.
+        if self.id != "symbolSprayer" && !self.use_pressure && self.intensity < 10.0 {
+            v.push(ring(self.diameter / 2.0 * self.intensity / 10.0, true));
+        }
+        v
     }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
         match self.id {
@@ -210,7 +312,22 @@ impl Tool for SymbolismTool {
         }
     }
     fn options(&self) -> Value {
-        json!({"diameter": self.diameter, "intensity": self.intensity, "density": self.density, "symbol": self.symbol, "style": self.style})
+        let mut v = json!({
+            "diameter": self.diameter,
+            "intensity": self.intensity,
+            "density": self.density,
+            "symbol": self.symbol,
+            "style": self.style,
+            "usePressure": self.use_pressure,
+            "method": self.method,
+            "showBrush": self.show_brush,
+            "proportional": self.proportional,
+            "affectsDensity": self.affects_density,
+        });
+        for ((key, _), mode) in SPRAY_ATTRIBUTES.iter().zip(self.spray) {
+            v[*key] = json!(mode);
+        }
+        v
     }
     fn set_option(&mut self, key: &str, v: &Value) {
         match key {
@@ -219,7 +336,29 @@ impl Tool for SymbolismTool {
             "density" => self.density = v.as_f64().unwrap_or(self.density).clamp(1.0, 10.0),
             "symbol" => self.symbol = v.as_str().map(str::to_string),
             "style" => self.style = v.as_str().map(str::to_string),
-            _ => {}
+            "usePressure" => self.use_pressure = v.as_bool().unwrap_or(self.use_pressure),
+            "method" => self.method = one_of(v, &METHODS).unwrap_or(self.method),
+            "showBrush" => self.show_brush = v.as_bool().unwrap_or(self.show_brush),
+            "proportional" => self.proportional = v.as_bool().unwrap_or(self.proportional),
+            "affectsDensity" => self.affects_density = v.as_bool().unwrap_or(self.affects_density),
+            _ => {
+                if let Some(i) = SPRAY_ATTRIBUTES.iter().position(|(k, _)| *k == key) {
+                    self.spray[i] = one_of(v, &SPRAY_MODES).unwrap_or(self.spray[i]);
+                }
+            }
+        }
+    }
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        let must_be = |names: &[&str]| format!("`{key}` must be one of {}", names.join(", "));
+        match key {
+            "diameter" => c::number(key, v, 2.0, 2000.0),
+            "intensity" | "density" => c::number(key, v, 1.0, 10.0),
+            "symbol" | "style" => c::string_or_null(key, v),
+            "usePressure" | "showBrush" | "proportional" | "affectsDensity" => c::boolean(key, v),
+            "method" => one_of(v, &METHODS).map(drop).ok_or_else(|| must_be(&METHODS)),
+            k if SPRAY_ATTRIBUTES.iter().any(|(a, _)| *a == k) => one_of(v, &SPRAY_MODES).map(drop).ok_or_else(|| must_be(&SPRAY_MODES)),
+            _ => Err(c::unknown(key)),
         }
     }
 }
@@ -238,10 +377,15 @@ impl Default for BrushPaintTool {
 }
 
 impl BrushPaintTool {
+    /// The tool's brush, else the document's current brush, skipping a name the document's brush
+    /// library no longer has (a deleted brush), so the stroke is drawn without it.
     fn brush_name(&self, cx: &ToolContext) -> Option<String> {
-        self.brush.clone().or_else(|| cx.doc.unknown.get("currentBrush").and_then(Value::as_str).map(str::to_string))
+        [self.brush.clone(), vectorcraft_brush::current(cx.doc)].into_iter().flatten().find(|n| vectorcraft_brush::find(cx.doc, n).is_some())
     }
     fn map(&self, cx: &ToolContext, acts: Vec<Action>) -> Vec<Action> {
+        if !acts.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "path.freehand")) {
+            return acts;
+        }
         let Some(b) = self.brush_name(cx) else { return acts };
         acts.into_iter()
             .map(|a| match a {
@@ -288,11 +432,33 @@ impl Tool for BrushPaintTool {
             self.inner.set_option(key, v);
         }
     }
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        if key == "brush" { crate::option_check::string_or_null(key, v) } else { self.inner.check_option(key, v) }
+    }
     fn wants_samples(&self) -> bool {
         self.inner.wants_samples()
     }
+    /// The brush it paints with varies with the wheel: a Calligraphic brush with a value on Stylus
+    /// Wheel and a variation other than 0, a Scatter brush with a value on it whose two values
+    /// differ, an Art brush whose width is on it with two different widths, or a Pattern brush
+    /// whose scale is on it with two different scales.
+    fn reads_wheel(&self, cx: &ToolContext) -> bool {
+        use vectorcraft_brush::{BrushKind, Variation};
+        let wheel = |mode: Variation| mode == Variation::StylusWheel;
+        let Some(brush) = self.brush_name(cx).and_then(|n| vectorcraft_brush::find(cx.doc, &n)) else { return false };
+        match brush.kind {
+            BrushKind::Calligraphic(c) => c.modes().into_iter().zip(c.variation).any(|(m, v)| wheel(m) && v != 0.0),
+            BrushKind::Scatter(s) => s.modes().into_iter().zip(s.values()).any(|(m, (a, b))| wheel(m) && a != b),
+            BrushKind::Art(a) => a.width_mode.is_some_and(wheel) && a.width_range().0 != a.width_range().1,
+            BrushKind::Pattern(p) => p.scale_mode.is_some_and(wheel) && p.scale_range().0 != p.scale_range().1,
+            BrushKind::Bristle(_) => false,
+        }
+    }
     fn busy(&self) -> bool {
         self.inner.busy()
+    }
+    fn readout(&self, cx: &ToolContext) -> Option<crate::Readout> {
+        Some(crate::Readout::Brush { name: self.brush_name(cx) })
     }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         let acts = self.inner.deactivate(cx);
@@ -371,6 +537,192 @@ mod tests {
         assert!(matches!(&a[1], Action::Preview(_, v) if v["color"] == fill && v["keepModel"] == true), "{a:?}");
     }
 
+    /// The Symbolism Tools Options the tools keep, with what each is before it is set.
+    #[test]
+    fn the_options_dialog_fields_are_tool_options() {
+        let mut t = SymbolismTool::new("symbolSizer");
+        let o = t.options();
+        assert_eq!((o["usePressure"].clone(), o["method"].clone(), o["showBrush"].clone()), (json!(false), json!("userDefined"), json!(true)));
+        assert_eq!((o["proportional"].clone(), o["affectsDensity"].clone()), (json!(true), json!(false)));
+        for (key, _) in SPRAY_ATTRIBUTES {
+            assert_eq!(o[key], "average", "{key}");
+        }
+        for (key, v) in [
+            ("usePressure", json!(true)),
+            ("method", json!("random")),
+            ("showBrush", json!(false)),
+            ("proportional", json!(false)),
+            ("affectsDensity", json!(true)),
+            ("sprayStain", json!("userDefined")),
+        ] {
+            t.set_option(key, &v);
+            assert_eq!(t.options()[key], v, "{key}");
+        }
+        // A value that is none of an option's choices leaves it as it was.
+        for (key, v) in [("method", json!("smooth")), ("method", json!(2)), ("sprayStain", json!("random")), ("usePressure", json!("yes"))] {
+            let before = t.options();
+            t.set_option(key, &v);
+            assert_eq!(t.options(), before, "{key}: {v}");
+        }
+    }
+
+    /// The adjusting tools send the Method (the Shifter has none), the Sizer its two options, and
+    /// with Use Pressure Pen each point's pen pressure.
+    #[test]
+    fn adjust_tools_send_the_method_the_sizer_options_and_the_pen_pressure() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let press = |t: &mut SymbolismTool| {
+            let down = PointerEvent { pressure: 0.25, ..PointerEvent::new(PointerKind::Down, 5.0, 5.0) };
+            match t.pointer(&cx, &down).swap_remove(1) {
+                Action::Preview(_, v) => v,
+                other => panic!("{other:?}"),
+            }
+        };
+        let mut sizer = SymbolismTool::new("symbolSizer");
+        let v = press(&mut sizer);
+        assert_eq!((v["method"].clone(), v["proportional"].clone(), v["affectsDensity"].clone()), (json!("userDefined"), json!(true), json!(false)));
+        assert_eq!((v["points"].clone(), v.get("usePressure")), (json!([[5.0, 5.0]]), None));
+        sizer.set_option("usePressure", &json!(true));
+        sizer.set_option("method", &json!("average"));
+        sizer.set_option("affectsDensity", &json!(true));
+        let v = press(&mut sizer);
+        assert_eq!((v["points"].clone(), v["usePressure"].clone()), (json!([[5.0, 5.0, 0.25]]), json!(true)));
+        assert_eq!((v["method"].clone(), v["affectsDensity"].clone()), (json!("average"), json!(true)));
+        let mut shifter = SymbolismTool::new("symbolShifter");
+        shifter.set_option("method", &json!("random"));
+        let v = press(&mut shifter);
+        assert!(v.get("method").is_none() && v.get("proportional").is_none(), "{v}");
+        let mut spinner = SymbolismTool::new("symbolSpinner");
+        spinner.set_option("method", &json!("random"));
+        let v = press(&mut spinner);
+        assert!(v["method"] == "random" && v.get("proportional").is_none(), "{v}");
+    }
+
+    /// A drag begun with Shift sends `shift` with the Shifter, Sizer, Stainer and Styler, and only
+    /// with them; one begun without it sends none.
+    #[test]
+    fn shift_reaches_the_tools_that_have_a_shift_form() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let shifted = Mods { shift: true, ..Default::default() };
+        for (id, sends) in [
+            ("symbolShifter", true),
+            ("symbolSizer", true),
+            ("symbolStainer", true),
+            ("symbolStyler", true),
+            ("symbolScruncher", false),
+            ("symbolSpinner", false),
+            ("symbolScreener", false),
+            ("symbolSprayer", false),
+        ] {
+            let mut t = SymbolismTool::new(id);
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0).with_mods(shifted));
+            let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+            assert_eq!(v.get("shift"), sends.then_some(&json!(true)), "{id}");
+            // The drag keeps the Shift it began with.
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 5.0));
+            let Action::Preview(_, v) = &a[0] else { panic!("{a:?}") };
+            assert_eq!(v.get("shift"), sends.then_some(&json!(true)), "{id} drag");
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 5.0));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0));
+            let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+            assert!(v.get("shift").is_none(), "{id} without Shift: {v}");
+        }
+    }
+
+    /// With Use Pressure Pen a drag sample where the pen stays is kept when the pressure changes;
+    /// without it, or with the same pressure, the drag keeps thinning the samples by distance.
+    #[test]
+    fn a_pressure_change_where_the_pen_stays_is_kept() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let stroke = |use_pressure: bool, pressures: [f32; 3]| {
+            let mut t = SymbolismTool::new("symbolSizer");
+            t.set_option("usePressure", &json!(use_pressure));
+            let at = |kind, pressure| PointerEvent { pressure, ..PointerEvent::new(kind, 5.0, 5.0) };
+            let events =
+                [(PointerKind::Down, pressures[0]), (PointerKind::Drag, pressures[1]), (PointerKind::Drag, pressures[2]), (PointerKind::Up, 0.0)];
+            // The points of the last preview, the one the drag commits.
+            let mut last = Value::Null;
+            for (kind, pressure) in events {
+                for a in t.pointer(&cx, &at(kind, pressure)) {
+                    if let Action::Preview(_, v) = a {
+                        last = v["points"].clone();
+                    }
+                }
+            }
+            last
+        };
+        assert_eq!(stroke(true, [0.0, 1.0, 1.0]), json!([[5.0, 5.0, 0.0], [5.0, 5.0, 1.0]]));
+        assert_eq!(stroke(true, [0.5, 0.52, 0.5]), json!([[5.0, 5.0, 0.5]]));
+        assert_eq!(stroke(false, [0.0, 1.0, 1.0]), json!([[5.0, 5.0]]));
+    }
+
+    /// The Sprayer sends its six options as `attributes`, and the fill color only while Stain is
+    /// User Defined.
+    #[test]
+    fn the_sprayer_sends_its_attributes() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = SymbolismTool::new("symbolSprayer");
+        t.set_option("usePressure", &json!(true));
+        let spray = |t: &mut SymbolismTool| match t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0)).swap_remove(1) {
+            Action::Preview(c, v) if c == "symbol.spray" => v,
+            other => panic!("{other:?}"),
+        };
+        let v = spray(&mut t);
+        let average =
+            json!({"scrunch": "average", "size": "average", "spin": "average", "screen": "average", "stain": "average", "style": "average"});
+        assert_eq!((v["attributes"].clone(), v.get("color"), v["points"].clone()), (average, None, json!([[5.0, 5.0]])));
+        t.set_option("sprayStain", &json!("userDefined"));
+        t.set_option("spraySpin", &json!("userDefined"));
+        let v = spray(&mut t);
+        assert_eq!(
+            (v["attributes"]["stain"].clone(), v["attributes"]["spin"].clone(), v["attributes"]["size"].clone()),
+            (json!("userDefined"), json!("userDefined"), json!("average"))
+        );
+        assert_eq!((v["color"].clone(), v["keepModel"].clone()), (serde_json::to_value(p.fill.color().unwrap()).unwrap(), json!(true)));
+    }
+
+    /// Show Brush Size and Intensity: the brush's outline with a dashed ring for the intensity
+    /// inside it; no ring with Use Pressure Pen, at intensity 10 or for the Symbol Sprayer, and
+    /// nothing with it off.
+    #[test]
+    fn show_brush_size_and_intensity_draws_the_brush() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = SymbolismTool::new("symbolScruncher");
+        assert!(t.overlays(&cx).is_empty(), "no pointer yet");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 50.0, 50.0));
+        let rings = |t: &SymbolismTool| {
+            t.overlays(&cx)
+                .into_iter()
+                .map(|o| match o {
+                    Overlay::Path { path, dashed, .. } => (path.bounding_box().width().round(), dashed),
+                    other => panic!("{other:?}"),
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(rings(&t), [(80.0, false), (40.0, true)]);
+        t.set_option("intensity", &json!(10));
+        assert_eq!(rings(&t), [(80.0, false)]);
+        t.set_option("intensity", &json!(2));
+        t.set_option("usePressure", &json!(true));
+        assert_eq!(rings(&t), [(80.0, false)]);
+        t.set_option("showBrush", &json!(false));
+        assert!(t.overlays(&cx).is_empty());
+        // The Symbol Sprayer uses neither Intensity nor pen pressure: the outline only.
+        let mut t = SymbolismTool::new("symbolSprayer");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 50.0, 50.0));
+        assert_eq!(rings(&t), [(80.0, false)]);
+    }
+
     #[test]
     fn brackets_change_diameter_and_intensity() {
         let (d, _) = doc_with_rect();
@@ -402,5 +754,79 @@ mod tests {
         assert!(matches!(&a[1], Action::Preview(c, v) if c == "brush.freehand" && v["brush"] == "Charcoal"));
         t.set_option("brush", &json!("Dots"));
         assert_eq!(t.options()["brush"], "Dots");
+    }
+
+    #[test]
+    fn paintbrush_skips_a_brush_the_document_does_not_have() {
+        let (mut d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let drag = |d: &vectorcraft_doc::Document, t: &mut BrushPaintTool| {
+            let cx = cx(d, &s, &p);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 30.0, 0.0)).swap_remove(1)
+        };
+        d.unknown.insert("currentBrush".into(), json!("Charcoal"));
+        let mut t = BrushPaintTool::default();
+        t.set_option("brush", &json!("Deleted"));
+        let a = drag(&d, &mut t);
+        assert!(matches!(&a, Action::Preview(c, v) if c == "brush.freehand" && v["brush"] == "Charcoal"), "the current brush: {a:?}");
+        d.unknown.insert("currentBrush".into(), json!("Also deleted"));
+        let a = drag(&d, &mut BrushPaintTool::default());
+        assert!(matches!(&a, Action::Preview(c, v) if c == "path.freehand" && v.get("brush").is_none()), "no brush: {a:?}");
+    }
+
+    #[test]
+    fn the_paintbrush_reads_the_wheel_only_with_a_stylus_wheel_brush() {
+        use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Calligraphic, PatternBrush, Scatter, Variation};
+        let wheel = Variation::StylusWheel;
+        let calligraphic =
+            |modes, size| BrushKind::Calligraphic(Calligraphic { variation: [0.0, 0.0, size], modes: Some(modes), ..Calligraphic::default() });
+        let scatter = |size| {
+            BrushKind::Scatter(Scatter { size, modes: Some([wheel, Variation::Fixed, Variation::Fixed, Variation::Fixed]), ..Scatter::default() })
+        };
+        let art = |width_mode, width_max| BrushKind::Art(ArtBrush { width_mode, width_max: Some(width_max), ..ArtBrush::default() });
+        let pattern = |scale_mode, scale_max| BrushKind::Pattern(PatternBrush { scale_mode, scale_max: Some(scale_max), ..PatternBrush::default() });
+        let library = [
+            Brush { name: "Plain".into(), kind: calligraphic([Variation::Fixed, Variation::Fixed, Variation::Pressure], 2.0) },
+            Brush { name: "Nib".into(), kind: calligraphic([Variation::Fixed, Variation::Fixed, wheel], 2.0) },
+            Brush { name: "Still nib".into(), kind: calligraphic([Variation::Fixed, Variation::Fixed, wheel], 0.0) },
+            Brush { name: "Dots".into(), kind: scatter((50.0, 150.0)) },
+            Brush { name: "Even dots".into(), kind: scatter((100.0, 100.0)) },
+            Brush { name: "Taper".into(), kind: art(Some(wheel), 200.0) },
+            Brush { name: "Even taper".into(), kind: art(Some(wheel), 100.0) },
+            Brush { name: "Flat".into(), kind: art(None, 200.0) },
+            Brush { name: "Tiles".into(), kind: pattern(Some(wheel), 200.0) },
+            Brush { name: "Even tiles".into(), kind: pattern(Some(wheel), 100.0) },
+            Brush { name: "Fixed tiles".into(), kind: pattern(None, 200.0) },
+        ];
+        let (mut d, _) = doc_with_rect();
+        d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), serde_json::to_value(library).unwrap());
+        let (s, p) = (Selection::default(), paint());
+        let reads = |d: &vectorcraft_doc::Document, t: &BrushPaintTool| t.reads_wheel(&cx(d, &s, &p));
+        let mut t = BrushPaintTool::default();
+        assert!(!reads(&d, &t), "no brush");
+        let brushes = [
+            ("Plain", false),
+            ("Nib", true),
+            ("Still nib", false),
+            ("Dots", true),
+            ("Even dots", false),
+            ("Taper", true),
+            ("Even taper", false),
+            ("Flat", false),
+            ("Tiles", true),
+            ("Even tiles", false),
+            ("Fixed tiles", false),
+            ("Deleted", false),
+        ];
+        for (name, varies) in brushes {
+            d.unknown.insert(vectorcraft_brush::CURRENT_KEY.into(), json!(name));
+            assert_eq!(reads(&d, &t), varies, "the current brush {name}");
+        }
+        t.set_option("brush", &json!("Plain"));
+        assert!(!reads(&d, &t), "the tool's own brush comes first");
+        t.set_option("brush", &json!("Nib"));
+        d.unknown.remove(vectorcraft_brush::CURRENT_KEY);
+        assert!(reads(&d, &t), "and reads the wheel");
     }
 }

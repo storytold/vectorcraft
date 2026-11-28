@@ -22,6 +22,8 @@ thread_local! {
     pub(crate) static CONTOUR_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// The sweeps [`normalize_bez`] made on this thread.
     static NORMALIZE_SWEEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The input curves [`exact_merge`] tested on this thread.
+    static EXACT_MERGE_CURVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Default curve-refit tolerance (document points) used to merge split curve pieces back together.
@@ -663,16 +665,17 @@ fn try_merge(run: &[Seg], tidy: &Tidy) -> Option<Seg> {
 }
 
 /// If every piece of `run` lies on one input cubic, return the exact sub-curve spanning the run.
+/// Only the input curves whose bounds hold both ends of the run are tested
+/// ([`Tidy::curves_around`]).
 fn exact_merge(run: &[Seg], tidy: &Tidy) -> Option<CubicBez> {
     use kurbo::{ParamCurve, ParamCurveNearest};
     let a = run[0].c.p0;
     let b = run[run.len() - 1].c.p3;
     let scale = 1.0 + a.x.abs().max(a.y.abs()).max(b.x.abs()).max(b.y.abs());
     let tol = 1e-6 * scale;
-    for (r, c) in &tidy.curves {
-        if !r.contains(a) || !r.contains(b) {
-            continue;
-        }
+    for c in tidy.curves_around(a, b) {
+        #[cfg(test)]
+        EXACT_MERGE_CURVES.with(|n| n.set(n.get() + 1));
         let na = c.nearest(a, 1e-12);
         let nb = c.nearest(b, 1e-12);
         if na.distance_sq.sqrt() > tol || nb.distance_sq.sqrt() > tol {
@@ -1364,6 +1367,29 @@ mod tests {
         lens.curve_to(upper.p2, upper.p1, upper.p0);
         lens.close_path();
         assert_eq!(tidy.repair(&lens), lens);
+    }
+
+    #[test]
+    fn rejoining_a_split_curve_tests_only_the_curves_around_it() {
+        // A row of 1,000 short curves; one of them is cut in three, as the sweep cuts a curve.
+        let mut row = BezPath::new();
+        row.move_to((0.0, 0.0));
+        for k in 0..1000 {
+            let x = f64::from(k);
+            row.curve_to((x + 0.3, 1.0), (x + 0.7, 1.0), (x + 1.0, 0.0));
+        }
+        let tidy = Tidy::keeping(DEFAULT_PRECISION, [&row]);
+        let c = CubicBez::new((500.0, 0.0), (500.3, 1.0), (500.7, 1.0), (501.0, 0.0));
+        let pieces: Vec<Seg> = [0.0..0.3, 0.3..0.6, 0.6..1.0].into_iter().map(|t| Seg { c: c.subsegment(t), line: false }).collect();
+        EXACT_MERGE_CURVES.with(|n| n.set(0));
+        let merged = tidy_segments(pieces, false, &tidy);
+        let tested = EXACT_MERGE_CURVES.with(std::cell::Cell::get);
+        assert_eq!(merged.len(), 1);
+        for (got, want) in [(merged[0].c.p1, c.p1), (merged[0].c.p2, c.p2)] {
+            assert!(got.distance(want) < 1e-9, "{got:?} {want:?}");
+        }
+        // Each merge attempt tests the curves whose bounds hold both ends of the run, not all 1,000.
+        assert!(tested <= 4, "{tested} curves tested");
     }
 
     #[test]

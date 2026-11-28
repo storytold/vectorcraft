@@ -3,8 +3,10 @@ use vectorcraft_geom::Point;
 use super::entry::RgbInCmyk;
 use super::{
     Affine, Arc, BezPath, BlendMode, Color, Compatibility, Document, Exporter, Fill, FillRule, HashMap, HashSet, Node, NormalizedF32, Path,
-    PathBuilder, PathEl, Rect, Shape, Standard, Surface, Transform, cmyk, krilla, luma, rgb,
+    PathBuilder, PathEl, Rect, Shape, Standard, Surface, cmyk, krilla, luma, rgb,
 };
+
+pub(super) use crate::surface::xf;
 
 /// How deep inline graphics nest before they are left out.
 pub(super) const MAX_INLINE_DEPTH: u32 = 4;
@@ -15,6 +17,10 @@ pub(super) const MAX_PATTERN_DEPTH: u32 = 4;
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
+
+/// The warning for an image left out because its colors can't be converted as the Output
+/// settings ask, although it could be written in its own colors.
+pub(super) const UNCONVERTED: &str = "an image couldn't be converted to the Output destination and is missing from the picture";
 
 /// The warning for an image whose placement cannot be written.
 pub(super) const UNWRITABLE_IMAGE: &str = "an image couldn't be written and is missing from the picture";
@@ -29,10 +35,13 @@ impl<'a> Exporter<'a> {
             warnings: vec![],
             images: HashMap::new(),
             image_left_out: None,
+            piece_image: None,
+            warp_size: None,
             brushes: None,
             knockout: doc.page_knockout,
             lab_spots: vec![],
             interpolate: set.standard != Standard::PdfA2b,
+            sweeps: set.standard != Standard::PdfA2b,
             // PDF 1.3 and 1.4 files are written with the PDF 1.4 settings ([`Writer::new`]).
             sixteen_bit: !matches!(set.compatibility, Compatibility::Pdf13 | Compatibility::Pdf14),
             compression: &set.compression,
@@ -50,7 +59,12 @@ impl<'a> Exporter<'a> {
             paper: Rect::ZERO,
             symbol_nodes: 0,
             symbol_limit: vectorcraft_doc::MAX_SYMBOL_NODES,
+            mask_symbol_nodes: 0,
+            in_knockout_mask: false,
+            mask_art_left_out: false,
             overprint: false,
+            darken_overprints: false,
+            discard_white: None,
             overprinted: false,
             invisible: false,
             inline_depth: 0,
@@ -95,11 +109,6 @@ pub(super) const MAX_GRADIENT_PX: f64 = 4096.0;
 /// 6.1.13). The PDF writer writes a whole number in the `i32` range as an integer, and in builds
 /// with overflow checks it panics on -2,147,483,648.
 pub(super) const MAX_COORD: f64 = 1e9;
-
-pub(super) fn xf(a: Affine) -> Transform {
-    let c = a.as_coeffs();
-    Transform::from_row(c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32, c[4] as f32, c[5] as f32)
-}
 
 /// The current transform of surface `s` in the content stream it draws into, without that stream's
 /// root transform (a page's y flip).
@@ -203,9 +212,12 @@ pub(super) fn cover(s: &mut Surface, page: Rect, level: u8, opacity: f32) {
 /// group of that opacity that, unlike the writer's opacity groups, is not isolated.
 /// The cover is white, so a reader that takes every soft mask as a luminosity mask shows the same.
 pub(super) fn constant_mask(s: &mut Surface, page: Rect, alpha: f32) -> krilla::mask::Mask {
+    let transform = s.group_transform();
     let mut sb = s.stream_builder();
-    let mut ms = sb.surface();
+    let mut ms = Surface::stream(sb.surface());
+    ms.push_transform(&transform);
     cover(&mut ms, page, 255, alpha);
+    ms.pop();
     ms.finish();
     krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Alpha)
 }

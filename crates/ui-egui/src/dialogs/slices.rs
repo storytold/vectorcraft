@@ -2,202 +2,199 @@
 //!
 //! Slice Options (`sliceOptions`, also a double click with the Slice Selection tool) edits the
 //! selected slices' options: fields `kind` (`image`, `noImage`, `htmlText`), `name`, `url`,
-//! `target`, `message`, `alt`, `text`, `background` (`""`, `matte` or `#rrggbb`), `hAlign`,
-//! `vAlign`, and `__html` (whether HTML Text applies). OK runs `object.slice.options`.
+//! `target`, `message`, `alt`, `cellText`, `hAlign`, `vAlign` and `background` (`null`,
+//! `"matte"` or `"#rrggbb"`). OK runs `object.slice.options`.
 //!
-//! Divide Slices (`divideSlices`): `divideRows` with `rows` (slices down) or, with `rowMode:
-//! "size"`, `rowHeight` (pt); `divideColumns` with `columns` or `columnWidth`. OK runs
-//! `object.slice.divide`.
+//! Divide Slices (`divideSlices`): `rows` and `columns` (a count or, with `rowsBy` or `columnsBy`
+//! `"size"`, a length in points; `null` while the axis is off). OK runs `object.slice.divide`.
 
+use craft::draw::ui::slice::{
+    DivideBy, DivideSlices, DivideSlicesDialog, SliceBackground, SliceCellAlign, SliceCellVAlign, SliceKind, SliceOptions, SliceOptionsDialog,
+};
+use craft::theme::Srgba;
 use serde_json::{Map, Value, json};
-use vectorcraft_color::Color;
-use vectorcraft_doc::{CellAlign, CellVAlign, SliceKind};
+use vectorcraft_doc::NodeId;
 
-use super::{DialogSpec, form, run_and_close};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use crate::VectorcraftApp;
+// PLAN: assumed `crate::canvas::general_lengths(app: &VectorcraftApp) -> LengthUnits` (cv.B5b)
+use crate::canvas::general_lengths;
 
 /// The dialog kind of Slice Options.
 pub const OPTIONS: &str = "sliceOptions";
 /// The dialog kind of Divide Slices.
 pub const DIVIDE: &str = "divideSlices";
 
-pub(super) const OPTIONS_SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Slice Options").into(), body: options_body, confirm: options_confirm, min_width: 380.0, ..DialogSpec::FORM };
+#[derive(Default)]
+pub(crate) struct SliceDialogs {
+    options: Option<Target>,
+    divide: Option<Target>,
+}
 
-pub(super) const DIVIDE_SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Divide Slices").into(), body: divide_body, confirm: divide_confirm, min_width: 320.0, ..DialogSpec::FORM };
+/// The document, its revert count and the effective slice selection used when opening either dialog.
+#[derive(PartialEq)]
+struct Target {
+    document: u64,
+    reverts: u64,
+    slices: Vec<NodeId>,
+}
 
-/// Label column and field widths of the dialogs.
-const LABEL_W: f32 = 110.0;
-const FIELD_W: f32 = 220.0;
+impl Target {
+    fn new(document: u64, reverts: u64, mut slices: Vec<NodeId>) -> Self {
+        slices.sort_unstable();
+        Self { document, reverts, slices }
+    }
+
+    fn current(app: &VectorcraftApp) -> Option<Self> {
+        let st = app.session.active()?;
+        Some(Self::new(st.uid, st.reverts, app.session.selected_slice_ids()))
+    }
+
+    /// Whether the active document is the opening one, reverted since the dialog opened.
+    fn reverted(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().is_some_and(|st| st.uid == self.document && st.reverts != self.reverts)
+    }
+}
+
+/// The command's key of each slice type, alignment and vertical alignment.
+const KINDS: [(&str, SliceKind); 3] = [("image", SliceKind::Image), ("noImage", SliceKind::NoImage), ("htmlText", SliceKind::HtmlText)];
+const ALIGNS: [(&str, SliceCellAlign); 4] =
+    [("default", SliceCellAlign::Default), ("left", SliceCellAlign::Left), ("center", SliceCellAlign::Center), ("right", SliceCellAlign::Right)];
+const VALIGNS: [(&str, SliceCellVAlign); 5] = [
+    ("default", SliceCellVAlign::Default),
+    ("top", SliceCellVAlign::Top),
+    ("middle", SliceCellVAlign::Middle),
+    ("baseline", SliceCellVAlign::Baseline),
+    ("bottom", SliceCellVAlign::Bottom),
+];
+
+/// The command's key of `value`.
+fn key_of<T: Copy + PartialEq>(table: &[(&'static str, T)], value: T) -> &'static str {
+    table.iter().find(|(_, v)| *v == value).map_or("", |(k, _)| *k)
+}
+
+/// The value of the command's `key`; the default for a key the table lacks.
+fn value_of<T: Copy + Default>(table: &[(&str, T)], key: &str) -> T {
+    table.iter().find(|(k, _)| *k == key).map(|(_, v)| *v).unwrap_or_default()
+}
+
+/// The dialog's options from the answer of `object.slice.options`.
+fn options_of(v: &Map<String, Value>) -> SliceOptions {
+    let text = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
+    let mut o = SliceOptions::default();
+    o.kind = value_of(&KINDS, &text("kind"));
+    o.name = text("name");
+    o.url = text("url");
+    o.target = text("target");
+    o.message = text("message");
+    o.alt = text("alt");
+    o.cell_text = text("text");
+    o.h_align = value_of(&ALIGNS, &text("hAlign"));
+    o.v_align = value_of(&VALIGNS, &text("vAlign"));
+    o.background = match text("background").as_str() {
+        "" => SliceBackground::None,
+        "matte" => SliceBackground::Matte,
+        hex => Srgba::from_hex(hex).map_or(SliceBackground::None, SliceBackground::Color),
+    };
+    o
+}
+
+/// The parameters of `object.slice.options` for the dialog's options.
+fn options_json(o: &SliceOptions) -> Value {
+    let background = match o.background {
+        SliceBackground::Matte => "matte".to_string(),
+        SliceBackground::Color(c) => c.to_hex(),
+        _ => String::new(),
+    };
+    json!({
+        "kind": key_of(&KINDS, o.kind), "name": o.name, "url": o.url, "target": o.target, "message": o.message, "alt": o.alt,
+        "text": o.cell_text, "hAlign": key_of(&ALIGNS, o.h_align), "vAlign": key_of(&VALIGNS, o.v_align), "background": background,
+    })
+}
+
+/// The parameters of `object.slice.divide`: per axis that is on, its count or its size.
+fn divide_json(d: &DivideSlices) -> Value {
+    let mut p = Map::new();
+    for (by, count, size) in [(d.rows, "rows", "rowHeight"), (d.columns, "columns", "columnWidth")] {
+        match by {
+            Some(DivideBy::Count(n)) => p.insert(count.into(), json!(n)),
+            Some(DivideBy::Size(s)) => p.insert(size.into(), json!(s)),
+            _ => None,
+        };
+    }
+    Value::Object(p)
+}
 
 /// Open Slice Options on the selected slices' options (those of the first one).
 pub fn open_options(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let source = Target::current(app).ok_or("no document open")?;
     let v = app.session.execute("object.slice.options", &json!({})).map_err(|e| e.to_string())?;
-    let mut fields: Map<String, Value> = v.as_object().cloned().unwrap_or_default();
-    let html = fields.remove("htmlText").unwrap_or(json!(false));
-    fields.insert("__html".into(), html);
-    app.ui.dialog = Some(Dialog { kind: OPTIONS.into(), fields });
+    let map = v.as_object().cloned().unwrap_or_default();
+    let mut kinds = vec![SliceKind::Image, SliceKind::NoImage];
+    if map.get("htmlText").and_then(Value::as_bool).unwrap_or(false) {
+        kinds.push(SliceKind::HtmlText);
+    }
+    let dialog = SliceOptionsDialog::new(options_of(&map)).kinds(&kinds);
+    app.dialogs().ok_or("no window")?.with(|host| {
+        host.open(dialog);
+        // Replacing a still-open dialog leaves its Cancel behind.
+        let _ = host.take::<SliceOptionsDialog>();
+    });
+    app.slice_dialogs.options = Some(source);
     Ok(Value::Null)
 }
 
 /// Open Divide Slices: two rows and two columns, the sizes halving the first selected slice.
 pub fn open_divide(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let lengths = general_lengths(app);
     let st = app.session.active().ok_or("no document open")?;
-    let first = st.selection.slices.iter().chain(&st.selection.objects).find_map(|id| st.doc.slice_bounds(*id));
+    let selected = app.session.selected_slice_ids();
+    let first = selected.iter().find_map(|id| st.doc.slice_bounds(*id));
+    let source = Target::new(st.uid, st.reverts, selected);
     let (w, h) = first.map_or((50.0, 50.0), |r| (r.width() / 2.0, r.height() / 2.0));
-    app.ui.dialog = Some(Dialog::new(
-        DIVIDE,
-        json!({"divideRows": true, "rows": 2, "rowMode": "count", "rowHeight": h, "divideColumns": true, "columns": 2, "columnMode": "count", "columnWidth": w}),
-    ));
+    let dialog = DivideSlicesDialog::new(DivideSlices::new(Some(DivideBy::Count(2)), Some(DivideBy::Count(2)))).lengths(lengths).start_sizes(h, w);
+    app.dialogs().ok_or("no window")?.with(|host| {
+        host.open(dialog);
+        let _ = host.take::<DivideSlicesDialog>();
+    });
+    app.slice_dialogs.divide = Some(source);
     Ok(Value::Null)
 }
 
-/// `(value, label)` pairs of a keyed enum's values.
-fn pairs<T: Copy>(all: &[T], key: fn(T) -> &'static str, label: fn(T) -> &'static str) -> Vec<(&'static str, &'static str)> {
-    all.iter().map(|v| (key(*v), label(*v))).collect()
-}
-
-fn options_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let kinds: Vec<_> = SliceKind::ALL.iter().filter(|k| **k != SliceKind::HtmlText || d.bool("__html")).copied().collect();
-    form::choice(ui, d, "kind", tl!("Slice Type:"), (LABEL_W, FIELD_W), &pairs(&kinds, SliceKind::key, SliceKind::label));
-    ui.add_space(6.0);
-    let kind = SliceKind::parse(&d.str("kind")).unwrap_or_default();
-    match kind {
-        SliceKind::Image => {
-            for (key, label) in
-                [("name", tl!("Name:")), ("url", tl!("URL:")), ("target", tl!("Target:")), ("message", tl!("Message:")), ("alt", tl!("Alt:"))]
-            {
-                widgets::label_row(ui, label, LABEL_W, |ui| {
-                    form::text(ui, d, key, FIELD_W - 12.0);
-                });
-            }
-        }
-        SliceKind::NoImage => {
-            widgets::dim_label(ui, tl!("Text Displayed in Cell:"));
-            form::text_area(ui, d, "text", LABEL_W + FIELD_W - 12.0, 4);
-        }
-        SliceKind::HtmlText => {
-            widgets::dim_label(ui, tl!("The cell shows the type object's text as HTML."));
+/// Run the answer of whichever slice dialog closed with OK. The framework dialogs hold no answer, so a
+/// refusal goes to the status line and the dialog is already closed.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(host) = app.dialogs() else { return };
+    let (options, divide) = host.with(|h| (h.take::<SliceOptionsDialog>(), h.take::<DivideSlicesDialog>()));
+    let answers = [
+        options.and_then(|r| {
+            let source = app.slice_dialogs.options.take();
+            r.ok().map(|o| (source, "object.slice.options", options_json(&o)))
+        }),
+        divide.and_then(|r| {
+            let source = app.slice_dialogs.divide.take();
+            r.ok().map(|d| (source, "object.slice.divide", divide_json(&d)))
+        }),
+    ];
+    for (source, cmd, params) in answers.into_iter().flatten() {
+        if source.as_ref().is_some_and(|source| source.reverted(app)) {
+            app.status(tl!("The document was reverted. Reopen this dialog to continue."));
+        } else if !source.is_some_and(|source| Some(source) == Target::current(app)) {
+            app.status(tl!("The slice selection changed while the dialog was open."));
+        } else if let Err(e) = app.run(cmd, params) {
+            app.status(e);
         }
     }
-    if kind != SliceKind::Image {
-        ui.add_space(6.0);
-        form::choice(ui, d, "hAlign", tl!("Horizontal:"), (LABEL_W, FIELD_W), &pairs(CellAlign::ALL, CellAlign::key, CellAlign::label));
-        form::choice(ui, d, "vAlign", tl!("Vertical:"), (LABEL_W, FIELD_W), &pairs(CellVAlign::ALL, CellVAlign::key, CellVAlign::label));
-    }
-    ui.add_space(6.0);
-    background_row(ui, d);
-    false
-}
-
-/// Background: None, Matte, White, Black or Other (a colour button for any colour).
-fn background_row(ui: &mut egui::Ui, d: &mut Dialog) {
-    const NAMES: [&str; 5] = ["None", "Matte", "White", "Black", "Other"];
-    let cur = d.str("background").to_ascii_lowercase();
-    let shown = match cur.as_str() {
-        "" => 0,
-        "matte" => 1,
-        "#ffffff" => 2,
-        "#000000" => 3,
-        _ => 4,
-    };
-    widgets::label_row(ui, tl!("Background:"), LABEL_W, |ui| {
-        if let Some(i) = widgets::dropdown(ui, "slice-background", NAMES[shown], &NAMES, 120.0) {
-            let v = match i {
-                0 => "",
-                1 => "matte",
-                2 => "#ffffff",
-                3 => "#000000",
-                _ => "#808080",
-            };
-            d.fields.insert("background".into(), json!(v));
-        }
-        if let Some(c) = Color::from_hex(&cur) {
-            let [r, g, b, _] = c.to_rgba8(1.0);
-            let mut rgb = [r, g, b];
-            if ui.color_edit_button_srgb(&mut rgb).changed() {
-                d.fields.insert("background".into(), json!(Color::rgb8(rgb[0], rgb[1], rgb[2]).to_hex()));
-            }
-        }
-    });
-}
-
-fn options_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let p: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
-    run_and_close(app, "object.slice.options", Value::Object(p))
-}
-
-/// One direction of Divide Slices: the checkbox, then "N slices …, evenly spaced" or "N pt per
-/// slice".
-fn divide_section(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, keys: [&str; 4], labels: [&str; 2]) {
-    let [on, count, mode, size] = keys;
-    if widgets::check(ui, labels[0], d.bool(on), true) {
-        d.fields.insert(on.into(), json!(!d.bool(on)));
-    }
-    let enabled = d.bool(on);
-    let by_size = d.str(mode) == "size";
-    ui.add_enabled_ui(enabled, |ui| {
-        ui.indent(on, |ui| {
-            ui.horizontal(|ui| {
-                if widgets::radio_button(ui, labels[1], !by_size, enabled) {
-                    d.fields.insert(mode.into(), json!("count"));
-                }
-                if let Some(n) = widgets::range_field(ui, ("divide", count), d.f64(count, 2.0), 1.0..=f64::INFINITY, "", 0, 50.0) {
-                    d.fields.insert(count.into(), json!(n as u64));
-                }
-                widgets::dim_label(ui, labels[1]);
-            });
-            ui.horizontal(|ui| {
-                if widgets::radio_button(ui, tl!("per slice"), by_size, enabled) {
-                    d.fields.insert(mode.into(), json!("size"));
-                }
-                form::length(ui, d, size, app.session.general_unit(), 70.0);
-                widgets::dim_label(ui, tl!("per slice"));
-            });
-        });
-    });
-}
-
-fn divide_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    divide_section(app, ui, d, ["divideRows", "rows", "rowMode", "rowHeight"], [tl!("Divide Horizontally Into"), tl!("slices down, evenly spaced")]);
-    ui.add_space(8.0);
-    divide_section(
-        app,
-        ui,
-        d,
-        ["divideColumns", "columns", "columnMode", "columnWidth"],
-        [tl!("Divide Vertically Into"), tl!("slices across, evenly spaced")],
-    );
-    false
-}
-
-fn divide_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut p = json!({});
-    for [on, count, mode, size] in [["divideRows", "rows", "rowMode", "rowHeight"], ["divideColumns", "columns", "columnMode", "columnWidth"]] {
-        if !d.bool(on) {
-            continue;
-        }
-        if d.str(mode) == "size" {
-            p[size] = json!(d.f64(size, 0.0));
-        } else {
-            p[count] = json!(d.f64(count, 2.0).round().max(1.0) as u64);
-        }
-    }
-    if p.as_object().is_none_or(|o| o.is_empty()) {
-        return Err("choose a direction to divide in".into());
-    }
-    run_and_close(app, "object.slice.divide", p)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use craft::ui::dialog::{DialogHost, DialogId};
+    use vectorcraft_doc::NodeId;
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.session.paint.stroke = vectorcraft_color::Paint::None;
         let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 60, "height": 40})).unwrap()["id"].as_u64().unwrap();
@@ -205,16 +202,167 @@ mod tests {
         app
     }
 
-    /// Draw the open dialog once, headlessly.
-    fn draw(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(Default::default(), |ui| super::super::show(app, ui.ctx()));
-        out.textures_delta.clear();
+    fn host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost) -> R) -> R {
+        app.dialogs().expect("a window").with(f)
     }
 
-    fn set(app: &mut VectorcraftApp, k: &str, v: Value) {
-        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+    /// The one open dialog: its id and its fields.
+    fn the_dialog(app: &VectorcraftApp) -> (DialogId, Value) {
+        let d = host(app, |h| h.open_dialogs().into_iter().next()).expect("a dialog is open");
+        (d.id, d.fields.unwrap_or(Value::Null))
+    }
+
+    fn set(app: &VectorcraftApp, field: &str, value: Value) {
+        let (ctx, (id, _)) = (app.ui_ctx.clone().unwrap(), the_dialog(app));
+        host(app, |h| h.set_json_field(&ctx, id, field, value)).unwrap();
+    }
+
+    /// OK on the open dialog, then the frame's pump runs its answer; whether OK was enabled.
+    fn ok(app: &mut VectorcraftApp) -> bool {
+        let (ctx, (id, _)) = (app.ui_ctx.clone().unwrap(), the_dialog(app));
+        let enabled = host(app, |h| h.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(app, &ctx);
+        enabled
+    }
+
+    fn add_slice(app: &mut VectorcraftApp, x: f64) -> NodeId {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 60, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.slice.make", json!({"ids": [id]})).unwrap();
+        NodeId(id)
+    }
+
+    fn select_slice(app: &mut VectorcraftApp, id: NodeId) {
+        app.run("object.slice.select", json!({"slices": [id.0]})).unwrap();
+    }
+
+    fn check_changed_selection(dialog: &str, divide: bool) {
+        let mut app = app();
+        let source = app.session.active().unwrap().doc.slice_ids()[0];
+        let destination = add_slice(&mut app, 80.0);
+        select_slice(&mut app, source);
+        app.run(dialog, json!({})).unwrap();
+        if !divide {
+            set(&app, "name", json!("Original"));
+        }
+        select_slice(&mut app, destination);
+        let st = app.session.active().unwrap();
+        let undo = st.history.undo.len();
+        let document = st.doc.clone();
+
+        assert!(ok(&mut app));
+        let st = app.session.active().unwrap();
+        assert_eq!(*st.doc, *document, "the changed selection is untouched");
+        assert_eq!(st.history.undo.len(), undo);
+        assert_eq!(app.ui.status, "The slice selection changed while the dialog was open.");
+    }
+
+    #[test]
+    fn stale_slice_dialog_options_leaves_the_new_selection_untouched() {
+        check_changed_selection("object.slice.options", false);
+    }
+
+    #[test]
+    fn stale_slice_dialog_divide_leaves_the_new_selection_untouched() {
+        check_changed_selection("object.slice.divide", true);
+    }
+
+    /// Opens `dialog` on the saved document's slice, edits the document, reverts it and reselects the same slice id;
+    /// OK then leaves the restored document as it is and reports the revert. Returns the app and the slice.
+    fn check_refused_after_file_revert(dialog: &str, divide: bool, tag: &str) -> (VectorcraftApp, NodeId) {
+        let mut app = app();
+        let slice = app.session.active().unwrap().doc.slice_ids()[0];
+        let dir = vectorcraft_testkit::TempDir::new(tag);
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        select_slice(&mut app, slice);
+        app.run(dialog, json!({})).unwrap();
+        if !divide {
+            set(&app, "name", json!("Draft"));
+        }
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        select_slice(&mut app, slice);
+        let st = app.session.active().unwrap();
+        assert!(st.doc.slice_options(slice).is_some(), "the same id names a slice of the restored document");
+        let (restored, undo) = (st.doc.clone(), st.history.undo.len());
+
+        assert!(ok(&mut app));
+        let st = app.session.active().unwrap();
+        assert_eq!(*st.doc, *restored, "OK leaves the restored document's slices unchanged");
+        assert_eq!(st.history.undo.len(), undo);
+        assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+        (app, slice)
+    }
+
+    #[test]
+    fn slice_options_refuses_its_draft_after_file_revert() {
+        let (mut app, slice) = check_refused_after_file_revert("object.slice.options", false, "slice-options-revert");
+        // Reopened on the restored document, the dialog applies again.
+        app.run("object.slice.options", json!({})).unwrap();
+        set(&app, "name", json!("Reopened"));
+        assert!(ok(&mut app));
+        assert_eq!(app.session.active().unwrap().doc.slice_options(slice).unwrap().name, "Reopened");
+    }
+
+    #[test]
+    fn divide_slices_refuses_its_draft_after_file_revert() {
+        let (mut app, _) = check_refused_after_file_revert("object.slice.divide", true, "divide-slices-revert");
+        let slices = app.session.active().unwrap().doc.slices.len();
+        app.run("object.slice.divide", json!({})).unwrap();
+        assert!(ok(&mut app));
+        assert!(app.session.active().unwrap().doc.slices.len() > slices, "reopened, Divide Slices divides again");
+    }
+
+    #[test]
+    fn stale_slice_dialog_refuses_a_different_document_with_matching_selected_ids() {
+        let mut app = app();
+        let from = app.session.active().unwrap().doc.slice_ids()[0];
+        app.run("object.slice.options", json!({})).unwrap();
+        set(&app, "name", json!("Source"));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let to = add_slice(&mut app, 0.0);
+        select_slice(&mut app, to);
+        assert_eq!(from, to, "selection IDs are local to each document");
+        let st = app.session.active().unwrap();
+        let undo = st.history.undo.len();
+
+        assert!(ok(&mut app));
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.slice_options(to).unwrap().name, "");
+        assert_eq!(st.history.undo.len(), undo);
+    }
+
+    #[test]
+    fn replacing_slice_options_keeps_the_new_dialogs_target() {
+        let mut app = app();
+        app.run("object.slice.options", json!({})).unwrap();
+        let other = add_slice(&mut app, 80.0);
+        select_slice(&mut app, other);
+        app.run("object.slice.options", json!({})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        pump(&mut app, &ctx);
+        set(&app, "name", json!("Replacement"));
+
+        assert!(ok(&mut app));
+        assert_eq!(app.session.active().unwrap().doc.slice_options(other).unwrap().name, "Replacement");
+    }
+
+    #[test]
+    fn confirming_slice_options_still_works_when_the_same_slices_are_selected_in_a_different_order() {
+        let mut app = app();
+        let first = app.session.active().unwrap().doc.slice_ids()[0];
+        let second = add_slice(&mut app, 80.0);
+        app.run("object.slice.select", json!({"slices": [first.0, second.0]})).unwrap();
+        app.run("object.slice.options", json!({})).unwrap();
+        set(&app, "alt", json!("Two slices"));
+        app.run("object.slice.select", json!({"slices": [second.0, first.0]})).unwrap();
+
+        assert!(ok(&mut app));
+        let document = &app.session.active().unwrap().doc;
+        assert_eq!(document.slice_options(first).unwrap().alt, "Two slices");
+        assert_eq!(document.slice_options(second).unwrap().alt, "Two slices");
     }
 
     #[test]
@@ -222,17 +370,12 @@ mod tests {
         let mut app = app();
         // The menu item (no params) opens the dialog through the app.
         app.run("object.slice.options", json!({})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, OPTIONS);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("kind"), "image");
-        for kind in ["image", "noImage"] {
-            set(&mut app, "kind", json!(kind));
-            draw(&mut app);
-        }
-        set(&mut app, "text", json!("Hello <i>cell</i>"));
-        set(&mut app, "background", json!("#00ff00"));
-        draw(&mut app);
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        assert!(host(&app, |h| h.is_open::<SliceOptionsDialog>()));
+        assert_eq!(the_dialog(&app).1["kind"], "image");
+        set(&app, "kind", json!("noImage"));
+        set(&app, "cellText", json!("Hello <i>cell</i>"));
+        set(&app, "background", json!("#00ff00"));
+        assert!(ok(&mut app));
         let l = app.run("slice.list", json!({})).unwrap();
         let own = l["slices"].as_array().unwrap().iter().find(|s| s["source"] == "object").unwrap().clone();
         assert_eq!(own["options"]["kind"], "noImage");
@@ -244,35 +387,25 @@ mod tests {
         assert!(l["slices"].as_array().unwrap().iter().any(|s| s["options"]["kind"] == "image" && s["source"] == "object"));
     }
 
-    /// Screen readers name Divide Slices' radio buttons by the text after their fields.
-    #[test]
-    fn screen_readers_name_the_divide_radio_buttons() {
-        use crate::widgets::accessibility_tests::{role_and_state, tree};
-        use egui::accesskit::{Role, Toggled};
-        let mut app = app();
-        app.run("object.slice.divide", json!({})).unwrap();
-        set(&mut app, "divideRows", json!(true));
-        let shown = tree(|ui| super::super::show(&mut app, ui.ctx()));
-        assert_eq!(role_and_state(&shown, "slices down, evenly spaced"), (Role::RadioButton, Some(Toggled::True)));
-        assert_eq!(role_and_state(&shown, "per slice"), (Role::RadioButton, Some(Toggled::False)));
-    }
-
     #[test]
     fn divide_slices_cuts_by_count_or_size() {
         let mut app = app();
         app.run("object.slice.divide", json!({})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, DIVIDE);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("columnWidth", 0.0), 30.0);
-        draw(&mut app);
-        set(&mut app, "columns", json!(3));
-        set(&mut app, "rowMode", json!("size"));
-        set(&mut app, "rowHeight", json!(15));
-        super::super::confirm(&mut app).unwrap();
+        assert!(host(&app, |h| h.is_open::<DivideSlicesDialog>()));
+        set(&app, "columnsBy", json!("size"));
+        assert_eq!(the_dialog(&app).1["columns"].as_f64(), Some(30.0), "half of the 60 pt slice");
+        set(&app, "columnsBy", json!("count"));
+        set(&app, "columns", json!(3));
+        set(&app, "rowsBy", json!("size"));
+        set(&app, "rows", json!(15));
+        assert!(ok(&mut app));
         // 40 pt in 15 pt rows: 3 rows; 3 columns.
-        assert_eq!(app.session.active().unwrap().doc.slices.len(), 9);
+        let slices = app.session.active().unwrap().doc.slices.len();
+        assert_eq!(slices, 9);
         app.run("object.slice.divide", json!({})).unwrap();
-        set(&mut app, "divideRows", json!(false));
-        set(&mut app, "divideColumns", json!(false));
-        assert!(super::super::confirm(&mut app).is_err());
+        set(&app, "rows", Value::Null);
+        set(&app, "columns", Value::Null);
+        assert!(!ok(&mut app), "no axis is on, so OK is off");
+        assert_eq!(app.session.active().unwrap().doc.slices.len(), slices);
     }
 }

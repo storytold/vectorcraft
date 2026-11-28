@@ -1,114 +1,207 @@
-//! New Character Style and New Paragraph Style: the new style's name. OK makes the style from the
-//! text that was selected when the dialog opened (`charStyle.new`, `paraStyle.new`).
+//! New Character Style and New Paragraph Style: the new style's name and the sections of Character
+//! or Paragraph Style Options, filled in from the text that was selected when the dialog opened.
+//! OK makes the style with those attributes (`charStyle.new`, `paraStyle.new`).
 //!
-//! Fields: `name`, `__para` (true for a paragraph style) and `__target` (the `id`, `start` and
-//! `end` of the Type tool's selection, empty for the selected objects, and the `attrs` that text had
-//! when the dialog opened).
+//! The dialog's `target` is the `id`, `start` and `end` of the Type tool's selection (empty for the
+//! selected objects) and the `attrs` that text had when the dialog opened.
 
-use serde_json::{Value, json};
+use std::sync::Arc;
 
-use super::swatch_options::{grid, label};
-use super::{DialogSpec, form};
+use craft::ui::patterns::form_dialogs::HostedPropertiesDialog;
+use serde_json::{Map, Value, json};
+
+use super::char_style_options::{self, reason, style_dialog};
+use super::para_style_options;
 use crate::VectorcraftApp;
-use crate::state::Dialog;
 
 /// The dialog kind of New Character Style and New Paragraph Style.
 pub const KIND: &str = "newTextStyle";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 320.0, ..DialogSpec::FORM };
-
-fn para(d: &Dialog) -> bool {
-    d.fields.get("__para").and_then(Value::as_bool).unwrap_or(false)
+/// What the dialog opened with: the character or the paragraph side's.
+enum Opening {
+    Char(Arc<char_style_options::Opening>),
+    Para(Arc<para_style_options::Opening>),
 }
 
-fn heading(d: &Dialog) -> String {
-    if para(d) { tl!("New Paragraph Style") } else { tl!("New Character Style") }.into()
+/// The open New Character Style or New Paragraph Style dialog.
+pub(crate) struct NewTextStyle {
+    inner: HostedPropertiesDialog,
+    opening: Opening,
+    /// Whether the dialog makes a paragraph style.
+    pub(crate) para: bool,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
+    target: Value,
 }
+
+impl NewTextStyle {
+    /// The new style's attributes as the dialog's values set them, or why they are refused.
+    pub(crate) fn edited(&self) -> Result<Map<String, Value>, String> {
+        match &self.opening {
+            Opening::Char(opening) => char_style_options::edited_attrs(self.inner.fields(), opening),
+            Opening::Para(opening) => para_style_options::edited_attrs(self.inner.fields(), opening),
+        }
+    }
+
+    /// The parameters of `charStyle.new` or `paraStyle.new` for the text the dialog opened on and `attrs`.
+    fn command(&self, attrs: Map<String, Value>) -> Value {
+        let mut params = self.target.clone();
+        params["name"] = json!(self.inner.fields().text("name").unwrap_or_default());
+        params["attrs"] = Value::Object(attrs);
+        params
+    }
+}
+style_dialog!(NewTextStyle, KIND);
 
 /// Open New Character Style (`para`: New Paragraph Style) with the name `charStyle.new` would give
 /// the style, to make it from the text `target` names.
 pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value, String> {
-    let d = &app.session.active().ok_or("no document open")?.doc;
-    let name = vectorcraft_engine::cmd::textstyles::new_style_name(d, para);
-    let mut target = target;
+    let state = app.session.active().ok_or("no document open")?;
+    let (document, doc) = ((state.uid, state.reverts), &state.doc);
+    let name = vectorcraft_engine::cmd::textstyles::new_style_name(doc, para);
+    let mut target = if target.is_object() { target } else { json!({}) };
     let selected_attrs = vectorcraft_engine::cmd::textstyles::target_style_attrs(&app.session, &target, para);
-    if let Some(attrs) = selected_attrs.or_else(|| (!para).then(|| vectorcraft_engine::cmd::textstyles::default_new_style_attrs(&app.session, false)))
-    {
-        target["attrs"] = Value::Object(attrs);
-    }
-    let mut fields = Dialog::new(KIND, json!({ "name": name, "__para": para, "__target": target })).fields;
-    if !para {
-        fields.insert("section".into(), json!("general"));
-        fields.insert("__smallCapsSize".into(), json!(d.setup.small_caps_size));
-        fields.insert("__superscript".into(), json!(d.setup.superscript));
-        fields.insert("__subscript".into(), json!(d.setup.subscript));
-        fields.insert("__swatches".into(), super::char_style_options::swatch_choices(d));
-        let attrs = target.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
-        fields.extend(super::char_style_options::fields_from_attrs(&attrs));
-        fields.insert("__attrs".into(), Value::Object(attrs));
-    }
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
+    let attrs = selected_attrs.unwrap_or_else(|| vectorcraft_engine::cmd::textstyles::default_new_style_attrs(&app.session, para));
+    target["attrs"] = Value::Object(attrs.clone());
+    let (opening, inner) = if para {
+        let opening = Arc::new(para_style_options::Opening::new("", attrs, app.session.general_unit(), para_style_options::vertical_text(app)));
+        let inner = para_style_options::hosted(KIND, tl!("New Paragraph Style"), &opening, &name);
+        (Opening::Para(opening), inner)
+    } else {
+        let opening = Arc::new(char_style_options::Opening::new("", attrs, &doc.setup, char_style_options::swatch_choices(doc)));
+        let inner = char_style_options::hosted(KIND, tl!("New Character Style"), &opening, &name);
+        (Opening::Char(opening), inner)
+    };
+    app.dialogs().ok_or("no window")?.with(|host| host.open(NewTextStyle { inner, opening, para, document, target }));
     Ok(json!({ "dialog": KIND }))
 }
 
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    if !para(d) {
-        ui.horizontal(|ui| {
-            super::char_style_options::section_list(ui, d);
-            ui.separator();
-            if d.str("section") == "basic" {
-                super::char_style_options::basic_body(ui, d);
-            } else if d.str("section") == "advanced" {
-                super::char_style_options::advanced_body(ui, d);
-            } else if d.str("section") == "color" {
-                super::char_style_options::color_body(ui, d);
-            } else if d.str("section") == "opentype" {
-                super::char_style_options::opentype_body(ui, d);
-            } else {
-                ui.vertical(|ui| {
-                    grid(ui, |ui| {
-                        label(ui, tl!("Style Name:"));
-                        form::text(ui, d, "name", 190.0);
-                        ui.end_row();
-                    });
-                    if let Ok(attrs) = super::char_style_options::edited_attrs(d) {
-                        for (key, value) in attrs {
-                            ui.label(format!("{}: {}", super::humanize(&key), value));
-                        }
-                    }
-                });
-            }
-        });
-        super::char_style_options::reset_button(ui, d);
-        if let Err(why) = super::char_style_options::edited_attrs(d) {
-            super::char_style_options::attrs_error(ui, &why);
-        }
-        return false;
+/// OK: make the style with the name. A name another style has, or an empty one, keeps the dialog
+/// open with the engine's reason under the rows. The panel highlights the new style and scrolls it
+/// into view when it next draws.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let Some((para, (document, reverts), frame)) = dialogs.with(|host| host.get_mut::<NewTextStyle>().map(|d| (d.para, d.document, d.frame())))
+    else {
+        // The dialog closed: its answer or cancel has nothing left for the app to do.
+        let _ = dialogs.with(|host| host.take::<NewTextStyle>());
+        return;
+    };
+    if !frame.ok {
+        return;
     }
-    grid(ui, |ui| {
-        label(ui, tl!("Style Name:"));
-        form::text(ui, d, "name", 190.0);
-        ui.end_row();
+    let made = if app.session.active().is_some_and(|doc| (doc.uid, doc.reverts) == (document, reverts)) {
+        frame.params.and_then(|params| app.run(if para { "paraStyle.new" } else { "charStyle.new" }, params))
+    } else if app.session.active().is_some_and(|doc| doc.uid == document) {
+        Err("The document was reverted. Reopen this dialog to continue.".into())
+    } else if app.session.documents().iter().any(|doc| doc.uid == document) {
+        Err("switch back to the document where this style was opened".into())
+    } else {
+        Err("the document where this style was opened has closed".into())
+    };
+    let answer = match &made {
+        Ok(v) => {
+            if let Some(name) = v["name"].as_str() {
+                app.ui.text_styles.made.retain(|(pending_uid, pending_para, _)| *pending_uid != document || *pending_para != para);
+                app.ui.text_styles.made.push((document, para, name.to_string()));
+            }
+            Ok(())
+        }
+        Err(why) => Err(reason(why)),
+    };
+    dialogs.with(|host| {
+        if let Some(d) = host.get_mut::<NewTextStyle>() {
+            d.hosted_mut().answer_ok(answer);
+        }
     });
-    false
 }
 
-/// OK: make the style with the name. A name another style has, or an empty one, keeps the dialog
-/// open. The panel highlights the new style and scrolls it into view when it next draws.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut params = d.fields.get("__target").filter(|t| t.is_object()).cloned().unwrap_or_else(|| json!({}));
-    params["name"] = json!(d.str("name"));
-    if !para(d) {
-        params["attrs"] = Value::Object(super::char_style_options::edited_attrs(d)?);
+#[cfg(test)]
+mod tests {
+    use craft::ui::dialog::{HeldOk, StackDialog};
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    fn style_exists(app: &VectorcraftApp, para: bool, name: &str) -> bool {
+        let doc = &app.session.doc().unwrap().doc;
+        if para { doc.para_styles.iter().any(|style| style.name == name) } else { doc.char_styles.iter().any(|style| style.name == name) }
     }
-    let r = app.run(if para(d) { "paraStyle.new" } else { "charStyle.new" }, params);
-    if let Ok(v) = &r {
-        app.ui.dialog = None;
-        if let Some((uid, name)) = app.session.active().and_then(|doc| v["name"].as_str().map(|name| (doc.uid, name))) {
-            let para = para(d);
-            app.ui.made_text_style.retain(|(pending_uid, pending_para, _)| *pending_uid != uid || *pending_para != para);
-            app.ui.made_text_style.push((uid, para, name.to_string()));
-        }
+
+    fn assert_style_stays_in_its_opening_document(para: bool) {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let opening = app.session.doc().unwrap().uid;
+        app.run(if para { "ui.newParaStyle" } else { "ui.newCharStyle" }, json!({})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        let dialog = host.with(|h| h.get::<NewTextStyle>().unwrap().id());
+        let name = "Opening Document Style";
+        host.with(|h| h.set_json_field(&ctx, dialog, "name", json!(name))).unwrap();
+
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        assert_ne!(app.session.doc().unwrap().uid, opening);
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
+        pump(&mut app, &ctx);
+
+        assert!(!style_exists(&app, para, name), "OK must leave styles in the other document unchanged");
+        assert!(app.ui.text_styles.made.is_empty(), "the other document must not highlight a style");
+        assert!(matches!(host.with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
+        pump(&mut app, &ctx);
+        assert!(style_exists(&app, para, name), "the original document can accept the same draft");
+        assert_eq!(app.ui.text_styles.made, [(opening, para, name.to_string())]);
     }
-    r
+
+    fn assert_style_is_refused_after_file_revert(para: bool) {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("text.create", json!({"x": 10, "y": 40, "text": "Opening document"})).unwrap();
+        let dir = vectorcraft_testkit::TempDir::new("new-text-style-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run(if para { "ui.newParaStyle" } else { "ui.newCharStyle" }, json!({})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        let dialog = host.with(|h| h.get::<NewTextStyle>().unwrap().id());
+        let name = "Draft Style";
+        host.with(|h| h.set_json_field(&ctx, dialog, "name", json!(name))).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
+        pump(&mut app, &ctx);
+
+        assert!(!style_exists(&app, para, name), "OK must not make the draft's style in the restored document");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        assert!(app.ui.text_styles.made.is_empty(), "the restored document must not highlight a style");
+        assert!(matches!(
+            host.with(|h| h.held_state(dialog)),
+            Some(HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
+    }
+
+    #[test]
+    fn new_character_style_is_refused_after_file_revert() {
+        assert_style_is_refused_after_file_revert(false);
+    }
+
+    #[test]
+    fn new_paragraph_style_is_refused_after_file_revert() {
+        assert_style_is_refused_after_file_revert(true);
+    }
+
+    #[test]
+    fn new_character_style_confirmation_stays_in_its_document() {
+        assert_style_stays_in_its_opening_document(false);
+    }
+
+    #[test]
+    fn new_paragraph_style_confirmation_stays_in_its_document() {
+        assert_style_stays_in_its_opening_document(true);
+    }
 }

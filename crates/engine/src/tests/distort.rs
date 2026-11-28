@@ -1,6 +1,6 @@
 //! Width points, Liquify, Puppet Warp and Perspective Grid commands and tools.
 
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_geom::{PathData, Point, Rect, Shape};
 use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
@@ -263,6 +263,26 @@ fn liquify_without_selection_hits_paths_under_the_brush() {
     assert_eq!(r["ids"], json!([b.0]));
     assert_eq!(path(&s, a).bounds().unwrap(), Rect::new(100.0, 100.0, 300.0, 300.0));
     assert!(path(&s, b).bounds().unwrap().width() < 100.0);
+}
+
+/// The warning about objects under the brush that Liquify leaves as they are names their count
+/// with the matching noun and verb.
+#[test]
+fn liquify_warns_about_one_or_several_skipped_objects() {
+    let mut s = session();
+    let text =
+        |s: &mut Session, x: i32| s.execute("text.create", &json!({"x": x, "y": 460, "text": "Hi", "size": 24})).unwrap()["id"].as_u64().unwrap();
+    let pucker = json!({"tool": "pucker", "points": [[550, 450]], "diameter": 150, "intensity": 1});
+    let first = text(&mut s, 520);
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let r = s.execute("object.liquify", &pucker).unwrap();
+    assert_eq!(r["skipped"], json!([first]));
+    assert_eq!(r["warning"], "Pucker left 1 object under the brush as it was (type): it reshapes paths only");
+    let second = text(&mut s, 560);
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let r = s.execute("object.liquify", &pucker).unwrap();
+    assert_eq!(r["skipped"], json!([first, second]));
+    assert_eq!(r["warning"], "Pucker left 2 objects under the brush as they were (type): it reshapes paths only");
 }
 
 /// With nothing selected, a stroke leaves the art on a locked artboard as it is.
@@ -623,6 +643,25 @@ fn attach_projects_onto_the_plane_and_releases() {
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(path(&s, a).bounds().unwrap(), Rect::new(450.0, 300.0, 550.0, 400.0));
+}
+
+#[test]
+fn a_repeated_id_attaches_moves_and_transforms_an_object_once() {
+    let edited = |cmd: &str, ids: &[u64], extra: Value| {
+        let mut s = session();
+        s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+        let a = rect(&mut s, 450.0, 300.0, 100.0, 100.0);
+        let ids: Vec<u64> = ids.iter().map(|_| a.0).collect();
+        let mut p = json!({"ids": ids, "plane": "right"});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        s.execute(cmd, &p).unwrap();
+        path(&s, a)
+    };
+    let moved = json!({"from": [480.0, 330.0], "to": [500.0, 350.0], "constrain": true});
+    let scaled = json!({"matrix": [1.5, 0.0, 0.0, 1.5, 10.0, 0.0]});
+    for (cmd, extra) in [("perspective.attach", json!({})), ("perspective.move", moved), ("perspective.transform", scaled)] {
+        assert_eq!(edited(cmd, &[0, 0], extra.clone()), edited(cmd, &[0], extra), "{cmd}");
+    }
 }
 
 #[test]

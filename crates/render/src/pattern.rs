@@ -39,7 +39,8 @@ type TileKey = (String, u64, Ink, bool);
 
 /// What a tile was drawn from besides its pattern's own art, for art that shows more than itself:
 /// the art of every pattern and symbol and the pixels of every image in the document, the
-/// document's other data (which holds its brushes), and the fonts. Editing a symbol leaves the art
+/// document's other data (which holds its brushes), and the fonts and hyphenation exceptions
+/// ([`vectorcraft_text::layout_inputs`]). Editing a symbol leaves the art
 /// of a pattern that shows it as it was, so the art alone kept the tile from before (#1723). Held
 /// weakly: a weak reference keeps the allocation, so no other value gets one of these addresses
 /// while the tile is kept.
@@ -66,13 +67,13 @@ impl Deps {
             art: Self::art(doc).map(Arc::downgrade).collect(),
             pixels: Self::pixels(doc).map(Arc::downgrade).collect(),
             unknown: vectorcraft_doc::Shared::downgrade(&doc.unknown),
-            fonts: vectorcraft_text::FontDb::global().generation(),
+            fonts: vectorcraft_text::layout_inputs(),
         }
     }
 
     /// Does `doc` hold what the tile was drawn from?
     fn current(&self, doc: &Document) -> bool {
-        self.fonts == vectorcraft_text::FontDb::global().generation()
+        self.fonts == vectorcraft_text::layout_inputs()
             && std::ptr::eq(self.unknown.as_ptr(), &*doc.unknown)
             && self.art.iter().map(Weak::as_ptr).eq(Self::art(doc).map(Arc::as_ptr))
             && self.pixels.iter().map(Weak::as_ptr).eq(Self::pixels(doc).map(Arc::as_ptr))
@@ -190,10 +191,14 @@ fn rasterize(
     let symbols = doc.symbol_boxes().quick();
     r.stamp += 1;
     let px_rect = Rect::new(0.0, 0.0, w as f64, h as f64);
+    // A tile drawn for a proof that preserves the colors' numbers shows its images through that
+    // proof too.
+    let plates = crate::proof::ink_plate_lut(ink, doc);
     for o in def.offsets_covering(region) {
         let v = view * def.instance_xf(o);
         let frame = Frame {
             mt: false,
+            patch: None,
             doc,
             symbols: &symbols,
             view: v,
@@ -202,7 +207,7 @@ fn rasterize(
             opts: &opts,
             ink,
             output: v,
-            plates: None,
+            plates: plates.as_deref(),
         };
         for a in &def.art {
             r.draw_arc(&mut ctx, &frame, a);
@@ -361,7 +366,8 @@ impl Renderer {
         let Some(pe) = &f.doc.pattern_edit else { return false };
         let Some(layer) = f.doc.layers.iter().find(|l| l.id == pe.layer) else { return false };
         let Some(def) = f.doc.pattern(&pe.pattern) else { return false };
-        let children: Vec<Arc<Node>> = layer.children().cloned().unwrap_or_default();
+        // The tile's art: the layer's ruler guides are not part of it.
+        let children: Vec<Arc<Node>> = layer.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).cloned().collect();
         if layer.visible && !children.is_empty() {
             let dim = (def.dim_copies / 100.0).clamp(0.0, 1.0);
             let (before, after) = def.preview_offsets_dimmed_sides();

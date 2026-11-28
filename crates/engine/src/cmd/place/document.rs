@@ -1,6 +1,7 @@
-//! Placed documents (`file.place` of a VectorCraft document, a PDF or a `.ai` file from a file,
-//! with `link`): one locked object showing an artboard of the document or a page of the PDF, a
-//! [`PlacedDocument`].
+//! Placed documents (`file.place` of a VectorCraft document, a PDF, a `.ai` file or an EPS file
+//! from a file, with `link`): one locked object showing an artboard of the document, a page of the
+//! PDF or the EPS file's art, a [`PlacedDocument`]. An EPS file whose bytes a `.ai` file's editing
+//! data includes opens as one too, read from those bytes.
 //!
 //! The object keeps the file's bytes (in the document's images, like image data) and the link; the
 //! art it shows is read from them the way placing the file without Link reads it
@@ -20,7 +21,7 @@ use std::sync::Arc;
 
 use vectorcraft_doc::links::hash_bytes;
 use vectorcraft_doc::placed_document::{PREVIEW_MAX, PREVIEW_PX_PER_PT, key_for};
-use vectorcraft_doc::{Document, ImageBlob, LinkInfo, Node, NodeKind, PageBox, PlacedDocument, PlacementOptions};
+use vectorcraft_doc::{ColorMode, Document, ImageBlob, LinkInfo, Node, NodeKind, PageBox, PlacedDocument, PlacementOptions};
 use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_pdf::CropTo;
 
@@ -33,6 +34,16 @@ pub(crate) const MAX_FILE: usize = 256 << 20;
 const NATIVE: [&str; 2] = ["vectorcraft", "template"];
 /// The type a placed VectorCraft document's bytes are stored with (a PDF's: its format's).
 const MIME: &str = "application/json";
+/// The type a placed EPS or PostScript file's bytes are stored with.
+pub(crate) const POSTSCRIPT: &str = "application/postscript";
+/// What follows the hash in the key of a placed PostScript `.ai` file ([`key_for`]).
+const AI_MARK: &str = "-ai";
+
+/// Is `key` (of a placed document) a PostScript `.ai` file's ([`AI_MARK`])? Hashes are hex, so
+/// only the mark puts `-ai-` in a key.
+pub(crate) fn is_postscript_ai_key(key: &str) -> bool {
+    key.contains(&format!("{AI_MARK}-"))
+}
 
 /// Is `name` with `bytes` a VectorCraft document?
 pub(crate) fn is_native(name: &str, bytes: &[u8]) -> bool {
@@ -42,6 +53,12 @@ pub(crate) fn is_native(name: &str, bytes: &[u8]) -> bool {
 /// Is `name` with `bytes` a PDF, or a `.ai` or `.ait` file read as PDF pages (not PostScript)?
 pub(crate) fn is_pdf(name: &str, bytes: &[u8]) -> bool {
     fileio::detect(name, bytes).is_some_and(|f| matches!(f.id, "pdf" | "ai" | "ait")) && !vectorcraft_pdf::is_postscript(bytes)
+}
+
+/// Is `bytes` an EPS file, a PostScript file or a PostScript `.ai` or `.ait` file, read by the EPS
+/// importer (not a DCS file, which is placed as a linked image)?
+pub(crate) fn is_postscript(bytes: &[u8]) -> bool {
+    vectorcraft_pdf::is_postscript(bytes) && !super::dcs::is_dcs(bytes)
 }
 
 /// The editing data of the `.ai` file `name` (`bytes`) when its PDF part is only a placeholder, or
@@ -60,9 +77,12 @@ pub(crate) fn editing_data(name: &str, bytes: &[u8]) -> Option<Document> {
     }
 }
 
-/// The type the bytes of placed file `name` (`bytes`) are stored with: a PDF's format's, else
-/// [`MIME`].
+/// The type the bytes of placed file `name` (`bytes`) are stored with: a PDF's format's,
+/// [`POSTSCRIPT`] for an EPS or PostScript file, else [`MIME`].
 fn mime(name: &str, bytes: &[u8]) -> &'static str {
+    if is_postscript(bytes) {
+        return POSTSCRIPT;
+    }
     fileio::detect(name, bytes).filter(|_| is_pdf(name, bytes)).map_or(MIME, |f| f.mime)
 }
 
@@ -100,12 +120,17 @@ pub(crate) struct DocumentArt {
     /// What is shown: the artboard, or the art's bounds.
     pub frame: Rect,
     pub warnings: Vec<String>,
+    /// Whether a PDF or `.ai` page was read from the file's editing data (its page only a
+    /// placeholder, or its PDF part unreadable) instead of from the page.
+    pub editing_data: bool,
 }
 
 /// Artboard `page` (1-based) of the VectorCraft document `name` (`bytes`, read from `path` when
 /// there is one, so its linked images are found), clipped to the artboard unless `bounding`; or
 /// page `page` of the PDF or `.ai` file `name`, clipped to its box `page_box` unless `bounding`
-/// ([`super::pdf_art`]).
+/// ([`super::pdf_art`]); or the art of the EPS or PostScript file `name` ([`is_postscript`]) on
+/// its page `page`, clipped to its bounding box unless `bounding`, as placing it without Link reads
+/// it.
 pub(crate) fn document_art(
     name: &str,
     bytes: &[u8],
@@ -115,9 +140,24 @@ pub(crate) fn document_art(
     page_box: PageBox,
     cmd: &str,
 ) -> Result<DocumentArt> {
+    opened_document_art(name, (bytes, None), path, page, bounding, page_box, cmd)
+}
+
+/// [`document_art`] of `bytes` and, for a PDF already read, `opened`: the PDF `bytes` as
+/// [`vectorcraft_pdf::open_pdf`] read it without a password, so its page is read without reading
+/// the file again.
+fn opened_document_art(
+    name: &str,
+    (bytes, opened): (&[u8], Option<&vectorcraft_pdf::Opened>),
+    path: Option<&str>,
+    page: u32,
+    bounding: bool,
+    page_box: PageBox,
+    cmd: &str,
+) -> Result<DocumentArt> {
     let file = fileio::file_name(name);
     let pdf = is_pdf(name, bytes);
-    if !pdf && !is_native(name, bytes) {
+    if !pdf && !is_native(name, bytes) && !is_postscript(bytes) {
         return Err(bad(cmd, format!("`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file")));
     }
     if bytes.len() > MAX_FILE {
@@ -125,8 +165,10 @@ pub(crate) fn document_art(
     }
     if pdf {
         let o = fileio::LoadOptions { crop: crop_to(page_box), ..Default::default() };
-        return super::pdf_art(name, bytes, path, page as usize, o, bounding, cmd);
+        return super::pdf_art(name, (bytes, opened), path, page as usize, o, bounding, cmd);
     }
+    // A VectorCraft document, or an EPS or PostScript file: the document our EPS files carry, else
+    // what its PostScript draws.
     let mut l = fileio::load(name, bytes)?;
     // Its linked images show their files; its placed documents stay as they are, unless their
     // stored bytes are lost, when resolving reads their files, which can place this one again.
@@ -136,6 +178,13 @@ pub(crate) fn document_art(
         super::super::links::resolve(&mut l.doc, super::super::links::LinkBase::file(path), false, false);
     }
     l.doc.drop_edit_modes();
+    // The native file does not store type's layout bounds. Measure them before cropping or
+    // copying the art, so the placed group keeps the positions of aligned point type.
+    for warning in crate::Session::refresh_text_bounds(&mut l.doc) {
+        if !l.warnings.contains(&warning) {
+            l.warnings.push(warning);
+        }
+    }
     let n = l.doc.artboards.len();
     let board = (page as usize).checked_sub(1).and_then(|i| l.doc.artboards.get(i)).map(|a| a.rect);
     let artboards = if n == 1 { "artboard" } else { "artboards" };
@@ -145,7 +194,7 @@ pub(crate) fn document_art(
     let nodes = super::on_artboard(&symbols, &layers, board);
     let frame = if bounding { super::shown_bounds(&symbols, &nodes) } else { Some(board) };
     let frame = frame.filter(|r| r.width() > 0.0 || r.height() > 0.0).ok_or_else(|| bad(cmd, format!("`{file}` has no art to place")))?;
-    Ok(DocumentArt { doc: l.doc, nodes, clip: (!bounding).then_some(board), frame, warnings: l.warnings })
+    Ok(DocumentArt { doc: l.doc, nodes, clip: (!bounding).then_some(board), frame, warnings: l.warnings, editing_data: false })
 }
 
 /// The most placed documents read inside one another while their links are resolved.
@@ -175,6 +224,27 @@ impl Drop for Reading {
     }
 }
 
+std::thread_local! {
+    /// How many placed documents [`read_document`] is reading inside one another on this thread.
+    static DRAWING: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// A placed document being read for drawing ([`DRAWING`]): the count goes down when this goes.
+struct Drawing;
+
+impl Drawing {
+    /// `None` when [`MAX_NESTED_READS`] are being read.
+    fn enter() -> Option<Self> {
+        DRAWING.with(|d| (d.get() < MAX_NESTED_READS).then(|| d.set(d.get() + 1))).map(|()| Drawing)
+    }
+}
+
+impl Drop for Drawing {
+    fn drop(&mut self) {
+        DRAWING.with(|d| d.set(d.get().saturating_sub(1)));
+    }
+}
+
 /// `nodes` as one group, clipped to `clip` (its own ids: what drawing reads).
 fn group(nodes: Vec<Node>, clip: Option<Rect>) -> Node {
     let mut children: Vec<Arc<Node>> = nodes.into_iter().map(Arc::new).collect();
@@ -186,9 +256,20 @@ fn group(nodes: Vec<Node>, clip: Option<Rect>) -> Node {
 
 /// `p`'s file (`bytes`) read as the art it shows: how the document model reads placed documents
 /// ([`vectorcraft_doc::placed_document::set_loader`]).
+/// `None` past [`MAX_NESTED_READS`] placed documents read inside one another: opening a file can
+/// draw the placed documents in it, whose files can place others.
 pub(crate) fn read_document(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
+    let _drawing = Drawing::enter()?;
+    #[cfg(test)]
+    DOCUMENT_READS.with(|n| n.set(n.get() + 1));
     let a = document_art(p.link.name(), bytes, Some(&p.link.path), p.page(), p.bounding, p.page_box, "draw").ok()?;
     Some((a.doc, group(a.nodes, a.clip), a.frame))
+}
+
+#[cfg(test)]
+std::thread_local! {
+    /// Placed documents read for drawing on this thread, for tests that count work.
+    pub(crate) static DOCUMENT_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// `p`'s file read again, while it is the file it was read from (how the document model gets it
@@ -221,22 +302,78 @@ pub(crate) struct Source {
     /// What is shown, in the file's coordinates: the artboard, the page's box or the art's bounds.
     pub frame: Rect,
     pub warnings: Vec<String>,
+    /// The colour mode the file's art was read in (a PDF page painted mostly in CMYK reads in CMYK).
+    pub color_mode: ColorMode,
+    /// [`DocumentArt::editing_data`].
+    pub editing_data: bool,
 }
 
 /// The VectorCraft document `name` (`bytes`, from `path` when there is one) read for showing
 /// artboard `page`, or the PDF or `.ai` file for showing page `page` clipped to its box
 /// `page_box` (its art's bounds when `bounding`).
 pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bounding: bool, page_box: PageBox, cmd: &str) -> Result<Source> {
+    read_source(name, bytes, None, path, (page, bounding, page_box), cmd)
+}
+
+/// A PDF (or PDF-compatible `.ai`) whose pages are read for placing linked, read once for them all.
+#[derive(Clone, Copy)]
+pub(crate) struct SharedFile<'a> {
+    /// The file's bytes, which every page's blob keeps without a copy of its own.
+    pub bytes: &'a Arc<Vec<u8>>,
+    /// The bytes' hash ([`hash_bytes`]).
+    pub hash: &'a str,
+    /// The bytes as [`vectorcraft_pdf::open_pdf`] read them, without a password.
+    pub opened: &'a vectorcraft_pdf::Opened,
+}
+
+/// [`source`] of page `page` of `file`: several pages of one file read this way share one copy of
+/// it, and the file is hashed and read once for them all.
+pub(crate) fn shared_source(
+    name: &str,
+    file: SharedFile<'_>,
+    path: Option<&str>,
+    page: u32,
+    bounding: bool,
+    page_box: PageBox,
+    cmd: &str,
+) -> Result<Source> {
+    read_source(name, file.bytes, Some(file), path, (page, bounding, page_box), cmd)
+}
+
+/// [`source`], the blob keeping `shared`'s bytes when given (else a copy of `bytes`), its hash
+/// used for the key (else `bytes` hashed) and its pages read from what was read of it; `shown` is
+/// the page (or artboard), whether the art's bounds are shown, and the page's box.
+fn read_source(
+    name: &str,
+    bytes: &[u8],
+    shared: Option<SharedFile<'_>>,
+    path: Option<&str>,
+    shown: (u32, bool, PageBox),
+    cmd: &str,
+) -> Result<Source> {
+    let (page, bounding, page_box) = shown;
+    let hash = shared.map_or_else(|| hash_bytes(bytes), |f| f.hash.to_string());
+    let opened = shared.map(|f| f.opened);
+    let shared = shared.map(|f| f.bytes);
+    // A PostScript `.ai` is read with the artboard its header gives, an EPS file on its page: the
+    // same bytes under the two names show different art, so they have keys of their own.
+    let ai = is_postscript(bytes) && fileio::detect(name, bytes).is_some_and(|f| matches!(f.id, "ai" | "ait"));
+    let hash = if ai { format!("{hash}{AI_MARK}") } else { hash };
     // The same document placed the same way is read once (placing it again is free).
-    let key = key_for(&hash_bytes(bytes), page, bounding, page_box);
+    let key = key_for(&hash, page, bounding, page_box);
     // Resolving its links depends on where the file is and on what the caller may read, so a hit
     // needs the same path, and nothing is shared with or from a confined (automation) caller.
     let confined = crate::file_access::current().is_some();
-    if !confined && let Some((_, s)) = lock_memo().iter().find(|(at, s)| s.key == key && at.as_deref() == path).cloned() {
+    if !confined && let Some((_, mut s)) = lock_memo().iter().find(|(at, s)| s.key == key && at.as_deref() == path).cloned() {
+        // The same bytes: the copy given is kept instead, so the pages that share it go on sharing.
+        if let Some(b) = shared {
+            s.blob.bytes = b.clone();
+        }
         return Ok(s);
     }
-    let a = document_art(name, bytes, path, page, bounding, page_box, cmd)?;
-    let mut blob = ImageBlob::new(mime(name, bytes), bytes.to_vec());
+    let a = opened_document_art(name, (bytes, opened), path, page, bounding, page_box, cmd)?;
+    let bytes = shared.cloned().unwrap_or_else(|| Arc::new(bytes.to_vec()));
+    let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None, file_font: Default::default() };
     let shown = PlacedDocument {
         link: LinkInfo { page: Some(page), ..LinkInfo::new(path.unwrap_or(name)) },
         key: key.clone(),
@@ -249,9 +386,10 @@ pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bo
     };
     let art = group(a.nodes, a.clip);
     blob.proxy = preview(&a.doc, &art, a.frame).map(Arc::new);
+    let (color_mode, editing_data) = (a.doc.color_mode, a.editing_data);
     // Drawing it needn't read it again.
     vectorcraft_doc::placed_document::prime(&shown, blob.bytes.clone(), (a.doc, art, a.frame));
-    let s = Source { blob, key, page_box, frame: a.frame, warnings: a.warnings };
+    let s = Source { blob, key, page_box, frame: a.frame, warnings: a.warnings, color_mode, editing_data };
     if !confined {
         let mut m = lock_memo();
         if m.len() >= MEMO_SIZE {
@@ -295,17 +433,30 @@ fn preview(doc: &Document, art: &Node, frame: Rect) -> Option<Vec<u8>> {
         })
         .collect();
     let rgba = image::RgbaImage::from_raw(w, h, px)?;
-    let mut out = vec![];
-    // Opaque but for the edge's anti-aliasing (an artboard drawn to whole pixels) and compositing's
-    // rounding: JPEG.
     let inner = |x: u32, y: u32| x > 0 && y > 0 && x + 1 < w && y + 1 < h;
     if rgba.enumerate_pixels().all(|(x, y, p)| p[3] >= 250 || !inner(x, y)) {
         let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 80).encode_image(&rgb).ok()?;
+        let raw = craft_image_codecs::Image::from_raw(
+            rgb.width(),
+            rgb.height(),
+            craft_image_codecs::ChannelLayout::Rgb,
+            craft_image_codecs::SampleType::U8,
+            rgb.into_raw(),
+        )
+        .ok()?;
+        let opts = craft_image_codecs::EncodeOptions { jpeg_quality: 80, ..Default::default() };
+        craft_image_codecs::encode(&raw, craft_image_codecs::Format::Jpeg, &opts).ok()
     } else {
-        rgba.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
+        let raw = craft_image_codecs::Image::from_raw(
+            rgba.width(),
+            rgba.height(),
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            rgba.into_raw(),
+        )
+        .ok()?;
+        craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
     }
-    Some(out)
 }
 
 /// `s` stored in `d` (objects showing the same thing share one blob).
@@ -330,7 +481,8 @@ pub(crate) fn node(d: &mut Document, s: &Source, link: LinkInfo, bounding: bool)
 }
 
 /// `d` for output: linked images and placed documents that keep only their previews get their
-/// files back, else output as their previews, with a warning.
+/// files back, else output as their previews, with a warning. The art of the stored brushes counts
+/// too.
 pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
     let (d, mut warnings) = super::super::links::full_linked_images(d, Default::default());
     let doc = match &d {
@@ -339,7 +491,7 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
     };
     let mut need: Vec<PlacedDocument> = vec![];
     let mut seen = std::collections::HashSet::new();
-    doc.visit_placed(|_, p| {
+    super::super::links::with_brush_art(doc).visit_placed(|_, p| {
         if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && seen.insert(p.key.clone()) {
             need.push(p.clone());
         }
@@ -356,7 +508,10 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
         let Some(blob) = out.images.get(&p.key) else { continue };
         match vectorcraft_doc::placed_document::full_bytes(&p, blob) {
             Some(bytes) => {
-                out.images.insert(p.key.clone(), ImageBlob { mime: mime(p.link.name(), &bytes).into(), bytes, proxy: blob.proxy.clone() });
+                out.images.insert(
+                    p.key.clone(),
+                    ImageBlob { mime: mime(p.link.name(), &bytes).into(), bytes, proxy: blob.proxy.clone(), file_font: Default::default() },
+                );
             }
             None => {
                 previews.insert(p.key);
@@ -370,7 +525,7 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
                 "{n} placed documents output as their previews: their files can't be found, or changed since they were read (relink or update them)"
             ),
         });
-        out.placed_as_previews(&previews);
+        super::super::links::editing_brush_art(&mut out, |out| out.placed_as_previews(&previews));
     }
     (Cow::Owned(out), warnings)
 }
@@ -378,8 +533,10 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
 /// Placed document `id` of `d` replaced by an editable copy of its art, as placing its file
 /// without Link gives (its resources joining `d`, renamed where `d` uses a name for something
 /// else), keeping the object's id, place, name and transparency: Break Link and Object › Expand.
+/// A placed document in opacity-mask art or in the art of a symbol, graph design or pattern is
+/// replaced where it is stored.
 pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
-    let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let n = d.stored_node(id).map(|(n, _)| Node::clone(n)).ok_or(EngineError::NoNode(id))?;
     let NodeKind::PlacedDocument(p) = &n.kind else { return Err(bad(cmd, format!("object {} is not a placed document", id.0))) };
     let blob = d.images.get(&p.key).ok_or_else(|| bad(cmd, format!("object {} has lost its file's contents: relink it", id.0)))?;
     let bytes = vectorcraft_doc::placed_document::full_bytes(p, blob)
@@ -395,6 +552,10 @@ pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
     let art = super::transformed(Node::new(d.alloc_id(), NodeKind::Group { children, clip: a.clip.is_some() }), m);
     let mut out = n.clone();
     out.kind = art.kind;
+    if d.node(id).is_none() {
+        *d.stored_node_mut(id).ok_or(EngineError::NoNode(id))? = out;
+        return Ok(());
+    }
     let (par, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
     d.remove(id)?;
     d.insert(par, index, out)?;

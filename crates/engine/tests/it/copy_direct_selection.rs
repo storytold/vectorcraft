@@ -367,13 +367,14 @@ fn copy_when_all_segments_selected_preserves_live_shape() {
 }
 
 #[test]
-fn compound_member_selected_whole_with_direct_selection_promotes_member() {
+fn compound_member_selected_whole_with_direct_selection_copies_only_the_member() {
     let mut s = Session::new();
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let outer = NodeId(run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 80}))["id"].as_u64().unwrap());
     let inner = NodeId(run(&mut s, "shape.rectangle", json!({"x": 30, "y": 30, "width": 40, "height": 40}))["id"].as_u64().unwrap());
     run(&mut s, "select.set", json!({"ids": [outer.0, inner.0]}));
     let compound = NodeId(run(&mut s, "object.compoundPath.make", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
 
     let standalone = rect(&mut s, 120.0, 10.0, 50.0, 50.0);
 
@@ -394,17 +395,24 @@ fn compound_member_selected_whole_with_direct_selection_promotes_member() {
     assert!(s.active().unwrap().selection.partial(outer).is_none());
     assert!(s.active().unwrap().selection.partial(standalone).is_some());
 
+    let undo_before = s.doc().unwrap().history.undo.len();
     run(&mut s, "edit.copy", json!({}));
-    // Clipboard should have:
-    // 1. The compound path (outer promoted to compound #786)
-    // 2. The extracted segment piece from standalone
+    // The clipboard holds the member as an ordinary path with the compound's paint, and the
+    // piece extracted from the standalone path.
     let clip_ids: Vec<NodeId> = s.clipboard.nodes.iter().map(|n| n.id).collect();
-    assert_eq!(clip_ids.len(), 2, "promoted compound plus the extracted standalone piece");
-    assert!(clip_ids.contains(&compound), "whole compound member must be promoted to compound parent");
+    assert_eq!(clip_ids.len(), 2, "the member plus the extracted standalone piece");
+    assert!(clip_ids.contains(&outer), "the member is copied itself: {clip_ids:?}");
+    assert!(!clip_ids.contains(&compound), "the compound is not copied");
+    let member = s.clipboard.nodes.iter().find(|n| n.id == outer).unwrap();
+    assert!(matches!(member.kind, NodeKind::Path { .. }));
+    assert_eq!(member.appearance, s.doc().unwrap().doc.node(compound).unwrap().appearance);
+    // Copy leaves the document and its history as they were.
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_before);
+    assert_eq!(s.doc().unwrap().doc.node(compound).unwrap().children().unwrap().len(), 2);
 }
 
 #[test]
-fn cut_whole_compound_member_with_direct_selection_cuts_compound_and_extracted_piece() {
+fn cut_whole_compound_member_with_direct_selection_cuts_member_and_extracted_piece() {
     let mut s = Session::new();
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let outer = NodeId(run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 80}))["id"].as_u64().unwrap());
@@ -426,16 +434,411 @@ fn cut_whole_compound_member_with_direct_selection_cuts_compound_and_extracted_p
         }),
     );
 
+    let undo_before = s.doc().unwrap().history.undo.len();
     run(&mut s, "edit.cut", json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_before + 1, "Cut is one undo step");
     let clip_ids: Vec<NodeId> = s.clipboard.nodes.iter().map(|n| n.id).collect();
-    assert_eq!(clip_ids.len(), 2, "promoted compound plus the extracted standalone piece");
-    assert!(clip_ids.contains(&compound), "whole compound member must be promoted to compound parent");
+    assert_eq!(clip_ids.len(), 2, "the member plus the extracted standalone piece");
+    assert!(clip_ids.contains(&outer) && !clip_ids.contains(&compound), "{clip_ids:?}");
 
-    // Compound was removed because member was selected whole
+    // The member left; the other member stays in the compound.
     let doc = &s.doc().unwrap().doc;
-    assert!(doc.node(compound).is_none(), "compound path must be removed on cut");
+    assert!(doc.node(outer).is_none(), "the cut member is removed");
+    assert_eq!(doc.node(compound).and_then(|n| n.children()).map(|c| c.iter().map(|m| m.id).collect::<Vec<_>>()), Some(vec![inner]));
     // Standalone has cut pieces remaining
     assert!(doc.node(standalone).is_some(), "partially cut standalone path remains");
+    check_session(&s).unwrap();
+
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(s.doc().unwrap().doc.node(compound).unwrap().children().unwrap().len(), 2, "Undo puts the member back");
+    run(&mut s, "edit.redo", json!({}));
+    assert!(s.doc().unwrap().doc.node(outer).is_none());
+    check_session(&s).unwrap();
+}
+
+/// A compound path of `n` rectangles side by side (x = 10, 60, 110, …), filled red, with its id
+/// and its members' ids.
+fn compound_of(s: &mut Session, n: usize) -> (NodeId, Vec<NodeId>) {
+    let members: Vec<NodeId> = (0..n).map(|i| rect(s, 10.0 + 50.0 * i as f64, 10.0, 40.0, 40.0)).collect();
+    run(s, "select.set", json!({"ids": members.iter().map(|m| m.0).collect::<Vec<_>>()}));
+    let compound = NodeId(run(s, "object.compoundPath.make", json!({}))["id"].as_u64().unwrap());
+    run(s, "paint.setFill", json!({"color": "#ff0000"}));
+    (compound, members)
+}
+
+/// Every anchor of the four-anchor rectangle `id` picked with Direct Selection, which selects it
+/// whole.
+fn pick_all_anchors(s: &mut Session, id: NodeId) {
+    run(s, "select.anchorsMany", json!({"items": [{"id": id.0, "anchors": [[0, 0], [0, 1], [0, 2], [0, 3]]}]}));
+    assert!(s.doc().unwrap().selection.contains(id) && s.doc().unwrap().selection.partial(id).is_none(), "the member is selected whole");
+}
+
+fn members_of(s: &Session, compound: NodeId) -> Option<Vec<NodeId>> {
+    s.doc().unwrap().doc.node(compound).and_then(|n| n.children()).map(|c| c.iter().map(|m| m.id).collect())
+}
+
+#[test]
+fn cut_of_one_member_of_two_leaves_a_compound_of_one() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    pick_all_anchors(&mut s, m[0]);
+    let undo_before = s.doc().unwrap().history.undo.len();
+    run(&mut s, "edit.cut", json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_before + 1, "Cut is one undo step");
+    assert_eq!(members_of(&s, compound), Some(vec![m[1]]), "the other member stays a compound of one, as after Clear");
+    assert_eq!(s.clipboard.nodes.len(), 1);
+    assert_eq!(s.clipboard.nodes[0].id, m[0]);
+    assert!(matches!(s.clipboard.nodes[0].kind, NodeKind::Path { .. }), "the clipboard holds an ordinary path");
+    check_session(&s).unwrap();
+
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(members_of(&s, compound), Some(m.clone()), "Undo puts the member back in its place");
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(members_of(&s, compound), Some(vec![m[1]]));
+    check_session(&s).unwrap();
+}
+
+#[test]
+fn cut_of_the_middle_member_of_three_leaves_the_other_two() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 3);
+    pick_all_anchors(&mut s, m[1]);
+    run(&mut s, "edit.cut", json!({}));
+    assert_eq!(members_of(&s, compound), Some(vec![m[0], m[2]]));
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [m[1]]);
+    check_session(&s).unwrap();
+}
+
+#[test]
+fn clear_of_a_whole_member_removes_only_the_member_and_keeps_the_clipboard() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    let standalone = rect(&mut s, 10.0, 120.0, 40.0, 40.0);
+    run(&mut s, "select.set", json!({"ids": [standalone.0]}));
+    run(&mut s, "edit.copy", json!({}));
+    pick_all_anchors(&mut s, m[0]);
+    run(&mut s, "edit.clear", json!({}));
+    assert_eq!(members_of(&s, compound), Some(vec![m[1]]));
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [standalone]);
+}
+
+#[test]
+fn group_selection_of_one_member_copies_and_cuts_only_that_member() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    s.select_tool("groupSelection", vectorcraft_engine::ViewInfo::default()).unwrap();
+    run(&mut s, "select.set", json!({"ids": [m[1].0]}));
+    run(&mut s, "edit.copy", json!({}));
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [m[1]]);
+    assert!(matches!(s.clipboard.nodes[0].kind, NodeKind::Path { .. }));
+    assert_eq!(members_of(&s, compound), Some(m.clone()), "Copy leaves both members");
+
+    run(&mut s, "edit.cut", json!({}));
+    assert_eq!(members_of(&s, compound), Some(vec![m[0]]));
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [m[1]]);
+    check_session(&s).unwrap();
+}
+
+#[test]
+fn every_member_selected_whole_copies_and_cuts_the_compound() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    s.select_tool("groupSelection", vectorcraft_engine::ViewInfo::default()).unwrap();
+    run(&mut s, "select.set", json!({"ids": [m[0].0, m[1].0]}));
+    run(&mut s, "edit.copy", json!({}));
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [compound]);
+    run(&mut s, "edit.cut", json!({}));
+    assert!(s.doc().unwrap().doc.node(compound).is_none(), "the compound leaves whole");
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [compound]);
+    check_session(&s).unwrap();
+}
+
+#[test]
+fn a_copied_member_keeps_the_compounds_transparency_mask_and_fill_rule() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    let mask = rect(&mut s, 0.0, 0.0, 120.0, 60.0);
+    run(&mut s, "select.set", json!({"ids": [compound.0, mask.0]}));
+    run(&mut s, "transparency.makeOpacityMask", json!({}));
+    let mask_art = s.doc().unwrap().doc.node(compound).unwrap().extras().mask.clone();
+    assert!(mask_art.is_some(), "the compound has an opacity mask");
+    run(&mut s, "select.set", json!({"ids": [compound.0]}));
+    run(&mut s, "transparency.set", json!({"opacity": 50, "blend": "Multiply", "isolate": true}));
+    run(&mut s, "path.setFillRule", json!({"rule": "evenOdd"}));
+    assert!(matches!(s.doc().unwrap().doc.node(m[0]).unwrap().kind, NodeKind::Path { rule: FillRule::NonZero, .. }), "the member keeps its own rule");
+    let (opacity, blend) = {
+        let c = s.doc().unwrap().doc.node(compound).unwrap();
+        (c.opacity, c.blend)
+    };
+    assert_eq!(opacity, 0.5);
+    pick_all_anchors(&mut s, m[0]);
+    run(&mut s, "edit.copy", json!({}));
+    assert_eq!(s.clipboard.nodes.iter().map(|n| (n.id, n.opacity, n.blend)).collect::<Vec<_>>(), [(m[0], opacity, blend)]);
+    assert!(matches!(s.clipboard.nodes[0].kind, NodeKind::Path { rule: FillRule::EvenOdd, .. }));
+    assert!(s.clipboard.nodes[0].isolate, "the member keeps the compound's isolated blending");
+    assert_eq!(s.clipboard.nodes[0].extras().mask, mask_art, "the member keeps the compound's opacity mask");
+}
+
+#[test]
+fn a_copied_member_with_its_own_appearance_takes_the_compounds() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    // The member carries an appearance of its own, as an imported member can; the compound's
+    // appearance is the one drawn.
+    run(&mut s, "paint.setFill", json!({"ids": [compound.0], "color": "#00ff00"}));
+    let own_look = s.doc().unwrap().doc.node(compound).unwrap().appearance.clone();
+    run(&mut s, "paint.setFill", json!({"ids": [compound.0], "color": "#0000ff"}));
+    let compound_look = s.doc().unwrap().doc.node(compound).unwrap().appearance.clone();
+    assert_ne!(own_look, compound_look);
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(m[0]).unwrap().appearance = own_look.clone();
+    assert!(!s.doc().unwrap().doc.node(m[0]).unwrap().appearance.items.is_empty(), "the member has its own appearance");
+    pick_all_anchors(&mut s, m[0]);
+    run(&mut s, "edit.copy", json!({}));
+    assert_eq!(s.clipboard.nodes[0].appearance, compound_look);
+}
+
+/// A member copied or cut on its own, whole or in part, takes the compound's graphic style link
+/// with its look, or no link when the compound has none or the member no longer has the style's
+/// look (a gradient pinned to the compound's bounds); the style the member had before Make Compound
+/// Path does not go with it.
+#[test]
+fn a_copied_member_takes_the_compounds_graphic_style() {
+    let style_of = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().extras().graphic_style;
+    let clipboard_styles = |s: &Session| s.clipboard.graphic_styles.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    for (compound_styled, gradient) in [(false, false), (true, false), (true, true)] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+        let m0 = rect(&mut s, 10.0, 10.0, 40.0, 40.0);
+        run(&mut s, "paint.setFill", json!({"ids": [m0.0], "color": "#00ff00"}));
+        run(&mut s, "select.set", json!({"ids": [m0.0]}));
+        run(&mut s, "graphicStyle.new", json!({"name": "Member"}));
+        let member_style = style_of(&s, m0);
+        assert!(member_style.is_some(), "the path is linked to the style made from it");
+        let m1 = rect(&mut s, 60.0, 10.0, 40.0, 40.0);
+        run(&mut s, "select.set", json!({"ids": [m0.0, m1.0]}));
+        let compound = NodeId(run(&mut s, "object.compoundPath.make", json!({}))["id"].as_u64().unwrap());
+        let fill =
+            if gradient { json!({"ids": [compound.0], "gradient": {"kind": "linear"}}) } else { json!({"ids": [compound.0], "color": "#ff0000"}) };
+        run(&mut s, "paint.setFill", fill);
+        assert_eq!(style_of(&s, m0), member_style, "the member keeps its old link inside the compound");
+        let compound_style = if compound_styled {
+            run(&mut s, "select.set", json!({"ids": [compound.0]}));
+            run(&mut s, "graphicStyle.new", json!({"name": "Compound"}));
+            style_of(&s, compound)
+        } else {
+            None
+        };
+        assert_eq!(compound_style.is_some(), compound_styled);
+        // A gradient fitted to the compound is pinned to its bounds on the copy, which is no longer
+        // the style's look.
+        let link = compound_style.filter(|_| !gradient);
+        let expected: Vec<String> = if link.is_some() { vec!["Compound".into()] } else { vec![] };
+        let case = format!("compound styled: {compound_styled}, gradient: {gradient}");
+
+        s.select_tool("groupSelection", vectorcraft_engine::ViewInfo::default()).unwrap();
+        run(&mut s, "select.set", json!({"ids": [m0.0]}));
+        run(&mut s, "edit.copy", json!({}));
+        assert_eq!(s.clipboard.nodes[0].id, m0);
+        assert_eq!(s.clipboard.nodes[0].extras().graphic_style, link, "whole member, {case}");
+        assert_eq!(clipboard_styles(&s), expected, "whole member, {case}");
+
+        run(&mut s, "select.segments", json!({"id": m0.0, "segments": [[0, 0]]}));
+        run(&mut s, "edit.copy", json!({}));
+        assert_eq!(s.clipboard.nodes.len(), 1);
+        assert_eq!(s.clipboard.nodes[0].extras().graphic_style, link, "one segment, {case}");
+        assert_eq!(clipboard_styles(&s), expected, "one segment, {case}");
+
+        run(&mut s, "select.set", json!({"ids": [m0.0]}));
+        run(&mut s, "edit.cut", json!({}));
+        assert_eq!(members_of(&s, compound), Some(vec![m1]));
+        let pasted = NodeId(run(&mut s, "edit.pasteInPlace", json!({}))["ids"][0].as_u64().unwrap());
+        assert_eq!(style_of(&s, pasted), link, "Cut and Paste in Place, {case}");
+        check_session(&s).unwrap();
+    }
+}
+
+#[test]
+fn every_segment_of_every_member_picked_copies_and_cuts_the_compound() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    let all: Vec<Vec<usize>> = (0..4).map(|i| vec![0, i]).collect();
+    run(&mut s, "select.segments", json!({"id": m[0].0, "segments": all}));
+    run(&mut s, "select.segments", json!({"id": m[1].0, "segments": all, "mode": "add"}));
+    let sel = &s.doc().unwrap().selection;
+    assert!(sel.segments.contains_key(&m[0]) && sel.segments.contains_key(&m[1]), "both members keep their picked segments");
+    run(&mut s, "edit.copy", json!({}));
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [compound]);
+    run(&mut s, "edit.cut", json!({}));
+    assert!(s.doc().unwrap().doc.node(compound).is_none(), "the compound leaves whole");
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [compound]);
+    check_session(&s).unwrap();
+}
+
+#[test]
+fn clear_of_every_segment_or_anchor_of_every_member_leaves_no_empty_compound() {
+    let all: Vec<Vec<usize>> = (0..4).map(|i| vec![0, i]).collect();
+    let picks: [(&str, Value, Value); 3] = [
+        ("every segment", json!({"segments": all}), json!({"segments": all, "mode": "add"})),
+        ("every anchor", json!({"anchors": all}), json!({"anchors": all})),
+        ("one member whole, every segment of the other", json!({"anchors": all}), json!({"segments": all, "mode": "add"})),
+    ];
+    for (label, first, second) in picks {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+        let (compound, m) = compound_of(&mut s, 2);
+        let layer = s.doc().unwrap().doc.parent_of(compound).unwrap();
+        if first.get("segments").is_some() {
+            run(&mut s, "select.segments", json!({"id": m[0].0, "segments": first["segments"]}));
+        } else {
+            run(&mut s, "select.anchorsMany", json!({"items": [{"id": m[0].0, "anchors": first["anchors"]}]}));
+        }
+        if second.get("segments").is_some() {
+            run(&mut s, "select.segments", json!({"id": m[1].0, "segments": second["segments"], "mode": "add"}));
+        } else {
+            run(&mut s, "select.anchorsMany", json!({"items": [{"id": m[0].0, "anchors": all}, {"id": m[1].0, "anchors": all}]}));
+        }
+        let undo_before = s.doc().unwrap().history.undo.len();
+        run(&mut s, "edit.clear", json!({}));
+        let doc = &s.doc().unwrap().doc;
+        assert!(doc.node(compound).is_none(), "{label}: Clear removes the compound with its members, as Cut does");
+        assert!(doc.node(layer).and_then(|l| l.children()).is_some_and(|c| c.is_empty()), "{label}: nothing is left in the layer");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo_before + 1, "{label}: Clear is one undo step");
+        check_session(&s).unwrap();
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(members_of(&s, compound), Some(m.clone()), "{label}: Undo puts the compound back");
+    }
+}
+
+#[test]
+fn a_copied_member_keeps_the_compounds_gradient_where_it_was() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    // Members at x 10..50 and 60..100: the compound's gradient spans x 10..100.
+    let (compound, m) = compound_of(&mut s, 2);
+    run(&mut s, "paint.setFill", json!({"ids": [compound.0], "gradient": {"kind": "linear"}}));
+    let (mut expected, bounds) = {
+        let c = s.doc().unwrap().doc.node(compound).unwrap();
+        (c.appearance.clone(), c.geometric_bounds().unwrap())
+    };
+    assert!(expected.has_unplaced_gradient(), "the compound's gradient is fitted to its bounds");
+    assert_eq!((bounds.x0, bounds.x1), (10.0, 100.0));
+    expected.pin_gradients(bounds);
+    s.select_tool("groupSelection", vectorcraft_engine::ViewInfo::default()).unwrap();
+    run(&mut s, "select.set", json!({"ids": [m[0].0]}));
+    run(&mut s, "edit.copy", json!({}));
+    let member = &s.clipboard.nodes[0];
+    assert_eq!(member.id, m[0]);
+    assert!(!member.appearance.has_unplaced_gradient(), "the member's gradient is not refitted to its own bounds");
+    assert_eq!(member.appearance, expected, "the gradient keeps the compound's fit");
+
+    // The member cut and pasted in place draws the gradient over the compound's stretch.
+    run(&mut s, "edit.cut", json!({}));
+    let pasted = NodeId(run(&mut s, "edit.pasteInPlace", json!({}))["ids"][0].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().doc.node(pasted).unwrap().appearance, expected);
+}
+
+#[test]
+fn the_only_member_of_a_compound_of_one_copies_the_compound() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    pick_all_anchors(&mut s, m[0]);
+    run(&mut s, "edit.cut", json!({}));
+    assert_eq!(members_of(&s, compound), Some(vec![m[1]]), "Cut leaves a compound of one");
+    // Its one member selected whole is every member selected whole.
+    s.select_tool("groupSelection", vectorcraft_engine::ViewInfo::default()).unwrap();
+    run(&mut s, "select.set", json!({"ids": [m[1].0]}));
+    run(&mut s, "edit.copy", json!({}));
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [compound]);
+    assert!(matches!(s.clipboard.nodes[0].kind, NodeKind::Compound { .. }));
+}
+
+#[test]
+fn copy_of_a_member_then_paste_in_front_adds_a_member_to_the_compound() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    pick_all_anchors(&mut s, m[0]);
+    run(&mut s, "edit.copy", json!({}));
+    // The member is still selected: a path pasted in front of it goes into its compound.
+    let pasted = NodeId(run(&mut s, "edit.pasteInFront", json!({}))["ids"][0].as_u64().unwrap());
+    let doc = &s.doc().unwrap().doc;
+    assert!(matches!(doc.node(pasted).unwrap().kind, NodeKind::Path { .. }));
+    assert_eq!(members_of(&s, compound), Some(vec![m[0], pasted, m[1]]), "the pasted path sits just above the member");
+    check_session(&s).unwrap();
+}
+
+#[test]
+fn cut_of_a_whole_member_with_anchors_of_another_member_takes_each_by_its_own_rule() {
+    let after = |command: &str| {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+        let (compound, m) = compound_of(&mut s, 2);
+        let whole: Vec<Vec<usize>> = (0..4).map(|i| vec![0, i]).collect();
+        run(&mut s, "select.anchorsMany", json!({"items": [{"id": m[0].0, "anchors": whole}, {"id": m[1].0, "anchors": [[0, 1], [0, 2]]}]}));
+        run(&mut s, command, json!({}));
+        check_session(&s).unwrap();
+        (s, compound, m)
+    };
+    let (s, compound, m) = after("edit.cut");
+    // The whole member and the segment between the two picked anchors went to the clipboard.
+    assert_eq!(s.clipboard.nodes.len(), 2);
+    assert!(s.clipboard.nodes.iter().any(|n| n.id == m[0]));
+    assert!(s.clipboard.nodes.iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
+    // The partly picked member stays in the compound, with what Clear leaves of its outline.
+    assert_eq!(members_of(&s, compound).map(|c| c.len()), Some(1));
+    assert_eq!(contours(&s), contours(&after("edit.clear").0));
+    assert_eq!(contours(&s).len(), 1);
+}
+
+#[test]
+fn cut_of_a_member_of_a_compound_inside_a_group_leaves_the_group_and_compound() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let (compound, m) = compound_of(&mut s, 2);
+    let other = rect(&mut s, 10.0, 120.0, 40.0, 40.0);
+    run(&mut s, "select.set", json!({"ids": [compound.0, other.0]}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    pick_all_anchors(&mut s, m[0]);
+    run(&mut s, "edit.cut", json!({}));
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.parent_of(compound), Some(group));
+    assert_eq!(members_of(&s, compound), Some(vec![m[1]]));
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [m[0]]);
+    check_session(&s).unwrap();
+}
+
+#[test]
+fn paste_in_place_and_in_front_of_a_cut_member_paste_an_ordinary_path() {
+    for command in ["edit.pasteInPlace", "edit.pasteInFront"] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+        let (compound, m) = compound_of(&mut s, 2);
+        let fill = s.doc().unwrap().doc.node(compound).unwrap().appearance.clone();
+        pick_all_anchors(&mut s, m[0]);
+        run(&mut s, "edit.cut", json!({}));
+        let pasted = run(&mut s, command, json!({}));
+        let ids = pasted["ids"].as_array().unwrap();
+        assert_eq!(ids.len(), 1, "{command}");
+        let id = NodeId(ids[0].as_u64().unwrap());
+        let doc = &s.doc().unwrap().doc;
+        let node = doc.node(id).unwrap();
+        assert!(matches!(node.kind, NodeKind::Path { .. }), "{command}");
+        assert_eq!(node.appearance, fill, "{command}: the path keeps the compound's paint");
+        assert!(doc.parent_of(id).and_then(|p| doc.node(p)).is_some_and(|p| p.is_layer()), "{command}: pasted into the layer");
+        let anchors: Vec<[f64; 2]> = node.path_data().unwrap().subpaths[0].anchors.iter().map(|a| [a.p.x, a.p.y]).collect();
+        assert!(anchors.contains(&[10.0, 10.0]) && anchors.contains(&[50.0, 50.0]), "{command}: where it was: {anchors:?}");
+        assert_eq!(members_of(&s, compound), Some(vec![m[1]]), "{command}");
+        check_session(&s).unwrap();
+    }
 }
 
 #[test]

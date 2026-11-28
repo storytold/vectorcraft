@@ -35,6 +35,39 @@ const BLUR: &str = r#"<filter id="Soft"><feGaussianBlur stdDeviation="2"/></filt
 const SHIFT: &str = r#"<filter id="Shift"><feOffset dx="3" dy="3"/></filter>"#;
 
 #[test]
+fn byte_import_keeps_svg_encodings_and_uses_one_undo_step() {
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><filter id="café"><feOffset dx="3"/></filter></svg>"#;
+    let utf16: Vec<u8> = [0xff, 0xfe].into_iter().chain(svg.encode_utf16().flat_map(u16::to_le_bytes)).collect();
+    let latin1: Vec<u8> = format!("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>{svg}").chars().map(|c| c as u8).collect();
+    for bytes in [svg.as_bytes().to_vec(), utf16, latin1] {
+        let mut s = session();
+        let out = run(&mut s, "svgFilter.import", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)}));
+        assert_eq!(out["added"], json!(["café"]));
+        assert_eq!(names(&mut s), ["café"]);
+        assert_eq!(steps(&s), 1);
+        run(&mut s, "edit.undo", json!({}));
+        assert!(names(&mut s).is_empty());
+    }
+}
+
+#[test]
+fn byte_import_refuses_invalid_oversized_and_compressed_files_without_an_edit() {
+    let mut s = session();
+    assert!(err(&mut s, "svgFilter.import", json!({"dataBase64": "!"})).contains("dataBase64"));
+    assert!(err(&mut s, "svgFilter.import", json!({"dataBase64": 3})).contains("must be a string"));
+    let mut inline = "é".repeat(8 << 20);
+    inline.push(' ');
+    assert!(err(&mut s, "svgFilter.import", json!({"svg": inline})).contains("larger than 16777216 bytes"));
+    assert!(names(&mut s).is_empty());
+    assert_eq!(steps(&s), 0);
+    for bytes in [vec![0xff], vec![b' '; (16 << 20) + 1], vectorcraft_svg::compress("<svg/>")] {
+        assert!(s.execute("svgFilter.import", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})).is_err());
+        assert!(names(&mut s).is_empty());
+        assert_eq!(steps(&s), 0);
+    }
+}
+
+#[test]
 fn filters_are_defined_edited_and_deleted_in_one_undo_step_each() {
     let mut s = session();
     assert_eq!(run(&mut s, "svgFilter.list", json!({}))["filters"], json!([]));
@@ -207,6 +240,246 @@ fn deleting_a_filter_in_use_leaves_the_effect_drawing_nothing() {
     assert_eq!(drawn(&s, a), json!(SHIFT_MORE));
 }
 
+/// The `(name, xml)` of every `svg.filter` effect on the document's objects.
+fn filter_effects(s: &Session) -> Vec<(String, String)> {
+    let mut out = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        for e in n.appearance.effects.iter().filter(|e| e.id == vectorcraft_render::effects::SVG_FILTER) {
+            out.push((e.params["name"].as_str().unwrap().to_string(), e.params["xml"].as_str().unwrap().to_string()));
+        }
+    });
+    out
+}
+
+/// Pasted art whose filter has a name the document gives another filter keeps its own filter
+/// under a free name, so editing or deleting the document's filter leaves it alone. Pasted back
+/// into the document it came from, it takes the document's filter as it is now.
+#[test]
+fn pasted_art_keeps_a_filter_another_of_its_name_would_replace() {
+    let mut s = session();
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT_MORE}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].0, "Shift 2", "renamed: {pasted:?}");
+    assert!(pasted[0].1.contains("id=\"Shift 2\"") && pasted[0].1.contains("dx=\"9\""), "its own filter: {pasted:?}");
+    assert_eq!(names(&mut s), ["Shift"]);
+    run(&mut s, "svgFilter.delete", json!({"name": "Shift"}));
+    assert_eq!(filter_effects(&s), pasted, "the document's filter leaves it alone");
+    // The same filter as the document's keeps its name.
+    let mut t = session();
+    run(&mut t, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut t, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut t, "edit.pasteInPlace", json!({}));
+    assert_eq!(filter_effects(&t), [("Shift".to_string(), SHIFT.to_string())]);
+    // Copied, then the filter edited: pasted back, the copy draws the edited filter.
+    let mut u = session();
+    let a = rect(&mut u, 10.0);
+    run(&mut u, "svgFilter.define", json!({"xml": SHIFT}));
+    run(&mut u, "svgFilter.apply", json!({"name": "Shift", "ids": [a.0]}));
+    run(&mut u, "select.set", json!({"ids": [a.0]}));
+    run(&mut u, "edit.copy", json!({}));
+    run(&mut u, "svgFilter.define", json!({"xml": SHIFT_MORE, "replace": "Shift"}));
+    run(&mut u, "edit.pasteInPlace", json!({}));
+    let both = filter_effects(&u);
+    assert_eq!(both, [("Shift".to_string(), SHIFT_MORE.to_string()), ("Shift".to_string(), SHIFT_MORE.to_string())]);
+}
+
+/// Pasted again, art whose filter was renamed takes the name the first paste gave it, so the
+/// same filter does not come in under a new name each time.
+#[test]
+fn pasting_a_renamed_filter_again_reuses_its_name() {
+    let mut s = session();
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT_MORE}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 2);
+    assert_eq!(pasted[0], pasted[1], "{pasted:?}");
+    assert_ne!(pasted[0].0, "Shift", "{pasted:?}");
+}
+
+/// A pasted filter at the size limit, which "Shift 2" would make too long to draw, keeps its own
+/// definition under a free name no longer than its own (a free letter for a one-letter name), and
+/// its id is that name.
+#[test]
+fn pasted_art_with_a_filter_at_the_size_limit_still_draws_when_renamed() {
+    for (name, held, renamed) in [("Shift", SHIFT, "Shif"), ("S", r#"<filter id="S"><feOffset dx="3" dy="3"/></filter>"#, "a")] {
+        let mut s = session();
+        run(&mut s, "svgFilter.define", json!({"xml": held}));
+        let (open, close) = (format!(r#"<filter id="{name}"><feOffset dx="9" dy="9" result=""#), r#""/></filter>"#);
+        let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+        assert!(vectorcraft_render::effects::svg_filter::check(&big).is_ok());
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#{name})"/></svg>"#
+        );
+        run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+        run(&mut s, "edit.pasteInPlace", json!({}));
+        let pasted = filter_effects(&s);
+        assert_eq!(pasted.len(), 1);
+        assert_eq!(pasted[0].0, renamed, "renamed: {}", pasted[0].0);
+        assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok(renamed.to_string()), "the pasted filter draws under its name");
+        assert!(pasted[0].1.contains("dx=\"9\""), "its own filter");
+        assert_eq!(names(&mut s), [name]);
+    }
+}
+
+/// A pasted filter is not renamed to a name an effect in the document already gives, even one whose
+/// filter was deleted, so defining a filter of that name later changes only that effect.
+#[test]
+fn pasted_art_takes_no_name_the_documents_effects_use() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="Shift 2"><feOffset dx="1" dy="1"/></filter>"#}));
+    run(&mut s, "svgFilter.apply", json!({"name": "Shift 2", "ids": [a.0]}));
+    run(&mut s, "svgFilter.delete", json!({"name": "Shift 2"}));
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT_MORE}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let names: Vec<String> = filter_effects(&s).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["Shift 2", "Shift 3"]);
+}
+
+/// A pasted filter is not renamed to a name an effect in a brush's art gives either.
+#[test]
+fn pasted_art_takes_no_name_the_documents_brushes_use() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="Shift 2"><feOffset dx="1" dy="1"/></filter>"#}));
+    run(&mut s, "svgFilter.apply", json!({"name": "Shift 2", "ids": [a.0]}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "brush.new", json!({"type": "art", "name": "Fx"}));
+    run(&mut s, "edit.clear", json!({"ids": [a.0]}));
+    run(&mut s, "svgFilter.delete", json!({"name": "Shift 2"}));
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT_MORE}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let names: Vec<String> = filter_effects(&s).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["Shift 3"]);
+}
+
+/// A pasted filter at the size limit with a one-letter name takes a free capital letter when every
+/// lowercase letter and digit is in use.
+#[test]
+fn a_renamed_paste_takes_a_free_capital_letter() {
+    let mut s = session();
+    for n in ('a'..='z').chain('0'..='9') {
+        run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}));
+    }
+    run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="S"><feOffset dx="3" dy="3"/></filter>"#}));
+    let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
+    let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#S)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].0, "A");
+    assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok("A".to_string()));
+    assert!(pasted[0].1.contains("dx=\"9\""), "its own filter");
+}
+
+/// A filter named `n`, with the characters a quoted attribute value cannot hold escaped.
+fn one_char_filter(n: char) -> String {
+    let id = match n {
+        '"' => "&quot;".to_string(),
+        '&' => "&amp;".to_string(),
+        '<' => "&lt;".to_string(),
+        c => c.to_string(),
+    };
+    format!(r#"<filter id="{id}"><feOffset dx="1" dy="1"/></filter>"#)
+}
+
+/// A pasted filter at the size limit with a one-letter name takes a free punctuation character when
+/// every letter and digit is in use.
+#[test]
+fn a_renamed_paste_takes_a_free_punctuation_character() {
+    let mut s = session();
+    for n in ('a'..='z').chain('0'..='9').chain('A'..='Z') {
+        run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}));
+    }
+    let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
+    let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#S)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].0, "!");
+    assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok("!".to_string()));
+    assert!(pasted[0].1.contains("dx=\"9\""), "its own filter");
+}
+
+/// A pasted filter at the size limit with a one-letter name, when every free name it could take is
+/// in use, is refused rather than pasted under the name of the document's filter.
+#[test]
+fn a_paste_with_no_free_name_for_its_filter_is_refused() {
+    let mut s = session();
+    for n in ('a'..='z').chain('0'..='9').chain('A'..='Z') {
+        run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}));
+    }
+    // A document holds at most 64 filters: the other one-character names are taken by effects
+    // whose filters were deleted.
+    for n in ('!'..='~').filter(|c| !c.is_ascii_alphanumeric()) {
+        let a = rect(&mut s, 10.0);
+        let name = run(&mut s, "svgFilter.define", json!({"xml": one_char_filter(n)}))["name"].as_str().unwrap().to_string();
+        assert_eq!(name, n.to_string());
+        run(&mut s, "svgFilter.apply", json!({"name": name, "ids": [a.0]}));
+        run(&mut s, "svgFilter.delete", json!({"name": name}));
+    }
+    let (open, close) = (r#"<filter id="S"><feOffset dx="9" dy="9" result=""#, r#""/></filter>"#);
+    let big = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{big}</defs><rect width="30" height="30" filter="url(#S)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    let (before, effects) = (steps(&s), filter_effects(&s).len());
+    assert_eq!(effects, 32);
+    assert!(err(&mut s, "edit.pasteInPlace", json!({})).contains("no free name"));
+    assert_eq!(filter_effects(&s).len(), effects, "nothing pasted");
+    assert_eq!(steps(&s), before);
+}
+
+/// A pasted filter whose name holds a tab, a line feed or a carriage return keeps those characters
+/// in its id under its new name.
+#[test]
+fn a_renamed_paste_keeps_whitespace_characters_in_its_id() {
+    for c in ["&#9;", "&#10;", "&#13;"] {
+        let mut s = session();
+        run(&mut s, "svgFilter.define", json!({"xml": format!(r#"<filter id="S{c}t"><feOffset dx="3" dy="3"/></filter>"#)}));
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><filter id="S{c}t"><feOffset dx="9" dy="9"/></filter></defs><rect width="30" height="30" filter="url(#S{c}t)"/></svg>"#
+        );
+        run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+        run(&mut s, "edit.pasteInPlace", json!({}));
+        let pasted = filter_effects(&s);
+        assert_eq!(pasted.len(), 1);
+        assert_ne!(pasted[0].0, names(&mut s)[0], "renamed");
+        assert_eq!(vectorcraft_render::effects::svg_filter::check(&pasted[0].1), Ok(pasted[0].0.clone()), "{c}: its id is its name");
+    }
+}
+
 /// Art in a symbol's definition that uses a filter follows its edits too.
 #[test]
 fn a_symbols_art_follows_a_filter_edit() {
@@ -329,6 +602,26 @@ fn svg_export_keeps_a_measured_region_only_on_the_object_alone() {
     assert!(after.contains("<image") && !after.contains("<feOffset dx=\"3\""), "{after}");
 }
 
+/// SVG export keeps a filter live only in a user space SVG import stores again: `scale` 1000 with
+/// `axes` that double it scales the user space 2000 times, past what import holds, so the object is
+/// written as an image instead of a filter that would be left out when the file is opened.
+#[test]
+fn svg_export_writes_an_image_for_a_user_space_import_cannot_store() {
+    let hue = r#"<filter id="Hue"><feColorMatrix type="hueRotate" values="90"/></filter>"#;
+    for (scale, axes, live) in [(2.0, json!([2, 0, 0, 2]), true), (1000.0, json!([2, 0, 0, 2]), false)] {
+        let mut s = session();
+        let a = rect(&mut s, 10.0);
+        run(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [a.0], "params": {"xml": hue, "scale": scale, "axes": axes}}));
+        let out = svg(&mut s);
+        assert_eq!((out.contains("<feColorMatrix"), out.contains("<image")), (live, !live), "scale {scale}: {out}");
+        let (back, warnings) = vectorcraft_svg::import_with_report(&out).unwrap();
+        assert!(warnings.is_empty(), "scale {scale}: {warnings:?}");
+        let mut kept = 0;
+        back.walk(|n| kept += n.appearance.effects.iter().filter(|e| e.id == "svg.filter").count());
+        assert_eq!(kept, usize::from(live), "scale {scale}: {out}");
+    }
+}
+
 /// SVG export writes a filter rebuilt from its filter elements and filter attributes, not the XML
 /// the effect holds.
 #[test]
@@ -351,6 +644,23 @@ fn moving_the_object_moves_the_filters_origin() {
     run(&mut s, "object.move", json!({"ids": [a.0], "dx": 5, "dy": -2}));
     let p = &s.doc().unwrap().doc.node(a).unwrap().appearance.effects[0].params;
     assert_eq!(p["origin"], json!([8.0, 2.0]));
+}
+
+/// `axes` turns or skews the filter's user space; a move moves only its origin. Axes the effect
+/// can't measure are refused.
+#[test]
+fn axes_turn_the_filters_user_space_and_bad_axes_are_refused() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [a.0], "params": {"xml": SHIFT, "axes": [0, 1, -1, 0]}}));
+    run(&mut s, "object.move", json!({"ids": [a.0], "dx": 5, "dy": -2}));
+    let p = &s.doc().unwrap().doc.node(a).unwrap().appearance.effects[0].params;
+    assert_eq!((&p["axes"], &p["origin"]), (&json!([0, 1, -1, 0]), &json!([5.0, -2.0])));
+    for axes in [json!([0, 0, 0, 0]), json!([1, 0, 0]), json!([1, 0, 0, "1"]), json!([1001, 0, 0, 1]), json!(null), json!("x")] {
+        let e = err(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [a.0], "params": {"xml": SHIFT, "axes": axes}}));
+        assert!(e.contains("`axes` must be [a, b, c, d]"), "{axes}: {e}");
+    }
+    assert!(err(&mut s, "effect.setParams", json!({"ids": [a.0], "index": 0, "params": {"axes": [0.01, 0, 0, 0.01]}})).contains("`axes` must be"));
 }
 
 #[test]
@@ -492,4 +802,180 @@ fn svg_export_draws_a_filter_svg_1_1_lacks_as_an_image() {
         let out = svg(&mut s);
         assert_eq!((out.contains("<image"), out.contains("<feBlend")), (image, !image), "{mode}: {out}");
     }
+}
+
+/// The `defaults` of `svgFilter.list`: each one's name and whether the document holds it.
+fn defaults(s: &mut Session) -> Vec<(String, bool)> {
+    let listed = run(s, "svgFilter.list", json!({}))["defaults"].as_array().cloned().unwrap_or_default();
+    listed.iter().map(|f| (f["name"].as_str().unwrap().to_string(), f["inDocument"].as_bool().unwrap())).collect()
+}
+
+/// Every document lists the default filters without holding them; applying one adds the effect and
+/// the document's copy in one undo step.
+#[test]
+fn a_default_filter_is_listed_and_copied_into_the_document_when_applied() {
+    use vectorcraft_render::effects::svg_filter::defaults::DEFAULT_FILTERS;
+    let mut s = session();
+    let listed = defaults(&mut s);
+    assert_eq!(listed.len(), DEFAULT_FILTERS.len());
+    assert!(listed.iter().all(|(_, held)| !held), "a new document holds none of them");
+    assert!(names(&mut s).is_empty());
+    let soft = DEFAULT_FILTERS.iter().find(|f| f.name == "Soft Shadow").unwrap();
+    assert_eq!(run(&mut s, "svgFilter.list", json!({}))["defaults"][2], json!({"name": "Soft Shadow", "xml": soft.xml, "inDocument": false}));
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 50.0));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    let before = steps(&s);
+    let r = run(&mut s, "svgFilter.apply", json!({"name": "Soft Shadow"}));
+    assert_eq!((r["ids"].as_array().unwrap().len(), &r["index"]), (2, &json!(0)));
+    assert_eq!(steps(&s), before + 1, "the effect and the copy are one step");
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "SVG Filter");
+    assert_eq!(names(&mut s), ["Soft Shadow"]);
+    assert_eq!(drawn(&s, a), json!(soft.xml));
+    assert!(defaults(&mut s).contains(&("Soft Shadow".to_string(), true)));
+    // Applied again, the document's copy is the filter: nothing more is added.
+    run(&mut s, "svgFilter.apply", json!({"name": "Soft Shadow", "ids": [a.0]}));
+    assert_eq!(names(&mut s), ["Soft Shadow"]);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(names(&mut s).is_empty(), "undo takes the copy back with the effect");
+    assert!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects.is_empty());
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!((names(&mut s), drawn(&s, b)), (vec!["Soft Shadow".to_string()], json!(soft.xml)));
+    // Nothing to apply it to: no copy and no step.
+    let mut s = session();
+    assert!(s.execute("svgFilter.apply", &json!({"name": "Glow"})).is_err(), "nothing selected");
+    assert!(names(&mut s).is_empty());
+    assert_eq!(steps(&s), 0);
+    assert!(err(&mut s, "svgFilter.apply", json!({"name": "glow", "ids": []})).contains("no SVG filter named \"glow\""), "names match exactly");
+}
+
+/// With a full history, applying a default lets one old step go, as any edit does: the copy joins
+/// the step that applied it, and one Undo takes both back.
+#[test]
+fn a_default_applied_with_a_full_history_is_still_one_step() {
+    let mut s = session();
+    s.active_mut().unwrap().history.limit = 3;
+    let a = rect(&mut s, 10.0);
+    rect(&mut s, 30.0);
+    rect(&mut s, 50.0);
+    assert_eq!(steps(&s), 3);
+    run(&mut s, "svgFilter.apply", json!({"name": "Invert", "ids": [a.0]}));
+    // The application takes one place in the history: only the oldest step went.
+    assert_eq!(steps(&s), 3);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "SVG Filter");
+    run(&mut s, "edit.undo", json!({}));
+    assert!(names(&mut s).is_empty(), "the copy is undone with the effect");
+    assert!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects.is_empty());
+}
+
+/// Edit SVG Filter on a default saves the edited copy in the document under the default's name;
+/// the document's filter then stands in the default's place, and deleting it lists the default again.
+#[test]
+fn an_edited_default_is_saved_in_the_document_and_delete_restores_the_default() {
+    use vectorcraft_render::effects::svg_filter::defaults::default_filter;
+    let mut s = session();
+    let glow = default_filter("Glow").unwrap();
+    // Saved with its own code: nothing to keep, and no undo step.
+    run(&mut s, "svgFilter.define", json!({"xml": glow.xml, "replace": "Glow"}));
+    assert_eq!((names(&mut s).len(), steps(&s)), (0, 0));
+    let edited = r#"<filter id="Renamed"><feGaussianBlur stdDeviation="9"/></filter>"#;
+    assert_eq!(run(&mut s, "svgFilter.define", json!({"xml": edited, "replace": "Glow"}))["name"], "Glow");
+    assert_eq!((names(&mut s), steps(&s)), (vec!["Glow".to_string()], 1));
+    assert_eq!(s.doc().unwrap().history.undo[0].label, "Edit SVG Filter");
+    let kept = r#"<filter id="Glow"><feGaussianBlur stdDeviation="9"/></filter>"#;
+    assert_eq!(run(&mut s, "svgFilter.list", json!({}))["filters"][0]["xml"], kept, "it keeps the default's name");
+    // Applying the name now applies the document's filter.
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.apply", json!({"name": "Glow", "ids": [a.0]}));
+    assert_eq!(drawn(&s, a), json!(kept));
+    // Deleting the copy leaves the effect drawing nothing, as for any filter, and lists the default.
+    run(&mut s, "svgFilter.delete", json!({"name": "Glow"}));
+    assert_eq!(drawn(&s, a), json!(""));
+    assert!(defaults(&mut s).contains(&("Glow".to_string(), false)));
+    // The default itself is not deleted.
+    let before = steps(&s);
+    assert!(err(&mut s, "svgFilter.delete", json!({"name": "Glow"})).contains("is a default SVG filter"));
+    assert!(err(&mut s, "svgFilter.delete", json!({"name": "Nope"})).contains("no SVG filter named"));
+    assert_eq!(steps(&s), before);
+    // Applied again, the default is copied back, and the object that named it draws with it.
+    let b = rect(&mut s, 50.0);
+    run(&mut s, "svgFilter.apply", json!({"name": "Glow", "ids": [b.0]}));
+    assert_eq!((drawn(&s, a), drawn(&s, b)), (json!(glow.xml), json!(glow.xml)));
+    assert_eq!(steps(&s), before + 2, "the rectangle and one step for the application");
+    // A new filter may take a default's name the document does not hold.
+    let mut s = session();
+    run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="Invert"><feOffset dx="1"/></filter>"#}));
+    assert!(defaults(&mut s).contains(&("Invert".to_string(), true)));
+    // An unknown name is still refused.
+    assert!(err(&mut s, "svgFilter.define", json!({"xml": SHIFT, "replace": "Nope"})).contains("no SVG filter named \"Nope\""));
+}
+
+/// With `index`, the filter takes the place of an applied SVG filter, a default with its copy in
+/// the same undo step; any other effect keeps its place.
+#[test]
+fn apply_with_an_index_replaces_an_applied_filter() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    run(&mut s, "svgFilter.apply", json!({"name": "Shift", "ids": [a.0]}));
+    run(&mut s, "effect.apply", json!({"effect": "stylize.feather", "ids": [a.0]}));
+    let before = steps(&s);
+    let r = run(&mut s, "svgFilter.apply", json!({"name": "Invert", "ids": [a.0], "index": 0, "item": null}));
+    assert_eq!(r["ids"], json!([a.0]));
+    assert_eq!(steps(&s), before + 1, "one step");
+    let fx = s.doc().unwrap().doc.node(a).unwrap().appearance.effects.clone();
+    assert_eq!((fx.len(), fx[0].params["name"].as_str(), fx[1].id.as_str()), (2, Some("Invert"), "stylize.feather"));
+    assert_eq!(names(&mut s), ["Shift", "Invert"]);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(names(&mut s), ["Shift"]);
+    assert_eq!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects[0].params["name"], "Shift");
+    // Not an SVG filter, no effect there, or not an index: refused, and the default is not copied.
+    let before = steps(&s);
+    for (index, why) in [
+        (json!(1), "applied SVG filter"),
+        (json!(7), "applied SVG filter"),
+        (json!("x"), "`index`"),
+        (json!(-1), "`index`"),
+        (json!(null), "`index`"),
+    ] {
+        let e = err(&mut s, "svgFilter.apply", json!({"name": "Invert", "ids": [a.0], "index": index, "item": null}));
+        assert!(e.contains(why), "{index}: {e}");
+    }
+    assert_eq!((names(&mut s), steps(&s)), (vec!["Shift".to_string()], before));
+}
+
+/// A default needs room in the document: at 64 filters applying one is refused, and a filter the
+/// document holds still applies.
+#[test]
+fn a_full_document_refuses_a_default_it_does_not_hold() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    for i in 0..64 {
+        run(&mut s, "svgFilter.define", json!({"xml": format!("<filter id=\"f{i}\"><feOffset/></filter>")}));
+    }
+    let before = steps(&s);
+    assert!(err(&mut s, "svgFilter.apply", json!({"name": "Glow", "ids": [a.0]})).contains("at most 64 SVG filters"));
+    let edited = r#"<filter id="Glow"><feOffset dx="2"/></filter>"#;
+    assert!(err(&mut s, "svgFilter.define", json!({"xml": edited, "replace": "Glow"})).contains("at most 64 SVG filters"));
+    assert_eq!(steps(&s), before);
+    assert!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects.is_empty());
+    run(&mut s, "svgFilter.apply", json!({"name": "f3", "ids": [a.0]}));
+}
+
+/// A default applied in one document is written to SVG as a filter and read back from the native
+/// format with the document's copy.
+#[test]
+fn an_applied_default_survives_svg_export_and_a_native_round_trip() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.apply", json!({"name": "Grayscale", "ids": [a.0]}));
+    let out = svg(&mut s);
+    assert!(out.contains("<feColorMatrix") && out.contains("saturate"), "{out}");
+    let (back, warnings) = vectorcraft_svg::import_with_report(&out).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(back.any_node(|n| n.appearance.effects.iter().any(|e| e.id == "svg.filter")), "SVG import reads the filter back");
+    let doc = s.doc().unwrap().doc.clone();
+    let again = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(again.svg_filters, doc.svg_filters);
+    assert_eq!(again.svg_filters[0].name, "Grayscale");
 }

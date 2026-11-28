@@ -1,0 +1,4 @@
+[Thumbnailer Entry]
+TryExec=vectorcraft-cli
+Exec=vectorcraft-cli thumbnail --size %s %i %o
+MimeType=application/x-vectorcraft;application/x-vectorcraft-template;

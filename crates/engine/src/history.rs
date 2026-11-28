@@ -25,12 +25,19 @@ pub struct HistoryEntry {
     next: usize,
     /// The template and name `label` was made from ([`Session::edit_named`]).
     pub(crate) named: Option<NamedStep>,
+    /// The built-in effect the step applied or edited, when the step is named after it
+    /// ([`Session::edit_effect`]).
+    pub(crate) effect: Option<&'static str>,
     /// A number no other step takes ([`History::step`]).
     serial: u64,
-    /// Original and converted new-art colors, only for steps that change document color mode.
+    /// Original and changed new-art paints, only for steps that change them: a document color mode
+    /// change, and a pattern Cancel, Delete or rename that clears or renames a pattern paint.
     pub(crate) color_mode_paints: Option<(vectorcraft_tools::PaintDefaults, vectorcraft_tools::PaintDefaults)>,
     /// Owned new-art snapshots included in both directional estimates.
     color_mode_bytes: usize,
+    /// The state that changes without an undo step as the next state had it: undo and redo compare
+    /// it with `doc` to tell what the step changed.
+    pub(crate) unrecorded: Arc<crate::cmd::Unrecorded>,
 }
 
 impl Clone for HistoryEntry {
@@ -45,9 +52,11 @@ impl Clone for HistoryEntry {
             next_bytes: self.next_bytes,
             next: self.next,
             named: self.named.clone(),
+            effect: self.effect,
             serial: self.serial,
             color_mode_paints: self.color_mode_paints.clone(),
             color_mode_bytes: self.color_mode_bytes,
+            unrecorded: self.unrecorded.clone(),
         }
     }
 }
@@ -56,6 +65,12 @@ impl Clone for HistoryEntry {
 fn next_serial() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The name of the undo step that applies or edits built-in effect `id`: its menu label without
+/// the ellipsis. `None` for an id no built-in effect has.
+pub(crate) fn effect_step_label(id: &str) -> Option<&'static str> {
+    vectorcraft_render::effects::built_in_effect(id).map(|(_, label)| label.trim_end_matches('…'))
 }
 
 /// A step name made by filling the `{name}` placeholder of a template with a name
@@ -90,9 +105,11 @@ impl HistoryEntry {
             next_bytes,
             next: std::ptr::from_ref(next) as usize,
             named: None,
+            effect: None,
             serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,
+            unrecorded: Arc::new(crate::cmd::Unrecorded::of(next)),
         }
     }
 
@@ -101,6 +118,13 @@ impl HistoryEntry {
     /// since it was recorded.
     pub fn named(&self) -> Option<&NamedStep> {
         self.named.as_ref().filter(|n| n.label() == self.label)
+    }
+
+    /// The id of the built-in effect the step applied or edited, while the step's label is still
+    /// the effect's name: `None` for any other step, and for one whose label was changed since it
+    /// was recorded.
+    pub fn effect(&self) -> Option<&'static str> {
+        self.effect.filter(|id| effect_step_label(id) == Some(self.label.as_str()))
     }
 
     /// The step that undoing (redoing) the step `costs` came from makes: it keeps `doc`, the
@@ -122,9 +146,11 @@ impl HistoryEntry {
             next_bytes: costs.bytes,
             next: Arc::as_ptr(now) as usize,
             named: None,
+            effect: None,
             serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,
+            unrecorded: Arc::new(crate::cmd::Unrecorded::of(now)),
         }
     }
 
@@ -171,7 +197,8 @@ pub struct History {
     /// Maximum undo depth (Illustrator has no hard limit; snapshots are cheap here).
     pub limit: usize,
     /// About the most memory the steps may keep ([`HistoryEntry::bytes`]): past it the oldest
-    /// steps go, but never the last [`History::MIN_STEPS`] undo (and redo) steps.
+    /// steps go, but never the last [`History::MIN_STEPS`] undo (and redo) steps. The histories of a
+    /// session's open documents also share [`Session::history_budget`](crate::Session::history_budget).
     pub byte_budget: usize,
     /// Counts the changes made in place to steps below the newest ([`History::put_back`]).
     pub(crate) rewrites: u64,
@@ -240,7 +267,7 @@ impl History {
 
     /// The document at row `row` of the History panel, `now` being the document now: the rows before
     /// it are the undo steps, oldest first, and the rows after it the redo steps, nearest first.
-    pub(crate) fn state<'a>(&'a self, now: &'a Arc<Document>, row: usize) -> Option<&'a Arc<Document>> {
+    pub fn state<'a>(&'a self, now: &'a Arc<Document>, row: usize) -> Option<&'a Arc<Document>> {
         let current = self.undo.len();
         match row.cmp(&current) {
             std::cmp::Ordering::Less => self.undo.get(row).map(|e| &e.doc),
@@ -335,27 +362,98 @@ impl History {
             e.next_bytes = after.saturating_add(e.color_mode_bytes);
             e.next = std::ptr::from_ref(now) as usize;
             e.serial = next_serial();
+            e.unrecorded = Arc::new(crate::cmd::Unrecorded::of(now));
         }
     }
 }
 
-/// The default [`History::byte_budget`]: an eighth of the machine's memory where it is known
-/// (Linux), at most 1 GiB (the figure elsewhere); 256 MiB on the web, whose memory is small.
+/// Let the oldest steps of `histories` go while together they keep more than `budget`
+/// ([`History::bytes`]): undo steps first, the oldest of all the histories first, then redo steps,
+/// the furthest ahead first. Each history keeps its last [`History::MIN_STEPS`] undo (and redo)
+/// steps, and a held one ([`History::mark`]) keeps all of its steps; their memory still counts.
+pub(crate) fn trim_together<'a>(histories: impl IntoIterator<Item = &'a mut History>, budget: usize) {
+    let all: Vec<&mut History> = histories.into_iter().collect();
+    let mut total = all.iter().fold(0usize, |t, h| t.saturating_add(h.bytes()));
+    if total <= budget {
+        return;
+    }
+    fn steps(h: &History, redo: bool) -> &[HistoryEntry] {
+        if redo { &h.redo } else { &h.undo }
+    }
+    let mut free: Vec<&mut History> = all.into_iter().filter(|h| !h.held).collect();
+    for redo in [false, true] {
+        // How many of each history's oldest steps go.
+        let mut gone = vec![0usize; free.len()];
+        while total > budget {
+            // The oldest step any history may still let go.
+            let next = free
+                .iter()
+                .zip(&gone)
+                .enumerate()
+                .filter(|(_, (h, n))| steps(h, redo).len().saturating_sub(**n) > History::MIN_STEPS)
+                .filter_map(|(i, (h, n))| steps(h, redo).get(*n).map(|e| (e.serial, i, e.bytes)))
+                .min();
+            let Some((_, i, bytes)) = next else { break };
+            total = total.saturating_sub(bytes);
+            if let Some(n) = gone.get_mut(i) {
+                *n += 1;
+            }
+        }
+        for (h, n) in free.iter_mut().zip(gone) {
+            let steps = if redo { &mut h.redo } else { &mut h.undo };
+            steps.drain(..n.min(steps.len()));
+        }
+    }
+}
+
+/// What [`Session::trim_histories`](crate::Session::trim_histories) last left: the budget, and for
+/// each open document its uid and what a new, undone, redone, merged, recosted, removed or put-back
+/// step changes in its history.
+pub(crate) type HistoriesSeen = (usize, Vec<(u64, (u64, u64), usize, usize, usize, u64, bool)>);
+
+impl crate::Session {
+    /// Let the oldest undo and redo steps of the open documents go while together they keep more
+    /// than [`Session::history_budget`](crate::Session::history_budget) ([`trim_together`]). While a
+    /// script runs, its commands leave the histories as they are: the run's end trims them. While an
+    /// undo group is open in any document, the histories stay as they are too, so a canceled group
+    /// leaves the other documents' steps in place: closing the groups trims them. When
+    /// neither the budget nor any history changed since the last call, the steps are not counted
+    /// again.
+    pub(crate) fn trim_histories(&mut self) {
+        if self.script_in_run || self.docs.iter().any(|d| d.undo_group.is_some()) {
+            return;
+        }
+        if self.histories_seen.as_ref() == Some(&self.histories_now()) {
+            return;
+        }
+        trim_together(self.docs.iter_mut().map(|d| &mut d.history), self.history_budget);
+        self.histories_seen = Some(self.histories_now());
+    }
+
+    fn histories_now(&self) -> HistoriesSeen {
+        let doc = |d: &crate::DocState| {
+            let h = &d.history;
+            (d.uid, h.step(), h.undo.len(), h.redo.len(), h.undo.last().map_or(0, |e| e.bytes), h.rewrites, h.held)
+        };
+        (self.history_budget, self.docs.iter().map(doc).collect())
+    }
+}
+
+/// The default [`History::byte_budget`] and [`Session::history_budget`](crate::Session::history_budget),
+/// which the open documents' histories share: a quarter of the installed memory, or on Linux of the
+/// process's cgroup memory limit where that is lower ([`vectorcraft_render::physical_memory`], see
+/// [`history_budget_for`]); 1 GiB where the installed memory can't be read, and 256 MiB on the web.
 pub fn default_history_budget() -> usize {
-    const MAX: usize = 1 << 30;
     if cfg!(target_arch = "wasm32") {
         return 256 << 20;
     }
     static BUDGET: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
-    *BUDGET.get_or_init(|| physical_memory().map_or(MAX, |m| (m / 8).clamp(64 << 20, MAX)))
+    *BUDGET.get_or_init(|| history_budget_for(vectorcraft_render::physical_memory()))
 }
 
-/// The machine's memory, where cheap to learn without platform calls.
-fn physical_memory() -> Option<usize> {
-    if !cfg!(target_os = "linux") {
-        return None;
-    }
-    let info = std::fs::read_to_string("/proc/meminfo").ok()?;
-    let kb: usize = info.lines().find_map(|l| l.strip_prefix("MemTotal:"))?.trim().trim_end_matches("kB").trim().parse().ok()?;
-    kb.checked_mul(1024)
+/// The default [`History::byte_budget`] for a reading of `memory` bytes installed: a quarter of it,
+/// at least 64 MiB, and at most a quarter of the address space (on 32-bit builds); 1 GiB when the
+/// reading is `None` or 0.
+pub(crate) fn history_budget_for(memory: Option<u64>) -> usize {
+    memory.filter(|&m| m > 0).map_or(1 << 30, |m| usize::try_from(m / 4).unwrap_or(usize::MAX).clamp(64 << 20, usize::MAX / 4))
 }
