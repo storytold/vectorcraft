@@ -15,12 +15,40 @@
 # Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language names,
 # OpenType, the built-in workspace names and the bracketed perspective grid preset names. Keep
 # placeholders, ellipses and the leading/trailing spaces of fragments when editing.
+# Rows from main without Georgian (2026-11-25)
+@msg	this is a binary DXF file, which can't be read: save it from the CAD app as an ASCII DXF and open that	ეს ორობითი DXF ფაილია და მისი წაკითხვა შეუძლებელია: CAD აპში შეინახეთ ის ASCII DXF-ად და ის გახსენით
+@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` უნდა იყოს ღერძების ტეგებისა და მნიშვნელობების ობიექტი, მაგალითად {"wght"}
+@msg	`items` is a list of {kind, item}	`items` არის {kind, item} ჩანაწერების სია
+@msg	`items` must be a list of {id, points}	`items` უნდა იყოს {id, points} ჩანაწერების სია
+@msg	`items` must be an array of {id, anchors}	`items` უნდა იყოს {id, anchors} ჩანაწერების მასივი
+@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout უნდა იყოს {layout?, columns?, spacing?, rightToLeft?}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	სტრიქონი {line}, სვეტი {column}: დიაგრამის მონაცემთა ფაილი `{path}` ცვლადისთვის `{var}` ფარდობითი გზაა: მიუთითეთ `base` ან აბსოლუტური გზა
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	სტრიქონი {line}, სვეტი {column}: ცვლადის `{var}` დიაგრამის მონაცემთა ფაილის წაკითხვა შეუძლებელია: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	სტრიქონი {line}, სვეტი {column}: დიაგრამის მონაცემთა ფაილის გზა `{path}` ცვლადისთვის `{var}` არ გაიხსნება: {r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	სტრიქონი {line}, სვეტი {column}: დიაგრამის მონაცემთა ფაილი `{path}` ცვლადისთვის `{var}` {MAX_GRAPH_DATA_FILE} ბაიტზე დიდია
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	სტრიქონი {line}, სვეტი {column}: დიაგრამის მონაცემთა ფაილი `{path}` ცვლადისთვის `{var}` იძლევა დიაგრამის მნიშვნელობას, რომელიც {MAX_GRAPH_CSV} ბაიტზე გრძელია
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	სტრიქონი {line}, სვეტი {column}: დიაგრამის მონაცემთა ფაილები სულ {MAX_GRAPH_FILES_TOTAL} ბაიტზე მეტს შეიცავს
+@msg	`base` is empty	`base` ცარიელია
+@msg	each format is an object {format, scale?, suffix?}	თითოეული ფორმატი არის ობიექტი {format, scale?, suffix?}
+@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	`fonts`-ის თითოეული ჩანაწერი არის {family, style?}; 1-დან 1000-მდე ჩანაწერი
+@msg	each of `items` is {kind, item}	`items`-ის თითოეული ჩანაწერი არის {kind, item}
+@msg	files must be {name, dataBase64}	files უნდა იყოს {name, dataBase64}
+@msg	give `matches`: [{kind, name, target}]	მიუთითეთ `matches`: [{kind, name, target}]
+@msg	give color, none, swatch, gradient or opacity	მიუთითეთ color, none, swatch, gradient ან opacity
+@msg	give the settings to change, e.g. {"formats"}]}	მიუთითეთ შესაცვლელი პარამეტრები, მაგ. {"formats"}]}
+@msg	give {key, value} or {values}	მიუთითეთ {key, value} ან {values}
+@msg	missing `map` (rows [{from, to}] or {current})	აკლია `map` (სტრიქონები [{from, to}] ან {current})
+@msg	not an RTF file: it doesn't start with {\\rtf	RTF ფაილი არ არის: არ იწყება {\\rtf-ით
+@msg	quotes must be {double?, single?}	quotes უნდა იყოს {double?, single?}
+@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text უნდა იყოს {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}
+@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: მიუთითეთ გამოსახულების ფაილის {path} ან {name, dataBase64}, ან ტექსტურა ისე, როგორც effect.list იძლევა
+
 # Georgian rows untranslated on main (catch-up, 2026-11-15)
 	Add as Single Graphic	ერთ გრაფიკად დამატება
 	Expand as Wireframes	კარკასებად გაშლა
 	Add art with Add as Single Graphic, or drop art here.	დაამატეთ ნახატი ბრძანებით „ერთ გრაფიკად დამატება“ ან ჩამოაგდეთ ნახატი აქ.
 	Face	მხარე
-	Graphics map onto the Plane, Extrude and Revolve object types.	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“.
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“, „ბრუნვა“ და „გაბერვა“.
 	Line Gap	სტრიქონებს შორის ღრეჩო
 	Manage Profiles	პროფილების მართვა
 	Mapped graphics	განთავსებული გრაფიკა
@@ -42,7 +70,7 @@
 	Reset Profile	პროფილის ჩამოყრა
 	Select Object on Path	ტრაექტორიაზე ობიექტის მონიშვნა
 	Weather Icons	ამინდის ხატულები
-	Media Controls	მედია მართვის საშუალებები
+	Media Controls	მედიის მართვის ელემენტები
 @id	language.name	ქართული
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' და 'arguments' მკაცრი რეჟიმის ფუნქციებში ვერ გამოიყენება
 @msg	3D effects require finite coordinates within 100 million points	3D ეფექტებს სჭირდება სასრული კოორდინატები 100 მილიონი პუნქტის ფარგლებში
@@ -902,7 +930,7 @@
 @msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	გლიფი {g} არ არის სიმბოლოს {ch} ალტერნატივა შრიფტში {_1} {_2}
 @msg	gradient must be "objects" or "mesh"	gradient უნდა იყოს "objects" ან "mesh"
 @msg	grays must be "profile" or "black", not `{g}`	grays უნდა იყოს "profile" ან "black" და არა `{g}`
-@msg	grayscale profiles can't be working spaces yet	ნაცრისფერი გრადაციების პროფილები სამუშაო ფერთა სივრცედ ჯერ ვერ გამოიყენება
+@msg	grayscale profiles can't be working spaces yet	ნაცრისფერი ტონების პროფილები სამუშაო ფერთა სივრცედ ჯერ ვერ გამოიყენება
 @msg	gridColors must be a preset name or two colours	gridColors უნდა იყოს პრესეტის სახელი ან ორი ფერი
 @msg	gridSize must be small, medium or large	gridSize უნდა იყოს small, medium ან large
 @msg	guide {g} is not selected	დამხმარე ხაზი {g} მონიშნული არ არის
@@ -2592,16 +2620,16 @@
 	Find Matching Fonts	შესაბამისი შრიფტების ძებნა
 	Find more font matches	მეტი შესაბამისი შრიფტის ძებნა
 	Type your text to preview	აკრიფეთ ტექსტი წინასწარი ნახვისთვის
-	Select outlined text, then Find Matching Fonts.	მონიშნეთ კონტურებად გარდაქმნილი ტექსტი, შემდეგ აირჩიეთ შესაბამისი შრიფტების ძებნა.
+	Select outlined text, then Find Matching Fonts.	მონიშნეთ კონტურებად გარდაქმნილი ტექსტი, შემდეგ დაწკაპეთ „შესაბამისი შრიფტების ძებნა“.
 	No font matches the selected shapes.	არცერთი შრიფტი არ შეესაბამება მონიშნულ ფიგურებს.
-	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	პირველი 2048-ის შემდეგი ან 16 ჯგუფზე ღრმად მოთავსებული ფიგურები არ შედარდა.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	პირველი 2048-ის მიღმა მყოფი და 16 დონეზე ღრმად ჩადგმული ფიგურები არ შედარდა.
 	Reset Retype Panel	ხელახლა აკრეფის პანელის ჩამოყრა
 	List Matching Fonts	შესაბამისი შრიფტების სია
-	Retype Preview	ხელახლა აკრეფის პანელის წინასწარი ნახვა
+	Retype Preview	ხელახლა აკრეფის წინასწარი ნახვა
 @msg	`count` must be a whole number from 1 to 96	`count` უნდა იყოს მთელი რიცხვი 1-დან 96-მდე
 @msg	`size` must be small, medium or large	`size` უნდა იყოს small, medium ან large
 @msg	`text` must be a string of at most 100 characters	`text` უნდა იყოს არაუმეტეს 100 სიმბოლოს სტრიქონი
-@msg	Retype: select outlined text (paths or compound paths)	ხელახლა აკრეფა: მონიშნეთ კონტურებად გარდაქმნილი ტექსტი (კონტურები ან შედგენილი კონტურები)
+@msg	Retype: select outlined text (paths or compound paths)	ხელახლა აკრეფა: მონიშნეთ კონტურებად გარდაქმნილი ტექსტი (ტრაექტორიები ან შედგენილი ტრაექტორიები)
 	Change Case	რეგისტრის შეცვლა
 	UPPERCASE	მთავრული
 	lowercase	პატარა ასოები
@@ -5228,7 +5256,7 @@ antiAlias	Sharp	მკვეთრი
 	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	„პროფილების გარეშე“ და CMYK გამოტანის მიზნით ყველა CMYK ფერი DeviceCMYK-ად იწერება, თუ ის სხვა პროფილის CMYK დანიშნულებაში არ გარდაიქმნება.
 	Flattener preset:	გაბრტყელების პრესეტი:
 	General › Thumbnails	ზოგადი › ესკიზები
-	Grayscale images	ნაცრისფერი გამოსახულებები
+	Grayscale images	ნაცრისფერი ტონების გამოსახულებები
 	Include non-printing layers	არაბეჭდვადი შრეების ჩართვა
 	Write pages longer than 200 in at full size in points	200 in-ზე გრძელი გვერდების სრული ზომით, პუნქტებში ჩაწერა
 	Left:	მარცხნივ:
@@ -5507,10 +5535,10 @@ theme	Appearance	იერსახე
 	Brush Options…	ფუნჯის პარამეტრები…
 	Options of Selected Object…	მონიშნული ობიექტის პარამეტრები…
 	Options of Selected Object	მონიშნული ობიექტის პარამეტრები
-@msg	no path painted with a brush is selected	ფუნჯით დახატული კონტური მონიშნული არ არის
-@msg	the selected paths are painted with brushes of different types	მონიშნული კონტურები სხვადასხვა ტიპის ფუნჯებითაა დახატული
+@msg	no path painted with a brush is selected	ფუნჯით დახატული ტრაექტორია მონიშნული არ არის
+@msg	the selected paths are painted with brushes of different types	მონიშნული ტრაექტორიები სხვადასხვა ტიპის ფუნჯებითაა დახატული
 @msg	give `params` or `reset`, not both	მიუთითეთ `params` ან `reset`, არა ორივე
-@msg	a bristle brush has no options of its own on a path	ჯაგრის ფუნჯს კონტურზე საკუთარი პარამეტრები არ აქვს
+@msg	a bristle brush has no options of its own on a path	ჯაგრის ფუნჯს ტრაექტორიაზე საკუთარი პარამეტრები არ აქვს
 	Current Brush	მიმდინარე ფუნჯი
 	Current Symbol	მიმდინარე სიმბოლო
 	Delete Brush	ფუნჯის წაშლა
@@ -6009,7 +6037,7 @@ theme	Appearance	იერსახე
 	Data Recovery	მონაცემების აღდგენა
 	Default Language	ნაგულისხმევი ენა
 	Disable Auto Add/Delete	ავტომატური დამატება/წაშლის გამორთვა
-	Delete Removes Anchor Points and Keeps Paths Joined	Delete შლის ღუზის წერტილებს და ინარჩუნებს კონტურებს შეერთებულად
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete შლის საყრდენ წერტილებს და ტრაექტორიებს შეერთებულს ტოვებს
 	Interpolate Control Points When Moving Anchors	სახელურების ინტერპოლაცია საყრდენი წერტილების გადაადგილებისას
 	Display All Blacks Accurately	ყველა შავის ზუსტად ჩვენება
 	Display All Blacks as Rich Black	ყველა შავის მდიდარ შავად ჩვენება
@@ -6323,7 +6351,7 @@ axis	Both	ორივე
 	Auto	ავტომატური
 	Center	ცენტრში
 	Transform in Perspective	პერსპექტივაში გარდაქმნა
-	Grayscale	ნაცრისფერი გრადაციები
+	Grayscale	ნაცრისფერი ტონები
 	High Color	ბევრი ფერი
 	Low Color	ცოტა ფერი
 	Embed	ჩაშენება
@@ -6545,8 +6573,8 @@ font-technology	Variable	ცვლადი
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	კლავიშის ხანგრძლივი დაჭერა უშვებს ხელსაწყოს ან ბრძანებას კლავიატურის მალსახმობების დაჭერის სვეტიდან; მოკლე დაჭერა უშვებს მის ჩვეულ მალსახმობს.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	რამდენი წამი უნდა იყოს კლავიში დაჭერილი, სანამ ჩვეული მალსახმობის ნაცვლად მისი ხანგრძლივი დაჭერის მალსახმობი გაეშვება.
-	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete შლის არჩეულ ღუზის წერტილებს და თითოეულის გარშემო მრუდს ხელახლა არგებს, ნაცვლად იმისა, რომ იქ კონტური გახსნას.
-	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა ღუზის წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete შლის მონიშნულ საყრდენ წერტილებს და თითოეულის ირგვლივ მრუდს თავიდან აგებს, ნაცვლად იმისა, რომ იქ ტრაექტორია გახსნას.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა საყრდენ წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	სანამ ხელსაწყოს მალსახმობ კლავიშს დაჭერილს გიჭირავთ, ეს ხელსაწყოა არჩეული; კლავიშის აშვების შემდეგ ისევ წინა ხელსაწყო აირჩევა.
 	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ჭრის ნიშნების შექმნა რომაულის ნაცვლად იაპონური სტილის ნიშნებს ხატავს.
@@ -6583,7 +6611,7 @@ font-technology	Variable	ცვლადი
 	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	საბაზისო ხაზის წანაცვლების ბიჯი: ჰორიზონტალურ ტექსტში Alt და Shift ზემოთ ან ქვემოთ ისართან ერთად საბაზისო ხაზს ერთი ბიჯით ანაცვლებს, Cmd/Ctrl-თან ერთად კი ხუთით.
 	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	აჩვენებს იაპონური და სხვა აღმოსავლეთაზიური ტექსტის პარამეტრებს პანელებში სიმბოლო, აბზაცი, OpenType და გლიფები, ასევე ბრძანებას კომპოზიტური შრიფტები.
 	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	აჩვენებს არაბული, ებრაული და ინდური ტექსტის პარამეტრებს პანელებში სიმბოლო და აბზაცი, მაგალითად აბზაცის მიმართულებას, ქაშიდებს და ციფრებს.
-	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	მონიშვნის ხელსაწყოები ტექსტს მხოლოდ მის საბაზისო ხაზზე, არის ტექსტის ჩარჩოზე ან მის კონტურზე მონიშნავენ და არა მისი ყუთის შიგნით ნებისმიერ ადგილას.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	მონიშვნის ხელსაწყოები ტექსტს მხოლოდ მის საბაზისო ხაზზე, არის ტექსტის ჩარჩოზე ან მის ტრაექტორიაზე მონიშნავენ და არა მისი ყუთის შიგნით ნებისმიერ ადგილას.
 	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	შრიფტების მენიუები ყოველ შრიფტს ინგლისური სახელით აჩვენებს; გამორთვისას შრიფტი, რომელსაც საკუთარ ენაზეც აქვს სახელი, იმ სახელს აჩვენებს.
 	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	ახალი არის ტექსტი ჩართული ავტომატური ზომით იწყება, ამიტომ ჰორიზონტალური ტექსტის მართკუთხა ჩარჩო სიმაღლეში იზრდება ან მცირდება, რომ ტექსტი დაეტიოს.
 	Font lists and the Type › Font menu show a sample of each font beside its name.	შრიფტების სიები და მენიუ შრიფტი თითოეული შრიფტის ნიმუშს მისი სახელის გვერდით აჩვენებს.
@@ -6632,10 +6660,10 @@ font-technology	Variable	ცვლადი
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	ტილოზე თითოეული ნაჭრის ნომერს აჩვენებს ჩარჩოში მის ზედა მარცხენა კუთხეში; გამორთულისას ნაჭრების კონტურები კვლავ ჩანს.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	მომხმარებლისა და ობიექტის ნაჭრების კონტურებისა და მათი ნომრების ჩარჩოების ფერი; ავტომატური ნაჭრები ამ ფერის უფრო მკრთალ ელფერს იყენებს.
 	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	აბზაცებში, სადაც სიტყვების გადატანა ჩართულია, სიაში მოცემული სიტყვა გადატანის დეფისს მხოლოდ მასში აკრეფილ დეფისებთან იღებს, ან არასდროს, თუ ისინი არ აქვს, მიუხედავად ენისა და რეგისტრისა.
-	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	დესკტოპზე ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და ახალი საქაღალდის OK-ით დაყენებისას, უსაფრთხო რეჟიმის გარდა; ნებართვების მომთხოვნი კი მათი მიცემის შემდეგ. ვებში არ იტვირთება.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	დესკტოპზე ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და მაშინ, როცა OK ახალ საქაღალდეს აყენებს, უსაფრთხო რეჟიმის გარდა; ნებართვების მომთხოვნი პლაგინი მხოლოდ მათი მიცემის შემდეგ იტვირთება. ვებ-ვერსია არცერთს არ ტვირთავს.
 	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	დიდი ფილტრის ან ბრძანების პლაგინის გაშვებას მინიმუმ 250 მილიონ ინსტრუქციას აძლევს, იგივე დროის ლიმიტით; ჩვეულებრივი ბიუჯეტს ტოვებს. ცოცხალი ეფექტები, ექსპორტერები და იმპორტერები არ იცვლება.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ და [ჩვეულებრივი სიმბოლოს სტილი] ენას არ ადგენს; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ახალი ტექსტი ამ ენას იღებს, როცა დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ და [ჩვეულებრივი სიმბოლოს სტილი] ენას არ ადგენს; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	აბზაცებში, სადაც სიტყვების გადატანა ჩართულია, სიაში მოცემული სიტყვა მხოლოდ მასში აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ ისინი არ აქვს, მიუხედავად ენისა და რეგისტრისა.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	დესკტოპის ვერსიაში ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და როცა აქ ახალი საქაღალდით OK-ს დააწკაპუნებთ, გარდა უსაფრთხო რეჟიმისა; ვებ-ვერსია მათ არ ტვირთავს.
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	ჩვეულებრივი ინარჩუნებს თითოეული პლაგინის საკუთარ ლიმიტებს; დიდით პლაგინის ფილტრს ან ბრძანებას შეუძლია შეასრულოს მინიმუმ 250 მილიონი ინსტრუქცია მისი შეყვანისთვის საჭირო ინსტრუქციების გარდა. დროის ლიმიტი იგივე რჩება.
@@ -6657,7 +6685,7 @@ font-technology	Variable	ცვლადი
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	ინტერფეისის ენა; ავტომატური სისტემის ენას იყენებს. დიალოგი ენას იცვლის, როგორც კი რომელიმეს აირჩევთ.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	ანიმირებული მასშტაბირება მუშაობს მხოლოდ მაშინ, როცა ეს ჩართულია; გამორთულისას ანიმირებული მასშტაბირება მკრთალია და მასშტაბირება არ ანიმირდება.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	ბორბლით მასშტაბირება რბილად სრიალებს, მასშტაბის ხელსაწყო კი ადიდებს, როცა გვერდზე გადაათრევთ ან დაჭერილს გაჩერებთ; გამორთულისას ის ადიდებს არეს, რომელზეც გადაათრევთ.
-	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	შემდეგი გაშვებიდან დესკტოპის ვერსია ტილოს აჩვენებს ამ ტიპის გრაფიკული პროცესორით; ნამუშევარი ყოველთვის CPU-ზე იხატება. ავტომატური Windows-სა და macOS-ზე ინტეგრირებულს ანიჭებს უპირატესობას. ვებ-ვერსია მას არ იყენებს.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	შემდეგი გაშვებიდან დესკტოპის ვერსია ტილოს ამ ტიპის გრაფიკული პროცესორით აჩვენებს; ნახატი ორივე შემთხვევაში CPU-ზე იხატება. „ავტომატური“ Windows-სა და macOS-ზე ინტეგრირებულს ანიჭებს უპირატესობას. ვებ-ვერსია მას არ იყენებს.
 	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	შემდეგი გაშვებიდან ფანჯარა აჩვენებს თითოეულ კადრს ეკრანის განახლების მოლოდინის გარეშე, სადაც გრაფიკული დრაივერი ამის საშუალებას იძლევა, წამში არაუმეტეს 240 კადრისა.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	შემდეგი გაშვებიდან დესკტოპის ვერსია ხატავს ამ ტიპის გრაფიკული პროცესორით; ავტომატური უპირატესობას ანიჭებს ეკრანის მმართველს. ვებ-ვერსია მას არ იყენებს.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	შემდეგი გაშვებიდან ფანჯარა აჩვენებს კადრებს ეკრანის განახლების მოლოდინის გარეშე, წამში არაუმეტეს 240-ისა; გამორთულისას ტემპს ეკრანი განსაზღვრავს. უპირატესობა აქვს გაშვებისას დაყენებულ ჩვენების რეჟიმს.
@@ -6666,7 +6694,7 @@ font-technology	Variable	ცვლადი
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	რამდენი სამუშაო ნაკადი ხატავს ნახატს; -1 იყენებს ერთით ნაკლებს VectorCraft-ისთვის ხელმისაწვდომ ბირთვებზე, მაქსიმუმ 8-ს, 0 კი არცერთს. ვებ-ვერსია არასდროს იყენებს.
 	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	შემდეგი გაშვებიდან Wayland-ის სამუშაო მაგიდაზე X11 (XWayland) ფანჯარას XWayland-ით ხსნის; სხვა არჩევანი ამას მხოლოდ მაშინ აკეთებს, როცა კალამი მიერთებულია.
 	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	შემდეგი გაშვებიდან დესკტოპის ვერსია კადრებს აჩვენებს ეკრანის განახლების მოლოდინის გარეშე, წამში მაქსიმუმ 240-ს; გამორთულისას ტემპს ეკრანი განსაზღვრავს.
-	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	დიდი ბიუჯეტი ობიექტის ფილტრის ყოველი გაშვების საბაზო ინსტრუქციებს ხუთჯერ ზრდის, შეყვანის ბაიტზე დანამატი კი იგივე რჩება; მძიმე ფილტრებს, ცოცხალ ეფექტებს, ექსპორტერებსა და იმპორტერებს თავისი ლიმიტები აქვთ.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	დიდი ბიუჯეტი ობიექტის ფილტრის ყოველი გაშვების საბაზო ინსტრუქციებს ხუთჯერ ზრდის, შეყვანის თითო ბაიტზე დაშვებული რაოდენობა კი იგივე რჩება; მძიმე ფილტრებს, ცოცხალ ეფექტებს, ექსპორტერებსა და იმპორტერებს საკუთარი ლიმიტები რჩებათ.
 	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	ტილოზე არსებულ ნახატს და სამუშაო დაფებს გარდაქმნის ეკრანის ფერთა პროფილში, სადაც სისტემა ამას უკვე არ აკეთებს; გამორთულისას ტილო sRGB-ში იხატება.
 	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	დესკტოპის ვერსიაში ფაილში შენახვა ფონურ რეჟიმში იწერება, სანამ რედაქტირებას აგრძელებთ; გამორთულისას ელოდებით, სანამ ჩაიწერება.
 	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	დესკტოპის ვერსიაში ფაილებში ექსპორტი და შეფუთვა ფონურ რეჟიმში იწერება, სანამ რედაქტირებას აგრძელებთ, გარდა 3D ექსპორტისა; გამორთულისას მათ ელოდებით.
@@ -6675,14 +6703,14 @@ font-technology	Variable	ცვლადი
 	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	დესკტოპის ვერსიაში საქაღალდე, სადაც აღდგენის ასლები ინახება; დატოვეთ ცარიელი VectorCraft-ის საკუთარი საქაღალდისთვის. ვებ-ვერსია მათ ბრაუზერში ინახავს.
 	No timed recovery copies are made of documents with more than 20,000 objects.	20 000-ზე მეტი ობიექტის მქონე დოკუმენტებისთვის პერიოდული აღდგენის ასლები არ კეთდება.
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	„ბოლოს გახსნილი ფაილების გახსნა“ და „საწყისი ეკრანი“ აჩვენებს მაქსიმუმ ამდენ ბოლო ფაილს; 0 არცერთს არ აჩვენებს, VectorCraft კი მაინც იმახსოვრებს 30-მდე ფაილს.
-	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	დოკუმენტის გახსნისას მიბმული EPS გამოსახულება, რომელიც თავის შენახულ გადახედვას აჩვენებს, ინარჩუნებს მას EPS ფაილის ხელახლა წაკითხვის ნაცვლად; შეცვლილი ფაილები კვლავ „ბმულების განახლებას“ მისდევს.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	დოკუმენტის გახსნისას დაკავშირებული EPS გამოსახულება, რომელიც თავის შენახულ გადახედვას აჩვენებს, ინარჩუნებს მას EPS ფაილის ხელახლა წაკითხვის ნაცვლად; შეცვლილი ფაილები კვლავ „ბმულების განახლებას“ მისდევს.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	„პიქსელების წინასწარ ნახვაში“ გამოსახულებები გლუვად იხატება; გამორთულისას მათი პიქსელები მკვეთრი კიდეებით ჩანს. მის გარეთ გამოსახულებები ყოველთვის გლუვდება.
 	PDF Text	PDF-ის ტექსტი
 	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	PDF-ის ტექსტი, რომელსაც ხსნით ან ჩაშენებთ, შემოდის რედაქტირებად ტექსტად ან კონტურებად, რომლებიც ერთნაირად ჩანს კომპიუტერზე მისი შრიფტების გარეშე.
-	Linked pages show the file's own text.	მიბმული გვერდები ფაილის საკუთარ ტექსტს აჩვენებს.
-	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	როცა მიბმული ფაილი იცვლება, „ავტომატურად“ მას ხელახლა კითხულობს, „შეკითხვა ცვლილებისას“ ჯერ გეკითხებათ, „ხელით“ კი უცვლელად ტოვებს და სტატუსის ზოლში შენიშვნას აჩვენებს.
+	Linked pages show the file's own text.	დაკავშირებული გვერდები ფაილის საკუთარ ტექსტს აჩვენებს.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	როცა დაკავშირებული ფაილი იცვლება, „ავტომატურად“ მას ხელახლა კითხულობს, „შეკითხვა ცვლილებისას“ ჯერ გეკითხებათ, „ხელით“ კი უცვლელად ტოვებს და სტატუსის ზოლში შენიშვნას აჩვენებს.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	დესკტოპის ვერსიაში საქაღალდე, საიდანაც „შაბლონიდან შექმნა…“ და „შაბლონად შენახვა…“ იწყება; დატოვეთ ცარიელი თქვენი დოკუმენტების საქაღალდეში არსებული VectorCraft Templates-ისთვის.
-	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„ორიგინალის რედაქტირება“ მიბმულ ფაილს მისი ტიპისთვის სისტემის ნაგულისხმევ აპში ხსნის; გამორთულისას მიბმული რასტრული გამოსახულება PhotoCraft-ში იხსნება, თუ ის დაინსტალირებულია.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„ორიგინალის რედაქტირება“ დაკავშირებულ ფაილს მისი ტიპისთვის სისტემის ნაგულისხმევ აპში ხსნის; გამორთულისას დაკავშირებული რასტრული გამოსახულება PhotoCraft-ში იხსნება, თუ ის დაინსტალირებულია.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	VectorCraft-ის ძველი ვერსიით შენახული ფაილი სახელის შემდეგ [Converted]-ით იხსნება, „შენახვა“ კი გეკითხებათ, სად შეინახოს; გამორთულისას „შენახვა“ ფაილს ცვლის.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-ის ფაილები და შაბლონები შეკუმშულად, ანუ უფრო მცირე ზომით ინახება, თუ შენახვა სხვას არ მიუთითებს; შენახვები ვერსიებისთვის, რომლებიც შეკუმშულ ფაილებს ვერ ხსნის, შეუკუმშავი რჩება.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	კოპირება და ამოჭრა სხვა აპებს ნახატის SVG კოდსაც აძლევს; დესკტოპზე კოდი ტექსტად არ კოპირდება, როცა ნახატში 1 MiB-ზე მეტი სურათია ჩაშენებული.
@@ -6691,7 +6719,7 @@ font-technology	Variable	ცვლადი
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	ტრაექტორიების შენარჩუნება ან იერსახისა და ზედდაბეჭდვების შენარჩუნება ძველი ვექტორული ბუფერისთვის; VectorCraft არჩევანს ინახავს, მაგრამ ჯერ არ იყენებს.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	ფორმატირების შენარჩუნება VectorCraft-ის ტექსტური ობიექტიდან კოპირებული ტექსტის სტილებს ინახავს ტექსტურ ობიექტში ჩასმისას; მხოლოდ ტექსტის შენარჩუნება მას ჩასმის ადგილის სტილს აძლევს.
 	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	ყველა შავის მდიდარ შავად ჩვენება სუფთა CMYK შავს (მხოლოდ შავი მელანი 100%-ზე) ტილოზე RGB შავად აჩვენებს; ყველა შავის ზუსტად ჩვენება მას სამუშაო CMYK სივრცით გარდაქმნის.
-	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	ყველა შავის მდიდარ შავად გამოტანა სუფთა CMYK შავს RGB შავად ხატავს RGB და ნაცრისფერი გრადაციების რასტრულ ექსპორტებში და ბიტმაპად ბეჭდვისას; ის არ ცვლის ვექტორულ ექსპორტებს, CMYK JPEG-ს, TIFF-სა და PSD-ს ან სხვა ბეჭდვას.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	ყველა შავის მდიდარ შავად გამოტანა სუფთა CMYK შავს RGB შავად ხატავს RGB და ნაცრისფერი ტონების რასტრულ ექსპორტებში და ბიტმაპად ბეჭდვისას; ის არ ცვლის ვექტორულ ექსპორტებს, CMYK JPEG-ს, TIFF-სა და PSD-ს ან სხვა ბეჭდვას.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	სენსორულ ეკრანზე გადადის სენსორულ სამუშაო სივრცეზე; პარამეტრის გამორთვისას ან სენსორული ეკრანის დაკარგვისას ბრუნდება წინა სამუშაო სივრცეზე.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	ტილოზე ორი თითით შეხება აბრუნებს მოქმედებას, სენსორულ სამუშაო სივრცეში კი მონიშვნისა და ხატვის ხელსაწყოებს შორის გადართავს; სამი თითით შეხება ხელახლა ასრულებს. პრეზენტაციის რეჟიმში არცერთი არ მუშაობს.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	გადატანის ჩართვისას სიის სიტყვა მხოლოდ აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ არ აქვს, რეგისტრის მიუხედავად; კორეულ სიტყვებს დეფისი არ ემატება, ინდური ენების სიტყვები კი სიმბოლოთა ჯგუფის შიგნით არ გადაიტანება.
@@ -6917,7 +6945,7 @@ font-technology	Variable	ცვლადი
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` შეცვლილ პარამეტრებს ნიშნავს: შეინახეთ პრესეტი სხვა სახელით
 @msg	`to` must be "corner" or "smooth"	`to` უნდა იყოს "corner" ან "smooth"
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` უნდა იყოს "emBox", "capHeight", "xHeight" ან "icfBox"
-@msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP ფაილები RGB-ა ან ნაცრისფერი: colorModel rgb ან gray
+@msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP ფაილები ან RGB-ია, ან ნაცრისფერი ტონების: colorModel rgb ან gray
 @msg	Blend colors: select at least three objects with filled colours	ფერების შერევა: მონიშნეთ მინიმუმ სამი ობიექტი ფერადი შევსებით
 @msg	Combine Slices: the slices have no bounds	ნაჭრების გაერთიანება: ნაჭრებს საზღვრები არ აქვს
 @msg	Convert to Artboards: selection has no area	სამუშაო დაფებად გარდაქმნა: მონიშნულს ფართობი არ აქვს
@@ -7052,7 +7080,7 @@ font-technology	Variable	ცვლადი
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` პროცესული ფერია: ტონირება გამოიყენება გლობალურ და სპოტ-ფერებზე
 @msg	`{name}` is no recovery entry name	`{name}` აღდგენის ჩანაწერის სახელი არ არის
 @msg	`{name}` isn't a colour swatch	`{name}` ფერის ნიმუში არ არის
-@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	პროცესული ფერი ვერ გააფერადებს გამჭვირვალობის მქონე ნაცრისფერ გამოსახულებას: გამოიყენეთ სპოტ-ფერი, შავი ან თეთრი
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	პროცესული ფერი ვერ გააფერადებს გამჭვირვალობის მქონე ნაცრისფერი ტონების გამოსახულებას: გამოიყენეთ სპოტ-ფერი, შავი ან თეთრი
 @msg	`{path}` must be a bool or an object of bools	`{path}` უნდა იყოს bool ან bool-ების ობიექტი
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` ფერი არ არის (#rrggbb ან პრესეტის სახელი)
 @msg	`{tool}` isn't a Liquify tool	`{tool}` გათხევადების ხელსაწყო არ არის
@@ -7774,20 +7802,20 @@ font-technology	Variable	ცვლადი
 @msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-ის გრადიენტული, ნიმუშის, ტექსტურის და PostScript შევსებები გამოტოვებულია
 @msg	colors in CDR color models VectorCraft doesn't read were opened as black	CDR-ის იმ ფერის მოდელების ფერები, რომლებსაც VectorCraft ვერ კითხულობს, შავად გაიხსნა
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-ის ბიბლიოთეკის ფერები, რომლებსაც ნახაზი მხოლოდ ნომრით ინახავს, შავ სპოტ-ფერებად გაიხსნა
-@msg	CDR outline arrowheads were left out	CDR-ის მოხაზულობების ისრისპირები გამოტოვებულია
-@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-ის კონვერტები არ იქნა გამოყენებული, და მათ ქვეშ მყოფი ფორმები ინარჩუნებენ თავიანთ მოხაზულობას
+@msg	CDR outline arrowheads were left out	CDR-ის კონტურების ისრის წვერები გამოტოვებულია
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-ის გარსები არ იქნა გამოყენებული და მათ ქვეშ მყოფი ფიგურები თავიანთ მოხაზულობას ინარჩუნებს
 @msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-ის ლინზები და ობიექტის გამჭვირვალობა არ იქნა გამოყენებული, და ობიექტები, რომლებზეც ისინია, გაუმჭვირვალედ ჩანს
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	ნახაზის ზედმეტად ღრმად ჩადგმული ან იმპორტის ლიმიტებს მიღმა არსებული ნაწილები გამოტოვებულია
 @msg	damaged parts of the drawing were left out	ნახაზის დაზიანებული ნაწილები გამოტოვებულია
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163 830 pt-ზე გრძელი CDR-ის გვერდები ამ სიგრძით გაიხსნა და მათ კიდეებთან ახლოს მყოფი გრაფიკა სამუშაო დაფის გარეთაა
 @msg	this CMX file can't be read ({why})	ამ CMX ფაილის წაკითხვა შეუძლებელია ({why})
-@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	CMX-ის ტექსტები, გამოსახულებები, მართკუთხედები, ელიფსები, ამოჭრის კონტურები და სხვა ობიექტები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, გამოტოვებულია
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	CMX-ის ტექსტები, გამოსახულებები, მართკუთხედები, ელიფსები, მომჭრელი ტრაექტორიები და სხვა ობიექტები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, გამოტოვებულია
 @msg	CMX fills other than uniform colors were left out	CMX-ის შევსებები, გარდა ერთგვაროვანი ფერებისა, გამოტოვებულია
 @msg	colors in CMX color models VectorCraft doesn't read were opened as black	CMX-ის იმ ფერის მოდელების ფერები, რომლებსაც VectorCraft ვერ კითხულობს, შავად გაიხსნა
 @msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX-ის ბიბლიოთეკის ფერები, რომლებსაც ფაილი მხოლოდ ნომრით ინახავს, შავ სპოტ-ფერებად გაიხსნა
-@msg	CMX outline arrowheads were left out	CMX-ის მოხაზულობების ისრისპირები გამოტოვებულია
-@msg	CMX lenses were not applied	CMX-ის ლინზები არ იქნა გამოყენებული
-@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163 830 pt-ზე გრძელი CMX-ის გვერდები ამ სიგრძით გაიხსნა და მათ კიდეებთან ახლოს მყოფი გრაფიკა სამუშაო დაფის გარეთაა
+@msg	CMX outline arrowheads were left out	CMX-ის კონტურების ისრის წვერები გამოტოვებულია
+@msg	CMX lenses were not applied	CMX-ის ლინზები არ გამოყენებულა
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163 830 pt-ზე გრძელი CMX-ის გვერდები ამ სიგრძით გაიხსნა და მათ კიდეებთან ახლოს მყოფი ნახატი სამუშაო დაფის გარეთაა
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
 @msg	zipped 1-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 1-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
 @msg	the PSD file's layer data uses an unknown compression ({m})	PSD ფაილის შრეების მონაცემები უცნობ შეკუმშვას იყენებს ({m})
@@ -8240,9 +8268,9 @@ arrowhead	Feather	ბუმბული
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` უნდა იყოს ობიექტი, რომელიც შეიცავს მხოლოდ `mode`-ს, მნიშვნელობით shaded ან wireframe
 @msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
 @msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel უნდა იყოს none, ერთ-ერთი: {_1}, ან custom და {BEVEL_PROFILE}
-@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom მოითხოვს {BEVEL_PROFILE}, წაკვეთის წერტილები
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom-ს სჭირდება {BEVEL_PROFILE} — წაკვეთის წერტილები
 @msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} უნდა იყოს სტრიქონი
-@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} უნდა შეიცავდეს 2-დან {most}-მდე [x, y] წერტილს, თითოეული წილი 0-სა და 1-ს შორის, [0, 0]-დან (ბოლო წახნაგის კიდე) [1, 1]-მდე (გვერდითი კედელი)
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} უნდა შეიცავდეს 2-დან {most}-მდე [x, y] წერტილს, თითოეული წილი 0-სა და 1-ს შორის, [0, 0]-დან (თავსახურის კიდე) [1, 1]-მდე (გვერდითი კედელი)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ამ ნახატიდან სხეულების შექმნა შეუძლებელია: მისი სიმბოლოს ეგზემპლარები, გადასვლები და მომჭრელი ჯგუფები ზედმეტად ბევრ ობიექტს შეიცავს
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: სიმბოლოს „{symbol}“ ეგზემპლარიდან სხეულის შექმნა შეუძლებელია: სიმბოლოს ნახატი მიუწვდომელია
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: მომჭრელი ტრაექტორია ზედმეტად რთულია ნახატის მოსაჭრელად
@@ -8388,7 +8416,7 @@ mark-style	Japanese	იაპონური
 	RGB	RGB
 	Rotate View	ხედის შემობრუნება
 	Scissors	მაკრატელი
-	Shades of Gray	ნაცრისფერი გრადაციები
+	Shades of Gray	ნაცრისფერი ტონები
 	Shear:	დახრა:
 	Shift+Click	Shift+დაწკაპუნება
 	Shift+Drag	Shift+გადათრევა
@@ -9521,8 +9549,8 @@ axis	Y Axis	Y ღერძი
 @msg	`opacity` must be a number	`opacity` უნდა იყოს რიცხვი
 @msg	`opacity` must be a number from 0 to 100	`opacity` უნდა იყოს რიცხვი 0-დან 100-მდე
 @msg	`opacity` must be true or false	`opacity` უნდა იყოს true ან false
-@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	ტექსტის სიმბოლოებს საკუთარი გაუმჭვირვალობა არ აქვთ: დაამატეთ შევსება ან კონტური იერსახის პანელის ბრძანებით ახალი შევსების დამატება ან ახალი კონტურის დამატება
-@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	სიმბოლოს ეგზემპლარში არჩეულ ობიექტს შევსების ან კონტურის საკუთარი გაუმჭვირვალობა არ აქვს
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	ტექსტის სიმბოლოებს საკუთარი გაუმჭვირვალობა არ აქვთ: დაამატეთ შევსება ან კონტური იერსახის პანელის ბრძანებით „ახალი შევსების დამატება“ ან „ახალი კონტურის დამატება“
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	სიმბოლოს ეგზემპლარში მონიშნულ ობიექტს შევსების ან კონტურის საკუთარი გაუმჭვირვალობა არ აქვს
 @msg	no target has that fill or stroke to take the opacity	არცერთ სამიზნეს არ აქვს ის შევსება ან კონტური, რომელიც გაუმჭვირვალობას მიიღებს
 @msg	`type` must be "path" or "compound"	`type` უნდა იყოს "path" ან "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` უნდა შედგებოდეს 1-{MAX_UNIT} დასაბეჭდი სიმბოლოსგან
@@ -9576,7 +9604,7 @@ axis	Y Axis	Y ღერძი
 @msg	`plates` requires a stop linked to a spot swatch	`plates` მოითხოვს გადასვლის წერტილს, რომელიც სპოტ-ფერის ნიმუშთანაა დაკავშირებული
 @msg	the output	გამოტანა
 @msg	the path has no anchor points	ტრაექტორიას საყრდენი წერტილები არ აქვს
-@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	შედგენილ ტრაექტორიას {id} აქვს დამალული, ჩაკეტილი ან დამხმარე ხაზის წევრი, ამიტომ მისი წევრების ჩანაცვლება შეუძლებელია
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	შედგენილ ტრაექტორიას {id} აქვს წევრი, რომელიც დამალულია, ჩაკეტილია ან დამხმარე ხაზია, ამიტომ მისი წევრების ჩანაცვლება შეუძლებელია
 @msg	compound path {id} has a member that isn't a path, so its members can't be replaced	შედგენილ ტრაექტორიას {id} აქვს წევრი, რომელიც ტრაექტორია არ არის, ამიტომ მისი წევრების ჩანაცვლება შეუძლებელია
 @msg	too many anchor points (limit {MAX_ANCHORS})	ძალიან ბევრი საყრდენი წერტილი (ლიმიტი {MAX_ANCHORS})
 @msg	true or false	true ან false
@@ -9698,7 +9726,7 @@ axis	Y Axis	Y ღერძი
 @msg	expected {count} paragraph styles, one per paragraph	მოსალოდნელი იყო აბზაცის {count} სტილი, თითო აბზაცზე ერთი
 @msg	the document has no Kinsoku set named '{shown}'	დოკუმენტს არ აქვს Kinsoku-ის ნაკრები სახელით '{shown}'
 @msg	must be 1-{MAX_FAMILY} printable characters	უნდა შედგებოდეს 1-{MAX_FAMILY} დასაბეჭდი სიმბოლოსგან
-	Read the objects it is given, and the document's settings, artboards, layers and swatches	მიღებული ობიექტების და დოკუმენტის პარამეტრების, სამუშაო დაფების, შრეებისა და ფერის ნიმუშების წაკითხვა
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	მიღებული ობიექტებისა და დოკუმენტის პარამეტრების, სამუშაო დაფების, შრეებისა და ფერის ნიმუშების წაკითხვა
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`-ში განსხვავებული სექციები უნდა იყოს: settings, artboards, layers ან swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` განკუთვნილია ფილტრისთვის ან `commands`-ის მქონე ცოცხალი ეფექტისთვის, `api` 3-ზე ან უფრო ახალზე, ნებართვით `doc.read`
 @msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	პლაგინის მიერ მოთხოვნილი დოკუმენტის ინფორმაცია ზედმეტად დიდია გადასაცემად: მაქსიმუმ {MAX_CONTEXT_ITEMS} სამუშაო დაფა, შრე და ფერის ნიმუში {MAX_CONTEXT_BYTES} ბაიტში
@@ -9809,8 +9837,8 @@ axis	Y Axis	Y ღერძი
 	Action Set:	მოქმედებების ნაკრები:
 	Choose Align To at playback	შესრულებისას სწორების სამიზნის არჩევა
 	Align steps use the key object, key anchor or key guide when one is set.	სწორების ნაბიჯები იყენებს საკვანძო ობიექტს, საკვანძო საყრდენ წერტილს ან საკვანძო დამხმარე ხაზს, თუ ის მითითებულია.
-	With one whole object selected and no key, they use the artboard.	ერთი მთლიანი მონიშნული ობიექტისას და გასაღების გარეშე ისინი იყენებს სამუშაო დაფას.
-	Otherwise they use the selection.	სხვა შემთხვევაში ისინი იყენებს მონიშნულს.
+	With one whole object selected and no key, they use the artboard.	თუ მონიშნულია ერთი მთლიანი ობიექტი და საკვანძო არაფერია მითითებული, ისინი სამუშაო დაფას იყენებს.
+	Otherwise they use the selection.	სხვა შემთხვევაში ისინი მონიშნულს იყენებენ.
 	Function Key:	ფუნქციური კლავიში:
 	Record	ჩაწერა
 	Create New Set	ახალი ნაკრების შექმნა
@@ -9836,7 +9864,7 @@ axis	Y Axis	Y ღერძი
 	Panel	პანელი
 	UI Frames	UI ჩარჩოები
 	Map Markers	რუკის ნიშნულები
-	Pin	ქინძისთავი
+	Pin	სამაგრი
 	Flag	დროშა
 	Crosshair	სამიზნე
 	Checkpoint	საკონტროლო წერტილი
@@ -10492,7 +10520,7 @@ anchor	Points:	წერტილები:
 	Objects with Color Effects	ობიექტები ფერის ეფექტებით
 	RGB Images	RGB გამოსახულებები
 	CMYK Images	CMYK გამოსახულებები
-	Grayscale Images	ნაცრისფერის გრადაციის გამოსახულებები
+	Grayscale Images	ნაცრისფერი ტონების გამოსახულებები
 @msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` უნდა იყოს spotColors, colorEffects, rgbImages, cmykImages ან grayImages
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
@@ -10774,7 +10802,7 @@ breakText	Glyphs	გლიფები
 	Add Bounding Rectangle	შემომსაზღვრელი მართკუთხედის დამატება
 	Add Bounding Circle	შემომსაზღვრელი წრეწირის დამატება
 	Add Bounding Rectangle…	შემომსაზღვრელი მართკუთხედის დამატება…
-	Add Bounding Circle…	შემომსაზღვრელი წრეწირის დამატება…
+	Add Bounding Circle…	შემომსაზღვრელი წრის დამატება…
 	One per Object	თითო თითოეულ ობიექტზე
 @msg	nothing to enclose	შემოსაზღვრელი არაფერია
 @msg	`offset` must be 0 or more	`offset` უნდა იყოს 0 ან მეტი
@@ -11232,13 +11260,13 @@ font-script	Japanese	იაპონური
 	Ornamental	ორნამენტული
 	Scrollwork	ხვეული
 	Filigree Arrow	ფილიგრანული ისარი
-	Petal Sweep	ფურცლების რკალი
+	Petal Sweep	ყვავილის ფურცლების რკალი
 	Twin Curl	ორმაგი ხვეული
 	Vector Packs	ვექტორული პაკეტები
 	Compass Rose	კომპასის ვარდი
-	Botanical Sprig	ბოტანიკური ტოტი
+	Botanical Sprig	ბოტანიკური რტო
 	Facet Diamond	წახნაგოვანი ბრილიანტი
-	Tide Crest	ტალღის ქედი
+	Tide Crest	ტალღის თხემი
 	Leaf Vine	ფოთლების ვაზი
 	Blossom Chain	ყვავილების ჯაჭვი
 	Pennant Garland	ალმების გირლანდა
@@ -11275,7 +11303,7 @@ font-script	Japanese	იაპონური
 	Rose Layers	ვარდისფერი ფენები
 	Monochrome Stack	მონოქრომული დასტა
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
-	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ინსტრუმენტების ზოლის ინსტრუმენტისა და მისი კლავიშების მოქმედებას მინიშნების ნაცვლად ბარათზე აჩვენებს; საჭიროა მინიშნებების ჩვენება.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ინსტრუმენტების ზოლის ინსტრუმენტისა და მისი კლავიშების მოქმედებას მინიშნების ნაცვლად ბარათზე აჩვენებს; ამისთვის საჭიროა მინიშნებების ჩვენების ჩართვა.
 	Selects whole objects and groups to move, resize or rotate them.	მთლიანად მონიშნავს ობიექტებსა და ჯგუფებს მათი გადასაადგილებლად, ზომის შესაცვლელად ან მოსაბრუნებლად.
 	Selects anchor points and path segments to reshape a path.	მონიშნავს საყრდენ წერტილებსა და ტრაექტორიის სეგმენტებს ტრაექტორიის ფორმის შესაცვლელად.
 	Draws paths point by point, with straight segments and smooth curves.	ხატავს ტრაექტორიებს წერტილ-წერტილ, სწორი სეგმენტებითა და გლუვი მრუდებით.
@@ -11296,7 +11324,7 @@ font-script	Japanese	იაპონური
 	Sets the direction and length of a gradient.	აყენებს გრადიენტის მიმართულებასა და სიგრძეს.
 	Creates, selects and resizes artboards.	ქმნის, მონიშნავს და ცვლის სამუშაო დაფების ზომას.
 	Changes the width of a stroke along its length.	ცვლის კონტურის სისქეს მისი სიგრძის გასწვრივ.
-	Bends art by dragging pins placed on it.	ღუნავს ნახატს მასზე დასმული ქინძისთავების გადათრევით.
+	Bends art by dragging pins placed on it.	ნახატს ღუნავს მასზე დასმული სამაგრების გადათრევით.
 	Pushes the outlines of paths in the direction you drag.	უბიძგებს ტრაექტორიების მოხაზულობას გადათრევის მიმართულებით.
 	Twists the outlines of paths into swirls.	ხვევს ტრაექტორიების მოხაზულობას გრიგალებად.
 	Pulls the outlines of paths in toward the brush.	იზიდავს ტრაექტორიების მოხაზულობას ფუნჯისკენ.
