@@ -1570,6 +1570,15 @@ fn probing(a: &[Data]) -> bool {
     matches!(arg(a, 2), Data::Bool(true))
 }
 
+/// The answer of an indexer called with a name, from `found`, the collection's `getByName`: a
+/// name nothing has gives `undefined` for `name in collection` ([`probing`]) and throws otherwise.
+fn by_name_or_probe(a: &[Data], found: Answer) -> Answer {
+    match found {
+        Err(HostError::Error(e)) if e == NOT_FOUND && probing(a) => Ok(Data::Undefined),
+        r => r,
+    }
+}
+
 /// `pageItems[i]`, and `pageItems["name"]` as `getByName` reads it.
 fn items_at(h: &Host, a: &[Data]) -> Answer {
     if layers::is_scoped(a) {
@@ -1577,10 +1586,7 @@ fn items_at(h: &Host, a: &[Data]) -> Answer {
     }
     let doc = items_doc(h, a)?;
     if let Data::String(_) = arg(a, 1) {
-        return match items_by_name(h, a) {
-            Err(HostError::Error(e)) if e == NOT_FOUND && probing(a) => Ok(Data::Undefined),
-            r => r,
-        };
+        return by_name_or_probe(a, items_by_name(h, a));
     }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };

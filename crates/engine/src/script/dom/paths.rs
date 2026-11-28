@@ -462,8 +462,12 @@ fn items_parent(h: &super::Host, a: &[Data]) -> Answer {
     })
 }
 
+/// `pathItems[i]`, and `pathItems["name"]` as `getByName` reads it.
 fn items_at(h: &super::Host, a: &[Data]) -> Answer {
     let (doc, c) = items_scope(h, a)?;
+    if let Data::String(_) = arg(a, 1) {
+        return super::by_name_or_probe(a, items_by_name(h, a));
+    }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
     with_doc(h, doc, |_, st| Ok(path_items(h, st, c)?.get(i).map_or(Data::Undefined, |id| super::item_ref(h, st, *id))))
@@ -493,6 +497,8 @@ fn items_index(h: &super::Host, a: &[Data]) -> Answer {
 
 /// `pathItems.removeAll()`: deletes every path the collection lists in one command. A hidden or
 /// locked path, or one in a hidden or locked layer or group, stops it before anything is deleted.
+/// A compound path's `pathItems.removeAll()` leaves the compound path, empty, as `remove()` of its
+/// last path does.
 fn items_remove_all(h: &super::Host, a: &[Data]) -> Answer {
     let (doc, c) = items_scope(h, a)?;
     let (ids, refused) = with_doc(h, doc, |_, st| {
@@ -505,7 +511,8 @@ fn items_remove_all(h: &super::Host, a: &[Data]) -> Answer {
         return Err(HostError::Error(format!("cannot delete hidden or locked paths: {list}")));
     }
     if !ids.is_empty() {
-        on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
+        let params = json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "keepEmpty": c.is_some()});
+        on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &params))?;
     }
     Ok(Data::Undefined)
 }
@@ -520,22 +527,35 @@ fn made_id(r: &(Data, Value)) -> std::result::Result<NodeId, HostError> {
 /// locked layer or group.
 pub const CONTAINER_LOCKED: &str = "Cannot add a path to a hidden or locked layer or group";
 
+/// The error of an object made in a Live Paint group, which would join the group's paths instead
+/// of staying in the group's own list.
+pub const LIVE_PAINT_CONTAINER: &str = "Cannot add an object to a Live Paint group";
+
+/// Whether `id` is a Live Paint group, which takes no new objects from the object model.
+pub(super) fn is_live_paint_group(st: &DocState, id: NodeId) -> bool {
+    st.doc.node(id).is_some_and(vectorcraft_tools::builder::is_live_paint)
+}
+
 /// Runs `make`, which makes a path in `doc` on top of the current layer and gives its id, with the
 /// selection and the current layer kept. With a layer or group `container`, the container's layer
 /// is the current one while `make` runs (`layer.setCurrent`, not an undo step), and a path made
 /// outside the container then moves on top of its contents in the same step; a container that is
 /// hidden or locked, or that is in a hidden or locked layer or group, throws [`CONTAINER_LOCKED`]
-/// before anything is made. → the new path.
+/// before anything is made, and a Live Paint group throws [`LIVE_PAINT_CONTAINER`]. → the new path.
 fn make_in(
     h: &super::Host,
     doc: Doc,
     container: Option<NodeId>,
     make: impl FnOnce(&super::Host) -> std::result::Result<NodeId, HostError>,
 ) -> Answer {
-    if let Some(c) = container
-        && !with_doc(h, doc, |_, st| editable(&st.doc, c))
-    {
-        return Err(HostError::Error(CONTAINER_LOCKED.into()));
+    if let Some(c) = container {
+        let (open, live) = with_doc(h, doc, |_, st| (editable(&st.doc, c), is_live_paint_group(st, c)));
+        if !open {
+            return Err(HostError::Error(CONTAINER_LOCKED.into()));
+        }
+        if live {
+            return Err(HostError::Error(LIVE_PAINT_CONTAINER.into()));
+        }
     }
     let made = match container {
         // Making a path can take more than one command (a stroke, a reversal): a failure of a later
@@ -1314,11 +1334,13 @@ fn node_arc(d: &crate::Document, id: NodeId) -> Option<&Arc<crate::doc::Node>> {
 /// points read before go stale, unless `own`: the object model made the change
 /// ([`see_all_points`]), which `own` is asked only after a change. The kept node is shared with
 /// the document, so a node whose pointer is unchanged has unchanged points, and any change to it
-/// makes a new node.
+/// makes a new node. The first look at a path of a document also keeps the document as it is then,
+/// when no look kept it before ([`see_all_points`]).
 fn see_points(h: &super::Host, key: (u64, u64), own: impl FnOnce() -> bool) {
-    let node = {
+    let (node, doc) = {
         let s = h.session.borrow();
-        s.documents().iter().find(|d| d.uid == key.0).and_then(|st| node_arc(&st.doc, NodeId(key.1)).cloned())
+        let st = s.documents().iter().find(|d| d.uid == key.0);
+        (st.and_then(|st| node_arc(&st.doc, NodeId(key.1)).cloned()), st.map(|st| st.doc.clone()))
     };
     // A path that is gone makes its points stale, so that an undo that brings it back leaves them
     // stale.
@@ -1328,9 +1350,15 @@ fn see_points(h: &super::Host, key: (u64, u64), own: impl FnOnce() -> bool) {
         }
         return;
     };
-    let changed = match h.dom.point_nodes.borrow_mut().insert(key, node.clone()) {
+    let old = h.dom.point_nodes.borrow_mut().insert(key, node.clone());
+    let changed = match old {
         Some(old) => !Arc::ptr_eq(&old, &node) && old.path_data().map(|pd| &pd.subpaths) != node.path_data().map(|pd| &pd.subpaths),
-        None => false,
+        None => {
+            if let Some(doc) = doc {
+                h.dom.point_docs.borrow_mut().entry(key.0).or_insert(doc);
+            }
+            false
+        }
     };
     if changed && !own() {
         cut_key(h, key);
@@ -1338,50 +1366,104 @@ fn see_points(h: &super::Host, key: (u64, u64), own: impl FnOnce() -> bool) {
 }
 
 /// [`see_points`] for each path whose points the run has read, after each command, so that a
-/// change that a later command reverses still makes the points stale. Paths under the object that
-/// the object model is changing ([`super::State`]), or that object itself, take the change as the
-/// object model's own, and their points stay valid. A document that is the one the run last looked
-/// at is skipped, as are its paths.
+/// change that a later command reverses still makes the points stale. Only the paths of documents
+/// that changed since the last look are looked at, and of those only the paths in the parts of the
+/// document that changed ([`changed_ids`]), so an edit of one path does not look at every other
+/// path the run read. Paths under the object that the object model is changing
+/// ([`super::State`]), or that object itself, take the change as the object model's own, and their
+/// points stay valid.
 pub(super) fn see_all_points(h: &super::Host) {
-    let keys: Vec<(u64, u64)> = {
-        let seen = h.dom.point_nodes.borrow();
-        if seen.is_empty() {
-            return;
-        }
+    if h.dom.point_nodes.borrow().is_empty() {
+        return;
+    }
+    // The documents that changed since the last look, as they were then (`None`: gone, or not
+    // kept), kept as they are now.
+    type Kept = Option<Arc<crate::Document>>;
+    let changed: Vec<(u64, Kept, Kept)> = {
         let s = h.session.borrow();
-        let mut docs = h.dom.point_docs.borrow_mut();
-        // The documents that changed since the last look, kept as they are now.
-        let mut changed = std::collections::HashSet::new();
-        for (uid, _) in seen.keys() {
-            if changed.contains(uid) {
-                continue;
+        let mut changed = Vec::new();
+        h.dom.point_docs.borrow_mut().retain(|uid, kept| match s.documents().iter().find(|d| d.uid == *uid) {
+            Some(st) if Arc::ptr_eq(kept, &st.doc) => true,
+            Some(st) => {
+                changed.push((*uid, Some(std::mem::replace(kept, st.doc.clone())), Some(st.doc.clone())));
+                true
             }
-            match s.documents().iter().find(|d| d.uid == *uid) {
-                Some(st) if docs.get(uid).is_some_and(|d| Arc::ptr_eq(d, &st.doc)) => {}
-                Some(st) => {
-                    docs.insert(*uid, st.doc.clone());
-                    changed.insert(*uid);
-                }
-                None => {
-                    docs.remove(uid);
-                    changed.insert(*uid);
-                }
+            None => {
+                changed.push((*uid, None, None));
+                false
             }
-        }
-        seen.keys().copied().filter(|(uid, _)| changed.contains(uid)).collect()
+        });
+        changed
     };
     let editing = h.dom.editing.get();
-    for (uid, id) in keys {
-        let own = || match editing {
-            Some(e) if e.doc.uid == uid => {
-                let s = h.session.borrow();
-                let id = NodeId(id);
-                id == e.id || s.documents().iter().find(|d| d.uid == uid).and_then(|st| st.doc.ancestry(id)).is_some_and(|a| a.contains(&e.id))
+    for (uid, was, now) in changed {
+        let keys: Vec<(u64, u64)> = {
+            let seen = h.dom.point_nodes.borrow();
+            match (&was, &now) {
+                (Some(was), Some(now)) => changed_ids(was, now).into_iter().map(|id| (uid, id.0)).filter(|k| seen.contains_key(k)).collect(),
+                _ => seen.keys().copied().filter(|(u, _)| *u == uid).collect(),
             }
-            _ => false,
         };
-        see_points(h, (uid, id), own);
+        if keys.is_empty() {
+            continue;
+        }
+        // The objects under the one the object model is changing, as it is now.
+        let mut inside = std::collections::HashSet::new();
+        if let (Some(e), Some(now)) = (editing, &now)
+            && e.doc.uid == uid
+            && let Some(n) = node_arc(now, e.id)
+        {
+            let mut stack = vec![n];
+            while let Some(n) = stack.pop() {
+                inside.insert(n.id);
+                stack.extend(n.children().map_or(&[][..], Vec::as_slice));
+            }
+        }
+        for key in keys {
+            see_points(h, key, || inside.contains(&NodeId(key.1)));
+        }
     }
+}
+
+/// The ids of the objects that differ between `was` and `now`, two versions of a document that
+/// share the objects they have in common: each object that is not the same object in both, and
+/// everything in it. Lists that keep their objects in place are compared object by object, and
+/// the rest by the part between the objects they start and end with in common.
+fn changed_ids(was: &crate::Document, now: &crate::Document) -> Vec<NodeId> {
+    type Nodes<'a> = &'a [Arc<crate::doc::Node>];
+    fn all(nodes: Nodes<'_>, out: &mut Vec<NodeId>) {
+        let mut stack: Vec<&Arc<crate::doc::Node>> = nodes.iter().collect();
+        while let Some(n) = stack.pop() {
+            out.push(n.id);
+            stack.extend(n.children().map_or(&[][..], Vec::as_slice));
+        }
+    }
+    let mut out = Vec::new();
+    let mut work: Vec<(Nodes<'_>, Nodes<'_>)> = vec![(&was.layers, &now.layers)];
+    while let Some((a, b)) = work.pop() {
+        let start = a.iter().zip(b).take_while(|(x, y)| Arc::ptr_eq(x, y)).count();
+        let end = a[start..].iter().rev().zip(b[start..].iter().rev()).take_while(|(x, y)| Arc::ptr_eq(x, y)).count();
+        let (a, b) = (&a[start..a.len() - end], &b[start..b.len() - end]);
+        if a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.id == y.id) {
+            for (x, y) in a.iter().zip(b) {
+                if Arc::ptr_eq(x, y) {
+                    continue;
+                }
+                out.push(y.id);
+                match (x.children(), y.children()) {
+                    (Some(xc), Some(yc)) => work.push((xc, yc)),
+                    (xc, yc) => {
+                        all(xc.map_or(&[][..], Vec::as_slice), &mut out);
+                        all(yc.map_or(&[][..], Vec::as_slice), &mut out);
+                    }
+                }
+            }
+        } else {
+            all(a, &mut out);
+            all(b, &mut out);
+        }
+    }
+    out
 }
 
 fn points_at(h: &super::Host, a: &[Data]) -> Answer {

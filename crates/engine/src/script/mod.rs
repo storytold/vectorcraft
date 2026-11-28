@@ -2252,14 +2252,24 @@ impl Session {
                 self.script_key = Some(key);
                 None
             }
-            // The point changes written as the script ended went past the growth allowance.
-            Ok(Ok(Progress::Done(_))) if job.host.waiting.get() => {
-                job.finished = true;
-                JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
-                self.script_key = Some(key);
-                None
+            Ok(Ok(Progress::Done(_))) => {
+                // What the script added must fit the allowance the last answer gave, which one
+                // answer can leave short of what the script had already added.
+                if !job.host.waiting.get()
+                    && let Err(e) = job.host.charge_growth(0, 0)
+                {
+                    return Some(self.script_failed(job, &end_flush_error(e)));
+                }
+                // The point changes written as the script ended, or what it added before, went past
+                // the growth allowance.
+                if job.host.waiting.get() {
+                    job.finished = true;
+                    JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
+                    self.script_key = Some(key);
+                    return None;
+                }
+                Some(self.script_ended(job))
             }
-            Ok(Ok(Progress::Done(_))) => Some(self.script_ended(job)),
         }
     }
 

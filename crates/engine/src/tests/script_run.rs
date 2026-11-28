@@ -1423,6 +1423,39 @@ fn a_finished_run_past_its_last_allowance_asks_again() {
     assert_eq!(questions, 3, "asked mid-run, as the script ended, and again for the third allowance");
 }
 
+/// A script that ends with nothing left to write, past the allowance the person's last answer
+/// gave, is asked again before its changes are kept.
+#[test]
+fn a_run_that_ends_past_its_last_allowance_with_nothing_to_write_asks_again() {
+    TEST_GROWTH.with(|g| g.set(Some(20)));
+    // 21 rectangles go past the first allowance, and the 45 the document opens go past the
+    // second and stay within twice it, which leaves them past the third.
+    let rects: String = (0..45).map(|i| format!(r#"<rect x="{i}" y="0" width="1" height="1"/>"#)).collect();
+    let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">{rects}</svg>"#);
+    let data = vectorcraft_format::base64_encode(svg.as_bytes());
+    let source = format!(
+        "for (var i = 0; i < 21; i++) vc.run('shape.rectangle', {{x:i,y:1,width:1,height:1}});\
+         vc.run('document.open', {{name: 'a.svg', dataBase64: '{data}'}});"
+    );
+    let mut s = two_docs();
+    s.script_frames = true;
+    run(&mut s, &source).unwrap();
+    let mut questions = 0;
+    let done = loop {
+        assert!(questions < 10);
+        if s.script_waiting() {
+            questions += 1;
+            s.script_continue();
+        }
+        if let Some(r) = s.script_pump() {
+            break r;
+        }
+    };
+    TEST_GROWTH.with(|g| g.set(None));
+    assert_eq!(done.unwrap()["ok"], true);
+    assert_eq!(questions, 3, "asked for the rectangles, for the document, and again as the script ended");
+}
+
 #[test]
 fn a_run_waiting_to_grow_stops_at_the_next_slice_once_its_work_is_canceled() {
     TEST_GROWTH.with(|g| g.set(Some(20)));

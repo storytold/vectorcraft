@@ -698,6 +698,20 @@ fn host_classes_that_do_not_fit_the_heap_end_with_the_heap_limit() {
     assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap));
 }
 
+/// A new object of a host class adds its handle to the heap's total as well as itself, so objects
+/// made one after another count each other's handles before a collection does.
+#[test]
+fn an_object_of_a_host_class_counts_its_handle_toward_the_heap() {
+    let mut r = realm(1_000_000);
+    with_thing(&mut r, None);
+    let interp = r.interp();
+    let handle: Vec<f64> = (0..64).map(f64::from).collect();
+    let before = interp.heap.bytes;
+    interp.write_host_ref(&host_ref("Thing", &handle)).unwrap();
+    let added = interp.heap.bytes - before;
+    assert!(added >= crate::heap::OBJECT_BYTES + crate::heap::host_handle_bytes(handle.len()), "{added}");
+}
+
 #[test]
 fn the_answer_to_a_waiting_member_of_a_host_class_is_an_object_of_its_class() {
     let mut r = realm(1_000_000);

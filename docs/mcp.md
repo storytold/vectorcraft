@@ -2779,7 +2779,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   object that is hidden or locked itself takes all of them (VectorCraft's own rule). `move` with the object itself
   as the relative object and `PLACEBEFORE` or `PLACEAFTER` leaves it where it is and adds no undo step. When `move`
   or `remove()` takes the last path out of a compound path, the compound path stays, empty, so a script that holds
-  it can still read it (`remove()` runs `edit.clear` with `keepEmpty: true`). An object with nothing in it, such
+  it can still read it (`remove()` runs `edit.clear` with `keepEmpty: true`). The compound path's
+  `pathItems.removeAll()` also leaves it, empty. An object with nothing in it, such
   as an empty group or that compound path, reads its bounds, `position`, `width` and `height` as zeros, and
   assigning them does nothing (VectorCraft's own rule). `duplicate` on a path inside a compound path throws
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
@@ -2896,8 +2897,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `setActiveArtboardIndex` changes the view's active artboard with no undo step, and `script.run`'s report lists the
   change in `activeArtboards` (`[{document, artboard}]`, both indexes, with each document's active artboard as the
   run leaves it). The report also lists a document whose active artboard has another index when the run ends because
-  artboards were inserted, removed or reordered before it. An index outside the list throws a
-  `RangeError`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
+  artboards were inserted, removed or reordered before it. `insert`, `remove` and `setActiveArtboardIndex` throw a
+  `RangeError` for an index outside the list. Reading an index past the last artboard gives `undefined` from
+  `artboards[i]` and throws `Not found` from `artboards.index(i)`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
   `Stale artboard`. `Layer.blendingMode`, `artworkKnockout` and `sliced` and `GroupItems.createFromFile` throw an
   error that says they are not available yet.
 - `object.newGroup {parent?, index?, compound?}` adds an empty group to a shown, unlocked layer or group (`parent`;
@@ -2927,7 +2929,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   run's one undo step. VectorCraft's own rules: a layer's or group's `pathItems` list the paths directly in it,
   topmost first, leaving out paths in its groups, compound paths and sublayers; a layer or group that is hidden or
   locked, or that is in a hidden or locked layer or group, throws `Cannot add a path to a hidden or locked layer or
-  group` and no path is made. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  group` and no path is made. A Live Paint group's `pathItems`, `groupItems` and `compoundPathItems` throw
+  `Cannot add an object to a Live Paint group` from their `add()` and the shape methods, and nothing is made. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
   members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
   `guides`, `clipping`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`, `stroked`, `strokeColor`,
   `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,

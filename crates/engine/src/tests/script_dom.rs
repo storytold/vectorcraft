@@ -1870,6 +1870,66 @@ fn path_items_of_a_hidden_or_locked_layer_or_group_make_no_path() {
     assert!(msg.contains("Stale page item"), "{msg}");
 }
 
+/// A collection read with a name gives what its `getByName` gives, in a layer's or a group's
+/// collections as in the document's, and a name nothing has is not `in` it.
+#[test]
+fn collections_read_with_a_name_give_the_named_object() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, g = d.groupItems[0], r = g.pageItems[0]; r.name = 'Logo'; g.name = 'G';\
+         vc.log([g.pageItems['Logo'] === r, g.pathItems['Logo'] === r, d.pathItems['Logo'] === r, d.groupItems['G'] === g,\
+                 d.layers[0].groupItems['G'] === g, d.layers['Layer 1'] === d.layers[0], d.artboards[d.artboards[0].name] === d.artboards[0]]);\
+         vc.log(['Logo' in g.pageItems, 'missing' in g.pageItems, 'missing' in g.pathItems, 'missing' in d.layers, 'missing' in d.artboards]);\
+         var m = ''; try { g.pageItems['missing']; } catch (e) { m = e.message; } vc.log(m);",
+    );
+    assert_eq!(out[0], json!([true, true, true, true, true, true, true]), "{out:?}");
+    assert_eq!(out[1], json!([true, false, false, false, false]), "{out:?}");
+    assert_eq!(out[2], json!("Not found"), "{out:?}");
+}
+
+/// A compound path's `pathItems.removeAll()` leaves it, empty, as `remove()` of its last path
+/// does.
+#[test]
+fn clearing_the_paths_of_a_compound_path_keeps_the_compound_path() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = layer_order(&s)[0];
+    let out = log(&mut s, "var c = app.activeDocument.compoundPathItems[0]; c.pathItems.removeAll(); vc.log([c.typename, c.pathItems.length]);");
+    assert_eq!(out, vec![json!(["CompoundPathItem", 0])]);
+    let d = &s.active().unwrap().doc;
+    assert!(d.node(compound).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())), "the compound path stays, empty");
+}
+
+/// A Live Paint group's collections make nothing in it: what they made would join the group's
+/// paths instead of being one of its objects.
+#[test]
+fn collections_of_a_live_paint_group_make_nothing() {
+    const REFUSED: &str = "Cannot add an object to a Live Paint group";
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("livePaint.make", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let out = log(
+        &mut s,
+        "var g = app.activeDocument.pageItems[0], m = [];\
+         try { g.pathItems.rectangle(10, 10, 5, 5); } catch (e) { m.push(e.message); }\
+         try { g.pathItems.add(); } catch (e) { m.push(e.message); }\
+         try { g.groupItems.add(); } catch (e) { m.push(e.message); }\
+         try { g.compoundPathItems.add(); } catch (e) { m.push(e.message); }\
+         vc.log(m);",
+    );
+    let refused: Vec<&str> = out[0].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert_eq!(refused.len(), 4, "{out:?}");
+    assert!(refused.iter().all(|m| m.contains(REFUSED)), "{out:?}");
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+}
+
 #[test]
 fn compound_path_items_add_makes_an_empty_compound_path_that_takes_paths() {
     let (mut s, a, b) = doc();

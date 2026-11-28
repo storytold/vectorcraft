@@ -537,8 +537,12 @@ fn layers_typename(h: &Host, a: &[Data]) -> Answer {
     Ok(text("Layers"))
 }
 
+/// `layers[i]`, and `layers["name"]` as `getByName` reads it.
 fn layers_at(h: &Host, a: &[Data]) -> Answer {
     let (doc, parent) = layers_scope(h, arg(a, 0))?;
+    if let Data::String(_) = arg(a, 1) {
+        return super::by_name_or_probe(a, layers_by_name(h, a));
+    }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
     with_doc(h, doc, |_, st| Ok(layer_ids(h, st, parent)?.get(i).map_or(Data::Undefined, |id| layer_ref(h, st.uid, *id))))
@@ -689,8 +693,12 @@ fn art_parent(h: &Host, a: &[Data], kind: Kind) -> Answer {
     Ok(with_doc(h, doc, |_, st| c.map_or_else(|| doc_ref(h, st.uid), |c| item_ref(h, st, c))))
 }
 
+/// `collection[i]`, and `collection["name"]` as `getByName` reads it.
 fn art_at(h: &Host, a: &[Data], kind: Kind) -> Answer {
     let (doc, c) = art_scope(h, arg(a, 0), kind.class())?;
+    if let Data::String(_) = arg(a, 1) {
+        return super::by_name_or_probe(a, art_by_name(h, a, kind));
+    }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
     with_doc(h, doc, |_, st| Ok(art_list(h, st, kind, c)?.get(i).map_or(Data::Undefined, |id| item_ref(h, st, *id))))
@@ -826,14 +834,19 @@ fn compounds_typename(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `groupItems.add()` and `compoundPathItems.add()`: an empty group or compound path on top of the
-/// layer's or group's contents (the document's: the current layer's), with `object.newGroup`.
-/// → the new object.
+/// layer's or group's contents (the document's: the current layer's), with `object.newGroup`. A
+/// Live Paint group takes none. → the new object.
 fn container_add(h: &Host, a: &[Data], kind: Kind) -> Answer {
     let (doc, c) = art_scope(h, arg(a, 0), kind.class())?;
     if let Some(c) = c {
-        let compound = with_doc(h, doc, |_, st| st.doc.node(c).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
+        let (compound, live) = with_doc(h, doc, |_, st| {
+            (st.doc.node(c).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })), super::paths::is_live_paint_group(st, c))
+        });
         if compound {
             return Err(HostError::Error("a compound path holds only paths".into()));
+        }
+        if live {
+            return Err(HostError::Error(super::paths::LIVE_PAINT_CONTAINER.into()));
         }
     }
     let mut params = c.map_or_else(|| json!({}), |c| json!({"parent": c.0}));
@@ -1232,8 +1245,12 @@ fn board_index_arg(d: &Data, len: usize, what: &str) -> Result<usize> {
         .ok_or_else(|| HostError::Range(format!("{what} must be a whole number from 0 to {}", len.saturating_sub(1))))
 }
 
+/// `artboards[i]`, and `artboards["name"]` as `getByName` reads it.
 fn boards_at(h: &Host, a: &[Data]) -> Answer {
     let doc = boards_doc(h, a)?;
+    if let Data::String(_) = arg(a, 1) {
+        return super::by_name_or_probe(a, boards_by_name(h, a));
+    }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
     Ok(with_doc(h, doc, |_, st| st.doc.artboards.get(i).map_or(Data::Undefined, |ab| board_ref(h, st.uid, ab.id))))
