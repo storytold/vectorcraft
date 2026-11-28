@@ -933,10 +933,10 @@ fn local_order_puts_overlapping_fill_walls_and_stroke_faces_in_depth_order() {
     }
 }
 
-/// A cycle of overlapping stroke faces is broken at the face that comes first by depth, and a cap
-/// drawn last stays after every wall: 0 at x 0 to 10, flat at z 0; 1 at x 4 to 14, z = x - 8; 2 at
-/// x 8 to 18, flat at z 1. Where they overlap, 0 is nearer than 1, 1 nearer than 2 and 2 nearer
-/// than 0. 3 is the cap.
+/// A cycle of overlapping stroke faces is broken at its own face that comes first by depth, and a
+/// cap drawn last stays after every wall: 0 at x 0 to 10, flat at z 0; 1 at x 4 to 14, z = x - 8;
+/// 2 at x 8 to 18, flat at z 1. Where they overlap, 0 is nearer than 1, 1 nearer than 2 and 2
+/// nearer than 0. 3 is the cap.
 #[test]
 fn a_depth_cycle_keeps_the_cap_last() {
     let square = |x: f64| vec![Point::new(x, 0.0), Point::new(x + 10.0, 0.0), Point::new(x + 10.0, 10.0), Point::new(x, 10.0)];
@@ -962,6 +962,450 @@ fn a_depth_cycle_keeps_the_cap_last() {
     };
     let faces = [at(1.0, 0.0, [0.0, 0.0, 1.0], 0.0), at(2.0, 4.0, [-1.0, 0.0, 1.0], -8.0), at(3.0, 8.0, [0.0, 0.0, 1.0], 1.0), cap];
     assert_eq!(draw_order(&faces, true), [0, 2, 1, 3]);
+}
+
+/// A face that lies in front of a face of a cycle, without being part of the cycle, waits for that
+/// face. 0, 1 and 2 overlap in a cycle (as in `a_depth_cycle_keeps_the_cap_last`); 3, at x 16 to
+/// 26 and flat at z 2, is nearer than 2 where they overlap, but its center is the farthest of all,
+/// so it comes first by depth. The cycle is broken at 0, its first face by depth, and 3 follows 2.
+/// Breaking it at the first face by depth of all the faces left drew 3 first, under 2.
+#[test]
+fn a_face_in_front_of_a_cycle_waits_for_it() {
+    let square = |x: f64| vec![Point::new(x, 0.0), Point::new(x + 10.0, 0.0), Point::new(x + 10.0, 10.0), Point::new(x, 10.0)];
+    let at = |depth: f64, x: f64, normal: [f64; 3], offset: f64| Placed {
+        depth,
+        side: true,
+        away: false,
+        bounds: Rect::new(x, 0.0, x + 10.0, 10.0),
+        member: 0,
+        paints: Paints::Other,
+        outline: square(x),
+        plane: Some(DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
+    };
+    let flat = [0.0, 0.0, 1.0];
+    let walls = || [at(1.0, 0.0, flat, 0.0), at(2.0, 4.0, [-1.0, 0.0, 1.0], -8.0), at(3.0, 8.0, flat, 1.0), at(-5.0, 16.0, flat, 2.0)];
+    assert_eq!(draw_order(&walls(), true), [0, 2, 3, 1]);
+    // With the cap of `a_depth_cycle_keeps_the_cap_last` as well, it still goes last.
+    let cap =
+        Placed { depth: f64::MAX, side: false, bounds: Rect::new(0.0, 0.0, 26.0, 10.0), outline: vec![], plane: None, ..at(0.0, 0.0, flat, 0.0) };
+    let capped: Vec<Placed> = walls().into_iter().chain([cap]).collect();
+    assert_eq!(draw_order(&capped, true), [0, 2, 3, 1, 4]);
+}
+
+/// `order` with the pairs `before` (each first face drawn before the second) in their own order
+/// ([`drawn_in_pairs_order`]), within `room` steps of looking for rings, and the steps taken; the
+/// faces of `last` are drawn last.
+fn in_pairs_order(order: &[usize], before: &[(usize, usize)], last: &[usize], room: usize) -> (Vec<usize>, usize) {
+    let n = order.len();
+    let mut position = vec![0; n];
+    for (at, &k) in order.iter().enumerate() {
+        position[k] = at;
+    }
+    let last: Vec<bool> = (0..n).map(|k| last.contains(&k)).collect();
+    let mut left = room;
+    let drawn = drawn_in_pairs_order(order.to_vec(), &position, &last, narrow(before), &mut left);
+    (drawn, room - left)
+}
+
+/// What [`drawn_in_pairs_order`] is to give with room enough, worked out plainly: at every stop
+/// the faces behind the first face left are followed afresh, with nothing kept and no face taken
+/// out of a list.
+fn in_pairs_order_plainly(order: &[usize], before: &[(usize, usize)], last: &[usize]) -> Vec<usize> {
+    /// The first group completed behind `face`, among the faces `open`: its faces, or `None` while
+    /// its group goes on. `earlier` lists the faces before each face, lowest first.
+    fn group(face: usize, open: &[bool], earlier: &[Vec<usize>], reached: &mut Vec<usize>, low: &mut Vec<usize>) -> Option<Vec<usize>> {
+        let place = reached.len();
+        reached.push(face);
+        low.push(place);
+        for &e in earlier[face].iter().filter(|&&e| open[e]) {
+            match reached.iter().position(|&f| f == e) {
+                Some(at) => low[place] = low[place].min(at),
+                None => {
+                    let found = group(e, open, earlier, reached, low);
+                    if found.is_some() {
+                        return found;
+                    }
+                    low[place] = low[place].min(low[reached.iter().position(|&f| f == e).unwrap()]);
+                }
+            }
+        }
+        (low[place] == place).then(|| reached[place..].to_vec())
+    }
+    let n = order.len();
+    let mut at = vec![0; n];
+    for (place, &k) in order.iter().enumerate() {
+        at[k] = place;
+    }
+    let mut earlier = vec![vec![]; n];
+    for &(first, then) in before {
+        earlier[then].push(first);
+    }
+    earlier.iter_mut().for_each(|list| list.sort_unstable());
+    let mut drawn = vec![false; n];
+    let mut out: Vec<usize> = vec![];
+    while out.len() < n {
+        let left: Vec<usize> = order.iter().copied().filter(|&k| !drawn[k]).collect();
+        let limit = left.iter().find(|k| last.contains(k)).map_or(usize::MAX, |&k| at[k]);
+        let waits = |k: usize| earlier[k].iter().any(|&e| !drawn[e]);
+        let next = match left.iter().copied().find(|&k| at[k] < limit && !waits(k)) {
+            Some(ready) => ready,
+            None if at[left[0]] >= limit => left[0],
+            None => {
+                let open: Vec<bool> = (0..n).map(|k| !drawn[k] && at[k] < limit).collect();
+                let found = group(left[0], &open, &earlier, &mut vec![], &mut vec![]).unwrap();
+                found.into_iter().min_by_key(|&k| at[k]).unwrap()
+            }
+        };
+        drawn[next] = true;
+        out.push(next);
+    }
+    out
+}
+
+/// `pairs` as [`drawn_in_pairs_order`] takes them.
+fn narrow(pairs: &[(usize, usize)]) -> Vec<(u32, u32)> {
+    pairs.iter().map(|&(first, then)| (first as u32, then as u32)).collect()
+}
+
+/// The pairs of `before` that `drawn` draws the wrong way round.
+fn broken(drawn: &[usize], before: &[(usize, usize)]) -> Vec<(usize, usize)> {
+    let mut at = vec![0; drawn.len()];
+    for (place, &k) in drawn.iter().enumerate() {
+        at[k] = place;
+    }
+    before.iter().copied().filter(|&(first, then)| at[first] > at[then]).collect()
+}
+
+/// After a ring's face is released, the faces left are looked at afresh: they may be a smaller
+/// ring and faces in none. Two rings share face 1: 0 before 1 before 4 before 0, and 1 before 2
+/// before 3 before 1. By depth the order is 3, 2, 0, 4, 1. The five wait for no other face, so the
+/// first stop releases 3, the first of them by depth. That leaves the one ring 0, 1, 4 and face
+/// 2, which only waits for 1: 0 is released, and 2 follows 1. Only pairs of a ring are drawn the
+/// wrong way round. Taking the first face left by depth at each stop drew 2 before 1 as well.
+#[test]
+fn the_faces_left_are_looked_at_afresh_after_each_face_released() {
+    let before = [(0, 1), (1, 4), (4, 0), (1, 2), (2, 3), (3, 1)];
+    let (drawn, _) = in_pairs_order(&[3, 2, 0, 4, 1], &before, &[], usize::MAX);
+    assert_eq!(drawn, [3, 0, 1, 2, 4]);
+    assert_eq!(broken(&drawn, &before), [(4, 0), (2, 3)]);
+    assert_eq!(broken(&in_pairs_order(&[3, 2, 0, 4, 1], &before, &[], 0).0, &before), [(4, 0), (1, 2), (2, 3)]);
+}
+
+/// A ring is the one behind the first face left by depth that waits for no face outside it: 0
+/// comes first by depth and waits for the ring 1, 2, 3, which waits for the ring 4, 5, 6. The far
+/// ring is broken first (at 4) and drawn, then the near one (at 1), and 0 follows 1; one pair of
+/// each ring is drawn the wrong way round, and no pair between them. Taking the first face left by
+/// depth drew 0 first, under 1.
+#[test]
+fn the_ring_released_waits_for_no_face_outside_it() {
+    let before = [(1, 0), (1, 2), (2, 3), (3, 1), (4, 1), (4, 5), (5, 6), (6, 4)];
+    let (drawn, _) = in_pairs_order(&[0, 1, 2, 3, 4, 5, 6], &before, &[], usize::MAX);
+    assert_eq!(drawn, [4, 5, 6, 1, 0, 2, 3]);
+    assert_eq!(broken(&drawn, &before), [(3, 1), (6, 4)]);
+    assert_eq!(broken(&in_pairs_order(&[0, 1, 2, 3, 4, 5, 6], &before, &[], 0).0, &before), [(1, 0), (3, 1), (4, 1), (6, 4)]);
+}
+
+/// A ring is looked for among the faces that come before the next face drawn last: 1 comes first
+/// by depth and waits for 4, a face of the ring 2, 3, 4, and for 0, which is drawn last. 0 waits
+/// for no face, so it is a group of its own behind 1, but no face before it by depth can wait for
+/// it. The ring gives up 2, and 1 follows 4; the pair of 1 and 0 cannot be kept. Stopping at 0
+/// drew 1 first, under 4.
+#[test]
+fn a_ring_is_looked_for_before_the_next_face_drawn_last() {
+    let before = [(2, 3), (3, 4), (4, 2), (4, 1), (0, 1)];
+    let (drawn, _) = in_pairs_order(&[1, 2, 3, 4, 0], &before, &[0], usize::MAX);
+    assert_eq!(drawn, [2, 3, 4, 1, 0]);
+    assert_eq!(broken(&drawn, &before), [(4, 2), (0, 1)]);
+    assert_eq!(broken(&in_pairs_order(&[1, 2, 3, 4, 0], &before, &[0], 0).0, &before), [(4, 2), (4, 1), (0, 1)]);
+    // A face that waits only for a face after the one drawn last goes before the faces that wait
+    // for it: 0 waits for 1, 1 for 3, and 2 is drawn last.
+    let before = [(1, 0), (3, 1)];
+    assert_eq!(in_pairs_order(&[0, 1, 2, 3], &before, &[2], usize::MAX).0, [1, 0, 2, 3]);
+    assert_eq!(in_pairs_order(&[0, 1, 2, 3], &before, &[2], 0).0, [0, 1, 2, 3]);
+}
+
+/// Looking for rings is counted, and past the room given the first face not drawn yet goes next,
+/// as before rings were looked for: the pairs of `a_face_in_front_of_a_cycle_waits_for_it`. A
+/// face drawn last keeps every face before it by depth before it, ring or not. An order and
+/// places in it that do not agree (an order that is not each face once), or a pair of a face that
+/// is not in them, give the order back.
+#[test]
+fn breaking_rings_stops_at_its_room() {
+    let before = [(1, 0), (0, 2), (2, 1), (2, 3)];
+    let order = [3, 0, 1, 2];
+    let (drawn, steps) = in_pairs_order(&order, &before, &[], usize::MAX);
+    assert_eq!(drawn, [0, 2, 3, 1]);
+    // The faces and pairs behind 3.
+    assert!((4..=16).contains(&steps), "{steps} steps");
+    assert_eq!(in_pairs_order(&order, &before, &[], steps), (vec![0, 2, 3, 1], steps));
+    for room in [0, 1, steps - 1] {
+        let (drawn, taken) = in_pairs_order(&order, &before, &[], room);
+        assert_eq!(drawn, [3, 0, 2, 1], "{room}");
+        assert!(taken <= room, "{room}");
+    }
+    // 0 is drawn last: 3, before it by depth, goes before it, and the ring's other faces after.
+    assert_eq!(in_pairs_order(&order, &before, &[0], usize::MAX).0, [3, 0, 2, 1]);
+    // 2 is drawn last: every other face is before it by depth, so 3 and 1, which wait only for
+    // it, go when they come first of the faces behind the first face left, and 0 follows 1.
+    assert_eq!(in_pairs_order(&order, &before, &[2], usize::MAX).0, [3, 1, 0, 2]);
+    assert_eq!(in_pairs_order(&order, &before, &[2], 0).0, [3, 0, 1, 2]);
+    let mut room = usize::MAX;
+    let position = [1, 2, 3, 0];
+    assert_eq!(drawn_in_pairs_order(order.to_vec(), &position, &[false; 3], narrow(&before), &mut room), order);
+    assert_eq!(drawn_in_pairs_order(order.to_vec(), &position, &[false; 4], vec![(9, 0)], &mut room), order);
+    assert_eq!(drawn_in_pairs_order(order.to_vec(), &position, &[false; 4], vec![(0, 4)], &mut room), order);
+    assert_eq!(drawn_in_pairs_order(order[..3].to_vec(), &position, &[false; 4], narrow(&before), &mut room), order[..3]);
+    assert_eq!(drawn_in_pairs_order(order.to_vec(), &position[..3], &[false; 4], narrow(&before), &mut room), order);
+    assert_eq!(drawn_in_pairs_order(order.to_vec(), &[1, 2, 0, 3], &[false; 4], narrow(&before), &mut room), order);
+    assert_eq!(drawn_in_pairs_order(vec![0, 0, 1, 2], &[0, 2, 3, 0], &[false; 4], narrow(&before), &mut room), [0, 0, 1, 2]);
+    assert_eq!(drawn_in_pairs_order(vec![0, 1, 2, 4], &[0, 1, 2, 3], &[false; 4], narrow(&before), &mut room), [0, 1, 2, 4]);
+    assert_eq!(room, usize::MAX);
+}
+
+/// A first face left that waits only for the face drawn last goes next with no search: 1,000
+/// such faces before a ring cost nothing, and the ring behind them still has its room. Each face
+/// i < 1,000 waits for 1,004, which is drawn last; 1,000 to 1,003 are the pairs of
+/// `breaking_rings_stops_at_its_room`, where 1,003 comes first by depth and waits for the ring.
+#[test]
+fn a_face_that_waits_only_for_the_face_drawn_last_costs_no_search() {
+    let waiting = 1000usize;
+    let (r, last) = (waiting, waiting + 4);
+    let mut before: Vec<(usize, usize)> = (0..waiting).map(|f| (last, f)).collect();
+    before.extend([(r + 1, r), (r, r + 2), (r + 2, r + 1), (r + 2, r + 3)]);
+    let order: Vec<usize> = (0..waiting).chain([r + 3, r, r + 1, r + 2, last]).collect();
+    let (drawn, steps) = in_pairs_order(&order, &before, &[last], usize::MAX);
+    let expected: Vec<usize> = (0..waiting).chain([r, r + 2, r + 3, r + 1, last]).collect();
+    assert_eq!(drawn, expected);
+    assert!(steps < 20, "{steps} steps");
+    // The room the ring takes is enough, whatever waits before it.
+    assert_eq!(in_pairs_order(&order, &before, &[last], before.len().div_ceil(4).max(steps)).0, expected);
+}
+
+/// The lists of the faces before each face are made only when the room left is at least a
+/// quarter of the pairs: with less, no ring is looked for, however few steps the ring would take.
+/// A ring of three behind 3,000 faces in a chain (each before the next).
+#[test]
+fn the_lists_for_rings_are_made_only_with_room_for_a_quarter_of_the_pairs() {
+    let chain = 3000usize;
+    let r = chain;
+    let mut before: Vec<(usize, usize)> = (0..chain - 1).map(|f| (f, f + 1)).collect();
+    before.extend([(r + 1, r), (r, r + 2), (r + 2, r + 1), (r + 2, r + 3)]);
+    // As in `breaking_rings_stops_at_its_room`: 3 comes first by depth of the four and waits for
+    // the ring.
+    let order: Vec<usize> = (0..chain).chain([r + 3, r, r + 1, r + 2]).collect();
+    let (drawn, steps) = in_pairs_order(&order, &before, &[], usize::MAX);
+    assert_eq!(drawn[chain..], [r, r + 2, r + 3, r + 1]);
+    assert!(steps < 20, "{steps} steps");
+    let quarter = before.len().div_ceil(4);
+    let (drawn, steps) = in_pairs_order(&order, &before, &[], quarter - 1);
+    assert_eq!(drawn[chain..], [r + 3, r, r + 2, r + 1]);
+    assert_eq!(steps, 0);
+    assert_eq!(in_pairs_order(&order, &before, &[], quarter).0[chain..], [r, r + 2, r + 3, r + 1]);
+}
+
+/// A list of the faces before a face is read only when the room left holds it: with less, no
+/// entry of it is read, and the first face left goes next. Face 0 comes first by depth and waits
+/// for 1, which waits for 2,000 faces after it in `order`, each waiting for 1: a ring of 1 with
+/// each of them.
+#[test]
+fn a_list_longer_than_the_room_left_is_not_read() {
+    let wide = 2000usize;
+    let mut before = vec![(1, 0)];
+    before.extend((2..2 + wide).flat_map(|f| [(f, 1), (1, f)]));
+    let order: Vec<usize> = (0..2 + wide).collect();
+    // Room for the lists (a quarter of the pairs) but not for 1's list, and room for it.
+    // With too little room only 0's one-entry list is read; with room for both, 1's list as well.
+    for (room, want) in [(before.len().div_ceil(4), 1), (wide - 1, 1), (wide + 3, wide + 1)] {
+        super::LIST_ENTRIES_READ.with(|read| read.set(0));
+        let (drawn, taken) = in_pairs_order(&order, &before, &[], room);
+        let read = super::LIST_ENTRIES_READ.with(|read| read.get());
+        assert_eq!(read, want, "room {room}: {read} entries read, {taken} steps");
+        assert!(read <= taken && taken <= room, "room {room}: {read} entries read, {taken} steps");
+        assert_eq!(drawn.len(), order.len());
+    }
+}
+
+/// The steps of breaking rings are counted, not timed, and for rings of a few faces they are a
+/// few a face however the rings lie: apart, each with a face in front of it that comes first by
+/// depth; all behind one face, itself in a ring whose other faces come first in its list; and one
+/// behind the other. The search goes on from where it stopped, and a face drawn is dropped from
+/// a list the next time the list is looked at. A ring that is still a ring after it gives up a
+/// face is walked again, so a large ring can take about its pairs for each face it gives up, the
+/// square of its faces even when each waits for few others. With too little room the rings not
+/// reached are broken at the first face left by depth, as before.
+#[test]
+fn breaking_rings_takes_a_few_steps_a_face_but_for_a_ring_of_many_pairs() {
+    // Ring r: faces 4r, 4r + 1 and 4r + 2 in a ring, and 4r + 3 after 4r + 2.
+    let rings = 2000usize;
+    let mut before = vec![];
+    for r in 0..rings {
+        let f = 4 * r;
+        before.extend([(f + 1, f), (f, f + 2), (f + 2, f + 1), (f + 2, f + 3)]);
+    }
+    // By depth: every fourth face first, then the rings.
+    let order: Vec<usize> = (0..rings).map(|r| 4 * r + 3).chain((0..rings).flat_map(|r| [4 * r, 4 * r + 1, 4 * r + 2])).collect();
+    let (drawn, steps) = in_pairs_order(&order, &before, &[], usize::MAX);
+    assert_eq!(broken(&drawn, &before), (0..rings).map(|r| (4 * r + 1, 4 * r)).collect::<Vec<_>>());
+    assert!(steps <= 4 * order.len(), "{steps} steps for {rings} rings apart");
+    // With no room the fourth faces go first, under the faces they are in front of.
+    assert_eq!(broken(&in_pairs_order(&order, &before, &[], 0).0, &before).len(), 2 * rings);
+
+    // Face 0, first by depth, is in a ring with 1 and 2, which come first in its list, and after a
+    // face of each ring r: faces 3r + 3, 3r + 4 and 3r + 5.
+    let rings = 3000usize;
+    let mut before = vec![(1, 0), (0, 2), (2, 1)];
+    for r in 0..rings {
+        let f = 3 * r + 3;
+        before.extend([(f, f + 1), (f + 1, f + 2), (f + 2, f), (f, 0)]);
+    }
+    let order: Vec<usize> = (0..3 * rings + 3).collect();
+    let (drawn, steps) = in_pairs_order(&order, &before, &[], usize::MAX);
+    // One pair of each ring, face 0's among them, and no pair of face 0 with another ring's face.
+    assert_eq!(broken(&drawn, &before), [(1, 0)].into_iter().chain((0..rings).map(|r| (3 * r + 5, 3 * r + 3))).collect::<Vec<_>>());
+    assert!(steps <= 4 * order.len(), "{steps} steps for {rings} rings behind one face");
+    // The same with a face drawn last that every ring's first face waits for: it is passed over
+    // each time, and nothing after it in a list is looked at twice for that.
+    let cap = 3 * rings + 3;
+    let capped: Vec<(usize, usize)> = (0..rings).map(|r| (cap, 3 * r + 3)).chain(before.iter().copied()).collect();
+    let order: Vec<usize> = (0..=cap).collect();
+    let (drawn, steps) = in_pairs_order(&order, &capped, &[cap], usize::MAX);
+    assert_eq!(broken(&drawn, &capped).len(), 2 * rings + 1);
+    assert!(steps <= 5 * order.len(), "{steps} steps for {rings} rings behind one face, before a face drawn last");
+
+    // Ring r: faces 3r, 3r + 1 and 3r + 2, the first after the last face of ring r + 1.
+    let rings = 3000usize;
+    let mut before = vec![];
+    for r in 0..rings {
+        let f = 3 * r;
+        before.extend([(f, f + 1), (f + 1, f + 2), (f + 2, f)]);
+        if r + 1 < rings {
+            before.push((f + 5, f));
+        }
+    }
+    let order: Vec<usize> = (0..3 * rings).collect();
+    let (drawn, steps) = in_pairs_order(&order, &before, &[], usize::MAX);
+    // One pair of each ring, and no pair between rings.
+    assert_eq!(broken(&drawn, &before).len(), rings);
+    assert!(broken(&drawn, &before).iter().all(|&(first, then)| first / 3 == then / 3));
+    assert!(steps <= 4 * order.len(), "{steps} steps for {rings} rings one behind the other");
+    let (short, taken) = in_pairs_order(&order, &before, &[], steps / 2);
+    assert!(broken(&short, &before).len() > rings && taken <= steps / 2, "{} pairs, {taken} steps", broken(&short, &before).len());
+    assert_eq!(short.len(), order.len());
+
+    // One ring: each of 200 faces before the next 99.
+    let faces = 200usize;
+    let before: Vec<(usize, usize)> = (0..faces).flat_map(|f| (1..100).map(move |d| (f, (f + d) % faces))).collect();
+    let order: Vec<usize> = (0..faces).collect();
+    let (drawn, steps) = in_pairs_order(&order, &before, &[], usize::MAX);
+    assert_eq!(drawn, order);
+    // Each face it gives up walks the ring again, so it takes many times its pairs (the cost the
+    // docs name), but no more than about its pairs for each face.
+    assert!(steps < 2 * faces * before.len(), "{steps} steps for a ring of {} pairs", before.len());
+
+    // Pairs at random, about four a face: one large ring and faces around it.
+    let steps_of = |faces: usize| {
+        let mut next = numbers(faces as u64);
+        let before: Vec<(usize, usize)> = (0..2 * faces)
+            .map(|_| ((next() * faces as f64) as usize, (next() * faces as f64) as usize))
+            .filter(|(first, then)| first != then)
+            .collect();
+        let order: Vec<usize> = (0..faces).collect();
+        let (drawn, steps) = in_pairs_order(&order, &before, &[], usize::MAX);
+        assert_eq!(drawn.len(), faces);
+        steps
+    };
+    // No more than the square of the faces.
+    let (few, more) = (steps_of(800), steps_of(1600));
+    assert!(few < 800 * 800 && more < 1600 * 1600, "{few} steps for 800 faces, {more} for 1,600");
+}
+
+/// Numbers from 0 to 1 that are the same on every run.
+fn numbers(mut seed: u64) -> impl FnMut() -> f64 {
+    move || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    }
+}
+
+/// A ring gives up its own face that comes first by depth, which draws no more pairs the wrong
+/// way round than taking the first face left by depth, ring or not, as before: on 6,000 sets of
+/// pairs at random (4 to 30 faces, sparse and dense, agreeing with the depths mostly or half the
+/// time, the pairs in any order and some twice, with up to four faces drawn last) none has more, and they have fewer in all. Every face
+/// is drawn once, a face drawn last follows every face before it by depth, and the order of every
+/// set is the one that looking afresh at every stop gives. One of them is a
+/// set where the ring's face that waits for the fewest faces drew 4 pairs wrong against 3.
+#[test]
+fn breaking_a_ring_draws_no_more_pairs_wrong_than_the_first_face_by_depth() {
+    let order = [3, 6, 4, 1, 0, 2, 5];
+    let before = [
+        (1, 0),
+        (2, 0),
+        (0, 3),
+        (0, 4),
+        (5, 0),
+        (6, 0),
+        (1, 2),
+        (1, 3),
+        (4, 1),
+        (5, 1),
+        (4, 2),
+        (5, 2),
+        (6, 2),
+        (3, 4),
+        (3, 6),
+        (5, 4),
+        (6, 4),
+        (5, 6),
+    ];
+    assert_eq!(broken(&in_pairs_order(&order, &before, &[], 0).0, &before).len(), 3);
+    assert_eq!(broken(&in_pairs_order(&order, &before, &[], usize::MAX).0, &before).len(), 3);
+
+    let mut next = numbers(7023);
+    let (mut with_rings, mut without, mut fewer) = (0usize, 0usize, 0usize);
+    for set in 0..6000 {
+        let n = 4 + (next() * 27.0) as usize;
+        let (dense, agrees) = (0.05 + 0.8 * next() * next(), if set % 2 == 0 { 0.5 } else { 0.85 });
+        // The order by depth: the faces shuffled.
+        let mut order: Vec<usize> = (0..n).collect();
+        for k in (1..n).rev() {
+            order.swap(k, (next() * (k + 1) as f64) as usize);
+        }
+        let mut before = vec![];
+        for a in 0..n {
+            for b in a + 1..n {
+                if next() < dense {
+                    before.push(if next() < agrees { (order[a], order[b]) } else { (order[b], order[a]) });
+                }
+            }
+        }
+        // The pairs in any order, and in every fifth set some of them twice.
+        for k in (1..before.len()).rev() {
+            before.swap(k, (next() * (k + 1) as f64) as usize);
+        }
+        if set % 5 == 0 {
+            let again: Vec<(usize, usize)> = before.iter().copied().filter(|_| next() < 0.3).collect();
+            before.extend(again);
+        }
+        // No face drawn last, or up to four.
+        let last: Vec<usize> = (0..set % 5).map(|_| order[(next() * n as f64) as usize]).collect();
+        let (drawn, _) = in_pairs_order(&order, &before, &last, usize::MAX);
+        // Keeping the search from stop to stop gives what looking afresh at every stop gives.
+        assert_eq!(drawn, in_pairs_order_plainly(&order, &before, &last), "set {set}: {order:?} {before:?} {last:?}");
+        let (plainly, _) = in_pairs_order(&order, &before, &last, 0);
+        let mut once = drawn.clone();
+        once.sort_unstable();
+        assert_eq!(once, (0..n).collect::<Vec<_>>(), "set {set}");
+        for &cap in &last {
+            let (at, place) = (order.iter().position(|&f| f == cap).unwrap(), drawn.iter().position(|&f| f == cap).unwrap());
+            assert!(order[..at].iter().all(|f| drawn[..place].contains(f)), "set {set}");
+        }
+        let (rings, plain) = (broken(&drawn, &before).len(), broken(&plainly, &before).len());
+        assert!(rings <= plain, "set {set}: {rings} pairs wrong, {plain} with the first face by depth; {order:?} {before:?} {last:?}");
+        with_rings += rings;
+        without += plain;
+        fewer += usize::from(rings < plain);
+    }
+    assert!(fewer > 500 && with_rings < without, "{with_rings} pairs wrong, {without} with the first face by depth, fewer in {fewer} sets");
 }
 
 /// The order keeps depths except where a shape's fill wall turned toward the viewer overlaps a
