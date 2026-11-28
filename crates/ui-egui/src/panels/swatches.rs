@@ -14,7 +14,7 @@ use craft::color_ui::palette::{SwatchColor, SwatchEntry, SwatchGroup, SwatchKind
 use craft::color_ui::ui::{SwatchKey, SwatchesPanel, SwatchesState};
 use craft::theme::Srgba;
 use craft::ui::choice::SwatchFace;
-use craft::ui::contract::{Bind, DropPlace, ListDrag, MemoProps, SelectMode};
+use craft::ui::contract::{Bind, DropPlace, ListDrag, MemoProps, PopupKind, SelectMode};
 use craft::ui::contract::{Entry, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::presets::{PresetEvent, PresetView, ThumbInfo};
@@ -778,8 +778,10 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Libraries, Show Swatch Kinds and the edit action sit at the start edge; Delete at the end edge, then New Swatch
     // and New Color Group before it.
     let actions = [
-        FooterAction::new(icon("library"), tl!(SwatchLibraries::MENU)).pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
-        FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).pressed(kind != Kind::All),
+        FooterAction::new(icon("library"), tl!(SwatchLibraries::MENU))
+            .popup(PopupKind::Menu)
+            .pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
+        FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).popup(PopupKind::Menu).pressed(kind != Kind::All),
         edit,
         FooterAction::new(icon("trash-2"), tl!("Delete Swatch"))
             .enabled(!del.is_empty())
