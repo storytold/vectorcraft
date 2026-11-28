@@ -362,7 +362,8 @@ impl ScriptGate {
         ScriptGate { also: Some(also), ..self.clone() }
     }
 
-    fn check(&self, path: &str, access: Access) -> Result<(), String> {
+    /// May `path` be read (or written) through this gate?
+    pub(crate) fn check(&self, path: &str, access: Access) -> Result<(), String> {
         if let Some(also) = &self.also {
             also.check(path, access)?;
         }

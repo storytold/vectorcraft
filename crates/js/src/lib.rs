@@ -138,7 +138,7 @@ pub use ast::{
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
-pub use host_classes::{HOST_REF_KEY, HostClass, HostMember, host_ref, host_ref_parts};
+pub use host_classes::{FILE_REF_KEY, HOST_REF_KEY, HostClass, HostMember, file_ref_path, host_ref, host_ref_parts};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
 pub use realm::{

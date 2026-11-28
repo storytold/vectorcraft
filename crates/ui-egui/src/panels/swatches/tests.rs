@@ -1335,3 +1335,36 @@ fn show_recent_colors_keeps_collecting_and_reads_as_on_unless_false() {
     };
     assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
 }
+
+/// The footer's Swatch Libraries menu is as wide as the same rows in a swatch library panel's menu: the menu fits its
+/// rows.
+#[test]
+fn the_swatch_libraries_menu_fits_its_rows_like_a_library_panels_menu() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    fn library(app: &mut VectorcraftApp, ui: &mut Ui) {
+        let panel = library_panel::last_open(&app.ui).expect("a library panel is open").panel();
+        library_panel::show(app, ui, &panel);
+    }
+    let with_library = || {
+        let mut app = app();
+        let id = library_panel::tests::menu_library_ids::<SwatchLibraries>(&app).into_iter().next().expect("a swatch library");
+        app.run("window.swatchLibrary", json!({"library": id})).unwrap();
+        app
+    };
+    // Space on the focused footer button opens its menu; the Swatches panel's footer sits below the harness's room.
+    let open = |panel: &mut Panel| {
+        panel.focus("Swatch Libraries Menu");
+        panel.key(Key::Space, Modifiers::NONE);
+        panel.frame();
+    };
+    let mut footer = Panel::new(with_library(), show);
+    open(&mut footer);
+    let footer_menu = footer.rect_role("Swatch Libraries", Role::MENU);
+    let mut panel = Panel::new(with_library(), library);
+    open(&mut panel);
+    let panel_menu = panel.rect_role("Swatch Libraries Menu", Role::MENU);
+    assert_eq!(footer_menu.width(), panel_menu.width(), "footer menu {footer_menu:?}, library panel menu {panel_menu:?}");
+}

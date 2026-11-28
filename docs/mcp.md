@@ -2653,9 +2653,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   while 4,096 other `[` are open, assign a property in brackets whose name is a string literal of more than 256
   characters, assign properties of more than 1,000 different names on members (`o.d = …`, `o['d'] = …`), or
   assign or declare `Folder`; a variable whose name a member assignment writes counts as one that may hold a File
-  object; the same objects left out are not counted for the File-only functions `open`, `read`, `readch`,
-  `readln`, `write`, `writeln`, `copy`, `createAlias`, `openDlg` and `saveDlg`, which a Folder object does not
-  have), `filesOpened` (files opened in other apps), `network`,
+  object; a document's `exportVariables` counts too; the same objects left out are not counted for the File-only
+  functions `open`, `read`, `readch`, `readln`, `write`, `writeln`, `copy`, `createAlias`, `openDlg` and `saveDlg`,
+  which a Folder object does not have), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -2870,7 +2870,8 @@ other files through `$`:
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
   tab as it was. A command that selects the objects it changes leaves the current layer and the highlighted Layers
   panel rows as they were before the change. A bad value throws an error and changes nothing. An object that was
-  deleted, or that a named engine kept from an earlier run, throws `Stale page item`. `remove()` on an object that
+  deleted, that a named engine kept from an earlier run, or whose document was reverted with `file.revert`, throws
+  `Stale page item`. Layer objects also become stale after their document is reverted. `remove()` on an object that
   is hidden or locked, is inside a hidden or locked layer or group, or is a group that holds one, and `removeAll()`
   when any object is, throw `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on
   a locked artboard, and `removeAll()` when any object is on one, throw `cannot delete objects on a locked artboard`
@@ -2894,6 +2895,29 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- A `Document` also has `variables`, `dataSets`, `activeDataset`, `variablesLocked`, `importVariables(file)` and
+  `exportVariables(file)` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/). `variables`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Variables/) and `dataSets`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Datasets/) have `length`, `parent`, `[i]`, `index(key)`,
+  `getByName(name)`, `add()` and `removeAll()`. A `Variable` (https://ai-scripting.docsforadobe.dev/jsobjref/Variable/)
+  has `name`, `kind`, `pageItems` and `remove()`, and a `Dataset` (https://ai-scripting.docsforadobe.dev/jsobjref/Dataset/)
+  has `name`, `display()`, `update()` and `remove()`. Every page item has `visibilityVariable`, and a `TextFrame`,
+  `PlacedItem`, `RasterItem` or `GraphItem` has `contentVariable` as well
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/). Each change runs a `variable.*` or `dataset.*` command:
+  `variables.add()` runs `variable.define` of a text variable named `Variable1`, `Variable2` and so on (the first free
+  name), `dataSets.add()` runs `dataset.capture`, `display()` and assigning `activeDataset` run `dataset.select`,
+  `update()` runs `dataset.update {name}`, assigning `visibilityVariable` or `contentVariable` runs
+  `variable.setBinding`, `importVariables` runs `variable.loadLibrary` and `exportVariables` runs
+  `variable.saveLibrary`. `kind` is one of the strings of the enumeration `VariableKind`
+  (`"VariableKind.TEXTUAL"`, `VISIBILITY`, `IMAGE`, `GRAPH` and `Unknown`); `Unknown` cannot be assigned.
+  VectorCraft's own rules: a `Variable` or `Dataset` names its variable or data set by name. A rename made through
+  it keeps it working; once the name leaves the document any other way (a delete, an undo, a rename or kind change by
+  another command, or an import that replaces the data sets), it throws `Stale variable` or `Stale data set`, also
+  after the name comes back. A run gives out at most 10,000 of each. `visibilityVariable` and `contentVariable` give
+  the first bound variable of their kind in the order the variables were defined, or `null`, and `null` unbinds.
+  `importVariables` and `exportVariables` take a `File`, not a path, which must be a file the script may read, or
+  write, through its `File` objects; the files of the open documents do not count. A value that changes nothing runs
+  no command.
 - `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
   with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
   `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page
@@ -4749,7 +4773,13 @@ already walks Image Trace. Short agent entry points:
   defined in. Names compare without regard to case; by object, unbound variables come first and variables bound
   to several objects last, and ties go by name. Another `by` value, or a `descending` that is not true or false,
   is an error. The sort is panel state, not saved and not an undo step; `variable.list` lists the variables in
-  that order and reports it as `sort: {by, descending}`.
+  that order and reports it as `sort: {by, descending}`. `variable.setBinding {id, slot: visibility|content,
+  variable?}` binds one object to `variable` for one slot and unbinds the object's other variables of that slot's
+  kind: `visibility` takes a visibility variable, and `content` the kind that drives the object (text for type, image
+  for a linked image, graph for a graph). Without `variable`, or with null, it unbinds them all. A variable of
+  another kind, an object of no content kind, and an embedded image for an image variable are errors, and nothing
+  changes. One undo step, and none when the object already has just that binding → `{id, slot, variable,
+  unbound}`.
 - Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, newName?, values?}` (`newName` also
   renames the row, in the same undo step; Edit Data Set's Name field sends it), `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
@@ -5532,8 +5562,9 @@ locked; `skipped` counts those objects.
 A `dataset.import` error about a value says why it was refused: a visibility value other than true, false, 1, 0, yes
 or no, or a graph value longer than 262,144 bytes.
 
-`dataset.update {all?}` writes what the bound objects hold now into the active data set, for each variable that the
-data set holds. A variable whose objects report no value, because they are deleted or, for a text, image or graph
+`dataset.update {all?, name?}` writes what the bound objects hold now into the active data set, for each variable that
+the data set holds. With `name`, it writes into that data set instead and the active data set stays as it is; a
+`name` that is not a string, or names no data set, is an error. A variable whose objects report no value, because they are deleted or, for a text, image or graph
 variable, locked or inside a locked layer or group, or for any variable on a locked artboard, keeps the data set's value. With `all: true`
 it also adds every other variable that the
 objects report a value for. The reply gives `values`, the number of values it wrote, and `left`, the variables it
@@ -9849,6 +9880,20 @@ with the defaults.
   them.
 - `file.newProfiles.reset {name}` deletes the category's file, so the shipped profile applies again, and returns
   `{name, reset}`. `reset` is false when there was no file. A copy of the profile that is open stays open.
+- `file.newProfiles.applyDefaults {name}` (Use Profile Defaults, VectorCraft's own command) gives the active document
+  the default fill and stroke and the default font of another profile. The document's Default Graphic Style takes the
+  fills, strokes, effects and transparency of the profile's, and its [Normal Character Style] takes the profile's
+  attributes, with the profile's colors converted to the document's color mode and the swatches, patterns, symbols and
+  brushes they paint with added. A composite font of the profile that those attributes name replaces the document's
+  composite font of that name, as `type.compositeFonts.import` does. A category without a file gives the shipped
+  defaults. The change is one undo step, which also puts back the fill and stroke new art took, and none is recorded
+  when applying the profile leaves the document unchanged. As
+  `graphicStyle.redefine` and `charStyle.redefine` do, objects still linked to the Default Graphic Style and type in
+  [Normal Character Style] take the new definitions and keep their overrides. New art then starts as `paint.default`
+  gives it, and new type in the profile's font. It returns `{name, changed, warnings?}`, and an error when the
+  profile's file can't be read, its [Normal Character Style] has attributes `charStyle.new` does not take, or the
+  composite font it names can't join the document's composite fonts (`type.compositeFonts.set` checks them the same
+  way).
 - Under automation roots, `file.newProfiles.edit` needs write and read access to the profile's file and
   `file.newProfiles.reset` needs write access. An error names the file whole only inside the read roots, and
   otherwise by its file name.
@@ -14997,7 +15042,8 @@ options existed keep their old look (appearance applied after the distortion).
 
 An envelope opened from a `.ai` can have margins, written to native files as `boundsMargin` and reported by
 `object.envelope.info` when they are not zero: `[top, bottom, left, right]`, as shares of the content's height and
-width. While `distortAppearance` is on, the content maps from its geometric bounds grown by the margins, and while it
+width. When the content's height or width is shorter than 1e-6 pt (zero included), as on a straight line, the margins
+along that side are shares of the other side. While `distortAppearance` is on, the content maps from its geometric bounds grown by the margins, and while it
 is off, the content maps from its geometric bounds. Leaving Edit Contents measures the margins again when the content's
 strokes reach differently than when Edit Contents began, and always for an envelope whose file opened in Edit Contents.
 New envelopes have no margins, and no command sets them.

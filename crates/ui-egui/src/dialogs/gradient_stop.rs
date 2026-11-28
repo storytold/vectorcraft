@@ -69,7 +69,8 @@ enum Target {
 /// The paint target and selected stop or point shown when the popover opened.
 #[derive(Clone, PartialEq, Eq)]
 struct TargetKey {
-    document: u64,
+    /// The document's uid and revert count: File > Revert keeps the uid and replaces the content.
+    document: (u64, u64),
     objects: Vec<NodeId>,
     item: Option<usize>,
     fill: bool,
@@ -87,7 +88,7 @@ impl TargetKey {
             Target::Point(_, _, index) => (true, *index),
         };
         Some(Self {
-            document: doc.uid,
+            document: (doc.uid, doc.reverts),
             objects: doc.selection.objects.clone(),
             item: app.session.appearance_item(),
             fill,
@@ -883,6 +884,32 @@ mod tests {
         let before = app.session.doc().unwrap().doc.clone();
         confirm(&mut app);
         assert_eq!(app.session.doc().unwrap().doc, before);
+        assert!(!is_open(&app));
+
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+        confirm(&mut app);
+        assert_eq!(stops(&app)[1].opacity, 0.25);
+    }
+
+    #[test]
+    fn the_popover_discards_a_pending_edit_after_file_revert() {
+        let mut app = app();
+        let dir = vectorcraft_testkit::TempDir::new("gradient-stop-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let art = app.session.doc().unwrap().selection.objects[0];
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [art.0]})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        confirm(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, before, "OK must leave the restored gradient as it is");
         assert!(!is_open(&app));
 
         open_popover(&mut app);
