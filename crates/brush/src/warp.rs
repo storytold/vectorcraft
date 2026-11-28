@@ -1129,11 +1129,23 @@ mod tests {
     /// Fitting is bounded however badly the map behaves: where it gives points that are not finite
     /// the tile falls back to chords with those points left out (or to nothing), and where it never
     /// fits (a map that jumps everywhere) the halving stops at its depth and anchor count. Either
-    /// way the call comes back promptly with finite geometry.
+    /// way the call comes back with finite geometry, having called the map a bounded number of
+    /// times.
     #[test]
     fn a_map_that_misbehaves_still_returns_promptly_and_finite() {
         let b = Rect::new(0.0, -20.0, 40.0, 20.0);
         let tile = circle_tile(b);
+        // Each piece the fitting tries reads its two ends, the derivatives there and the checks
+        // between them. Fitted pieces are at most the chords, so the halving tries at most twice
+        // as many pieces plus those on the way down to the one that gives up. The chord route
+        // maps each chord point once more.
+        let NodeKind::Path { path, .. } = &tile.kind else { panic!("the tile is a path") };
+        let allowed: usize = path
+            .subpaths
+            .iter()
+            .filter_map(|sp| densified(sp, 0.25, 1.5))
+            .map(|dense| 1 + (FIT_CHECKS + 3) * (2 * dense.len() + FIT_DEPTH as usize + 1) + dense.len())
+            .sum();
         let finite = |n: &Node| match &n.kind {
             NodeKind::Path { path, .. } => {
                 path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite())
@@ -1147,9 +1159,14 @@ mod tests {
             &|_| Point::new(f64::NAN, f64::NAN),
         ];
         for (i, f) in maps.iter().enumerate() {
-            let t0 = std::time::Instant::now();
-            let out = warp_node(&tile, f, 0.25, 1.5, 0.25, 1.0);
-            assert!(t0.elapsed() < std::time::Duration::from_secs(2), "map {i} took {:?}", t0.elapsed());
+            // Past the allowance the map places nothing, so a warp that keeps calling it stops.
+            let calls = std::cell::Cell::new(0usize);
+            let counted = |p: Point| {
+                calls.set(calls.get() + 1);
+                if calls.get() > allowed { Point::new(f64::NAN, f64::NAN) } else { f(p) }
+            };
+            let out = warp_node(&tile, &counted, 0.25, 1.5, 0.25, 1.0);
+            assert!(calls.get() <= allowed, "map {i} was called {} times, {allowed} allowed", calls.get());
             match (i, &out) {
                 (3, out) => assert!(out.is_none(), "a map that places nothing draws nothing"),
                 (_, Some(n)) => assert!(finite(n), "map {i} drew non-finite geometry"),
