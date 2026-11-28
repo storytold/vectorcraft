@@ -295,10 +295,14 @@ pub struct ToolContext<'a> {
     /// General → Double-Click Adds Anchor Points: a plain double-click on a path segment with Direct
     /// Selection adds an anchor there.
     pub double_click_adds_anchor: bool,
-    /// Selection & Anchor Display → Command Click to Select Objects Behind: Cmd/Ctrl-click with the
-    /// Selection tool selects the object under the selected one, the next click the one under
-    /// that.
+    /// Selection & Anchor Display → Command Click to Select Objects Behind: once a Cmd/Ctrl press
+    /// with the Selection tool has armed it ([`Self::behind_armed`]), a Cmd/Ctrl-click selects the
+    /// object under the selected one, the next click the one under that.
     pub select_behind: bool,
+    /// A Cmd/Ctrl press with the Selection tool came before, and Cmd/Ctrl has been held since: the
+    /// next Cmd/Ctrl-click over the selection selects behind ([`Self::select_behind`]). The first
+    /// press is lent to Direct Selection or Group Selection.
+    pub behind_armed: bool,
     /// Selection & Anchor Display → Highlight anchors on mouse over: Direct Selection marks the
     /// anchor under the pointer.
     pub highlight_anchors: bool,

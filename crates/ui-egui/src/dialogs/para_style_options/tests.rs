@@ -297,6 +297,212 @@ fn preview_cancel_and_ok_update_the_paragraphs_in_one_undo_step() {
     assert_eq!(app.session.doc().unwrap().doc, changed);
 }
 
+/// A paragraph style Body with the left indent `left_indent` and a selected text object that uses it.
+fn styled(app: &mut VectorcraftApp, left_indent: f64, text: &str) {
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": text})).unwrap()["id"].as_u64().unwrap();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {"left_indent": left_indent}})).unwrap();
+    app.run("paraStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+}
+
+/// Two documents that each have a paragraph style Body with their own left indent, with Paragraph
+/// Style Options open on Body in the first.
+fn options_in_the_first_of_two_documents() -> VectorcraftApp {
+    let mut app = app();
+    styled(&mut app, 6.0, "Opening document");
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    styled(&mut app, 3.0, "Other document");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    open(&mut app, "Body");
+    app
+}
+
+/// Preview changes only the document the dialog opened on: while another document is active it
+/// leaves that document's Body as it is, it resumes on switching back, and Cancel restores the
+/// opening document.
+#[test]
+fn the_style_preview_stays_in_its_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    let opening = app.session.doc().unwrap().doc.clone();
+    set(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = app.session.doc().unwrap().doc.clone();
+    set(&app, "left_indent", json!("12"));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, other, "Preview leaves the other document's Body style unchanged");
+    assert!(!app.session.in_interaction());
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    pump(&mut app);
+    assert!(app.session.doc().unwrap().doc.para_styles.iter().any(|style| style.name == "Revised"));
+    cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, opening);
+}
+
+/// OK with another document active is refused and keeps the dialog open; OK back in the opening
+/// document saves the edit there.
+#[test]
+fn a_style_options_confirmation_stays_in_its_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    set(&app, "preview", json!(false));
+    set(&app, "name", json!("Revised"));
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = app.session.doc().unwrap().doc.clone();
+    let closed = ok(&mut app);
+
+    assert_eq!(app.session.doc().unwrap().doc, other, "OK leaves the other document's Body style unchanged");
+    assert!(!closed, "the same draft remains available");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert!(ok(&mut app));
+    assert!(app.session.doc().unwrap().doc.para_styles.iter().any(|style| style.name == "Revised"));
+}
+
+/// After File > Revert the draft neither previews on nor commits to the restored document, and OK is refused.
+#[test]
+fn style_options_refuse_their_draft_after_file_revert() {
+    let mut app = app();
+    styled(&mut app, 6.0, "Opening document");
+    let dir = vectorcraft_testkit::TempDir::new("para-style-options-revert");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+    open(&mut app, "Body");
+    set(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    set(&app, "left_indent", json!("12"));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, restored, "Preview leaves the restored document's Body style unchanged");
+    assert!(!ok(&mut app), "the dialog stays open with the refusal");
+    assert_eq!(app.session.doc().unwrap().doc, restored, "OK leaves the restored document's Body style unchanged");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    let refusal = with_dialog(&app, |host, id| host.held_state(id));
+    assert!(matches!(refusal, Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")));
+}
+
+/// OK after the opening document has closed is refused and leaves the remaining document as it is.
+#[test]
+fn a_style_options_confirmation_is_refused_after_its_document_closes() {
+    let mut app = options_in_the_first_of_two_documents();
+    set(&app, "preview", json!(false));
+    set(&app, "name", json!("Revised"));
+    assert!(app.session.close_document(0));
+    let other = app.session.doc().unwrap().doc.clone();
+    assert!(!ok(&mut app), "the dialog stays open with the refusal");
+    assert_eq!(app.session.doc().unwrap().doc, other);
+}
+
+/// Cancel with another document active leaves that document's own gesture running.
+#[test]
+fn cancelling_style_options_leaves_the_other_documents_gesture() {
+    let mut app = options_in_the_first_of_two_documents();
+    set(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.session.begin_interaction("Another gesture").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+
+    cancel(&mut app);
+
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+/// A gesture started in the opening document after switching away and back is not the dialog's:
+/// Preview pauses, OK is refused, and Cancel leaves the gesture running.
+#[test]
+fn switching_back_leaves_a_new_gesture_in_the_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    set(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.session.begin_interaction("Another gesture").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+
+    set(&app, "left_indent", json!("12"));
+    pump(&mut app);
+    assert!(!ok(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+/// Paragraph Style Options open with a preview that a newer gesture of the same name replaced in
+/// the same document.
+fn options_with_a_newer_gesture() -> VectorcraftApp {
+    let mut app = app();
+    styled(&mut app, 6.0, "Opening document");
+    open(&mut app, "Body");
+    set(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    let resets = app.session.tool_resets();
+    app.session.cancel_interaction().unwrap();
+    app.session.begin_interaction("Paragraph Style Options").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    assert_eq!(app.session.tool_resets(), resets);
+    app
+}
+
+/// Cancel leaves a newer gesture in the same document running.
+#[test]
+fn cancelling_style_options_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+/// Preview does not replace a newer gesture in the same document.
+#[test]
+fn style_options_preview_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    set(&app, "left_indent", json!("12"));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+/// OK is refused while a newer gesture is active in the same document, and records no undo step.
+#[test]
+fn style_options_confirmation_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    assert!(!ok(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+}
+
+/// The first preview does not replace a gesture that was already active when the dialog opened.
+#[test]
+fn a_first_style_preview_preserves_an_existing_gesture() {
+    let mut app = app();
+    styled(&mut app, 6.0, "Opening document");
+    open(&mut app, "Body");
+    app.session.begin_interaction("Paragraph Style Options").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    set(&app, "left_indent", json!("12"));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
 /// East Asian Composition Settings › Korean Line Break Anywhere sets the style's attribute, which
 /// its paragraphs take; unset, the style leaves it out and the paragraphs keep their own.
 #[test]

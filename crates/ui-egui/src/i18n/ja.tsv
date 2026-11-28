@@ -7136,6 +7136,15 @@ axis	Y Axis	Y 軸
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	読み取り専用のオブジェクトが省かれています: {{"id": …}} だけの形か、渡されたとおりの形で返してください
 @msg	a string	文字列
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	線に使えるのは `paint`、`width`、`join`、`cap`、`miterLimit` だけです
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	ペイント型のライブ効果のピースに使えるのは `path`、`fillRule`、`fills`、`strokes`、`opacity`、`blend`、`effects` だけです
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	線に使えるのは `paint`、`width`、`join`、`cap`、`miterLimit`、`opacity`、`blend`、`effects` だけです
+@msg	`appearanceOutput` may only be true	`appearanceOutput` には true のみ指定できます
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` は `paintOutput` を宣言した `api` 3 のライブ効果専用です
+@msg	`opacity` must be a number from 0 to 1	`opacity` は 0 から 1 の数値にしてください
+@msg	unknown blending mode; `blend` is one of {_1}	不明な描画モードです。`blend` は {_1} のいずれかです
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` は最大 {MAX_LOOK_EFFECTS} 件のレコードの配列にしてください
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	1 つの結果に含められる効果レコードは最大 {MAX_RESULT_EFFECTS} 件です
+@msg	this host takes no effects here	このホストではここに効果を指定できません
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	線は {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} の形にしてください
 @msg	an effect must be {{"id", "params"?, "visible"?}}	効果は {{"id", "params"?, "visible"?}} の形にしてください
 @msg	an effect on a fill returns only `fills`	塗りの効果が返すのは `fills` だけです
@@ -10048,6 +10057,7 @@ breakText	Glyphs	字形
 	Place Brush Art	ブラシのアートを配置
 	Replace Brush Art	ブラシのアートを置き換え
 	Replace Pattern Art	パターンのアートを置き換え
+	Place Pattern Art	パターンのアートを配置
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	このブラシは線で使われています。新しいアートをそれらの線に適用しますか？それとも線をそのままにして、新しいアートを持つブラシのコピーを追加しますか？
 	Apply to Strokes	線に適用
 	Leave Strokes	線を保持

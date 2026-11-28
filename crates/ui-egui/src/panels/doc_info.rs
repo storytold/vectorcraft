@@ -39,24 +39,74 @@ pub(crate) fn row(ui: &mut Ui, label: &str, value: &str) -> bool {
         Text::new(label.to_string()).shade(Shade::Muted).show(ui);
         // The value can be selected and copied, and a click copies all of it (#8432). A drag selects
         // and a Shift-click extends the selection, so neither copies.
-        let shown = SelectableText::new(label.to_string(), value).show(ui);
-        // The click's own position and keys: a move or a key change after the release in the same
-        // frame leaves the pointer and the held keys elsewhere. A frame with more than one release
-        // copies nothing, since the click flags below do not say which release they describe.
-        let area = shown.interact_rect.intersect(ui.clip_rect());
-        let primary = egui::PointerButton::Primary;
-        let release = ui.input(|i| {
-            let mut releases = i.events.iter().filter_map(|e| match e {
-                egui::Event::PointerButton { pos, button, pressed: false, modifiers } if *button == primary => Some((*pos, *modifiers)),
-                _ => None,
-            });
-            let release = releases.next().filter(|_| releases.next().is_none());
-            let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
-            release.filter(|_| single)
-        });
-        clicked = release.is_some_and(|(pos, keys)| keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id()));
+        clicked = copy_value(ui, label, value, false);
     });
     clicked
+}
+
+/// The framework readout policy introduced for Document Info in #9353: the first plain
+/// primary release copies immediately, while subsequent double-clicks select text.
+pub(crate) fn copy_value(ui: &mut Ui, label: &str, value: &str, mono: bool) -> bool {
+    let text = SelectableText::new(label.to_string(), value);
+    let shown = if mono { text.mono().show(ui) } else { text.show(ui) };
+    copy_shown(ui, &shown, value)
+}
+
+/// The same guarded full-value copy for an already shown readout. An elided path remains
+/// static text: selection indices must describe the text actually shown by the framework.
+pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bool {
+    // The click's own position and keys: a move or a key change after the release in the same
+    // frame leaves the pointer and the held keys elsewhere. A frame with more than one release
+    // copies nothing, since the click flags below do not say which release they describe.
+    let area = shown.interact_rect.intersect(ui.clip_rect());
+    let primary = egui::PointerButton::Primary;
+    let press_id = shown.id.with("readout_copy_press");
+    let saved_origin = ui.ctx().data(|d| d.get_temp::<egui::Pos2>(press_id));
+    let eligible = ui.is_enabled() && !value.is_empty() && area.is_positive();
+    let (events, single) = ui.input(|i| {
+        let events: Vec<_> = i
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                egui::Event::PointerButton { pos, button, pressed, modifiers } if *button == primary => Some((*pos, *pressed, *modifiers)),
+                _ => None,
+            })
+            .collect();
+        let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
+        (events, single)
+    });
+    let mut origin = saved_origin;
+    let mut release = None;
+    let mut release_count = 0_usize;
+    // egui clears pointer.press_origin on release. Remember only an eligible press in
+    // this clipped readout's own layer, including a press/release in the same frame.
+    for (pos, pressed, modifiers) in events {
+        if pressed {
+            origin = (eligible && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())).then_some(pos);
+        } else {
+            release_count += 1;
+            release = Some((origin.take(), pos, modifiers));
+        }
+    }
+    let release = release.filter(|_| release_count == 1 && single);
+    if origin != saved_origin {
+        ui.ctx().data_mut(|d| match origin {
+            Some(pos) => {
+                d.insert_temp(press_id, pos);
+            }
+            None => d.remove::<egui::Pos2>(press_id),
+        });
+    }
+    ui.ctx().accesskit_node_builder(shown.id, |node| {
+        node.set_description(tl!("Copy"));
+        node.add_action(egui::accesskit::Action::Click);
+    });
+    let activated = ui.input(|i| i.num_accesskit_action_requests(shown.id, egui::accesskit::Action::Click) > 0);
+    eligible
+        && (activated
+            || release.is_some_and(|(origin, pos, keys)| {
+                origin.is_some() && keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())
+            }))
 }
 
 /// Whether no artwork is selected. Artboards the Artboard tool has selected are not artwork:
@@ -129,7 +179,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for (k, r) in rows.iter().enumerate() {
                 let (label, value) = (r[0].as_str().unwrap_or_default(), r[1].as_str().unwrap_or_default());
                 if value.is_empty() {
-                    Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
+                    if named.contains(&k) && !label.is_empty() {
+                        if copy_value(ui, label, label, false) {
+                            copy = Some(label.to_string());
+                        }
+                    } else {
+                        Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
+                    }
                 } else {
                     let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
                     if row(ui, super::label_or_name(label, !named.contains(&k)), &shown) {

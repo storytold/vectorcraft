@@ -162,7 +162,9 @@ impl StackDialog for DxfImportDialog {
                     });
                     Stack::new().show(ui, |ui, _| {
                         Field::new(tl!("Layout")).show(ui, |ui, _| {
-                            if let Some(layout) = Select::new(tl!("Layout"), Bind::given(c.layout.clone()), &layouts).show(ui).value().cloned() {
+                            if let Some(layout) =
+                                Select::new(tl!("Layout"), Bind::given(c.layout.clone()), &layouts).show(ui).events.landed().cloned()
+                            {
                                 c.layout = layout;
                             }
                         });
@@ -176,7 +178,7 @@ impl StackDialog for DxfImportDialog {
                                 Row::new().show(ui, |ui, _| {
                                     Text::new("1").show(ui);
                                     if let Some(unit) =
-                                        Select::new(tl!("Unit"), Bind::given(c.unit), &units).enabled(!c.fit).show(ui).value().copied()
+                                        Select::new(tl!("Unit"), Bind::given(c.unit), &units).enabled(!c.fit).show(ui).events.landed().copied()
                                     {
                                         c.unit = unit;
                                     }
@@ -186,7 +188,8 @@ impl StackDialog for DxfImportDialog {
                                         .enabled(!c.fit)
                                         .show(ui)
                                         .edit
-                                        .value()
+                                        .events
+                                        .landed()
                                         .copied()
                                         .flatten();
                                     if let Some(scale) = scale {
@@ -426,6 +429,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 #[cfg(test)]
 mod tests {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
     use vectorcraft_engine::doc::NodeKind;
 
     use super::super::text_import::test_support as host;
@@ -460,6 +466,94 @@ mod tests {
 
     fn set(app: &VectorcraftApp, k: &str, v: Value) {
         host::set(app, KIND, k, v);
+    }
+
+    fn actual_dialog() -> Panel {
+        let mut panel = Panel::new(host::app(), crate::tests::picks::dialogs);
+        panel.room(egui::vec2(1000.0, 800.0));
+        io::open_bytes(&mut panel.app(), "plan.dxf", &drawing(), None).unwrap();
+        panel.frame();
+        panel
+    }
+
+    fn preview_key(panel: &Panel) -> Option<Revision> {
+        panel.app().dialogs().unwrap().with(|host| host.get::<DxfImportDialog>().unwrap().preview.as_ref().map(|(key, _)| *key))
+    }
+
+    fn accept_and_check_width(panel: &mut Panel, unit: Unit, width: f64) {
+        panel.click("OK");
+        panel.frame();
+        assert!(!host::is_open(&panel.app(), KIND));
+        let app = panel.app();
+        let doc = &app.session.active().unwrap().doc;
+        assert_eq!(doc.units, unit);
+        assert!((doc.artboards[0].rect.width() - width).abs() < 1e-6, "the imported drawing uses the accepted layout, unit and scale");
+    }
+
+    fn canceled_choice_keeps_the_original_import(field: &str) {
+        let mut panel = actual_dialog();
+        let original = host::fields(&panel.app(), KIND);
+        assert_eq!(preview_key(&panel), Some(Revision::of(&"Model".to_owned())));
+        panel.click_role(field, Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.frame();
+        let changed = host::fields(&panel.app(), KIND);
+        if field == "Layout" {
+            assert_eq!(changed["layout"], "Layout1");
+            assert_eq!(preview_key(&panel), Some(Revision::of(&"Layout1".to_owned())), "the proposed layout is previewed");
+        } else {
+            assert_eq!(changed["unit"], "Centimeters");
+        }
+        panel.key(Key::Escape, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(host::fields(&panel.app(), KIND), original, "Escape restores the choices normal OK will import");
+        assert_eq!(preview_key(&panel), Some(Revision::of(&"Model".to_owned())));
+        accept_and_check_width(&mut panel, Unit::Millimeters, 100.0 * Unit::Millimeters.points());
+    }
+
+    #[test]
+    fn actual_layout_popup_escape_restores_the_preview_and_import() {
+        canceled_choice_keeps_the_original_import("Layout");
+    }
+
+    #[test]
+    fn actual_unit_popup_escape_restores_the_import_unit() {
+        canceled_choice_keeps_the_original_import("Unit");
+    }
+
+    #[test]
+    fn escape_while_typing_a_scale_cancels_the_import() {
+        let mut panel = actual_dialog();
+        let count = panel.app().session.documents().len();
+        panel.click("Scale");
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("2");
+        assert_eq!(host::fields(&panel.app(), KIND)["scale"], 2.0);
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert!(!host::is_open(&panel.app(), KIND));
+        assert_eq!(panel.app().session.documents().len(), count);
+        io::open_bytes(&mut panel.app(), "plan.dxf", &drawing(), None).unwrap();
+        panel.frame();
+        assert_eq!(host::fields(&panel.app(), KIND)["scale"], 1.0);
+    }
+
+    #[test]
+    fn actual_layout_and_unit_enter_and_scale_blur_import_the_accepted_choices() {
+        let mut panel = actual_dialog();
+        for field in ["Layout", "Unit"] {
+            panel.click_role(field, Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Enter, Modifiers::NONE);
+        }
+        panel.click("Scale");
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("2");
+        panel.key(Key::Tab, Modifiers::NONE);
+        let choices = host::fields(&panel.app(), KIND);
+        assert_eq!(choices["layout"], "Layout1");
+        assert_eq!(choices["unit"], "Centimeters");
+        assert_eq!(choices["scale"], 2.0);
+        accept_and_check_width(&mut panel, Unit::Centimeters, 10.0 * Unit::Centimeters.points() / 2.0);
     }
 
     #[test]

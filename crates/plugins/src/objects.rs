@@ -781,7 +781,7 @@ fn decode_stroke(v: &Value, at: &str) -> Result<OutStroke> {
 /// An effect record from plug-in output: `{id, params?, visible?}`, in form only (the host says
 /// whether the effect exists and takes the parameters). `params` stays as given, so a record
 /// handed back unchanged equals the object's own.
-fn decode_effect(v: &Value, at: &str) -> Result<Effect> {
+pub(crate) fn decode_effect(v: &Value, at: &str) -> Result<Effect> {
     let e = v.as_object().ok_or_else(|| out_err(at, "an effect must be {\"id\", \"params\"?, \"visible\"?}"))?;
     let id = e.get("id").and_then(Value::as_str).filter(|id| (1..=MAX_EFFECT_ID).contains(&id.len()) && !id.chars().any(char::is_control));
     let id = id.ok_or_else(|| out_err(at, format!("`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes")))?;

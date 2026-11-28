@@ -176,7 +176,8 @@ struct Shown {
 /// tilings ([`crate::pattern::hash_tiling`]) of the patterns in the fills and strokes of its
 /// objects and of type's characters, the address of each symbol instance's art, and the address of
 /// the read of each placed file that [`vectorcraft_doc::PlacedDocument::art`] shows (none before
-/// the file is read), and the address of the document's pixels for each image whose
+/// the file is read) with whether that art is the crossed box
+/// ([`vectorcraft_doc::placed_document::Crossed`]), and the address of the document's pixels for each image whose
 /// own fills or strokes follow them ([`crate::effects::follows_image_pixels`]). It walks `n` and
 /// then, one at a time from a list, the opacity-mask, pattern and symbol art it finds, each pattern
 /// and each symbol's art once ([`first_seen`]). `shown` records the type, placed files, reads,
@@ -214,6 +215,8 @@ fn hash_resources<'a>(symbols: &SymbolBoxes<'a>, n: &'a Node, shown: &mut Shown,
                 NodeKind::PlacedDocument(p) => {
                     let read = vectorcraft_doc::placed_document::read_cached(p);
                     read.as_ref().map(|r| Arc::as_ptr(r) as usize).hash(h);
+                    // The art is the crossed box instead in some Outline frames.
+                    vectorcraft_doc::placed_document::crossed().hash(h);
                     shown.reads.extend(read.as_ref().map(Arc::downgrade));
                     shown.text = true;
                     shown.placed = true;

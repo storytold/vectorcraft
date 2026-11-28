@@ -287,10 +287,10 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "inside.png").unwrap_or_else(|| panic!("{list}")).clone();
     assert_eq!(row["owner"]["kind"], "symbol", "{list}");
     let mut h = Panel::new(app, super::links::show);
-    assert!(h.shows("20 × 20 px"), "Link Info of the selected image in the layers");
+    assert!(h.label_has_value("Dimensions", "20 × 20 px"), "Link Info of the selected image in the layers");
     h.click_with("inside.png", egui::Modifiers::NONE);
     assert!(selected(&h.app()).is_empty(), "the canvas can't select it");
-    assert!(h.shows("30 × 20 px"), "Link Info of the symbol's image");
+    assert!(h.label_has_value("Dimensions", "30 × 20 px"), "Link Info of the symbol's image");
     // Copy Info without ids copies the row picked in the panel.
     assert!(crate::menus::enabled(&h.app(), "links.copyInfo"));
     assert_eq!(h.app().run("links.copyInfo", json!({})).unwrap()["text"], "inside.png");
@@ -302,13 +302,13 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     h.advance(1.0);
     h.click_with("layer.png", egui::Modifiers::COMMAND);
     assert!(selected(&h.app()).is_empty());
-    assert!(h.shows("30 × 20 px"), "the symbol's image is still picked");
+    assert!(h.label_has_value("Dimensions", "30 × 20 px"), "the symbol's image is still picked");
     h.app().run("select.set", json!({"ids": [layer]})).unwrap();
     h.frame();
-    assert!(h.shows("20 × 20 px"));
+    assert!(h.label_has_value("Dimensions", "20 × 20 px"));
     h.app().run("select.set", json!({"ids": []})).unwrap();
     h.frame();
-    assert!(!h.shows("30 × 20 px") && !h.shows("20 × 20 px"), "nothing is picked");
+    assert!(!h.label_has_value("Dimensions", "30 × 20 px") && !h.label_has_value("Dimensions", "20 × 20 px"), "nothing is picked");
     // Go To clears the selection and says the link has no place on the canvas.
     h.app().run("select.set", json!({"ids": [layer]})).unwrap();
     super::links::go_to(&mut h.app(), row["id"].as_u64().unwrap());
@@ -706,6 +706,174 @@ fn replace_image_with_a_desktop_path_remains_linked() {
     let NodeKind::Image(image) = &state.doc.node(NodeId(embedded)).unwrap().kind else { panic!("replacement must keep the image's id") };
     assert_eq!((image.width, image.height), (10, 20));
     assert_eq!(image.link.as_ref().unwrap().path, path);
+}
+
+/// The Properties panel and the Control bar, each drawn over `app` in a room wide enough for its
+/// image controls (a narrow Control bar drops its lower ranks).
+fn image_surfaces(app: impl Fn() -> VectorcraftApp) -> [(&'static str, Panel); 2] {
+    let mut bar = Panel::new(app(), crate::chrome::control_bar);
+    bar.room(vec2(2200.0, 200.0)).frame();
+    [("Properties", Panel::new(app(), super::properties::show)), ("Control bar", bar)]
+}
+
+/// Whether image `id` is embedded.
+fn is_embedded(app: &mut VectorcraftApp, id: u64) -> bool {
+    app.run("links.info", json!({"id": id})).unwrap()["status"] == "embedded"
+}
+
+/// With several linked images selected, the Properties panel's Quick Actions and the Control bar
+/// offer Embed, which embeds every one of them in one undo step.
+#[test]
+fn embed_takes_several_selected_linked_images() {
+    let dir = Folder::new("embed-several");
+    let placed = Cell::new(0);
+    let app = || {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        for i in 0..2 {
+            placed.set(placed.get() + 1);
+            let path = dir.file(&format!("linked-{}.png", placed.get()), &png(30, 20));
+            app.run("file.place", json!({"path": path, "at": [50 + 100 * i, 50]})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        app
+    };
+    for (surface, mut h) in image_surfaces(app) {
+        let ids = selected(&h.app());
+        assert_eq!(ids.len(), 2, "{surface}");
+        assert!(!h.shows("Unembed…"), "{surface}: no image is embedded");
+        let undo = h.app().session.doc().unwrap().history.undo.len();
+        h.click("Embed");
+        let mut app = h.app();
+        assert!(ids.iter().all(|id| is_embedded(&mut app, *id)), "{surface}: every selected image is embedded");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{surface}: in one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(ids.iter().all(|id| !is_embedded(&mut app, *id)), "{surface}: one undo links them again");
+    }
+}
+
+/// With a linked and an embedded image selected, both surfaces offer Embed for the linked one and
+/// Unembed… for the embedded one.
+#[test]
+fn several_mixed_images_offer_embed_and_unembed() {
+    let dir = Folder::new("mixed-several");
+    let app = || {
+        let (mut app, linked, embedded) = app(&dir);
+        app.run("select.set", json!({"ids": [linked, embedded]})).unwrap();
+        app
+    };
+    for (surface, h) in image_surfaces(app) {
+        assert!(h.shows("Embed") && h.shows("Unembed…"), "{surface}");
+    }
+}
+
+/// A single-file DCS 2.0 file with one Cyan plate, a 2 × 2 grayscale image on a 20 × 10 pt page,
+/// made from scratch as http://www.telegraphics.net/doc/DCS.txt describes it; without a clipping
+/// path it places as a plain linked image.
+fn dcs_file() -> Vec<u8> {
+    let plate = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%EndComments\n20 10 scale\n2 2 8 [2 0 0 -2 0 2] <0000ffff> image\nshowpage\n%%Trailer\n%%EOF\n";
+    let header = |at: usize| {
+        format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%PlateFile: (Cyan) EPS #{at:010} {:010}\n%%EndComments\n20 10 scale 2 2 8 [2 0 0 -2 0 2] <808080808080808080808080> false 3 colorimage showpage\n%%EOF\n",
+            plate.len()
+        )
+    };
+    let mut out = header(header(0).len()).into_bytes();
+    out.extend(plate.as_bytes());
+    out
+}
+
+/// Images placed from DCS files stay linked (`links.embed` refuses them): with one selected,
+/// neither surface offers Embed; with a DCS image and a linked image selected, Embed embeds the
+/// linked one and leaves the DCS image linked; with a DCS image and an embedded one, only
+/// Unembed… is offered.
+#[test]
+fn several_images_leave_dcs_images_out_of_embed() {
+    let dir = Folder::new("dcs-several");
+    let placed = Cell::new(0);
+    let setup = |with: &'static str| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        placed.set(placed.get() + 1);
+        let dcs = dir.file(&format!("plates-{}.eps", placed.get()), &dcs_file());
+        let r = app.run("file.place", json!({"path": dcs, "at": [50, 50]})).unwrap();
+        let dcs = r["ids"][0].as_u64().unwrap();
+        let png = dir.file(&format!("other-{}.png", placed.get()), &png(30, 20));
+        let other = match with {
+            "linked" => Some(app.run("file.place", json!({"path": png, "at": [200, 50]})).unwrap()["ids"][0].as_u64().unwrap()),
+            "embedded" => Some(app.run("file.place", json!({"path": png, "at": [200, 50], "link": false})).unwrap()["ids"][0].as_u64().unwrap()),
+            _ => None,
+        };
+        let ids: Vec<u64> = [Some(dcs), other].into_iter().flatten().collect();
+        app.run("select.set", json!({"ids": ids})).unwrap();
+        (app, dcs, other)
+    };
+    let alone = || setup("alone").0;
+    {
+        let app = alone();
+        let st = app.session.active().unwrap();
+        let id = st.selection.objects[0];
+        assert!(matches!(st.doc.node(id).unwrap().kind, vectorcraft_doc::NodeKind::Image(_)), "placed as one image");
+    }
+    for (surface, h) in image_surfaces(alone) {
+        assert!(h.shows("Edit Original") && !h.shows("Embed"), "{surface}: one DCS image");
+    }
+    let ids = RefCell::new(vec![]);
+    let with_linked = || {
+        let (app, dcs, other) = setup("linked");
+        ids.borrow_mut().push((dcs, other.unwrap()));
+        app
+    };
+    // Each surface draws its own app, made in this order.
+    for (n, (surface, mut h)) in image_surfaces(with_linked).into_iter().enumerate() {
+        let (dcs, linked) = ids.borrow()[n];
+        assert_eq!(selected(&h.app()).len(), 2, "{surface}");
+        h.click("Embed");
+        let mut app = h.app();
+        assert!(is_embedded(&mut app, linked), "{surface}: the linked image is embedded");
+        assert!(!is_embedded(&mut app, dcs), "{surface}: the DCS image stays linked");
+    }
+    for (surface, h) in image_surfaces(|| setup("embedded").0) {
+        assert!(h.shows("Unembed…") && !h.shows("Embed"), "{surface}: a DCS image and an embedded one");
+    }
+}
+
+/// The Links panel's Embed and Break Link leave images placed from DCS files out: with a DCS image
+/// and a linked image selected, each embeds the linked one and leaves the DCS image linked; with
+/// only the DCS image selected, its row menu's Embed Image is unavailable.
+#[test]
+fn links_panel_leaves_dcs_images_out_of_embed() {
+    let dir = Folder::new("dcs-links-panel");
+    let placed = Cell::new(0);
+    let setup = || {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        placed.set(placed.get() + 1);
+        let dcs = dir.file(&format!("plates-{}.eps", placed.get()), &dcs_file());
+        let dcs = app.run("file.place", json!({"path": dcs, "at": [50, 50]})).unwrap()["ids"][0].as_u64().unwrap();
+        let png = dir.file(&format!("other-{}.png", placed.get()), &png(30, 20));
+        let linked = app.run("file.place", json!({"path": png, "at": [200, 50]})).unwrap()["ids"][0].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [dcs, linked]})).unwrap();
+        (app, dcs, linked)
+    };
+    for (how, act) in [("Embed", "ui.links.embed"), ("Break Link", "")] {
+        let (app, dcs, linked) = setup();
+        let mut h = Panel::new(app, super::links::show);
+        if act.is_empty() {
+            h.click(how);
+        } else {
+            super::links::run(&mut h.app(), act, &json!({})).expect("a panel command").unwrap();
+            h.frame();
+        }
+        let mut app = h.app();
+        assert!(is_embedded(&mut app, linked), "{how}: the linked image is embedded");
+        assert!(!is_embedded(&mut app, dcs), "{how}: the DCS image stays linked");
+    }
+    let (mut app, dcs, _) = setup();
+    app.run("select.set", json!({"ids": [dcs]})).unwrap();
+    let mut h = Panel::new(app, super::links::show);
+    h.secondary_click(&format!("plates-{}.eps", placed.get()));
+    assert!(!h.menu_item_enabled("Embed Image"), "one DCS image");
 }
 
 /// Unembed… acts on several selected embedded images: it asks for one folder, writes a file for

@@ -51,8 +51,8 @@ pub(crate) struct Info {
     script_target: Option<egui::IdSalt>,
 }
 
-/// What [`info`] was read for: (document uid, revision, selection size, first and last selected object).
-pub(crate) type SelKey = (u64, u64, usize, Option<NodeId>, Option<NodeId>);
+/// What [`info`] was read for: drawing (uid and File Revert count), revision, and selection size and ends.
+pub(crate) type SelKey = ((u64, u64), u64, usize, Option<NodeId>, Option<NodeId>);
 
 /// A side label's text without its colon: the label draws the colon itself
 /// (`CommonWords::caption`), so the catalog's "Event:" keeps its translation here.
@@ -64,7 +64,7 @@ pub(crate) fn caption(label: &'static str) -> &'static str {
 fn sel_key(app: &VectorcraftApp) -> Option<SelKey> {
     let st = app.session.active()?;
     let sel = &st.selection.objects;
-    Some((st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied()))
+    Some(((st.uid, st.reverts), st.revision, sel.len(), sel.first().copied(), sel.last().copied()))
 }
 
 /// The memoized [`Info`] when it was read for the current document and selection.
@@ -86,7 +86,7 @@ pub(crate) fn info(app: &mut VectorcraftApp) -> Info {
     let mut targets: Vec<u64> = r["ids"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
     targets.sort_unstable();
     let has = !targets.is_empty();
-    // The editor's draft belongs to the actual targets, even if the selection is reordered.
+    // The editor's draft belongs to this drawing generation and its targets, independent of selection order.
     let script_target = has.then(|| egui::IdSalt::new((key.0, targets)));
     let v = Info { has, events, script_target };
     app.canvas.svg_info = Some((key, v.clone()));
@@ -283,6 +283,82 @@ mod tests {
 
     fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
         app.session.execute(id, &p).unwrap()
+    }
+
+    /// Revert retires an unsubmitted script even when the saved event and object id are unchanged.
+    #[test]
+    fn native_file_revert_discards_the_unsubmitted_script_draft() {
+        struct SavedDrawing(std::path::PathBuf);
+        impl Drop for SavedDrawing {
+            fn drop(&mut self) {
+                // Clean the task-owned file on both a red baseline unwind and a successful test.
+                let _ = std::fs::remove_file(self.0.join("saved.vectorcraft"));
+                let _ = std::fs::remove_dir(&self.0);
+            }
+        }
+        for frame_without_selection in [false, true] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+            let saved_script = "saved();\nreturn true;";
+            app.run("svgInteractivity.setEvent", json!({"event": SVG_EVENTS[0], "script": saved_script})).unwrap();
+            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+            let dir = std::env::temp_dir().join(format!("vectorcraft-svg-revert-{}-{stamp}-{frame_without_selection}", std::process::id()));
+            std::fs::create_dir(&dir).unwrap();
+            let saved_file = SavedDrawing(dir);
+            let path = saved_file.0.join("saved.vectorcraft");
+            app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+            app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+            app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+            app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+            let mut panel = Panel::new(app, show);
+            let field = caption("JavaScript:");
+            let multiline = craft::ui::contract::Role::MULTILINE_TEXT_INPUT;
+            let events = |panel: &Panel| run(&mut panel.app(), "svgInteractivity.info", json!({}))["events"].clone();
+            let saved_events = json!([{"event": SVG_EVENTS[0], "script": saved_script}]);
+            let discarded = "discarded();\npending();";
+            panel.click_role(field, multiline);
+            panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+            panel.type_text(discarded);
+            assert!(panel.focused_nth(multiline, 0));
+            assert_eq!(panel.value_role(field, multiline).as_deref(), Some(discarded));
+            assert_eq!(events(&panel), saved_events, "the text remains an unsubmitted draft");
+
+            let uid = panel.app().session.active().unwrap().uid;
+            let reverts = panel.app().session.active().unwrap().reverts;
+            panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+            {
+                let app = panel.app();
+                let state = app.session.active().unwrap();
+                assert_eq!(state.uid, uid);
+                assert_eq!(state.reverts, reverts + 1, "the native Revert replaced the drawing contents");
+                assert!(state.doc.node(NodeId(id)).is_some(), "the saved object keeps its node id");
+                assert!(state.selection.objects.is_empty());
+            }
+            if frame_without_selection {
+                panel.frame();
+            }
+            panel.app().run("select.set", json!({"ids": [id]})).unwrap();
+            panel.frame();
+            assert_eq!(events(&panel), saved_events);
+            let shown_after_revert = panel.value_role(field, multiline);
+            let original = panel.app().session.active().unwrap().doc.clone();
+            let revision = panel.app().session.active().unwrap().revision;
+            let undo = panel.app().session.active().unwrap().history.undo.len();
+            panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+            assert_eq!(events(&panel), saved_events, "Enter must not submit the retired draft");
+            assert_eq!(shown_after_revert.as_deref(), Some(saved_script), "the discarded script leaves the editor");
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            assert_eq!(panel.app().session.active().unwrap().revision, revision);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+
+            panel.click_role(field, multiline);
+            panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+            panel.type_text("fresh();");
+            panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+            assert_eq!(events(&panel), json!([{"event": SVG_EVENTS[0], "script": "fresh();"}]));
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1, "a fresh edit still submits normally");
+        }
     }
 
     #[test]

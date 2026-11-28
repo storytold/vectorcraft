@@ -90,6 +90,8 @@ use interp::{Fault, Interp};
 use obj::PsError;
 
 pub use ai::NameEncoding;
+#[cfg(any(test, feature = "work-count"))]
+pub use ai::blend_work;
 #[cfg(test)]
 pub(crate) use ai::objects_read;
 #[cfg(test)]
@@ -98,7 +100,7 @@ pub(crate) use ai::{
     BLEND_BUDGET, BLEND_PLUGIN, BRUSH_MANAGER, BrushesRead, DEFORM_PLUGIN, EnvelopeGridPoint, MAX_BLEND_KEYS, MAX_BLEND_OBJECTS,
     MAX_CHECKED as ENVELOPE_CHECKS, MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_MESH_SIDE, MAX_SYMBOLS, ParsedStyle,
     blend_reads, brush_plugin_name, brushes_kept, envelope_outline, envelope_upright, mesh_reads, parse_art_style, parsed_moves_with,
-    read_brush_object, read_parsed_style, read_style_list, symbol_art_member, turn_brush_art_over, warp_number,
+    parsed_type_color, read_brush_object, read_parsed_style, read_style_list, symbol_art_member, turn_brush_art_over, warp_number,
 };
 pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES, record_version};
 pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
