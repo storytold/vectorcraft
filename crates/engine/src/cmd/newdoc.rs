@@ -15,10 +15,10 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Artboard, Background, ColorMode, Document, LayerColor, Node, Unit};
+use vectorcraft_doc::{Artboard, Background, ColorMode, CompositeFont, DEFAULT_GRAPHIC_STYLE, Document, GraphicStyle, LayerColor, Node, Unit};
 use vectorcraft_geom::{Point, Rect};
 
-use super::{CommandSpec, Result, Session, always, bad, clock_date, cmd, date_param, str_param, switch_or};
+use super::{CommandSpec, Result, Session, always, bad, clock_date, cmd, date_param, has_doc, str_param, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Profile",
             [],
             None,
-            "{name: a category of file.newPresets} open the category's New Document profile as a document to edit (File › Save keeps the changes for the next file.new); a category without a profile file gets the shipped profile written first; under automation roots it needs write and read access to the file, and an error names the file by its file name outside the read roots → document.open's result",
+            "{name: a built-in category of file.newPresets (not Recent or Saved)} open the category's New Document profile as a document to edit (File › Save keeps the changes for the next file.new); a category without a profile file gets the shipped profile written first; under automation roots it needs write and read access to the file, and an error names the file by its file name outside the read roots → document.open's result",
             always,
             edit_profile
         ),
@@ -72,9 +72,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Profile",
             [],
             None,
-            "{name: a category of file.newPresets} delete the category's profile file, so the shipped profile (today's defaults) applies again; an open copy of it stays open; under automation roots it needs write access to the file, and an error names the file by its file name outside the read roots → {name, reset: whether a file was deleted}",
+            "{name: a built-in category of file.newPresets (not Recent or Saved)} delete the category's profile file, so the shipped profile (today's defaults) applies again; an open copy of it stays open; under automation roots it needs write access to the file, and an error names the file by its file name outside the read roots → {name, reset: whether a file was deleted}",
             always,
             reset_profile
+        ),
+        cmd!(
+            "file.newProfiles.applyDefaults",
+            "Use Profile Defaults",
+            [],
+            None,
+            "{name: a built-in category of file.newPresets (not Recent or Saved)} give the active document the default fill and stroke and the default font of the category's New Document profile (VectorCraft's own command; a category without a profile file gives the shipped ones): the document's Default Graphic Style takes the fills, strokes, effects and transparency of the profile's, and its [Normal Character Style] the profile's attributes (a composite font of the profile they name replaces the document's of that name, as type.compositeFonts.import does), the profile's colors converted to the document's color mode, with the swatches, patterns, symbols and brushes they paint with, in one undo step (none when applying the profile leaves the document unchanged). As Redefine Graphic Style and Redefine Character Style do, objects still linked to the Default Graphic Style and type in [Normal Character Style] take the new definitions and keep their overrides. New art then starts as paint.default gives it (see appearance.newArt), and new type in the profile's [Normal Character Style]. An error when the profile's file can't be read, its [Normal Character Style] has attributes charStyle.new does not take, or the composite font it names can't join the document's (as type.compositeFonts.set checks them) → {name, changed: whether the document changed, warnings?: [text] (a color profile or font the profile's file carries that can't be used)}",
+            has_doc,
+            apply_defaults
         ),
     ]
 }
@@ -1112,4 +1121,99 @@ fn reset_profile(s: &mut Session, p: &Value) -> Result<Value> {
         Err(e) => return Err(profile_error(format!("{path}: {e}"), &path)),
     };
     Ok(json!({ "name": name, "reset": reset }))
+}
+
+/// `file.newProfiles.applyDefaults`: the active document takes the Default Graphic Style and
+/// [Normal Character Style] of profile `name`, and new art is reset to them.
+fn apply_defaults(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "file.newProfiles.applyDefaults";
+    let name = profile_name(p.get("name").unwrap_or(&Value::Null), C)?;
+    let mode = s.doc()?.doc.color_mode;
+    let (mut src, warnings) = match s.read_profile(name) {
+        Ok(Some(p)) => (p.doc, p.warnings),
+        // The shipped profile: the defaults of a new document in this color mode.
+        Ok(None) => (Document::new_with_mode(1.0, 1.0, mode), vec![]),
+        Err(e) => return Err(bad(C, format!("the {name} profile can't be read: {e}"))),
+    };
+    if src.color_mode != mode {
+        super::colormgmt::set_color_mode(&mut src, mode, true, None, super::colormgmt::Grays::Profile);
+    }
+    // A profile without a Default Graphic Style gives the shipped one, as a new document from it
+    // starts with the shipped fill and stroke.
+    let look = match src.graphic_style(DEFAULT_GRAPHIC_STYLE) {
+        Some(g) => g.clone(),
+        None => Document::new_with_mode(1.0, 1.0, mode).graphic_style(DEFAULT_GRAPHIC_STYLE).cloned().unwrap_or_else(shipped_default_style),
+    };
+    let normal = super::textstyles::style_attrs(&src, false, super::textstyles::NORMAL_CHAR).unwrap_or_default();
+    let chars = s.prefs.override_char_color;
+    // A composite font the style names comes with it, in place of the document's of its name, as
+    // Import Composite Fonts brings it.
+    let family = normal.get("font_family").and_then(Value::as_str);
+    let fonts_before = s.doc()?.doc.composite_fonts.to_vec();
+    let fonts = family
+        .and_then(|f| CompositeFont::named(&src.composite_fonts, f))
+        .map(|f| super::compositefonts::with_font(&fonts_before, f))
+        .filter(|after| *after != fonts_before);
+    if let Some(after) = &fonts {
+        super::compositefonts::check_set(after, C)?;
+    }
+    let fonts_changed = match &fonts {
+        Some(after) => super::compositefonts::register(s, &fonts_before, after),
+        None => vec![],
+    };
+    let apply = |d: &mut Document| -> Result<()> {
+        if let Some(after) = &fonts {
+            super::compositefonts::set_fonts(d, after, &fonts_changed)?;
+        }
+        let before = d.clone();
+        let (appearance, attrs) = super::clipboard::resources::import_looks(&src, d, &look.appearance, &normal)?;
+        let attrs = if attrs.is_empty() {
+            attrs
+        } else {
+            super::textstyles::stored_style_attrs(d, false, &attrs)
+                .ok_or_else(|| bad(C, format!("the {name} profile's [Normal Character Style] has attributes charStyle.new does not take")))?
+        };
+        let new = GraphicStyle { appearance, ..look.clone() };
+        match d.graphic_style_index(DEFAULT_GRAPHIC_STYLE) {
+            Some(i) if d.graphic_styles[i].same_look(&new) => {}
+            Some(i) => super::style::redefine_in(d, &before, i, new, None, chars),
+            None => {
+                let id = d.next_graphic_style_id();
+                d.graphic_styles.insert(0, GraphicStyle { name: DEFAULT_GRAPHIC_STYLE.to_string(), id, ..new });
+            }
+        }
+        super::textstyles::redefine_normal_char(d, &attrs)
+    };
+    // An undo step only when the document changes; Undo puts the new-art paints back too.
+    let paint_before = super::colormgmt::new_art_colors_before(s)?;
+    let mut run = || -> Result<bool> {
+        let mut trial = (*s.doc()?.doc).clone();
+        apply(&mut trial)?;
+        let changed = trial != *s.doc()?.doc;
+        if changed {
+            s.edit("Use Profile Defaults", |d, _| apply(d))?;
+        }
+        Ok(changed)
+    };
+    let changed = run();
+    if fonts.is_some() {
+        super::compositefonts::sync(s);
+    }
+    let changed = changed?;
+    super::newart::reset(s);
+    // The selection's appearance does not replace the defaults just set.
+    s.note_defaults_only();
+    if changed || s.batch_stash.is_some() || s.doc()?.undo_group.is_some() {
+        super::colormgmt::record_new_art_colors(s, paint_before)?;
+    }
+    let mut out = json!({ "name": name, "changed": changed });
+    if !warnings.is_empty() {
+        out["warnings"] = json!(warnings);
+    }
+    Ok(out)
+}
+
+/// The shipped Default Graphic Style: white fill, 1 pt black stroke.
+fn shipped_default_style() -> GraphicStyle {
+    GraphicStyle::new(DEFAULT_GRAPHIC_STYLE, vectorcraft_doc::Appearance::default_art())
 }
