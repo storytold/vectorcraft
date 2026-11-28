@@ -78,6 +78,15 @@ pub fn specs() -> Vec<CommandSpec> {
             toggle
         ),
         cmd!(
+            "select.remove",
+            "Remove from Selection",
+            [],
+            None,
+            "{id} or {ids: [id…]}: each one leaves the selection; one inside a selected group or compound path (Direct Selection's Shift-click on it) leaves it too, and the rest of that group stays selected: the outermost selected object around it gives way to the objects inside it on the way down, leaving out hidden and locked objects; an id that is neither selected nor inside a selected object is left alone; all ids must be non-negative integers naming existing objects → {count, ids} (resulting selection)",
+            has_doc,
+            remove
+        ),
+        cmd!(
             "select.key",
             "Cancel Key Object",
             [],
@@ -556,6 +565,25 @@ fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
     selection_result(s)
 }
 
+fn remove(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.remove";
+    let ids = if p.get("ids").is_some() {
+        checked_ids_param(s, p, "ids", C)?
+    } else {
+        let value = p.get("id").ok_or_else(|| bad(C, "missing id or ids"))?;
+        vec![checked_id(s, value, C)?]
+    };
+    s.select(|d, sel| {
+        for id in ids {
+            sel.expand_to(d, id);
+            if sel.contains(id) {
+                sel.remove(id);
+            }
+        }
+    })?;
+    selection_result(s)
+}
+
 fn selection_result(s: &Session) -> Result<Value> {
     let selection = &s.doc()?.selection;
     Ok(json!({ "count": selection.len(), "ids": selection.objects }))
@@ -930,7 +958,15 @@ fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // A path selected as a whole has every anchor selected: toggle and add start from them all,
         // but only when no partial anchor selection is active and only on a single isolated object.
-        let whole = sel.contains(id) && sel.partial(id).is_none() && sel.anchors.is_empty() && sel.objects.len() <= 1;
+        // A toggle on a path inside a selected group selects the path itself in the group's place,
+        // beside the group's other objects, and starts from all its anchors. A toggle on a group
+        // member that is itself selected whole (as an earlier toggle in the group leaves the other
+        // members) starts from all its anchors whatever else is selected.
+        let toggle = mode == "toggle";
+        let inside = toggle && sel.expand_to(d, id);
+        let own = sel.contains(id) && sel.partial(id).is_none();
+        let in_group = || d.ancestry(id).is_some_and(|c| c.len() >= 2 && d.node(c[c.len() - 2]).is_some_and(|n| !n.is_layer()));
+        let whole = inside || (own && ((sel.anchors.is_empty() && sel.objects.len() <= 1) || (toggle && in_group())));
         sel.add(id);
         // A segment pick's endpoints aren't selected anchors: start from none of them.
         if sel.segments.remove(&id).is_some() {

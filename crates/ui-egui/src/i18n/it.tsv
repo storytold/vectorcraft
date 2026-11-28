@@ -8804,7 +8804,9 @@ breakText	Glyphs	Glifi
 @msg	missing `picks`	`picks` mancante
 @msg	missing `word`	`word` mancante
 @msg	must be an object with `kind` and `value`	deve essere un oggetto con `kind` e `value`
-@msg	must have `kind` alert, confirm or prompt	deve avere `kind` alert, confirm o prompt
+@msg	must have `kind` alert, confirm, prompt or window	deve avere `kind` alert, confirm, prompt o window
+@msg	is a window's answer, whose `value` must be a list of steps	è la risposta di una finestra, il cui `value` deve essere un elenco di passaggi
+@msg	has a step {i} that is not a valid click, change or close	ha un passaggio {i} che non è un clic, una modifica o una chiusura validi
 @msg	must have exactly `kind` and `value`	deve avere esattamente `kind` e `value`
 @msg	needs a closing quote after the name	richiede una virgoletta di chiusura dopo il nome
 @msg	needs a name	richiede un nome

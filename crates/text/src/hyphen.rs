@@ -96,9 +96,13 @@ fn parse_list(source: &str) -> Exceptions {
 
 /// Preferences › Hyphenation › Exceptions: comma-separated words. A word with no hyphens is never
 /// hyphenated; hyphens mark the only allowed break points (`ty-pog-ra-phy`). Matching is
-/// case-insensitive. Empty clears the list.
+/// case-insensitive. Empty clears the list. With the `test-fonts` feature, the change waits while
+/// another thread holds `test_fonts::steady_fonts`.
 pub fn set_hyphenation_exceptions(source: &str) {
-    *store() = parse_list(source);
+    let list = parse_list(source);
+    #[cfg(any(test, feature = "test-fonts"))]
+    let _change = crate::test_fonts::font_change();
+    *store() = list;
     EXCEPTIONS_SET.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
@@ -631,9 +635,11 @@ mod tests {
     }
 
     /// Process-wide store used by `prefs.set` / restore. Each change makes envelopes measure type
-    /// again, and caches of layouts lay type out again.
+    /// again, and caches of layouts lay type out again. The guard holds back other tests' changes
+    /// until the last assertion.
     #[test]
     fn set_hyphenation_exceptions_round_trips_the_source_string() {
+        let _steady = crate::test_fonts::steady_fonts(&crate::FontDb::with_font_dirs(vec![]));
         let inputs = crate::layout_inputs();
         set_hyphenation_exceptions("typography, hap-pen");
         assert_eq!(hyphenation_exceptions(), "typography, hap-pen");

@@ -26,8 +26,10 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[t("magicWand", "Magic Wand Tool", Some("Y"), "tool-magic-wand")],
     &[
         t("lasso", "Lasso Tool", Some("Q"), "tool-lasso"),
-        // Enclosing Lasso's tool, kept out of `addons::GROUPS` so that `all_tools` lists it once.
+        // Enclosing Lasso's and Polygonal Lasso's tools, kept out of `addons::GROUPS` so that
+        // `all_tools` lists each once.
         t(crate::addons::enclosing_lasso::ID, "Enclosing Lasso Tool", None, "tool-lasso-enclosing"),
+        t(crate::addons::polygonal_lasso::ID, "Polygonal Lasso Tool", None, "dc-lasso-polygonal"),
     ],
     &[
         t("pen", "Pen Tool", Some("P"), "tool-pen"),

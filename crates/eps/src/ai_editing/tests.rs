@@ -10388,6 +10388,8 @@ fn brush_library() -> Vec<vectorcraft_brush::Brush> {
                 rotation_relative_to_path: true,
                 colorization: Colorization::Tints,
                 hue_jitter: 0.0,
+                saturation_jitter: 0.0,
+                brightness_jitter: 0.0,
                 modes: Some([Variation::Random, Variation::Fixed, Variation::Pressure, Variation::Random]),
             }),
         },
@@ -10502,6 +10504,36 @@ fn a_scatter_brush_with_hue_jitter_is_left_out() {
     let mut lib = brush_library();
     let BrushKind::Scatter(s) = &mut lib[1].kind else { panic!("scatter") };
     s.hue_jitter = 60.0;
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    assert_eq!(back.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Nib", "Ribbon", "Plain ribbon"]);
+}
+
+/// Nor its saturation jitter: such a brush is left out and reported too.
+#[test]
+fn a_scatter_brush_with_saturation_jitter_is_left_out() {
+    use vectorcraft_brush::BrushKind;
+    let mut lib = brush_library();
+    let BrushKind::Scatter(s) = &mut lib[1].kind else { panic!("scatter") };
+    s.saturation_jitter = 30.0;
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    assert_eq!(back.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Nib", "Ribbon", "Plain ribbon"]);
+}
+
+/// Nor its brightness jitter: such a brush is left out and reported too.
+#[test]
+fn a_scatter_brush_with_brightness_jitter_is_left_out() {
+    use vectorcraft_brush::BrushKind;
+    let mut lib = brush_library();
+    let BrushKind::Scatter(s) = &mut lib[1].kind else { panic!("scatter") };
+    s.brightness_jitter = 30.0;
     let mut doc = Document::new(300.0, 200.0);
     vectorcraft_brush::store(&mut doc, &lib);
     let out = export_ai_editing(&doc, &opts()).unwrap();
@@ -10841,6 +10873,8 @@ fn more_brush_settings_are_read_back() {
         rotation_relative_to_path: false,
         colorization: Colorization::None,
         hue_jitter: 0.0,
+        saturation_jitter: 0.0,
+        brightness_jitter: 0.0,
         modes: Some([Variation::Tilt, Variation::Bearing, Variation::Fixed, Variation::Rotation]),
     };
     let lib = vec![

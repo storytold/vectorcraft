@@ -110,6 +110,24 @@ fn steady_fonts_hold_back_other_threads_font_changes() {
     });
 }
 
+/// While a thread holds [`test_fonts::steady_fonts`], hyphenation exceptions set on another thread
+/// change [`crate::layout_inputs`] only once the guard is dropped.
+#[test]
+fn steady_fonts_hold_back_other_threads_hyphenation_changes() {
+    let db = FontDb::with_font_dirs(vec![]);
+    let steady = crate::test_fonts::steady_fonts(&db);
+    let before = crate::layout_inputs();
+    std::thread::scope(|scope| {
+        let setting = scope.spawn(|| crate::set_hyphenation_exceptions(&crate::hyphenation_exceptions()));
+        let waits = first_decision(setting.thread().id(), GateAsk::Change, || setting.is_finished());
+        assert_eq!(waits, Some(true), "the other thread's change waits for the guard");
+        assert_eq!(crate::layout_inputs(), before, "the other thread's change waits for the guard");
+        drop(steady);
+        setting.join().unwrap();
+    });
+    assert_ne!(crate::layout_inputs(), before, "the change is made once the guard is dropped");
+}
+
 /// Whether the first `ask` that the thread `id` made of the font gate waited, once the thread has
 /// made it; `None` when `finished` says the thread ended without making it.
 fn first_decision(id: std::thread::ThreadId, ask: GateAsk, finished: impl Fn() -> bool) -> Option<bool> {

@@ -270,6 +270,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
         .target(text_style(app).is_some() || selection_len(app) > 0)
         // A character style has nothing to apply to at a bare caret; the panel then reports a status instead.
         .text_selected(text_editing(app).is_none_or(|(_, a, b)| a != b))
+        // [Normal Character Style] takes Style Options, Duplicate and Redefine, as [Normal Paragraph Style] does.
+        .base_character_style(true)
         .highlighting(true);
     if let Some(id) = reveal.as_deref().and_then(id_of) {
         list = list.reveal(id);
@@ -350,9 +352,9 @@ pub(crate) fn run_action(app: &mut VectorcraftApp, kind: Kind, action: TextStyle
                 set_highlighted(app, kind, vec![]);
             }
         }
-        // Normal has no options for either kind.
+        // The Normal style of either kind opens its options too; its name stays fixed there.
         TextStyleAction::Options(id) => {
-            if let Some(n) = name(id).filter(|_| id != 0) {
+            if let Some(n) = name(id) {
                 open_style_options(app, kind, &n);
             }
         }

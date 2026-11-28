@@ -10,7 +10,7 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::bytecode::{Code, Handler, Op};
+use crate::bytecode::{BlockScope, Code, Handler, Op};
 use crate::value::{Str, Value};
 
 /// A property name: its UTF-16 code units.
@@ -1034,10 +1034,15 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             + code.pattern_names.len()
             + code.vars.len()
             + 2 * code.fun_decls.len()
-            + code.scopes.iter().map(|s| 2 + s.lets.len() + 2 * s.funcs.len()).sum::<usize>()
             + code.templates.iter().map(|t| 2 + t.cooked.len() + t.raw.len()).sum::<usize>();
         let tables = code.finally_tables.iter().map(|t| 24 + 4 * t.len()).sum::<usize>();
+        let scopes = code
+            .scopes
+            .iter()
+            .map(|s| size_of::<BlockScope>() + size_of::<(Key, bool)>() * s.lets.len() + size_of::<(Key, u32)>() * s.funcs.len())
+            .sum::<usize>();
         strings.bytes += CODE_BYTES
+            + scopes
             + size_of::<Op>() * code.ops.len()
             + 4 * code.positions.len()
             + 8 * code.numbers.len()
@@ -1185,6 +1190,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             extra = std::mem::size_of::<PropMap<Value>>() + PROP_BYTES * fields.len();
         }
         Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
+        Class::Host(h) => extra = crate::host_classes::handle_bytes(h.handle.len()),
         Class::Promise(p) => {
             for v in p.values() {
                 mark_value(&v, work, strings);

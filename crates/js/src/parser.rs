@@ -14,14 +14,20 @@ use std::collections::{HashMap, HashSet};
 
 use crate::LineTable;
 use crate::ast::{
-    AssignOp, Ast, BinaryOp, Binding, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionKind, LexKind, LogicalOp, Name, Program,
-    Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl,
+    AssignOp, Ast, BinaryOp, Binding, CatchClause, ClassDef, ClassElement, ClassKey, Expr, ExprId, ForInTarget, ForInit, Function, FunctionKind,
+    LexKind, LogicalOp, MethodKind, Name, Program, Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp,
+    VarDecl,
 };
 use crate::error::{SyntaxError, TOO_DEEP};
 use crate::lexer::{Goal, Lexer};
 use crate::token::{Directive, Keyword, Punct, Span, Token, TokenKind, strict_reserved};
 
 type Result<T> = std::result::Result<T, SyntaxError>;
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static SCOPE_VAR_PEAK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 /// What the code being parsed allows, saved and replaced at each function body.
 #[derive(Clone, Debug, Default)]
@@ -58,6 +64,18 @@ struct Scope {
     /// A function body or the script: `var` names go no further out, and function declarations
     /// here are var-scoped.
     function: bool,
+}
+
+/// What `super` and `new.target` may do where the parser is (ECMA-262 2015 sections 12.3.5.1,
+/// 12.3.8.1, 14.1.2, 14.5.1 and 15.1.1): set for each function body and kept by arrow functions.
+#[derive(Clone, Copy, Debug, Default)]
+struct SuperRules {
+    /// `super.property` and `super[index]`: in a class's methods, accessors and constructor.
+    property: bool,
+    /// `super(arguments)`: in a derived class's constructor.
+    call: bool,
+    /// `new.target`: in any function other than an arrow function at the top of a script.
+    new_target: bool,
 }
 
 /// The parameters of a function as they are read: names or patterns, each one's default value,
@@ -105,6 +123,8 @@ pub(crate) struct Parser<'s> {
     es2015: bool,
     /// The scopes open around the current token, outermost first (only with `es2015`).
     scopes: Vec<Scope>,
+    /// What `super` and `new.target` may do in the function being read.
+    supers: SuperRules,
     /// Where each shorthand property with an initializer (`{a = 1}`) not yet read as part of a
     /// destructuring pattern starts; one left when its expression ends is a `SyntaxError`.
     cover_inits: Vec<u32>,
@@ -145,6 +165,7 @@ impl<'s> Parser<'s> {
             e4x: options.e4x,
             es2015: options.es2015,
             scopes: if options.es2015 { vec![Scope { function: true, ..Scope::default() }] } else { Vec::new() },
+            supers: SuperRules::default(),
             cover_inits: Vec::new(),
             cover_ok: false,
             rest_commas: HashSet::new(),
@@ -328,8 +349,12 @@ impl<'s> Parser<'s> {
     }
 
     fn pop_scope(&mut self) {
-        if self.es2015 {
-            self.scopes.pop();
+        if self.es2015
+            && let Some(scope) = self.scopes.pop()
+            && !scope.function
+            && let Some(parent) = self.scopes.last_mut()
+        {
+            parent.vars.extend(scope.vars);
         }
     }
 
@@ -355,20 +380,24 @@ impl<'s> Parser<'s> {
         Ok(())
     }
 
-    /// Declares a `var` name: in each scope out to the function's, where no lexical declaration
-    /// may have it.
+    /// Declares a `var` name in the current scope after checking lexical declarations through
+    /// the containing function's scope. Closing a block moves its names to the parent scope.
     fn declare_var(&mut self, name: &Name) -> Result<()> {
         let mut clash = false;
-        for scope in self.scopes.iter_mut().rev() {
+        for scope in self.scopes.iter().rev() {
             if scope.lexical.contains_key(&name.name) {
                 clash = true;
                 break;
             }
-            scope.vars.insert(name.name.clone());
             if scope.function {
                 break;
             }
         }
+        if !clash && let Some(scope) = self.scopes.last_mut() {
+            scope.vars.insert(name.name.clone());
+        }
+        #[cfg(test)]
+        SCOPE_VAR_PEAK.with(|peak| peak.set(peak.get().max(self.scopes.iter().map(|scope| scope.vars.len()).sum())));
         if clash { Err(self.redeclared(name)) } else { Ok(()) }
     }
 
@@ -509,6 +538,17 @@ impl<'s> Parser<'s> {
             }
             return Ok(id);
         }
+        if self.es2015 && self.at_keyword(Keyword::Class) {
+            let start = self.tok.span;
+            self.enter()?;
+            let class = self.parse_class(true);
+            self.leave();
+            let class = class?;
+            if let Some(name) = &class.name {
+                self.declare_lexical(name, false)?;
+            }
+            return Ok(self.ast.push_stmt(Stmt::Class(Box::new(class)), self.span_from(start)));
+        }
         if let Some(kind) = self.at_lexical_declaration() {
             let start = self.bump()?.span;
             self.enter()?;
@@ -607,6 +647,9 @@ impl<'s> Parser<'s> {
                 Ok(self.ast.push_stmt(Stmt::Debugger, self.span_from(start)))
             }
             Keyword::Default if self.at_default_xml_namespace() => self.parse_default_xml_namespace(start),
+            // A class declaration stands only in a statement list, and an expression statement
+            // cannot start with `class` (ECMA-262 2015 sections 13 and 13.5).
+            Keyword::Class if self.es2015 => Err(self.error_at_token(&self.tok, "a class declaration cannot stand here; put it in a block")),
             _ => {
                 let expr = self.parse_expression(false)?;
                 self.semicolon()?;
@@ -1085,19 +1128,43 @@ impl<'s> Parser<'s> {
         start: Span,
         generator: bool,
     ) -> Result<crate::ast::FunctionId> {
+        self.parse_function_with(kind, name, start, false, generator)
+    }
+
+    /// The parameters and body of a function, from `(`; `home` for one defined in a class body or
+    /// as a method of an object literal, where `super.property` may stand, and with `generator`, a
+    /// generator function's.
+    fn parse_function_with(
+        &mut self,
+        kind: FunctionKind,
+        name: Option<(Name, Token)>,
+        start: Span,
+        home: bool,
+        generator: bool,
+    ) -> Result<crate::ast::FunctionId> {
         self.enter()?;
+        let rules = SuperRules { property: home, call: kind == FunctionKind::DerivedConstructor, new_target: true };
+        let outer = std::mem::replace(&mut self.supers, rules);
         // The parameters are read with the function's own `yield` rule, not the enclosing code's.
         let outer_generator = std::mem::replace(&mut self.ctx.generator, generator);
         let yields = self.yields.len();
-        let result = self.function_rest(kind, name, start, generator);
+        let result = self.function_rest(kind, name, start, home, generator);
         // The `yield` expressions of this function are not in the code around it.
         self.yields.truncate(yields);
         self.ctx.generator = outer_generator;
+        self.supers = outer;
         self.leave();
         result
     }
 
-    fn function_rest(&mut self, kind: FunctionKind, name: Option<(Name, Token)>, start: Span, generator: bool) -> Result<crate::ast::FunctionId> {
+    fn function_rest(
+        &mut self,
+        kind: FunctionKind,
+        name: Option<(Name, Token)>,
+        start: Span,
+        home: bool,
+        generator: bool,
+    ) -> Result<crate::ast::FunctionId> {
         let params_start = self.tok.span.start;
         self.expect(Punct::LParen)?;
         let mut params: Vec<Binding> = Vec::new();
@@ -1159,7 +1226,8 @@ impl<'s> Parser<'s> {
         self.ctx = outer;
         let body = body?;
         self.expect(Punct::RBrace)?;
-        let function = Function { kind, name: name.map(|(n, _)| n), params, defaults, rest, body, strict, generator, span: self.span_from(start) };
+        let function =
+            Function { kind, name: name.map(|(n, _)| n), params, defaults, rest, body, strict, generator, span: self.span_from(start), home };
         self.check_params(&function, use_strict)?;
         Ok(self.ast.push_function(function))
     }
@@ -1191,8 +1259,18 @@ impl<'s> Parser<'s> {
             self.expect(Punct::RBrace)?;
         }
         let defaults = if defaults.iter().all(Option::is_none) { Vec::new() } else { defaults };
-        let function =
-            Function { kind: FunctionKind::Arrow, name: None, params, defaults, rest, body, strict, generator: false, span: self.span_from(start) };
+        let function = Function {
+            kind: FunctionKind::Arrow,
+            name: None,
+            params,
+            defaults,
+            rest,
+            body,
+            strict,
+            generator: false,
+            span: self.span_from(start),
+            home: false,
+        };
         self.check_params(&function, use_strict)?;
         let id = self.ast.push_function(function);
         Ok(self.ast.push_expr(Expr::Arrow(id), self.span_from(start)))
@@ -1240,8 +1318,9 @@ impl<'s> Parser<'s> {
     /// The rules for a function's name and parameters. Strict mode code (Annex C): neither `eval`,
     /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function,
     /// a method or a function with a default or rest parameter has no parameter name twice either
-    /// (ECMA-262 2015 sections 14.1.2, 14.2.1 and 14.3.1), and its body cannot start with
-    /// `"use strict"` (`body_strict`; ECMA-262 2016 section 14.1.2).
+    /// (ECMA-262 2015 sections 14.1.2, 14.2.1 and 14.3.1), and a function with default, rest or
+    /// destructured parameters cannot start its body with `"use strict"` (`body_strict`; ECMA-262
+    /// 2016 section 14.1.2).
     fn check_params(&self, function: &Function, body_strict: bool) -> Result<()> {
         let names: Vec<Name> = function.params.iter().chain(&function.rest).flat_map(|p| self.ast.bound_names(p)).collect();
         let params = || names.iter();
@@ -1380,7 +1459,7 @@ impl<'s> Parser<'s> {
                 }
                 Ok(())
             }
-            Some(Expr::Member { .. } | Expr::Index { .. } | Expr::XmlScopeName(_)) => Ok(()),
+            Some(Expr::Member { .. } | Expr::Index { .. } | Expr::XmlScopeName(_) | Expr::SuperMember(_) | Expr::SuperIndex(_)) => Ok(()),
             Some(Expr::Call { .. }) if !self.ctx.strict => Ok(()),
             _ => Err(self.error_at_offset(self.ast.expr_span(expr).start, message)),
         }
@@ -1495,10 +1574,16 @@ impl<'s> Parser<'s> {
     /// after its callee, and a `new` left without one constructs with no arguments.
     fn parse_left_hand_side(&mut self) -> Result<ExprId> {
         let mut news = Vec::new();
-        while self.at_keyword(Keyword::New) {
+        while self.at_keyword(Keyword::New) && !self.at_new_target() {
             news.push(self.bump()?.span);
         }
-        let mut expr = self.parse_primary()?;
+        let mut expr = if self.es2015 && self.at_keyword(Keyword::Super) {
+            self.parse_super(news.is_empty())?
+        } else if self.at_new_target() {
+            self.parse_new_target()?
+        } else {
+            self.parse_primary()?
+        };
         loop {
             match &self.tok.kind {
                 TokenKind::Punct(Punct::DotDot) => expr = self.parse_xml_descendants(expr)?,
@@ -1549,6 +1634,66 @@ impl<'s> Parser<'s> {
             expr = self.ast.push_expr(Expr::New { callee: expr, args: Vec::new() }, span);
         }
         Ok(expr)
+    }
+
+    /// The current `new` starts `new.target` (with [`crate::Options::es2015`]).
+    fn at_new_target(&self) -> bool {
+        self.es2015 && self.at_keyword(Keyword::New) && self.peek().is_some_and(|t| t.is_punct(Punct::Dot))
+    }
+
+    /// `new.target`, in a function (ECMA-262 2015 sections 12.3.8 and 15.1.1).
+    fn parse_new_target(&mut self) -> Result<ExprId> {
+        let new = self.bump()?;
+        self.expect(Punct::Dot)?;
+        if self.tok.ident() != Some("target") || self.tok.escaped {
+            return Err(self.error_at_token(&self.tok, format!("expected 'target' after 'new.' but found {}", describe(&self.tok))));
+        }
+        self.bump()?;
+        if !self.supers.new_target {
+            return Err(self.error_at_token(&new, "'new.target' is allowed only in functions"));
+        }
+        Ok(self.ast.push_expr(Expr::NewTarget, self.span_from(new.span)))
+    }
+
+    /// `super(…)`, `super.name` or `super[…]`, where the function being read allows it
+    /// (ECMA-262 2015 section 12.3.5); `call_allowed` is false after `new`.
+    fn parse_super(&mut self, call_allowed: bool) -> Result<ExprId> {
+        self.enter()?;
+        let result = self.super_expr(call_allowed);
+        self.leave();
+        result
+    }
+
+    fn super_expr(&mut self, call_allowed: bool) -> Result<ExprId> {
+        let word = self.bump()?;
+        let start = word.span;
+        match &self.tok.kind {
+            TokenKind::Punct(Punct::LParen) if call_allowed => {
+                if !self.supers.call {
+                    return Err(self.error_at_token(&word, "'super()' is allowed only in the constructor of a class with 'extends'"));
+                }
+                let args = self.parse_arguments()?;
+                Ok(self.ast.push_expr(Expr::SuperCall(args), self.span_from(start)))
+            }
+            TokenKind::Punct(Punct::Dot | Punct::LBracket) if !self.supers.property => {
+                Err(self.error_at_token(&word, "'super' properties are allowed only in the methods and constructor of a class"))
+            }
+            TokenKind::Punct(Punct::Dot) => {
+                self.bump()?;
+                let Some(name) = self.tok.identifier_name().map(str::to_string) else {
+                    return Err(self.error_at_token(&self.tok, format!("expected a property name but found {}", describe(&self.tok))));
+                };
+                let token = self.bump()?;
+                Ok(self.ast.push_expr(Expr::SuperMember(Name { name, span: token.span }), self.span_from(start)))
+            }
+            TokenKind::Punct(Punct::LBracket) => {
+                self.bump()?;
+                let index = self.parse_expression(false)?;
+                self.expect(Punct::RBracket)?;
+                Ok(self.ast.push_expr(Expr::SuperIndex(index), self.span_from(start)))
+            }
+            _ => Err(self.error_at_token(&word, "'super' must be followed by an argument list or a property access")),
+        }
     }
 
     /// An optional chain (ECMA-262 2020 section 12.3.9), from the `?.` after `base` to the last
@@ -1650,6 +1795,10 @@ impl<'s> Parser<'s> {
             TokenKind::Keyword(Keyword::True) => Expr::Bool(true),
             TokenKind::Keyword(Keyword::False) => Expr::Bool(false),
             TokenKind::Keyword(Keyword::Function) => return self.parse_function_expression(),
+            TokenKind::Keyword(Keyword::Class) if self.es2015 => {
+                let class = self.parse_class(false)?;
+                return Ok(self.ast.push_expr(Expr::Class(Box::new(class)), self.span_from(start)));
+            }
             TokenKind::Ident(name) => {
                 let name = name.clone();
                 self.check_identifier(&self.tok, &name)?;
@@ -1776,6 +1925,125 @@ impl<'s> Parser<'s> {
         let name = name?;
         let id = self.parse_function_rest(FunctionKind::Expression, name, start, generator)?;
         Ok(self.ast.push_expr(Expr::Function(id), self.span_from(start)))
+    }
+
+    /// A class declaration (`declaration`, which needs a name) or expression, from `class`
+    /// (ECMA-262 2015 section 14.5). All of it is strict mode code.
+    fn parse_class(&mut self, declaration: bool) -> Result<ClassDef> {
+        let outer = self.ctx.strict;
+        self.ctx.strict = true;
+        let result = self.class_rest(declaration);
+        self.ctx.strict = outer;
+        result
+    }
+
+    fn class_rest(&mut self, declaration: bool) -> Result<ClassDef> {
+        let start = self.expect_keyword(Keyword::Class)?.span;
+        let name = if matches!(self.tok.kind, TokenKind::Ident(_)) { Some(self.binding_identifier()?) } else { None };
+        if declaration && name.is_none() {
+            return Err(self.error_at_token(&self.tok, format!("expected a class name but found {}", describe(&self.tok))));
+        }
+        let heritage = if self.at_keyword(Keyword::Extends) {
+            self.bump()?;
+            Some(self.parse_left_hand_side()?)
+        } else {
+            None
+        };
+        self.expect(Punct::LBrace)?;
+        let mut constructor = None;
+        let mut elements = Vec::new();
+        while !self.at(Punct::RBrace) {
+            if self.eat(Punct::Semicolon)? {
+                continue;
+            }
+            if self.tok.kind == TokenKind::Eof {
+                return Err(self.unexpected());
+            }
+            let at = self.tok.clone();
+            match self.parse_class_element(heritage.is_some())? {
+                Ok(element) => elements.push(element),
+                Err(_) if constructor.is_some() => return Err(self.error_at_token(&at, "a class can have only one constructor")),
+                Err(f) => constructor = Some(f),
+            }
+        }
+        self.bump()?;
+        let span = self.span_from(start);
+        let constructor = match constructor {
+            Some(f) => f,
+            None => self.default_constructor(heritage.is_some(), span),
+        };
+        if let Some(f) = self.ast.functions.get_mut(constructor.0 as usize) {
+            f.span = span;
+        }
+        Ok(ClassDef { name, heritage, constructor, elements, span })
+    }
+
+    /// A method or accessor of a class body (`Ok`), or its constructor (`Err`). `derived`: the
+    /// class has `extends`.
+    fn parse_class_element(&mut self, derived: bool) -> Result<std::result::Result<ClassElement, crate::ast::FunctionId>> {
+        let is_static = self.tok.ident() == Some("static") && !self.tok.escaped && self.peek().is_some_and(|t| !t.is_punct(Punct::LParen));
+        if is_static {
+            self.bump()?;
+        }
+        let start = self.tok.span;
+        let generator = self.eat(Punct::Star)?;
+        // `get` and `set` start an accessor only when written without escapes and followed by a name.
+        let accessor = match self.tok.ident().filter(|_| !self.tok.escaped) {
+            Some("get") => Some(MethodKind::Get),
+            Some("set") => Some(MethodKind::Set),
+            _ => None,
+        }
+        .filter(|_| !generator && self.peek().is_some_and(|t| property_key(&t).is_some() || t.is_punct(Punct::LBracket)));
+        if accessor.is_some() {
+            self.bump()?;
+        }
+        let kind = accessor.unwrap_or(MethodKind::Method);
+        let key = if self.eat(Punct::LBracket)? {
+            let e = self.parse_assignment(false)?;
+            self.expect(Punct::RBracket)?;
+            ClassKey::Computed(e)
+        } else {
+            ClassKey::Fixed(self.parse_property_key()?.0)
+        };
+        let named = |word: &str| matches!(&key, ClassKey::Fixed(k) if k.to_utf16().iter().copied().eq(word.encode_utf16()));
+        if !is_static && named("constructor") {
+            if kind != MethodKind::Method {
+                return Err(self.error_at_offset(start.start, "a class constructor cannot be a getter or a setter"));
+            }
+            if generator {
+                return Err(self.error_at_offset(start.start, "a class constructor cannot be a generator"));
+            }
+            let ctor = if derived { FunctionKind::DerivedConstructor } else { FunctionKind::ClassConstructor };
+            return Ok(Err(self.parse_function_with(ctor, None, start, true, false)?));
+        }
+        if is_static && named("prototype") {
+            return Err(self.error_at_offset(start.start, "a class cannot have a static method named 'prototype'"));
+        }
+        let fkind = match kind {
+            MethodKind::Method => FunctionKind::Method,
+            MethodKind::Get => FunctionKind::Getter,
+            MethodKind::Set => FunctionKind::Setter,
+        };
+        let function = self.parse_function_with(fkind, None, start, true, generator)?;
+        Ok(Ok(ClassElement { key, is_static, kind, function }))
+    }
+
+    /// The constructor of a class written without one (ECMA-262 2015 section 14.5.14, step 10):
+    /// empty, or in a derived class `constructor(...args) { super(...args); }`, its rest parameter
+    /// under a name no script can write.
+    fn default_constructor(&mut self, derived: bool, span: Span) -> crate::ast::FunctionId {
+        let (kind, rest, body) = if derived {
+            let args = Name { name: "\u{0}args".into(), span };
+            let ident = self.ast.push_expr(Expr::Ident(args.name.clone()), span);
+            let spread = self.ast.push_expr(Expr::Spread(ident), span);
+            let call = self.ast.push_expr(Expr::SuperCall(vec![spread]), span);
+            (FunctionKind::DerivedConstructor, Some(Binding::Name(args)), vec![self.ast.push_stmt(Stmt::Expr(call), span)])
+        } else {
+            (FunctionKind::ClassConstructor, None, Vec::new())
+        };
+        let function =
+            Function { kind, name: None, params: Vec::new(), defaults: Vec::new(), rest, body, strict: true, generator: false, span, home: true };
+        self.ast.push_function(function)
     }
 
     /// `[a, , b]`: elements, a comma with nothing before it leaving a hole.

@@ -7503,7 +7503,9 @@ imageTrace	Outline	Contour
 @msg	more than {MAX_IMPORT} presets	meer dan {MAX_IMPORT} voorinstellingen
 @msg	moved must be [[x,y]…]	moved moet [[x,y]…] zijn
 @msg	must be an object with `kind` and `value`	moet een object met `kind` en `value` zijn
-@msg	must have `kind` alert, confirm or prompt	moet `kind` alert, confirm of prompt hebben
+@msg	must have `kind` alert, confirm, prompt or window	moet `kind` alert, confirm, prompt of window hebben
+@msg	is a window's answer, whose `value` must be a list of steps	is het antwoord van een venster, waarvan `value` een lijst met stappen moet zijn
+@msg	has a step {i} that is not a valid click, change or close	heeft een stap {i} die geen geldige klik, wijziging of sluiting is
 @msg	must have exactly `kind` and `value`	moet precies `kind` en `value` hebben
 @msg	name (a toolbar's name) is required	name (de naam van een werkbalk) is vereist
 @msg	name (a toolbar's name) must be a string	name (de naam van een werkbalk) moet een string zijn
