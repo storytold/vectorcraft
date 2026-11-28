@@ -9,6 +9,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import re
 import subprocess
 import unittest
 from unittest import mock
@@ -78,15 +79,42 @@ class Deadline(unittest.TestCase):
         before_limit = clear.parse_time("2026-11-28T04:00:00Z") + timedelta(seconds=clear.GIVE_UP_SECONDS - 60)
         after_limit = clear.parse_time("2026-11-28T04:00:00Z") + timedelta(seconds=clear.GIVE_UP_SECONDS + 60)
         self.assertGreater((before_limit - self.began).total_seconds(), clear.GIVE_UP_SECONDS)
-        self.assertFalse(clear.gave_up(late, before_limit, self.began))
-        self.assertTrue(clear.gave_up(late, after_limit, self.began))
+        self.assertFalse(clear.gave_up(late, before_limit))
+        self.assertTrue(clear.gave_up(late, after_limit))
+        self.assertFalse(clear.start_overdue(late, after_limit, self.began))
 
     def test_a_leg_that_never_starts_is_timed_from_the_script_start(self):
         queued = warm_job("queued", started_at="2026-11-28T03:38:00Z")
-        later = self.began + timedelta(seconds=clear.GIVE_UP_SECONDS + 60)
-        self.assertFalse(clear.gave_up(None, self.began + timedelta(minutes=10), self.began))
-        self.assertTrue(clear.gave_up(None, later, self.began))
-        self.assertTrue(clear.gave_up(queued, later, self.began))
+        before_limit = self.began + timedelta(seconds=clear.START_SECONDS - 60)
+        after_limit = self.began + timedelta(seconds=clear.START_SECONDS + 60)
+        self.assertFalse(clear.start_overdue(None, before_limit, self.began))
+        self.assertTrue(clear.start_overdue(None, after_limit, self.began))
+        self.assertTrue(clear.start_overdue(queued, after_limit, self.began))
+        self.assertFalse(clear.gave_up(queued, after_limit))
+
+
+class Workflow(unittest.TestCase):
+    ci = (Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml").read_text()
+
+    def timeout_minutes(self, job):
+        """The first `timeout-minutes` under `job` in ci.yml."""
+        lines = self.ci.splitlines()
+        start = lines.index(f"  {job}:") + 1
+        for line in lines[start:]:
+            if re.match(r"  \S", line):
+                break
+            match = re.match(r"\s+timeout-minutes: (\d+)$", line)
+            if match:
+                return int(match.group(1))
+        self.fail(f"no timeout-minutes under {job}")
+
+    def test_the_job_outlasts_the_start_wait_and_the_save_wait(self):
+        # Five minutes are left for the steps before the script and for the deletion.
+        spare = self.timeout_minutes("cold-cache-clear") * 60 - clear.START_SECONDS - clear.GIVE_UP_SECONDS
+        self.assertGreaterEqual(spare, 5 * 60)
+
+    def test_the_save_wait_outlasts_the_gate(self):
+        self.assertGreater(clear.GIVE_UP_SECONDS, self.timeout_minutes("gate") * 60)
 
 
 class Jobs(unittest.TestCase):
