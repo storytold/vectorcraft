@@ -2401,7 +2401,15 @@ impl Session {
             o.insert("unhandledRejectionCount".into(), json!(job.realm.unhandled_rejection_count()));
         }
         close_run(self, host, &mut report, console::Ending::Finished);
+        let tool = host.dom.chosen_tool();
         self.end_job(job, false);
+        // The tool `app.selectTool` chose last becomes the current tool, as a choice on the
+        // toolbar makes it; the run's changes are kept when the tool cannot be chosen.
+        if let Some(id) = tool
+            && let Err(e) = self.select_tool(id, self.last_view)
+        {
+            report["toolError"] = json!(e.to_string());
+        }
         self.script_report = Some(report.clone());
         Ok(report)
     }

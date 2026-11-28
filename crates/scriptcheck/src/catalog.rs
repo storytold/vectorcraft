@@ -183,7 +183,7 @@ features! {
     ScriptuiDrawing "scriptui.drawing" Dialogs,
     ScriptuiPalette "scriptui.palette" HostOnly,
     ScriptuiWindow "scriptui.window" Dialogs,
-    SelectTool "selectTool" HostOnly,
+    SelectTool "selectTool" Dom,
     Socket "socket" HostOnly,
     UnitValue "unitValue" Language,
     Xml "xml" Language,

@@ -157,6 +157,24 @@ fn a_write_reads_the_file_it_replaces_only_one_byte_past_the_new_length() {
     assert!(holds(&[][..], &[]));
 }
 
+#[cfg(unix)]
+#[test]
+fn a_plain_capped_read_refuses_a_link_and_reads_a_plain_file() {
+    use crate::store::{NOT_PLAIN, read_capped_plain};
+    let root = fresh_dir("plain-read");
+    let target = root.join("target.bin");
+    std::fs::write(&target, b"outside").unwrap();
+    let link = root.join("profile.vectorcraft");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    assert_eq!(read_capped_plain(&link, 100), Err(NOT_PLAIN.to_string()));
+    let folder = root.join("folder");
+    std::fs::create_dir(&folder).unwrap();
+    assert_eq!(read_capped_plain(&folder, 100), Err(NOT_PLAIN.to_string()));
+    assert_eq!(read_capped_plain(&target, 100), Ok(b"outside".to_vec()));
+    assert_eq!(read_capped_plain(&target, 7), Ok(b"outside".to_vec()));
+    assert!(read_capped_plain(&target, 6).is_err());
+}
+
 #[test]
 fn a_saved_preset_replaces_an_oversized_file_in_its_place() {
     let root = fresh_dir("oversized-put");

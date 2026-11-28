@@ -42,6 +42,9 @@
 //! - `app.activeDocument` with no document open throws `No active document`.
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
 //!   must be one of that document's that can be selected, or nothing changes.
+//! - `app.selectTool(name)` takes a tool's id, its label, or a name of the list cited at
+//!   [`TOOL_NAME_PREFIX`], and the tool becomes the current tool when the run ends without an
+//!   error. A run that fails leaves the tool as it was.
 //! - Members the help pages list that are not here yet throw an error that says so.
 //! - Assigning `hidden`, `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an
 //!   object in a hidden or locked layer, and `zOrder()` on one, throw `Cannot edit` and change
@@ -118,7 +121,8 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 /// What the object model keeps for one run: its coordinate system, the lists of page items and the
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
 /// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
-/// open, and the settings of each `DocumentPreset` the run made.
+/// open, the settings of each `DocumentPreset` the run made, and the tool `app.selectTool` chose
+/// last.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
@@ -126,12 +130,19 @@ pub(super) struct State {
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    tool: Cell<Option<&'static str>>,
 }
 
 impl State {
     /// Whether a call's own savepoint is open: its commands take none of their own.
     pub(super) fn saving(&self) -> bool {
         self.saving.get()
+    }
+
+    /// The id of the tool `app.selectTool` chose last in the run, which becomes the current tool
+    /// when the run ends without an error.
+    pub(super) fn chosen_tool(&self) -> Option<&'static str> {
+        self.tool.get()
     }
 }
 
@@ -359,6 +370,14 @@ fn find_doc(h: &Host, run: f64, uid: f64) -> Option<Doc> {
     s.documents().iter().position(|d| d.uid == uid).map(|index| Doc { index, uid })
 }
 
+/// [`find_doc`] for the handle of an object in a document: none as well when the document was
+/// reverted since the handle was made, as its objects were read again from its file.
+fn find_doc_of_object(h: &Host, run: f64, uid: f64, reverts: f64) -> Option<Doc> {
+    let doc = find_doc(h, run, uid)?;
+    let s = h.session.borrow();
+    (whole(reverts) == Some(s.documents()[doc.index].reverts)).then_some(doc)
+}
+
 /// The document `d` names: a `Document` or a `PageItems` object.
 fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError> {
     let Some(handle) = handle_of(d, class) else { return Err(HostError::Type(format!("this is not a {class}"))) };
@@ -371,8 +390,8 @@ fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError
 /// The page item `d` names, which must still be in its document.
 fn item_of(h: &Host, d: &Data) -> std::result::Result<Item, HostError> {
     let Some(handle) = handle_of(d, "PageItem") else { return Err(HostError::Type("this is not a page item".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let [run, uid, reverts, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
+    let doc = find_doc_of_object(h, *run, *uid, *reverts).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let s = h.session.borrow();
     let st = &s.documents()[doc.index];
@@ -410,8 +429,8 @@ fn doc_ref(h: &Host, uid: u64) -> Data {
 fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     match st.doc.node(id) {
         Some(n) => match typename(n) {
-            Some(t) => host_ref(t, &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
-            None => host_ref("Layer", &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
+            Some(t) => host_ref(t, &[float(h.run), float(st.uid), float(st.reverts), id_parts(id)[0], id_parts(id)[1]]),
+            None => host_ref("Layer", &[float(h.run), float(st.uid), float(st.reverts), id_parts(id)[0], id_parts(id)[1]]),
         },
         None => Data::Null,
     }
@@ -645,8 +664,20 @@ fn restore_layer(h: &Host, uid: u64, layer: Option<NodeId>, rows: &[NodeId]) -> 
 /// commands changed it (commands given ids select them first), direct-selected anchors, segments,
 /// ruler guides, slices, the key, a Layers panel target and an object chosen inside a dynamic
 /// symbol instance or an Objects on Path group included, less the objects that are now deleted,
-/// hidden or locked.
+/// hidden or locked. `f`'s commands and the steps that put things back succeed or fail together
+/// ([`atomically`]): when putting back the selection, the layer or the active document fails, `f`'s
+/// changes are undone as well.
 fn on_doc<T>(
+    h: &Host,
+    uid: u64,
+    keep_selection: bool,
+    f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
+) -> std::result::Result<T, HostError> {
+    atomically(h, |h| on_doc_steps(h, uid, keep_selection, f))
+}
+
+/// The steps of [`on_doc`].
+fn on_doc_steps<T>(
     h: &Host,
     uid: u64,
     keep_selection: bool,
@@ -780,6 +811,69 @@ fn app_is_open(h: &Host, a: &[Data]) -> Answer {
     let s = h.session.borrow();
     let open = s.documents().iter().filter_map(|d| d.path.as_deref()).any(|p| path_key(p) == key && crate::file_access::check_read(p).is_ok());
     Ok(Data::Bool(open))
+}
+
+/// The start of the tool names that scripts pass to `app.selectTool`, as the list at
+/// <https://community.adobe.com/questions-652/what-s-new-in-illustrator-scripting-cc2020-769942> gives them.
+const TOOL_NAME_PREFIX: &str = "Adobe "; // brand-ok: the start of the tool names scripts pass
+
+/// The names on that list, without [`TOOL_NAME_PREFIX`], whose words differ from the label of the
+/// VectorCraft tool they choose, with that tool's id. Names whose words are a VectorCraft tool's
+/// label (`Pen Tool`) choose that tool without a row here. The pairs are VectorCraft's own.
+const TOOL_NAMES: &[(&str, &str)] = &[
+    ("Select Tool", "selection"),
+    ("Direct Select Tool", "directSelection"),
+    ("Direct Object Select Tool", "groupSelection"),
+    ("Direct Lasso Tool", "lasso"),
+    ("Path Type Tool", "typeOnPath"),
+    ("Vertical Path Type Tool", "verticalTypeOnPath"),
+    ("Line Tool", "lineSegment"),
+    ("Shape Construction Regular Polygon Tool", "polygon"),
+    ("Shape Construction Star Tool", "star"),
+    ("Shape Construction Spiral Tool", "spiral"),
+    ("Brush Tool", "paintbrush"),
+    ("Freehand Tool", "pencil"),
+    ("Freehand Smooth Tool", "smooth"),
+    ("Freehand Erase Tool", "pathEraser"),
+    ("Corner Join Tool", "join"),
+    ("Knife Tool", "knife"),
+    ("New Twirl Tool", "twirl"),
+    ("Cyrstallize Tool", "crystallize"),
+    ("Planar Paintbucket Tool", "livePaintBucket"),
+    ("Planar Face Select Tool", "livePaintSelection"),
+    ("Mesh Editing Tool", "mesh"),
+    ("Gradient Vector Tool", "gradient"),
+    ("Crop Tool", "artboard"),
+    ("Slice Select Tool", "sliceSelection"),
+    ("Scroll Tool", "hand"),
+    ("Page Tool", "printTiling"),
+];
+
+/// The id of the tool `name` names: a tool's id (`pen`), its label (`Pen Tool`), or a name of the
+/// list [`TOOL_NAME_PREFIX`] cites.
+fn tool_named(name: &str) -> Option<&'static str> {
+    let tools = || vectorcraft_tools::catalog::all_tools();
+    if let Some(t) = tools().find(|t| t.id == name || t.label == name) {
+        return Some(t.id);
+    }
+    let rest = name.strip_prefix(TOOL_NAME_PREFIX)?;
+    if let Some((_, id)) = TOOL_NAMES.iter().find(|(n, _)| *n == rest) {
+        return vectorcraft_tools::tool_info(id).map(|t| t.id);
+    }
+    tools().find(|t| t.label == rest).map(|t| t.id)
+}
+
+/// `app.selectTool(name)`: chooses the tool `name` names ([`tool_named`]) and gives `true`. The
+/// tool becomes the current tool when the run ends without an error, as a choice on the toolbar
+/// does; the tool chosen last in a run is the one that counts. A name no tool has throws.
+fn app_select_tool(h: &Host, a: &[Data]) -> Answer {
+    let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("selectTool needs a tool name, as a string".into())) };
+    if name.len() > MAX_TEXT_BYTES {
+        return Err(HostError::Range("the tool name is too long".into()));
+    }
+    let id = tool_named(name).ok_or_else(|| HostError::Error(format!("No tool is named \"{name}\"")))?;
+    h.dom.tool.set(Some(id));
+    Ok(Data::Bool(true))
 }
 
 /// The menu command strings `app.executeMenuCommand` takes, each with the command it runs. The
@@ -1715,9 +1809,9 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if !(0.0..=100.0).contains(&v) {
         return Err(HostError::Range("opacity must be from 0 to 100".into()));
     }
-    // A value the getter reports for the item's opacity sends the opacity it has, and
-    // `object.setProps` finds the no-op itself: an opacity a graph mark or label already has still
-    // replaces the one the graph keeps for its series or kind.
+    // A value the getter reports for the item's opacity runs no command, unless the item is a graph
+    // mark or label whose graph keeps another opacity for its series or kind: then the opacity the
+    // item has is sent, and replaces the one the graph keeps.
     // The opacity the item already has may be assigned while its layer is hidden or locked, unless
     // it would still replace the opacity a graph keeps for the item's series or kind.
     let item = this_item(h, a)?;
@@ -1732,7 +1826,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if now.is_none() || keeps_other {
         refuse_protected_edit(h, item)?;
     }
-    set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
+    set_props(h, a, |_| now.is_some() && !keeps_other, json!({"opacity": now.unwrap_or(v)}))
 }
 
 fn item_selected(h: &Host, a: &[Data]) -> Answer {
@@ -1776,6 +1870,31 @@ fn item_geometric(h: &Host, a: &[Data]) -> Answer {
 
 fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
+}
+
+/// `controlBounds`: the visible bounds, grown to hold the control points of the item's paths.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    let (r, f) = with_doc(h, item.doc, |_, st| {
+        let control = st.doc.node(item.id).and_then(control_points_box);
+        Ok::<_, HostError>((vectorcraft_geom::union_opt(st.doc.bounds_of(&[item.id], true), control), frame(st)?))
+    })?;
+    match r {
+        Some(r) => Ok(f.bounds(h.dom.coords.get(), r)),
+        None => Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])),
+    }
+}
+
+/// The box of the control points of the paths in `n`, the visible members of its groups and
+/// compound paths included; none for other art.
+fn control_points_box(n: &crate::doc::Node) -> Option<Rect> {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        NodeKind::Group { .. } | NodeKind::Compound { .. } => {
+            n.children()?.iter().filter(|c| c.visible).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, control_points_box(c)))
+        }
+        _ => None,
+    }
 }
 
 fn item_position(h: &Host, a: &[Data]) -> Answer {
@@ -1958,13 +2077,13 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data) -> std::result::
     let how = placement_of(how)?;
     let beside = matches!(how, Placement::Above | Placement::Below);
     let handle = handle_of(target, "PageItem").or_else(|| handle_of(target, "Layer"));
-    let Some(&[run, uid, high, low]) = handle.as_deref() else {
+    let Some(&[run, uid, reverts, high, low]) = handle.as_deref() else {
         if handle_of(target, "Document").is_some() {
             return Err(HostError::Error("a document as the relative object is not available yet".into()));
         }
         return Err(HostError::Type("the relative object must be a page item or a layer".into()));
     };
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let doc = find_doc_of_object(h, run, uid, reverts).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     if doc.uid != item.doc.uid {
         return Err(HostError::Error(CROSS_DOCUMENT.into()));
     }
@@ -2134,8 +2253,8 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
 
 fn layer_name(h: &Host, a: &[Data]) -> Answer {
     let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
+    let [run, uid, reverts, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
+    let doc = find_doc_of_object(h, *run, *uid, *reverts).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
     let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
     with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
 }
@@ -2224,6 +2343,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, app_selection, app_set_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
+        ("selectTool", method(l, app_select_tool)),
         ("executeMenuCommand", method(l, app_menu_command)),
         ("toString", class_text("Application")),
     ]);
@@ -2310,7 +2430,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
+        ("controlBounds", get(l, item_control)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),

@@ -2627,9 +2627,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
 
 - `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects,
   syntax and directives, such as `$`, `alert`, `UnitValue`, the XML object and E4X, `#target` and `#targetengine`),
-  `dom` (the reference app's document model), `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the
-  reference app has: palettes, BridgeTalk, sockets, native code, XMP, operator overloading, reflection, actions and
-  `selectTool`).
+  `dom` (the reference app's document model, `app.selectTool` included), `files`, `menuCommands`, `dialogs`, and
+  `hostOnly` (features only the reference app has: palettes, BridgeTalk, sockets, native code, XMP, operator
+  overloading, reflection and actions).
 - `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
   and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
   `locale`. A directive is read where it starts a line, written `#name` or `//@name`.
@@ -2764,7 +2764,7 @@ other files through `$`:
 - `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
   describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
   `app.selection` (assigning it sets the active document's selection), `app.coordinateSystem`,
-  `app.getIsFileOpen(path)` and `app.executeMenuCommand(name)`. `executeMenuCommand` runs the command of a menu item
+  `app.getIsFileOpen(path)`, `app.selectTool(name)` and `app.executeMenuCommand(name)`. `executeMenuCommand` runs the command of a menu item
   on the active document, as the type definitions at https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts
   describe the method, and takes these names from the list at
   https://community.adobe.com/questions-652/a-list-of-illustrator-menu-commands-we-can-call-from-javascript-769510:
@@ -2781,7 +2781,13 @@ other files through `$`:
   describes; in VectorCraft that holds for `activeDocument`, `documents` and `selection`. VectorCraft's own rules:
   assigning `activeDocument` or `selection` without `app.` assigns the application's member. A top-level
   `var selection = ...` does the same and does not make a variable of the script. Assigning `documents` keeps its
-  value. `app.documents`
+  value. `selectTool`
+  (https://community.adobe.com/questions-652/what-s-new-in-illustrator-scripting-cc2020-769942) takes a tool's id
+  (`pen`), its label (`Pen Tool`) or a tool name in the form that thread lists, returns `true`, and makes the tool it
+  names the current tool when the run ends without an error; the tool chosen last in a run is the one that counts,
+  and a run that fails leaves the tool as it was. A name no tool has throws `No tool is named "<name>"`, a name that
+  is not a string throws a `TypeError`, and a name of more than 4,096 bytes throws a `RangeError`. Which tool each
+  name in that thread chooses is VectorCraft's own reading; names with no VectorCraft tool throw. `app.documents`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
   and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
   which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
@@ -2815,7 +2821,7 @@ other files through `$`:
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  visible bounds, grown to hold the control points of the object's paths), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
   or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
@@ -2869,8 +2875,9 @@ other files through `$`:
   for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
   tab as it was. A command that selects the objects it changes leaves the current layer and the highlighted Layers
-  panel rows as they were before the change. A bad value throws an error and changes nothing. An object that was
-  deleted, or that a named engine kept from an earlier run, throws `Stale page item`. `remove()` on an object that
+  panel rows as they were before the change. A bad value throws an error and changes nothing. A page item that was
+  deleted, or that a named engine kept from an earlier run, throws `Stale page item`, and a document or a page item
+  collection that a named engine kept from an earlier run throws `Stale document`. `remove()` on an object that
   is hidden or locked, is inside a hidden or locked layer or group, or is a group that holds one, and `removeAll()`
   when any object is, throw `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on
   a locked artboard, and `removeAll()` when any object is on one, throw `cannot delete objects on a locked artboard`

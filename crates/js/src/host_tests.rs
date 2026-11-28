@@ -898,6 +898,25 @@ fn objects_of_a_host_class_report_its_available_members_as_their_own() {
 }
 
 #[test]
+fn an_unavailable_member_hides_the_member_its_parent_class_has() {
+    let mut r = realm(1_000_000);
+    let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let missing: HostFunction = Rc::new(|_| Err(HostError::Error("not here yet".into())));
+    let class = |name: &str, parent: Option<&str>, member: HostMember| HostClass {
+        name: name.into(),
+        parent: parent.map(Into::into),
+        members: vec![("size".to_string(), member)],
+        index: None,
+        construct: None,
+    };
+    let classes = vec![class("Base", None, HostMember::Get(value)), class("Leaf", Some("Base"), HostMember::Unavailable(missing))];
+    let objects = vec![("it".into(), host_ref("Leaf", &[1.0])), ("base".into(), host_ref("Base", &[2.0]))];
+    r.define_host_classes(classes, objects).unwrap();
+    r.start("[it.hasOwnProperty('size'), it.propertyIsEnumerable('size'), base.hasOwnProperty('size')].join()").unwrap();
+    assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::String("false,false,true".into()));
+}
+
+#[test]
 fn a_member_a_class_declares_unavailable_is_not_its_own_when_its_parent_has_it() {
     let mut r = realm(1_000_000);
     let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
