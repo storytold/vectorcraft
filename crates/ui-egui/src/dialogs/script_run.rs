@@ -31,6 +31,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use craft::color_ui::ui::ColorPickerDialog;
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
@@ -50,6 +51,7 @@ use vectorcraft_engine::script::dialogs::{MAX_PROMPT_BYTES, cut_to, shown_text};
 use vectorcraft_engine::script::files::{MAX_ENTRIES, PickAnswer, PickerKind, ScriptPicker};
 use vectorcraft_engine::script::{DialogAnswer, MAX_SOURCE_BYTES, ScriptDialog};
 
+use super::color_picker;
 use crate::VectorcraftApp;
 use crate::file_asks::{self, Owner};
 
@@ -453,6 +455,22 @@ pub(crate) fn forget<D: StackDialog>(app: &VectorcraftApp) {
     });
 }
 
+/// [`forget`] for the Color Picker a script's `app.showColorPicker` opened.
+pub(crate) fn forget_color_picker(app: &mut VectorcraftApp) {
+    let Some(ctx) = app.ui_ctx.clone() else { return };
+    if color_picker::script_picker(app).is_none() {
+        return;
+    }
+    let asking = with_host(app, |host, _| host.is_open::<CloseQuestion>()).unwrap_or(false);
+    color_picker::forget_script(app, &ctx);
+    if asking {
+        with_host(app, |host, _| {
+            let _ = host.take::<CloseQuestion>();
+            host.open(close_question());
+        });
+    }
+}
+
 /// `ui.runScript`: the script at `path` or given as `source`; without either, pick a file.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if p.get("path").is_some() || p.get("source").is_some() {
@@ -537,8 +555,13 @@ pub(crate) fn open_picker(app: &VectorcraftApp, p: ScriptPicker) {
 /// Quitting while a script runs asks whether to stop it, also over the script's own dialog, which
 /// Cancel shows again as it was. Any other open dialog stays, and quitting asks nothing yet.
 pub(crate) fn ask_to_close(app: &mut VectorcraftApp) {
+    let picker = color_picker::script_picker(app);
     with_host(app, |host, _| {
-        let own = host.get::<ScriptNotice>().map(StackDialog::id).or_else(|| host.get::<ScriptFiles>().map(StackDialog::id));
+        let own = host
+            .get::<ScriptNotice>()
+            .map(StackDialog::id)
+            .or_else(|| host.get::<ScriptFiles>().map(StackDialog::id))
+            .or_else(|| picker.filter(|&id| host.get_by_id::<ColorPickerDialog>(id).is_some()));
         match own {
             Some(parent) if host.stack().is_top(parent) => {
                 host.open_child(close_question(), parent);
@@ -636,6 +659,7 @@ fn answer_close(app: &mut VectorcraftApp, close: Option<DialogResult<<CloseQuest
         }
         forget::<ScriptNotice>(app);
         forget::<ScriptFiles>(app);
+        forget_color_picker(app);
         app.sync_views();
     }
 }

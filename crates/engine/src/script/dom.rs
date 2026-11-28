@@ -67,6 +67,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod colors;
+mod paths;
 mod tags;
 mod variables;
 
@@ -82,6 +84,8 @@ pub(super) fn before_command(h: &Host, id: &str) -> Option<(u64, Vec<crate::doc:
 pub(super) fn after_command(h: &Host, before: Option<(u64, Vec<crate::doc::DataSet>)>) {
     variables::after_command(h, before);
 }
+
+pub(super) use colors::of_color as color_data;
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -131,14 +135,32 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the lists of page items and the
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
-/// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
-/// open, the settings of each `DocumentPreset` the run made, and the `Variable` and `Dataset`
-/// objects it gave out.
+/// each kept while its document is unchanged, the point changes of a path not written yet, how many
+/// times each path's points went stale and each path as the run last saw its points, whether a
+/// call's own savepoint ([`atomically`]) is open, the settings of each `DocumentPreset` the run
+/// made, and the `Variable` and `Dataset` objects it gave out.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
+    /// The last list of a document's paths ([`paths`]), kept while that document is unchanged.
+    paths: RefCell<Option<ItemList>>,
+    /// A path and its subpaths with the point changes the run has made to it and not written yet
+    /// ([`flush`]).
+    pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,
+    /// How many times the points the run read of each path went stale, by document uid and path id
+    /// ([`paths`]).
+    point_cuts: RefCell<std::collections::HashMap<(u64, u64), u64>>,
+    /// Each path whose points the run read, as the run last saw it, by document uid and path id
+    /// ([`paths`]).
+    point_nodes: RefCell<std::collections::HashMap<(u64, u64), Arc<crate::doc::Node>>>,
+    /// Each document, by uid, as it was when the run last looked at all the paths in it whose
+    /// points it read ([`paths`]).
+    point_docs: RefCell<std::collections::HashMap<u64, Arc<Document>>>,
+    /// The item the object model is changing ([`edit_item`]), whose points stay valid through the
+    /// change.
+    editing: Cell<Option<Item>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
     vars: variables::Handles,
@@ -230,13 +252,38 @@ type Answer = std::result::Result<Data, HostError>;
 /// A member function: the run's host and the call's arguments, `this` first.
 type Member = fn(&Host, &[Data]) -> Answer;
 
+/// A member function that first writes the point changes waiting in [`State`] ([`flush`]).
 fn function(link: &Link, f: Member) -> HostFunction {
+    call(link, f, true)
+}
+
+/// A member function of the points of a path, which reads and adds to the point changes waiting in
+/// [`State`] instead of writing them first.
+fn point_function(link: &Link, f: Member) -> HostFunction {
+    call(link, f, false)
+}
+
+fn call(link: &Link, f: Member, flushing: bool) -> HostFunction {
     let l = link.clone();
     Rc::new(move |a: Vec<Data>| {
         let h = current(&l)?;
         h.charge_call(16 + a.iter().map(data_size).sum::<u64>())?;
+        if flushing {
+            flush(&h)?;
+        }
         f(&h, &a)
     })
+}
+
+/// Writes the point changes of a path that wait in [`State`] with one command ([`paths::flush`]).
+pub(super) fn flush(h: &Host) -> std::result::Result<(), HostError> {
+    paths::flush(h)
+}
+
+/// Notes the changes a command made to the points of the paths the run has read
+/// ([`paths::see_all_points`]).
+pub(super) fn see_points(h: &Host) {
+    paths::see_all_points(h)
 }
 
 fn get(link: &Link, f: Member) -> HostMember {
@@ -251,9 +298,22 @@ fn method(link: &Link, f: Member) -> HostMember {
     HostMember::Method(function(link, f))
 }
 
+/// [`get`], [`property`] and [`method`] for a member of the points of a path ([`point_function`]).
+fn point_get(link: &Link, f: Member) -> HostMember {
+    HostMember::Get(point_function(link, f))
+}
+
+fn point_property(link: &Link, g: Member, s: Member) -> HostMember {
+    HostMember::Property { get: point_function(link, g), set: point_function(link, s) }
+}
+
+fn point_method(link: &Link, f: Member) -> HostMember {
+    HostMember::Method(point_function(link, f))
+}
+
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
-/// the check that a document or page item `this` is still there. `hasOwnProperty` is false for it,
-/// so a script that checks for the member first skips it.
+/// the check that a document, page item or path point `this` is still there. `hasOwnProperty` is
+/// false for it, so a script that checks for the member first skips it.
 fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostMember) {
     let message = format!("{class}.{name} is not available yet");
     let l = link.clone();
@@ -264,8 +324,11 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostM
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "PageItem" | "PathItem" => {
                 item_of(&h, arg(&a, 0))?;
+            }
+            "PathPoint" => {
+                paths::this_point(&h, &a)?;
             }
             _ => {}
         }
@@ -726,9 +789,14 @@ fn on_doc<T>(
     Ok(v)
 }
 
-/// Runs `id` with `params` on the item's document, its selection kept.
+/// Runs `id` with `params` on the item's document, its selection kept. The points the run read of
+/// the item's paths stay valid through the change ([`paths::see_all_points`]).
 fn edit_item(h: &Host, item: Item, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
-    on_doc(h, item.doc.uid, true, |h| command(h, id, params))
+    paths::see_all_points(h);
+    let kept = h.dom.editing.replace(Some(item));
+    let r = on_doc(h, item.doc.uid, true, |h| command(h, id, params));
+    h.dom.editing.set(kept);
+    r
 }
 
 /// Reads the document of `doc` with `f`.
@@ -784,6 +852,13 @@ fn app_coords(h: &Host, _: &[Data]) -> Answer {
 fn app_set_coords(h: &Host, a: &[Data]) -> Answer {
     h.dom.coords.set(coords_of(arg(a, 1))?);
     Ok(Data::Undefined)
+}
+
+/// `app.showColorPicker(color)`: the Color Picker on `color`, which must be an `RGBColor`,
+/// `CMYKColor`, `GrayColor` or `LabColor` ([`super::dialogs::show_color_picker`]).
+fn app_show_color_picker(h: &Host, a: &[Data]) -> Answer {
+    let color = colors::solid(arg(a, 1), "showColorPicker's color")?;
+    super::dialogs::show_color_picker(h, color)
 }
 
 /// A path as `getIsFileOpen` compares it: `\` and `/` alike, and on Windows paths (a drive letter
@@ -2256,6 +2331,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
         ("executeMenuCommand", method(l, app_menu_command)),
+        ("showColorPicker", method(l, app_show_color_picker)),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
@@ -2301,10 +2377,11 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("convertCoordinate", method(l, doc_convert)),
         ("pageItems", get(l, doc_page_items)),
         ("selection", property(l, doc_selection, doc_set_selection)),
+        ("pathItems", get(l, paths::doc_path_items)),
         ("toString", method(l, doc_to_string)),
     ]);
     document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
+        ["layers", "artboards", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
@@ -2375,8 +2452,17 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     );
     page_item.extend(variables::page_item_members(l));
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), variables::item_members(l, c), None)));
+    classes.extend(ITEM_CLASSES.iter().map(|c| {
+        let mut members = variables::item_members(l, c);
+        if *c == "PathItem" {
+            members.extend(paths::path_item_members(l));
+        }
+        class(c, Some("PageItem"), members, None)
+    }));
+    classes.extend(paths::classes(l));
+    classes.extend(colors::classes(l));
     classes.extend(variables::classes(l));
+    paths::install_enums(realm)?;
     classes.push(class(
         "Layer",
         None,
