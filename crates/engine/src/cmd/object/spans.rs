@@ -1,5 +1,5 @@
 use super::shape::scale_across;
-use super::{Affine, Document, Node, NodeId, NodeKind, OrientedBox, Point, Rect};
+use super::{Affine, Appearance, Document, Node, NodeId, NodeKind, OrientedBox, Point, Rect};
 
 /// One axis of an object that [`set_bounds`] sizes, square to its frame: the geometric box runs
 /// from `lo` to `hi`, and the visual box reaches past each end (before, after) by a margin that
@@ -47,27 +47,47 @@ impl Spans {
             (true, true) => n.visual_bounds_with(s),
             (false, _) => n.bounds_in(s, to_local, visual),
         };
+        // The box the strokes of the plain groups around `n` paint along it, square to `frame`
+        // (`Node::painted_by_container`).
+        let painted = |n: &Node, groups: &[&Appearance], s: &vectorcraft_doc::SymbolBoxes| {
+            if groups.is_empty() {
+                return None;
+            }
+            let placed;
+            let n = if frame.angle == 0.0 {
+                n
+            } else {
+                let mut m = n.clone();
+                m.transform(to_local, false);
+                placed = m;
+                &placed
+            };
+            groups.iter().fold(None, |acc, a| vectorcraft_geom::union_opt(acc, n.painted_by_container(a, Some(s))))
+        };
         let roots: Vec<&Node> = ids.iter().filter_map(|id| d.node(*id)).collect();
         let mut parts = vec![];
-        if !roots.iter().all(|n| open(n, 0.0, d, &symbols, to_local, &mut parts)) {
-            parts = roots.iter().map(|n| Part::Object(n, 0.0)).collect();
+        if !roots.iter().all(|n| open(n, &[], d, &symbols, to_local, &mut parts)) {
+            parts = roots.iter().map(|n| Part::Object(n, vec![])).collect();
         }
         let mut out = Self { x: vec![], y: vec![], strokes };
         for part in parts {
             let (g, v, vs) = match part {
-                Part::Object(n, grow) => {
+                Part::Object(n, groups) => {
                     let Some(g) = measure(n, &symbols, false) else { continue };
-                    let v = measure(n, &symbols, true).unwrap_or(g).inflate(grow, grow);
-                    let vs = if strokes { measure(n, &without, true).unwrap_or(g).inflate(grow, grow) } else { g };
+                    let v = vectorcraft_geom::union_opt(measure(n, &symbols, true), painted(n, &groups, &symbols)).unwrap_or(g);
+                    let vs =
+                        if strokes { vectorcraft_geom::union_opt(measure(n, &without, true), painted(n, &groups, &without)).unwrap_or(g) } else { g };
                     (g, v, vs)
                 }
                 // Measured as the instance's own box measures its art (`Node::visual_bounds_with`):
-                // the strokes at their own weight, and the instances in it by their art boxes.
+                // the strokes at their own weight, those of the plain groups around it in the art
+                // included, and the instances in it by their art boxes.
                 Part::Art(n, xf, grow, kept) => {
                     let mut placed = n.clone();
                     placed.transform(xf, false);
                     let Some(g) = placed.geometric_bounds_with(&art) else { continue };
-                    let v = placed.visual_bounds_with(&art).map_or(g, |v| v.union(g)).inflate(kept + grow, kept + grow);
+                    let v = placed.visual_bounds_with(&art).map_or(g, |v| v.union(g));
+                    let v = kept.iter().fold(v, |v, a| placed.painted_by_container(a, Some(&art)).map_or(v, |p| v.union(p))).inflate(grow, grow);
                     let vs = if strokes { g.inflate(grow, grow) } else { g };
                     (g, v, vs)
                 }
@@ -155,29 +175,40 @@ const MAX_SPANS: usize = 4096;
 
 /// What [`Spans::measure`] measures as one span.
 enum Part<'a> {
-    /// An object of the selection, or a member of a plain group in it, and the outset of the
-    /// strokes of the plain groups around it, which scale with its own.
-    Object(&'a Node, f64),
+    /// An object of the selection, or a member of a plain group in it, and the appearances of the
+    /// plain groups around it, whose strokes paint along it and scale with its own.
+    Object(&'a Node, Vec<&'a Appearance>),
     /// An object in the art of a symbol instance and the transform that places it square to the
-    /// frame. The outset of the strokes of the instance and of the plain groups around the instance
-    /// scales with the strokes; the outset of the strokes of the plain groups around the object in
-    /// the art stays, as the strokes in the art do.
-    Art(&'a Node, Affine, f64, f64),
+    /// frame. The outset of the strokes of the instance scales with the strokes; the strokes of the
+    /// plain groups around the object in the art, given by their appearances, paint along it and
+    /// stay, as the strokes in the art do. The strokes of the plain groups around the instance paint
+    /// nothing round it.
+    Art(&'a Node, Affine, f64, Vec<&'a Appearance>),
 }
 
-/// Adds the parts that [`Spans::measure`] measures `n` by to `parts`, `grow` being the outset of
-/// the strokes of the plain groups around it ([`Part::Object`]). A plain group ([`opens`]) adds the
-/// parts of each member. A symbol instance without effects or an opacity mask of its own adds the
-/// objects of its art, with plain groups there opened too ([`Part::Art`]), when its symbol's art
+/// Adds the parts that [`Spans::measure`] measures `n` by to `parts`, `groups` being the
+/// appearances of the plain groups around it ([`Part::Object`]); hidden members and guides stop
+/// those groups' strokes. A plain group ([`opens`]) adds the parts of each member. A symbol
+/// instance without effects or an opacity mask of its own adds the objects of its art, with plain
+/// groups there opened too ([`Part::Art`]), when its symbol's art
 /// measures it, it is not in perspective, and its transform keeps the art square to the frame (a
 /// turned or slanted instance is measured by the box around its turned art box). Anything else is
 /// one part. Returns false when the parts pass [`MAX_SPANS`].
-fn open<'a>(n: &'a Node, grow: f64, d: &'a Document, symbols: &vectorcraft_doc::SymbolBoxes, to_local: Affine, parts: &mut Vec<Part<'a>>) -> bool {
+fn open<'a>(
+    n: &'a Node,
+    groups: &[&'a Appearance],
+    d: &'a Document,
+    symbols: &vectorcraft_doc::SymbolBoxes,
+    to_local: Affine,
+    parts: &mut Vec<Part<'a>>,
+) -> bool {
+    let groups = if n.visible && !n.is_guide() { groups } else { &[] };
     if opens(n) {
         match &n.kind {
             NodeKind::Group { children, .. } => {
-                let grow = grow + n.appearance.outset();
-                return children.iter().all(|c| open(c, grow, d, symbols, to_local, parts));
+                let mut groups = groups.to_vec();
+                groups.push(&n.appearance);
+                return children.iter().all(|c| open(c, &groups, d, symbols, to_local, parts));
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 let xf = to_local * *xf;
@@ -186,38 +217,41 @@ fn open<'a>(n: &'a Node, grow: f64, d: &'a Document, symbols: &vectorcraft_doc::
                     && symbols.art_bounds(symbol).is_some()
                     && let Some(art) = d.symbols.iter().find(|s| s.name == *symbol)
                 {
-                    return open_art(&art.art, xf, grow + n.appearance.outset(), 0.0, parts);
+                    return open_art(&art.art, xf, n.appearance.outset(), &[], parts);
                 }
             }
             _ => {}
         }
     }
-    parts.push(Part::Object(n, grow));
+    parts.push(Part::Object(n, groups.to_vec()));
     parts.len() <= MAX_SPANS
 }
 
 /// [`open`] for `n` in symbol art that `xf` places square to the frame: a plain group adds the parts
-/// of each member, and anything else, a symbol instance included, is one part. `kept` is the outset
-/// of the strokes of the plain groups around `n` in the art, and `grow` that of the instance and the
-/// plain groups around it.
-fn open_art<'a>(n: &'a Node, xf: Affine, grow: f64, kept: f64, parts: &mut Vec<Part<'a>>) -> bool {
+/// of each member, and anything else, a symbol instance included, is one part. `kept` holds the
+/// appearances of the plain groups around `n` in the art, stopped at hidden members and guides,
+/// and `grow` is the outset of the strokes of the instance.
+fn open_art<'a>(n: &'a Node, xf: Affine, grow: f64, kept: &[&'a Appearance], parts: &mut Vec<Part<'a>>) -> bool {
+    let kept = if n.visible && !n.is_guide() { kept } else { &[] };
     if let NodeKind::Group { children, .. } = &n.kind
         && opens(n)
     {
-        let kept = kept + n.appearance.outset();
-        return children.iter().all(|c| open_art(c, xf, grow, kept, parts));
+        let mut kept = kept.to_vec();
+        kept.push(&n.appearance);
+        return children.iter().all(|c| open_art(c, xf, grow, &kept, parts));
     }
-    parts.push(Part::Art(n, xf, grow, kept));
+    parts.push(Part::Art(n, xf, grow, kept.to_vec()));
     parts.len() <= MAX_SPANS
 }
 
-/// Whether [`open`] opens `n`: a group without a clip, a Shaper construction, effects or an opacity
-/// mask of its own, or a symbol instance without effects or an opacity mask of its own.
+/// Whether [`open`] opens `n`: a group that is not a compound shape and has no clip, Shaper
+/// construction, effects or opacity mask of its own, or a symbol instance without effects or an
+/// opacity mask of its own.
 fn opens(n: &Node) -> bool {
     let visible = |effects: &[vectorcraft_doc::Effect]| effects.iter().any(|e| e.visible);
     let effects = visible(&n.appearance.effects) || n.appearance.items.iter().any(|i| visible(i.effects()));
     let kind = match n.kind {
-        NodeKind::Group { clip, .. } => !clip && n.extras().shaper.is_none(),
+        NodeKind::Group { clip, .. } => !clip && !n.is_compound_shape() && n.extras().shaper.is_none(),
         NodeKind::SymbolInstance { .. } => true,
         _ => false,
     };

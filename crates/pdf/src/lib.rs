@@ -92,7 +92,7 @@ pub use output::ActiveProfiles;
 pub use pages::reads_of;
 pub use pages::{
     IllustratorData, Opened, PageInfo, PdfInfo, TrimPages, has_illustrator_data, illustrator_data, illustrator_data_without_pdf_part, info,
-    is_postscript, open_pdf, read_illustrator_data_without_pdf_part,
+    is_postscript, open_pdf, read_illustrator_data_without_pdf_part, read_illustrator_data_without_pdf_part_with,
 };
 pub use piece_info::{PRIVATE_CHUNK, PrivateData};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};

@@ -5118,7 +5118,9 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	is a confirm's answer, whose `value` must be true or false	является ответом на confirm, поэтому его `value` должно быть true или false
 @msg	is longer than 16 KiB	длиннее 16 КиБ
 @msg	is a prompt's answer, whose `value` must be a string or null	является ответом на prompt, поэтому его `value` должно быть строкой или null
-@msg	must have `kind` alert, confirm or prompt	должен иметь `kind` alert, confirm или prompt
+@msg	must have `kind` alert, confirm, prompt or window	должен иметь `kind` alert, confirm, prompt или window
+@msg	is a window's answer, whose `value` must be a list of steps	является ответом окна, `value` которого должен быть списком шагов
+@msg	has a step {i} that is not a valid click, change or close	содержит шаг {i}, который не является допустимым щелчком, изменением или закрытием
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` предназначен только для запуска, в котором некого спросить: в приложении человек сам отвечает на каждое диалоговое окно
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` должен быть целым числом от 1 до {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` вложен глубже 64 уровней

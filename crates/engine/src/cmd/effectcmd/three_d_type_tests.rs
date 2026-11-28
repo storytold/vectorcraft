@@ -23,6 +23,27 @@ fn undo_len(s: &Session) -> usize {
 }
 
 #[test]
+fn unchanged_three_d_parameters_preserve_the_document_revision_and_history() {
+    for effect_id in ["threeD.extrude", "threeD.classicExtrude"] {
+        let (mut s, id) = setup(effect_id, json!({"rotationX": 12.345}));
+        let before = s.doc().unwrap().doc.clone();
+        let history = undo_len(&s);
+        let revision = s.doc().unwrap().revision;
+        let current = effect(&s, id).1;
+        let params = vectorcraft_render::effects::merged_params(effect_id, &current);
+        let result = s.execute("effect.setParams", &json!({"index": 0, "item": null, "params": params})).unwrap();
+        assert_eq!(result["ids"], json!([]), "an unchanged effect is not an edit");
+        assert_eq!(s.doc().unwrap().doc, before, "default values need not be written into the stored effect");
+        assert_eq!(s.doc().unwrap().revision, revision);
+        assert_eq!(undo_len(&s), history);
+        s.execute("effect.setParams", &json!({"index": 0, "item": null, "params": {"rotationX": 25.0}})).unwrap();
+        assert_eq!(undo_len(&s), history + 1, "a changed option saves once");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+}
+
+#[test]
 fn three_d_type_turns_the_effect_in_place_keeping_shared_settings_in_one_undo_step() {
     let types = [("plane", "threeD.rotate"), ("extrude", "threeD.extrude"), ("revolve", "threeD.revolve"), ("inflate", "threeD.inflate")];
     for (from_type, from) in types {

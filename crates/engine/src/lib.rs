@@ -375,6 +375,11 @@ pub struct Session {
     pub(crate) script_high_water: std::collections::HashMap<u64, u64>,
     /// While a slice of a script runs in this session.
     pub(crate) script_in_run: bool,
+    /// The desktop app supplies each window by (document uid, runtime window identity) while a
+    /// script runs. Scripts read them as `Document.views`, and the app applies their zoom, center,
+    /// and screen mode. This list is empty without windows (headless).
+    /// View state: not saved, not undoable, and a run that fails keeps what it changed.
+    pub window_views: Vec<((u64, u64), WindowView)>,
     /// Write recovery copies of the unsaved documents before a run, and don't start without them.
     pub script_copy_first: bool,
     /// While the active tool's actions run: their commands aren't "a command from outside the
@@ -499,7 +504,7 @@ pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
 pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_plugin_loads, waits_for_tool_edit};
-pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection};
+pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection, WindowView};
 pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
 use history::history_budget_for;

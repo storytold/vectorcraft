@@ -607,6 +607,42 @@ fn set_takes_a_linked_mask_and_placed_gradient_with_the_shape() {
 }
 
 #[test]
+fn a_slice_cuts_the_shape_through_its_center_in_one_step() {
+    let mut s = session();
+    let n = steps(&s);
+    let r = s
+        .execute(
+            "addon.pathtools.shape.create",
+            &json!({"kind": "ellipse", "center": [200, 150], "width": 100, "height": 60, "sliceStart": 0, "sliceEnd": 90}),
+        )
+        .unwrap();
+    let id = id_of(&r);
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert_eq!((r["shape"]["sliceStart"].clone(), r["shape"]["sliceEnd"].clone()), (json!(0.0), json!(90.0)));
+    // The top right quarter, from the center.
+    let b = path(&s, id).bounds().unwrap();
+    assert!((b.x0 - 200.0).abs() < 1e-9 && (b.x1 - 250.0).abs() < 1e-9 && (b.y0 - 120.0).abs() < 1e-9 && (b.y1 - 150.0).abs() < 1e-9, "{b:?}");
+    assert_eq!(path(&s, id).subpaths[0].anchors[0].p, Point::new(200.0, 150.0));
+    // Turned the other way round: the three quarters left, one more step; moving keeps the slice.
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "sliceStart": 90, "sliceEnd": 0})).unwrap();
+    assert_eq!(steps(&s), n + 2);
+    let b = path(&s, id).bounds().unwrap();
+    assert!((b.x0 - 150.0).abs() < 1e-9 && (b.y1 - 180.0).abs() < 1e-9, "{b:?}");
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!(shape_of(&s, id).map(|g| (g.slice_start, g.slice_end)), Some((90.0, 0.0)));
+    // The same start and end: the whole ellipse again.
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "sliceEnd": 90})).unwrap();
+    assert_eq!(path(&s, id).anchor_count(), 4);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(path(&s, id).anchor_count() > 4, "undo brings the slice back");
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.set",
+        &[json!({"id": id.0, "sliceStart": -10}), json!({"id": id.0, "sliceEnd": 361}), json!({"id": id.0, "sliceEnd": "90"})],
+    );
+}
+
+#[test]
 fn bad_shape_params_are_refused() {
     let mut s = session();
     let id = star(&mut s);

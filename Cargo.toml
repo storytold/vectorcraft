@@ -18,6 +18,8 @@ craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "51fcc3b0
 # The `.vectorcraft` envelope: its members, version, embedded images and the data after the JSON.
 craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "51fcc3b0413af193db952df28dffae2321745703" }
 craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "51fcc3b0413af193db952df28dffae2321745703" }
+# `.pcraft` documents: their manifest, full-size composite, preview, layer pixels and ICC profile.
+craft-doc = { git = "https://github.com/storytold/craft-libs", rev = "51fcc3b0413af193db952df28dffae2321745703", features = ["pcraft-pixels"] }
 # Native Affinity documents (craft-libs#914).
 craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "51fcc3b0413af193db952df28dffae2321745703" }
 # Bounded CDR (v1-v27) and CMX (32-bit) reader (craft-libs#778).

@@ -79,7 +79,8 @@ static BEFORE_INSTALL_LOCK: Mutex<Option<InstallHook>> = Mutex::new(None);
 pub fn install(plugin: Plugin) -> Result<Arc<Plugin>> {
     // The revision moves while the write lock is held, so a cache that reads the new revision and
     // then the plug-ins finds the new plug-in among them. The approval is checked while it is held
-    // too.
+    // too. The change waits for other threads' steady guards ([`crate::steady`]) before it takes
+    // the lock.
     #[cfg(test)]
     {
         let hook = BEFORE_INSTALL_LOCK.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -87,6 +88,8 @@ pub fn install(plugin: Plugin) -> Result<Arc<Plugin>> {
             hook(plugin.id());
         }
     }
+    #[cfg(any(test, feature = "test-steady"))]
+    let _change = crate::steady::plugin_change();
     let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     if !approved(&plugin) {
         return Err(Error::NeedsApproval(crate::permissions::names(&plugin.manifest().permissions()).join(", ")));
@@ -111,6 +114,8 @@ fn insert(plugins: &mut BTreeMap<String, Arc<Plugin>>, mut plugin: Plugin) -> Ar
 /// runs, then the grant is recorded and the plug-in installed. `attach` runs while the plug-ins are
 /// held, so it may call [`set_storage`] but no function that reads or changes the plug-ins or grants.
 pub fn install_for_load(plugin: Plugin, changes: &LoadChanges, grant: Option<GrantToken>, attach: impl FnOnce()) -> Result<Option<Arc<Plugin>>> {
+    #[cfg(any(test, feature = "test-steady"))]
+    let _change = crate::steady::plugin_change();
     let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     if changes.superseded(plugin.id()) {
         return Ok(None);
@@ -220,6 +225,8 @@ pub fn install_checked<E>(
     refused: impl FnOnce(Error) -> E,
 ) -> std::result::Result<Arc<Plugin>, E> {
     // The same order as `install`, which reads the grants while it holds the plug-ins.
+    #[cfg(any(test, feature = "test-steady"))]
+    let _change = crate::steady::plugin_change();
     let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     let mut grants = GRANTS.write().unwrap_or_else(|e| e.into_inner());
     let id = plugin.id().to_string();
@@ -267,6 +274,8 @@ pub fn list() -> Vec<Arc<Plugin>> {
 /// Uninstalls `id`; false if it wasn't installed.
 pub fn remove(id: &str) -> bool {
     // The revision moves while the write lock is held, as in `install`.
+    #[cfg(any(test, feature = "test-steady"))]
+    let _change = crate::steady::plugin_change();
     let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     let gone = plugins.remove(id).is_some();
     if gone {

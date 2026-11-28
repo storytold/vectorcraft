@@ -278,6 +278,14 @@ impl Opened {
         private_data(&self.pdf)
     }
 
+    /// What `read` returns, given the private data of an Illustrator `.ai` as one reader over its
+    /// streams in order, each decoded as it is read and none joined to the others: no limit on its
+    /// size applies but the one `read` keeps. `None` as for [`illustrator_data`](Self::illustrator_data),
+    /// also when a stream turns out not to be readable after `read` has started.
+    pub fn read_illustrator_data<T>(&self, read: impl FnOnce(&mut dyn std::io::Read) -> T) -> Option<T> {
+        streamed_private_data(&self.pdf, read).ok().flatten()
+    }
+
     /// Does the first page carry an editor's copy of the art, as [`has_illustrator_data`] says?
     pub fn has_illustrator_data(&self) -> bool {
         has_private_data_keys(&self.pdf)
@@ -502,9 +510,10 @@ pub fn illustrator_data(bytes: &[u8], password: Option<&str>) -> Option<Vec<u8>>
 /// The private data of a file whose PDF part can't be read ([`illustrator_data_without_pdf_part`]),
 /// with the size of its first page.
 #[derive(Clone, Debug, PartialEq)]
-pub struct IllustratorData {
-    /// The private data, as [`illustrator_data`] reads it.
-    pub data: Vec<u8>,
+pub struct IllustratorData<T = Vec<u8>> {
+    /// The private data, as [`illustrator_data`] reads it, or what was read from it
+    /// ([`read_illustrator_data_without_pdf_part_with`]).
+    pub data: T,
     /// The size in points of a unit of the first page's user space (its `UserUnit`).
     pub user_unit: f64,
     /// The first page's trim box (its crop box when it has none) in points, rotated as the page
@@ -526,10 +535,29 @@ pub fn illustrator_data_without_pdf_part(bytes: &[u8], password: Option<&str>) -
 pub fn read_illustrator_data_without_pdf_part(bytes: &[u8], password: Option<&str>) -> Result<Option<IllustratorData>, String> {
     let Ok(pdf) = open_structural_with_options(bytes, password, &open_options()) else { return Ok(None) };
     let Some(data) = read_private_data(&pdf)? else { return Ok(None) };
-    let Some(page) = pdf.pages().first() else { return Ok(None) };
+    Ok(with_first_page(&pdf, data))
+}
+
+/// [`read_illustrator_data_without_pdf_part`] with the private data given to `read` as
+/// [`Opened::read_illustrator_data`] gives it, in place of joined: what `read` returns, with the
+/// size of the first page. `Err` with why a stream can't be read when one can't, even after `read`
+/// has started.
+pub fn read_illustrator_data_without_pdf_part_with<T>(
+    bytes: &[u8],
+    password: Option<&str>,
+    read: impl FnOnce(&mut dyn std::io::Read) -> T,
+) -> Result<Option<IllustratorData<T>>, String> {
+    let Ok(pdf) = open_structural_with_options(bytes, password, &open_options()) else { return Ok(None) };
+    let Some(data) = streamed_private_data(&pdf, read)? else { return Ok(None) };
+    Ok(with_first_page(&pdf, data))
+}
+
+/// `data` read from `pdf`'s private data, with the size of its first page: `None` without a page.
+fn with_first_page<T>(pdf: &Pdf, data: T) -> Option<IllustratorData<T>> {
+    let page = pdf.pages().first()?;
     // (The page transform is in points: it applies the `UserUnit`.)
     let trim = frame(page, CropTo::Trim).1;
-    Ok(Some(IllustratorData { data, user_unit: f64::from(page.user_unit()), trim: (trim.width(), trim.height()) }))
+    Some(IllustratorData { data, user_unit: f64::from(page.user_unit()), trim: (trim.width(), trim.height()) })
 }
 
 /// The private data of `pdf`'s first page, as [`illustrator_data`] reads it.
@@ -537,22 +565,92 @@ fn private_data(pdf: &Pdf) -> Option<Vec<u8>> {
     read_private_data(pdf).ok().flatten()
 }
 
+/// The dictionary that holds `pdf`'s private data streams (its first page's `PieceInfo`), with the
+/// key they are numbered after: `AIPrivateData`, else `AIPDFPrivateData`.
+fn private_streams<'a>(pdf: &'a Pdf) -> Option<(Dict<'a>, &'static str)> {
+    let private = pdf.pages().first()?.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private")?;
+    let key = if private.contains_key(b"AIPrivateData1") { "AIPrivateData" } else { "AIPDFPrivateData" };
+    Some((private, key))
+}
+
+/// Most private data streams read.
+const MAX_PRIVATE_STREAMS: u32 = 100_000;
+
 /// [`private_data`], with why a private data stream can't be read ([`inflated`]).
 fn read_private_data(pdf: &Pdf) -> Result<Option<Vec<u8>>, String> {
-    let Some(private) = pdf
-        .pages()
-        .first()
-        .and_then(|page| page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private"))
-    else {
-        return Ok(None);
-    };
-    let key = if private.contains_key(b"AIPrivateData1") { "AIPrivateData" } else { "AIPDFPrivateData" };
+    let Some((private, key)) = private_streams(pdf) else { return Ok(None) };
     let mut data = vec![];
-    for n in 1..=100_000u32 {
+    for n in 1..=MAX_PRIVATE_STREAMS {
         let Some(stream) = private.get::<Stream<'_>>(format!("{key}{n}").as_bytes()) else { break };
         data.extend_from_slice(&inflated(&stream, MAX_PRIVATE - data.len()).map_err(|why| why.to_string())?);
     }
     Ok((!data.is_empty()).then_some(data))
+}
+
+/// What `read` returns, given the private data of `pdf`'s first page as one reader over its
+/// streams in order ([`PrivateStreams`]): `Ok(None)` without private data or when its streams hold
+/// nothing, as [`read_private_data`] gives, and `Err` with why a stream can't be read when one
+/// can't (in place of what `read` returned).
+fn streamed_private_data<T>(pdf: &Pdf, read: impl FnOnce(&mut dyn std::io::Read) -> T) -> Result<Option<T>, String> {
+    use std::io::BufRead as _;
+    let Some((private, key)) = private_streams(pdf) else { return Ok(None) };
+    let mut streams = PrivateStreams { private, key, next: 1, current: None, error: None };
+    let mut src = std::io::BufReader::new(&mut streams);
+    let read = match src.fill_buf() {
+        Ok(first) if !first.is_empty() => Some(read(&mut src)),
+        _ => None,
+    };
+    drop(src);
+    match streams.error {
+        Some(why) => Err(why),
+        None => Ok(read),
+    }
+}
+
+/// A reader over a `.ai`'s private data streams in order (`{key}1`, `{key}2`, … in `private`, as
+/// [`read_private_data`] takes them), each checked ([`stream_form`]) and decoded as it is reached.
+/// Once a stream can't be read, `error` says why and every read fails.
+struct PrivateStreams<'a> {
+    private: Dict<'a>,
+    key: &'static str,
+    /// The number of the next stream.
+    next: u32,
+    /// The stream being read, decoded.
+    current: Option<Box<dyn std::io::Read + 'a>>,
+    error: Option<String>,
+}
+
+impl std::io::Read for PrivateStreams<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        loop {
+            if let Some(why) = &self.error {
+                return Err(std::io::Error::other(why.clone()));
+            }
+            if let Some(current) = &mut self.current {
+                match current.read(buf) {
+                    Ok(0) => self.current = None,
+                    Ok(n) => return Ok(n),
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                    // (Only a deflated stream's decoder fails.)
+                    Err(_) => self.error = Some("its zlib compression is damaged".to_string()),
+                }
+                continue;
+            }
+            if self.next > MAX_PRIVATE_STREAMS {
+                return Ok(0);
+            }
+            let Some(stream) = self.private.get::<Stream<'_>>(format!("{}{}", self.key, self.next).as_bytes()) else { return Ok(0) };
+            self.next += 1;
+            match stream_form(&stream) {
+                Ok(true) => self.current = Some(Box::new(flate2::read::ZlibDecoder::new(std::io::Cursor::new(stream.raw_data())))),
+                Ok(false) => self.current = Some(Box::new(std::io::Cursor::new(stream.raw_data()))),
+                Err(why) => self.error = Some(why),
+            }
+        }
+    }
 }
 
 /// Does the PDF's first page carry an editor's copy of the art: a PDF-compatible `.ai`
@@ -574,8 +672,29 @@ fn has_private_data_keys(pdf: &Pdf) -> bool {
 /// doesn't know counts as another filter.
 fn inflated(stream: &Stream<'_>, most: usize) -> Result<Vec<u8>, String> {
     use std::io::Read;
-    let unread = || "it is stored in a form that isn't read".to_string();
     let too_large = || format!("it is larger than {} MB", MAX_PRIVATE >> 20);
+    let deflated = stream_form(stream)?;
+    let raw = stream.raw_data();
+    let mut out = vec![];
+    let limit = u64::try_from(most).ok().and_then(|m| m.checked_add(1)).ok_or_else(too_large)?;
+    if deflated {
+        flate2::read::ZlibDecoder::new(&*raw).take(limit).read_to_end(&mut out).map_err(|_| "its zlib compression is damaged".to_string())?;
+    } else if raw.len() <= most {
+        out.extend_from_slice(&raw);
+    } else {
+        return Err(too_large());
+    }
+    if out.len() > most {
+        return Err(too_large());
+    }
+    Ok(out)
+}
+
+/// Is the private data stream `stream` deflated (`true`) or plain (`false`)? `Err` with why it
+/// isn't read when it is in another form: with decode parameters, or with a filter the reader
+/// doesn't know (which counts as another filter).
+fn stream_form(stream: &Stream<'_>) -> Result<bool, String> {
+    let unread = || "it is stored in a form that isn't read".to_string();
     let dict = stream.dict();
     let named = |key: &[u8]| match dict.get::<Object<'_>>(key) {
         None | Some(Object::Null(_)) => Some(0),
@@ -596,21 +715,11 @@ fn inflated(stream: &Stream<'_>, most: usize) -> Result<Vec<u8>, String> {
     if named(b"Filter").zip(named(b"F")).is_none_or(|(a, b)| a.max(b) != filters.len()) {
         return Err(unread());
     }
-    let raw = stream.raw_data();
-    let mut out = vec![];
-    let limit = u64::try_from(most).ok().and_then(|m| m.checked_add(1)).ok_or_else(too_large)?;
     match filters.as_slice() {
-        [] if raw.len() <= most => out.extend_from_slice(&raw),
-        [] => return Err(too_large()),
-        [craft::pdf::syntax::Filter::FlateDecode] => {
-            flate2::read::ZlibDecoder::new(&*raw).take(limit).read_to_end(&mut out).map_err(|_| "its zlib compression is damaged".to_string())?;
-        }
-        _ => return Err(unread()),
+        [] => Ok(false),
+        [craft::pdf::syntax::Filter::FlateDecode] => Ok(true),
+        _ => Err(unread()),
     }
-    if out.len() > most {
-        return Err(too_large());
-    }
-    Ok(out)
 }
 
 /// Does `page` carry an editor's private data (`PieceInfo` keys starting with `AIPrivateData`)?

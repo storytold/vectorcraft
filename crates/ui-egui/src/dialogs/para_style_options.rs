@@ -23,6 +23,7 @@ use craft::ui::runtime::env::Label;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::text::DEFAULT_TAB_INTERVAL;
 use vectorcraft_doc::{HyphenationOptions, JustificationOptions, TabAlign, TabStop, Unit};
+use vectorcraft_engine::cmd::textstyles::NORMAL_PARA;
 
 use super::char_style_options::{
     Refusals, Values, canonical_map, general_rows, pump_in_opening_document, rows, select, style_dialog, text, to_fields, tri_state, value_of,
@@ -730,7 +731,7 @@ pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTa
         tl!("East Asian Composition Settings"),
     ];
     let bodies = [
-        general_rows(edited_attrs(fields, opening)),
+        general_rows(edited_attrs(fields, opening), opening.style == NORMAL_PARA),
         basic_rows(),
         tabs_rows(fields, opening),
         composition_rows(),
@@ -786,8 +787,13 @@ pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     let unit = app.session.general_unit();
     let state = app.session.active().ok_or("no document open")?;
     let (document, doc) = ((state.uid, state.reverts), &state.doc);
-    let def = doc.para_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no style `{name}`"))?;
-    let opening = Arc::new(Opening::new(name, def.attrs.clone(), unit, vertical_text(app)));
+    // [Normal Paragraph Style] has no definition until it is first redefined: it sets nothing.
+    let attrs = match doc.para_styles.iter().find(|s| s.name == name) {
+        Some(def) => def.attrs.clone(),
+        None if name == NORMAL_PARA => Map::new(),
+        None => return Err(format!("no style `{name}`")),
+    };
+    let opening = Arc::new(Opening::new(name, attrs, unit, vertical_text(app)));
     let dialog = ParaStyleOptions { inner: hosted(KIND, tl!("Paragraph Style Options"), &opening, name).previews(), opening, document };
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(json!({"dialog": KIND}))

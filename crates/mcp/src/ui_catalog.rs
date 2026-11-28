@@ -616,13 +616,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "toolbar.addCommand",
         "Toolbar: Add Command",
         "",
-        "{command: id, toolbar: name, at?: n} put a button for `command` (a Command Palette result other than a tool: a command's id, or `plugin:<id>`, `effect:<id>` or `panel:<id>`) on the toolbar made with New Toolbar called `toolbar`, after its tools, moving it if it is there already: at place `at` among its command buttons (0 = the first; omitted: at the end), as Add Command in its Add Tool… menu and Move Up and Move Down in the button's context menu do; a click on the button runs what the command's menu item runs; an unknown command, a tool, a command that needs params a click does not give (such as this one) or an `at` past the end is an error and changes nothing; kept with the workspace; returns the toolbar's commands",
+        "{command: id, toolbar: name, at?: n, label?: text} put a button for `command` (a Command Palette result other than a tool: a command's id, or `plugin:<id>`, `effect:<id>` or `panel:<id>`) on the toolbar made with New Toolbar called `toolbar`, after its tools, moving it if it is there already: at place `at` among its command buttons (0 = the first; omitted: at the end), as Add Command in its Add Tool… menu and Move Up and Move Down in the button's context menu do; with `label`, the button shows that label, as toolbar.renameCommand gives it (an empty `label` gives it the command's own label again); a click on the button runs what the command's menu item runs; an unknown command, a tool, a command that needs params a click does not give (such as this one), an `at` past the end, or a `label` that is not text or is longer than 64 characters is an error and changes nothing; kept with the workspace; returns the toolbar's commands",
     ),
     (
         "toolbar.removeCommand",
         "Toolbar: Remove Command",
         "",
-        "{command: id, toolbar: name} take the button for `command` off the toolbar made with New Toolbar called `toolbar` (one not on it stays off; a command that is no longer installed can be taken off too), as Remove Command in its Add Tool… menu and Remove from Toolbar in the button's context menu do; returns the toolbar's commands",
+        "{command: id, toolbar: name} take the button for `command` off the toolbar made with New Toolbar called `toolbar`, with its own label (one not on it stays off; a command that is no longer installed can be taken off too), as Remove Command in its Add Tool… menu and Remove from Toolbar in the button's context menu do; returns the toolbar's commands",
+    ),
+    (
+        "toolbar.renameCommand",
+        "Toolbar: Rename Button",
+        "",
+        "{command: id, toolbar: name, label?: text} give the button for `command` on the toolbar made with New Toolbar called `toolbar` the label `label` (spaces at its ends dropped, at most 64 characters; empty: the command's own label again), as Rename Button… in the button's context menu does; without `label` (or with null), opens the Rename Button dialog and returns null; the hover text still shows the command's name and shortcut, and a screen reader says the label and then the command's name, or only the label when it is the command's label or name; a button the toolbar does not have, or a label that is not text or is longer, is an error and changes nothing; kept with the workspace; returns {command, label} (`label` null for the command's own)",
     ),
     (
         "toolbar.reset",
@@ -682,7 +688,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.toolbar.list",
         "List Toolbars",
         "",
-        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, commands, floating, side, order}], `commands` the Command Palette results of its command buttons, `side` the edge it docks at (while floating, the edge it docked at last) and `order` its column's place in that edge's dock, 0 at the window's edge, while docked (else null)",
+        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, commands, labels, floating, side, order}], `commands` the Command Palette results of its command buttons, `labels` the labels given to them with Rename Button… ({command: label}), `side` the edge it docks at (while floating, the edge it docked at last) and `order` its column's place in that edge's dock, 0 at the window's edge, while docked (else null)",
     ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
@@ -1126,7 +1132,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.brushOptions",
         "Brush Options…",
         "",
-        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens (dialog `brushOptions`): Calligraphic (fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation), Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness), Scatter (fields sizeMin/sizeMax/sizeMode, spacingMin/spacingMax/spacingMode, scatterMin/scatterMax/scatterMode, rotationMin/rotationMax/rotationMode with modes fixed|random|pressure, rotationRelativeTo: page|path, hueJitter 0..180°), Art (fields width %, scaleMode: proportional|stretch|betweenGuides, guideStart/guideEnd % of the art length, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flipAlong, flipAcross) or Pattern (fields scale %, spacing %, fit: stretch|addSpace|approximate, flipAlong, flipAcross); Scatter, Art and Pattern also colorization: none|tints|tintsAndShades|hueShift, keyColor, and tips: true opens Colorization Tips (what each method does, beside a sample of the brush painted with it), as the Tips button beside Method does; OK runs brush.options",
+        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens (dialog `brushOptions`): Calligraphic (fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation), Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness), Scatter (fields sizeMin/sizeMax/sizeMode, spacingMin/spacingMax/spacingMode, scatterMin/scatterMax/scatterMode, rotationMin/rotationMax/rotationMode with modes fixed|random|pressure, rotationRelativeTo: page|path, hueJitter 0..180°, saturationJitter 0..100%, brightnessJitter 0..100%), Art (fields width %, scaleMode: proportional|stretch|betweenGuides, guideStart/guideEnd % of the art length, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flipAlong, flipAcross) or Pattern (fields scale %, spacing %, fit: stretch|addSpace|approximate, flipAlong, flipAcross); Scatter, Art and Pattern also colorization: none|tints|tintsAndShades|hueShift, keyColor, and tips: true opens Colorization Tips (what each method does, beside a sample of the brush painted with it), as the Tips button beside Method does; OK runs brush.options",
     ),
     (
         "ui.brushObjectOptions",
@@ -1144,7 +1150,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.charStyleOptions",
         "Character Style Options",
         "",
-        "{name} open Character Style Options (dialog `charStyleOptions`); OK runs charStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
+        "{name} open Character Style Options (dialog `charStyleOptions`), [Normal Character Style] included with Style Name disabled; OK runs charStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
     ),
     (
         "ui.charStyleOptions.resetPanel",
@@ -1156,7 +1162,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.paraStyleOptions",
         "Paragraph Style Options",
         "",
-        "{name} open Paragraph Style Options (dialog `paraStyleOptions`, sections General, Basic Paragraph Formats, Composition, Hyphenation and Justification); OK runs paraStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
+        "{name} open Paragraph Style Options (dialog `paraStyleOptions`, sections General, Basic Paragraph Formats, Composition, Hyphenation and Justification), [Normal Paragraph Style] included with Style Name disabled; OK runs paraStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
     ),
     (
         "ui.paraStyleOptions.resetPanel",
@@ -1998,7 +2004,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.dialog",
         "Plug-in…",
         "",
-        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter at the value the filter last ran with in this session, else its default, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns). On the web the dialog has no live preview, and every filter it runs, at once or on OK, runs in a Web Worker → {background: true, status}",
+        "{id: an object filter or generator plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter at the value the filter last ran with in this session, else its default, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns). On the web the filter's dialog has no live preview, and every filter it runs, at once or on OK, runs in a Web Worker → {background: true, status}. A generator draws new generated art at once when it takes no parameters or params are given (plugin.generate), else opens dialog `pluginGenerate` (a row per parameter; OK runs plugin.generate)",
+    ),
+    (
+        "ui.editGeneratedArt",
+        "Edit Generated Art…",
+        "",
+        "{id?: a generated art object (default: the one selected)} Object › Plug-ins › Edit Generated Art…: open dialog `pluginGenerate` with the parameters the object was drawn with; OK runs plugin.editGenerated, which draws its art again as one undo step (none when nothing changed). An object whose generator isn't installed, or whose saved plug-in id, parameters, transforms or scales are damaged, is an error naming it, and its art stays as it is",
     ),
     (
         "plugin.applyLastFilter",

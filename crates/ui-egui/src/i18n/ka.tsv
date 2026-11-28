@@ -1088,7 +1088,9 @@
 @msg	more than {MAX_IMPORT} presets	{MAX_IMPORT}-ზე მეტი პრესეტი
 @msg	moved must be [[x,y]…]	moved უნდა იყოს [[x,y]…]
 @msg	must be an object with `kind` and `value`	უნდა იყოს ობიექტი `kind`-ით და `value`-თი
-@msg	must have `kind` alert, confirm or prompt	`kind` უნდა იყოს alert, confirm ან prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind` უნდა იყოს alert, confirm, prompt ან window
+@msg	is a window's answer, whose `value` must be a list of steps	არის ფანჯრის პასუხი, რომლის `value` უნდა იყოს ნაბიჯების სია
+@msg	has a step {i} that is not a valid click, change or close	შეიცავს ნაბიჯს {i}, რომელიც არ არის სწორი დაწკაპუნება, ცვლილება ან დახურვა
 @msg	must have exactly `kind` and `value`	უნდა ჰქონდეს ზუსტად `kind` და `value`
 @msg	name (a toolbar's name) is required	საჭიროა name (ხელსაწყოთა ზოლის სახელი)
 @msg	name (a toolbar's name) must be a string	name (ხელსაწყოთა ზოლის სახელი) უნდა იყოს სტრიქონი

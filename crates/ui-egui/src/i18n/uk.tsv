@@ -9638,7 +9638,9 @@ breakText	Glyphs	Гліфи
 @msg	more than {MAX_IMPORT} presets	понад {MAX_IMPORT} наборів
 @msg	moved must be [[x,y]…]	moved має бути [[x,y]…]
 @msg	must be an object with `kind` and `value`	має бути об’єктом із `kind` і `value`
-@msg	must have `kind` alert, confirm or prompt	повинен мати `kind` зі значенням alert, confirm або prompt
+@msg	must have `kind` alert, confirm, prompt or window	повинен мати `kind` зі значенням alert, confirm, prompt або window
+@msg	is a window's answer, whose `value` must be a list of steps	є відповіддю вікна, `value` якої має бути списком кроків
+@msg	has a step {i} that is not a valid click, change or close	має крок {i}, який не є допустимим клацанням, зміною або закриттям
 @msg	must have exactly `kind` and `value`	повинен мати рівно `kind` і `value`
 @msg	name (a toolbar's name) is required	name (ім’я панелі інструментів) є обов’язковим
 @msg	name (a toolbar's name) must be a string	name (ім’я панелі інструментів) має бути рядком

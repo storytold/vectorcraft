@@ -1448,6 +1448,10 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
             {
                 return wrap(r);
             }
+            // A script's ScriptUI dialog gives the script an event and stays open.
+            if let Some(r) = crate::dialogs::script_window::dialog_method(app, method, &params) {
+                return wrap(r);
+            }
             // `ui.dialog.set {action}` answers the dialog after setting its fields: the app's own key, which the
             // framework's method does not take.
             let action = if method == "ui.dialog.set" { params.as_object_mut().and_then(|o| o.remove("action")) } else { None };
