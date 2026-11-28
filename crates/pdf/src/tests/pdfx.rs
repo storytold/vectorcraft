@@ -127,6 +127,9 @@ fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
         // Validators expect the version property to inherit its namespace from the description.
         assert_eq!(attributes.contains(r#"xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/""#), is_pdfx4, "{standard:?}: {attributes}");
         assert_eq!(xmp_value(&xmp, "pdfxid:GTS_PDFXVersion"), is_pdfx4.then_some("PDF/X-4"), "{standard:?}");
+        // The edited packet is still well-formed XML: the namespace is declared once.
+        assert_eq!(attributes.matches("xmlns:pdfxid=").count(), usize::from(is_pdfx4), "{standard:?}: {attributes}");
+        assert!(craft_xml::Options::default().strict().parse(xmp.as_bytes()).is_ok(), "{standard:?}: {xmp}");
         assert_eq!(t.contains("<pdf:Trapped>False</pdf:Trapped>"), standard == Standard::PdfX4);
         assert!(!t.contains("/Encrypt"), "{standard:?}");
         // The file reads back.
