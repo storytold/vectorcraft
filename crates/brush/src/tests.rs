@@ -1566,6 +1566,39 @@ fn brightness_jitter_moves_after_the_colorization_in_each_model() {
     assert!(lab.iter().all(|c| matches!(*c, Color::Lab { l, a, b } if a == 40.0 && b == 30.0 && (l - 50.0).abs() <= 20.001)), "{lab:?}");
 }
 
+/// A swatch-linked color already at the end a copy's saturation or brightness moves toward stays as
+/// it is and keeps its link; the copies that move it lose the link.
+#[test]
+fn jitter_at_a_limit_keeps_the_swatch_link() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    // Full red (full saturation and brightness), full magenta and yellow ink, and a Lab red whose a
+    // is at its largest: saturation that grows and brightness that grows leave them as they are.
+    for (color, saturation_jitter, brightness_jitter) in [
+        (Color::rgb(1.0, 0.0, 0.0), 50.0, 0.0),
+        (Color::cmyk(0.0, 1.0, 1.0, 0.0), 50.0, 0.0),
+        (Color::lab(50.0, 127.0, 0.0), 50.0, 0.0),
+        (Color::rgb(1.0, 0.0, 0.0), 0.0, 50.0),
+        (Color::lab(100.0, 20.0, 10.0), 0.0, 50.0),
+    ] {
+        let linked = Paint::Solid { color, swatch: Some("Spot".into()), tint: 1.0 };
+        let mut art = rect_art(10.0, 4.0);
+        art.appearance.set_fill(linked.clone());
+        let mut s = Scatter { art, saturation_jitter, ..Default::default() };
+        s.brightness_jitter = brightness_jitter;
+        let out = stroke_pieces(&doc, &Brush { name: "s".into(), kind: BrushKind::Scatter(s) }, &path, &stroke(1.0));
+        let (mut kept, mut moved) = (0, 0);
+        for n in &out {
+            match n.appearance.fill_paint() {
+                p if p == linked => kept += 1,
+                Paint::Solid { color: c, swatch: None, .. } if c != color => moved += 1,
+                p => panic!("{color:?}: {p:?}"),
+            }
+        }
+        assert!(kept > 0 && moved > 0, "{color:?}: {kept} kept, {moved} moved");
+    }
+}
+
 /// An instance whose fill has an opacity of 0 does not stain its symbol's art, so the art keeps its
 /// swatch links.
 #[test]

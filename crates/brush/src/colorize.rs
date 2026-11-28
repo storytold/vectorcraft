@@ -212,7 +212,8 @@ const LAB_AB_MAX: f64 = 127.0;
 /// so its hue and brightness stay: RGB in HSB of its values, CMYK over C, M and Y with K kept, Lab
 /// by moving its chroma (the length of a and b) by `points` with its lightness and hue angle kept.
 /// The result stays between no saturation and full. `None` for a color without a hue (white,
-/// black and grays, which have no saturation to move).
+/// black and grays, which have no saturation to move) and for one whose saturation stays as it is
+/// (already at the end it would move past), so such a color keeps its swatch link.
 fn saturated(c: &Color, points: f32) -> Option<Color> {
     if !points.is_finite() || vectorcraft_color::recolor::Neutral::of(c).is_some() {
         return None;
@@ -220,7 +221,8 @@ fn saturated(c: &Color, points: f32) -> Option<Color> {
     let by = points / 100.0;
     let move_by = |v: [f32; 3]| {
         let [h, s, b] = vectorcraft_color::rgb_to_hsb(v);
-        (s > 0.0).then(|| vectorcraft_color::hsb_to_rgb([h, (s + by).clamp(0.0, 1.0), b]))
+        let to = (s + by).clamp(0.0, 1.0);
+        (s > 0.0 && to != s).then(|| vectorcraft_color::hsb_to_rgb([h, to, b]))
     };
     match *c {
         Color::Rgb { r, g, b } => move_by([r, g, b]).map(|[r, g, b]| Color::rgb(r, g, b)),
@@ -236,7 +238,7 @@ fn saturated(c: &Color, points: f32) -> Option<Color> {
             // already reaches past that does not grow.
             let fit = (LAB_AB_MAX / a.abs().max(b.abs())).max(1.0);
             let scale = ((chroma + f64::from(points)).max(0.0) / chroma).min(fit);
-            Some(Color::lab(l, (a * scale) as f32, (b * scale) as f32))
+            (scale != 1.0).then(|| Color::lab(l, (a * scale) as f32, (b * scale) as f32))
         }
     }
 }
