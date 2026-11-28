@@ -960,6 +960,8 @@ row under the topmost visible one is not stored, also when that row shows throug
 mark loses it when the graph is drawn again. A mark whose row
 already has the paint counts as written, so its paint replaces the one another mark of the series left on the graph.
 When one of these commands writes several paths of a series, the frontmost of them sets what the graph stores.
+`paint.setFill` and `paint.setStroke` with `opacity` store the opacity and blend mode of the row they write when it is
+the topmost visible row of its kind, also when that row already had the opacity.
 
 `appearance.addFill`, `appearance.addStroke`, `appearance.setItem`, `appearance.removeItem`,
 `appearance.duplicateItem`, `appearance.moveItem`, `appearance.clear`, `appearance.reduceToBasic`,
