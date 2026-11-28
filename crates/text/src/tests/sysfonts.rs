@@ -1257,3 +1257,21 @@ fn a_name_asked_for_before_its_font_is_installed_finds_it_after_a_rescan() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A document names `Gilroy-Black` as the family Gilroy in the style Black. A file whose own family is
+/// `Gilroy-Black`, with no style, is that face, once cataloged and in a search of a folder.
+#[test]
+fn a_search_finds_the_file_of_a_postscript_name_split_into_family_and_style() {
+    let data = named(&[(3, EN, 1, "Gilroy-Black"), (3, EN, 4, "Gilroy-Black"), (3, EN, 6, "Gilroy-Black")]);
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-split-ps", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("Gilroy-Black.ttf");
+    std::fs::write(&file, &data).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    let (face, matched) = db.resolve("Gilroy", "Black").unwrap();
+    assert_eq!(matched, FontMatch::Exact, "{face:?}");
+    let wanted = |style: &str| WantedFonts::new(&[WantedFont { family: "Gilroy".into(), style: style.into(), installed: None }]);
+    assert_eq!(wanted("Black").provided_by(&file), [0]);
+    assert!(wanted("Bold").provided_by(&file).is_empty(), "another style of the family is another file");
+    let _ = std::fs::remove_dir_all(dir);
+}
