@@ -90,6 +90,8 @@ use interp::{Fault, Interp};
 use obj::PsError;
 
 pub use ai::NameEncoding;
+#[cfg(any(test, feature = "work-count"))]
+pub use ai::blend_work;
 #[cfg(test)]
 pub(crate) use ai::objects_read;
 #[cfg(test)]
@@ -276,6 +278,12 @@ fn program(bytes: &[u8]) -> Result<&[u8], String> {
 pub fn page(bytes: &[u8]) -> Result<Rect, String> {
     let [llx, lly, urx, ury] = Dsc::read(program(bytes)?).bbox.unwrap_or(LETTER);
     Ok(Rect::new(0.0, 0.0, urx - llx, ury - lly))
+}
+
+/// An EPS or PostScript file's bounding box (`%%HiResBoundingBox` when it has one) in its own
+/// space, as `[llx, lly, urx, ury]`, read from its comments; `None` without one.
+pub(crate) fn bounding_box(bytes: &[u8]) -> Option<[f64; 4]> {
+    Dsc::read(program(bytes).ok()?).bbox
 }
 
 /// [`import`], an Illustrator EPS through the editing copy of its art only when `editing_data`

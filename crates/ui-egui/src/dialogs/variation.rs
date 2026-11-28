@@ -57,12 +57,13 @@ fn variation_rows(
             .id_salt(salt.to_owned())
             .show(ui)
             .edit
-            .value()
+            .events
+            .landed()
             .and_then(|typed| typed.to_owned())
     };
     let shown = Stack::new().fill_width().show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
-            if let Some(picked) = Select::new(tl!("Mode"), Bind::given(mode_at), &entries).id_salt("mode").show(ui).value() {
+            if let Some(picked) = Select::new(tl!("Mode"), Bind::given(mode_at), &entries).id_salt("mode").show(ui).events.committed() {
                 set_mode = offered.get(*picked).copied();
             }
             set_value = field(tl!("Value"), value, range, true, "value", ui);
@@ -81,4 +82,93 @@ fn variation_rows(
         fields.set(var_key, FieldValue::Number(v));
     }
     shown.output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::VectorcraftApp;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::patterns::form_dialogs::HostedParamDialog;
+    use egui::{Key, Modifiers};
+    use serde_json::{Value, json};
+    use vectorcraft_engine::Session;
+
+    fn draft(panel: &Panel) -> DialogFields {
+        panel.app().dialogs().unwrap().with(|host| host.get::<HostedParamDialog>().unwrap().fields().clone())
+    }
+
+    /// The Eraser's first shared row is Angle; the Blob Brush has only the shared Size row.
+    /// Both offered mode lists and both numbers take real keyboard input through their tool dialog.
+    #[test]
+    fn cancelled_variation_controls_do_not_reach_the_eraser_or_blob_brush_options() {
+        for (tool, key, initial, spread, typed, variation, accepted_mode) in
+            [("eraser", "angle", 17.0, 9.0, "37", "15", "random"), ("blobBrush", "size", 10.5, 2.5, "20.5", "4.5", "fixed")]
+        {
+            for (commit, save) in [(false, true), (true, true), (true, false)] {
+                let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+                app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+                let mode_key = format!("{key}Mode");
+                let variation_key = format!("{key}Variation");
+                let mut values = serde_json::Map::new();
+                values.insert(key.into(), json!(initial));
+                values.insert(mode_key.clone(), json!("pressure"));
+                values.insert(variation_key.clone(), json!(spread));
+                app.run("tool.setOption", json!({"tool": tool, "values": values})).unwrap();
+                let original = app.session.tool_options_of(tool);
+                let document = app.session.active().unwrap().doc.clone();
+                let undo = app.session.active().unwrap().history.undo.len();
+                let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+                panel.room(egui::vec2(1000.0, 1200.0));
+                crate::toolbar::open_options(&mut panel.app(), tool).unwrap();
+                panel.frame();
+                let before = draft(&panel);
+                panel.click_role("Mode", Role::COMBO_BOX);
+                panel.key(Key::ArrowUp, Modifiers::NONE);
+                panel.key(Key::Escape, Modifiers::NONE);
+                assert_eq!(draft(&panel), before, "a cancelled mode choice keeps every companion field");
+                for (label, text) in [("Value", typed), ("Variation:", variation)] {
+                    panel.click_role(label, Role::SPIN_BUTTON);
+                    panel.key(Key::A, Modifiers::COMMAND);
+                    panel.type_text(text);
+                    panel.key(Key::Escape, Modifiers::NONE);
+                    assert!(!panel.app().dialogs().unwrap().with(|host| host.is_open::<HostedParamDialog>()));
+                    assert_eq!(panel.app().session.tool_options_of(tool), original, "the canceled {label} leaves the tool unchanged");
+                    crate::toolbar::open_options(&mut panel.app(), tool).unwrap();
+                    panel.frame();
+                    assert_eq!(draft(&panel), before, "reopening shows the exact original values");
+                }
+                if commit {
+                    for (label, text) in [("Value", typed), ("Variation:", variation)] {
+                        panel.click_role(label, Role::SPIN_BUTTON);
+                        panel.key(Key::A, Modifiers::COMMAND);
+                        panel.type_text(text);
+                        panel.key(Key::Tab, Modifiers::NONE);
+                    }
+                    panel.click_role("Mode", Role::COMBO_BOX);
+                    panel.key(Key::ArrowUp, Modifiers::NONE);
+                    panel.key(Key::Enter, Modifiers::NONE);
+                    assert_eq!(draft(&panel).text(&mode_key), Some(accepted_mode));
+                    assert_eq!(draft(&panel).number(key), typed.parse::<f64>().ok());
+                    assert_eq!(draft(&panel).number(&variation_key), variation.parse::<f64>().ok());
+                }
+                assert_eq!(panel.app().session.tool_options_of(tool), original, "tool settings stay unchanged until OK");
+                panel.click(if save { "OK" } else { "Cancel" });
+                panel.frame();
+                panel.frame();
+                assert!(!panel.app().dialogs().unwrap().with(|host| host.is_open::<HostedParamDialog>()));
+                let after = panel.app().session.tool_options_of(tool);
+                if commit && save {
+                    assert_eq!(after[key], Value::from(typed.parse::<f64>().unwrap()));
+                    assert_eq!(after[&mode_key], accepted_mode);
+                    assert_eq!(after[&variation_key], Value::from(variation.parse::<f64>().unwrap()));
+                } else {
+                    assert_eq!(after, original);
+                }
+                assert_eq!(panel.app().session.active().unwrap().doc, document);
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            }
+        }
+    }
 }

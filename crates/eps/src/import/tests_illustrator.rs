@@ -56,6 +56,19 @@ fn tree(nodes: &[Arc<Node>]) -> String {
     nodes.iter().map(one).collect::<Vec<_>>().join(" ")
 }
 
+/// Placed EPS files drawn as the app draws them: the art of the file read as it opens, in its
+/// bounding box (the engine registers the app's own loader).
+fn draw_placed_eps() {
+    fn load(_: &vectorcraft_doc::PlacedDocument, bytes: &[u8]) -> Option<(vectorcraft_doc::Document, Node, Rect)> {
+        let mut doc = import(bytes).ok()?.document;
+        let frame = doc.artboards.first()?.rect;
+        let layers = std::mem::take(&mut doc.layers);
+        let children = layers.iter().flat_map(|l| l.children().map(|c| c.to_vec()).unwrap_or_default()).collect();
+        Some((doc, Node::new(vectorcraft_doc::NodeId(0), NodeKind::Group { children, clip: false }), frame))
+    }
+    vectorcraft_doc::placed_document::set_loader(load);
+}
+
 fn read(header: &str, ugroup: &str, body: &str) -> (String, Vec<String>) {
     let r = import(&ai(header, ugroup, body)).unwrap();
     (tree(r.document.layers[0].children().unwrap()), r.warnings)
@@ -424,9 +437,10 @@ fn a_postscript_ai_with_a_template_box_and_no_art_size_opens_on_a_letter_artboar
 }
 
 /// A placed EPS in the legacy format (version 7 specification §16, no `%AI5_BeginPlace`), its file
-/// included whole: the layers come in, the placed file as the art the page draws in its box.
+/// included whole: the layers come in, the placed file as a placed document of its bytes in its box.
 #[test]
 fn a_legacy_file_with_a_placed_eps_comes_in_through_its_layers() {
+    draw_placed_eps();
     // `` ` `` takes the file's user space into the page's (`concat`); `~` restores it.
     let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /k {setcmykcolor} def\n\
                   /` {gsave 5 {pop} repeat concat} def /~ {grestore} def";
@@ -440,14 +454,35 @@ fn a_legacy_file_with_a_placed_eps_comes_in_through_its_layers() {
     let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
     assert_eq!(names, ["Back"], "{:?}", r.warnings);
     let art = r.document.layers[0].children().unwrap();
-    assert_eq!(tree(art), "p g[p]", "{:?}", r.warnings);
+    let NodeKind::PlacedDocument(p) = &art[1].kind else { panic!("{}: {:?}", tree(art), r.warnings) };
+    assert_eq!(r.document.images[&p.key].bytes.as_slice(), eps.as_bytes(), "the file's bytes");
+    assert_eq!(p.link.path, "art.eps");
     // The file's box, moved by the matrix: 20 40 60 70 on the page, y up.
     let bounds = art[1].geometric_bounds().unwrap();
     assert!(
         (bounds.x0 - 20.0).abs() < 0.01 && (bounds.y0 - 30.0).abs() < 0.01 && (bounds.x1 - 60.0).abs() < 0.01 && (bounds.y1 - 60.0).abs() < 0.01,
         "{bounds:?}"
     );
-    assert!(r.warnings.iter().any(|w| w.contains("placed files")), "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+/// A legacy file whose placed EPS file, included whole, has type: the page's type is the placed
+/// file's, so the layers come in with it as a placed document.
+#[test]
+fn a_legacy_file_with_a_placed_eps_with_type_comes_in_through_its_layers() {
+    draw_placed_eps();
+    let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /k {setcmykcolor} def\n\
+                  /` {gsave 5 {pop} repeat concat} def /~ {grestore} def";
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n\
+               /Helvetica findfont 12 scalefont setfont 15 30 moveto (Hi) show\n%%EOF\n";
+    let placed = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}%%EndDocument\n~\n");
+    let body = format!("%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Back) Ln\n0 A\n0 0 0 1 k\n{} {placed}LB\n%AI5_EndLayer--\n", tri(10));
+    let file = String::from_utf8(ai(AI8, "", &body)).unwrap().replace("%%EndProlog", &format!("{prolog}\n%%EndProlog"));
+    let r = import(file.as_bytes()).unwrap();
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Back"], "{:?}", r.warnings);
+    let art = r.document.layers[0].children().unwrap();
+    assert!(matches!(art[1].kind, NodeKind::PlacedDocument(_)), "{}: {:?}", tree(art), r.warnings);
 }
 
 /// A legacy file with a linked image (version 7 specification §8.2, §8.3: `(path) modified XG`, then

@@ -297,6 +297,74 @@ fn depth() -> usize {
     DEPTH.with(Cell::get)
 }
 
+/// How a frame draws art ([`Renderer::layer_mode`]): whether Layer Options apply (on screen;
+/// exports and thumbnails ignore them), whether the art draws in Outline mode, and whether Show
+/// Images in Outline Mode is on for it ([`Renderer::shows_outline_images`]). Layers are measured
+/// in the mode they draw in, and placed documents are their crossed box in Outline mode without
+/// Show Images in Outline Mode ([`vectorcraft_doc::placed_document::Crossed`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LayerMode {
+    pub(crate) options: bool,
+    pub(crate) outline: bool,
+    pub(crate) images: bool,
+}
+
+thread_local! {
+    /// The mode of the frame being drawn or measured on this thread ([`LayerMode::enter`]).
+    static MODE: Cell<Option<LayerMode>> = const { Cell::new(None) };
+}
+
+impl LayerMode {
+    /// The mode layer `n` draws its art in when its Layer Options change it: a template layer stays
+    /// in Preview in Outline mode (#1486), and a layer whose Preview is off draws in outline.
+    /// `None` for other objects and for a layer that draws in this mode.
+    pub(crate) fn inside(self, n: &Node) -> Option<Self> {
+        let vectorcraft_doc::NodeKind::Layer { preview, template, .. } = &n.kind else { return None };
+        if !self.options {
+            return None;
+        }
+        let outline = if *template && self.outline {
+            false
+        } else if !preview && !template && !self.outline {
+            true
+        } else {
+            return None;
+        };
+        Some(Self { outline, ..self })
+    }
+
+    /// The mode of the frame being drawn or measured on this thread, if any.
+    pub(crate) fn now() -> Option<Self> {
+        MODE.with(Cell::get)
+    }
+
+    /// Draw and measure in this mode on this thread until the guard returned is dropped.
+    pub(crate) fn enter(self) -> InMode {
+        let crossed = vectorcraft_doc::placed_document::Crossed::set(self.outline && !self.images);
+        InMode { was: MODE.with(|m| m.replace(Some(self))), _crossed: crossed }
+    }
+}
+
+/// While alive: art on this thread is drawn and measured in a [`LayerMode`]; once dropped, in the
+/// mode before it.
+#[must_use]
+pub(crate) struct InMode {
+    was: Option<LayerMode>,
+    _crossed: vectorcraft_doc::placed_document::Crossed,
+}
+
+impl Drop for InMode {
+    fn drop(&mut self) {
+        MODE.with(|m| m.set(self.was));
+    }
+}
+
+/// Measure layer `n` in the mode its Layer Options draw it in, inside the mode on this thread
+/// ([`LayerMode::inside`]), until the guard returned is dropped; `None` when that is the same mode.
+pub(crate) fn enter_layer(n: &Node) -> Option<InMode> {
+    LayerMode::now()?.inside(n).map(LayerMode::enter)
+}
+
 /// Render `art` of a placed document's file (`doc`, its resources) into `w`×`h` transparent
 /// pixels through `view`, the placed documents inside it one level deeper.
 pub fn render_inside(r: &mut Renderer, doc: &vectorcraft_doc::Document, art: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<crate::Rendered> {
@@ -489,8 +557,8 @@ impl Renderer {
     }
 
     /// Draw placed document `p` as its box crossed from corner to corner ([`Self::crosses_placed`]).
-    /// Its file is still read, as when its art is drawn: the art its effects and its group's effects
-    /// make comes from the read kept.
+    /// Its file is still read, as when its art is drawn: once the frame shows images again, the art
+    /// its effects and its group's effects make comes from the read kept.
     pub(crate) fn draw_crossed_placed(&mut self, ctx: &mut RenderContext, f: &Frame, p: &PlacedDocument) {
         if let Some(blob) = f.doc.images.get(&p.key) {
             let _ = read_placed(p, blob);

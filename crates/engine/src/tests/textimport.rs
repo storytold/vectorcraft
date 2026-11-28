@@ -995,25 +995,32 @@ fn doc_styles_are_worked_out_once_however_many_paragraphs_use_them() {
             styles.push(Some((stk, if i == first { 0x0FFF } else { i - 1 }, vec![], chpx)));
         }
     }
-    // 20,000 hidden paragraphs in the last paragraph style with the last character style, then one
-    // shown.
-    let text: &'static str = format!("{}x\r", "\r".repeat(20_000)).leak();
-    let doc = Word97 {
-        pieces: vec![(text, true)],
-        chpx: vec![(0, 20_000, prls(&[(0x4A30, &[63, 0]), (0x083C, &[1])])), (20_000, 20_002, prls(&[(0x4A30, &[63, 0])]))],
-        papx: vec![(20_001, 31, vec![])],
-        styles,
-        ..Word97::default()
-    }
-    .build();
+    // `hidden` hidden paragraphs in the last paragraph style with the last character style, then
+    // one shown; the Prls read placing it.
     let mut s = session();
-    let started = std::time::Instant::now();
-    let r = s.execute("file.place", &json!({"name": "a.doc", "dataBase64": vectorcraft_format::base64_encode(&doc)})).unwrap();
-    let took = started.elapsed();
-    let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
-    let NodeKind::Text(t) = &n.kind else { panic!("not type") };
-    assert_eq!((t.runs.len(), t.runs[0].text.as_str(), t.runs[0].style.font_style.as_str(), t.runs[0].style.size), (1, "x", "Italic", 12.0));
-    assert!(took < std::time::Duration::from_secs(10), "placing took {took:?}");
+    let mut place_hidden = |hidden: u32| {
+        let text: &'static str = format!("{}x\r", "\r".repeat(hidden as usize)).leak();
+        let doc = Word97 {
+            pieces: vec![(text, true)],
+            chpx: vec![(0, hidden, prls(&[(0x4A30, &[63, 0]), (0x083C, &[1])])), (hidden, hidden + 2, prls(&[(0x4A30, &[63, 0])]))],
+            papx: vec![(hidden + 1, 31, vec![])],
+            styles: styles.clone(),
+            ..Word97::default()
+        }
+        .build();
+        crate::cmd::place::PRLS_READ.set(0);
+        let r = s.execute("file.place", &json!({"name": "a.doc", "dataBase64": vectorcraft_format::base64_encode(&doc)})).unwrap();
+        let n = s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap().clone();
+        let NodeKind::Text(t) = &n.kind else { panic!("not type") };
+        assert_eq!((t.runs.len(), t.runs[0].text.as_str(), t.runs[0].style.font_style.as_str(), t.runs[0].style.size), (1, "x", "Italic", 12.0));
+        crate::cmd::place::PRLS_READ.get()
+    };
+    let one = place_hidden(1);
+    let many = place_hidden(20_000);
+    // The styles' own Prls: 21,000 in each of the 64, and the two first ones' sizes.
+    let sheet = 64 * 21_000 + 2;
+    assert!(one >= sheet && one < 2 * sheet, "each style's properties are read once: {one} Prls read, {sheet} in the styles");
+    assert!(many <= one + 20_000, "20,000 more paragraphs read {} more Prls", many - one);
     // A chain of 34 paragraph styles, each based on the next; the last is 12 pt. Styles 31 and 0
     // both take its size.
     let mut styles: Vec<_> = (0..33u16).map(|i| Some((1, i + 1, vec![], vec![]))).collect();
