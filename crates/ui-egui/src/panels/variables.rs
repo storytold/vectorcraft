@@ -706,14 +706,29 @@ fn ask_open(app: &mut VectorcraftApp, filters: &[(&str, &[&str])], command: &'st
     })
 }
 
-/// Asks for a file `name` to write with `filters` and runs `command` with its path; a cancelled
-/// dialog does nothing → what [`file_asks::ask`] returns.
-fn ask_save(app: &mut VectorcraftApp, name: &str, filters: &[(&str, &[&str])], command: &'static str) -> Value {
+/// Desktop saves run the path command after the picker; browser saves serialize through the
+/// command and give the bytes to the file service for a save or download.
+fn ask_save(app: &mut VectorcraftApp, name: &str, filters: &[(&str, &[&str])], command: &'static str, field: &str) -> Value {
     let request = filters.iter().fold(PickRequest::save("variables").file_name(name), |r, (name, exts)| r.filter(*name, exts));
-    file_asks::ask(app, request, Owner::Document, move |app, picked| match picked.first_path() {
-        Some(path) => app.run(command, json!({"path": path.to_string_lossy()})),
-        None => Ok(Value::Null),
-    })
+    if !app.host.files().browser_saves() {
+        return file_asks::ask(app, request, Owner::Document, move |app, picked| match picked.first_path() {
+            Some(path) => app.run(command, json!({"path": path.to_string_lossy()})),
+            None => Ok(Value::Null),
+        });
+    }
+    let output = match app.run(command, json!({})) {
+        Ok(output) => output,
+        Err(error) => {
+            app.status(error);
+            return Value::Null;
+        }
+    };
+    let Some(text) = output.get(field).and_then(Value::as_str) else {
+        app.status("The export returned no file contents");
+        return Value::Null;
+    };
+    let bytes = text.as_bytes().to_vec();
+    file_asks::save(app, request, bytes, Owner::Document, |_, _| Ok(Value::Null))
 }
 
 /// Import…: one file dialog for a CSV, TSV, TXT or XML file, and `variable.import` on the chosen
@@ -727,9 +742,9 @@ fn import_datasets(app: &mut VectorcraftApp) -> Value {
     ask_open(app, &[CSV], "dataset.import")
 }
 
-/// Export Data Sets…: a path, and `dataset.export` to it.
+/// Export Data Sets…: save or download the CSV from `dataset.export`.
 fn export_datasets(app: &mut VectorcraftApp) -> Value {
-    ask_save(app, "datasets.csv", &[("CSV", &["csv"])], "dataset.export")
+    ask_save(app, "datasets.csv", &[("CSV", &["csv"])], "dataset.export", "csv")
 }
 
 /// Load Variable Library…: an XML file, and `variable.loadLibrary` on it.
@@ -737,9 +752,9 @@ fn load_library(app: &mut VectorcraftApp) -> Value {
     ask_open(app, &[XML], "variable.loadLibrary")
 }
 
-/// Save Variable Library…: a path for an XML file, and `variable.saveLibrary` to it.
+/// Save Variable Library…: save or download the XML from `variable.saveLibrary`.
 fn save_library(app: &mut VectorcraftApp) -> Value {
-    ask_save(app, "variables.xml", &[XML], "variable.saveLibrary")
+    ask_save(app, "variables.xml", &[XML], "variable.saveLibrary", "xml")
 }
 
 #[cfg(test)]
@@ -788,6 +803,78 @@ mod tests {
         assert!(xml.session.active().unwrap().doc.variables.variables.iter().any(|v| v.name == "Caption"));
     }
     use crate::i18n::LangExt;
+
+    #[test]
+    fn exports_give_the_file_service_the_csv_and_xml_contents() {
+        for (command, path, marker) in [(EXPORT_DATA_SETS, "/datasets.csv", "Alice"), (SAVE_LIBRARY, "/variables.xml", "Alice")] {
+            let mut app = app_with_data();
+            let revision = app.session.active().unwrap().revision;
+            let files = Arc::new(craft::host::ScriptedFiles::held().in_browser());
+            crate::tests::picks::install_files(&mut app, files.clone());
+            run(&mut app, command, &json!({})).unwrap().unwrap();
+            files.answer(craft::host::Picked::Saved { path: path.into(), file_type: None });
+            crate::file_asks::poll(&mut app);
+            let bytes = files.file(std::path::Path::new(path)).expect("the file service saved the serialized export");
+            let text = String::from_utf8(bytes).unwrap();
+            assert!(text.contains(marker), "the export keeps the captured text value");
+            assert_eq!(app.session.active().unwrap().revision, revision, "export does not change the drawing");
+            let import = if command == EXPORT_DATA_SETS { "dataset.import" } else { "variable.loadLibrary" };
+            let params = if command == EXPORT_DATA_SETS { json!({"csv": text}) } else { json!({"xml": text}) };
+            app.run(import, params).unwrap();
+            let datasets = app.run("dataset.list", json!({})).unwrap();
+            assert_eq!(datasets["datasets"].as_array().unwrap().len(), 1);
+        }
+    }
+
+    #[test]
+    fn browser_export_completion_keeps_the_drawing_and_reports_write_failures() {
+        use craft::host::{Picked, ScriptedFiles};
+        for command in [EXPORT_DATA_SETS, SAVE_LIBRARY] {
+            for answer in [Picked::Downloaded("export".into()), Picked::Cancelled, Picked::Failed("save was refused".into())] {
+                let mut app = app_with_data();
+                let revision = app.session.active().unwrap().revision;
+                let datasets = app.run("dataset.list", json!({})).unwrap();
+                let files = Arc::new(ScriptedFiles::held().in_browser());
+                crate::tests::picks::install_files(&mut app, files.clone());
+                run(&mut app, command, &json!({})).unwrap().unwrap();
+                let failed = matches!(answer, Picked::Failed(_));
+                files.answer(answer);
+                crate::file_asks::poll(&mut app);
+                assert_eq!(app.session.active().unwrap().revision, revision);
+                assert_eq!(app.run("dataset.list", json!({})).unwrap(), datasets);
+                if failed {
+                    assert_eq!(app.ui.status, "save was refused");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_failed_variables_download_reports_its_error_after_the_source_closes() {
+        use craft::host::{Picked, ScriptedFiles};
+
+        for command in [EXPORT_DATA_SETS, SAVE_LIBRARY] {
+            for answer in [Picked::Failed("downloads are blocked".into()), Picked::Cancelled, Picked::Downloaded("export".into())] {
+                let mut app = app_with_data();
+                let files = Arc::new(ScriptedFiles::held().in_browser());
+                crate::tests::picks::install_files(&mut app, files.clone());
+                run(&mut app, command, &json!({})).unwrap().unwrap();
+                app.session.execute("file.close", &json!({"index": 0})).unwrap();
+                app.run("file.new", json!({"width": 80, "height": 80})).unwrap();
+                app.status("another drawing");
+                let before = app.session.active().unwrap().doc.clone();
+                let expected = match &answer {
+                    Picked::Failed(error) => error.as_str(),
+                    Picked::Cancelled => "another drawing",
+                    _ => file_asks::closed(),
+                };
+                files.answer(answer.clone());
+                file_asks::poll(&mut app);
+                assert_eq!(app.ui.status, expected);
+                assert_eq!(app.session.active().unwrap().doc, before);
+            }
+        }
+    }
 
     fn app_with_data() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());

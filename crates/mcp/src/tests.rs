@@ -1662,16 +1662,6 @@ fn headless_backend_methods() {
     assert_eq!(entry["label"], "Trim at Crossings Tool");
     assert!(entry["shortcut"].is_null());
     assert_eq!(h.call("ui.tool.select", json!({"tool": trim})).unwrap()["tool"], trim);
-    // The Enclosing Lasso Tool is listed once, in the Lasso tool's group after the Lasso.
-    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
-    let with_enclosing: Vec<_> =
-        groups.iter().map(|group| group.as_array().unwrap()).filter(|group| group.iter().any(|entry| entry["id"] == enclosing)).collect();
-    assert_eq!(with_enclosing.len(), 1, "{enclosing} is in one group");
-    let ids: Vec<_> = with_enclosing[0].iter().map(|entry| entry["id"].clone()).collect();
-    assert_eq!(ids, [json!("lasso"), json!(enclosing)]);
-    assert_eq!(with_enclosing[0][1]["label"], "Enclosing Lasso Tool");
-    assert!(with_enclosing[0][1]["shortcut"].is_null());
-    assert_eq!(h.call("ui.tool.select", json!({"tool": enclosing})).unwrap()["tool"], enclosing);
     // The Smart Pen Tool is listed once, at the end of the Pen tool's group.
     let smart_pen = vectorcraft_tools::addons::smart_pen::ID;
     let with_smart_pen: Vec<_> =
@@ -1684,9 +1674,32 @@ fn headless_backend_methods() {
     assert_eq!(entry["label"], "Smart Pen Tool");
     assert!(entry["shortcut"].is_null());
     assert_eq!(h.call("ui.tool.select", json!({"tool": smart_pen})).unwrap()["tool"], smart_pen);
-    let polygonal = groups.iter().flat_map(|group| group.as_array().unwrap()).find(|entry| entry["id"] == "polygonalLasso");
-    assert_eq!(polygonal.map(|entry| entry["label"].clone()), Some(json!("Polygonal Lasso Tool")));
     assert!(h.call("ui.resize", json!({})).is_err());
+}
+
+/// The Enclosing Lasso and Polygonal Lasso tools are listed once each, in the Lasso tool's group
+/// after the Lasso, with no shortcut, and `ui.tool.select` chooses them.
+#[test]
+fn headless_lists_the_lasso_group() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 300, "height": 200}})).unwrap();
+    let listed = h.call("ui.tool.list", json!({})).unwrap();
+    let groups = listed.as_array().unwrap();
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    let polygonal = vectorcraft_tools::addons::polygonal_lasso::ID;
+    let with_enclosing: Vec<_> =
+        groups.iter().map(|group| group.as_array().unwrap()).filter(|group| group.iter().any(|entry| entry["id"] == enclosing)).collect();
+    assert_eq!(with_enclosing.len(), 1, "{enclosing} is in one group");
+    let ids: Vec<_> = with_enclosing[0].iter().map(|entry| entry["id"].clone()).collect();
+    assert_eq!(ids, [json!("lasso"), json!(enclosing), json!(polygonal)]);
+    assert_eq!(with_enclosing[0][1]["label"], "Enclosing Lasso Tool");
+    assert!(with_enclosing[0][1]["shortcut"].is_null());
+    assert_eq!(with_enclosing[0][2]["label"], "Polygonal Lasso Tool");
+    assert!(with_enclosing[0][2]["shortcut"].is_null());
+    let listed = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == polygonal).count();
+    assert_eq!(listed, 1, "{polygonal} is listed once");
+    assert_eq!(h.call("ui.tool.select", json!({"tool": enclosing})).unwrap()["tool"], enclosing);
+    assert_eq!(h.call("ui.tool.select", json!({"tool": polygonal})).unwrap()["tool"], polygonal);
 }
 
 /// The headless key, pointer and screenshot calls refuse a value of the wrong type and change

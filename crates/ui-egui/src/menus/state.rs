@@ -403,6 +403,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.guides" | "view.grid" => !app.ui.view.trim_view,
         "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
+        crate::dialogs::plugin::EDIT_COMMAND => crate::dialogs::plugin::one_generated_selected(app),
         // A filter may take no objects and add new ones, so no selection is needed.
         crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => {
             app.session.active().is_some() && crate::dialogs::plugin::last_filter(app).is_some()

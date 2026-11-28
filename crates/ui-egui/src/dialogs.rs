@@ -139,6 +139,7 @@ pub(crate) mod saved_names;
 pub(crate) mod screen_formats;
 pub mod script_check;
 pub mod script_run;
+pub mod script_window;
 pub mod shape_builder_options;
 pub(crate) mod shapes;
 pub mod shortcut_import;
@@ -209,6 +210,8 @@ mod tests_package;
 mod tests_plugin_export;
 #[cfg(test)]
 mod tests_plugin_fields;
+#[cfg(test)]
+mod tests_plugin_generate;
 #[cfg(test)]
 mod tests_plugin_import;
 #[cfg(test)]

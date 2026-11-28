@@ -121,10 +121,16 @@ impl Node {
     pub fn bounds_in(&self, symbols: &SymbolBoxes, a: Affine, visual: bool) -> Option<Rect> {
         match &self.kind {
             NodeKind::Group { clip: false, .. } => {
-                let b = self.editing_children().iter().fold(None, |acc, c| union_opt(acc, c.bounds_in(symbols, a, visual)));
-                // The group's own strokes paint around its members (as in `visual_bounds`).
-                let o = if visual { self.appearance.outset() } else { 0.0 };
-                b.map(|b| b.inflate(o, o))
+                // The group's own strokes paint along its members, placed by `a` (as in `visual_bounds`).
+                let stroked = visual && self.appearance.painted_strokes().next().is_some();
+                self.editing_children().iter().fold(None, |acc, c| {
+                    let own = stroked.then(|| {
+                        let mut placed = (**c).clone();
+                        placed.transform(a, false);
+                        placed.painted_by_container(&self.appearance, Some(symbols))
+                    });
+                    union_opt(union_opt(acc, c.bounds_in(symbols, a, visual)), own.flatten())
+                })
             }
             NodeKind::Group { children, clip: true } => {
                 let clip = children.first()?;

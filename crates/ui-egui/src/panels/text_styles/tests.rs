@@ -271,19 +271,68 @@ fn select_type_range(app: &mut VectorcraftApp, id: NodeId, start: usize, end: us
     assert_eq!(text_editing(app), Some((id, start, end)));
 }
 
-/// Normal has no Style Options: the action opens no dialog and runs no command.
+/// The Normal style of either kind takes Style Options: its row menu offers Style Options…, and a double click on its
+/// row opens the dialog on it.
 #[test]
-fn double_clicking_the_normal_style_opens_no_options() {
+fn double_clicking_the_normal_style_opens_its_options() {
+    use crate::tests::panel_harness::Panel;
+    use vectorcraft_engine::cmd::textstyles::{NORMAL_CHAR, NORMAL_PARA};
+
     for kind in [Kind::Char, Kind::Para] {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.ui_ctx = Some(ui_context());
+        let what = kind.what();
+        let normal = if kind == Kind::Char { NORMAL_CHAR } else { NORMAL_PARA };
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
         app.run("file.new", json!({"width": 200, "height": 150})).unwrap();
-        let id = app.run("text.create", json!({"x": 20, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        let commands = app.run_count;
-        act(&mut app, kind, TextStyleAction::Options(0));
-        assert!(!is_open(&app, options_key(kind)), "{} Styles: Normal has no Style Options", kind.what());
-        assert_eq!(app.run_count, commands, "{} Styles: no command runs", kind.what());
+        let draw: fn(&mut VectorcraftApp, &mut Ui) = match kind {
+            Kind::Char => |app, ui| show(app, ui, Kind::Char),
+            Kind::Para => |app, ui| show(app, ui, Kind::Para),
+        };
+        let mut panel = Panel::new(app, draw);
+        panel.secondary_click(normal);
+        assert!(panel.menu_item_enabled("Style Options…"), "{what} Styles: Normal's menu offers Style Options");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        panel.double_click(normal);
+        let app = panel.app();
+        assert_eq!(fields_of(&app, options_key(kind)).map(|f| f["name"].clone()), Some(json!(normal)), "{what} Styles: the dialog opens on Normal");
+    }
+}
+
+/// Style Options of a Normal style shows its name disabled, and OK gives the style its first definition in one undo
+/// step: the type set in Normal takes the new attributes.
+#[test]
+fn normal_style_options_keep_the_name_and_define_the_style() {
+    use crate::tests::panel_harness::Panel;
+    use crate::tests::picks::dialogs;
+    use vectorcraft_engine::cmd::textstyles::{NORMAL_CHAR, NORMAL_PARA};
+
+    for (kind, field, value) in [(Kind::Char, "size", 20.0), (Kind::Para, "left_indent", 12.0)] {
+        let what = kind.what();
+        let normal = if kind == Kind::Char { NORMAL_CHAR } else { NORMAL_PARA };
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 150})).unwrap();
+        let id = NodeId(app.run("text.create", json!({"x": 20, "y": 40, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Body"})).unwrap();
+        let mut p = Panel::new(app, dialogs);
+        let body = style_id(&mut p.app(), kind, "Body");
+        act(&mut p.app(), kind, TextStyleAction::Options(body));
+        p.frame();
+        assert!(p.enabled("Style Name"), "{what}: another style's name can be changed");
+        answer(&mut p.app(), options_key(kind), &[], false);
+
+        let undo = undo_len(&p.app());
+        act(&mut p.app(), kind, TextStyleAction::Options(0));
+        p.frame();
+        assert!(!p.enabled("Style Name"), "{what}: Normal keeps its name");
+        answer(&mut p.app(), options_key(kind), &[(field, json!(value))], true);
+        let app = p.app();
+        assert!(!is_open(&app, options_key(kind)), "{what}: OK closes the dialog");
+        assert_eq!(undo_len(&app), undo + 1, "{what}: one undo step");
+        let doc = &app.session.doc().unwrap().doc;
+        let defs = if kind == Kind::Char { &doc.char_styles } else { &doc.para_styles };
+        assert_eq!(defs.iter().find(|d| d.name == normal).and_then(|d| d.attrs.get(field)), Some(&json!(value)), "{what}: the definition");
+        let NodeKind::Text(t) = &doc.node(id).unwrap().kind else { panic!("not text") };
+        let set = if kind == Kind::Char { t.runs[0].style.size } else { t.paragraph_styles()[0].left_indent };
+        assert_eq!(set, value, "{what}: the type in Normal follows");
     }
 }
 

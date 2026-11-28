@@ -105,7 +105,12 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   that starts no segment is left out. They are read again whenever the path changes, so a turned
   path shows its new overall width or height rather than that of its bounding box before the
   turn. The line keeps its distance from the whole path when the path changes or the dimension
-  changes orientation. Alt has this effect only before the first point is clicked.
+  changes orientation. With Use Preview Bounds on, the box and the dimension reach the outside of
+  the path's strokes, the width or height that W and H show: each outermost point moves out to the
+  edge of the box the strokes paint (a member of a compound path takes the compound path's
+  strokes, with an arrowhead only where the compound path draws one on that member), and a dimension placed that way measures to there again when the path or its strokes
+  change. Geometry effects are not included. Alt has this effect only before the first point is
+  clicked.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
   straight lines that meet (or would, extended), then click to place.
 - **Radial:** hover a circle, or a segment that is a perfect arc, and drag: outwards gives its
@@ -199,10 +204,14 @@ another document.
   mode, the orientation of a linear dimension (`aligned`, the default, `horizontal` or
   `vertical`), offset and style; returns the group id and label. `{"kind":"extent","node":<id>}`
   measures a whole path, linear only: between its leftmost and rightmost points when horizontal
-  or aligned, and its topmost and bottommost points when vertical. A version without the extent
-  source does not open a file that holds one. `offset` is the distance of the dimension
-  line from the first point: along the left normal of a → b for an aligned dimension, downward
-  for a horizontal one and leftward for a vertical one. A negative offset goes the other way.
+  or aligned, and its topmost and bottommost points when vertical. With `"preview":true` (what
+  the tool records with Use Preview Bounds on; `false` when omitted, and any value other than
+  `true` or `false` is an error) those points move out to the outside of the path's strokes. A
+  version without the extent source does not open a file that holds one, and a version without
+  `preview` measures such a dimension between the points themselves. `offset` is the distance of
+  the dimension line from the first point: along the left normal of a → b for an aligned
+  dimension, downward for a horizontal one and leftward for a vertical one. A negative offset goes
+  the other way.
 - `dimension.update`: restyle or move existing dimensions, or change the orientation of linear
   ones. A new orientation keeps the line on the side of the points it was on. For a dimension of
   a whole path, a new orientation that would put the line more than 1,000,000 pt from its first
