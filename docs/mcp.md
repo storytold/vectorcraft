@@ -9035,9 +9035,9 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   Pen with Alt. A handle shorter than that leaves its anchor to be picked when pressed nearer the anchor.
 - `objectSelectionByPathOnly`: a click inside a filled path or compound path doesn't select it, one on its path does.
   Off (the default), a selection tool click inside the closed subpaths of a path or compound path with no fill selects
-  it when the click hits no object's fill, stroke or path there, the topmost such path first, except in Outline view;
-  guides and clipping paths are still picked by
-  their path only (#9175).
+  it when the click hits no other object there, by its fill, stroke, path or bounds (a symbol instance, for example,
+  is hit anywhere in its bounds), the topmost such path first, except in Outline view and on a layer whose Preview is
+  off; guides and clipping paths are still picked by their path only (#9175).
 - `ctrlClickSelectsBehind` (on by default): a Selection tool click with `mods: {cmd: true}` (Command on macOS, Ctrl
   elsewhere) selects the object under the selected one there, the next such click the one under that, then the
   topmost again. Cmd held to borrow the selection tool from another tool clicks as usual.
