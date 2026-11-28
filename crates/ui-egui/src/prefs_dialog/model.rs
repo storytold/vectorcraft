@@ -8,15 +8,16 @@ use std::sync::{Mutex, PoisonError};
 use craft::host::{PickKind, PickRequest};
 use craft::theme::Rgba;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
 use craft::ui::form::{SliderField, SliderFieldLayout};
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::preferences::{GroupSpec, PageSpec, PathSetting, PrefValue, PreferencesDraft, PreferencesModel, RowKind, RowSpec};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
 use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, PrefKind, PrefSpec, folder_check, spec};
 
-use super::{APP_TITLE_BAR_SHOWN, PrefsWindow, UI_FIELDS, descriptions};
+use super::{APP_TITLE_BAR_SHOWN, PrefsWindow, UI_FIELDS, descriptions, script_access};
 use crate::VectorcraftApp;
 use crate::i18n::{Lang, LangExt as _};
 use craft::color_ui::ui::ColorPickerDialog;
@@ -128,6 +129,8 @@ impl Live<'_> {
             "appTitleBar" => APP_TITLE_BAR_SHOWN,
             "linuxDisplayServer" => cfg!(target_os = "linux"),
             "monitorProfileDisplay" | "lowLatencyDrawing" => !cfg!(target_arch = "wasm32"),
+            // Only where the session keeps script grants: not without a settings folder, and not on the web.
+            script_access::KEY => self.w.script_access.is_some(),
             "editOriginal" => self.app.services.check_application.is_some() && self.app.services.open_in_application.is_some(),
             _ => true,
         }
@@ -257,6 +260,10 @@ impl Live<'_> {
             if sp.key == "editOriginalSystemDefaults" {
                 groups.add(sp.section, self.row("editOriginal", "", "Edit Original with PhotoCraft", RowKind::Custom));
             }
+            if sp.key == "showExternalScriptWarning" {
+                let english = "Script File Access revoke read write file folder";
+                groups.add(sp.section, self.row(script_access::KEY, tl!("Script File Access"), english, RowKind::CustomRows));
+            }
         }
         if cat == PREF_CATEGORIES[0] {
             let tools = self.row("prefsFile", "", "export import reset preferences", RowKind::Custom);
@@ -268,12 +275,23 @@ impl Live<'_> {
         page
     }
 
-    /// Sets every key of the draft to its default, as the answered Reset question does.
+    /// Sets every key of the draft to its default, the UI-only rows ([`UI_FIELDS`]) included, as the answered
+    /// Reset question does.
     fn reset_all(&mut self) {
         let keys: Vec<String> =
             Prefs::default().to_json().as_object().into_iter().flatten().map(|(k, _)| k.clone()).filter(|k| super::is_known(k)).collect();
         self.w.reset_keys(keys.iter().map(String::as_str));
+        self.reset_ui_rows(|_| true);
         crate::original_editor::reset(self.app);
+    }
+
+    /// Sets the UI-only rows of the categories `reset` names to their defaults.
+    fn reset_ui_rows(&mut self, reset: impl Fn(&str) -> bool) {
+        for (key, value) in super::default_ui_fields(&self.app.ui) {
+            if UI_FIELDS.iter().any(|&(k, c, _)| k == key && reset(c)) {
+                self.w.set_row(key, &json!(value));
+            }
+        }
     }
 
     /// The answers of the dialogs the window opened: the Reset question and the colour picker.
@@ -348,12 +366,17 @@ impl PreferencesModel for Live<'_> {
                 crate::original_editor::show(self.app, ui, enabled);
                 false
             }
+            script_access::KEY => {
+                script_access::show(self.app, &mut self.w.script_access, ui);
+                false
+            }
             "prefsFile" => {
                 let (mut export, mut import, mut reset) = (false, false, false);
-                ui.horizontal_wrapped(|ui| {
+                let web = crate::io::is_web(self.app);
+                Row::new().wrap(true).show(ui, |ui, _| {
                     export = Button::new(tl!("Export Preferences…")).show(ui).clicked();
                     // Not on the web, whose open dialog answers with the file's contents, not a path to import.
-                    if !crate::io::is_web(self.app) {
+                    if !web {
                         import = Button::new(tl!("Import Preferences…")).show(ui).clicked();
                     }
                     reset = Button::new(tl!("Reset Preferences")).show(ui).clicked();
@@ -386,6 +409,11 @@ impl PreferencesModel for Live<'_> {
     fn reset_page(&mut self, page: &str) {
         let keys: Vec<&str> = PREF_SPECS.iter().filter(|s| s.category == page).map(|s| s.key).collect();
         self.w.reset_keys(keys);
+        self.reset_ui_rows(|c| c == page);
+        // The Edit Original row of its page.
+        if spec("editOriginalSystemDefaults").is_some_and(|s| s.category == page) {
+            crate::original_editor::reset(self.app);
+        }
     }
 
     fn nested(&mut self, ui: &mut egui::Ui) {
@@ -399,33 +427,81 @@ impl PreferencesModel for Live<'_> {
 }
 
 impl PreferencesDraft for Live<'_> {
+    /// A row set in the window counts even when it shows the value it opened with: a reset of a row a command changed
+    /// while the window is open is still applied.
     fn differs(&self) -> bool {
-        self.w.draft != self.w.opened
+        self.w.draft != self.w.opened || !self.w.touched.is_empty()
     }
 
     fn apply(&mut self) -> Result<(), String> {
-        let values: Map<String, Value> =
-            self.w.draft.to::<Map<String, Value>>().unwrap_or_default().into_iter().filter(|(k, _)| !k.starts_with("__")).collect();
+        // A `prefs.reset` run since the last frame shows in the draft before OK reads it.
+        super::apply_prefs_resets_to(self.app, Some(&mut *self.w));
+        // Only the rows changed in the window: a setting changed outside it while it is open keeps its new value.
+        let current = self.app.session.prefs.to_json();
+        let edited: Map<String, Value> = self
+            .w
+            .draft
+            .to::<Map<String, Value>>()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(k, _)| {
+                self.w.edited(k)
+                    && (k != "keyHoldDelay"
+                        || self.w.explicitly_edited(k)
+                        || current.get(k).and_then(Value::as_f64) == self.w.source.get::<Value>(k).as_ref().and_then(Value::as_f64))
+            })
+            .collect();
+        let values: Map<String, Value> = edited.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
         let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
         let document_units = self.w.reset_units.as_deref().is_none_or(|u| values.get("unitsGeneral").and_then(Value::as_str) != Some(u));
         // A refused folder, typed or picked, comes back here as the engine's message.
-        self.app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
+        if !values.is_empty() {
+            self.app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
+        }
+        let row = |key: &str| edited.get(key).and_then(Value::as_bool);
+        // When OK enters the Touch workspace, the task bar is set before the switch, so it goes to the workspace being
+        // left; otherwise after it, so a return from Touch gives it to the workspace returned to.
+        let before_switch = touch_ws.is_some() && crate::workspaces::enters_touch(self.app, self.app.touch_screen);
+        if before_switch && let Some(on) = row("__taskBar") {
+            self.app.ui.task_bar = on;
+        }
         if touch_ws.is_some() {
             crate::workspaces::sync_touch_workspace(self.app, self.app.touch_screen);
         }
-        let flag = |key: &str, now: bool| self.w.draft.get::<bool>(key).unwrap_or(now);
-        let (smart_guides, snap_to_grid, task_bar) = (
-            flag("__smartGuides", self.app.ui.view.smart_guides),
-            flag("__snapToGrid", self.app.ui.view.snap_to_grid),
-            flag("__taskBar", self.app.ui.task_bar),
-        );
-        self.app.ui.view.smart_guides = smart_guides;
-        self.app.ui.view.snap_to_grid = snap_to_grid;
-        self.app.ui.task_bar = task_bar;
-        crate::original_editor::commit(self.app);
-        super::snapshot(self.app);
-        self.app.prefs_changed = true;
+        if let Some(on) = row("__smartGuides") {
+            self.app.ui.view.smart_guides = on;
+        }
+        if let Some(on) = row("__snapToGrid") {
+            self.app.ui.view.snap_to_grid = on;
+        }
+        if !before_switch && let Some(on) = row("__taskBar") {
+            self.app.ui.task_bar = on;
+        }
+        let editor = crate::original_editor::commit(self.app);
+        // The host saves the settings only when one changed.
+        if !edited.is_empty() || editor {
+            super::snapshot(self.app);
+            self.app.prefs_changed = true;
+        }
+        // The row shows the task bar in use: after OK enters Touch, that is Touch's, not the value the workspace left
+        // took, so a later Apply does not give the workspace left's value to Touch.
+        let current = self.app.session.prefs.to_json();
+        for (key, value) in current.as_object().into_iter().flatten() {
+            if self.w.draft.get::<Value>(key).is_some() {
+                self.w.draft.set(key, value);
+            }
+        }
+        if let Some(state) = self.app.session.active() {
+            self.w.draft.set("unitsGeneral", &state.doc.units.key());
+        }
+        self.w.draft.set("__smartGuides", &self.app.ui.view.smart_guides);
+        self.w.draft.set("__snapToGrid", &self.app.ui.view.snap_to_grid);
+        self.w.draft.set("__taskBar", &self.app.ui.task_bar);
         self.w.opened = self.w.draft.clone();
+        self.w.source = self.w.draft.clone();
+        self.w.touched.clear();
+        self.w.reset_units = None;
+        self.w.sync_strings();
         Ok(())
     }
 

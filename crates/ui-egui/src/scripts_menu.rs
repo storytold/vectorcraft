@@ -13,7 +13,8 @@
 //!
 //! `ui.runInstalledScript {path}` runs a listed script (`script.run`) without the warning Other
 //! Script… shows: the file was put in the folder to be run from the menu. The path is one a
-//! listing gave; a file that is no longer a plain script under the folder is not run.
+//! listing gave; a file that is no longer a plain script under the folder is not run. With General ›
+//! Run Startup Scripts on, the startup scripts run first (`script.startup.run`).
 
 // PLAN: needs craft-menu, craft-host and craft-platform in crates/ui-egui/Cargo.toml (shell owner).
 use std::path::{Path, PathBuf};
@@ -165,9 +166,10 @@ pub fn refresh(app: &VectorcraftApp, ctx: &egui::Context) {
     }
     if let Some(queue) = &state.queue {
         let read = root.clone();
+        let clock = app.session.script_listing_clock();
         // The app's own folder, read for the person at the keyboard.
         queue.submit(root, Priority::VISIBLE, move |_| {
-            vectorcraft_engine::file_access::unconfined(|| vectorcraft_engine::script::folder::list(&read))
+            vectorcraft_engine::file_access::unconfined(|| vectorcraft_engine::script::folder::list(&read, clock))
         });
     }
     if !state.loaded && state.first_read.is_none() {
@@ -199,13 +201,13 @@ fn take() {
     }
 }
 
-/// Wait for the reads under way and take them in.
+/// Wait for the reads under way, however long they take, and take them in.
 #[cfg(test)]
 pub(crate) fn finish() {
     {
         let state = state();
         if let Some(queue) = &state.queue {
-            queue.finish(Duration::from_secs(10));
+            assert!(queue.finish(Duration::MAX), "the reads of the Scripts folder could not finish");
         }
     }
     take();
@@ -241,7 +243,7 @@ pub(crate) fn items_at(now: f64) -> Vec<Node> {
     };
     let mut nodes = level(&listing.entries);
     let notes = [listing.truncated.then_some(TRUNCATED), listing.unreadable.then_some(UNREADABLE), note];
-    nodes.extend(notes.into_iter().flatten().map(Node::heading));
+    nodes.extend(notes.into_iter().flatten().map(crate::menus::placeholder));
     if !nodes.is_empty() {
         nodes.push(Node::Separator);
     }
@@ -276,7 +278,12 @@ pub fn readable(p: &Value) -> bool {
 /// folder is read again.
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let path = p.get("path").and_then(Value::as_str).ok_or("missing `path`")?;
-    app.run("script.run", json!({ "path": path, "installed": true })).inspect_err(|e| {
+    // With startup scripts to run first, a script no longer in the folder is found before they run.
+    let listed = match app.session.startup_skip() {
+        Some(_) => Ok(()),
+        None => app.session.installed_script(path).map(drop).map_err(|e| e.to_string()),
+    };
+    listed.and_then(|()| crate::script_runs::run_chosen(app, json!({ "path": path, "installed": true }))).inspect_err(|e| {
         if e == NOT_LISTED
             && let Some(ctx) = app.ui_ctx.clone()
         {

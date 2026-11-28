@@ -1,14 +1,14 @@
 //! The plug-in ABI end to end: the example Desaturate plug-in, and hostile modules (infinite
 //! loops, memory bombs, out-of-bounds access, bad manifests and outputs…), which must all fail
-//! with an error, quickly.
+//! with an error, within their instruction budget.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
-use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use vectorcraft_plugins::manifest::{MANIFEST_SECTION, MAX_MANIFEST_BYTES};
 use vectorcraft_plugins::storage::{Meter, Storage, StorageError};
-use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, LARGE_FUEL, Limits, Plugin, Report, heavy_terms, registry, wat as tpl};
+use vectorcraft_plugins::{
+    Error, FUEL_SLICE, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, LARGE_FUEL, Limits, Plugin, Report, heavy_terms, registry, wat as tpl,
+};
 
 /// The example Desaturate plug-in, built from `crates/plugins/example`.
 const DESATURATE: &[u8] = include_bytes!("fixtures/desaturate.wasm");
@@ -30,11 +30,16 @@ fn ok_module(run: &str) -> Vec<u8> {
 
 const INPUT: &str = r#"{"objects":[]}"#;
 
-/// Runs `bytes` on an empty input; returns the error and how long it took.
-fn run_err(bytes: &[u8], limits: Limits) -> (Error, Duration) {
-    let t = Instant::now();
+/// Runs `bytes` on an empty input → the error.
+fn run_err(bytes: &[u8], limits: Limits) -> Error {
     let r = Plugin::load(bytes, limits).and_then(|p| p.run(INPUT.as_bytes(), b"{}"));
-    (r.expect_err("hostile module must fail"), t.elapsed())
+    r.expect_err("hostile module must fail")
+}
+
+/// Two slices of instructions and nothing per input byte: a run that is not stopped between the
+/// first and the second slice ends with the instruction budget.
+fn two_slices() -> Limits {
+    Limits { fuel_base: 2 * FUEL_SLICE, fuel_per_byte: 0, ..Limits::default() }
 }
 
 #[test]
@@ -73,6 +78,39 @@ fn example_desaturate_moves_every_colour_model_to_grey() {
     assert!(matches!(vectorcraft_plugins::objects::decode(&none), Err(Error::Failed(m)) if m.contains("Select some paths")));
 }
 
+/// A Desaturate run changes colours only: a live shape with fractional coordinates keeps its path
+/// exactly and stays live.
+#[test]
+fn example_desaturate_keeps_the_geometry_exactly() {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, Document, LiveShape, Node, NodeKind};
+    use vectorcraft_geom::{Affine, PathData, Point, SubPath};
+    use vectorcraft_plugins::objects;
+    let p = Plugin::load(DESATURATE, Limits::default()).unwrap();
+    let mut d = Document::new(2000.0, 2000.0);
+    let layer = d.layers[0].id;
+    let points: Vec<Point> = (1..1000).map(|k| f64::from(k) * 1.234_567_890_123_456_7 / 7.0 + 0.1).map(|x| Point::new(x, x / 3.0)).collect();
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 1.0);
+    let mut n = Node::path(d.alloc_id(), PathData::single(SubPath::polyline(&points, true)), red.clone());
+    if let NodeKind::Path { live, .. } = &mut n.kind {
+        *live = Some(Box::new(LiveShape::Rectangle {
+            w: 10.0 / 3.0,
+            h: 20.0 / 7.0,
+            radii: [0.0; 4],
+            radii_relative: false,
+            kinds: Default::default(),
+            xf: Affine::translate((0.1, 1.0 / 3.0)),
+        }));
+    }
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    let before = d.node(id).unwrap().kind.clone();
+    let out = p.run(&objects::encode_input(&d, &[id]), b"{}").unwrap();
+    objects::apply_output(&mut d, &[id], objects::decode(&out).unwrap(), None, &|fx, _| Ok(fx.to_vec())).unwrap();
+    let after = d.node(id).unwrap();
+    assert!(after.kind == before, "the path or its live shape changed");
+    assert!(after.appearance != red, "the fill was not desaturated");
+}
+
 #[test]
 fn input_and_params_reach_the_plugin_and_output_comes_back() {
     let p = Plugin::load(&build(&tpl::module(MANIFEST, tpl::ECHO, "", 1)), Limits::default()).unwrap();
@@ -86,37 +124,49 @@ fn input_and_params_reach_the_plugin_and_output_comes_back() {
     assert_eq!(fixed.run(input, b"{}").unwrap(), br#"{"objects":[]}"#);
 }
 
+/// Each hostile module fails with the error for what it did. The ones that never end stop at
+/// their instruction budget, not at the time budget, so how long they run depends on the
+/// instructions they are given and not on the machine's speed.
 #[test]
-fn hostile_modules_fail_quickly() {
-    let quick = Duration::from_secs(5);
-    let cases: Vec<(&str, Vec<u8>)> = vec![
-        ("infinite loop", ok_module("(loop $l (br $l)) (i64.const 0)")),
-        ("memory.grow bomb, then trap", ok_module("(loop $l (br_if $l (i32.ne (memory.grow (i32.const 512)) (i32.const -1)))) unreachable")),
-        ("memory.grow forever", ok_module("(loop $l (drop (memory.grow (i32.const 1))) (br $l)) (i64.const 0)")),
-        ("out-of-bounds write", ok_module("(i32.store (i32.const -4) (i32.const 0)) (i64.const 0)")),
-        ("trap", ok_module("unreachable")),
-        ("division by zero", ok_module("(drop (i32.div_u (i32.const 1) (i32.const 0))) (i64.const 0)")),
-        ("deep recursion", module(MANIFEST, "(call $r) (i64.const 0)", "(func $r (call $r))")),
-        ("error code", ok_module("(i64.const -7)")),
-        ("output outside memory", ok_module("(i64.const 0x00000100fffffff0)")),
-        ("huge output", ok_module("(i64.const 0x7fffffff00000000)")),
+fn hostile_modules_fail_within_their_budget() {
+    let budget = "plug-in exceeded its instruction budget";
+    let cases: Vec<(&str, Vec<u8>, &str)> = vec![
+        ("infinite loop", ok_module("(loop $l (br $l)) (i64.const 0)"), budget),
+        (
+            "memory.grow bomb, then trap",
+            ok_module("(loop $l (br_if $l (i32.ne (memory.grow (i32.const 512)) (i32.const -1)))) unreachable"),
+            "plug-in trapped: wasm `unreachable`",
+        ),
+        ("memory.grow forever", ok_module("(loop $l (drop (memory.grow (i32.const 1))) (br $l)) (i64.const 0)"), budget),
+        ("out-of-bounds write", ok_module("(i32.store (i32.const -4) (i32.const 0)) (i64.const 0)"), "plug-in trapped: out of bounds memory access"),
+        ("trap", ok_module("unreachable"), "plug-in trapped: wasm `unreachable`"),
+        ("division by zero", ok_module("(drop (i32.div_u (i32.const 1) (i32.const 0))) (i64.const 0)"), "plug-in trapped: integer divide by zero"),
+        ("deep recursion", module(MANIFEST, "(call $r) (i64.const 0)", "(func $r (call $r))"), "plug-in trapped: call stack exhausted"),
+        ("error code", ok_module("(i64.const -7)"), "plug-in failed: vc_run returned error code -7"),
+        ("output outside memory", ok_module("(i64.const 0x00000100fffffff0)"), "plug-in ABI: the output points outside memory"),
+        ("huge output", ok_module("(i64.const 0x7fffffff00000000)"), "plug-in exceeded its output size"),
         (
             "wrong ABI version",
             build(&tpl::module(MANIFEST, "(i64.const 0)", "", 1).replace("(result i32) (i32.const 1))", "(result i32) (i32.const 2))")),
+            "plug-in ABI: vc_abi_version returned 2",
         ),
-        ("bad manifest", module("not json", "(i64.const 0)", "")),
-        ("manifest with a bad id", module(r#"{"id":"a b","name":"x","kind":"filter"}"#, "(i64.const 0)", "")),
-        ("manifest of the wrong kind", module(r#"{"id":"a","name":"x","kind":"panel"}"#, "(i64.const 0)", "")),
-        ("start function loops", module(MANIFEST, "(i64.const 0)", "(func $spin (loop $l (br $l))) (start $spin)")),
+        ("bad manifest", module("not json", "(i64.const 0)", ""), "plug-in manifest: "),
+        ("manifest with a bad id", module(r#"{"id":"a b","name":"x","kind":"filter"}"#, "(i64.const 0)", ""), "plug-in manifest: invalid id \"a b\""),
+        (
+            "manifest of the wrong kind",
+            module(r#"{"id":"a","name":"x","kind":"panel"}"#, "(i64.const 0)", ""),
+            "plug-in manifest: manifest: unknown variant `panel`",
+        ),
+        ("start function loops", module(MANIFEST, "(i64.const 0)", "(func $spin (loop $l (br $l))) (start $spin)"), budget),
         (
             "WASI import",
             module(MANIFEST, "(i64.const 0)", r#"(import "wasi_snapshot_preview1" "fd_write" (func (param i32 i32 i32 i32) (result i32)))"#),
+            "plug-in ABI: the module imports `wasi_snapshot_preview1.fd_write`",
         ),
     ];
-    for (name, bytes) in cases {
-        let (e, t) = run_err(&bytes, Limits::default());
-        assert!(t < quick, "{name} took {t:?}");
-        eprintln!("{name}: {e} ({t:?})");
+    for (name, bytes, want) in cases {
+        let e = run_err(&bytes, Limits::default()).to_string();
+        assert!(e.starts_with(want), "{name}: {e}");
     }
 }
 
@@ -146,7 +196,7 @@ fn malformed_and_oversized_modules_are_refused() {
         "(func (export \"vc_alloc\") (param $n i32) (result i32) (local $old i32)",
         "(func (export \"vc_alloc\") (param $n i32) (result i32) (local $old i32) (return (i32.const -16))",
     ));
-    let (e, _) = run_err(&bogus_alloc, Limits::default());
+    let e = run_err(&bogus_alloc, Limits::default());
     assert!(matches!(e, Error::Abi(_)), "{e}");
 }
 
@@ -198,10 +248,43 @@ fn a_plugin_may_use_the_listed_webassembly_proposals_and_no_others() {
     }
 }
 
+/// A multi-value `br_table` whose targets all take the same values, with another operand under
+/// those values, gives every target the values it was branched with: the run traps unless each
+/// branch index returns both of them.
+#[test]
+fn a_multi_value_branch_table_gives_every_target_its_values() {
+    let fields = "(func $pick (param $i i32) (result i64 i64)
+        (block (result i64 i64) (i32.const 7) (i64.const 0x1111) (i64.const 0x2222) (br_table 0 1 0 (local.get $i))))
+      (func $check (param $i i32) (local $a i64) (local $b i64)
+        (call $pick (local.get $i)) (local.set $b) (local.set $a)
+        (if (i64.ne (local.get $a) (i64.const 0x1111)) (then unreachable))
+        (if (i64.ne (local.get $b) (i64.const 0x2222)) (then unreachable)))";
+    let run = format!("(call $check (i32.const 0)) (call $check (i32.const 1)) (call $check (i32.const 2)) {}", tpl::ECHO);
+    let p = Plugin::load(&module(MANIFEST, &run, fields), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+}
+
+/// A function type with more than 32 parameters or results is refused before any function body is
+/// validated: the module's extra function has an invalid body, and the error names the limit. A
+/// type with 32 of each loads.
+#[test]
+fn a_function_type_past_32_values_is_refused_before_any_function_body_is_validated() {
+    let i32s = |n: usize| vec!["i32"; n].join(" ");
+    for (word, field) in [("parameters", "param"), ("results", "result")] {
+        let fits = module(MANIFEST, tpl::ECHO, &format!("(type (func ({field} {})))", i32s(32)));
+        assert!(Plugin::load(&fits, Limits::default()).is_ok(), "32 {word}");
+        let past = module(MANIFEST, tpl::ECHO, &format!("(type (func ({field} {}))) (func (i32.add))", i32s(33)));
+        match Plugin::load(&past, Limits::default()) {
+            Err(Error::Module(m)) => assert_eq!(m, format!("a function type exceeds the limit of 32 {word}")),
+            other => panic!("33 {word}: {:?}", other.err()),
+        }
+    }
+}
+
 #[test]
 fn budgets_stop_runaway_plugins() {
     let spin = ok_module("(loop $l (br $l)) (i64.const 0)");
-    let (e, _) = run_err(&spin, Limits { fuel_base: 1_000_000, fuel_per_byte: 10, ..Limits::default() });
+    let e = run_err(&spin, Limits { fuel_base: 1_000_000, fuel_per_byte: 10, ..Limits::default() });
     assert_eq!(e, Error::Limit("instruction budget".into()));
 }
 
@@ -244,31 +327,30 @@ fn a_bulk_memory_instruction_at_the_end_of_a_slice_keeps_the_run_s_fuel() {
     }
 }
 
+/// The time budget stops a runaway plug-in where the first slice of its instruction budget ends:
+/// with a time budget of 0 the deadline has passed on the monotonic clock before the run starts,
+/// and an endless loop given two slices ends with the time budget. With the default time budget
+/// the same loop runs through both slices and ends with the instruction budget.
 #[test]
 fn wall_clock_budget_stops_runaway_plugins() {
     let spin = ok_module("(loop $l (br $l)) (i64.const 0)");
-    // Wall-clock budget, with an effectively unlimited instruction budget.
-    let (e, t) = run_err(&spin, Limits { fuel_base: u64::MAX / 4, wall_time_ms: 300, ..Limits::default() });
-    assert_eq!(e, Error::Limit("time budget".into()));
-    assert!(t < Duration::from_secs(3), "{t:?}");
+    assert_eq!(run_err(&spin, Limits { wall_time_ms: 0, ..two_slices() }), Error::Limit("time budget".into()));
+    assert_eq!(run_err(&spin, two_slices()), Error::Limit("instruction budget".into()));
 }
 
-/// Cancelling stops a run where one slice of its budget ends: an endless loop given all but
-/// unlimited instructions comes back `Cancelled` within seconds, where outside a cancelled scope the
-/// same module runs until its budget is spent.
+/// Cancelling stops a run where one slice of its budget ends: an endless loop given two slices of
+/// instructions comes back `Cancelled` at the end of the first, where outside a cancelled scope the
+/// same module runs through both and ends with the instruction budget.
 #[test]
 fn cancelling_stops_a_run_between_two_slices_of_its_budget() {
     let spin = ok_module("(loop $l (br $l)) (i64.const 0)");
-    let p = Plugin::load(&spin, Limits { fuel_base: u64::MAX / 4, ..Limits::default() }).unwrap();
+    let p = Plugin::load(&spin, two_slices()).unwrap();
     let token = vectorcraft_doc::cancel::CancelToken::new();
     token.cancel();
-    let t = Instant::now();
     let r = vectorcraft_doc::cancel::scope(&token, None, || p.run(INPUT.as_bytes(), b"{}"));
     assert_eq!(r, Err(Error::Cancelled));
-    assert!(t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());
     // Outside a cancelled scope the same module still runs to its budget.
-    let (e, _) = run_err(&spin, Limits { fuel_base: 1_000_000, ..Limits::default() });
-    assert_eq!(e, Error::Limit("instruction budget".into()));
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}"), Err(Error::Limit("instruction budget".into())));
 }
 
 /// Compiling a plug-in's code takes none of a run's instructions, so a first run takes as many as the
@@ -301,7 +383,7 @@ fn a_first_run_takes_no_more_instructions_than_the_next() {
 fn a_heavy_filter_finishes_what_a_light_one_cannot() {
     let heavy = r#"{"id":"test.heavy","name":"Heavy","version":"1","kind":"filter","budget":"heavy"}"#;
     let (light, heavy) = (build(&tpl::spinning(MANIFEST, 100_000_000, INPUT)), build(&tpl::spinning(heavy, 100_000_000, INPUT)));
-    assert_eq!(run_err(&light, Limits::default()).0, Error::Limit("instruction budget".into()));
+    assert_eq!(run_err(&light, Limits::default()), Error::Limit("instruction budget".into()));
     let p = Plugin::load(&heavy, Limits::default()).unwrap();
     assert_eq!((p.limits().fuel_base, p.limits().wall_time_ms), (HEAVY_FUEL, HEAVY_WALL_TIME_MS));
     assert_eq!(heavy_terms(), (5, 20));

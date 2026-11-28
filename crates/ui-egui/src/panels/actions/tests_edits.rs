@@ -203,6 +203,29 @@ fn options_with_a_field_that_is_not_an_index_change_nothing() {
     }
 }
 
+#[test]
+fn stale_action_options_do_not_rename_the_copy_that_took_its_index() {
+    let mut app = app_with_sets();
+    crate::dialogs::action_set_options::open_action(&mut app, 1, 1);
+    set_dialog::<SetOptionsDialog>(&mut app, "name", json!("Wrong target"));
+    assert_eq!(app.run(DUPLICATE, json!({"set": 1, "action": 0})).unwrap(), json!({"set": 1, "action": 1}));
+    let before = action_names(&app, 1);
+    assert!(confirm_dialog::<SetOptionsDialog>(&mut app).is_err(), "an index taken by a copy must refuse OK");
+    assert!(is_open::<SetOptionsDialog>(&app));
+    assert_eq!(action_names(&app, 1), before);
+}
+
+#[test]
+fn stale_set_options_do_not_rename_the_set_that_took_its_index() {
+    let mut app = app_with_sets();
+    crate::dialogs::action_set_options::open(&mut app, 1);
+    set_dialog::<SetOptionsDialog>(&mut app, "name", json!("Wrong target"));
+    app.ui.actions.delete_set("Mine").unwrap();
+    assert!(confirm_dialog::<SetOptionsDialog>(&mut app).is_err(), "an index taken by the next set must refuse OK");
+    assert!(is_open::<SetOptionsDialog>(&app));
+    assert_eq!(set_names(&app), ["Default Actions", "Other"]);
+}
+
 /// `ui.actionSet.delete` moves the panel's selected action down with its set, and clears it
 /// when its set is deleted.
 #[test]
@@ -902,6 +925,8 @@ fn insert_menu_item_refuses_what_no_menu_item_runs_and_changes_nothing() {
 /// artboard to both.
 #[test]
 fn every_listed_menu_item_runs_from_the_menu_what_its_step_holds() {
+    // The View menu's proof items change the whole process's proof view.
+    let _view = crate::testing::DefaultProofView::new();
     for item in crate::menus::insertable_items(false, &crate::menus::Listed::default()) {
         let (mut app, _) = app_with_three_moves();
         app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": item.command, "params": item.params})).unwrap();

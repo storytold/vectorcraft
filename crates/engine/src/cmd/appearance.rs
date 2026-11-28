@@ -322,35 +322,52 @@ impl ItemTarget {
     /// targets have. In a target without an equal item, and for any other target, the row stands
     /// for itself. Every entry is `Some`.
     pub(crate) fn per_target(self, s: &Session, ids: &[NodeId]) -> Vec<Option<ItemTarget>> {
-        let ItemTarget::Item { index, explicit, aligned: true } = self else { return vec![Some(self); ids.len()] };
-        let Some(st) = s.active().filter(|_| ids.len() >= 2) else { return vec![Some(self); ids.len()] };
-        let k = self.anchor(s, ids);
-        let Some(first) = ids.get(k).and_then(|id| st.doc.node(*id)) else { return vec![Some(self); ids.len()] };
-        ids.iter()
-            .enumerate()
-            .map(|(j, id)| match st.doc.node(*id) {
+        self.each_target(s, ids).collect()
+    }
+
+    /// [`ItemTarget::per_target`], one target at a time: a caller that stops at the first answer
+    /// matches only the targets it reads against the anchor's stack.
+    pub(crate) fn each_target<'a>(self, s: &'a Session, ids: &'a [NodeId]) -> impl Iterator<Item = Option<ItemTarget>> + 'a {
+        let anchor = match self {
+            ItemTarget::Item { aligned: true, .. } if ids.len() >= 2 => s.active().and_then(|st| {
+                let k = self.anchor(s, ids);
+                Some((&st.doc, k, ids.get(k).and_then(|id| st.doc.node(*id))?))
+            }),
+            _ => None,
+        };
+        ids.iter().enumerate().map(move |(j, id)| {
+            let (ItemTarget::Item { index, explicit, .. }, Some((d, k, first))) = (self, anchor) else { return Some(self) };
+            match d.node(*id) {
                 Some(n) if j != k => {
-                    let at = SharedStack::of(&[&*first.appearance, &*n.appearance]).item_in(index, 1);
+                    let at = shared_stack(&first.appearance, &n.appearance).item_in(index, 1);
                     Some(at.map_or(self, |index| ItemTarget::Item { index, explicit, aligned: true }))
                 }
                 _ => Some(self),
-            })
-            .collect()
+            }
+        })
     }
 
     /// [`ItemTarget::per_target`], with an explicit aligned item a row of the stack of `of` (see [`design_reference`]),
     /// which is not among `ids`, when there is one: each target edits the item equal to it there, and a target without
     /// an equal item is left out (`None`).
     pub(crate) fn per_target_of(self, s: &Session, of: Option<NodeId>, ids: &[NodeId]) -> Vec<Option<ItemTarget>> {
-        let ItemTarget::Item { index, explicit: true, aligned: true } = self else { return self.per_target(s, ids) };
-        let Some(d) = s.active().map(|st| &st.doc) else { return self.per_target(s, ids) };
-        let Some(r) = of.and_then(|of| d.node(of)) else { return self.per_target(s, ids) };
-        ids.iter()
-            .map(|id| {
-                let index = SharedStack::of(&[&*r.appearance, &*d.node(*id)?.appearance]).item_in(index, 1)?;
+        self.each_target_of(s, of, ids).collect()
+    }
+
+    /// [`ItemTarget::per_target_of`], one target at a time (see [`ItemTarget::each_target`]).
+    pub(crate) fn each_target_of<'a>(self, s: &'a Session, of: Option<NodeId>, ids: &'a [NodeId]) -> impl Iterator<Item = Option<ItemTarget>> + 'a {
+        let reference = match self {
+            ItemTarget::Item { index, explicit: true, aligned: true } => s.active().map(|st| &st.doc).and_then(|d| Some((d, d.node(of?)?, index))),
+            _ => None,
+        };
+        let own = reference.is_none().then(|| self.each_target(s, ids));
+        let shared = reference.map(|(d, r, index)| {
+            ids.iter().map(move |id| {
+                let index = shared_stack(&r.appearance, &d.node(*id)?.appearance).item_in(index, 1)?;
                 Some(ItemTarget::Item { index, explicit: true, aligned: true })
             })
-            .collect()
+        });
+        own.into_iter().flatten().chain(shared.into_iter().flatten())
     }
 
     /// Where among `ids` (the targets, in paint order) the object whose stack this item is a row of
@@ -390,6 +407,26 @@ impl ItemTarget {
             ItemTarget::Item { explicit: false, .. } => Ok(None),
         }
     }
+}
+
+/// The stack that `a` and `b` share ([`SharedStack::of`]), which [`ItemTarget::each_target`] and
+/// [`ItemTarget::each_target_of`] match each target's rows in.
+fn shared_stack(a: &Appearance, b: &Appearance) -> SharedStack {
+    #[cfg(test)]
+    STACKS_MATCHED.set(STACKS_MATCHED.get() + 1);
+    SharedStack::of(&[a, b])
+}
+
+#[cfg(test)]
+thread_local! {
+    /// [`stacks_matched`] of this thread.
+    static STACKS_MATCHED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many shared stacks [`shared_stack`] has built on this thread.
+#[cfg(test)]
+pub(crate) fn stacks_matched() -> u64 {
+    STACKS_MATCHED.get()
 }
 
 /// Does `p` say its item and effect indices are rows of the first target's stack (`aligned`),
@@ -865,7 +902,7 @@ fn edit_items_writing_then(
 /// The first of `ids` that [`edit_items`] aimed at `item` with `of` changes, and the item it changes there. Read it
 /// before the edit: once edited, a row that was equal to a row of the art of `of` no longer is.
 pub(crate) fn first_edited(s: &Session, item: ItemTarget, of: Option<NodeId>, ids: &[NodeId]) -> Option<(NodeId, ItemTarget)> {
-    ids.iter().zip(item.per_target_of(s, of, ids)).find_map(|(id, it)| Some((*id, it?)))
+    ids.iter().zip(item.each_target_of(s, of, ids)).find_map(|(id, it)| Some((*id, it?)))
 }
 
 /// Keep the object rows of the graph labels among `ids` for every label of their kind
@@ -1196,6 +1233,24 @@ pub(crate) fn capture_series_paint_writes(
         rows.extend(painted_rows(d, shown.collect::<Vec<_>>()));
     }
     super::graph::capture_series_top_paints(d, &rows)
+}
+
+/// Store on the graph the opacity and blend mode of each row an edit wrote (`written`: an object with the index of the
+/// row) on the series marks among them, when that row is the topmost visible one of its kind, also when the mark
+/// already showed that opacity: it replaces the opacity another mark of the series left on the graph. When the edit
+/// reaches several marks of one series, the frontmost one sets what the graph stores. Returns whether the stored
+/// opacity or blend mode changed.
+pub(crate) fn capture_series_opacity_writes(d: &mut vectorcraft_doc::Document, written: &[(NodeId, usize)]) -> bool {
+    let ids: Vec<NodeId> = written.iter().map(|(id, _)| *id).collect();
+    // A later mark's capture replaces an earlier one's: take them in paint order.
+    let rows: Vec<(NodeId, bool)> = series_children_in_paint_order(d, &ids)
+        .into_iter()
+        .flat_map(|id| {
+            let shown = written.iter().filter(move |(w, _)| *w == id).filter_map(|(_, at)| Some((id, top_row_kind(&d.node(id)?.appearance, *at)?)));
+            shown.collect::<Vec<_>>()
+        })
+        .collect();
+    super::graph::capture_series_opacity(d, &rows)
 }
 
 /// The kind of the row at `at` (fill `true`, stroke `false`) when it is the topmost visible row of that kind in `ap`.
@@ -1669,6 +1724,8 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     let from = index_param(p, "from", C)?;
     let contents = p.get("contents").map(|_| index_param(p, "contents", C)).transpose()?;
     let mut landed = to;
+    let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
+    let mut active_landed = None;
     // When every object's stack comes out as it was, the document and its undo history stay as they
     // are.
     let before = s.doc()?.doc.clone();
@@ -1676,6 +1733,9 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
             landed = n.appearance.move_item(from, to).ok_or_else(|| bad(C, format!("no item at index {from}")))?;
+            if active == Some(*id) {
+                active_landed = Some(landed);
+            }
             if let Some(k) = contents.filter(|_| n.contents_label().is_some()) {
                 n.appearance.set_contents_at(k);
             }
@@ -1685,13 +1745,14 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         let labels = super::graph::capture_label_changes(&before, d, &ids, true, None);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
-    // The moved row stays the active one; the rows it passed shift by one.
+    // Track the row in its own object's stack, since other stacks may clamp to a different index.
+    let at = active_landed.unwrap_or(landed);
     s.remap_appearance_item(&ids, |a| {
         Some(if a == from {
-            landed
-        } else if from < a && a <= landed {
+            at
+        } else if from < a && a <= at {
             a - 1
-        } else if landed <= a && a < from {
+        } else if at <= a && a < from {
             a + 1
         } else {
             a

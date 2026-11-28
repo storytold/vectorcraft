@@ -283,7 +283,8 @@ thread_local! {
 }
 
 /// Show Sample's area under the table: the sample of `f` with the marks `fields` show, then a swatch
-/// and a toggle for each mark and Zoom beside it. A change the user makes goes into `fields`.
+/// and a toggle for each mark and Zoom beside it. Zoom writes live proposals into `fields`, restores
+/// its opening percentage on cancellation and preserves a later automation edit.
 pub(super) fn show(ui: &mut Ui, fields: &mut Map<String, Value>, f: &CompositeFont) {
     let zoom_now = zoom(fields);
     let marks: Vec<Mark> = Mark::ALL.into_iter().filter(|m| on(fields, m.field())).collect();
@@ -318,8 +319,10 @@ pub(super) fn show(ui: &mut Ui, fields: &mut Map<String, Value>, f: &CompositeFo
             }
             Row::new().id_salt("zoom").show(ui, |ui, _| {
                 Text::new(tl!("Zoom")).show(ui);
-                if let Some(z) = Select::new(tl!("Zoom"), Bind::given(zoom_now), &entries).show(ui).value().copied() {
-                    fields.insert("zoom".into(), json!(z));
+                let mut chosen_zoom = zoom_now;
+                Select::new(tl!("Zoom"), Bind::bound(&mut chosen_zoom), &entries).show(ui);
+                if chosen_zoom != zoom_now {
+                    fields.insert("zoom".into(), json!(chosen_zoom));
                 }
             });
         });
@@ -383,4 +386,95 @@ pub(super) fn draw(f: &CompositeFont, size: f64, baseline: f64, px: (u16, u16), 
     let view = Affine::scale(f64::from(ppp));
     let empty = || vectorcraft_render::Rendered { width: u32::from(w), height: u32::from(h), pixels: vec![0; usize::from(w) * usize::from(h) * 4] };
     RENDERER.with(|r| r.borrow_mut().render_node(&doc, &node, w, h, view)).unwrap_or_else(empty)
+}
+
+#[cfg(test)]
+mod zoom_tests {
+    use craft::ui::contract::Role;
+    use craft::ui::dialog::dialog_id;
+    use egui::{Key, Modifiers, vec2};
+    use vectorcraft_engine::Session;
+
+    use super::super::{KIND, open, with_dialog};
+    use super::*;
+    use crate::VectorcraftApp;
+    use crate::tests::panel_harness::Panel;
+
+    fn opened(width: f32) -> Panel {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(vec2(width, 1000.0));
+        open(&mut panel.app()).unwrap();
+        with_dialog(&panel.app(), |dialog| {
+            dialog.fonts = vec![CompositeFont::new("Sample draft", "Source Sans 3", "Regular")];
+            dialog.select(0);
+        })
+        .unwrap();
+        panel.frame();
+        panel.click("Show Sample");
+        panel
+    }
+
+    fn fields(panel: &Panel) -> Map<String, Value> {
+        with_dialog(&panel.app(), |dialog| dialog.sample.clone()).expect("the Composite Fonts dialog remains open")
+    }
+
+    #[test]
+    fn composite_sample_zoom_escape_restores_the_opening_value() {
+        for width in [1024.0, 1280.0] {
+            let mut panel = opened(width);
+            let before = fields(&panel);
+            let (document, undo, revision) = {
+                let app = panel.app();
+                let st = app.session.active().unwrap();
+                (st.doc.clone(), st.history.undo.len(), st.revision)
+            };
+            assert_eq!(panel.value_role("Zoom", Role::COMBO_BOX).as_deref(), Some("100%"));
+            panel.click_role("Zoom", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            assert_ne!(fields(&panel)["zoom"], before["zoom"], "the open popup previews its proposed magnification");
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert_eq!(fields(&panel), before, "Escape restores the complete sample draft while keeping the parent dialog open");
+            assert_eq!(panel.value_role("Zoom", Role::COMBO_BOX).as_deref(), Some("100%"));
+            let app = panel.app();
+            let st = app.session.active().unwrap();
+            assert_eq!(st.doc, document);
+            assert_eq!(st.history.undo.len(), undo);
+            assert_eq!(st.revision, revision);
+        }
+    }
+
+    #[test]
+    fn composite_sample_zoom_accepts_pointer_and_keyboard_choices() {
+        let mut panel = opened(1280.0);
+        panel.click_role("Zoom", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        assert_eq!(fields(&panel)["zoom"], json!(200));
+        panel.click_role("Zoom", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(fields(&panel)["zoom"], json!(200), "a later cancellation restores the last accepted choice");
+        panel.click_role("Zoom", Role::COMBO_BOX);
+        panel.click("400%");
+        assert_eq!(fields(&panel)["zoom"], json!(400));
+        assert_eq!(panel.value_role("Zoom", Role::COMBO_BOX).as_deref(), Some("400%"));
+    }
+
+    #[test]
+    fn composite_sample_zoom_preserves_an_automation_edit_during_a_popup() {
+        let mut panel = opened(1280.0);
+        panel.click_role("Zoom", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(fields(&panel)["zoom"], json!(200));
+        {
+            let app = panel.app();
+            let ctx = app.ui_ctx.clone().unwrap();
+            app.dialogs().unwrap().with(|host| host.set_json_field(&ctx, dialog_id(KIND), "zoom", json!(400))).unwrap();
+        }
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(fields(&panel)["zoom"], json!(400), "canceling an older popup must not undo the later automation edit");
+        assert_eq!(panel.value_role("Zoom", Role::COMBO_BOX).as_deref(), Some("400%"));
+    }
 }

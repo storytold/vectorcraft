@@ -927,6 +927,7 @@ font-technology	Variable	Variables
 	Direct Selection Tool	Herramienta Selección directa
 	Direction Handles	Manejadores de dirección
 	Disable Auto Add/Delete	Desactivar agregar/eliminar automático
+	Delete Removes Anchor Points and Keeps Paths Joined	Suprimir quita puntos de ancla y mantiene los trazados unidos
 	Interpolate Control Points When Moving Anchors	Interpolar manejadores de dirección al mover puntos de ancla
 	Disable Opacity Mask	Desactivar máscara de opacidad
 	Discard	Descartar
@@ -1676,6 +1677,17 @@ font-technology	Variable	Variables
 	Graphic Styles	Estilos gráficos
 	Graphic Styles Options	Opciones de estilos gráficos
 	Graphics	Gráficos
+	Show Contrast	Mostrar contraste
+	Contrast For	Contraste para
+	Normal Text	Texto normal
+	Large Text	Texto grande
+	Contrast Background	Fondo del contraste
+	Behind Selection	Detrás de la selección
+	Current Color	Color actual
+	Pass	Cumple
+	Fail	No cumple
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contraste mínimo de WCAG 2.2: texto normal AA 4.5:1 (1.4.3) y AAA 7:1 (1.4.6), texto grande AA 3:1 y AAA 4.5:1, gráficos y controles AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	El fondo se lee en el centro de la selección.
 	Graphics Processor	Procesador gráfico
 	Graphics: {adapter}	Gráficos: {adapter}
 	Gravity	Gravedad
@@ -2479,6 +2491,12 @@ font-technology	Variable	Variables
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolución no disponible
+	estimated memory {memory}	memoria estimada {memory}
+	memory unavailable	memoria no disponible
+	Unknown format	Formato desconocido
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2627,6 +2645,7 @@ font-technology	Variable	Variables
 	One Point Perspective Preset 5	Preajuste de perspectiva de un punto 5
 	Only Web Colors	Solo colores web
 	Opacity	Opacidad
+	Show Opacity	Mostrar opacidad
 	Opacity & Mask Define Knockout Shape	La opacidad y la máscara definen la forma de exclusión
 	Opacity Mask	Máscara de opacidad
 	Opacity Mask Info	Información de máscara de opacidad
@@ -3075,6 +3094,9 @@ digits	Malayalam	Malayálam
 	Scale Artwork with Artboard	Escalar la ilustración con la mesa de trabajo
 	Artboards: {n}	Mesas de trabajo: {n}
 	Rearrange All Artboards…	Reorganizar todas las mesas de trabajo…
+	Rearrange…	Reorganizar…
+	Selected Artboards: {n}	Mesas de trabajo seleccionadas: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Haz clic en el lienzo para colocar las mesas de trabajo (Esc cancela)
 	Recall Selection	Recuperar selección
 	RECENT	RECIENTES
 	Recent	Recientes
@@ -3316,7 +3338,7 @@ digits	Malayalam	Malayálam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selección › Igual › Color de relleno, Color de trazo y Relleno y trazo solo coinciden con el mismo matiz de una muestra global o de tinta plana, no con cualquier matiz de ella.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Muestra la pantalla de inicio cuando no hay ningún documento abierto; desactivada, la ventana queda vacía hasta que hace clic en Inicio.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mide los objetos con sus trazos y los efectos que cambian su forma para el tamaño, la posición y la alineación; las sombras, los resplandores y los desenfoques no se miden.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Con un zoom del 100 %, una pulgada del documento ocupa 96 puntos de pantalla en lugar de 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Con un zoom del 100 %, una pulgada del documento ocupa una pulgada de la pantalla, o 96 puntos de pantalla si el sistema no indica un tamaño utilizable.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Al hacer doble clic en un grupo, trazado o imagen con la herramienta Selección, se abre en modo de aislamiento.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Los rellenos y trazos de motivo se transforman con la ilustración, salvo que una transformación o el menú del panel Transformar indique otra cosa.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Los radios de esquina dinámicos se escalan con la ilustración, salvo que el escalado indique otra cosa.
@@ -3327,6 +3349,7 @@ digits	Malayalam	Malayálam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto de giro con dos dedos en un trackpad gira la vista del lienzo.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Mantener pulsada una tecla ejecuta la herramienta o el comando de su columna Mantener pulsado en Métodos abreviados de teclado; una pulsación breve ejecuta su método abreviado habitual.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Cuántos segundos hay que mantener pulsada una tecla para que se ejecute su método abreviado de pulsación larga en lugar del habitual.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Suprimir quita los puntos de ancla seleccionados y reajusta la curva alrededor de cada uno, en lugar de abrir el trazado ahí.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Al mover puntos de ancla, cada curva con un extremo movido conserva su forma respecto a sus extremos.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantener pulsado el atajo de una herramienta la elige hasta que lo suelta, y después vuelve a elegirse la herramienta anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Muestra el cuadro delimitador mientras mueve la selección o dibuja una forma.
@@ -4895,6 +4918,14 @@ axis	Both	Ambos
 	The script asks to read and write a folder you choose, with everything in it.	El script pide leer y escribir una carpeta que usted elija, con todo su contenido.
 	Allow Once	Permitir una vez
 	Always Allow This Script	Permitir siempre este script
+	No script has kept file access.	Ningún script tiene acceso a archivos guardado.
+	Read file	Leer archivo
+	Read and write file	Leer y escribir archivo
+	Read and write folder	Leer y escribir carpeta
+	Revoke	Revocar
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revocar quita el acceso guardado para cada versión del script. El acceso a una carpeta abarca todo su contenido.
+@msg	Script file access revoked	Acceso del script a archivos revocado
+@msg	The script file access was already revoked	El acceso del script a archivos ya estaba revocado
 	Deny	Denegar
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script puede cambiar los documentos abiertos y escribir archivos mediante los comandos que ejecuta. Ejecute solo scripts de confianza.
 	Do not show this warning again	No volver a mostrar esta advertencia
@@ -5092,6 +5123,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` para el cuadro de diálogo de archivo de un script debe ser uno de: once, always, deny, stop
 @msg	choose a file or folder first, or deny	elija primero un archivo o una carpeta, o deniegue
 @msg	the script file permissions could not be saved: {e}	no se pudieron guardar los permisos de archivos de los scripts: {e}
+@msg	the script file permissions could not be read: {e}	no se pudieron leer los permisos de archivos de los scripts: {e}
 @msg	this script's file access can be allowed only once	el acceso a archivos de este script solo se puede permitir una vez
 @msg	Only the person at the keyboard can allow a script's file access	Solo la persona que está en el teclado puede permitir el acceso a archivos de un script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Un script recibe como máximo 2.048 archivos: los archivos elegidos después de ellos se omitieron
@@ -5567,6 +5599,12 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	finish editing the pattern first	termina primero la edición del motivo
 @msg	nothing encoded	no se codificó nada
 @msg	nothing selected	no hay nada seleccionado
+@msg	`{key}` must be a color or {_1}	`{key}` debe ser un color o {_1}
+@msg	the selected objects' colors differ: give `color`	los colores de los objetos seleccionados difieren: indique `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	los colores de los objetos seleccionados difieren: indique `opacity` o `color`
+@msg	the active fill or stroke has no color: give `color`	el relleno o trazo activo no tiene color: indique `color`
+@msg	the active fill or stroke is hidden: give `color`	el relleno o trazo activo está oculto: indique `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	el relleno o trazo activo se dibuja a través de una máscara de opacidad: indique `color`
 @msg	nothing selected is in a group	nada de lo seleccionado está en un grupo
 @msg	nothing to align	no hay nada que alinear
 @msg	nothing to distort	no hay nada que distorsionar
@@ -6675,6 +6713,9 @@ file-filter	Swatch libraries	Bibliotecas de muestras
 file-filter	Flattener presets	Preajustes del acoplador
 file-filter	PDF presets	Preajustes de PDF
 file-filter	Print presets	Preajustes de impresión
+file-filter	Tracing presets	Preajustes de calco
+file-filter	Action sets	Conjuntos de acciones
+file-filter	Composite fonts	Fuentes compuestas
 file-filter	Preferences	Preferencias
 file-filter	Export presets	Ajustes de exportación
 file-filter	SVG Compressed	SVG comprimido
@@ -6763,6 +6804,8 @@ mark-style	Japanese	Japonesas
 	Variation	Variación
 	VectorCraft Default	Predeterminado de VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	CMYK genérico de VectorCraft (similar a SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK estucado de VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK no estucado de VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Muestras de VectorCraft (.vcswatches)
 	Vertical Area Type	Texto de área vertical
 	Vertical Type	Texto vertical
@@ -7274,6 +7317,8 @@ axis	Y Axis	Eje Y
 	Cancel Plug-in Run	Cancelar ejecución del plugin
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} terminó, pero el documento o el plugin cambió entretanto: vuelva a ejecutarlo
 @msg	Running “{name}”…	Ejecutando “{name}”…
+@msg	Plug-in “{name}”: {notice}	Plugin “{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` debe ser una cadena con texto visible
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un efecto interactivo se ejecuta mientras se dibuja el documento, así que no puede ser `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un plugin de exportación siempre recibe el presupuesto de una exportación: omite `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” pide un presupuesto de cálculo grande (cada ejecución hasta {minutes} minutos y {times} veces las instrucciones habituales): una persona debe aprobarlo en la aplicación de escritorio, o pasa `allowHeavy: true` en una sesión iniciada con --allow-plugin-grants
@@ -7300,6 +7345,8 @@ axis	Y Axis	Eje Y
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	requiere aprobación: pide {0}, que el usuario concede al instalarlo por separado
 @msg	not JSON: {e}	no es JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	no es un binario WebAssembly (falta el encabezado \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un tipo de función supera el límite de {MAX_FUNC_TYPE_VALUES} parámetros
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un tipo de función supera el límite de {MAX_FUNC_TYPE_VALUES} resultados
 @msg	parameter `{k}`: {what}	parámetro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parámetro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	los parámetros del plugin deben ser un objeto JSON
@@ -7317,6 +7364,10 @@ axis	Y Axis	Eje Y
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc devolvió 0 (sin memoria)
 @msg	vc_alloc returned a block outside memory	vc_alloc devolvió un bloque fuera de la memoria
 @msg	vc_run returned error code {packed}	vc_run devolvió el código de error {packed}
+@msg	did not finish loading within {secs} s	no terminó de cargarse en {secs} s
+@msg	no thread was left to load it	no quedó ningún hilo para cargarlo
+@msg	panicked while loading	falló de forma inesperada al cargarse
+@msg	panicked while loading: {what}	falló de forma inesperada al cargarse: {what}
 @msg	{_1} is not a file	{_1} no es un archivo
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} ocupa {_2} bytes (límite {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objetos (límite {MAX_OBJECTS})
@@ -7337,6 +7388,11 @@ axis	Y Axis	Eje Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` y `maxItems` deben ser 0-{MAX_LIST}, `maxItems` al menos 1, y el valor predeterminado debe tener esa cantidad
 @msg	`name` must be a string	`name` debe ser una cadena
 @msg	`opacity` must be a number	`opacity` debe ser un número
+@msg	`opacity` must be a number from 0 to 100	`opacity` debe ser un número de 0 a 100
+@msg	`opacity` must be true or false	`opacity` debe ser true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	los caracteres de texto no tienen opacidad propia: agregue un relleno o un trazo con Agregar nuevo relleno o Agregar nuevo trazo del panel Apariencia
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objeto seleccionado en una instancia de símbolo no tiene opacidad propia de relleno ni de trazo
+@msg	no target has that fill or stroke to take the opacity	ningún destino tiene ese relleno o trazo para recibir la opacidad
 @msg	`type` must be "path" or "compound"	`type` debe ser "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` debe tener 1-{MAX_UNIT} caracteres imprimibles
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` debe indicar de 1 a {MAX_CONDITION_VALUES} valores para `{other}`
@@ -7355,12 +7411,21 @@ axis	Y Axis	Eje Y
 @msg	a list of {min_items} to {max_items} numbers	una lista de {min_items} a {max_items} números
 @msg	a new object needs a `path`	un objeto nuevo necesita un `path`
 @msg	a number	un número
-@msg	a painted live effect returns only `objects`	un efecto dinámico de pintura solo devuelve `objects`
+@msg	a painted live effect returns only `objects` and `notice`	un efecto dinámico de pintura solo devuelve `objects` y `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una pieza de un efecto dinámico de pintura solo tiene `path`, `fillRule`, `fills` y `strokes`
 @msg	a read-only object was left out	se omitió un objeto de solo lectura
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	se omitió un objeto de solo lectura: devuélvalo como {{"id": …}} solo o tal como se recibió
 @msg	a string	una cadena
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un trazo solo tiene `paint`, `width`, `join`, `cap` y `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	una pieza de un efecto dinámico de pintura solo tiene `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` y `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	un trazo solo tiene `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` y `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` solo puede ser true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` solo es para un efecto dinámico que declara `paintOutput`, con `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` debe ser un número de 0 a 1
+@msg	unknown blending mode; `blend` is one of {_1}	modo de fusión desconocido; `blend` es uno de {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` debe ser una lista de {MAX_LOOK_EFFECTS} registros como máximo
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	un resultado lleva como máximo {MAX_RESULT_EFFECTS} registros de efecto
+@msg	this host takes no effects here	este host no admite efectos aquí
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un trazo debe ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	un efecto debe ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un efecto en un relleno solo devuelve `fills`
@@ -7460,6 +7525,8 @@ axis	Y Axis	Eje Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` es {_1}; este host admite los niveles de API de plugins de 1 a {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` solo puede ser true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` solo es para un efecto dinámico (`kind` "effect") con `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` solo es para un importador (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	«{shown}» abre archivos pero no los coloca: su manifiesto no establece `place`
 @msg	`grant` must be a list of permission names	`grant` debe ser una lista de nombres de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` nombra un permiso desconocido `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un plugin de tipo `{_1}` necesita el permiso `{_2}`
@@ -7471,12 +7538,60 @@ axis	Y Axis	Eje Y
 @msg	`inputs` lists `{shown}` twice	`inputs` incluye `{shown}` dos veces
 @msg	`inputs` needs `api` 2 or later	`inputs` requiere `api` 2 o posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` requiere el permiso `doc.read`
+@msg	only a filter declares `writes`	solo un filtro declara `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` nombra un tipo de objeto desconocido `{shown}`: use type, image o symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` incluye `{shown}` dos veces
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` incluye `{shown}`, que `inputs` no incluye
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` requiere `api` {WRITES_API} o posterior
+@msg	`writes` needs the permission `doc.write`	`writes` requiere el permiso `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} no es texto, ni una imagen ni una instancia de símbolo
+@msg	the text of type given as `truncated` can't be changed	no se puede cambiar el texto de un objeto de texto dado como `truncated`
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	debe ser una lista de {MAX_INPUT_RUNS} entradas como máximo
+@msg	type needs at least one run	el texto necesita al menos un tramo
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes de texto (límite {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} párrafos (límite {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	más de {MAX_INPUT_TEXT_TOTAL} bytes de texto en toda la salida
+@msg	unknown key '{k}'	clave desconocida '{k}'
+@msg	must be a list of 6 numbers	debe ser una lista de 6 números
+@msg	a number is out of range (limit ±{MAX_COORD})	un número está fuera de rango (límite ±{MAX_COORD})
+@msg	flattens the object to a line or a point	reduce el objeto a una línea o un punto
+@msg	an object flattened to a line or a point can't be placed again	un objeto reducido a una línea o un punto no se puede volver a colocar
+@msg	must be a number from 0 to 1	debe ser un número de 0 a 1
+@msg	must be the name of a symbol	debe ser el nombre de un símbolo
+@msg	'{shown}' is not a symbol in this document	'{shown}' no es un símbolo de este documento
+@msg	a run must be {{"text", "style", "inline"?}}	un tramo debe ser {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` contiene el carácter de un gráfico en línea
+@msg	inline graphics can't be added, removed, reordered or changed	los gráficos en línea no se pueden añadir, quitar, reordenar ni cambiar
+@msg	the characters of threaded type can't be changed	los caracteres del texto enlazado no se pueden cambiar
+@msg	the characters of type with ruby can't be changed	los caracteres del texto con ruby no se pueden cambiar
+@msg	expected {count} paragraph styles, one per paragraph	se esperaban {count} estilos de párrafo, uno por párrafo
+@msg	the document has no Kinsoku set named '{shown}'	el documento no tiene ningún conjunto de kinsoku llamado '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	debe tener 1-{MAX_FAMILY} caracteres imprimibles
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Leer los objetos que recibe, y los ajustes, las mesas de trabajo, las capas y las muestras del documento
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` debe enumerar secciones distintas: settings, artboards, layers o swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` es para un filtro, o un efecto dinámico con `commands`, con `api` 3 o posterior y el permiso `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	la información del documento que pide el plugin es demasiado grande para entregarla: como máximo {MAX_CONTEXT_ITEMS} mesas de trabajo, capas y muestras en {MAX_CONTEXT_BYTES} bytes
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	presupuesto de memoria (el objeto {_1} necesita {size} bytes de entrada, quedan {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	presupuesto de objetos (más de {MAX_OBJECTS} objetos de solo lectura)
 @msg	instruction budget	presupuesto de instrucciones
 @msg	time budget	presupuesto de tiempo
 @msg	memory budget (the selection is too large to hand over)	presupuesto de memoria (la selección es demasiado grande para entregarla)
 @msg	output size ({what} is {len} bytes, limit {max})	tamaño de salida ({what} ocupa {len} bytes, límite {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} línea {line}, columna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	presupuesto de memoria
+@msg	call depth	profundidad de llamadas
+@msg	run(input, params) returned no output object	run(input, params) no devolvió ningún objeto de salida
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" necesita `script`: el nombre del archivo .js del plugin, junto al manifiesto
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` debe ser el nombre de un archivo .js en la carpeta del manifiesto: 1-128 bytes, sin carpeta, sin `:`, sin empezar por `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` es el texto del script y solo se da en el JSON que toma el dataBase64 de plugin.install: un archivo .vcplugin nombra su script en `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	el manifiesto de un plugin de JavaScript indica `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" es para un filtro de objetos (`kind` "filter"), no para `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	un plugin de JavaScript no puede incluir el permiso `{name}`: de los permisos del host puede incluir `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	el manifiesto de un módulo WebAssembly omite `runtime`: "js" es para un plugin de JavaScript
+@msg	a JavaScript plug-in makes no command calls	un plugin de JavaScript no llama a comandos
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) recibe dos números
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) recibe un nivel, 0 (error), 1 (advertencia), 2 (información) o 3 (depuración), y una cadena
 @msg	the plug-in's grant can't be removed from the plug-in store	el permiso del plugin no se puede quitar del almacén de plugins
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permiso `{shown}` está reservado para una API de plugins posterior; este host no lo concede
 @msg	unknown permission `{shown}`	permiso desconocido `{shown}`
@@ -8367,6 +8482,7 @@ breakText	Glyphs	Glifos
 	Place Brush Art	Colocar ilustración del pincel
 	Replace Brush Art	Reemplazar ilustración del pincel
 	Replace Pattern Art	Reemplazar ilustración del motivo
+	Place Pattern Art	Colocar ilustración del motivo
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Algunos trazos usan este pincel. ¿Aplicar la nueva ilustración a esos trazos, o dejarlos como están y añadir una copia del pincel con la nueva ilustración?
 	Apply to Strokes	Aplicar a los trazos
 	Leave Strokes	Dejar los trazos
@@ -8436,6 +8552,8 @@ breakText	Glyphs	Glifos
 	Tangent Circle	Círculo tangente
 	Tangent Circle Tool	Herramienta Círculo tangente
 	No tangent circle here	No hay círculo tangente aquí
+	Ask For Circle Radius	Preguntar el radio del círculo
+	Auto-Update Default	Actualizar automáticamente el valor predeterminado
 	Circle:	Círculo:
 @msg	`ids` names an object twice	`ids` indica un objeto dos veces
 @msg	select two or three paths or compound paths	seleccione dos o tres trazados o trazados compuestos
@@ -8889,6 +9007,16 @@ breakText	Glyphs	Glifos
 	Margin	Margen
 	Box	Caja
 	Swatch	Muestra
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` debe estar entre 0,01 y 1000 pt
+@msg	select the banner, or mark every artboard	seleccione la pancarta o marque todas las mesas de trabajo
+@msg	the banner has no width or height	la pancarta no tiene anchura ni altura
+@msg	the grommet inset is too large for the banner	la distancia de los ojales al borde es demasiado grande para la pancarta
+@msg	the hem is too deep for the banner	el dobladillo es demasiado profundo para la pancarta
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	el espaciado genera más de {MAX_GROMMETS} ojales
+@msg	there is no banner to mark	no hay ninguna pancarta que marcar
+@msg	turn on at least one side	active al menos un lado
+@msg	with no hem and no grommets there is nothing to mark	sin dobladillo ni ojales no hay nada que marcar
+@msg	{saving} failed: {e}	{saving} falló: {e}
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' y 'arguments' no se pueden usar en funciones en modo estricto
 @msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Se llamó a Boolean.prototype.{name} con un valor que no es un Boolean
 @msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	Las imágenes CMYK cuyas muestras no se pudieron leer en CMYK se importaron en RGB
@@ -10676,6 +10804,11 @@ breakText	Glyphs	Glifos
 	No objects are selected.	No hay objetos seleccionados.
 	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
 	Remove Fold Line Role	Quitar tipo de línea
+	Fold Angle	Ángulo de plegado
+	Set Fold Angle…	Definir ángulo de plegado…
+	Set Fold Angle	Definir ángulo de plegado
+	Reset Fold Angle	Restablecer ángulo de plegado
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	seleccione una línea de hendido, de corte parcial o de perforación que no esté bloqueada ni oculta
 	Check	Comprobar
 	Check Fold Lines	Comprobar líneas de plegado
 @msg	No cut lines are in the selection.	No hay líneas de corte en la selección.

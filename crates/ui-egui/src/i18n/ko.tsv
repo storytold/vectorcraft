@@ -406,6 +406,9 @@ digits	Malayalam	말라얄람어
 	Artboards	아트보드
 	Convert to Artboards	아트보드로 변환
 	Rearrange All Artboards…	모든 아트보드 재정렬…
+	Rearrange…	재정렬…
+	Selected Artboards: {n}	선택한 아트보드: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	캔버스를 클릭하여 아트보드를 배치하세요(Esc로 취소)
 	Fit to Artwork Bounds	아트워크 경계에 맞추기
 	Fit to Selected Art	선택한 아트에 맞추기
 	Graph	그래프
@@ -576,6 +579,7 @@ digits	Malayalam	말라얄람어
 	Side Length:	변 길이:
 	Make Sides Equal	변 길이 같게
 	Opacity	불투명도
+	Show Opacity	불투명도 표시
 	Pie End Angle:	파이 끝 각도:
 	Pie Start Angle:	파이 시작 각도:
 	Stroke Color	선 색상
@@ -1684,6 +1688,7 @@ antiAlias	Sharp	날카롭게
 	Dimensions	치수
 	Direct Selection Tool	직접 선택 도구
 	Disable Auto Add/Delete	자동 추가/삭제 사용 안 함
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete로 고정점을 제거하고 패스를 연결된 상태로 유지
 	Interpolate Control Points When Moving Anchors	앵커 포인트 이동 시 방향 핸들 보간
 	Disable Opacity Mask	불투명 마스크 사용 안 함
 	Discard	삭제
@@ -2694,6 +2699,12 @@ antiAlias	Sharp	날카롭게
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	해상도를 알 수 없음
+	estimated memory {memory}	예상 메모리 {memory}
+	memory unavailable	메모리를 알 수 없음
+	Unknown format	알 수 없는 형식
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3322,7 +3333,7 @@ mark-style	Japanese	일본식
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	선택 › 동일 › 칠 색상, 선 색상, 칠 및 선은 전역 또는 별색 견본의 같은 색조만 찾고, 다른 색조는 찾지 않습니다.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	열린 문서가 없을 때 홈 화면을 표시합니다. 끄면 홈을 클릭할 때까지 창이 비어 있습니다.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	크기, 위치, 정렬을 위해 선과 모양을 바꾸는 효과를 포함하여 개체를 측정합니다. 그림자, 광선, 흐림 효과는 측정하지 않습니다.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 확대/축소에서 문서의 1인치가 72가 아닌 96 화면 포인트를 차지합니다.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% 확대/축소에서 문서의 1인치가 디스플레이의 1인치를 채우며, 시스템이 사용할 수 있는 디스플레이 크기를 알려 주지 않으면 96 화면 포인트를 차지합니다.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	선택 도구로 그룹, 패스 또는 이미지를 두 번 클릭하면 격리 모드로 엽니다.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	변형 명령이나 변형 패널의 메뉴에서 달리 선택하지 않는 한, 패턴 칠과 선이 아트웍과 함께 변형됩니다.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 라이브 모퉁이 반지름이 아트웍과 함께 크기 조정됩니다.
@@ -3333,6 +3344,7 @@ mark-style	Japanese	일본식
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	키를 누르고 있으면 키보드 단축키의 누르고 있기 열에 있는 도구나 명령이 실행되고, 짧게 누르면 평소 단축키가 실행됩니다.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	평소 단축키 대신 길게 누르기 단축키가 실행되기 전까지 키를 누르고 있어야 하는 시간(초)입니다.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete는 선택한 고정점을 제거하고 각 점 주위의 곡선을 다시 맞추며, 그 위치에서 패스를 열지 않습니다.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	고정점을 이동하면 한쪽 끝이 이동한 각 곡선은 양 끝을 기준으로 모양을 유지합니다.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
 	Shows the bounding box while you move the selection or draw a shape.	선택 영역을 이동하거나 모양을 그리는 동안 테두리 상자를 표시합니다.
@@ -4336,6 +4348,9 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Tracing presets	추적 프리셋
+file-filter	Action sets	액션 세트
+file-filter	Composite fonts	합성 글꼴
 file-filter	Preferences	환경 설정
 file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG
@@ -4418,6 +4433,17 @@ file-filter	Templates	템플릿
 	Stacked	누적
 	Graphic Style Libraries Menu	그래픽 스타일 라이브러리 메뉴
 	Graphics	그래픽
+	Show Contrast	대비 표시
+	Contrast For	대비 기준
+	Normal Text	일반 텍스트
+	Large Text	큰 텍스트
+	Contrast Background	대비 배경
+	Behind Selection	선택 영역 뒤
+	Current Color	현재 색상
+	Pass	통과
+	Fail	실패
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 최소 대비: 일반 텍스트 AA 4.5:1 (1.4.3) 및 AAA 7:1 (1.4.6), 큰 텍스트 AA 3:1 및 AAA 4.5:1, 그래픽과 컨트롤 AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	배경은 선택 영역의 중앙에서 읽습니다.
 	Greek & Cyrillic	그리스어 및 키릴 문자
 	Hex by Column	열 기준 육각형
 	Hex by Row	행 기준 육각형
@@ -5709,6 +5735,14 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 	The script asks to read and write a folder you choose, with everything in it.	스크립트가 선택한 폴더와 그 안의 모든 항목을 읽고 쓰도록 요청합니다.
 	Allow Once	한 번 허용
 	Always Allow This Script	이 스크립트 항상 허용
+	No script has kept file access.	파일 접근을 유지한 스크립트가 없습니다.
+	Read file	파일 읽기
+	Read and write file	파일 읽기 및 쓰기
+	Read and write folder	폴더 읽기 및 쓰기
+	Revoke	권한 취소
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	권한 취소는 스크립트의 모든 버전에 유지된 접근을 제거합니다. 폴더 접근에는 폴더 안의 모든 항목이 포함됩니다.
+@msg	Script file access revoked	스크립트 파일 접근 권한을 취소했습니다
+@msg	The script file access was already revoked	스크립트 파일 접근 권한이 이미 취소되었습니다
 	Deny	거부
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
 	Do not show this warning again	이 경고를 다시 표시하지 않음
@@ -5883,6 +5917,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	스크립트 파일 대화 상자의 `answer`는 once, always, deny, stop 중 하나여야 합니다
 @msg	choose a file or folder first, or deny	먼저 파일이나 폴더를 선택하거나 거부하세요
 @msg	the script file permissions could not be saved: {e}	스크립트 파일 권한을 저장할 수 없습니다: {e}
+@msg	the script file permissions could not be read: {e}	스크립트 파일 권한을 읽을 수 없습니다: {e}
 @msg	this script's file access can be allowed only once	이 스크립트의 파일 접근은 한 번만 허용할 수 있습니다
 @msg	Only the person at the keyboard can allow a script's file access	스크립트의 파일 접근은 키보드 앞에 있는 사람만 허용할 수 있습니다
 @msg	A script is given at most 2,048 files: the files picked after them were left out	스크립트에는 파일이 최대 2,048개까지 전달됩니다: 그 뒤에 고른 파일은 제외되었습니다
@@ -5977,6 +6012,12 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	Couldn't paste from the clipboard: {e}	클립보드에서 붙여넣을 수 없습니다: {e}
 @msg	Couldn't paste: the document it was pasted in was closed	붙여넣을 수 없습니다: 붙여넣던 문서가 닫혔습니다
 @msg	nothing selected	선택된 항목이 없습니다
+@msg	`{key}` must be a color or {_1}	`{key}`은(는) 색상 또는 {_1}이어야 합니다
+@msg	the selected objects' colors differ: give `color`	선택한 개체의 색상이 서로 다릅니다: `color`를 지정하세요
+@msg	the selected objects' colors differ: give `opacity` or `color`	선택한 개체의 색상이 서로 다릅니다: `opacity` 또는 `color`를 지정하세요
+@msg	the active fill or stroke has no color: give `color`	활성 칠 또는 획에 색상이 없습니다: `color`를 지정하세요
+@msg	the active fill or stroke is hidden: give `color`	활성 칠 또는 획이 숨겨져 있습니다: `color`를 지정하세요
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	활성 칠 또는 획이 불투명 마스크를 통해 그려집니다: `color`를 지정하세요
 @msg	nothing selected is in a group	선택한 항목 중 그룹에 속한 항목이 없습니다
 @msg	the {tool} tool has no options	{tool} 도구에는 옵션이 없습니다
 @msg	unknown tool `{tool}`	알 수 없는 도구 `{tool}`
@@ -6893,6 +6934,8 @@ axis	Y Axis	Y축
 	Cancel Plug-in Run	플러그인 실행 취소
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1}이(가) 끝났지만 그동안 문서나 플러그인이 변경되었습니다. 다시 실행하세요
 @msg	Running “{name}”…	“{name}” 실행 중…
+@msg	Plug-in “{name}”: {notice}	플러그인 “{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice`는 보이는 텍스트가 있는 문자열이어야 합니다
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	라이브 효과는 문서를 그리는 동안 실행되므로 `heavy`일 수 없습니다
 @msg	an exporter always gets an export's budget: leave `budget` out	내보내기 플러그인은 항상 내보내기 예산을 받습니다. `budget`은 생략하세요
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `allowHeavy: true`를 전달하세요
@@ -6919,6 +6962,8 @@ axis	Y Axis	Y축
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	승인이 필요합니다. {0}을(를) 요청하며, 사용자가 따로 설치할 때 허용합니다
 @msg	not JSON: {e}	JSON이 아닙니다: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly 바이너리가 아닙니다(\\0asm 헤더 없음)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	함수 형식의 매개변수가 한도인 {MAX_FUNC_TYPE_VALUES}개를 초과합니다
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	함수 형식의 결과가 한도인 {MAX_FUNC_TYPE_VALUES}개를 초과합니다
 @msg	parameter `{k}`: {what}	매개변수 `{k}`: {what}
 @msg	parameter `{name}`: {what}	매개변수 `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	플러그인 매개변수는 JSON 개체여야 합니다
@@ -6936,6 +6981,10 @@ axis	Y Axis	Y축
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc이 0을 반환했습니다(메모리 부족)
 @msg	vc_alloc returned a block outside memory	vc_alloc이 메모리 밖의 블록을 반환했습니다
 @msg	vc_run returned error code {packed}	vc_run이 오류 코드 {packed}을(를) 반환했습니다
+@msg	did not finish loading within {secs} s	{secs}초 안에 로드를 마치지 못했습니다
+@msg	no thread was left to load it	로드할 스레드가 남아 있지 않았습니다
+@msg	panicked while loading	로드하는 중에 비정상 종료되었습니다
+@msg	panicked while loading: {what}	로드하는 중에 비정상 종료되었습니다: {what}
 @msg	{_1} is not a file	{_1}은(는) 파일이 아닙니다
 @msg	{_1} is {_2} bytes (limit {_3})	{_1}이(가) {_2}바이트입니다(한도 {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	개체 {_1}개(한도 {MAX_OBJECTS})
@@ -6955,6 +7004,11 @@ axis	Y Axis	Y축
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems`와 `maxItems`는 0-{MAX_LIST}, `maxItems`는 1 이상이어야 하며 기본값의 항목 수도 그 범위여야 합니다
 @msg	`name` must be a string	`name`은(는) 문자열이어야 합니다
 @msg	`opacity` must be a number	`opacity`은(는) 숫자여야 합니다
+@msg	`opacity` must be a number from 0 to 100	`opacity`은(는) 0에서 100 사이의 숫자여야 합니다
+@msg	`opacity` must be true or false	`opacity`은(는) true 또는 false여야 합니다
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	문자에는 자체 불투명도가 없습니다. 모양새 패널의 새 칠 추가 또는 새 선 추가로 칠이나 선을 추가하세요
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	심볼 인스턴스에서 선택한 개체에는 자체 칠 또는 선 불투명도가 없습니다
+@msg	no target has that fill or stroke to take the opacity	불투명도를 적용할 해당 칠 또는 선이 있는 대상이 없습니다
 @msg	`type` must be "path" or "compound"	`type`은(는) "path" 또는 "compound"여야 합니다
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`은(는) 인쇄 가능한 문자 1-{MAX_UNIT}자여야 합니다
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`에는 `{other}`의 값을 1-{MAX_CONDITION_VALUES}개 나열해야 합니다
@@ -6973,12 +7027,21 @@ axis	Y Axis	Y축
 @msg	a list of {min_items} to {max_items} numbers	숫자 {min_items}-{max_items}개의 목록
 @msg	a new object needs a `path`	새 개체에는 `path`가 필요합니다
 @msg	a number	숫자
-@msg	a painted live effect returns only `objects`	페인트형 라이브 효과는 `objects`만 반환합니다
+@msg	a painted live effect returns only `objects` and `notice`	페인트형 라이브 효과는 `objects`와 `notice`만 반환합니다
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`만 있습니다
 @msg	a read-only object was left out	읽기 전용 개체가 빠졌습니다
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	읽기 전용 개체가 빠졌습니다: {{"id": …}}만 있는 형태나 받은 그대로 반환하십시오
 @msg	a string	문자열
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`만 있습니다
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend`, `effects`만 있습니다
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend`, `effects`만 있습니다
+@msg	`appearanceOutput` may only be true	`appearanceOutput`에는 true만 지정할 수 있습니다
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput`은 `paintOutput`을 선언한 `api` 3의 라이브 효과에만 쓸 수 있습니다
+@msg	`opacity` must be a number from 0 to 1	`opacity`는 0에서 1 사이의 숫자여야 합니다
+@msg	unknown blending mode; `blend` is one of {_1}	알 수 없는 혼합 모드입니다. `blend`는 {_1} 중 하나입니다
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects`는 최대 {MAX_LOOK_EFFECTS}개 레코드의 배열이어야 합니다
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	결과 하나에는 효과 레코드가 최대 {MAX_RESULT_EFFECTS}개까지 들어갑니다
+@msg	this host takes no effects here	이 호스트는 여기서 효과를 받지 않습니다
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	선은 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 형태여야 합니다
 @msg	an effect must be {{"id", "params"?, "visible"?}}	효과는 {{"id", "params"?, "visible"?}} 형태여야 합니다
 @msg	an effect on a fill returns only `fills`	칠에 적용된 효과는 `fills`만 반환합니다
@@ -7078,6 +7141,8 @@ axis	Y Axis	Y축
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api`가 {_1}입니다. 이 호스트는 플러그인 API 수준 1부터 {API_LEVEL}까지 지원합니다
 @msg	`paintOutput` may only be true	`paintOutput`에는 true만 지정할 수 있습니다
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput`은 `api` 2의 라이브 효과(`kind` "effect")에만 쓸 수 있습니다
+@msg	`place` is only for an importer (`kind` "importer")	`place`는 임포터(`kind` "importer")에만 쓸 수 있습니다
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}”은(는) 파일을 열지만 배치하지는 않습니다: 매니페스트에 `place`가 설정되어 있지 않습니다
 @msg	`grant` must be a list of permission names	`grant`는 권한 이름 목록이어야 합니다
 @msg	`grant` names an unknown permission `{shown}`	`grant`에 알 수 없는 권한 `{shown}`이(가) 있습니다
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 종류의 플러그인에는 `{_2}` 권한이 필요합니다
@@ -7089,12 +7154,60 @@ axis	Y Axis	Y축
 @msg	`inputs` lists `{shown}` twice	`inputs`에 `{shown}`이(가) 두 번 나열되어 있습니다
 @msg	`inputs` needs `api` 2 or later	`inputs`에는 `api` 2 이상이 필요합니다
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
+@msg	only a filter declares `writes`	필터만 `writes`를 선언할 수 있습니다
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes`에 알 수 없는 개체 종류 `{shown}`이(가) 있습니다. type, image 또는 symbolInstance를 사용하세요
+@msg	`writes` lists `{shown}` twice	`writes`에 `{shown}`이(가) 두 번 나열되어 있습니다
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes`에 나열된 `{shown}`이(가) `inputs`에는 없습니다
+@msg	`writes` needs `api` {WRITES_API} or later	`writes`에는 `api` {WRITES_API} 이상이 필요합니다
+@msg	`writes` needs the permission `doc.write`	`writes`에는 `doc.write` 권한이 필요합니다
+@msg	{_1} is not type, an image or a symbol instance	{_1}은(는) 문자, 이미지, 심볼 인스턴스가 아닙니다
+@msg	the text of type given as `truncated` can't be changed	`truncated`로 전달된 문자 개체의 텍스트는 변경할 수 없습니다
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	항목이 최대 {MAX_INPUT_RUNS}개인 목록이어야 합니다
+@msg	type needs at least one run	문자에는 런이 하나 이상 있어야 합니다
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	텍스트 {bytes}바이트(한도 {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	단락 {paragraphs}개(한도 {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	출력 전체의 텍스트가 {MAX_INPUT_TEXT_TOTAL}바이트를 넘습니다
+@msg	unknown key '{k}'	알 수 없는 키 '{k}'
+@msg	must be a list of 6 numbers	숫자 6개의 목록이어야 합니다
+@msg	a number is out of range (limit ±{MAX_COORD})	숫자가 범위를 벗어났습니다(한도 ±{MAX_COORD})
+@msg	flattens the object to a line or a point	개체를 선이나 점으로 납작하게 만듭니다
+@msg	an object flattened to a line or a point can't be placed again	선이나 점으로 납작해진 개체는 다시 배치할 수 없습니다
+@msg	must be a number from 0 to 1	0에서 1 사이의 숫자여야 합니다
+@msg	must be the name of a symbol	심볼 이름이어야 합니다
+@msg	'{shown}' is not a symbol in this document	'{shown}'은(는) 이 문서의 심볼이 아닙니다
+@msg	a run must be {{"text", "style", "inline"?}}	런은 {{"text", "style", "inline"?}} 형식이어야 합니다
+@msg	`text` holds the character of an inline graphic	`text`에 인라인 그래픽 문자가 들어 있습니다
+@msg	inline graphics can't be added, removed, reordered or changed	인라인 그래픽은 추가, 제거, 순서 변경, 수정할 수 없습니다
+@msg	the characters of threaded type can't be changed	연결된 문자의 글자는 변경할 수 없습니다
+@msg	the characters of type with ruby can't be changed	루비가 있는 문자의 글자는 변경할 수 없습니다
+@msg	expected {count} paragraph styles, one per paragraph	단락마다 하나씩 단락 스타일 {count}개가 필요합니다
+@msg	the document has no Kinsoku set named '{shown}'	문서에 '{shown}'(이)라는 긴소쿠 세트가 없습니다
+@msg	must be 1-{MAX_FAMILY} printable characters	인쇄 가능한 문자 1-{MAX_FAMILY}자여야 합니다
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	전달받은 개체와 문서의 설정, 아트보드, 레이어, 견본 읽기
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`에는 서로 다른 섹션을 나열해야 합니다: settings, artboards, layers 또는 swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context`는 `api` 3 이상이고 `doc.read` 권한이 있는 필터 또는 `commands`가 있는 라이브 효과에만 쓸 수 있습니다
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	플러그인이 요청한 문서 정보가 너무 커서 넘길 수 없습니다: 아트보드, 레이어, 견본은 {MAX_CONTEXT_BYTES}바이트 안에서 최대 {MAX_CONTEXT_ITEMS}개입니다
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
 @msg	instruction budget	명령어 예산
 @msg	time budget	시간 예산
 @msg	memory budget (the selection is too large to hand over)	메모리 예산(선택 항목이 너무 커서 넘길 수 없음)
 @msg	output size ({what} is {len} bytes, limit {max})	출력 크기({what}: {len}바이트, 제한 {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason}({id}, {script} {line}행 {column}열)
+@msg	{reason} ({id}, {script})	{reason}({id}, {script})
+@msg	memory budget	메모리 예산
+@msg	call depth	호출 깊이
+@msg	run(input, params) returned no output object	run(input, params)이 출력 개체를 반환하지 않았습니다
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js"에는 `script`가 필요합니다: 매니페스트 옆에 있는 플러그인 .js 파일의 이름
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script`는 매니페스트 폴더에 있는 .js 파일의 이름이어야 합니다: 1-128바이트, 폴더 없음, `:` 없음, `.`으로 시작하지 않음
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source`는 스크립트의 텍스트이며 plugin.install의 dataBase64가 받는 JSON에서만 지정합니다: .vcplugin 파일은 스크립트를 `script`에 지정합니다
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript 플러그인의 매니페스트는 `runtime` "js"를 지정합니다
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js"는 개체 필터(`kind` "filter")용이며 `kind` "{kind}"용이 아닙니다
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript 플러그인은 권한 `{name}`을(를) 나열할 수 없습니다: 호스트 권한 중에서 `progress`를 나열할 수 있습니다
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly 모듈의 매니페스트는 `runtime`을 생략합니다: "js"는 JavaScript 플러그인용입니다
+@msg	a JavaScript plug-in makes no command calls	JavaScript 플러그인은 명령을 호출하지 않습니다
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total)는 숫자 두 개를 받습니다
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text)는 수준 0(오류), 1(경고), 2(정보), 3(디버그) 중 하나와 문자열을 받습니다
 @msg	the plug-in's grant can't be removed from the plug-in store	플러그인 저장소에서 플러그인의 권한을 제거할 수 없습니다
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
@@ -8025,6 +8138,7 @@ breakText	Glyphs	글리프
 	Place Brush Art	브러시 아트 배치
 	Replace Brush Art	브러시 아트 바꾸기
 	Replace Pattern Art	패턴 아트 바꾸기
+	Place Pattern Art	패턴 아트 배치
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	선에서 이 브러시를 사용합니다. 새 아트를 해당 선에 적용하시겠습니까, 아니면 선을 그대로 두고 새 아트로 브러시 사본을 추가하시겠습니까?
 	Apply to Strokes	선에 적용
 	Leave Strokes	선 유지
@@ -8094,6 +8208,8 @@ breakText	Glyphs	글리프
 	Tangent Circle	접원
 	Tangent Circle Tool	접원 도구
 	No tangent circle here	여기에는 접원이 없음
+	Ask For Circle Radius	원 반지름 묻기
+	Auto-Update Default	기본값 자동 업데이트
 	Circle:	원:
 @msg	`ids` names an object twice	`ids`에 같은 오브젝트가 두 번 있습니다
 @msg	select two or three paths or compound paths	패스나 컴파운드 패스를 두 개 또는 세 개 선택하세요
@@ -9306,6 +9422,7 @@ breakText	Glyphs	글리프
 @msg	give a pattern name or select an object painted with a pattern	패턴 이름을 지정하거나 패턴으로 칠한 개체를 선택하세요
 @msg	give at least one of clip, invert, disabled, linked	clip, invert, disabled, linked 중 하나 이상을 지정하세요
 @msg	give color, none, swatch or gradient	color, none, swatch 또는 gradient를 지정하세요
+@msg	give color, none, swatch, gradient or opacity	color, none, swatch, gradient 또는 opacity를 지정하세요
 @msg	give dataBase64	dataBase64를 지정하세요
 @msg	give either at (a click) or area (a path drawn around the overlaps)	at(클릭) 또는 area(겹친 부분 둘레에 그린 패스) 중 하나를 지정하세요
 @msg	give exactly one of `at`, `rect` and `points`	`at`, `rect`, `points` 중 정확히 하나를 지정하세요
@@ -10390,6 +10507,11 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Fold Angle	접는 각도
+	Set Fold Angle…	접는 각도 설정…
+	Set Fold Angle	접는 각도 설정
+	Reset Fold Angle	접는 각도 재설정
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	잠기거나 숨겨지지 않은 오시선, 하프 컷 선 또는 미싱선을 선택하세요
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	도구 막대의 도구와 그 키가 하는 일을 도움말 대신 카드로 표시합니다. 도구 설명 표시가 켜져 있어야 합니다.
 	Selects whole objects and groups to move, resize or rotate them.	개체와 그룹 전체를 선택하여 이동하거나 크기를 조정하거나 회전합니다.

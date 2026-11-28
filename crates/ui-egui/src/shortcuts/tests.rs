@@ -246,6 +246,79 @@ fn named_panel_default_chords_toggle_their_panels() {
     }
 }
 
+/// Each Window menu row that shows a panel shows the chord of that panel's shortcut, as production's did, and the
+/// rows of the panels with a default key show one. The first frame builds the keymap after its menus, so the menus of
+/// the next frame show the chords.
+#[test]
+fn window_menu_panel_rows_show_their_panels_shortcuts() {
+    let mut app = new_app();
+    let ctx = ready(&mut app);
+    key_frame(&mut app, &ctx, vec![]);
+    let rows: Vec<(craft::keymap::CommandRef, Option<craft::keymap::Chord>)> = app
+        .menus
+        .bar
+        .items()
+        .into_iter()
+        .filter(|it| it.command.id == "window.panel" && it.command.params["toggle"] == true)
+        .map(|it| (it.command.clone(), it.shortcut))
+        .collect();
+    assert!(!rows.is_empty(), "the Window menu lists panels");
+    let mut with_keys = 0;
+    for (row, chord) in rows {
+        let panel = row.params["panel"].as_str().expect("a panel row names its panel");
+        let entry = crate::keymap::command_of(&format!("panel:{panel}"));
+        assert_eq!(chord, craft::ui::runtime::commands::chord(&ctx, &entry), "{panel}: the row shows its shortcut's chord");
+        if crate::shortcut_editor::PANEL_SHORTCUTS.iter().any(|(p, _)| *p == panel) {
+            assert!(chord.is_some(), "{panel} has a default key, and its row shows it");
+            with_keys += 1;
+        }
+    }
+    assert!(with_keys > 0, "some listed panels have a default key");
+}
+
+/// A click on a Window menu row toggles its panel: it puts a showing panel away and shows it again. Libraries is
+/// docked in front with no function key, so neither its flyout nor its shortcut toggles it.
+#[test]
+fn a_window_menu_click_toggles_its_panel() {
+    use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
+    let mut app = new_app();
+    let ctx = ready(&mut app);
+    let row = app
+        .menus
+        .bar
+        .items()
+        .into_iter()
+        .find(|it| it.command.id == "window.panel" && it.command.params["panel"] == "libraries")
+        .map(|it| it.command.clone());
+    let row = row.expect("a Window › Libraries row");
+    let before = crate::panel_docking::showing(&app.ui, "libraries");
+    let click = |app: &mut VectorcraftApp| {
+        crate::shortcuts::run_fired(app, &ctx, &Fired::new(row.clone(), FireSource::Menu, FirePhase::Press, 0.0));
+        key_frame(app, &ctx, vec![]);
+        crate::panel_docking::showing(&app.ui, "libraries")
+    };
+    let once = click(&mut app);
+    assert_ne!(once, before, "the first click toggles Libraries");
+    assert_eq!(click(&mut app), before, "the second click toggles it back");
+}
+
+/// A click on the task bar's More Options › Show Properties Panel, a menu row that runs `window.panel {panel:
+/// "properties"}`, leaves a showing docked Properties panel showing: it does not take the toggle of Window › Properties.
+#[test]
+fn the_task_bar_show_properties_row_keeps_properties_showing() {
+    use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
+    let mut app = new_app();
+    let ctx = ready(&mut app);
+    let row = craft::keymap::CommandRef::with_params("window.panel", json!({ "panel": "properties" }));
+    let click = |app: &mut VectorcraftApp| {
+        crate::shortcuts::run_fired(app, &ctx, &Fired::new(row.clone(), FireSource::Menu, FirePhase::Press, 0.0));
+        key_frame(app, &ctx, vec![]);
+        crate::panel_docking::showing(&app.ui, "properties")
+    };
+    assert!(click(&mut app), "the first click shows Properties");
+    assert!(click(&mut app), "a second click leaves Properties showing");
+}
+
 /// A shortcut on a panel without a function key of its own runs `window.panel` with the params it has: no toggle is
 /// added, as production checked.
 #[test]
@@ -1482,8 +1555,10 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
         key_frame(&mut app, &ctx, vec![]);
         assert_eq!(dialog_kind(&app).as_deref(), Some(dialog), "{tool}: and it stays open");
         assert_eq!(steps(&app), before, "{tool}: the Enter that opened it didn't confirm it");
-        // With its default values only Reflect changes the art. A held OK closes its dialog on the window's next pass.
+        // With its default values only Reflect changes the art. A held OK closes its dialog on the window's next pass,
+        // and its field gives up the keyboard in the frame after that.
         key_frame(&mut app, &ctx, enter());
+        key_frame(&mut app, &ctx, vec![]);
         key_frame(&mut app, &ctx, vec![]);
         let after = (before.0 + usize::from(dialog == "object.reflect"), before.1 + 1);
         assert_eq!((dialog_kind(&app), steps(&app)), (None, after), "{tool}: Enter confirms");
@@ -1642,6 +1717,7 @@ fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
 #[test]
 fn each_filter_plugin_takes_a_shortcut_of_its_own() {
     use vectorcraft_plugins::wat as tpl;
+    let _names = crate::tests::SHARED_PLUGIN_NAMES.lock().unwrap_or_else(|e| e.into_inner());
     let (one, two) = ("test.UI.key_filter-one", "test.UI.key_filter-two");
     let (key_one, key_two) = (format!("plugin:{one}"), format!("plugin:{two}"));
     let install = |id: &str, name: &str, params: &str| {
@@ -1717,6 +1793,10 @@ fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
 fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
     use vectorcraft_plugins::wat as tpl;
     let mut app = new_app();
+    // The background work waits until the test runs it, which it never does: the run started from
+    // the key is still running when Cancel stops it, however long the frames take.
+    let jobs = std::sync::Arc::new(craft::host::ManualJobs::new());
+    app.host = std::sync::Arc::new(craft::host::Host::builder(app.host.app().clone()).i18n(crate::i18n::shared()).jobs(jobs).build());
     app.session.allow_plugin_grants_from_requests();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     let (at_once, asks) = ("test.UI.heavy_filter-at-once", "test.UI.heavy_filter-asks");
@@ -1758,4 +1838,27 @@ fn a_filter_plugin_row_translates_its_path_and_not_its_name() {
     assert_ne!(path, "Object › Plug-ins");
     assert_eq!(filter, format!("{path} › Group"));
     assert_eq!(command, format!("{path} › {}", crate::i18n::tr(zh, "Group")));
+}
+
+/// A UI command whose params are all optional and that no item of the menu bar runs can be given a
+/// key: Keyboard Shortcuts lists it, and the key opens its dialog or says in the status bar why it
+/// cannot.
+#[test]
+fn a_key_runs_a_ui_command_whose_params_are_all_optional() {
+    for id in crate::shortcut_editor::KEY_ONLY_UI {
+        let mut app = app_with_a_selected_rectangle();
+        let listed = app.run("shortcuts.list", json!({"query": id})).unwrap();
+        assert!(listed.as_array().is_some_and(|rows| rows.iter().any(|r| r["id"] == id)), "{id} is listed: {listed}");
+        // Rename edits the name in place and Color Picker… opens the framework's picker; other tests
+        // check what they open.
+        if ["ui.rename", "ui.colorPicker"].contains(&id) {
+            continue;
+        }
+        let ctx = ready(&mut app);
+        bind(&mut app, id, "Cmd+Alt+Shift+F12");
+        app.ui.status.clear();
+        key_frame(&mut app, &ctx, tap(Key::F12, cmd() | Modifiers::ALT | Modifiers::SHIFT));
+        key_frame(&mut app, &ctx, vec![]);
+        assert!(dialog_kind(&app).is_some() || !app.ui.status.is_empty(), "{id}: the key opens a dialog or reports why not");
+    }
 }

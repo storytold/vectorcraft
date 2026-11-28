@@ -24,7 +24,7 @@
 //! true value for; every entry takes fuel.
 
 use crate::HostItem;
-use crate::builtins::{arg, constructor, data, method, native, pausable_method, put_at};
+use crate::builtins::{accessor_native, arg, constructor, data, method, native, pausable_method, put_at};
 use crate::heap::{CONFIGURABLE, Class, HIDDEN, NativeFn, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, key, string_bytes};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult, Pause};
 use crate::value::{Value, index_key};
@@ -92,6 +92,19 @@ fn slot(i: &Interp, o: ObjId, name: &str) -> JsResult<Value> {
     })
 }
 
+/// The path of `id` when it is a `File`: an object whose prototype is `File.prototype` and whose
+/// path is in its own slot. `None` for anything else, a `Folder` included.
+pub(crate) fn file_path(i: &Interp, id: ObjId) -> JsResult<Option<String>> {
+    let Some(c) = &i.files else { return Ok(None) };
+    if i.object(id)?.proto != Some(c.file_proto) {
+        return Ok(None);
+    }
+    Ok(match slot(i, id, PATH)? {
+        Value::String(s) => Some(s.to_rust_string()),
+        _ => None,
+    })
+}
+
 fn set_slot(i: &mut Interp, o: ObjId, name: &str, value: Value) -> JsResult<()> {
     if let Value::String(s) = &value {
         i.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(PROP_BYTES + string_bytes(s.len())))?;
@@ -133,6 +146,29 @@ fn parse(i: &mut Interp, x: &Value) -> JsResult<Value> {
 fn parse_text(i: &mut Interp, text: Value, platform: bool) -> JsResult<Value> {
     let current = classes(i)?.current;
     host(i, "parse", &[text, current, Value::Bool(platform)])
+}
+
+/// The platform path `x` names, as `File(x).fsName` gives it: for `XMPFile`
+/// ([`crate::xmp_classes`]).
+pub(crate) fn platform_path(i: &mut Interp, x: &Value) -> JsResult<Value> {
+    let p = parse(i, x)?;
+    i.rooted(std::slice::from_ref(&p), |i| field(i, &p, "fs"))
+}
+
+/// Calls the host function `name` with `args`, as `File` and `Folder` call theirs: for `XMPFile`.
+pub(crate) fn call_host(i: &mut Interp, name: &str, args: &[Value]) -> JsResult<Value> {
+    host(i, name, args)
+}
+
+/// The field `name` of a record a host function gave ([`field`]): for `XMPFile`.
+pub(crate) fn record_field(i: &mut Interp, v: &Value, name: &str) -> JsResult<Value> {
+    field(i, v, name)
+}
+
+/// The count of runs the realm has begun since `File` and `Folder` were added, or `None` without
+/// them: an `XMPFile` is open only in the run that opened it.
+pub(crate) fn run_count(i: &Interp) -> Option<f64> {
+    i.files.as_ref().map(|c| c.run)
 }
 
 fn parsed(i: &mut Interp, this: &Value, what: &str, name: &str) -> JsResult<Value> {
@@ -312,6 +348,12 @@ fn name(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
 
 fn display_name(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     parsed(i, &this, "displayName", "display")
+}
+
+/// `localizedName`: the same decoded name as `displayName`; VectorCraft does not look up a name the
+/// system shows in another language.
+fn localized_name(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    parsed(i, &this, "localizedName", "display")
 }
 
 fn path(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
@@ -1011,10 +1053,10 @@ places!(
 
 /// Defines the accessor `name` on `on`, not enumerable, as the help pages' objects have them.
 fn accessor(i: &mut Interp, on: ObjId, name: &'static str, get: NativeFn, set: Option<NativeFn>) -> JsResult<()> {
-    let g = native(i, name, get, 0, NativeKind::Plain, false)?;
+    let g = accessor_native(i, "get ", name, get, 0)?;
     i.rooted(&[Value::Object(g)], |i| {
         let s = match set {
-            Some(f) => Some(native(i, name, f, 1, NativeKind::Plain, false)?),
+            Some(f) => Some(accessor_native(i, "set ", name, f, 1)?),
             None => None,
         };
         i.define(on, key(name), Prop::Accessor { get: Some(g), set: s, flags: CONFIGURABLE })
@@ -1029,6 +1071,7 @@ fn common(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     accessor(i, proto, "relativeURI", relative_uri, None)?;
     accessor(i, proto, "name", name, None)?;
     accessor(i, proto, "displayName", display_name, None)?;
+    accessor(i, proto, "localizedName", localized_name, None)?;
     accessor(i, proto, "path", path, None)?;
     accessor(i, proto, "parent", parent, None)?;
     accessor(i, proto, "exists", exists, None)?;
@@ -1087,11 +1130,37 @@ fn folder_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
 pub(crate) fn reset_current(i: &mut Interp) -> JsResult<()> {
     let Some(c) = i.files.as_mut() else { return Ok(()) };
     c.run += 1.0;
+    i.heap.reset_xmp_files();
     let start = host(i, "current", &[])?;
     if let Some(c) = i.files.as_mut() {
         c.current = start;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod xmp_run_tests {
+    use super::*;
+    use crate::heap::PropMap;
+
+    #[test]
+    fn a_failed_folder_reset_releases_native_xmp_buffers() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        let host = interp.heap.alloc_object(Object::new(Class::Ordinary, None));
+        interp.files = Some(Classes { file_proto: host, folder_proto: host, host, current: Value::str("start"), run: 0.0 });
+        let mut fields = PropMap::default();
+        fields.insert(key("__vcXmpPacket"), Value::str("packet"));
+        fields.insert(key("__vcXmpPending"), Value::str("pending"));
+        fields.insert(key("__vcXmpPath"), Value::str("kept.xmp"));
+        let file = interp.heap.alloc_object(Object::new(Class::XmpFile(Box::new(fields)), None));
+        let result = interp.rooted(&[Value::Object(file)], reset_current);
+        assert!(result.is_err(), "the host has no current function");
+        assert_eq!(run_count(&interp), Some(1.0));
+        let Class::XmpFile(fields) = &interp.heap.object(file).unwrap().class else { panic!("native file") };
+        assert!(matches!(fields.get(&key("__vcXmpPacket")), Some(Value::Null)));
+        assert!(matches!(fields.get(&key("__vcXmpPending")), Some(Value::Undefined)));
+        assert!(matches!(fields.get(&key("__vcXmpPath")), Some(Value::String(path)) if path.to_rust_string() == "kept.xmp"));
+    }
 }
 
 /// Adds `File` and `Folder` to the global object, their work done by the host functions in

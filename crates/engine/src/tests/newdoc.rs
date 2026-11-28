@@ -160,7 +160,8 @@ fn ppi_overprint_preview_and_bad_params() {
         json!({"previewMode": "xray"}),
         json!({"artboardLayout": {"layout": "spiral"}}),
         json!({"artboardLayout": {"columns": 0}}),
-        json!({"artboardLayout": {"rows": 2}}),
+        json!({"artboardLayout": {"rows": 0}}),
+        json!({"artboardLayout": {"tiles": 2}}),
         json!({"units": "furlongs"}),
         json!({"width": 160000, "artboards": 1000}),
     ] {
@@ -532,6 +533,102 @@ fn rearrange_that_moves_no_artboard_records_no_undo_step() {
     assert_eq!(history(&s), before);
 }
 
+/// Rearrange with `indices` lays out only those artboards, in document order whatever order they
+/// are listed in, with the grid's top-left at `at`: their art and guides go along, and the other
+/// artboards, their art and their guides stay where they are, all in one undo step.
+#[test]
+fn rearrange_lays_out_only_the_listed_artboards() {
+    let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 4}));
+    let before = boards(&s);
+    let art: Vec<NodeId> = before
+        .iter()
+        .map(|r| {
+            NodeId(
+                s.execute("shape.rectangle", &json!({"x": r.x0 + 10.0, "y": r.y0 + 10.0, "width": 10, "height": 10})).unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            )
+        })
+        .collect();
+    for i in [0, 1] {
+        s.execute("guide.add", &json!({"vertical": true, "pos": before[i].x0 + 5.0, "artboard": i})).unwrap();
+    }
+    let undo = s.doc().unwrap().history.undo.len();
+    let p = json!({"indices": [3, 1], "layout": "row", "spacing": 10, "at": [500, 400]});
+    let r = s.execute("artboard.rearrange", &p).unwrap();
+    assert_eq!(r, json!({"artboards": 4, "indices": [1, 3], "moved": 2, "rows": 1, "columns": 2}));
+    let after = boards(&s);
+    assert_eq!((after[0], after[2]), (before[0], before[2]), "the artboards not listed stay");
+    assert_eq!((after[1], after[3]), (Rect::new(500.0, 400.0, 600.0, 450.0), Rect::new(610.0, 400.0, 710.0, 450.0)));
+    let d = &s.doc().unwrap().doc;
+    for (id, r) in art.iter().zip(&after) {
+        let b = d.node(*id).unwrap().geometric_bounds().unwrap();
+        assert_eq!((b.x0, b.y0), (r.x0 + 10.0, r.y0 + 10.0), "the art is on its artboard");
+    }
+    let guides: Vec<f64> = d.ruler_guides().iter().map(|g| g.pos).collect();
+    assert_eq!(guides, [before[0].x0 + 5.0, 505.0]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(boards(&s), before);
+}
+
+/// Without `at`, the grid of the listed artboards starts at the first one's top-left; one listed
+/// artboard is laid out alone; a listed locked artboard stays and keeps its cell; when every listed
+/// artboard is locked, nothing moves, no undo step is recorded and `moved` is 0.
+#[test]
+fn rearrange_of_listed_artboards_starts_at_the_first_and_keeps_locked_ones() {
+    let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 4, "artboardLayout": {"layout": "row", "spacing": 20}}));
+    let before = boards(&s);
+    // Artboards 1 and 3 in one column, from artboard 1's corner.
+    let r = s.execute("artboard.rearrange", &json!({"indices": [1, 3], "layout": "column", "spacing": 10})).unwrap();
+    assert_eq!(r["moved"], 1);
+    let after = boards(&s);
+    assert_eq!(after[1], before[1]);
+    assert_eq!(after[3], Rect::new(before[1].x0, before[1].y1 + 10.0, before[1].x1, before[1].y1 + 60.0));
+    // One artboard goes to `at`.
+    s.execute("artboard.rearrange", &json!({"indices": [2], "at": [-300, -200]})).unwrap();
+    assert_eq!(boards(&s)[2], Rect::new(-300.0, -200.0, -200.0, -150.0));
+    // Artboard 0 locked keeps its place and its cell: artboard 2 goes to the second cell from 0's.
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let r = s.execute("artboard.rearrange", &json!({"indices": [0, 2], "layout": "row", "spacing": 5, "at": [1000, 0]})).unwrap();
+    assert_eq!(r["moved"], 1);
+    assert_eq!((boards(&s)[0], boards(&s)[2]), (before[0], Rect::new(1105.0, 0.0, 1205.0, 50.0)));
+    // Every listed artboard locked: nothing moves.
+    let placed = boards(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("artboard.rearrange", &json!({"indices": [0], "at": [3000, 3000]})).unwrap();
+    assert_eq!(r, json!({"artboards": 4, "indices": [0], "moved": 0, "rows": 1, "columns": 1}));
+    assert_eq!((boards(&s), s.doc().unwrap().history.undo.len()), (placed, undo));
+}
+
+/// Rearrange refuses `indices` that are not a non-empty list of artboards, and an `at` that is not
+/// [x, y], before anything moves, and leaves the document as it was when `at` would put an
+/// artboard past the canvas; a listed index given twice counts once.
+#[test]
+fn rearrange_refuses_bad_indices_and_at() {
+    let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 3}));
+    let before = (boards(&s), s.doc().unwrap().history.undo.len());
+    for (p, msg) in [
+        (json!({"indices": []}), "invalid parameters for `artboard.rearrange`: `indices` must be a non-empty list of artboard indices"),
+        (json!({"indices": 1}), "invalid parameters for `artboard.rearrange`: `indices` must be a list of artboard indices"),
+        (json!({"indices": [1.5]}), "invalid parameters for `artboard.rearrange`: `indices` must contain whole numbers"),
+        (json!({"indices": [-1]}), "invalid parameters for `artboard.rearrange`: `indices` must contain whole numbers"),
+        (json!({"indices": ["1"]}), "invalid parameters for `artboard.rearrange`: `indices` must contain whole numbers"),
+        (json!({"indices": [0, 3]}), "no such artboard"),
+        (json!({"indices": [0, 1], "at": [1]}), "invalid parameters for `artboard.rearrange`: `at` must be [x, y]"),
+        (json!({"indices": [0, 1], "at": "0,0"}), "invalid parameters for `artboard.rearrange`: `at` must be [x, y]"),
+        (json!({"at": [0, "1"]}), "invalid parameters for `artboard.rearrange`: `at` must be [x, y]"),
+        (json!({"indices": [0], "at": [1e20, 0]}), "result would exceed the canvas (coordinates out of range)"),
+        (json!({"at": [0, -4.000001e6]}), "result would exceed the canvas (coordinates out of range)"),
+    ] {
+        let err = s.execute("artboard.rearrange", &p).unwrap_err().to_string();
+        assert_eq!(err, msg, "{p}");
+        assert_eq!((boards(&s), s.doc().unwrap().history.undo.len()), before, "{p}");
+    }
+    let r = s.execute("artboard.rearrange", &json!({"indices": [2, 2], "at": [0, 500]})).unwrap();
+    assert_eq!((r["indices"].clone(), boards(&s)[2]), (json!([2]), Rect::new(0.0, 500.0, 100.0, 550.0)));
+}
+
 /// A session whose New Document profiles are in a fresh folder for test `name` (not made yet).
 fn with_profiles(name: &str) -> (Session, std::path::PathBuf) {
     let dir = std::env::temp_dir().join(format!("vc-newdoc-profiles-{name}-{}", std::process::id()));
@@ -796,6 +893,167 @@ fn a_profiles_normal_character_style_is_the_default_font() {
 }
 
 #[test]
+fn an_open_document_takes_another_profiles_default_fill_stroke_and_font() {
+    use vectorcraft_color::Paint;
+    let (mut s, dir) = with_profiles("apply-defaults");
+    const GLOW: &str = r#"<filter id="Glow7653"><feOffset dx="3" dy="3"/></filter>"#;
+    // The CMYK Print profile: no fill and a 0.25 pt stroke of the global swatch Laser Red, with
+    // the SVG filter Glow7653, and red type in Source Serif 4 at 9 pt.
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Laser Red", "color": "#ff0000", "global": true})).unwrap();
+    s.execute("svgFilter.define", &json!({"xml": GLOW})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"swatch": "Laser Red"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 0.25})).unwrap();
+    s.execute("svgFilter.apply", &json!({"name": "Glow7653"})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Default Graphic Style"})).unwrap();
+    let serif =
+        s.execute("text.create", &json!({"x": 10, "y": 80, "text": "Serif", "font": "Source Serif 4", "size": 9, "color": "#ff0000"})).unwrap();
+    s.execute("charStyle.redefine", &json!({"name": "[Normal Character Style]", "id": serif["id"]})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+
+    // An RGB document made without a profile, with another filter named Glow7653, type in the
+    // default font and a rectangle linked to its Default Graphic Style.
+    s.execute("file.new", &json!({"colorMode": "rgb"})).unwrap();
+    s.execute("svgFilter.define", &json!({"xml": r#"<filter id="Glow7653"><feOffset dx="9" dy="9"/></filter>"#})).unwrap();
+    let before = s.execute("text.create", &json!({"x": 20, "y": 40, "text": "Before"})).unwrap();
+    let linked = s.execute("shape.rectangle", &json!({"x": 20, "y": 80, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("graphicStyle.apply", &json!({"name": "Default Graphic Style"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let default_font = first_run(&s, &before["id"]);
+
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "print"})).unwrap();
+    assert_eq!((r["name"].clone(), r["changed"].clone()), (json!("Print"), json!(true)), "{r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    // The swatch comes along, in the document's color mode, and the style paints with it.
+    let d = &s.doc().unwrap().doc;
+    let red = d.swatches.iter().find(|w| w.name == "Laser Red").cloned().expect("the style's swatch");
+    assert!(matches!(red.paint, Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, .. }), "{:?}", red.paint);
+    let stroke = s.paint.stroke.clone();
+    assert!(matches!(&stroke, Paint::Solid { swatch: Some(w), .. } if w == "Laser Red"), "{stroke:?}");
+    // The profile's filter keeps its definition under a free name; the document's keeps its own.
+    let style = d.graphic_style("Default Graphic Style").cloned().unwrap();
+    let filter = style.appearance.effects.iter().find(|e| e.id == "svg.filter").cloned().expect("the style's filter");
+    assert_ne!(filter.params["name"], "Glow7653", "{filter:?}");
+    assert!(filter.params["xml"].as_str().is_some_and(|x| x.contains("dx=\"3\"")), "{filter:?}");
+    assert!(d.svg_filters.iter().any(|f| f.name == "Glow7653" && f.xml.contains("dx=\"9\"")));
+    // New art takes the profile's look; so does the rectangle linked to the style.
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 0.25));
+    let id = s.execute("shape.rectangle", &json!({"x": 60, "y": 80, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(look(&s, id), (Paint::None, stroke.clone(), Some(0.25)));
+    assert_eq!(look(&s, linked), (Paint::None, stroke.clone(), Some(0.25)));
+    // New type starts in the profile's font, and type in [Normal Character Style] follows it.
+    let made = s.execute("text.create", &json!({"x": 20, "y": 160, "text": "After"})).unwrap();
+    for id in [&made["id"], &before["id"]] {
+        let st = first_run(&s, id);
+        assert_eq!((st.font_family.as_str(), st.size), ("Source Serif 4", 9.0));
+        // The profile's CMYK red is converted to the document's color mode.
+        assert!(
+            matches!(st.fill, Paint::Solid { color: vectorcraft_color::Color::Rgb { r, g, b }, .. } if r > 0.8 && g < 0.3 && b < 0.3),
+            "a converted red: {:?}",
+            st.fill
+        );
+    }
+    // Again: nothing changes and no undo step is recorded.
+    let step = s.doc().unwrap().history.step();
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "Print"})).unwrap();
+    assert_eq!(r["changed"], false, "{r}");
+    assert_eq!(s.doc().unwrap().history.step(), step);
+
+    // A category without a profile file gives the shipped defaults back.
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let print_paint = s.paint.clone();
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "Web"})).unwrap();
+    assert_eq!(r["changed"], true, "{r}");
+    assert_eq!(s.paint, vectorcraft_tools::PaintDefaults::default());
+    let st = first_run(&s, &before["id"]);
+    assert_eq!((st.font_family, st.size), (default_font.font_family.clone(), default_font.size));
+    // Undo goes back to the Print profile's defaults in the document and for new art; Redo
+    // brings the shipped ones again.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(first_run(&s, &before["id"]).font_family, "Source Serif 4");
+    assert_eq!(s.paint, print_paint);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.paint, vectorcraft_tools::PaintDefaults::default());
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // An unknown profile is an error and changes nothing.
+    let step = s.doc().unwrap().history.step();
+    assert!(s.execute("file.newProfiles.applyDefaults", &json!({"name": "Posters"})).is_err());
+    assert!(s.execute("file.newProfiles.applyDefaults", &json!({})).is_err());
+    assert_eq!(s.doc().unwrap().history.step(), step);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// With New Art Has Basic Appearance off, the selected object's look does not replace the profile's
+/// defaults that Use Profile Defaults has just set.
+#[test]
+fn profile_defaults_stay_with_an_unrelated_object_selected() {
+    use vectorcraft_color::Paint;
+    let (mut s, dir) = with_profiles("apply-defaults-selected");
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 0.25})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Default Graphic Style"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("prefs.set", &json!({"key": "newArtBasic", "value": false})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 4})).unwrap();
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "Print"})).unwrap();
+    assert_eq!(r["changed"], true, "{r}");
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 0.25));
+    let id = s.execute("shape.rectangle", &json!({"x": 60, "y": 80, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!((look(&s, id).0, look(&s, id).2), (Paint::None, Some(0.25)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A profile whose [Normal Character Style] is set in one of its composite fonts gives the open
+/// document that composite font too, in place of the document's of the same name.
+#[test]
+fn profile_defaults_bring_the_composite_font_of_the_default_font() {
+    let font = |roman: f64| {
+        json!({"name": "CF Profile 7653", "parts": {
+            "kanji": {"font": "Source Sans 3"},
+            "roman": {"font": "JetBrains Mono", "size": roman},
+        }})
+    };
+    let (mut s, dir) = with_profiles("apply-defaults-composite");
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font(50.0)]})).unwrap();
+    let t = s.execute("text.create", &json!({"x": 10, "y": 80, "text": "Ab", "font": "CF Profile 7653", "size": 12})).unwrap();
+    s.execute("charStyle.redefine", &json!({"name": "[Normal Character Style]", "id": t["id"]})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+
+    s.execute("file.new", &json!({"colorMode": "cmyk"})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font(100.0)]})).unwrap();
+    let profile = |s: &Session| s.doc().unwrap().doc.composite_fonts.iter().find(|f| f.name == "CF Profile 7653").map(|f| f.parts.roman.size);
+    assert_eq!(profile(&s), Some(100.0));
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "Print"})).unwrap();
+    assert_eq!(r["changed"], true, "{r}");
+    assert_eq!(profile(&s), Some(50.0), "the profile's definition");
+    let made = s.execute("text.create", &json!({"x": 20, "y": 160, "text": "Ab"})).unwrap();
+    assert_eq!(first_run(&s, &made["id"]).font_family, "CF Profile 7653");
+    let missing = s.execute("text.fonts", &json!({})).unwrap().as_array().unwrap().iter().filter(|f| f["missing"] == true).count();
+    assert_eq!(missing, 0);
+    // Again: nothing changes.
+    let step = s.doc().unwrap().history.step();
+    assert_eq!(s.execute("file.newProfiles.applyDefaults", &json!({"name": "Print"})).unwrap()["changed"], false);
+    assert_eq!(s.doc().unwrap().history.step(), step);
+    // Undone, the document's own definition is back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(profile(&s), Some(100.0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn profile_errors_name_the_file_by_its_name_outside_the_read_roots() {
     let (mut s, dir) = with_profiles("errors");
     let elsewhere = dir.with_extension("elsewhere");
@@ -902,6 +1160,22 @@ fn a_damaged_or_oversized_profile_leaves_the_defaults_and_is_reported() {
     let r = s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
     assert!(r["profileError"]["reason"].as_str().unwrap_or("").contains("larger than"), "{r}");
     assert_eq!(s.doc().unwrap().doc.artboards[0].rect.width(), 1920.0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_profile_that_is_a_link_is_not_followed() {
+    let (mut s, dir) = with_profiles("link");
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    // A profile the folder held, moved out and linked back in.
+    let outside = std::env::temp_dir().join(format!("vc-newdoc-profile-outside-{}.vectorcraft", std::process::id()));
+    std::fs::rename(dir.join("Print.vectorcraft"), &outside).unwrap();
+    std::os::unix::fs::symlink(&outside, dir.join("Print.vectorcraft")).unwrap();
+    let r = s.execute("file.new", &json!({"preset": "Letter"})).unwrap();
+    assert_eq!(r["profileError"]["reason"], "not a plain file", "{r}");
+    assert!(r.get("profile").is_none(), "{r}");
+    let _ = std::fs::remove_file(&outside);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

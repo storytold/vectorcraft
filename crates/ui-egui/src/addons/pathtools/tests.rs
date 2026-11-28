@@ -4,9 +4,9 @@ use vectorcraft_engine::Session;
 use vectorcraft_tools::addons::parametric_shape::ShapeKind;
 
 use super::{ID, KIND, readout};
-use crate::VectorcraftApp;
 use crate::addons::dialogs::tests as host;
 use crate::tests::panel_harness::Panel;
+use crate::{VectorcraftApp, menus};
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -42,6 +42,32 @@ fn the_inspector_shows_the_selected_anchor_and_its_buttons_edit() {
     app.run("addon.pathtools.smooth", json!({})).unwrap();
     let a = readout(&app).anchor.unwrap();
     assert!(a.lengths.iter().all(|l| *l > 0.0) && a.angles.iter().all(|d| d.is_some()), "{:?} {:?}", a.lengths, a.angles);
+}
+
+#[test]
+fn a_short_anchor_inspector_scrolls_to_the_selected_anchors_actions() {
+    let mut app = app();
+    let path = app.run("path.create", json!({ "anchors": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 110}] })).unwrap();
+    let id = vectorcraft_doc::NodeId(path["id"].as_u64().unwrap());
+    app.session
+        .select(|_, sel| {
+            sel.set([id]);
+            sel.anchors.insert(id, [(0, 1)].into_iter().collect());
+        })
+        .unwrap();
+    let mut panel = Panel::new(app, super::show);
+    let room = egui::vec2(220.0, 215.0);
+    panel.room(room).frame();
+    panel.frame();
+    let action = "Remove Points, Keep Shape";
+    assert!(panel.rect(action).bottom() > room.y, "the action starts clipped");
+    panel.focus(action);
+    let rect = panel.rect(action);
+    assert!(panel.focused(action) && rect.top() >= 0.0 && rect.bottom() <= room.y, "focus reveals the action: {rect:?}");
+    panel.focus("Make Smooth");
+    panel.click("Make Smooth");
+    let anchor = readout(&panel.app()).anchor.unwrap();
+    assert!(anchor.lengths.iter().all(|length| *length > 0.0));
 }
 
 /// Runs `f` on the held options dialog, `None` when none is open.
@@ -84,13 +110,111 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("straight"));
     ok(&mut app, &[("mode", FieldValue::Text("arc".into()))]);
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
-    // The Tangent Circle tool's radius for Shift.
+    // The Tangent Circle tool's radius for Shift, Add Points to Existing Paths (off to start), Ask For
+    // Circle Radius and Auto-Update Default.
     app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
-    assert_eq!(held(&app, |d| d.expect("the held dialog").fields().number("radius")), Some(36.0));
-    ok(&mut app, &[("radius", FieldValue::Number(12.5))]);
-    assert_eq!(app.session.tool_options_of("tangentCircle")["radius"], json!(12.5));
+    let shown = held(&app, |d| {
+        let f = d.expect("the held dialog").fields();
+        (f.number("radius"), f.bool("addPoints"), f.bool("askRadius"), f.bool("autoUpdateDefault"))
+    });
+    assert_eq!(shown, (Some(36.0), Some(false), Some(false), Some(false)));
+    let rows = super::options_params("tangentCircle", crate::canvas::rulers::general_lengths(&app));
+    assert!(rows.iter().any(|p| p.key == "addPoints" && p.label.as_str() == "Add Points to Existing Paths"), "the option has a row");
+    ok(&mut app, &[("radius", FieldValue::Number(12.5)), ("addPoints", FieldValue::Bool(true)), ("askRadius", FieldValue::Bool(true))]);
+    let o = app.session.tool_options_of("tangentCircle");
+    assert_eq!(
+        (o["radius"].clone(), o["addPoints"].clone(), o["askRadius"].clone(), o["autoUpdateDefault"].clone()),
+        (json!(12.5), json!(true), json!(true), json!(false))
+    );
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
     assert_eq!(KIND, "pathToolOptions");
+}
+
+/// The Tangent Circle tool's options dialog shows the preview and snapping options, OK sets them,
+/// and a value the tool refuses sets none of them and keeps the dialog open.
+#[test]
+fn the_tangent_circle_options_set_the_preview_and_snapping() {
+    let mut app = app_with_window();
+    let ctx = host::ctx(&app);
+    let ok = |app: &mut VectorcraftApp, set: &[(&str, FieldValue)]| {
+        held(app, |d| {
+            let d = d.expect("the held dialog");
+            for (key, value) in set {
+                d.set_field(*key, value.clone());
+            }
+        });
+        app.dialogs().expect("the window's dialogs").with(|h| h.confirm::<HostedParamDialog>(&ctx));
+        crate::dialogs::host::pump(app, &ctx);
+        crate::tests_synthetic::key_frame(app, &ctx, vec![]);
+    };
+    app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
+    let shown = held(&app, |d| {
+        let f = d.expect("the held dialog").fields();
+        (f.bool("center"), f.bool("radii"), f.text("color").map(str::to_owned), f.number("snapTolerance"), f.bool("snapWithoutGuides"))
+    });
+    assert_eq!(shown, (Some(true), Some(true), Some("red".to_owned()), Some(3.0), Some(true)));
+    ok(
+        &mut app,
+        &[
+            ("center", FieldValue::Bool(false)),
+            ("radii", FieldValue::Bool(false)),
+            ("color", FieldValue::Text("magenta".into())),
+            ("snapTolerance", FieldValue::Number(9.0)),
+            ("snapWithoutGuides", FieldValue::Bool(false)),
+        ],
+    );
+    assert!(held(&app, |d| d.is_none()), "OK closes the dialog");
+    let o = app.session.tool_options_of("tangentCircle");
+    assert_eq!((&o["center"], &o["radii"], &o["color"], &o["snapWithoutGuides"]), (&json!(false), &json!(false), &json!("magenta"), &json!(false)));
+    assert_eq!(o["snapTolerance"].as_f64(), Some(9.0));
+    // A negative tolerance is refused: nothing changes and the dialog stays open.
+    app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
+    ok(&mut app, &[("center", FieldValue::Bool(true)), ("snapTolerance", FieldValue::Number(-2.0))]);
+    assert!(held(&app, |d| d.is_some()), "a refusal keeps the dialog open");
+    let o = app.session.tool_options_of("tangentCircle");
+    assert_eq!((&o["center"], o["snapTolerance"].as_f64()), (&json!(false), Some(9.0)));
+}
+
+/// The Tangent Circle tool's options dialog has a row for each option, a fractional snapping
+/// tolerance opens as it is, and every color has a label, in the tool's order.
+#[test]
+fn the_tangent_circle_options_have_their_rows_and_a_fractional_tolerance() {
+    use craft::ui::patterns::form_dialogs::ParamKind;
+    let mut app = app_with_window();
+    let params = super::options_params("tangentCircle", crate::canvas::rulers::general_lengths(&app));
+    let rows: Vec<(&str, &str)> = params.iter().map(|p| (p.key.as_str(), p.label.as_str())).collect();
+    assert_eq!(
+        rows,
+        [
+            ("radius", "Radius"),
+            ("addPoints", "Add Points to Existing Paths"),
+            ("center", "Circle Center"),
+            ("radii", "Circle Radii Lines"),
+            ("color", "Color"),
+            ("snapTolerance", "Snap Tolerance"),
+            ("snapWithoutGuides", "Snap When Smart Guides Are Off"),
+            ("askRadius", "Ask For Circle Radius"),
+            ("autoUpdateDefault", "Auto-Update Default"),
+        ]
+    );
+    let colors = params.iter().find_map(|p| match &p.kind {
+        ParamKind::Choice { options, .. } if p.key == "color" => {
+            Some(options.iter().map(|(id, label)| (id.clone(), label.as_str().to_owned())).collect::<Vec<_>>())
+        }
+        _ => None,
+    });
+    let expected: Vec<(String, String)> = vectorcraft_tools::addons::tangent_circle::COLORS
+        .iter()
+        .zip(super::TANGENT_CIRCLE_COLORS)
+        .map(|((name, _), label)| ((*name).to_owned(), label.to_owned()))
+        .collect();
+    assert_eq!(colors, Some(expected));
+    for (name, _) in vectorcraft_tools::addons::tangent_circle::COLORS {
+        assert!(super::TANGENT_CIRCLE_COLORS.iter().any(|label| label.to_lowercase() == *name), "{name} has a label");
+    }
+    app.run("tool.setOption", json!({"tool": "tangentCircle", "values": {"snapTolerance": 7.5}})).unwrap();
+    app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
+    assert_eq!(held(&app, |d| d.expect("the held dialog").fields().number("snapTolerance")), Some(7.5));
 }
 
 #[test]
@@ -110,6 +234,44 @@ fn the_parametric_shape_panel_edits_the_selected_shape_or_the_tools_next_one() {
     app.run("select.set", json!({"ids": [plain]})).unwrap();
     let (id, _) = super::shape::target(&app);
     assert!(id.is_none() && super::shape::plain_selected(&app));
+}
+
+/// The panel's W and H keep the point of the selection's box that the Transform panel and the
+/// Control bar share in place, as their own W and H do, on upright and turned shapes.
+#[test]
+fn the_parametric_shape_panels_size_fields_keep_the_shared_reference_point() {
+    for (refi, rotation) in [(0usize, 0.0), (8, 0.0), (2, 30.0), (0, 180.0)] {
+        let mut app = app();
+        let params = json!({"kind": "rectangle", "center": [150, 150], "width": 100, "height": 60, "rotation": rotation});
+        let id = vectorcraft_doc::NodeId(app.run("addon.pathtools.shape.create", params).unwrap()["id"].as_u64().unwrap());
+        let shape =
+            |app: &VectorcraftApp| vectorcraft_tools::addons::parametric_shape::read(app.session.active().unwrap().doc.node(id).unwrap()).unwrap();
+        app.ui.transform_panel.reference_point = refi;
+        let (before, was) = (shape(&app), app.selection_box().unwrap().reference_point(refi));
+        let mut panel = Panel::new(app, super::shape::show);
+        panel.type_into("W", "160");
+        panel.type_into("H", "20");
+        let mut app = panel.app();
+        let after = shape(&app);
+        assert!(after.width > before.width && after.height < before.height, "reference {refi}: W and H took {after:?}");
+        let moved = app.selection_box().unwrap().reference_point(refi).distance(was);
+        assert!(moved < 1e-6, "reference {refi}, rotation {rotation}: the reference point moved {moved} pt");
+    }
+    // With an anchor direct-selected the locator shows the anchors' box, so W keeps the shape's center.
+    let mut app = app();
+    let params = json!({"kind": "rectangle", "center": [150, 150], "width": 100, "height": 60});
+    let id = vectorcraft_doc::NodeId(app.run("addon.pathtools.shape.create", params).unwrap()["id"].as_u64().unwrap());
+    app.session
+        .select(|_, sel| {
+            sel.anchors.insert(id, [(0, 1)].into_iter().collect());
+        })
+        .unwrap();
+    app.ui.transform_panel.reference_point = 0;
+    let mut panel = Panel::new(app, super::shape::show);
+    panel.type_into("W", "160");
+    let app = panel.app();
+    let after = vectorcraft_tools::addons::parametric_shape::read(app.session.active().unwrap().doc.node(id).unwrap()).unwrap();
+    assert!((after.width - 160.0).abs() < 1e-6 && after.center.distance(vectorcraft_geom::Point::new(150.0, 150.0)) < 1e-6, "{after:?}");
 }
 
 /// The Corner Tool and Shared Edge Merge Tool items leave a floating Anchor Inspector showing
@@ -318,4 +480,42 @@ fn a_bare_number_in_a_panels_picas_field_follows_numbers_without_units_are_point
     let (points, picas) = (radius_typed(true), radius_typed(false));
     assert!((points - 12.0).abs() < 1e-6, "on: {points} pt");
     assert!((picas - 144.0).abs() < 1e-6, "off: {picas} pt");
+}
+
+#[test]
+fn add_inscribed_circle_draws_its_circles_without_a_dialog() {
+    let mut app = app_with_window();
+    let find = |app: &VectorcraftApp| {
+        let entries = menus::menu_entries(app);
+        entries
+            .into_iter()
+            .find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Add Inscribed Circle")
+            .expect("Add Inscribed Circle")
+    };
+    let item = find(&app);
+    assert_eq!((item.command.as_deref(), &item.params), (Some(super::INSCRIBED_CIRCLE), &json!({})));
+    assert!(!item.enabled, "with nothing selected");
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 100, "y": 20, "width": 20, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let (steps, nodes) = (app.session.doc().unwrap().history.undo.len(), app.session.doc().unwrap().doc.node_count());
+    let item = find(&app);
+    assert!(item.enabled);
+    let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+    menus::invoke(&mut app, &cmd, p);
+    assert!(held(&app, |d| d.is_none()), "no dialog opens");
+    let st = app.session.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.doc.node_count()), (steps + 1, nodes + 2), "a circle in each rectangle, one undo step");
+    let made = &st.selection.objects;
+    assert_eq!(made.len(), 2, "the two circles are selected: {made:?}");
+    for (id, inside) in made.iter().zip([[10.0, 20.0, 40.0, 60.0], [100.0, 20.0, 120.0, 60.0]]) {
+        assert!(id.0 != a && id.0 != b, "{id:?} is a new object");
+        let live = match &st.doc.node(*id).unwrap().kind {
+            vectorcraft_doc::NodeKind::Path { live, .. } => live.as_deref(),
+            _ => None,
+        };
+        assert!(matches!(live, Some(vectorcraft_doc::LiveShape::Ellipse { w, h, .. }) if w == h), "{id:?} is a live circle");
+        let r = st.doc.bounds_of(&[*id], false).unwrap();
+        assert!(r.x0 >= inside[0] && r.y0 >= inside[1] && r.x1 <= inside[2] && r.y1 <= inside[3], "{r:?} inside {inside:?}");
+    }
 }

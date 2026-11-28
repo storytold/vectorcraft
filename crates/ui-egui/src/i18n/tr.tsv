@@ -906,6 +906,7 @@ font-technology	Variable	Değişken
 	Direct Selection Tool	Doğrudan Seçim Aracı
 	Direction Handles	Yön Kolları
 	Disable Auto Add/Delete	Otomatik Ekleme/Silmeyi Devre Dışı Bırak
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete Bağlantı Noktalarını Kaldırır ve Yolları Birleşik Tutar
 	Interpolate Control Points When Moving Anchors	Bağlantı Noktalarını Taşırken Yön Kollarını Enterpole Et
 	Disable Opacity Mask	Opaklık Maskesini Devre Dışı Bırak
 	Discard	At
@@ -1090,7 +1091,7 @@ font-technology	Variable	Değişken
 	Edit…	Düzenle…
 	Effect	Efekt
 	Effect Options	Efekt Seçenekleri
-	Effective PPI	Etkili ÜFE
+	Effective PPI	Etkili PPI
 	Effects	Efektler
 	Effect…	Etki…
 	Ellipse	elips
@@ -1587,6 +1588,17 @@ font-technology	Variable	Değişken
 	Graphic Styles	Grafik Stilleri
 	Graphic Styles Options	Grafik Stilleri Seçenekleri
 	Graphics	Grafik
+	Show Contrast	Kontrastı Göster
+	Contrast For	Kontrast Hedefi
+	Normal Text	Normal Metin
+	Large Text	Büyük Metin
+	Contrast Background	Kontrast Arka Planı
+	Behind Selection	Seçimin Arkası
+	Current Color	Geçerli Renk
+	Pass	Geçti
+	Fail	Kaldı
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 en düşük kontrast: normal metin AA 4.5:1 (1.4.3) ve AAA 7:1 (1.4.6), büyük metin AA 3:1 ve AAA 4.5:1, grafikler ve denetimler AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Arka plan seçimin ortasında okunur.
 	Graphics Processor	Grafik İşlemcisi
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Yerçekimi
@@ -2397,6 +2409,7 @@ font-technology	Variable	Değişken
 	One Point Perspective Preset 5	Tek Noktalı Perspektif Ön Ayarı 5
 	Only Web Colors	Yalnızca Web Renkleri
 	Opacity	Opaklık
+	Show Opacity	Opaklığı Göster
 	Opacity & Mask Define Knockout Shape	Opaklık ve Maske Tanımlama Nakavt Şekli
 	Opacity Mask	Opaklık Maskesi
 	Opacity Mask Info	Opaklık Maskesi Bilgisi
@@ -2666,7 +2679,7 @@ shape	Open	Açık
 	Position	Pozisyon
 	Postcard	Kartpostal
 	PostScript:	PostScript:
-	PPI	ÜFE
+	PPI	PPI
 	Preferences	Tercihler
 	Preferences…	Tercihler…
 	Prefix:	Önek:
@@ -2844,6 +2857,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Çalışma Yüzeyi ile Resmi Ölçeklendirin
 	Artboards: {n}	Çalışma yüzeyleri: {n}
 	Rearrange All Artboards…	Tüm Çalışma Yüzeylerini Yeniden Düzenleme…
+	Rearrange…	Yeniden Düzenle…
+	Selected Artboards: {n}	Seçili çalışma yüzeyleri: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Çalışma yüzeylerini yerleştirmek için tuvale tıklayın (Esc iptal eder)
 	Recall Selection	Seçimi Geri Çağır
 	RECENT	SON
 	Recent	Son
@@ -3081,7 +3097,7 @@ digits	Malayalam	Malayalam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seçim › Aynı › Dolgu Rengi, Kontur Rengi ve Doldur ve Konturla yalnızca genel veya spot renk örneğinin aynı tonunu bulur, herhangi bir tonunu değil.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiçbir belge açık değilken Ana Sayfa ekranını gösterir; kapalıyken siz Ana Sayfa'ya tıklayana kadar pencere boş kalır.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Nesneleri boyut, konum ve hizalama için konturları ve şekil değiştiren efektleriyle birlikte ölçer; gölgeler, parlamalar ve bulanıklaştırmalar ölçülmez.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	%100 yakınlaştırmada belgenin bir inçi 72 yerine 96 ekran noktası kaplar.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	%100 yakınlaştırmada belgenin bir inçi ekranın bir inçini kaplar; sistem kullanılabilir bir ekran boyutu bildirmezse 96 ekran noktası kaplar.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Seçim aracıyla bir gruba, yola veya görüntüye çift tıklamak onu yalıtım modunda açar.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Desen dolguları ve konturları, bir dönüşüm veya Dönüştür panelinin menüsü başka bir seçim yapmadıkça resimle birlikte dönüşür.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Canlı köşe yarıçapları, ölçekleme başka bir seçim yapmadıkça resimle birlikte ölçeklenir.
@@ -3092,6 +3108,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Bir tuşu basılı tutmak, Klavye Kısayolları'ndaki Basılı tutun sütununda bulunan aracı veya komutu çalıştırır; kısa basış olağan kısayolunu çalıştırır.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Olağan kısayolu yerine basılı tutma kısayolunun çalışması için bir tuşun kaç saniye basılı tutulması gerektiği.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete, seçili bağlantı noktalarını kaldırır ve yolu orada açmak yerine her birinin çevresindeki eğriyi yeniden uydurur.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Bağlantı noktalarını taşıdığınızda, bir ucu taşınan her eğri uçlarına göre şeklini korur.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
 	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.
@@ -4644,6 +4661,14 @@ axis	Both	Her İkisi
 	The script asks to read and write a folder you choose, with everything in it.	Betik, seçtiğiniz bir klasörü içindeki her şeyle birlikte okumak ve yazmak için izin istiyor.
 	Allow Once	Bir Kez İzin Ver
 	Always Allow This Script	Bu Betiğe Her Zaman İzin Ver
+	No script has kept file access.	Hiçbir betiğin kayıtlı dosya erişimi yok.
+	Read file	Dosya Okuma
+	Read and write file	Dosya Okuma ve Yazma
+	Read and write folder	Klasör Okuma ve Yazma
+	Revoke	İzni Kaldır
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	İzni Kaldır, betiğin her sürümü için kayıtlı erişimi kaldırır. Bir klasöre erişim, içindeki her şeyi kapsar.
+@msg	Script file access revoked	Betiğin dosya erişimi kaldırıldı
+@msg	The script file access was already revoked	Betiğin dosya erişimi zaten kaldırılmıştı
 	Deny	Reddet
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
 	Do not show this warning again	Bu uyarıyı bir daha gösterme
@@ -4826,6 +4851,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	bir betiğin dosya iletişim kutusu için `answer` şunlardan biri olmalıdır: once, always, deny, stop
 @msg	choose a file or folder first, or deny	önce bir dosya veya klasör seçin ya da reddedin
 @msg	the script file permissions could not be saved: {e}	betiklerin dosya izinleri kaydedilemedi: {e}
+@msg	the script file permissions could not be read: {e}	betiklerin dosya izinleri okunamadı: {e}
 @msg	this script's file access can be allowed only once	bu betiğin dosya erişimine yalnızca bir kez izin verilebilir
 @msg	Only the person at the keyboard can allow a script's file access	Bir betiğin dosya erişimine yalnızca klavye başındaki kişi izin verebilir
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Bir betiğe en fazla 2.048 dosya verilir: bunlardan sonra seçilen dosyalar dışarıda bırakıldı
@@ -5297,6 +5323,12 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	finish editing the pattern first	önce deseni düzenlemeyi bitir
 @msg	nothing encoded	kodlanmış hiçbir şey yok
 @msg	nothing selected	hiçbir şey seçilmedi
+@msg	`{key}` must be a color or {_1}	`{key}` bir renk veya {_1} olmalıdır
+@msg	the selected objects' colors differ: give `color`	seçili nesnelerin renkleri farklı: `color` belirtin
+@msg	the selected objects' colors differ: give `opacity` or `color`	seçili nesnelerin renkleri farklı: `opacity` veya `color` belirtin
+@msg	the active fill or stroke has no color: give `color`	etkin dolgu veya konturun rengi yok: `color` belirtin
+@msg	the active fill or stroke is hidden: give `color`	etkin dolgu veya kontur gizli: `color` belirtin
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	etkin dolgu veya kontur bir opaklık maskesi üzerinden çiziliyor: `color` belirtin
 @msg	nothing selected is in a group	seçilenlerin hiçbiri bir grupta değil
 @msg	nothing to align	hizalanacak hiçbir şey yok
 @msg	nothing to distort	çarpıtılacak hiçbir şey yok
@@ -6639,6 +6671,8 @@ arrowhead	Feather	Tüy
 	VectorCraft Default	VectorCraft Varsayılanı
 	VectorCraft Defaults	VectorCraft Varsayılanları
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft Genel CMYK (SWOP benzeri)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft Kaplamalı CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft Kaplamasız CMYK (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	VectorCraft Renk Örnekleri (.vcswatches)
 	Vertical Align	Dikey Hizalama
 	Vertical Area Type	Dikey Alan Türü
@@ -6696,8 +6730,10 @@ effect	Horizontal	Yatay
 effect	Points	Noktalar
 effect	Regular	Düzenli
 effect	Vertical	Dikey
+file-filter	Action sets	Eylem setleri
 file-filter	All placeable files	Yerleştirilebilir tüm dosyalar
 file-filter	All readable files	Okunabilir tüm dosyalar
+file-filter	Composite fonts	Bileşik fontlar
 file-filter	Export presets	Dışa aktarma önayarları
 file-filter	Flattener presets	Düzleştirici önayarları
 file-filter	PDF presets	PDF önayarları
@@ -6707,6 +6743,7 @@ file-filter	Preferences	Tercihler
 file-filter	SVG Compressed	Sıkıştırılmış SVG
 file-filter	Swatch libraries	Renk örneği kitaplıkları
 file-filter	Templates	Şablonlar
+file-filter	Tracing presets	İzleme önayarları
 file-filter	VectorCraft Template	VectorCraft Şablonu
 gradient-kind	Radial	Radyal
 mark-style	Japanese	Japon
@@ -7180,6 +7217,12 @@ theme	Appearance	Görünüm
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	çözünürlük kullanılamıyor
+	estimated memory {memory}	tahmini bellek {memory}
+	memory unavailable	bellek kullanılamıyor
+	Unknown format	Bilinmeyen biçim
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -7371,6 +7414,8 @@ axis	Y Axis	Y ekseni
 	Cancel Plug-in Run	Eklenti Çalıştırmasını İptal Et
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} bitti, ancak bu sırada belge veya eklenti değişti: yeniden çalıştırın
 @msg	Running “{name}”…	“{name}” çalıştırılıyor…
+@msg	Plug-in “{name}”: {notice}	“{name}” eklentisi: {notice}
+@msg	`notice` must be a string with visible text	`notice` görünür metin içeren bir dize olmalıdır
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `allowHeavy: true` geçirin
@@ -7397,6 +7442,8 @@ axis	Y Axis	Y ekseni
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	onay gerekiyor: {0} istiyor; kullanıcı bunu eklentiyi tek başına yüklerken verir
 @msg	not JSON: {e}	JSON değil: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly ikili dosyası değil (\\0asm üst bilgisi eksik)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	bir işlev türü {MAX_FUNC_TYPE_VALUES} parametre sınırını aşıyor
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	bir işlev türü {MAX_FUNC_TYPE_VALUES} sonuç sınırını aşıyor
 @msg	parameter `{k}`: {what}	`{k}` parametresi: {what}
 @msg	parameter `{name}`: {what}	`{name}` parametresi: {what}
 @msg	plug-in parameters must be a JSON object	eklenti parametreleri bir JSON nesnesi olmalıdır
@@ -7414,6 +7461,10 @@ axis	Y Axis	Y ekseni
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc 0 döndürdü (bellek yetersiz)
 @msg	vc_alloc returned a block outside memory	vc_alloc bellek dışında bir blok döndürdü
 @msg	vc_run returned error code {packed}	vc_run {packed} hata kodunu döndürdü
+@msg	did not finish loading within {secs} s	{secs} sn içinde yüklenmeyi bitirmedi
+@msg	no thread was left to load it	onu yükleyecek iş parçacığı kalmadı
+@msg	panicked while loading	yüklenirken çöktü
+@msg	panicked while loading: {what}	yüklenirken çöktü: {what}
 @msg	{_1} is not a file	{_1} bir dosya değil
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} {_2} bayt (sınır {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} nesne (sınır {MAX_OBJECTS})
@@ -7433,6 +7484,11 @@ axis	Y Axis	Y ekseni
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ve `maxItems` 0-{MAX_LIST} olmalı, `maxItems` en az 1 olmalı ve varsayılan değer bu kadar öğe içermelidir
 @msg	`name` must be a string	`name` bir dize olmalıdır
 @msg	`opacity` must be a number	`opacity` bir sayı olmalıdır
+@msg	`opacity` must be a number from 0 to 100	`opacity` 0 ile 100 arasında bir sayı olmalıdır
+@msg	`opacity` must be true or false	`opacity` true veya false olmalıdır
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	metin karakterlerinin kendi opaklığı yoktur: Görünüm panelindeki Yeni Dolgu Ekle veya Yeni Kontur Ekle ile bir dolgu veya kontur ekleyin
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	bir sembol örneğinde seçilen nesnenin kendi dolgu veya kontur opaklığı yoktur
+@msg	no target has that fill or stroke to take the opacity	hiçbir hedefte opaklığı alacak o dolgu veya kontur yok
 @msg	`type` must be "path" or "compound"	`type` "path" veya "compound" olmalıdır
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 1-{MAX_UNIT} yazdırılabilir karakter olmalıdır
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`, `{other}` için 1 ile {MAX_CONDITION_VALUES} arasında değer listelemelidir
@@ -7451,12 +7507,21 @@ axis	Y Axis	Y ekseni
 @msg	a list of {min_items} to {max_items} numbers	{min_items} ile {max_items} arasında sayıdan oluşan bir liste
 @msg	a new object needs a `path`	yeni bir nesnenin `path` değerine ihtiyacı vardır
 @msg	a number	bir sayı
-@msg	a painted live effect returns only `objects`	boyama türü canlı efekt yalnızca `objects` döndürür
+@msg	a painted live effect returns only `objects` and `notice`	boyama türü canlı efekt yalnızca `objects` ve `notice` döndürür
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	boyama türü canlı efektin bir parçasında yalnızca `path`, `fillRule`, `fills` ve `strokes` bulunur
 @msg	a read-only object was left out	salt okunur bir nesne atlandı
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	salt okunur bir nesne atlandı: onu yalnızca {{"id": …}} olarak veya verildiği gibi döndürün
 @msg	a string	bir dize
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	bir konturda yalnızca `paint`, `width`, `join`, `cap` ve `miterLimit` bulunur
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	boyama türü canlı efektin bir parçasında yalnızca `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` ve `effects` bulunur
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	bir konturda yalnızca `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` ve `effects` bulunur
+@msg	`appearanceOutput` may only be true	`appearanceOutput` yalnızca true olabilir
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` yalnızca `paintOutput` bildiren, `api` 3 düzeyindeki canlı efekt içindir
+@msg	`opacity` must be a number from 0 to 1	`opacity` 0 ile 1 arasında bir sayı olmalıdır
+@msg	unknown blending mode; `blend` is one of {_1}	bilinmeyen karışım modu; `blend` şunlardan biridir: {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` en fazla {MAX_LOOK_EFFECTS} kayıtlık bir dizi olmalıdır
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	bir sonuç en fazla {MAX_RESULT_EFFECTS} efekt kaydı taşır
+@msg	this host takes no effects here	bu ana bilgisayar burada efekt kabul etmez
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	bir kontur {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} biçiminde olmalıdır
 @msg	an effect must be {{"id", "params"?, "visible"?}}	bir efekt {{"id", "params"?, "visible"?}} biçiminde olmalıdır
 @msg	an effect on a fill returns only `fills`	dolgudaki bir efekt yalnızca `fills` döndürür
@@ -7556,6 +7621,8 @@ axis	Y Axis	Y ekseni
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
 @msg	`paintOutput` may only be true	`paintOutput` yalnızca true olabilir
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` yalnızca `api` 2 düzeyindeki canlı efekt (`kind` "effect") içindir
+@msg	`place` is only for an importer (`kind` "importer")	`place` yalnızca içe aktarıcı (`kind` "importer") içindir
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” dosyaları açar ama yerleştirmez: bildirimi `place` ayarlamaz
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır
@@ -7567,12 +7634,60 @@ axis	Y Axis	Y ekseni
 @msg	`inputs` lists `{shown}` twice	`inputs` `{shown}` değerini iki kez listeliyor
 @msg	`inputs` needs `api` 2 or later	`inputs` için `api` 2 veya üstü gerekir
 @msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
+@msg	only a filter declares `writes`	`writes` yalnızca bir filtrede bildirilebilir
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` bilinmeyen bir nesne türü belirtiyor: `{shown}`; type, image veya symbolInstance kullanın
+@msg	`writes` lists `{shown}` twice	`writes` `{shown}` değerini iki kez listeliyor
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` `{shown}` değerini listeliyor, ancak `inputs` listelemiyor
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` için `api` {WRITES_API} veya üstü gerekir
+@msg	`writes` needs the permission `doc.write`	`writes` için `doc.write` izni gerekir
+@msg	{_1} is not type, an image or a symbol instance	{_1} metin, görüntü veya sembol örneği değil
+@msg	the text of type given as `truncated` can't be changed	`truncated` olarak verilen metin nesnesinin metni değiştirilemez
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	en fazla {MAX_INPUT_RUNS} girişli bir liste olmalıdır
+@msg	type needs at least one run	metnin en az bir parçası olmalıdır
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bayt metin (sınır {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paragraf (sınır {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	çıktının tamamında {MAX_INPUT_TEXT_TOTAL} bayttan fazla metin
+@msg	unknown key '{k}'	bilinmeyen anahtar '{k}'
+@msg	must be a list of 6 numbers	6 sayılık bir liste olmalıdır
+@msg	a number is out of range (limit ±{MAX_COORD})	bir sayı aralık dışında (sınır ±{MAX_COORD})
+@msg	flattens the object to a line or a point	nesneyi bir çizgiye veya noktaya yassılaştırıyor
+@msg	an object flattened to a line or a point can't be placed again	bir çizgiye veya noktaya yassılaşmış nesne yeniden yerleştirilemez
+@msg	must be a number from 0 to 1	0 ile 1 arasında bir sayı olmalıdır
+@msg	must be the name of a symbol	bir sembolün adı olmalıdır
+@msg	'{shown}' is not a symbol in this document	'{shown}' bu belgede bir sembol değil
+@msg	a run must be {{"text", "style", "inline"?}}	bir parça {{"text", "style", "inline"?}} biçiminde olmalıdır
+@msg	`text` holds the character of an inline graphic	`text` satır içi bir grafiğin karakterini içeriyor
+@msg	inline graphics can't be added, removed, reordered or changed	satır içi grafikler eklenemez, kaldırılamaz, yeniden sıralanamaz veya değiştirilemez
+@msg	the characters of threaded type can't be changed	zincirli metnin karakterleri değiştirilemez
+@msg	the characters of type with ruby can't be changed	ruby içeren metnin karakterleri değiştirilemez
+@msg	expected {count} paragraph styles, one per paragraph	her paragraf için bir tane olmak üzere {count} paragraf stili bekleniyordu
+@msg	the document has no Kinsoku set named '{shown}'	belgede '{shown}' adlı Kinsoku seti yok
+@msg	must be 1-{MAX_FAMILY} printable characters	1-{MAX_FAMILY} yazdırılabilir karakter olmalıdır
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Kendisine verilen nesneleri ve belgenin ayarlarını, çalışma yüzeylerini, katmanlarını ve renk örneklerini okuma
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` farklı bölümleri listelemelidir: settings, artboards, layers veya swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` yalnızca `api` 3 veya sonrasında, `doc.read` izniyle bir filtre ya da `commands` içeren bir canlı efekt içindir
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	eklentinin istediği belge bilgileri aktarılamayacak kadar büyük: {MAX_CONTEXT_BYTES} bayt içinde en fazla {MAX_CONTEXT_ITEMS} çalışma yüzeyi, katman ve renk örneği
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
 @msg	instruction budget	talimat bütçesi
 @msg	time budget	zaman bütçesi
 @msg	memory budget (the selection is too large to hand over)	bellek bütçesi (seçim aktarılamayacak kadar büyük)
 @msg	output size ({what} is {len} bytes, limit {max})	çıktı boyutu ({what}: {len} bayt, sınır {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} satır {line}, sütun {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	bellek bütçesi
+@msg	call depth	çağrı derinliği
+@msg	run(input, params) returned no output object	run(input, params) bir çıktı nesnesi döndürmedi
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" için `script` gerekir: eklentinin bildirimin yanındaki .js dosyasının adı
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script`, bildirimin klasöründeki bir .js dosyasının adı olmalıdır: 1-128 bayt, klasör yok, `:` yok, `.` ile başlamaz
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` betiğin metnidir ve yalnızca plugin.install komutunun dataBase64 parametresinin aldığı JSON içinde verilir: bir .vcplugin dosyası betiğini `script` içinde adlandırır
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	bir JavaScript eklentisinin bildirimi `runtime` "js" verir
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" bir nesne filtresi içindir (`kind` "filter"), `kind` "{kind}" için değil
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	bir JavaScript eklentisi `{name}` iznini listeleyemez: ana makinenin izinlerinden `progress` iznini listeleyebilir
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	bir WebAssembly modülünün bildirimi `runtime` anahtarını atlar: "js" bir JavaScript eklentisi içindir
+@msg	a JavaScript plug-in makes no command calls	bir JavaScript eklentisi komut çağırmaz
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) iki sayı alır
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) bir düzey, 0 (hata), 1 (uyarı), 2 (bilgi) veya 3 (hata ayıklama), ve bir dize alır
 @msg	the plug-in's grant can't be removed from the plug-in store	eklentinin izni eklenti deposundan kaldırılamıyor
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
@@ -10282,6 +10397,7 @@ breakText	Glyphs	Glifler
 	Place Brush Art	Fırça Çizimini Yerleştir
 	Replace Brush Art	Fırça Çizimini Değiştir
 	Replace Pattern Art	Desen Çizimini Değiştir
+	Place Pattern Art	Desen Çizimini Yerleştir
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturlar bu fırçayı kullanıyor. Yeni çizim bu konturlara uygulansın mı, yoksa konturlar olduğu gibi bırakılıp fırçanın yeni çizimli bir kopyası mı eklensin?
 	Apply to Strokes	Konturlara Uygula
 	Leave Strokes	Konturları Bırak
@@ -10351,6 +10467,8 @@ breakText	Glyphs	Glifler
 	Tangent Circle	Teğet Daire
 	Tangent Circle Tool	Teğet Daire Aracı
 	No tangent circle here	Burada teğet daire yok
+	Ask For Circle Radius	Daire Yarıçapını Sor
+	Auto-Update Default	Varsayılanı Otomatik Güncelle
 	Circle:	Daire:
 @msg	`ids` names an object twice	`ids` bir nesneyi iki kez belirtiyor
 @msg	select two or three paths or compound paths	iki veya üç yol ya da bileşik yol seçin
@@ -10709,6 +10827,11 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Fold Angle	Katlama Açısı
+	Set Fold Angle…	Katlama Açısını Ayarla…
+	Set Fold Angle	Katlama Açısını Ayarla
+	Reset Fold Angle	Katlama Açısını Sıfırla
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	kilitli ya da gizli olmayan bir pilyaj, yarım kesim veya perforaj çizgisi seçin
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Araç çubuğundaki bir aracın ve tuşlarının ne yaptığını ipucu yerine bir kartta gösterir; Araç İpuçlarını Göster gerekir.
 	Selects whole objects and groups to move, resize or rotate them.	Taşımak, yeniden boyutlandırmak veya döndürmek için nesnelerin ve grupların tamamını seçer.

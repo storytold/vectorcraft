@@ -14,14 +14,15 @@
 //! its file name alone, as `svgInteractivity.info` does; `selected` keeps the file as linked.
 
 use craft::behavior::{Selection, keyed};
-use craft::host::PickRequest;
+use craft::host::{PickId, PickRequest, Picked};
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, StackDialog, dialog_id};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow};
 use craft::ui::patterns::form_dialogs::PathRow;
+use craft::ui::primitives::Revision;
 use craft::ui::sections::{DialogRole, FooterButton};
 use egui::{Context, Ui};
 use serde_json::{Value, json};
@@ -60,6 +61,8 @@ struct Form {
     file: String,
     /// The linked file selected in the list, as linked or as the list shows it.
     selected: String,
+    /// The file chooser still waiting for its typed answer.
+    pick: Option<PickId>,
     pending: Option<Pending>,
 }
 
@@ -199,29 +202,46 @@ const LIST_ROWS: u16 = 6;
 
 fn body(ui: &mut Ui, files: &[(String, String)], form: &mut Form) {
     let source = keyed(files, |(linked, _): &(String, String)| linked.clone());
-    let selection =
-        selected_row(files, &form.selected).and_then(|i| files.get(i)).map(|(linked, _)| Selection::single(linked.clone())).unwrap_or_default();
-    let list = List::<String>::options(tl!("Linked files"))
+    let selected = selected_row(files, &form.selected).map(|i| &files[i].0);
+    let mut selection = selected.map(|linked| Selection::single(linked.clone())).unwrap_or_default();
+    List::new(tl!("Linked files"))
+        .select(SelectMode::Single)
+        .rows_stamp(Revision::of(&selected).get())
         .min_rows(LIST_ROWS)
         .max_rows(LIST_ROWS)
-        .selection(Bind::given(selection))
+        .selection(Bind::bound(&mut selection))
         .sizing(Sizing::FillWidth)
         .empty(tl!("No JavaScript files linked"))
         .show_items(ui, &source, &mut |key, _| {
             // Paths and URLs are data: shown as they are.
             ListRow::new(files.iter().find(|(linked, _)| linked == key).map_or_else(String::new, |(_, shown)| shown.clone()))
         });
-    for event in list.events {
-        if let CollectionEvent::Activate(key) = event {
-            form.selected = key;
-        }
+    if selection.items.first() != selected {
+        form.selected = selection.items.into_iter().next().unwrap_or_default();
     }
-    Field::new(caption("File or URL:")).show(ui, |ui, _| {
-        let request = PickRequest::open("javascript").filter("JavaScript", &["js"]);
-        let out = PathRow::new(caption("File or URL:"), Bind::bound(&mut form.file)).button(tl!("Choose…")).pick(request).show(ui);
-        // The answer is a path; the dialog links a `file:///` URL ([`crate::io::file_url`]).
-        if let Some(path) = out.picked {
-            form.file = crate::io::file_url(&path);
+    Field::new(caption("File or URL:")).show(ui, |ui, cx| {
+        if let Some(ticket) = form.pick
+            && let Some(answer) = cx.take_pick_answer(ticket)
+        {
+            form.pick = None;
+            // Browser picks supply the file's bytes and basename. Only a filesystem path can be linked.
+            if let Picked::Paths(paths) = answer
+                && let Some(path) = paths.first()
+            {
+                form.file = crate::io::file_url(&path.to_string_lossy());
+            }
+        }
+        let mut row = PathRow::new(caption("File or URL:"), Bind::bound(&mut form.file)).button(tl!("Choose…"));
+        if !cx.env.host().is_some_and(|host| host.files().can_pick()) {
+            row = row.browse_reason(tl!("To link a script here, enter its URL."));
+        }
+        let row = row.show(ui);
+        if row.browse
+            && form.pick.is_none()
+            && let Some(host) = cx.env.host()
+        {
+            let request = PickRequest::open("javascript").filter("JavaScript", &["js"]);
+            form.pick = Some(host.files().pick(request));
         }
     });
     let chosen = selected_row(files, &form.selected);
@@ -241,8 +261,9 @@ mod tests {
     use std::rc::Rc;
     use std::sync::Arc;
 
-    use craft::host::{AppInfo, Host, Picked, ScriptedFiles};
+    use craft::host::{AppInfo, Host, ScriptedFiles};
     use craft::ui::testing::Fixture;
+    use egui::{Key, Modifiers};
     use vectorcraft_engine::Session;
 
     use super::*;
@@ -286,6 +307,31 @@ mod tests {
         let linked = panel.app().session.active().map(|st| st.doc.svg_scripts.clone()).unwrap_or_default();
         assert!(linked.iter().any(|f| f == "https://example.com/b.js"), "{linked:?}");
         assert_eq!(json_selected(&panel), json!("https://example.com/b.js"));
+    }
+
+    #[test]
+    fn arrow_navigation_changes_which_javascript_file_remove_unlinks() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        for file in ["scripts/first.js", "scripts/second.js"] {
+            app.run("svgInteractivity.addFile", json!({"file": file})).unwrap();
+        }
+        let mut panel = Panel::new(app, draw);
+        panel.app().run("ui.javascriptFilesDialog", json!({})).unwrap();
+        panel.frame();
+        panel.frame();
+
+        panel.click("scripts/first.js");
+        assert_eq!(json_selected(&panel), "scripts/first.js");
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(json_selected(&panel), "scripts/second.js");
+        // A selection changed outside the list gives the next arrow its new starting row.
+        set_field(&panel, "selected", "scripts/first.js");
+        panel.frame();
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(json_selected(&panel), "scripts/second.js");
+        panel.click(tl!("Remove"));
+        assert_eq!(panel.app().session.active().unwrap().doc.svg_scripts, ["scripts/first.js"]);
     }
 
     /// In a frame drawn with read roots in force, the list names a linked file outside them by its
@@ -352,5 +398,24 @@ mod tests {
         fixture.idle(3);
         let file = form.borrow().file.clone();
         assert!(file.starts_with("file:///") && file.ends_with("/my%20menu.js") && !file.contains('\\'), "{file}");
+    }
+
+    #[test]
+    fn browser_can_link_a_url_without_offering_a_local_file_picker() {
+        let files = Arc::new(ScriptedFiles::held().in_browser());
+        let form = Rc::new(RefCell::new(Form { file: "https://example.test/menu.js".into(), ..Default::default() }));
+        let shown = Rc::clone(&form);
+        let mut fixture = Fixture::new(move |ui| body(ui, &[], &mut shown.borrow_mut()));
+        fixture.host(Arc::new(Host::builder(AppInfo { id: "test", name: "Test", version: "1.0" }).files(files.clone()).build()));
+        fixture.settle();
+        let choose = fixture.by_label(tl!("Choose…")).expect("the Choose button");
+        assert!(fixture.tree().is_disabled_key(choose.node));
+        fixture.click(&choose);
+        fixture.settle();
+        assert!(files.requests().is_empty());
+        assert_eq!(form.borrow().file, "https://example.test/menu.js");
+        let add = fixture.by_label(tl!("Add")).expect("the Add button");
+        fixture.click(&add);
+        assert_eq!(form.borrow().pending, Some(Pending::Add));
     }
 }

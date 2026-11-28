@@ -3,8 +3,9 @@ use std::sync::Arc;
 use serde_json::json;
 use vectorcraft_engine::Session;
 
-use super::{CHECK, ID, SET_ROLE, follow_role, last_check, rows, run_check, select_issue};
+use super::{CHECK, ID, SET_FOLD_ANGLE, SET_ROLE, follow_role, last_check, read_rows, rows, run_check, select_issue, show};
 use crate::i18n::LangExt as _;
+use crate::tests::panel_harness::Panel;
 use crate::{VectorcraftApp, menus};
 
 /// An app with two rectangles, nothing selected → (app, their ids).
@@ -142,8 +143,67 @@ fn every_issue_message_translates_in_every_complete_message_catalog() {
         "ca", "nl", "da",
     ] {
         let lang = crate::i18n::Lang::from_code(code).unwrap();
-        for m in ISSUE_MESSAGES.into_iter().chain(["Panels: 3, hinges: 2, errors: 1, warnings: 0"]) {
+        let no_fold_line = "select a crease, partial cut or perforation line that is neither locked nor hidden";
+        for m in ISSUE_MESSAGES.into_iter().chain(["Panels: 3, hinges: 2, errors: 1, warnings: 0", no_fold_line]) {
             assert_ne!(crate::i18n::message(lang, m), m, "{code}: {m}");
         }
     }
+}
+
+#[test]
+fn set_fold_angle_is_listed_after_check_fold_lines() {
+    let (app, _, _) = app();
+    let entries = menus::menu_entries(&app);
+    let items: Vec<&str> = entries.iter().filter(|e| e.path == ["Object", "Plug-ins", "Packaging Tools"]).map(|e| e.label.as_str()).collect();
+    let at = |label: &str| items.iter().position(|l| *l == label).unwrap_or_else(|| panic!("{label}: {items:?}"));
+    assert_eq!(at("Set Fold Angle…"), at("Check Fold Lines") + 1);
+    let item = entries.iter().find(|e| e.label == "Set Fold Angle…").expect("listed");
+    assert_eq!(item.command.as_deref(), Some(SET_FOLD_ANGLE));
+}
+
+#[test]
+fn a_fold_angle_field_shows_every_place_the_angle_has() {
+    use super::angle_places;
+    assert_eq!([None, Some(90.0), Some(-135.5), Some(179.9999999), Some(1e-12)].map(angle_places), [1, 1, 1, 7, 12]);
+}
+
+#[test]
+fn the_panel_shows_the_selected_lines_fold_angle_and_what_reset_takes_away() {
+    let (mut app, a, b) = app();
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [a]})).unwrap();
+    app.run(SET_ROLE, json!({"role": "cut", "ids": [b]})).unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("Fold Angle"), "a cut line has no fold angle: {text}");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let kept = read_rows(&mut app);
+    assert_eq!((kept.selection, kept.fold_lines, kept.angle, kept.stored_angles), (true, 1, Some(90.0), 0), "Reset is dimmed");
+    app.run(SET_FOLD_ANGLE, json!({"angle": 135})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("Fold Angle") && text.contains("Reset"), "{text}");
+    let panel = Panel::new(app, show);
+    let values = panel.values();
+    let mut app = panel.app();
+    assert!(values.iter().any(|v| v.strip_prefix("135").is_some_and(|unit| unit.is_empty() || unit.starts_with([' ', '°']))), "{values:?}");
+    let kept = read_rows(&mut app);
+    assert_eq!((kept.angle, kept.stored_angles), (Some(135.0), 1));
+    // Stored text that is not an angle: the field shows the role's angle, and Reset can still remove the text.
+    app.session
+        .edit("Test", |d, _| {
+            if let Some(n) = d.node_mut(vectorcraft_doc::NodeId(a)) {
+                n.edit_attrs(|at| {
+                    at.data.retain(|(k, _)| k != "vc-fold-angle");
+                    at.data.push(("vc-fold-angle".into(), "wide".into()));
+                });
+            }
+            Ok(())
+        })
+        .unwrap();
+    let kept = read_rows(&mut app);
+    assert_eq!((kept.angle, kept.stored_angles), (Some(90.0), 1));
+    // Nothing selected: the rows count the document and no Fold Angle row shows.
+    app.run("select.none", json!({})).unwrap();
+    assert!(!read_rows(&mut app).selection);
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("Fold Angle"), "{text}");
 }

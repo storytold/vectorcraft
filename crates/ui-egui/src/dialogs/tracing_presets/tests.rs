@@ -1,6 +1,7 @@
 //! Edit → Tracing Presets: New… and Edit… through the preset editor, Delete, and the import with
 //! the question about saved presets of the same names, all through the dialog host.
 
+use craft::host::ScriptedFiles;
 use craft::ui::dialog::dialog_id;
 use craft::ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
 use serde_json::{Value, json};
@@ -66,9 +67,17 @@ fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, ok: bool) {
 
 /// The texts the dialogs paint, once they have faded in (each frame is a quarter second on).
 fn frame_texts(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
-    fn walk(s: &egui::Shape, out: &mut Vec<String>) {
+    frame_runs(app, ctx).into_iter().map(|(text, _, _)| text).collect()
+}
+
+/// The texts the dialogs paint with where each is drawn and its font, once they have faded in.
+fn frame_runs(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<(String, egui::Rect, Option<egui::FontId>)> {
+    fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect, Option<egui::FontId>)>) {
         match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Text(t) => {
+                let font = t.galley.job.sections.first().map(|section| section.format.font_id.clone());
+                out.push((t.galley.text().to_string(), t.galley.rect.translate(t.pos.to_vec2()), font));
+            }
             egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
             _ => {}
         }
@@ -143,6 +152,22 @@ fn new_and_edit_save_through_the_editor_and_cancel_saves_nothing() {
     // New… from a saved preset starts from its settings.
     press(&mut app, &ctx, Action::New);
     assert_eq!((field(&app, "name"), field(&app, "params")), (json!("Tracing Preset 1"), edited));
+}
+
+#[test]
+fn the_selected_preset_shows_beside_the_list_under_a_strong_name() {
+    let (mut app, ctx) = windowed(Default::default());
+    app.run("ui.tracingPresetsDialog", json!({})).unwrap();
+    pass(&mut app, &ctx);
+    let runs = frame_runs(&app, &ctx);
+    let rect = |names: &[&str]| runs.iter().find(|r| names.contains(&r.0.as_str())).map(|r| r.1);
+    let (Some(export), Some(mode)) = (rect(&["Export…"]), rect(&["Mode", "Mode:"])) else { panic!("Export… and Mode: {runs:?}") };
+    // The settings column starts right of the list's buttons and level with the list, not under it.
+    assert!(mode.left() >= export.right() && mode.top() < export.top(), "Mode {mode:?}, Export… {export:?}");
+    // The selected preset's name over its settings is set apart from its row in the list.
+    let names: Vec<_> = runs.iter().filter(|r| r.0 == "[Default]").collect();
+    assert_eq!(names.len(), 2, "{runs:?}");
+    assert_ne!(names[0].2, names[1].2, "the list row and the name: {names:?}");
 }
 
 #[test]
@@ -271,6 +296,47 @@ fn import_asks_before_replacing_saved_presets() {
     pass(&mut app, &ctx);
     assert!(asking(&app));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn delayed_import_keeps_the_reopened_tracing_preset_managers_selection() {
+    let (mut app, ctx) = windowed(Default::default());
+    let files = Arc::new(ScriptedFiles::held());
+    let host = app.host.with_files(files.clone());
+    host.clone().install(&ctx);
+    app.host = Arc::new(host);
+    app.run("imageTrace.presets.save", json!({"name": "Poster", "params": {"noise": 7}})).unwrap();
+    app.run("ui.tracingPresetsDialog", json!({})).unwrap();
+    press(&mut app, &ctx, Action::Import);
+    assert_eq!(files.open(), 1);
+
+    let dialogs = app.dialogs().unwrap();
+    assert!(dialogs.with(|host| host.cancel::<Manager>(&ctx)));
+    app.run("ui.tracingPresetsDialog", json!({"selected": "6 Colors"})).unwrap();
+    let contents =
+        br#"{"format": "vctracepresets", "version": 1, "presets": [{"name": "Poster", "params": {"noise": 40}}, {"name": "Ink", "params": {}}]}"#;
+    assert!(files.answer(Picked::Contents(vec![("picked.vctracepresets".into(), contents.to_vec())])).is_some());
+    crate::file_asks::poll(&mut app);
+    pass(&mut app, &ctx);
+    assert_eq!(saved_names(&app), ["Poster", "Ink"], "the requested import still adds new presets");
+    assert_eq!(selected(&app).as_deref(), Some("6 Colors"), "the reopened manager keeps its own selection");
+    let replace = dialog_id(REPLACE_KIND);
+    dialogs.with(|host| {
+        assert!(host.is_open::<ReplacePresets>());
+        assert_eq!(host.stack().parent(replace), None, "the duplicate question does not belong to the reopened manager");
+        host.set_json_field(&ctx, replace, "choice", json!("proceed")).unwrap();
+        assert!(host.confirm_by_id(&ctx, replace));
+    });
+    pass(&mut app, &ctx);
+    assert_eq!(app.session.trace_preset("Poster").unwrap().params.noise, 40, "Replace still updates the saved preset");
+    assert_eq!(selected(&app).as_deref(), Some("6 Colors"), "Replace leaves the reopened manager's selection alone");
+
+    press(&mut app, &ctx, Action::Import);
+    let current_pick = br#"{"format": "vctracepresets", "version": 1, "presets": [{"name": "Graphite", "params": {}}]}"#;
+    assert!(files.answer(Picked::Contents(vec![("current.vctracepresets".into(), current_pick.to_vec())])).is_some());
+    crate::file_asks::poll(&mut app);
+    pass(&mut app, &ctx);
+    assert_eq!(selected(&app).as_deref(), Some("Graphite"), "the current manager selects the preset it imported");
 }
 
 #[test]

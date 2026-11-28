@@ -31,6 +31,8 @@ pub const KIND: &str = "nearestSwatch";
 /// The query that lists the matches, and how many of each colour's the dialog shows.
 const FIND: &str = "addon.color.nearestSwatch";
 const MATCHES: u64 = 3;
+/// The rows the match list shows before it scrolls.
+const LIST_ROWS: u16 = 12;
 
 /// What the query read: the document and its revision, the library, Fill and Stroke. An answer
 /// stands while these are what the dialog shows now.
@@ -130,10 +132,7 @@ impl StackDialog for NearestDialog {
 /// The dialog's rows: the library, Fill and Stroke, then what the query found (or what to do first).
 fn body(ui: &mut Ui, fields: &mut Fields, libraries: &[Entry<String>], selected: bool, found: Option<&(QueryKey, Result<Value, String>)>) {
     Field::new(label(tl!("Library:"))).show(ui, |ui, _| {
-        let picked = Select::new(label(tl!("Library:")), Bind::given(fields.library.clone()), libraries).show(ui).value().cloned();
-        if let Some(library) = picked {
-            fields.library = library;
-        }
+        Select::new(label(tl!("Library:")), Bind::bound(&mut fields.library), libraries).show(ui);
     });
     Row::new().show(ui, |ui, _| {
         Checkbox::new(Bind::bound(&mut fields.fill)).label(label(tl!("Fill"))).show(ui);
@@ -155,7 +154,8 @@ fn body(ui: &mut Ui, fields: &mut Fields, libraries: &[Entry<String>], selected:
     let lines = lines(found);
     let keys: Vec<usize> = (0..lines.len()).collect();
     let source = keyed(&keys, |i| *i);
-    List::<usize>::new(label(tl!("Find Nearest Swatch"))).select(SelectMode::None).show_items(ui, &source, &mut |&i, item| match lines.get(i) {
+    let list = List::<usize>::new(label(tl!("Find Nearest Swatch"))).select(SelectMode::None).max_rows(LIST_ROWS);
+    list.show_items(ui, &source, &mut |&i, item| match lines.get(i) {
         Some(line) => {
             let face = SwatchFace::new(line.color);
             let row = ListRow::new(line.text.clone())
@@ -266,5 +266,58 @@ mod tests {
         assert_eq!(listed(&app), None, "no query without a selection");
         assert!(!host(&app, |h| h.confirm_by_id(&ctx, id)), "Apply is off");
         assert!(host(&app, |h| h.is_open::<NearestDialog>()));
+    }
+
+    #[test]
+    fn find_nearest_swatch_draws_its_matches_and_buttons() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("swatch.new", json!({"name": "Brand", "color": "#ff8000", "global": true})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+        let mut p = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+        menus::invoke(&mut p.app(), COMMAND, serde_json::Value::Null);
+        p.frame();
+        p.frame();
+        for name in ["Brand", "Apply", "Cancel"] {
+            assert!(p.shows(name), "{name} is drawn");
+        }
+    }
+
+    /// A highlighted library previews its matches; Escape restores the library and results that
+    /// were current before the popup opened, while Enter keeps a deliberate choice.
+    #[test]
+    fn cancelling_a_library_popup_restores_the_original_library_and_matches() {
+        use egui::{Key, Modifiers};
+
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("swatch.new", json!({"name": "Brand", "color": "#ff8000", "global": true})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+        menus::invoke(&mut panel.app(), COMMAND, serde_json::Value::Null);
+        panel.frame();
+        panel.frame();
+        let original = listed(&panel.app()).unwrap();
+        let library = |panel: &crate::tests::panel_harness::Panel| host(&panel.app(), |h| h.get::<NearestDialog>().unwrap().fields.library.clone());
+        assert_eq!(library(&panel), "document");
+        panel.click_role("Library", craft::ui::contract::Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.frame();
+        let proposed = library(&panel);
+        assert_ne!(proposed, "document", "the open popup previews another enabled library");
+        assert_ne!(listed(&panel.app()), Some(original.clone()), "the query follows the highlighted library");
+        panel.key(Key::Escape, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(library(&panel), "document");
+        assert_eq!(listed(&panel.app()), Some(original));
+        panel.click_role("Library", craft::ui::contract::Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(library(&panel), proposed, "a deliberate choice is kept");
+        assert!(host(&panel.app(), |h| h.is_open::<NearestDialog>()), "choosing a library does not apply and close the dialog");
     }
 }

@@ -26,9 +26,15 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
 /// [`open_bytes`], a document opening with `document.open`'s params `p`.
 fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
     let opens = opens_as(name);
-    // A WebAssembly plug-in is installed.
+    // A plug-in is installed: a JavaScript plug-in's manifest by its path, which the script it
+    // names is read beside. Without a path the manifest's bytes alone are refused, since they hold
+    // no script (`vectorcraft_plugins::js::SOURCE_RULE`).
     if opens == Some(OpensAs::Plugin) {
-        let module = json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)});
+        let js = vectorcraft_plugins::registry::is_js_package(std::path::Path::new(name));
+        let module = match path.as_deref() {
+            Some(path) if js => json!({ "path": path }),
+            _ => json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)}),
+        };
         return install_module(app, module).map(|_| Value::Null);
     }
     if opens == Some(OpensAs::ShortcutSet) {
@@ -236,9 +242,7 @@ fn ask_open(
     Ok(file_asks::ask(app, request, owner, move |app, picked| match picked {
         Picked::Contents(files) => {
             for (name, bytes) in &files {
-                if let Err(e) = open_bytes(app, name, bytes, None) {
-                    report_open_error(app, name, &e);
-                }
+                open_bytes_reporting(app, name, bytes);
             }
             Ok(Value::Null)
         }
@@ -262,11 +266,16 @@ pub fn install_plugin(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 }
 
 /// What permission `name` lets a plug-in do, in plain words in the UI language, with the ids of
-/// the `commands` it may call for `commands`; a name the app doesn't know is shown as it is.
-fn permission_words(name: &str, commands: &[String]) -> String {
+/// the `commands` it may call for `commands`, and for `doc.read` of a plug-in whose manifest asks
+/// for document information (`context`), that information too; a name the app doesn't know is
+/// shown as it is.
+fn permission_words(name: &str, commands: &[String], context: bool) -> String {
     let words = match permissions::Permission::parse(name) {
         Some(permissions::Permission::Commands) => {
             return crate::i18n::fmt(tl!("Run these commands on the document: {ids}"), &[("ids", &commands.join(", "))]);
+        }
+        Some(permissions::Permission::DocRead) if context => {
+            tl!("Read the objects it is given, and the document's settings, artboards, layers and swatches")
         }
         Some(permissions::Permission::DocRead) => tl!("Read the objects it is given"),
         Some(permissions::Permission::DocWrite) => tl!("Change, add and delete objects in the document"),
@@ -294,10 +303,20 @@ fn permission_words(name: &str, commands: &[String]) -> String {
 /// `replace: true` doesn't skip asking about replacing, and the answer while it asks adds
 /// `approval: "personMustStartInstall"`: the person starts Install Plug-in… to install it.
 /// Every text from the manifest is shown with its hidden characters escaped and its length capped
-/// ([`permissions::display_text`]).
+/// ([`permissions::display_text`]). On the web a worker checks the module first
+/// ([`crate::plugin_runs::check_install`]) → `{pending: true}` while it does; the install then goes
+/// on, and the page runs none of the module's code.
 pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, String> {
-    let origin = if app.automation_asked() { dialogs::plugin::InstallOrigin::Automation } else { dialogs::plugin::InstallOrigin::Person };
-    let automated = origin == dialogs::plugin::InstallOrigin::Automation;
+    let automated = app.automation_asked();
+    install_module_as(app, module, automated)
+}
+
+/// [`install_module`], as automation's install when `automated`.
+pub(crate) fn install_module_as(app: &mut VectorcraftApp, module: Value, automated: bool) -> Result<Value, String> {
+    if let Some(r) = crate::plugin_runs::check_install(app, &module, automated) {
+        return r;
+    }
+    let origin = if automated { dialogs::plugin::InstallOrigin::Automation } else { dialogs::plugin::InstallOrigin::Person };
     let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
     let source = Value::Object(["path", "dataBase64", "name"].into_iter().filter_map(given).collect());
     let mut install = Value::Object(["path", "dataBase64", "name", "replace", "hash"].into_iter().filter_map(given).collect());
@@ -343,7 +362,8 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
             .as_array()
             .map(|ids| ids.iter().filter_map(Value::as_str).map(|id| permissions::display_text(id, permissions::MAX_SHOWN_FIELD)).collect())
             .unwrap_or_default();
-        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p, &commands))));
+        let context = info["context"].as_array().is_some_and(|c| !c.is_empty());
+        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p, &commands, context))));
         paragraphs.push(lines.join("\n"));
         install["grant"] = Value::Array(asked.clone());
     }
@@ -390,6 +410,8 @@ fn open_dialog_folder(app: &VectorcraftApp) -> Option<String> {
 
 /// File → Open…: `{pending: "fileDialog"}` while its picker is open.
 pub fn open_dialog(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // The picker lists the extensions of the importer plug-ins the launch is still loading too.
+    app.session.finish_plugin_loads();
     let request = open_request("document", open_dialog_folder(app), fileio::open_filters());
     ask_open(app, request, Owner::Free, |app, path| open_reporting(app, &path))
 }
@@ -494,6 +516,17 @@ pub fn report_open_error(app: &mut VectorcraftApp, name: &str, e: &str) {
     dialogs::confirm::tell(app, &message, &crate::i18n::message(crate::i18n::current(), e));
 }
 
+/// [`open_bytes`] for a file the user asked to open, a failure reported ([`report_open_error`]),
+/// also one that a worker's check of a plug-in module finds after it returned
+/// ([`crate::plugin_runs::report_checks_as_opened`]).
+pub fn open_bytes_reporting(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) {
+    let from = crate::plugin_runs::checks_started(app);
+    match open_bytes(app, name, bytes, None) {
+        Ok(_) => crate::plugin_runs::report_checks_as_opened(app, from, name),
+        Err(e) => report_open_error(app, name, &e),
+    }
+}
+
 /// [`open_path`] for a file the user asked for, a failure reported ([`report_open_error`]). On
 /// the desktop a document is decoded off the UI thread ([`crate::opening`]): the result is then
 /// `{background: true, status}`, and the document opens in its tab (or the failure is reported)
@@ -559,6 +592,11 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) 
 fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Value) -> Result<Value, String> {
     // Automation confined to some folders reaches no file outside them, open in a tab or not.
     vectorcraft_engine::file_access::check_read(path)?;
+    // A plug-in still loading may be the importer that reads the file, or what installs it.
+    app.session.finish_plugin_loads();
+    // The path is checked again after the wait, so a link replaced while the plug-ins loaded
+    // doesn't lead the read outside the folders.
+    vectorcraft_engine::file_access::check_read(path)?;
     // File › Open, Open Recent, the Home screen, a drop and the Finder all focus a document that
     // is already open, or still being read, instead of opening a second copy. While a dialog or
     // a drag acts on the active document, its tab comes to the front once that ends
@@ -596,6 +634,12 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
         note_recent(app, path);
         return Ok(Value::Null);
     }
+    // A JavaScript plug-in's manifest is read by `plugin.install {path}`, with the script it names.
+    if opens_as(path) == Some(OpensAs::Plugin) && vectorcraft_plugins::registry::is_js_package(std::path::Path::new(path)) {
+        install_module(app, json!({ "path": path }))?;
+        note_recent(app, path);
+        return Ok(Value::Null);
+    }
     // A file only an importer plug-in reads is not read past the importer's input limit.
     check_import_size(path, false)?;
     let bytes = read(app, path)?;
@@ -621,13 +665,25 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
 }
 
 /// File → New from Template…: a template (or any readable file) as a new untitled document. Without
-/// a path the open dialog starts in the Templates folder. On the web the browser's file picker
-/// opens it (`.vctemplate`, `.ait` and template files open untitled there too).
+/// a path the open dialog starts in the Templates folder. The browser supplies the picked file's
+/// name and bytes for the same template loader.
 pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
     let Some(path) = path else {
         let filters = std::iter::once(("Templates", TEMPLATE_EXTS)).chain(fileio::builtin_open_filters());
         let request = open_request("template", fileio::templates_dialog_folder(&app.session.prefs), filters);
-        return ask_open(app, request, Owner::Free, new_from_path);
+        return Ok(file_asks::ask(app, request, Owner::Free, |app, picked| match picked {
+            Picked::Contents(files) => {
+                let (name, bytes) = files.into_iter().next().ok_or("cancelled")?;
+                if let Err(error) = open_template(app, &name, &bytes, None) {
+                    report_open_error(app, &name, &error);
+                }
+                Ok(Value::Null)
+            }
+            picked => {
+                let path = picked.first_path().ok_or("cancelled")?;
+                new_from_path(app, path.to_string_lossy().into_owned())
+            }
+        }));
     };
     new_from_path(app, path)
 }
@@ -635,7 +691,11 @@ pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Resu
 /// [`new_from_template`] for the file at `path`.
 fn new_from_path(app: &mut VectorcraftApp, path: String) -> Result<Value, String> {
     let bytes = read(app, &path)?;
-    let r = fileio::open_template(&mut app.session, &path, &bytes, Some(&path)).map_err(|e| e.to_string())?;
+    open_template(app, &path, &bytes, Some(&path))
+}
+
+fn open_template(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value, String> {
+    let r = fileio::open_template(&mut app.session, name, bytes, path).map_err(|e| e.to_string())?;
     opened(app, &r);
     Ok(r)
 }
@@ -664,7 +724,13 @@ pub fn ask_revert(app: &mut VectorcraftApp) -> Result<Value, String> {
     (c.enabled)(&app.session)?;
     let name = app.session.active().map(|d| d.title()).unwrap_or_default();
     let message = crate::i18n::fmt(tl!("Revert to the saved version of “{name}”?"), &[("name", &name)]);
-    dialogs::confirm::ask(app, &message, tl!("Changes made since it was last saved will be lost."), "file.revert", json!({ "confirmed": true }));
+    dialogs::confirm::ask_in_document(
+        app,
+        &message,
+        tl!("Changes made since it was last saved will be lost."),
+        "file.revert",
+        json!({ "confirmed": true }),
+    );
     Ok(json!({ "pending": dialogs::confirm::KIND }))
 }
 

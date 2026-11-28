@@ -44,11 +44,15 @@ const INSIDE_TOL: f64 = 1e-6;
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
+/// The warning about how distorted images are written.
+pub(crate) const DISTORTED_IMAGES_NOTE: &str = DISTORTED_IMAGES;
 
 /// A stroke as a pen draws it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Pen {
     pub rgb: [u8; 3],
+    /// The solid paint `rgb` comes from (`None`: a gradient's or pattern's one colour).
+    pub paint: Option<Paint>,
     /// Points.
     pub width: f64,
     pub cap: LineCap,
@@ -65,6 +69,8 @@ pub(crate) enum Op {
         path: BezPath,
         rule: FillRule,
         rgb: [u8; 3],
+        /// The solid paint `rgb` comes from (`None`: a gradient's or pattern's one colour).
+        paint: Option<Paint>,
     },
     Stroke {
         path: BezPath,
@@ -102,6 +108,11 @@ fn first_solid(n: &Node) -> Option<vectorcraft_color::Color> {
         _ => None,
     });
     own.or_else(|| n.children().into_iter().flatten().find_map(|c| first_solid(c)))
+}
+
+/// `p` when it is a solid paint.
+fn solid(p: &Paint) -> Option<Paint> {
+    matches!(p, Paint::Solid { .. }).then(|| p.clone())
 }
 
 fn q(v: f32) -> u8 {
@@ -167,6 +178,18 @@ impl<'a> Scene<'a> {
             self.ops.push(Op::Unclip);
         }
         (self.ops, self.warnings)
+    }
+
+    /// The operations of each top-level layer of the document, in its paint order, and the
+    /// warnings. Unlike [`Scene::run`], nothing is clipped to the region.
+    pub fn run_by_layer(mut self) -> (Vec<Vec<Op>>, Vec<String>) {
+        let doc = self.doc;
+        let mut layers = Vec::with_capacity(doc.layers.len());
+        for l in &doc.layers {
+            self.node(l, false);
+            layers.push(std::mem::take(&mut self.ops));
+        }
+        (layers, self.warnings)
     }
 
     fn warn(&mut self, w: &str) {
@@ -397,7 +420,7 @@ impl<'a> Scene<'a> {
     fn flat_fill(&mut self, bp: &BezPath, rule: FillRule, paint: &Paint, opacity: f32) {
         let Some(rgb) = self.flat(paint) else { return };
         self.check_opacity(opacity);
-        self.ops.push(Op::Fill { path: bp.clone(), rule, rgb });
+        self.ops.push(Op::Fill { path: bp.clone(), rule, rgb, paint: solid(paint) });
     }
 
     /// One colour for a paint: a solid colour, the average of a gradient's stops, or a pattern's
@@ -485,7 +508,15 @@ impl<'a> Scene<'a> {
         }
         let Some(rgb) = self.flat(&st.paint) else { return };
         self.check_opacity(st.opacity);
-        let pen = Pen { rgb, width: st.width, cap: st.cap, join: st.join, miter: st.miter_limit, dash: st.dash.clone().filter(|d| d.is_dashed()) };
+        let pen = Pen {
+            rgb,
+            paint: solid(&st.paint),
+            width: st.width,
+            cap: st.cap,
+            join: st.join,
+            miter: st.miter_limit,
+            dash: st.dash.clone().filter(|d| d.is_dashed()),
+        };
         self.ops.push(Op::Stroke { path: bp.clone(), pen });
     }
 
@@ -601,7 +632,7 @@ fn merge_tiles(ops: &mut Vec<Op>, starts: &[usize]) -> bool {
     if shape.is_empty() || !rest.iter().all(same) {
         return false;
     }
-    let mut merged: Vec<Op> = shape.iter().map(|(_, rule, rgb)| Op::Fill { path: BezPath::new(), rule: *rule, rgb: *rgb }).collect();
+    let mut merged: Vec<Op> = shape.iter().map(|(_, rule, rgb)| Op::Fill { path: BezPath::new(), rule: *rule, rgb: *rgb, paint: None }).collect();
     for tile in &tiles {
         for (op, (path, _, _)) in merged.iter_mut().zip(tile) {
             if let Op::Fill { path: all, .. } = op {
@@ -630,7 +661,7 @@ fn plain_fills(ops: &[Op]) -> Option<Vec<(BezPath, FillRule, [u8; 3])>> {
     inner
         .iter()
         .map(|op| match op {
-            Op::Fill { path, rule, rgb } => Some((path.clone(), *rule, *rgb)),
+            Op::Fill { path, rule, rgb, .. } => Some((path.clone(), *rule, *rgb)),
             _ => None,
         })
         .collect()
@@ -741,9 +772,11 @@ mod merge_tests {
     #[test]
     fn a_clip_that_cuts_its_fill_is_kept() {
         let clip = Op::Clip { path: poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero };
-        let past = Op::Fill { path: poly(&[(0.0, 0.0), (12.0, 0.0), (12.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0] };
+        let past =
+            Op::Fill { path: poly(&[(0.0, 0.0), (12.0, 0.0), (12.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0], paint: None };
         assert!(plain_fills(&[clip.clone(), past, Op::Unclip]).is_none());
-        let within = Op::Fill { path: poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0] };
+        let within =
+            Op::Fill { path: poly(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]), rule: FillRule::NonZero, rgb: [255, 0, 0], paint: None };
         assert_eq!(plain_fills(&[clip, within, Op::Unclip]).map(|f| f.len()), Some(1));
     }
 }
