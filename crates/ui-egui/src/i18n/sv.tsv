@@ -1570,7 +1570,7 @@ font-technology	Variable	Variabla
 	Draw Filled Lines	Rita fyllda linjer
 	Line Width	Linjebredd
 	Tick Values	Skalstrecksvärden
-	Override Calculated Values	Åsidosätt beräknade värden
+	Override Calculated Values	Ändra beräknade värden lokalt
 	Divisions	Indelningar
 	Tick Marks	Skalstreck
 	Tick Marks per Division	Skalstreck per indelning
@@ -2851,7 +2851,7 @@ font-technology	Variable	Variabla
 	Preserve RGB Numbers	Bevara RGB-värden
 	Device to Simulate:	Enhet att simulera:
 	Simulate Paper Color	Simulera pappersfärg
-	Simulate Black Ink	Simulera svart bläck
+	Simulate Black Ink	Simulera svart tryckfärg
 	Load…	Läs in…
 	Preserve Editing Capabilities	Bevara redigeringsmöjligheter
 	Preserve editing capabilities	Bevara redigeringsmöjligheter
@@ -3258,7 +3258,7 @@ digits	Malayalam	Malayalam
 	Shows a tip when the pointer rests on a button or field that has one.	Visar ett tips när pekaren vilar på en knapp eller ett fält som har ett.
 	Shows a warning before a script you choose runs.	Visar en varning innan ett skript som du väljer körs.
 	Smooths the edges of artwork on the canvas.	Jämnar ut kanterna på grafiken på arbetsytan.
-	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Markera › Samma › Fyllnadsfärg, Konturfärg och Fyllning och kontur hittar bara samma nyans av ett globalt färgprov eller en dekorfärg, inte vilken nyans som helst av det.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Markera › Samma › Fyllnadsfärg, Konturfärg och Fyllning och kontur hittar bara samma nyans av en global färgruta eller en dekorfärg, inte vilken nyans som helst av den.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Visar startskärmen när inget dokument är öppet; när det är av förblir fönstret tomt tills du klickar på Start.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mäter objekt med deras konturer och formändrande effekter för storlek, position och justering; skuggor, glöd och oskärpa mäts inte.
 	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Vid 100 % zoom fyller en tum av dokumentet en tum av skärmen, eller 96 skärmpunkter om systemet inte anger en användbar skärmstorlek.
@@ -3325,9 +3325,9 @@ digits	Malayalam	Malayalam
 	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Att skriva en listmarkör som 1. eller * och sedan ett blanksteg i början av ett stycke gör stycket till en lista.
 	Fonts in this folder show in the font menus and can be used without being installed.	Typsnitt i den här mappen visas i typsnittsmenyerna och kan användas utan att installeras.
 	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	När en grafikstil tillämpas på text tas teckens egen fyllning eller linje bort där stilen har en, så att stilens färg syns.
-	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Justera och Fördela mäter punkttext efter glyfernas bläck i stället för dess em-ruta.
-	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Justera och Fördela mäter områdestext efter glyfernas bläck i stället för dess ram.
-	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Begränsningsramen och panelen Transformera mäter punkttext efter glyfernas bläck i stället för dess em-ruta.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Justera och Fördela mäter punkttext efter glyfernas tryckfärg i stället för dess em-ruta.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Justera och Fördela mäter områdestext efter glyfernas tryckfärg i stället för dess ram.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Begränsningsramen och panelen Transformera mäter punkttext efter glyfernas tryckfärg i stället för dess em-ruta.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Fäster ritande, flyttning och skalning mot rutnätets underindelningar, även när rutnätet är dolt; medan det är på gäller inte Fäst mot pixel.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Färgen på stödlinjer som inte är markerade; en rityta med en stödlinjeetikett ritar sina egna stödlinjer i etikettens färg.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Ritar stödlinjer som heldragna linjer eller som punkter, även stödlinjer som redan finns i dokumentet.
@@ -3405,7 +3405,7 @@ digits	Malayalam	Malayalam
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	När ett dokument öppnas behåller en länkad EPS-bild som visar sin sparade förhandsvisning den i stället för att läsa EPS-filen igen; ändrade filer följer fortfarande Uppdatera länkar.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	I Pixelförhandsgranskning ritas bilder utjämnade; avstängt visar deras pixlar skarpa kanter. Utanför Pixelförhandsgranskning utjämnas bilder alltid.
 	PDF Text	PDF-text
-	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Texten i en PDF som du öppnar eller bäddar in kommer in som redigerbar text eller som konturlinjer som ser likadana ut på en dator utan dess teckensnitt.
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Texten i en PDF som du öppnar eller bäddar in kommer in som redigerbar text eller som konturlinjer som ser likadana ut på en dator utan dess typsnitt.
 	Linked pages show the file's own text.	Länkade sidor visar filens egen text.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	När en länkad fil ändras läser Automatiskt in den igen, Fråga vid ändring frågar dig först, och Manuellt låter den vara och visar en notis i statusfältet.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	I skrivbordsversionen mappen som Ny från mall… och Spara som mall… börjar i; lämna tom för VectorCraft Templates i din dokumentmapp.
@@ -6002,7 +6002,7 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-biblioteksfärger som teckningen bara lagrar som nummer öppnades som svarta dekorfärger
 @msg	CDR outline arrowheads were left out	pilspetsar på CDR-linjer utelämnades
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-omslag tillämpades inte, och formerna under dem behåller sina konturer
-@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-linser och objekttransparens tillämpades inte, och objekten de ligger på visas ogenomskinliga
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-objektiv och objekttransparens tillämpades inte, och objekten de ligger på visas ogenomskinliga
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	delar av teckningen som är för djupt nästlade eller ligger utanför importgränserna utelämnades
 @msg	damaged parts of the drawing were left out	skadade delar av teckningen utelämnades
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CDR-sidor längre än 163 830 pt öppnades med den längden, och grafik nära deras kanter ligger utanför ritytan
@@ -6012,7 +6012,7 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msg	colors in CMX color models VectorCraft doesn't read were opened as black	färger i CMX-färgmodeller som VectorCraft inte läser öppnades som svarta
 @msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX-biblioteksfärger som filen bara lagrar som nummer öppnades som svarta dekorfärger
 @msg	CMX outline arrowheads were left out	pilspetsar på CMX-linjer utelämnades
-@msg	CMX lenses were not applied	CMX-linser tillämpades inte
+@msg	CMX lenses were not applied	CMX-objektiv tillämpades inte
 @msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CMX-sidor längre än 163 830 pt öppnades med den längden, och grafik nära deras kanter ligger utanför ritytan
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
 @msg	zipped 1-bit PSD image data with prediction can't be read	zippad 1-bitars PSD-bilddata med prediktion kan inte läsas
@@ -6027,8 +6027,8 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msg	{n} type layers came in as pixels: the text isn't editable	{n} textlager kom in som pixlar: texten går inte att redigera
 @msg	1 adjustment layer was not applied	1 justeringslager tillämpades inte
 @msg	{n} adjustment layers were not applied	{n} justeringslager tillämpades inte
-@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 fyllningslager ritades inte (en övertonings- eller mönsterfyllning, en färg som inte kan läsas eller en form som inte lagrar några pixlar)
-@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} fyllningslager ritades inte (en övertonings- eller mönsterfyllning, en färg som inte kan läsas eller en form som inte lagrar några pixlar)
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 fyllningslager ritades inte (en gradient- eller mönsterfyllning, en färg som inte kan läsas eller en form som inte lagrar några pixlar)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} fyllningslager ritades inte (en gradient- eller mönsterfyllning, en färg som inte kan läsas eller en form som inte lagrar några pixlar)
 @msg	the layer effects of 1 layer weren't drawn	lagereffekterna för 1 lager ritades inte
 @msg	the layer effects of {n} layers weren't drawn	lagereffekterna för {n} lager ritades inte
 @msg	the vector masks of 1 layer weren't applied	vektormaskerna för 1 lager tillämpades inte
@@ -8036,7 +8036,7 @@ axis	Y Axis	Y-axel
 	Warped Checks	Förvrängda rutor
 	Pinched Stripes	Klämda ränder
 	Chevron Pulse	Chevronpuls
-	Radiating Lenses	Strålande linser
+	Radiating Lenses	Strålande objektiv
 	Soft Shadow	Mjuk skugga
 	Hard Shadow	Hård skugga
 	Lifted Card	Upplyft kort
@@ -11139,3 +11139,278 @@ digits	Hindi	Hindi
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Redigera original med:
 file-filter	Applications	Program
+	Graphics map onto the Plane, Extrude and Revolve object types.	Grafik mappas på objekttyperna Plan, Extrudera och Rotera runt axel.
+	Drop Script Engine	Ta bort skriptmotor
+	Edit Paragraph Style	Redigera styckestil
+	Edit Profile	Redigera profil
+	List Script Engines	Lista skriptmotorer
+	Map Graphic	Mappa grafik
+	Move Object on Path	Flytta objekt på bana
+	New Document Profiles	Profiler för nytt dokument
+	Select Object on Path	Markera objekt på bana
+@msg	angle and roundness must be finite	vinkel och rundhet måste vara ändliga
+@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	kolumn {column}: `{cell}` är en `%`-kolumn i diagramdatafiler, som inte läses
+@msg	composer must be "singleLine" or "everyLine"	composer måste vara "singleLine" eller "everyLine"
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	okänd OpenType-funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefixet - stänger av; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom och aalt tar numret på ett alternativ som `tag=N` med N från 0 till {_1}, som `salt=2`)
+@msg	`style` must be "pencil" or "brush", not {v}	`style` måste vara "pencil" eller "brush", inte {v}
+@msg	commands[{i}]: `prefs.import` runs on its own, not as a batch step	commands[{i}]: `prefs.import` körs för sig, inte som ett batchsteg
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	utsparningsgrupper med för många överlappande genomskinliga element skrivs som PDF-utsparningsgrupper: deras genomskinliga element sparar ut allt de täcker helt
+@msg	no pattern `{pat}`	inget mönster `{pat}`
+@msg	plugin.remove: {_1}: {e}: nothing was removed	plugin.remove: {_1}: {e}: ingenting togs bort
+@msg	the plug-in store can't be locked	pluginförrådet kan inte låsas
+@msg	{C}: {_1}: {e}: nothing was installed	{C}: {_1}: {e}: ingenting installerades
+@msg	{EXPORT_SELECTION} must be true or false, not {v}	{EXPORT_SELECTION} måste vara true eller false, inte {v}
+	Automatic Plane Positioning	Automatisk planplacering
+	Emboss	Relief
+	Glow	Glöd
+	Heavy Blur	Kraftig oskärpa
+	Rough Edges	Ojämna kanter
+	Soft Blur	Mjuk oskärpa
+	Thicken	Förtjocka
+	Thin	Tunn
+	Anchor Point of Perspective Artwork	Ankarpunkt i perspektivbildmaterial
+	Intersection of Gridlines	Stödlinjernas skärningspunkt
+@msg	`artboard` must be a whole number	`artboard` måste vara ett heltal
+@msg	`artboard` must be an artboard's index	`artboard` måste vara index för en rityta
+@msg	`artboards` must contain whole numbers	`artboards` får bara innehålla heltal
+@msg	`glyphForm` must be one of {_1}	`glyphForm` måste vara en av {_1}
+@msg	`index` must be the index of an applied SVG filter	`index` måste vara index för ett tillämpat SVG-filter
+@msg	`{key}` must be a list of artboard indices	`{key}` måste vara en lista med ritytsindex
+@msg	`{key}` must be a non-empty list of artboard indices	`{key}` måste vara en icke-tom lista med ritytsindex
+@msg	`{key}` must be from 0 to {max} pt	`{key}` måste vara från 0 till {max} pt
+@msg	`{key}` must contain whole numbers	`{key}` får bara innehålla heltal
+@msg	`{k}` isn't an export setting: {_1}, openLocation	`{k}` är inte en exportinställning: {_1}, openLocation
+@msg	a document holds at most {_1} SVG filters, and applying a default filter adds it	ett dokument rymmer högst {_1} SVG-filter, och ett standardfilter läggs till när du använder det
+@msg	a new document has no artboard	ett nytt dokument har ingen rityta
+@msg	can't open `{_1}`: not a PDF	kan inte öppna `{_1}`: inte en PDF
+@msg	linkPages can't be used with textAs: outlines: linked pages show the file's own type	linkPages kan inte användas med textAs: outlines: länkade sidor visar filens egen text
+@msg	linkPages can't open a file with a password: linked pages are read again without it	linkPages kan inte öppna en fil med lösenord: länkade sidor läses in igen utan det
+@msg	linkPages must be true or false	linkPages måste vara true eller false
+@msg	linkPages needs the file's path: linked pages are read from it	linkPages behöver filens sökväg: länkade sidor läses in från den
+@msg	linkPages: `{file}` is over {_1} MB	linkPages: `{file}` är större än {_1} MB
+@msg	linkPages: `{file}` isn't a PDF or a PDF-compatible .ai file	linkPages: `{file}` är inte en PDF eller en PDF-kompatibel .ai-fil
+@msg	no selected object fits on the sheet	inget markerat objekt får plats på arket
+@msg	select at most {MAX_SHAPES} objects to nest	markera högst {MAX_SHAPES} objekt att nästla
+@msg	sort `{x}`: name, kind, status or size	sort `{x}`: name, kind, status eller size
+@msg	the margin leaves no room on the sheet	marginalen lämnar inget utrymme på arket
+@msg	the selection has nothing to nest	markeringen har inget att nästla
+@msg	the {_1} file holds no records	{_1}-filen innehåller inga poster
+@msg	the {_1} header is damaged	filhuvudet i {_1} är skadat
+@msg	there is no artboard for the sheet	det finns ingen rityta för arket
+@msg	there is no artboard {i}	det finns ingen rityta {i}
+@msg	{name} is a default SVG filter, and the document holds no copy of it to delete	{name} är ett standard-SVG-filter, och dokumentet har ingen kopia av det att radera
+@msg	`{key}` must be a number from 0 to 1	`{key}` måste vara ett tal från 0 till 1
+@msg	data set `{name}` holds a graph value for `{var}` with {_1}	datauppsättningen `{name}` har ett diagramvärde för `{var}` med {_1}
+@msg	data set `{name}` holds a graph value for `{var}` without rows or series	datauppsättningen `{name}` har ett diagramvärde för `{var}` utan rader eller serier
+@msg	data set `{name}` holds an image value for `{var}` that isn't a file's absolute path	datauppsättningen `{name}` har ett bildvärde för `{var}` som inte är en fils absoluta sökväg
+@msg	data set `{set}` holds a graph value for `{var}` longer than {MAX_GRAPH_CSV} bytes	datauppsättningen `{set}` har ett diagramvärde för `{var}` som är längre än {MAX_GRAPH_CSV} byte
+@msg	data set `{set}` holds a graph value for `{var}` with {_1}	datauppsättningen `{set}` har ett diagramvärde för `{var}` med {_1}
+@msg	data set `{set}` holds a value for `{_1}` that isn't {what}	datauppsättningen `{set}` har ett värde för `{_1}` som inte är {what}
+@msg	data set `{set}` holds a value for `{var}` that isn't a graph's `data` element	datauppsättningen `{set}` har ett värde för `{var}` som inte är ett diagrams `data`-element
+@msg	match applies only with scope {scopes}	match gäller bara med scope {scopes}
+@msg	match must be a paint as the document stores it	match måste vara en färgsättning i den form dokumentet lagrar den
+@msg	scope applies to a click: leave out points	scope gäller ett klick: utelämna points
+@msg	scope must be "one", "connected" or "samePaint"	scope måste vara "one", "connected" eller "samePaint"
+@msg	variable `{_1}` starts or ends with white space or holds a control character, which a variable library can't hold	variabeln `{_1}` börjar eller slutar med blanktecken eller innehåller ett styrtecken, vilket ett variabelbibliotek inte kan lagra
+	Set Panel View	Ange panelvy
+@msg	`panel` is swatches, graphicStyles or symbols	`panel` är swatches, graphicStyles eller symbols
+@msg	`showImportOptions` must be true or false	`showImportOptions` måste vara true eller false
+@msg	`start` is a number up to 1 (below 0: before an open path's start)	`start` är ett tal upp till 1 (under 0: före början av en öppen bana)
+@msg	the character at byte {start} is not drawn: it falls before its path's start	tecknet vid byte {start} ritas inte: det hamnar före banans början
+@msg	unknown `by` "{name}": expected one of {_1}	okänt `by` "{name}": förväntade ett av {_1}
+@msg	{mode_key} is one of {ERASER_MODES}, not `{id}`	{mode_key} är ett av {ERASER_MODES}, inte `{id}`
+@msg	{mode_key} is one of {ERASER_MODES}, not {other}	{mode_key} är ett av {ERASER_MODES}, inte {other}
+@msg	{var_key} must be 0 or more	{var_key} måste vara 0 eller mer
+@msg	{var_key} must be at most {most}	{var_key} måste vara högst {most}
+	Show Hidden Panels at Edge	Visa dolda paneler vid kanten
+@msg	`anchor` must be a [subpath, anchor] pair	`anchor` måste vara ett par [subpath, anchor]
+@msg	`anchor` needs `id`, the path the point is on	`anchor` behöver `id`, banan som punkten ligger på
+@msg	`side` must be left, right or null	`side` måste vara left, right eller null
+@msg	`{_1}`: U+{_2} is a control character or past U+FFFF	`{_1}`: U+{_2} är ett kontrolltecken eller ligger efter U+FFFF
+@msg	`{_1}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters	`{_1}`: en teckenuppsättning rymmer högst {CUSTOM_CHARS_MAX} tecken
+@msg	`{code}` is not a code from U+0000 to U+FFFF	`{code}` är inte en kod från U+0000 till U+FFFF
+@msg	`{font}`: `{name}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters	`{font}`: `{name}`: en teckenuppsättning rymmer högst {CUSTOM_CHARS_MAX} tecken
+@msg	`{font}`: `{name}`: characters must be a string	`{font}`: `{name}`: characters måste vara en sträng
+@msg	`{font}`: `{name}`: {e}	`{font}`: `{name}`: {e}
+@msg	`{font}`: each character set must be {{name, characters, font…}}	`{font}`: varje teckenuppsättning måste vara {{name, characters, font…}}
+@msg	`{font}`: each character set needs a name	`{font}`: varje teckenuppsättning behöver ett namn
+@msg	`{font}`: unknown key `{k}` in a character set	`{font}`: okänd nyckel `{k}` i en teckenuppsättning
+@msg	`{name}` can't name a character set	`{name}` kan inte användas som namn på en teckenuppsättning
+@msg	`{name}`: U+{code} is a control character or past U+FFFF	`{name}`: U+{code} är ett kontrolltecken eller ligger efter U+FFFF
+@msg	`{name}`: U+{code} is listed twice	`{name}`: U+{code} finns två gånger
+@msg	`{name}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters	`{name}`: en teckenuppsättning rymmer högst {CUSTOM_CHARS_MAX} tecken
+@msg	`{name}`: a composite font keeps at most {CUSTOM_SETS_MAX} character sets	`{name}`: ett komposittypsnitt rymmer högst {CUSTOM_SETS_MAX} teckenuppsättningar
+@msg	`{name}`: custom must be a list of character sets	`{name}`: custom måste vara en lista med teckenuppsättningar
+@msg	`{raw}` can't name a character set (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan inte vara namn på en teckenuppsättning (1 till {COMPOSITE_NAME_MAX} tecken, inga styrtecken)
+@msg	a composite font keeps at most {CUSTOM_SETS_MAX} character sets	ett sammansatt typsnitt rymmer högst {CUSTOM_SETS_MAX} teckenuppsättningar
+@msg	anchor [{_1}, {_2}] of object {id} is not a selected anchor point	ankare [{_1}, {_2}] i objekt {id} är inte en markerad ankarpunkt
+@msg	give `anchor` or `guide`, not both	ange `anchor` eller `guide`, inte båda
+@msg	missing `newName` or `kind`	`newName` eller `kind` saknas
+@msg	no character set	ingen teckenuppsättning
+@msg	no panels are docked on the {_1} side	inga paneler är dockade på sidan {_1}
+@msg	select another anchor point to align to the key anchor	markera en annan ankarpunkt att justera mot nyckelankaret
+@msg	the RGB policy can't be {_1}	RGB-principen kan inte vara {_1}
+@msg	the composite fonts make a file larger than 4 MB, which Import can't read; export fewer of them	de sammansatta typsnitten ger en fil som är större än 4 MB, vilket Importera inte kan läsa; exportera färre av dem
+@msg	the panels are not hidden	panelerna är inte dolda
+@msg	the place cursor that asked for these import options is no longer loaded	placeringsmarkören som bad om dessa importalternativ är inte längre inläst
+@msg	two character sets are named `{name}`	två teckenuppsättningar heter `{name}`
+@msg	unknown key `{k}`; a font takes name, parts and custom	okänd nyckel `{k}`; ett typsnitt tar name, parts och custom
+@msg	{label} failed: {e}	{label} misslyckades: {e}
+	Glyph Categories	Glyfkategorier
+	Import Metadata Template…	Importera metadatamall…
+	Metadata Templates	Metadatamallar
+	PSD Info	PSD-info
+	Limit to Library	Begränsa till bibliotek
+	Pick from Swatches	Välj från färgrutor
+@msg	`baseAlong` must be one of x, y	`baseAlong` måste vara x eller y
+@msg	`family` must be a string	`family` måste vara en sträng
+@msg	`from.byte` is past the end of {id}'s text	`from.byte` ligger efter slutet av texten i {id}
+@msg	`from.byte` must be a whole number	`from.byte` måste vara ett heltal
+@msg	`from.id` must be a type object's id	`from.id` måste vara id för ett textobjekt
+@msg	`from.id` {id} is not a type object	`from.id` {id} är inte ett textobjekt
+@msg	`from.id` {id} is not one of the type objects checked	`from.id` {id} är inte ett av de kontrollerade textobjekten
+@msg	`from` must be {{id, byte}}	`from` måste vara {{id, byte}}
+@msg	`from` takes id and byte, not `{k}`	`from` tar id och byte, inte `{k}`
+@msg	`limit` must be a whole number from 1 to {MAX_SIMILAR}	`limit` måste vara ett heltal från 1 till {MAX_SIMILAR}
+@msg	`lineWidth` must be a number, not {w}	`lineWidth` måste vara ett tal, inte {w}
+@msg	`lineWidth` must be from {min} to {max} pt, not {w}	`lineWidth` måste vara från {min} till {max} pt, inte {w}
+@msg	`max` must be 1 to {MAX_WORDS}	`max` måste vara 1 till {MAX_WORDS}
+@msg	`reference` must be a whole number from 0 to 8	`reference` måste vara ett heltal från 0 till 8
+@msg	`ringSeed` must be below 2^53, not {r}	`ringSeed` måste vara under 2^53, inte {r}
+@msg	`source` is the only path, line or label that graph group `target` stands for	`source` är den enda bana, linje eller etikett som diagramgruppen `target` står för
+@msg	`tolerance` must be from {_1} to {_2} pt	`tolerance` måste vara från {_1} till {_2} pt
+@msg	`words` must be a list of {{id, start, end}}	`words` måste vara en lista med {{id, start, end}}
+@msg	`{key}` must be from 0 to {max}, not {n}	`{key}` måste vara från 0 till {max}, inte {n}
+@msg	`{name}` already carries the {_1} role	`{name}` har redan rollen {_1}
+@msg	`{var_key}` must be from {_1} to {most}	`{var_key}` måste vara från {_1} till {most}
+@msg	a slice's text has more than the {MAX_SLICE_TEXT} characters a PSD file holds	texten i en skiva har fler än de {MAX_SLICE_TEXT} tecken som en PSD-fil rymmer
+@msg	a word's `id` must be a type object's id	ett ords `id` måste vara id för ett textobjekt
+@msg	a word's `{k}` must be a whole number	ett ords `{k}` måste vara ett heltal
+@msg	alignToPixelGrid must be true or false	alignToPixelGrid måste vara true eller false
+@msg	an image is too large to draw	en bild är för stor för att ritas
+@msg	byColor needs the seam fills' group under every path: move it to the bottom or delete it	byColor kräver att gruppen med skarvfyllningar ligger under alla banor: flytta den längst ned eller radera den
+@msg	cannot apply brush `{name}`: path has no stroke	kan inte använda penseln `{name}`: banan har ingen kontur
+@msg	duplicate attribute `{key}`	dubblerat attribut `{key}`
+@msg	duplicate expanded attribute `{key}`	dubblerat expanderat attribut `{key}`
+@msg	each of `words` must be {{id, start, end}}	varje post i `words` måste vara {{id, start, end}}
+@msg	each of `words` takes id, start and end, not `{k}`	varje post i `words` tar id, start och end, inte `{k}`
+@msg	give `points` or `rect`, not both	ange `points` eller `rect`, inte båda
+@msg	image is too large to draw	bilden är för stor för att ritas
+@msg	importSlices must be true or false	importSlices måste vara true eller false
+@msg	invalid 16-bit pixel buffer	ogiltig 16-bitars pixelbuffert
+@msg	invalid 8-bit pixel buffer	ogiltig 8-bitars pixelbuffert
+@msg	missing `swatch`	`swatch` saknas
+@msg	pdfs `single` writes artboards as the pages of one PDF: assets, layers and selection `each` write a PDF each	pdfs `single` skriver ritytor som sidorna i en enda PDF: assets, layers och selection `each` skriver en PDF var
+@msg	preserveText writes type layers: it needs layers: true	preserveText skriver textlager: det kräver layers: true
+@msg	rect is [x, y, width, height] in points, with a width and a height above 0	rect är [x, y, width, height] i punkter, med en bredd och en höjd över 0
+@msg	select a path that is neither locked nor hidden: text, images and symbol instances can't have a fold line role	markera en bana som varken är låst eller dold: text, bilder och symbolinstanser kan inte ha rollen viklinje
+@msg	slice {number} has no finite bounds and can't be written to PSD	skiva {number} har inga ändliga gränser och kan inte skrivas till PSD
+@msg	style `{style}` of `{family}` is not available	stilen `{style}` i `{family}` är inte tillgänglig
+@msg	the decoded samples don't fit the image	de avkodade samplen passar inte bilden
+@msg	the document has {count} slices, more than the {MAX_SLICES} a PSD file holds	dokumentet har {count} skivor, fler än de {MAX_SLICES} som en PSD-fil rymmer
+@msg	the document it was dropped on was closed	dokumentet det drogs till har stängts
+@msg	the document it was dropped on was reverted	dokumentet det drogs till har återställts
+@msg	the document was switched	dokumentet byttes
+@msg	the image is too large to change	bilden är för stor för att ändras
+@msg	the image is too large to draw	bilden är för stor för att ritas
+@msg	the lines and labels in graph group {_1} have different appearance rows: pass `aligned: true` or their ids	linjerna och etiketterna i diagramgrupp {_1} har olika utseenderader: ange `aligned: true` eller deras id:n
+@msg	the slices are too large for PSD (at most 4 GB)	skivorna är för stora för PSD (högst 4 GB)
+@msg	through applies to scope "connected"	through gäller scope "connected"
+@msg	through must be an array of at most 4096 edge ids	through måste vara en array med högst 4096 kant-id:n
+@msg	through: {id} is not an edge of {g}, or is given twice	through: {id} är inte en kant i {g} eller anges två gånger
+@msg	too many in-scope namespace declarations	för många namnrymdsdeklarationer i omfånget
+@msg	unknown role `{id}`: cut, crease, partialCut or perforation	okänd roll `{id}`: cut, crease, partialCut eller perforation
+@msg	unknown role `{id}`: cut, crease, partialCut, perforation or none	okänd roll `{id}`: cut, crease, partialCut, perforation eller none
+@msg	words of {_1} overlap at byte {a}	ord i {_1} överlappar vid byte {a}
+@msg	{_1} is not a type object	{_1} är inte ett textobjekt
+@msg	{a}..{b} is not a word of {_1}'s text	{a}..{b} är inte ett ord i texten i {_1}
+@msg	{label}: the clipping masks hide the selected art	{label}: klippmaskerna döljer den markerade grafiken
+@msg	{path}: invalid pixel buffer	{path}: ogiltig pixelbuffert
+@msg	{why} (the {_1} role's swatch; addon.packaging.setRoleSwatch picks another)	{why} (färgrutan för rollen {_1}; addon.packaging.setRoleSwatch väljer en annan)
+@msg	{w} × {h} pixels take {rgba} bytes as RGBA	{w} × {h} pixlar tar {rgba} byte som RGBA
+	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	När Zooma med mushjulet är avstängt rullar mushjulet arbetsytan i sidled medan du håller ned Cmd/Ctrl.
+	Active Artboard Only	Endast aktiv rityta
+	Brush Options	Penselalternativ
+	Change to:	Ändra till:
+	Checks update after edits. Linked files are rechecked every two seconds.	Kontrollerna uppdateras efter redigeringar. Länkade filer kontrolleras om varannan sekund.
+	Clean Up	Rensa upp
+	Create Gradient Mesh	Skapa gradientnät
+	Delete Brushes	Radera penslar
+	Devanagari	Devanagari
+	Duplicate Brushes	Duplicera penslar
+	Duplicate Graphic Styles	Duplicera grafikstilar
+	Eyedropper: click the source image to sample the ignored color	Pipett: klicka i källbilden för att sampla färgen som ska ignoreras
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Från och med nästa start ritar systemet fönstrets namnlist där VectorCraft annars skulle rita sin egen.
+	Gurmukhi	Gurmukhi
+	Image Resolution	Bildupplösning
+	Image resolution is below the minimum	Bildupplösningen är under minimum
+	Linked file changed; update it before delivery	Den länkade filen har ändrats; uppdatera den före leverans
+	Linked file is missing	Den länkade filen saknas
+	Minimum PPI:	Minsta PPI:
+	Missing font style; closest style will be used	Teckenstilen saknas; närmaste stil används
+	Missing font; fallback will be used	Typsnittet saknas; ett reservtypsnitt används
+	Needs attention	Kräver åtgärd
+	New Layer	Nytt lager
+	New Sublayer	Nytt underlager
+	Not checked	Inte kontrollerad
+	Not in Dictionary:	Finns inte i ordlistan:
+	Passed	Godkänd
+	Preflight could not complete	Preflight kunde inte slutföras
+	Preflight updates when the edit finishes.	Preflight uppdateras när redigeringen är klar.
+	Raster resolution: {line_ppi} ppi line art and text, {grad_ppi} ppi gradient and mesh	Rasterupplösning: {line_ppi} ppi för streckteckning och text, {grad_ppi} ppi för gradienter och nät
+	Recheck	Kontrollera igen
+	Resolution inside resource art or placed documents is not checked.	Upplösningen i resursgrafik eller placerade dokument kontrolleras inte.
+	Select and zoom to affected artwork	Markera och zooma till berört bildmaterial
+	Some affected artwork could not be selected. Unlock it or its artboard, or leave isolation mode, then try again.	En del berört bildmaterial kunde inte markeras. Lås upp det eller dess rityta, eller lämna isoleringsläget, och försök sedan igen.
+	Suggestions:	Förslag:
+	Text Overflow	Textöverflöde
+	Text past the frame will be left out	Text utanför ramen utelämnas
+	The spell check is complete.	Stavningskontrollen är klar.
+	These checks do not certify an exported file.	De här kontrollerna certifierar inte en exporterad fil.
+@msg	\ at end of pattern	\ i slutet av mönstret
+@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` måste vara ett objekt med axeltaggar och värden, till exempel {"wght"}
+@msg	`items` is a list of {kind, item}	`items` är en lista med {kind, item}
+@msg	`items` must be a list of {id, points}	`items` måste vara en lista med {id, points}
+@msg	`items` must be an array of {id, anchors}	`items` måste vara en array av {id, anchors}
+@msg	`{GRAPHICS}` face must be front or back	face i `{GRAPHICS}` måste vara front eller back
+@msg	a \u escape needs four hexadecimal digits	en \u-escapesekvens kräver fyra hexadecimala siffror
+@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout måste vara {layout?, columns?, spacing?, rightToLeft?}
+@msg	each format is an object {format, scale?, suffix?}	varje format är ett objekt {format, scale?, suffix?}
+@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	varje post i `fonts` är {family, style?}; 1 till 1000 stycken
+@msg	each of `items` is {kind, item}	varje post i `items` är {kind, item}
+@msg	files must be {name, dataBase64}	files måste vara {name, dataBase64}
+@msg	give `matches`: [{kind, name, target}]	ange `matches`: [{kind, name, target}]
+@msg	give the settings to change, e.g. {"formats"}]}	ange inställningarna som ska ändras, t.ex. {"formats"}]}
+@msg	give {key, value} or {values}	ange {key, value} eller {values}
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafik placeras på plana sidor: använd objekttypen Extrudera eller Plan
+@msg	knockout groups with brushed strokes over other translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	utsparningsgrupper med penselkonturer över andra genomskinliga element skrivs som PDF-utsparningsgrupper: deras genomskinliga element sparar ut allt de täcker helt
+@msg	missing `map` (rows [{from, to}] or {current})	`map` saknas (rader [{from, to}] eller {current})
+@msg	not an RTF file: it doesn't start with {\\rtf	inte en RTF-fil: den börjar inte med {\\rtf
+@msg	not an RTF file: it doesn't start with {\rtf	inte en RTF-fil: den börjar inte med {\rtf
+@msg	quotes must be {double?, single?}	quotes måste vara {double?, single?}
+@msg	Script file dialogs are not available	Fildialogrutor för skript är inte tillgängliga
+@msg	Script file writing is not available	Skrivning av skriptfiler är inte tillgänglig
+@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text måste vara {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}
+@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: ange {path} eller {name, dataBase64} för en bildfil, eller en textur så som effect.list anger den
+@msg	unknown parameter `{within}settings.{format}`; {why}	okänd parameter `{within}settings.{format}`; {why}
+arrowhead	Target	Måltavla
+	Delete Effect	Ta bort effekt
+	Delete Effects	Ta bort effekter
+	Delete Fill	Ta bort fyllning
+	Delete Items	Ta bort objekt
+	Delete Stroke	Ta bort kontur
+	Duplicate Fill	Duplicera fyllning
+	Duplicate Items	Duplicera objekt
+	Duplicate Set	Duplicera uppsättning
+	Duplicate Stroke	Duplicera kontur
+	Edit Effect…	Redigera effekt…
+	Export Asset…	Exportera resurs…
+	Export {count} Assets…	Exportera {count} resurser…
+	Hide Effect	Dölj effekt
+	Hide Fill	Dölj fyllning
+	Hide Stroke	Dölj kontur
+	Remove {count} Assets	Ta bort {count} resurser
+	Select Artwork on Canvas	Markera bildmaterial på arbetsytan
+	Show Effect	Visa effekt
+	Show Fill	Visa fyllning
+	Show Stroke	Visa kontur
