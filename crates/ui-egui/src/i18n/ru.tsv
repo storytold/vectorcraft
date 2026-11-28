@@ -2675,6 +2675,9 @@ file-filter	Templates	Шаблоны
 	Only Web Colors	Только web-цвета
 	Opacity	Непрозрачность
 	Show Opacity	Показать непрозрачность
+	Show Hex Field	Показать поле hex
+	Hex or CSS color	Цвет hex или CSS
+	Parse Color	Разобрать цвет
 	Opacity & Mask Define Knockout Shape	Непрозрачность и маска определяют форму вырезания
 	Opacity Mask	Непрозрачная маска
 	Opacity Mask Info	Сведения о непрозрачной маске
@@ -5291,6 +5294,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` должно быть hue, saturation, brightness, red, green или blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` должен быть none, oklch или hsl
 @msg	OKLCH needs sRGB as the working RGB space	Для OKLCH рабочим пространством RGB должно быть sRGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` должно быть цветом hex (#rgb, #rgba, #rrggbb или #rrggbbaa) или цветом CSS rgb(), hsl() или oklch() длиной не более 48 символов
 @msg	`{k}` must be [x, y]	`{k}` должно быть [x, y]
 @msg	`{name}` has no options	`{name}` не имеет параметров
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` — встроенная рабочая среда; выберите другое имя

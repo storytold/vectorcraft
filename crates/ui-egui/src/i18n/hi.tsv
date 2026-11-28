@@ -3747,6 +3747,9 @@ arrowhead	Feather	पंख
 	Only Web Colors	केवल वेब रंग
 	Opacity	ओपेसिटी
 	Show Opacity	ओपेसिटी दिखाएँ
+	Show Hex Field	हेक्स फ़ील्ड दिखाएँ
+	Hex or CSS color	हेक्स या CSS रंग
+	Parse Color	रंग पार्स करें
 	Opacity & Mask Define Knockout Shape	ओपेसिटी एंड मास्क डिफ़ाइन नॉकआउट शेप
 	Opacity Mask	ओपेसिटी मास्क
 	Opacity Mask Info	ओपेसिटी मास्क की जानकारी
@@ -7192,6 +7195,7 @@ arrowhead	Feather	पंख
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` को hue, saturation, brightness, red, green या blue होना चाहिए
 @msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch या hsl होना चाहिए
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH के लिए वर्किंग RGB स्पेस sRGB होना चाहिए
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` एक हेक्स रंग (#rgb, #rgba, #rrggbb या #rrggbbaa) या अधिकतम 48 वर्णों का CSS rgb(), hsl() या oklch() रंग होना चाहिए
 @msg	`mode` must be one of {_1}	`mode` को {_1} में से एक होना चाहिए
 @msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" या "lineEndHalf" होना चाहिए।
 @msg	`name` is empty	`name` खाली है

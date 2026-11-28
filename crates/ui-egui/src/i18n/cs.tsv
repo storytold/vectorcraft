@@ -522,6 +522,9 @@
 	Fill Color	Barva výplně
 	Opacity	Krytí
 	Show Opacity	Zobrazit krytí
+	Show Hex Field	Zobrazit pole hex
+	Hex or CSS color	Barva hex nebo CSS
+	Parse Color	Analyzovat barvu
 	Stroke Color	Barva tahu
 	Fill Gradient	Přechod výplně
 	Stroke Gradient	Přechod tahu
@@ -5578,6 +5581,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musí být hue, saturation, brightness, red, green nebo blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` musí být none, oklch nebo hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH vyžaduje sRGB jako pracovní prostor RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` musí být barva hex (#rgb, #rgba, #rrggbb nebo #rrggbbaa) nebo barva CSS rgb(), hsl() nebo oklch() o nejvýše 48 znacích
 @msg	`{k}` must be [x, y]	`{k}` musí být [x, y]
 @msg	`{name}` has no options	`{name}` nemá žádné možnosti
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` je vestavěný pracovní prostor; zvolte jiný název

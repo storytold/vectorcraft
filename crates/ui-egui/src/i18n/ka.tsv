@@ -2656,6 +2656,9 @@
 	Fill Color	შევსების ფერი
 	Opacity	გაუმჭვირვალობა
 	Show Opacity	გაუმჭვირვალობის ჩვენება
+	Show Hex Field	Hex ველის ჩვენება
+	Hex or CSS color	Hex ან CSS ფერი
+	Parse Color	ფერის გარჩევა
 	Stroke Color	კონტურის ფერი
 	Fill Gradient	შევსების გრადიენტი
 	Stroke Gradient	კონტურის გრადიენტი
@@ -8879,6 +8882,7 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` უნდა იყოს hue, saturation, brightness, red, green ან blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` უნდა იყოს none, oklch ან hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` უნდა იყოს hex ფერი (#rgb, #rgba, #rrggbb ან #rrggbbaa) ან CSS ფერი rgb(), hsl() ან oklch(), არაუმეტეს 48 სიმბოლოსი
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	ეს PostScript ფაილია (ძველ ფორმატში ან PDF-თან თავსებადობის გარეშე შენახული .ai, ან EPS ფაილი) და არა PDF: ფაილი › გახსნა და ფაილი › განთავსება მას EPS-ად კითხულობს
 # Upstream sync 2026-10-16 (3): Intertwine, symbol registration, gradient span, data sets, Batch.
 	Intertwine	გადახლართვა

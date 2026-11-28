@@ -2606,6 +2606,9 @@ file-filter	Templates	Vorlagen
 	Only Web Colors	Nur Webfarben
 	Opacity	Deckkraft
 	Show Opacity	Deckkraft einblenden
+	Show Hex Field	Hex-Feld einblenden
+	Hex or CSS color	Hex- oder CSS-Farbe
+	Parse Color	Farbe auswerten
 	Opacity & Mask Define Knockout Shape	Deckkraft und Maske definieren Aussparungsform
 	Opacity Mask	Deckkraftmaske
 	Opacity Mask Info	Informationen zur Deckkraftmaske
@@ -5156,6 +5159,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` muss hue, saturation, brightness, red, green oder blue sein
 @msg	`sliders` must be none, oklch or hsl	`sliders` muss none, oklch oder hsl sein
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH erfordert sRGB als RGB-Arbeitsfarbraum
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` muss eine Hex-Farbe (#rgb, #rgba, #rrggbb oder #rrggbbaa) oder eine CSS-Farbe rgb(), hsl() oder oklch() mit höchstens 48 Zeichen sein
 @msg	`{k}` must be [x, y]	`{k}` muss [x, y] sein
 @msg	`{name}` has no options	`{name}` hat keine Optionen
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` ist ein integrierter Arbeitsbereich; wählen Sie einen anderen Namen
