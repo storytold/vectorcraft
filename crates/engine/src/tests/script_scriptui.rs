@@ -287,6 +287,23 @@ fn a_show_in_a_callback_throws_in_the_app() {
     assert!(r["log"][0].as_str().unwrap().contains("cannot open inside a callback"), "{r}");
 }
 
+/// A handler that `notify` runs while no dialog is showing may show one in a run with nobody to
+/// ask, which takes a window answer for it; in the app the same `show()` throws.
+#[test]
+fn a_show_in_a_handler_notify_runs_takes_a_window_answer_with_nobody_to_ask() {
+    let source = "var b = new Window('dialog').add('button', undefined, 'Go'); var r = ''; \
+        b.onClick = function () { var d = new Window('dialog'); d.add('button', undefined, 'OK'); r = d.show(); }; \
+        try { b.notify(); } catch (x) { r = x.message; } vc.log(r);";
+    let mut s = one_doc();
+    let r = headless(&mut s, source, window(json!([{"control": "OK", "event": "click"}]))).unwrap();
+    assert_eq!(r["log"], json!([1]), "{r}");
+    let mut s = one_doc();
+    s.script_frames = true;
+    assert_eq!(s.execute("script.run", &json!({"source": source, "name": "w.js"})).unwrap()["running"], true);
+    let r = pump(&mut s).expect("show does not wait in a handler notify runs").unwrap();
+    assert!(r["log"][0].as_str().unwrap().contains("cannot open inside a callback"), "{r}");
+}
+
 fn node(kind: &str, parent: f64) -> Data {
     Data::Object(vec![
         ("kind".into(), Data::String(kind.into())),

@@ -607,7 +607,10 @@ impl Realm {
 
     /// Adds ScriptUI's global constructor `Window` ([`crate::scriptui`]), whose dialogs the host
     /// functions in `items` show: `open` and `wait`, each given the dialog's description, and
-    /// `end`, given the result of `show()` and whether `show()` ended normally.
+    /// `end`, given the result of `show()` and whether `show()` ended normally. A run that ends
+    /// while `show()` waits for `wait`'s answer, because it is stopped or the host does not resume
+    /// it, ends without a call to `end`: the host releases what it holds for the dialog when the run
+    /// ends, and does not wait for `end`.
     pub fn define_script_ui(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
         match crate::scriptui::install(&mut self.interp, items) {
             Ok(()) => Ok(()),

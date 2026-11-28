@@ -333,6 +333,8 @@ fn a_malformed_resource_specification_throws_a_syntax_error() {
         "new Window('dialog {} trailing')",
         "new Window('dialog').add('g: Group { v: orange }')",
         "new Window('dialog').add('g: Group { o: { b: Button {} } }')",
+        "new Window('dialog').add('g: Group')",
+        "new Window('main: Dialog')",
     ] {
         let (mut r, _, _) = realm(Vec::new());
         let e = r.run(&format!("try {{ {source}; 'made' }} catch (e) {{ e.name }}")).unwrap();
@@ -478,6 +480,26 @@ fn a_list_a_later_getter_changes_is_described_as_the_person_picks_from_it() {
 }
 
 #[test]
+fn a_list_item_text_a_later_getter_changes_is_described_as_the_person_picks_from_it() {
+    let (mut r, seen, _) = realm(vec![change(1, Data::Number(0.0)), click(2)]);
+    let source = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['A']); var b = w.add('button', undefined, 'OK'); \
+        var swapped = false; Object.defineProperty(b, 'text', {get: function () { if (!swapped) { swapped = true; l.items[0].text = 'B'; } return 'OK'; }}); \
+        var picked = ''; l.onChange = function () { picked = l.selection.text; }; w.show(); picked";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("B".into()));
+    let seen = seen.borrow();
+    assert_eq!(
+        field(&nodes(&seen.descriptions[0])[1], "items"),
+        &Data::Array(vec![Data::String("B".into())]),
+        "the description shows the text the item has"
+    );
+    let (mut r, _, _) = realm(Vec::new());
+    let source = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['A']); var b = w.add('button', undefined, 'OK'); var n = 0; \
+        Object.defineProperty(b, 'text', {get: function () { l.items[0].text = 'T' + n++; return 'OK'; }}); \
+        try { w.show(); } catch (e) { e.message }";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("show: a list's items or a container's controls changed while the dialog was read".into()));
+}
+
+#[test]
 fn a_control_a_later_getter_removes_is_not_in_the_description() {
     let (mut r, seen, _) = realm(vec![click(1)]);
     let source = "var w = new Window('dialog'); var ok = w.add('button', undefined, 'OK'); var b = w.add('button', undefined, 'Go'); \
@@ -544,6 +566,18 @@ fn a_hidden_or_disabled_ok_button_is_not_the_default_found_by_its_text() {
         w.add('button', undefined, 'OK'); w.show()";
     assert_eq!(r.run(source).unwrap(), JsValue::Number(0.0));
     assert_eq!(field(&seen.borrow().descriptions[0], "defaultElement"), &Data::Number(3.0), "the OK button that can be clicked is the default");
+}
+
+#[test]
+fn an_ok_or_cancel_button_in_a_hidden_or_disabled_group_is_not_found_by_its_text() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    let source = "var w = new Window('dialog'); var g = w.add('group'); g.add('button', undefined, 'OK'); g.add('button', undefined, 'Cancel'); \
+        g.visible = false; var h = w.add('panel'); h.add('group').add('button', undefined, 'OK'); h.enabled = false; \
+        w.add('button', undefined, 'OK'); w.add('button', undefined, 'Cancel'); w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(0.0));
+    let seen = seen.borrow();
+    assert_eq!(field(&seen.descriptions[0], "defaultElement"), &Data::Number(7.0), "the OK button outside the groups is the default");
+    assert_eq!(field(&seen.descriptions[0], "cancelElement"), &Data::Number(8.0), "the Cancel button outside the group is the cancel button");
 }
 
 #[test]
@@ -828,6 +862,67 @@ fn a_remove_that_runs_out_of_fuel_leaves_the_dialog_as_it_was() {
     assert_eq!(v, JsValue::String("512|||512".into()), "the removed group's controls are counted off the dialog once");
 }
 
+/// Runs `op` after `setup` with each heap limit from the bytes `setup` left up to past what `op`
+/// adds, and after each run that ended at the limit, gives `check` the realm without a limit and
+/// what its host was given.
+fn at_each_heap_limit(setup: &str, op: &str, check: impl Fn(&mut Realm, &RefCell<Seen>, u64)) {
+    let ready = || {
+        let (mut r, seen, _) = realm(vec![close(); 4]);
+        r.run(setup).unwrap();
+        r.collect_garbage();
+        (r, seen)
+    };
+    let (mut r, _) = ready();
+    let before = r.interp().heap.bytes;
+    r.run(op).unwrap();
+    let added = r.interp().heap.bytes.saturating_sub(before) as u64;
+    let mut ended = 0;
+    for extra in 0..added + 64 {
+        let (mut r, seen) = ready();
+        let limit = r.interp().heap.bytes + extra as usize;
+        r.set_limits(Limits { fuel: 10_000_000, heap_bytes: limit, ..Limits::default() });
+        let e = match r.run(op) {
+            Ok(_) => break,
+            Err(e) => e,
+        };
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{op} at {extra}: {e:?}");
+        ended += 1;
+        r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
+        check(&mut r, &seen, extra);
+    }
+    assert!(ended > 0, "{op} ended at the heap limit");
+}
+
+#[test]
+fn an_add_or_a_remove_that_ends_at_the_heap_limit_leaves_the_dialog_as_it_was() {
+    let list = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['a', 'b', 'c']); l.selection = 2;";
+    for op in ["w.add('button')", "l.add('item', 'd')", "l.remove(0)", "l.removeAll()"] {
+        let check = |r: &mut Realm, seen: &RefCell<Seen>, extra: u64| {
+            // What the script reads, and what `show()` describes from the dialog's own arrays.
+            let read = r.run("var d = []; for (var k = 0; k < l.items.length; k++) d.push(l.items[k].text); [w.children.length, d.join(' '), l.selection.index].join()");
+            assert_eq!(read, Ok(JsValue::String("1,a b c,2".into())), "{op} ended at {extra} bytes and changed what the script reads");
+            let at = seen.borrow().descriptions.len();
+            r.run("w.show()").unwrap();
+            let shown = nodes(&seen.borrow().descriptions[at]);
+            let items = Data::Array(["a", "b", "c"].iter().map(|t| Data::String((*t).into())).collect());
+            assert_eq!(
+                (shown.len(), field(&shown[1], "items"), field(&shown[1], "selection")),
+                (2, &items, &Data::Number(2.0)),
+                "{op} ended at {extra} bytes and changed the dialog"
+            );
+        };
+        at_each_heap_limit(list, op, check);
+    }
+    // A removeAll that ends at the limit leaves the dialog's count of items as it was, so a full
+    // dialog takes no more items.
+    let full =
+        format!("var w = new Window('dialog'); var l = w.add('listbox', undefined, new Array({}).join('x,').split(','));", scriptui::MAX_ITEMS);
+    at_each_heap_limit(&full, "l.removeAll()", |r, _, extra| {
+        let more = r.run("try { l.add('item', 'y'); 'added' } catch (e) { e.name }");
+        assert_eq!(more, Ok(JsValue::String("RangeError".into())), "removeAll ended at {extra} bytes and miscounted the items");
+    });
+}
+
 #[test]
 fn a_text_getter_that_changes_a_list_while_remove_looks_it_up_makes_remove_throw() {
     let (mut r, _, _) = realm(Vec::new());
@@ -879,6 +974,19 @@ fn a_listener_removed_and_added_again_in_the_same_event_does_not_run_in_it() {
         )
         .unwrap();
     assert_eq!(v, JsValue::String("1,1,2".into()), "the second registration runs from the next event on");
+}
+
+#[test]
+fn a_listener_a_capturing_container_registers_again_does_not_run_in_the_same_event() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); var ran = []; var once = true; function own() { ran.push(2); } \
+             w.addEventListener('click', function () { ran.push(1); if (once) { once = false; b.removeEventListener('click', own); b.addEventListener('click', own); } }, true); \
+             b.addEventListener('click', own); b.notify('onClick'); b.notify('onClick'); ran.join(',')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("1,1,2".into()), "the new registration runs from the next event on");
 }
 
 #[test]

@@ -18,6 +18,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
+use craft::automation::protocol::Params;
 use craft::behavior::{Selection, SelectionChange, keyed};
 use craft::theme::Variant;
 use craft::ui::buttons::Button;
@@ -30,6 +31,7 @@ use craft::ui::list::{List, ListRow};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::focus::Initial;
 use craft::ui::runtime::keys::take_submit;
+use craft::ui::runtime::overlay;
 use craft::ui::sections::{DialogRole, FooterButton, GroupBox};
 use craft::ui::text::TextField;
 use craft::ui::value_drag::Slider;
@@ -96,6 +98,8 @@ pub(crate) struct ScriptWindow {
     cancel: bool,
     /// An error for the status bar.
     status: Option<String>,
+    /// The overlay layer the dialog's body was last drawn in.
+    layer: Option<egui::Id>,
 }
 
 impl ScriptWindow {
@@ -112,6 +116,7 @@ impl ScriptWindow {
             stop: false,
             cancel: false,
             status: None,
+            layer: None,
         }
     }
 
@@ -318,7 +323,7 @@ impl StackDialog for ScriptWindow {
         let shown = dialog.show(ui, |ui, _| {
             let (width, height) = window.size();
             let size = egui::vec2(width.max(1.0), height.max(1.0));
-            let mut pass = Pass::default();
+            let mut pass = Pass { layer: overlay::drawing_parent(ui.ctx()), ..Pass::default() };
             ui.scope(|ui| {
                 ui.set_max_size(MAX_SHOWN);
                 Stack::new().scroll(Scroll::both()).show(ui, |ui, _| {
@@ -345,6 +350,9 @@ impl StackDialog for ScriptWindow {
             pass
         });
         let pass = shown.inner.unwrap_or_default();
+        if pass.layer.is_some() {
+            self.layer = pass.layer;
+        }
         for (id, draft) in pass.drafts {
             match draft {
                 Some(text) => self.drafts.insert(id, text),
@@ -431,12 +439,13 @@ struct Shown {
 }
 
 /// What one run of the dialog's body gave: the events, whether an edit field has the keyboard
-/// focus, and the typed texts to keep or forget, by field id.
+/// focus, the typed texts to keep or forget, by field id, and the overlay layer it was drawn in.
 #[derive(Default)]
 struct Pass {
     events: Vec<UiEvent>,
     typing: bool,
     drafts: Vec<(u64, Option<String>)>,
+    layer: Option<egui::Id>,
 }
 
 /// The text of the visible static text just before control `i` in its container: the visible
@@ -506,8 +515,10 @@ fn control(ui: &mut Ui, drafts: &BTreeMap<u64, String>, place: &Place, (i, n, pr
             let source = keyed(&keys, |k: &usize| *k);
             let selection = n.selection.map(Selection::single).unwrap_or_default();
             // Screen readers read the box as a list box, by its name or the static text before
-            // it, with the selected item as its value.
+            // it, with the selected item as its value. The box has no opener to keep the keyboard
+            // focus, so a press on a row gives it the focus and the arrow keys go on from that row.
             let out = List::<usize>::options(list_name(n, prompt))
+                .focus_on_press(true)
                 .id_salt(salt)
                 .enabled(enabled)
                 .max_rows(list_rows(n.rect.h))
@@ -650,6 +661,14 @@ pub(crate) fn is_top(app: &VectorcraftApp) -> bool {
     with_host(app, |host, _| host.get::<ScriptWindow>().is_some_and(|d| host.stack().is_top(d.id()))).unwrap_or(false)
 }
 
+/// Whether the ScriptUI dialog is the top dialog and no popup or modal layer, its own drop-down
+/// lists' included, is open over it.
+pub(crate) fn uncovered(app: &VectorcraftApp) -> bool {
+    let Some(layer) = with_window(app, |d| d.layer) else { return false };
+    let top = app.ui_ctx.as_ref().and_then(overlay::top);
+    is_top(app) && top.is_none_or(|top| Some(top) == layer)
+}
+
 /// Opens, keeps or closes the ScriptUI dialog as the run's `show()` stands: it opens when a
 /// `show()` waits, follows the dialog while the run waits at it (its heading follows a title a
 /// handler changed), stays open while one of its handlers runs and closes when `show()` ends. A
@@ -690,6 +709,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp) {
     }
     if cancel_asked && let Err(e) = cancel(app) {
         app.status(e);
+    }
+    // Events wait in the queue while another dialog, such as the quit question, is open over it.
+    if !is_top(app) {
+        return;
     }
     let Some(w) = app.session.script_window() else { return };
     if with_window(app, |d| d.shown()) != Some(w.shown) {
@@ -765,11 +788,20 @@ pub(crate) fn cancel(app: &mut VectorcraftApp) -> Result<(), String> {
     let mut events = vec![cancel_event(&w)];
     with_window(app, |d| d.commit_drafts(&w, &mut events)).unwrap_or(Ok(()))?;
     let empty = with_window(app, |d| d.queue.is_empty()).unwrap_or(true);
+    // A cancel after other events goes last, and is a click on the cancel button of the dialog the
+    // run waits at when its turn comes, or its close box.
+    let deferred = !empty || events.len() > 1;
+    if deferred {
+        events.pop();
+    }
     let mut events = events.into_iter();
     if empty && let Some(first) = events.next() {
-        let _ = app.session.script_window_answer(first);
+        app.session.script_window_answer(first)?;
     }
-    let later: Vec<Queued> = events.filter_map(|e| queued(&w, &e)).collect();
+    let mut later: Vec<Queued> = events.filter_map(|e| queued(&w, &e)).collect();
+    if deferred {
+        later.push(Queued::Cancel);
+    }
     with_window(app, |d| d.queue.extend(later));
     Ok(())
 }
@@ -782,6 +814,11 @@ pub(crate) fn dialog_method(app: &mut VectorcraftApp, method: &str, params: &Val
     if !ours {
         return None;
     }
+    // The parameters each method takes, checked before anything is set or given.
+    let keys: &[&str] = if method == "ui.dialog.set" { &["dialog", "field", "value", "fields", "action"] } else { &["dialog"] };
+    if let Err(e) = Params(params).only(None, keys) {
+        return Some(Err(e));
+    }
     let mut params = params.clone();
     let action = if method == "ui.dialog.set" { params.as_object_mut().and_then(|o| o.remove("action")) } else { None };
     let answer = match (method, action.as_ref().map(Value::as_str)) {
@@ -790,7 +827,12 @@ pub(crate) fn dialog_method(app: &mut VectorcraftApp, method: &str, params: &Val
         (_, None) => None,
         (_, Some(_)) => return Some(Err("`action` must be confirm or cancel".into())),
     };
-    if method == "ui.dialog.set" && params.as_object().is_some_and(|o| o.keys().any(|k| k != "dialog")) {
+    // A dialog open over it, such as the quit question, takes its answer first.
+    if answer == Some(true) && with_host(app, |host, _| host.stack().has_child(dialog_id(KIND))).unwrap_or(false) {
+        return Some(Err("the dialog refuses OK while a dialog open over it waits for its answer".into()));
+    }
+    // A set without an action sets a field, which the host's setter asks for when none is given.
+    if method == "ui.dialog.set" && (answer.is_none() || params.as_object().is_some_and(|o| o.keys().any(|k| k != "dialog"))) {
         let set = with_host(app, |host, ctx| craft::automation::dialogs::dialog_method(host, ctx, method, &params)).flatten();
         if let Some(Err(e)) = set {
             return Some(Err(e));
@@ -799,6 +841,12 @@ pub(crate) fn dialog_method(app: &mut VectorcraftApp, method: &str, params: &Val
     Some(match answer {
         Some(true) => confirm(app),
         Some(false) => cancel(app).map(|()| Value::Null),
-        None => Ok(Value::Null),
+        // A set answers with the dialog it set, `{id, parent, key, fields}`, as the other dialogs' sets do.
+        None => Ok(with_host(app, |host, _| {
+            let id = dialog_id(KIND).value().to_string();
+            craft::automation::dialogs::inspect(host).as_array().and_then(|open| open.iter().find(|d| d["id"] == id.as_str()).cloned())
+        })
+        .flatten()
+        .unwrap_or(Value::Null)),
     })
 }

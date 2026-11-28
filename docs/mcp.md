@@ -3315,16 +3315,17 @@ its own and no `capture` handler on a container stopped the click; `click` handl
 capture do not keep it from closing (VectorCraft's own rule). `onClose` runs before the dialog closes, and
 returning `false` keeps it open. The default button is `defaultElement`, else a button named or titled OK, and the
 cancel button is `cancelElement`, else a button named or titled Cancel, in any case; a button found by its name or
-title counts only while it is enabled and visible. A `show()` inside a handler,
-or of a dialog that is showing, throws an `Error`, and so does one inside a callback of a built-in function. In
-the app, `alert`, `confirm`, `prompt` and the file dialogs called from a handler also throw an `Error`; in a run with
-nobody to ask, `alert`, `confirm` and `prompt` in a handler take their answers from `answers`. A shown dialog can be shown again after it closes.
+title counts only while it is enabled and visible. A `show()` inside a handler while a dialog is showing, or of a
+dialog that is showing, throws an `Error`. In the app, a `show()` inside a callback of a built-in function, a handler
+that `notify` runs included, also throws an `Error`, and so do `alert`, `confirm`, `prompt` and the file dialogs called
+from a handler; in a run with nobody to ask, such a `show()` takes a `window` answer, and `alert`, `confirm` and
+`prompt` in a handler take their answers from `answers`. A shown dialog can be shown again after it closes.
 
 `show()` checks the dialog: at most 512 controls, nested at most 16 deep, 1,024 list items in all and 16 KiB of
 text a control, past which it throws a `RangeError`, a size or a place that is not a finite number, which throws
-too, and a slider's minimum above its maximum. When a getter changes a list's items after the list was read, or
-adds or removes a control after the controls were read, it reads the dialog again, and throws an `Error` when the
-dialog changes again. It lays the controls out from each container's `orientation`,
+too, and a slider's minimum above its maximum. When a getter changes a list's items or an item's text after the
+list was read, or adds or removes a control after the controls were read, it reads the dialog again, and throws an
+`Error` when the dialog changes again. It lays the controls out from each container's `orientation`,
 `alignChildren`, `spacing` and `margins` and each control's `alignment`, `preferredSize` (each side of `size` that
 is above 0 takes the place of `preferredSize`'s), `minimumSize`, `maximumSize` and `bounds`, which places it in its
 container. A control whose `visible` is false, and every control in it, takes no room in the layout. Sizes and places

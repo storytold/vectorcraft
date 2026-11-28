@@ -1625,7 +1625,7 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 /// `e`'s message, with what to do about a failure that comes from a script written for another
 /// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
 fn explained(e: &RunError) -> String {
-    const HOST_OBJECTS: &[&str] = &["Window", "BridgeTalk"];
+    const HOST_OBJECTS: &[&str] = &["BridgeTalk"];
     let message = &e.message;
     let first = message.strip_prefix("ReferenceError: ").and_then(|m| m.split_whitespace().next());
     let names_host_object = first.is_some_and(|f| HOST_OBJECTS.contains(&f));

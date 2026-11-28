@@ -438,9 +438,9 @@ pub(crate) fn busy(app: &VectorcraftApp) -> bool {
 }
 
 /// Whether the run's question can open now: over nothing, or over the script's ScriptUI dialog
-/// while nothing is open over it.
+/// while nothing, neither a dialog nor a popup, is open over it.
 pub(crate) fn can_ask(app: &VectorcraftApp) -> bool {
-    !busy(app) || script_window::is_top(app)
+    !busy(app) || script_window::uncovered(app)
 }
 
 /// Opens `dialog` over the script's ScriptUI dialog when that is the top dialog, so the ScriptUI

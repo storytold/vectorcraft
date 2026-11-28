@@ -219,6 +219,14 @@ impl Reader {
         }
     }
 
+    /// The number that the `digits` hex digits at `at` write; `None` when they are not all there.
+    fn hex(&self, at: usize, digits: usize) -> Option<u32> {
+        let hex: String = self.chars.iter().skip(at).take(digits).collect();
+        // `from_str_radix` also takes a sign, which an escape does not have.
+        let valid = hex.len() == digits && hex.chars().all(|c| c.is_ascii_hexdigit());
+        u32::from_str_radix(&hex, 16).ok().filter(|_| valid)
+    }
+
     fn string(&mut self) -> Result<String, Fault> {
         let Some(quote) = self.peek() else { return Err(self.expected("a string")) };
         let start = self.at;
@@ -249,16 +257,24 @@ impl Reader {
                 '0' => s.push('\0'),
                 '\n' => {}
                 'u' | 'x' => {
+                    let escape = self.at - 1;
                     let digits = if e == 'u' { 4 } else { 2 };
-                    let hex: String = self.chars.iter().skip(self.at).take(digits).collect();
-                    // `from_str_radix` also takes a sign, which an escape does not have.
-                    let valid = hex.len() == digits && hex.chars().all(|c| c.is_ascii_hexdigit());
-                    match u32::from_str_radix(&hex, 16).ok().filter(|_| valid).and_then(char::from_u32) {
+                    let code = self.hex(self.at, digits);
+                    // A high surrogate and the `\u` escape of a low one after it are one character.
+                    let low = code.filter(|c| (0xD800..0xDC00).contains(c)).and_then(|_| {
+                        let next = self.chars.get(self.at + digits..self.at + digits + 2)?;
+                        (next == ['\\', 'u']).then(|| self.hex(self.at + digits + 2, 4)).flatten().filter(|c| (0xDC00..0xE000).contains(c))
+                    });
+                    let (code, len) = match (code, low) {
+                        (Some(high), Some(low)) => (Some(0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00)), digits + 6),
+                        (code, _) => (code, digits),
+                    };
+                    match code.and_then(char::from_u32) {
                         Some(c) => {
                             s.push(c);
-                            self.at += digits;
+                            self.at += len;
                         }
-                        None => return Err(Fault::Syntax(format!("the escape at character {} is not valid", self.at - 1))),
+                        None => return Err(Fault::Syntax(format!("the escape at character {escape} is not valid"))),
                     }
                 }
                 e => s.push(e),
@@ -327,6 +343,14 @@ mod tests {
             assert!(matches!(parse(text), Err(Fault::Syntax(_))), "{text}: {:?}", parse(text));
         }
         assert_eq!(parse("dialog { t: '\\x0A\\u0041' }"), Ok(spec("dialog", vec![("t", Res::String("\nA".into()))])));
+    }
+
+    #[test]
+    fn a_surrogate_pair_of_escapes_is_one_character_and_a_lone_surrogate_is_a_syntax_fault() {
+        assert_eq!(parse("dialog { t: '\\uD83D\\uDE00!' }"), Ok(spec("dialog", vec![("t", Res::String("\u{1F600}!".into()))])));
+        for text in ["dialog { t: '\\uD83D' }", "dialog { t: '\\uD83Dx' }", "dialog { t: '\\uD83D\\u0041' }", "dialog { t: '\\uDE00' }"] {
+            assert_eq!(parse(text), Err(Fault::Syntax("the escape at character 14 is not valid".into())), "{text}");
+        }
     }
 
     #[test]
