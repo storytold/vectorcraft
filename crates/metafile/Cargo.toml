@@ -3,13 +3,12 @@ name = "vectorcraft-metafile"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft metafiles: EMF and WMF export and EMF, EMF+ and WMF import through craft-metafile, and a QuickDraw picture (PICT) reader"
+description = "VectorCraft metafiles: EMF and WMF export and EMF, EMF+, WMF and QuickDraw PICT import through craft-metafile"
 
 [lints]
 workspace = true
 
 [dependencies]
-craft-codepage = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

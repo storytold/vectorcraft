@@ -1,28 +1,39 @@
 //! Window → Flattener Preview: what flattening the document would touch (`flattener.preview`),
 //! highlighted in red over a grey preview of the art. Refresh takes a new snapshot of the
 //! document; Highlight picks what shows; Overprints, the preset and the options (Show Options in
-//! the panel menu) set how it flattens. Click the preview to zoom in, Alt-click to zoom out, drag
-//! to pan and double-click to fit.
+//! the panel menu) set how it flattens. The preview is a `PreviewPane`: a click zooms in about the
+//! point clicked and an Alt-click (Option on macOS) zooms out, a drag pans, Ctrl or Cmd with the
+//! wheel zooms, and a double click fits. The zoom row under it zooms from the keyboard.
 //!
 //! The settings live in `UiState::flattener_preview` (`ui.inspect`); `ui.flattenerPreview` sets
-//! them and refreshes.
+//! them and refreshes. The snapshot, the view and the texture live in [`FlattenerPreviewModel`]
+//! on the app.
 
-use std::cell::RefCell;
 use std::sync::Arc;
 
-use egui::{Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use craft::behavior::CanvasTransform;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, Sizing};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::menu::PanelRow;
+use craft::ui::patterns::form_dialogs::{DialogFields, ParamRows, PreviewPane, PreviewView, PreviewZoom};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::runtime::env::Env;
+use craft::ui::style::{TypeRole, rgba_color};
+use egui::load::SizedTexture;
+use egui::{Ui, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::FlattenOptions;
 use vectorcraft_engine::cmd::flatten::{FlattenReport, Highlight, Overprints};
-use vectorcraft_geom::{Affine, Point, Rect as DRect};
+use vectorcraft_geom::{Affine, Rect as DRect};
 use vectorcraft_render::RenderOptions;
 
-use super::navigator::{doc_to_thumb, thumb_to_doc};
-use crate::dialogs::flatten::{options_editor, preset_dropdown};
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, widgets};
+use crate::VectorcraftApp;
+use crate::dialogs::{flatten, form};
 
 /// The panel id (Window → Flattener Preview).
 pub const ID: &str = "flattenerPreview";
@@ -57,7 +68,7 @@ impl Settings {
 /// The document as the last Refresh saw it, and what flattening it would do.
 struct Shot {
     doc: Arc<Document>,
-    doc_index: usize,
+    doc_uid: u64,
     revision: u64,
     /// The settings it was taken with.
     options: FlattenOptions,
@@ -69,55 +80,33 @@ struct Shot {
     generation: u64,
 }
 
-/// The preview's zoom (1 = fit) and centre.
-#[derive(Clone, Copy, Default)]
-struct View {
-    zoom: f64,
-    center: Option<Point>,
+/// The pane's well width over its height.
+const ASPECT: f32 = 1.25;
+
+/// The zoom is relative to the fitted picture: 1 is the fit, up to 8×.
+fn fitting_view() -> PreviewView {
+    PreviewView::fitting().zoom_range(1.0..=8.0)
 }
 
-impl View {
-    /// The part of `fit` shown.
-    fn visible(&self, fit: DRect) -> DRect {
-        let z = self.zoom.max(1.0);
-        let c = self.center.unwrap_or(fit.center());
-        DRect::from_center_size(c, (fit.width() / z, fit.height() / z))
-    }
-
-    /// Zoom by `factor` (1×–64×) keeping `at` under the pointer, panned within `fit`.
-    fn zoom_at(&mut self, fit: DRect, at: Point, factor: f64) {
-        let v = self.visible(fit);
-        let z = (self.zoom.max(1.0) * factor).clamp(1.0, 64.0);
-        let k = self.zoom.max(1.0) / z;
-        let c = v.center();
-        self.zoom = z;
-        self.center = Some(Point::new(at.x + (c.x - at.x) * k, at.y + (c.y - at.y) * k));
-        self.pan(fit, (0.0, 0.0));
-    }
-
-    /// Move the centre by `d` (document units), keeping the view inside `fit`.
-    fn pan(&mut self, fit: DRect, d: (f64, f64)) {
-        let v = self.visible(fit);
-        let (hw, hh) = (v.width() / 2.0, v.height() / 2.0);
-        let c = v.center();
-        let x = (c.x + d.0).clamp(fit.x0 + hw, (fit.x1 - hw).max(fit.x0 + hw));
-        let y = (c.y + d.1).clamp(fit.y0 + hh, (fit.y1 - hh).max(fit.y0 + hh));
-        self.center = Some(Point::new(x, y));
-    }
-}
-
-/// What the preview texture shows: (generation, highlight, simulated overprints, the visible rect's
-/// bits, its pixel size).
-type Key = (u64, Highlight, bool, [u64; 4], [u32; 2]);
-
-#[derive(Default)]
-struct Cache {
+/// The panel's state outside the settings: the last snapshot, its view and its texture.
+pub(crate) struct FlattenerPreviewModel {
     shot: Option<Shot>,
-    view: View,
+    /// Counts snapshots, so the texture cache tells them apart.
     generation: u64,
     renderer: Option<vectorcraft_render::Renderer>,
+    view: PreviewView,
     drawn: crate::graphics::TexCache<Drawn>,
 }
+
+impl Default for FlattenerPreviewModel {
+    fn default() -> Self {
+        Self { shot: None, generation: 0, renderer: None, view: fitting_view(), drawn: Default::default() }
+    }
+}
+
+/// What the preview texture shows: (generation, highlight, simulated overprints, its pixel size). The
+/// whole `fit` rect is rendered, so the view is not part of the key.
+type Key = (u64, Highlight, bool, u32);
 
 /// The preview as drawn: for what, and its texture.
 #[derive(Default)]
@@ -126,17 +115,14 @@ struct Drawn {
     tex: Option<egui::TextureHandle>,
 }
 
-thread_local! {
-    static CACHE: RefCell<Cache> = RefCell::new(Cache::default());
-}
-
 /// Take a new snapshot of the active document and work out what flattening it would do →
 /// `flattener.preview`'s answer for the panel's highlight.
 pub fn refresh(app: &mut VectorcraftApp) -> Result<Value, String> {
     let set = &app.ui.flattener_preview;
     let (o, report) = app.session.flattener_report(&set.params()).map_err(|e| e.to_string())?;
     let (options, overprints) = (set.options.clone(), set.overprints);
-    let (st, doc_index) = (app.session.active().ok_or("no document open")?, app.session.active_index().unwrap_or(0));
+    let st = app.session.active().ok_or("no document open")?;
+    let doc_uid = st.uid;
     let mut out = report.to_json(&st.doc, set.highlight);
     out["options"] = serde_json::to_value(&o).unwrap_or_default();
     let mut fit = st.doc.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b)).unwrap_or(DRect::new(0.0, 0.0, 612.0, 792.0));
@@ -145,12 +131,10 @@ pub fn refresh(app: &mut VectorcraftApp) -> Result<Value, String> {
     }
     let fit = fit.inflate(fit.width() * 0.03 + 4.0, fit.height() * 0.03 + 4.0);
     let (doc, revision) = (st.doc.clone(), st.revision);
-    CACHE.with(|c| {
-        let mut c = c.borrow_mut();
-        c.generation += 1;
-        c.shot = Some(Shot { doc, doc_index, revision, options, overprints, report, fit, generation: c.generation });
-        c.view = View::default();
-    });
+    let m = &mut app.flattener_preview;
+    m.generation += 1;
+    m.shot = Some(Shot { doc, doc_uid, revision, options, overprints, report, fit, generation: m.generation });
+    m.view = fitting_view();
     Ok(out)
 }
 
@@ -176,7 +160,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     }
     app.ui.flattener_preview = set;
     app.ui.open_panel = Some(ID.into());
-    app.ui.dock = true;
+    crate::panel_docking::show_panels(app);
     refresh(app)
 }
 
@@ -189,61 +173,85 @@ fn merged(base: &FlattenOptions, over: &Value) -> Value {
     v
 }
 
+/// Whether the snapshot is behind the document or the settings.
+fn stale(app: &VectorcraftApp) -> bool {
+    let (Some(st), Some(s)) = (app.session.active(), app.flattener_preview.shot.as_ref()) else { return false };
+    let set = &app.ui.flattener_preview;
+    s.doc_uid != st.uid || s.revision != st.revision || s.options != set.options || s.overprints != set.overprints
+}
+
+/// Whether the options are no preset's: the preset field then reads `[Custom]`.
+fn custom(app: &VectorcraftApp) -> bool {
+    let set = &app.ui.flattener_preview;
+    !app.session.flattener_presets().iter().any(|p| p.name == set.preset && p.options == set.options)
+}
+
+/// The panel body.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let Some(st) = app.session.active() else {
+    if app.session.active().is_none() {
         super::empty_state(ui, "eye", tl!("No document"), tl!("Open a document to preview its flattening."));
         return;
-    };
-    let (index, revision) = (app.session.active_index().unwrap_or(0), st.revision);
+    }
+    let uid = app.session.active().map(|st| st.uid);
     // A document the panel hasn't seen yet gets a snapshot right away.
-    let seen = CACHE.with(|c| c.borrow().shot.as_ref().map(|s| s.doc_index));
-    if seen != Some(index)
+    if app.flattener_preview.shot.as_ref().map(|s| s.doc_uid) != uid
         && let Err(e) = refresh(app)
     {
         app.status(e);
     }
+    // The highlighted art takes the theme's error colour.
+    let highlight = rgba_color(Env::of(ui).tokens.tokens().color.status.bad.solid);
+    let compact = ui.available_width() < Env::of(ui).tokens.size.plot.width;
     let mut set = app.ui.flattener_preview.clone();
     let mut refresh_now = false;
-    ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("Refresh"), 64.0).on_hover_text(tl!("Preview the document as it is now")).clicked() {
-            refresh_now = true;
-        }
-        let labels = Highlight::ALL.map(Highlight::label);
-        if let Some(i) = widgets::dropdown(ui, "fp-highlight", set.highlight.label(), &labels, ui.available_width().max(120.0)) {
-            set.highlight = Highlight::ALL[i];
-        }
+    Row::new().fill_width().wrap(true).show(ui, |ui, _| {
+        refresh_now = Button::new(tl!("Refresh")).tooltip(tl!("Preview the document as it is now")).show(ui).clicked();
+        let entries = Highlight::ALL.map(|h| Entry::new(h, h.label()));
+        let picker = Select::new(tl!("Highlight"), Bind::bound(&mut set.highlight), &entries);
+        let picker = if compact { picker.sizing(Sizing::FillWidth) } else { picker };
+        picker.show(ui);
     });
-    ui.add_space(4.0);
-    egui::Grid::new("fp-settings").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-        widgets::dim_label(ui, tl!("Overprints:"));
-        let labels = Overprints::ALL.map(Overprints::label);
-        if let Some(i) = widgets::dropdown(ui, "fp-overprints", set.overprints.label(), &labels, 150.0) {
-            set.overprints = Overprints::ALL[i];
-        }
-        ui.end_row();
-        widgets::dim_label(ui, tl!("Preset:"));
-        let presets = app.session.flattener_presets();
-        if let Some(p) = preset_dropdown(ui, "fp-preset", &presets, &set.preset, Some(&set.options), 150.0) {
-            set.preset = p.name.clone();
-            set.options = p.options.clone();
-        }
-        ui.end_row();
+    Row::new().fill_width().wrap(true).show(ui, |ui, _| {
+        Text::new(tl!("Overprints:")).shade(Shade::Muted).show(ui);
+        let entries = Overprints::ALL.map(|o| Entry::new(o, o.label()));
+        let picker = Select::new(tl!("Overprints"), Bind::bound(&mut set.overprints), &entries);
+        let picker = if compact { picker.sizing(Sizing::FillWidth) } else { picker };
+        picker.show(ui);
     });
-    if set.show_options {
-        widgets::divider(ui);
-        options_editor(ui, "flattener-preview", &mut set.options, true);
+    let preset_id = ui.scope_id().with("flattener-preset-row");
+    let mut preset = |ui: &mut Ui| {
+        Text::new(tl!("Preset:")).shade(Shade::Muted).show(ui);
+        let names = flatten::preset_names(app);
+        let is_custom = custom(app);
+        let current = if is_custom { String::new() } else { set.preset.clone() };
+        let mut fields = DialogFields::from_pairs([("preset", current.clone())]);
+        flatten::preset_picker(ui, &mut fields, "preset", &names, is_custom);
+        if !ui.is_sizing_pass()
+            && let Some(name) = fields.text("preset").filter(|name| *name != current)
+            && let Some(p) = app.session.flattener_preset(name)
+        {
+            (set.preset, set.options) = (p.name, p.options);
+        }
+    };
+    if compact {
+        Stack::new().id(preset_id).fill_width().show(ui, |ui, _| preset(ui));
+    } else {
+        Row::new().id(preset_id).fill_width().wrap(true).show(ui, |ui, _| preset(ui));
     }
-    ui.add_space(6.0);
-    preview_area(ui, &t, set.highlight, set.overprints);
-    // What is highlighted, and whether the snapshot is behind the document or the settings.
-    let (count, stale) = CACHE.with(|c| {
-        let c = c.borrow();
-        let s = c.shot.as_ref();
-        let count = s.map_or(0, |s| s.report.objects(set.highlight).len() + s.report.areas(set.highlight).len());
-        (count, s.is_some_and(|s| s.revision != revision || s.options != set.options || s.overprints != set.overprints))
-    });
+    if set.show_options {
+        Divider::horizontal().show(ui);
+        let params = flatten::option_params(&[], "");
+        let mut fields = flatten::option_fields(&set.options);
+        let out = ParamRows::new(tl!("Flattener options"), &params, Bind::bound(&mut fields)).show(ui);
+        if out.changed
+            && let Ok(o) = serde_json::from_value(Value::Object(form::json_of(&params, &fields)))
+        {
+            set.options = o;
+        }
+    }
+    preview_area(app, ui, highlight, set.highlight, set.overprints);
     if set.highlight != Highlight::None {
+        let count = app.flattener_preview.shot.as_ref().map_or(0, |s| s.report.objects(set.highlight).len() + s.report.areas(set.highlight).len());
         let areas = matches!(set.highlight, Highlight::RasterizedRegions | Highlight::AllRasterized);
         let n = count as u64;
         let msg = if areas {
@@ -251,10 +259,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else {
             crate::i18n::tn(n, "{n} object highlighted", "{n} objects highlighted")
         };
-        widgets::dim_label(ui, &msg);
+        Text::new(msg).shade(Shade::Muted).show(ui);
     }
-    if stale {
-        ui.label(egui::RichText::new(tl!("Changed since the last Refresh.")).color(t.text_dim).size(11.5));
+    if stale(app) {
+        Text::new(tl!("Changed since the last Refresh.")).role(TypeRole::Caption).shade(Shade::Muted).show(ui);
     }
     if set != app.ui.flattener_preview {
         app.ui.flattener_preview = set;
@@ -264,52 +272,76 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The preview: the snapshot rendered over the visible part, grey under a highlight with the
-/// highlighted art in `t.highlight`; click, Alt-click, drag and double-click zoom and pan.
-fn preview_area(ui: &mut Ui, t: &Tokens, h: Highlight, overprints: Overprints) {
+/// The preview: the whole snapshot rendered once per [`Key`], grey under a highlight with the
+/// highlighted art in the theme's error colour, in a pane that zooms and pans it.
+/// A click zooms in 2× about the point clicked and an Alt-click zooms out 2×, within [`fitting_view`]'s range.
+fn preview_area(app: &mut VectorcraftApp, ui: &mut Ui, highlight: egui::Color32, h: Highlight, overprints: Overprints) {
+    let FlattenerPreviewModel { shot, renderer, view, drawn, .. } = &mut app.flattener_preview;
+    let Some(shot) = shot.as_ref() else { return };
     let w = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(vec2(w, (w * 0.8).clamp(140.0, 320.0)), Sense::click_and_drag());
-    let resp = resp.on_hover_text(tl!("Click to zoom in, Alt-click to zoom out, drag to pan, double-click to fit"));
-    ui.painter().rect_filled(rect, 0.0, t.pasteboard);
-    let ppp = ui.ctx().pixels_per_point();
-    CACHE.with(|c| {
-        let mut c = c.borrow_mut();
-        let Cache { shot, view, renderer, drawn, .. } = &mut *c;
-        let Some(shot) = shot.as_ref() else { return };
-        let mut drawn = drawn.borrow_mut();
-        let Drawn { key, tex } = &mut *drawn;
-        let visible = view.visible(shot.fit);
-        if resp.double_clicked() {
-            *view = View::default();
-        } else if resp.clicked()
-            && let Some(p) = resp.interact_pointer_pos()
-        {
-            let alt = ui.input(|i| i.modifiers.alt);
-            view.zoom_at(shot.fit, thumb_to_doc(visible, rect, p), if alt { 0.5 } else { 2.0 });
-        } else if resp.dragged() {
-            let per_px = (visible.width() / rect.width() as f64).max(visible.height() / rect.height() as f64);
-            let d = resp.drag_delta();
-            view.pan(shot.fit, (-d.x as f64 * per_px, -d.y as f64 * per_px));
+    // A dock resize renders again only when the width crosses a power of two; the picture stays within what the
+    // window's textures can hold.
+    let most = ui.ctx().input(|i| i.max_texture_side).min(4096) as u32;
+    let px = ((w * ui.ctx().pixels_per_point() * 4.0).ceil().max(1.0) as u32).next_power_of_two().min(most);
+    let mut drawn = drawn.borrow_mut();
+    let Drawn { key, tex } = &mut *drawn;
+    let k = (shot.generation, h, overprints == Overprints::Simulate, px);
+    if *key != Some(k) || tex.is_none() {
+        let r = renderer.get_or_insert_with(vectorcraft_render::Renderer::new);
+        let img = render(r, shot, shot.fit, [px, px], h, overprints, highlight);
+        match tex {
+            Some(tx) => tx.set(img, egui::TextureOptions::LINEAR),
+            None => *tex = Some(ui.ctx().load_texture("flattener-preview", img, egui::TextureOptions::LINEAR)),
         }
-        let visible = view.visible(shot.fit);
-        let px = [(rect.width() * ppp) as u32, (rect.height() * ppp) as u32];
-        let k = (shot.generation, h, overprints == Overprints::Simulate, [visible.x0, visible.y0, visible.x1, visible.y1].map(f64::to_bits), px);
-        if *key != Some(k) || tex.is_none() {
-            let r = renderer.get_or_insert_with(vectorcraft_render::Renderer::new);
-            let img = render(r, shot, visible, px, h, overprints, t.highlight);
-            match tex {
-                Some(tx) => tx.set(img, egui::TextureOptions::LINEAR),
-                None => *tex = Some(ui.ctx().load_texture("flattener-preview", img, egui::TextureOptions::LINEAR)),
-            }
-            *key = Some(k);
+        *key = Some(k);
+    }
+    let Some(tx) = tex else { return };
+    // At scale 1 the picture is the fit of the well (width `w`, height `w / ASPECT`), so the zoom reads relative to the fit.
+    let s = (f64::from(w) / shot.fit.width()).min(f64::from(w / ASPECT) / shot.fit.height());
+    let size = vec2((shot.fit.width() * s) as f32, (shot.fit.height() * s) as f32);
+    let pane = PreviewPane::new(tl!("Flattener Preview"), SizedTexture::new(tx.id(), size), view)
+        .aspect(ASPECT)
+        .click_centres(false)
+        .tooltip(tl!("Click to zoom in, Alt-click to zoom out, drag to pan, double-click to fit"));
+    let out = if w < Env::of(ui).tokens.size.plot.width {
+        let (_, room) = ui.allocate_space(vec2(w, w / ASPECT));
+        pane.show_at(ui, room)
+    } else {
+        pane.show(ui)
+    };
+    *view = match out.clicked {
+        Some(at) => {
+            let factor = if craft::ui::runtime::pointer::frame(ui.ctx()).pick_mods.alt { 0.5 } else { 2.0 };
+            zoomed_about(&out.shown, at, size, out.response.rect.size(), factor)
         }
-        if let Some(tx) = tex {
-            let r =
-                Rect::from_min_max(doc_to_thumb(visible, rect, visible.origin()), doc_to_thumb(visible, rect, Point::new(visible.x1, visible.y1)));
-            ui.painter().with_clip_rect(rect).image(tx.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), egui::Color32::WHITE);
-        }
-    });
-    ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
+        // The view as drawn, so the zoom row steps from what is on screen while the pane fits.
+        None => out.view.unwrap_or(out.shown),
+    };
+    // The zoom row zooms from the keyboard too.
+    if let Some(v) = PreviewZoom::new(view).show(ui).view {
+        *view = v;
+    }
+}
+
+/// `shown` zoomed by `factor` within its zoom range, keeping the point `at` of a picture of `picture` points (from its
+/// top-left corner) under the pointer, settled in a well of `well` points. A zoom out to the fit or past it returns
+/// to the fitting view.
+fn zoomed_about(shown: &PreviewView, at: egui::Pos2, picture: egui::Vec2, well: egui::Vec2, factor: f32) -> PreviewView {
+    let t = shown.transform;
+    let fit = PreviewPane::fit_view(picture, well, &shown.range);
+    let scale = (t.scale * factor).min(*shown.range.end());
+    let mut next = shown.clone();
+    if scale <= fit.scale {
+        next.transform = PreviewPane::settled(fit, picture, well);
+        next.fit = true;
+        return next;
+    }
+    // Where the point lies from the well's center; the new offset keeps it there at the new zoom.
+    let about = (at.to_vec2() - picture / 2.0) * t.scale + t.offset;
+    let offset = about - (about - t.offset) * (scale / t.scale);
+    next.transform = PreviewPane::settled(CanvasTransform::new(scale, offset), picture, well);
+    next.fit = false;
+    next
 }
 
 /// `visible` of the snapshot at most `px` pixels: in colour without a highlight, else in grey with
@@ -352,36 +384,55 @@ fn render(
     crate::canvas::color_image(&img)
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if widgets::menu_item(ui, tl!("Refresh"), app.session.active().is_some(), false)
-        && let Err(e) = refresh(app)
-    {
-        app.status(e);
-    }
-    let shown = app.ui.flattener_preview.show_options;
-    if widgets::menu_item(ui, tl!("Show Options"), true, shown) {
-        app.ui.flattener_preview.show_options = !shown;
-    }
-    if widgets::menu_item(ui, tl!("Fit in Window"), true, false) {
-        CACHE.with(|c| c.borrow_mut().view = View::default());
-    }
-    if widgets::menu_item(ui, tl!("Save Transparency Flattener Preset…"), true, false) {
-        // Saved under a new name, then shown in the presets manager to name it.
-        match app.run("flattener.presets.save", json!({ "options": app.ui.flattener_preview.options })) {
-            Ok(r) => {
+const REFRESH: &str = "ui.flattenerPreview.refresh";
+const SHOW_OPTIONS: &str = "ui.flattenerPreview.showOptions";
+const FIT_IN_WINDOW: &str = "ui.flattenerPreview.fitInWindow";
+const SAVE_PRESET: &str = "ui.flattenerPreview.savePreset";
+
+/// The rows of the panel menu.
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    // PLAN: owner hub-w2 registers these four commands in `menus/ui_commands.rs`.
+    [REFRESH, SHOW_OPTIONS, FIT_IN_WINDOW, SAVE_PRESET].into_iter().map(|id| PanelRow::Command(CommandRef::new(id))).collect()
+}
+
+/// The states of the menu's rows: Refresh needs a document, Show Options is checked while the options show.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    states.set(CommandRef::new(REFRESH), CommandState::new().enabled(app.session.active().is_some()));
+    states.set(CommandRef::new(SHOW_OPTIONS), CommandState::new().checked(app.ui.flattener_preview.show_options));
+}
+
+/// Runs a menu row; `None` for an id that is not this panel's.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    let r = match id {
+        REFRESH => refresh(app),
+        SHOW_OPTIONS => {
+            let set = &mut app.ui.flattener_preview;
+            set.show_options = !set.show_options;
+            Ok(Value::Null)
+        }
+        FIT_IN_WINDOW => {
+            app.flattener_preview.view = fitting_view();
+            Ok(Value::Null)
+        }
+        SAVE_PRESET => {
+            // Saved under a new name, then shown in the presets manager to name it.
+            app.run("flattener.presets.save", json!({ "options": app.ui.flattener_preview.options })).map(|r| {
                 let name = r["name"].as_str().unwrap_or_default().to_string();
                 app.ui.flattener_preview.preset = name.clone();
                 let _ = app.run("ui.flattenerPresetsDialog", json!({ "selected": name }));
-            }
-            Err(e) => app.status(e),
+                Value::Null
+            })
         }
-    }
+        _ => return None,
+    };
+    Some(r)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
+    use vectorcraft_geom::Point;
 
     /// A half-transparent blue rectangle over type, and a green square apart.
     fn app() -> VectorcraftApp {
@@ -397,8 +448,7 @@ mod tests {
 
     /// Two headless frames of the panel (the texture uploads in the first).
     fn frame(app: &mut VectorcraftApp) -> egui::Context {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
+        let ctx = crate::testing::ui_context();
         for _ in 0..2 {
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
             out.textures_delta.clear();
@@ -406,60 +456,59 @@ mod tests {
         ctx
     }
 
-    fn pixels() -> egui::ColorImage {
-        CACHE.with(|c| {
-            let mut c = c.borrow_mut();
-            let Cache { shot, view, renderer, .. } = &mut *c;
-            let shot = shot.as_ref().unwrap();
-            render(
-                renderer.get_or_insert_with(vectorcraft_render::Renderer::new),
-                shot,
-                view.visible(shot.fit),
-                [300, 200],
-                Highlight::None,
-                Overprints::Preserve,
-                egui::Color32::RED,
-            )
-        })
+    #[test]
+    fn another_drawing_at_the_same_index_and_revision_gets_its_own_preview() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let make_drawing = |app: &mut VectorcraftApp, x| {
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 10, "height": 10})).unwrap();
+        };
+        make_drawing(&mut app, 10);
+        frame(&mut app);
+        let first = app.session.active().unwrap();
+        let (uid, revision, index) = (first.uid, first.revision, app.session.active_index());
+        let old_generation = app.flattener_preview.generation;
+        let old_art = first.doc.clone();
+
+        app.session.execute("file.close", &json!({"index": 0})).unwrap();
+        frame(&mut app);
+        make_drawing(&mut app, 70);
+        let second = app.session.active().unwrap();
+        assert_ne!(second.uid, uid);
+        assert_eq!(second.revision, revision);
+        assert_eq!(app.session.active_index(), index);
+        let expected = second.doc.clone();
+        assert_ne!(expected.layers, old_art.layers, "the replacement drawing has different artwork");
+
+        frame(&mut app);
+        let shot = app.flattener_preview.shot.as_ref().unwrap();
+        assert!(Arc::ptr_eq(&shot.doc, &expected), "the preview snapshots the drawing now open");
+        assert!(shot.generation > old_generation);
+        assert!(!stale(&app));
     }
 
     #[test]
     fn the_panel_takes_a_snapshot_and_highlights_in_red() {
         let mut app = app();
         frame(&mut app);
-        assert!(CACHE.with(|c| c.borrow().shot.is_some()), "a first look refreshes");
-        assert!(CACHE.with(|c| c.borrow().drawn.borrow().tex.is_some()), "the preview is drawn");
+        assert!(app.flattener_preview.shot.is_some(), "a first look refreshes");
+        assert!(app.flattener_preview.drawn.borrow().tex.is_some(), "the preview is drawn");
         let v = command(&mut app, &json!({"highlight": "allAffected"})).unwrap();
         assert_eq!(v["counts"]["allAffected"], 2);
         assert_eq!(app.ui.open_panel.as_deref(), Some(ID));
-        let text = crate::tests_labels::painted_text(&mut app, show);
-        assert!(text.contains("2 objects highlighted") && text.contains("All Affected Objects"), "{text}");
+        let FlattenerPreviewModel { shot, renderer, .. } = &mut app.flattener_preview;
+        let shot = shot.as_ref().unwrap();
+        let r = renderer.get_or_insert_with(vectorcraft_render::Renderer::new);
+        let fit = DRect::new(0.0, 0.0, 300.0, 200.0);
+        assert!(shot.fit.contains(Point::new(300.0, 200.0)));
         // The highlight is red where the art is affected and grey elsewhere.
-        let (shot_fit, img) = CACHE.with(|c| {
-            let mut c = c.borrow_mut();
-            let Cache { shot, renderer, .. } = &mut *c;
-            let shot = shot.as_ref().unwrap();
-            let fit = DRect::new(0.0, 0.0, 300.0, 200.0);
-            (
-                shot.fit,
-                render(
-                    renderer.get_or_insert_with(vectorcraft_render::Renderer::new),
-                    shot,
-                    fit,
-                    [300, 200],
-                    Highlight::AllAffected,
-                    Overprints::Preserve,
-                    egui::Color32::RED,
-                ),
-            )
-        });
-        assert!(shot_fit.contains(Point::new(300.0, 200.0)));
+        let img = render(r, shot, fit, [300, 200], Highlight::AllAffected, Overprints::Preserve, egui::Color32::RED);
         let at = |x: usize, y: usize| img.pixels[y * img.width() + x];
         assert_eq!(at(100, 60), egui::Color32::RED, "inside the transparent rectangle");
         let apart = at(260, 160);
         assert!(apart.r() == apart.g() && apart.g() == apart.b(), "the lone square is grey: {apart:?}");
         // Without a highlight it is in colour.
-        let plain = pixels();
+        let plain = render(r, shot, fit, [300, 200], Highlight::None, Overprints::Preserve, egui::Color32::RED);
         assert!(plain.pixels.iter().any(|p| i32::from(p.b()) > i32::from(p.r()) + 40), "the blue shows");
     }
 
@@ -467,20 +516,18 @@ mod tests {
     fn edits_wait_for_refresh_and_settings_drive_the_report() {
         let mut app = app();
         frame(&mut app);
-        let text = crate::tests_labels::painted_text(&mut app, show);
-        assert!(!text.contains("Changed since"), "{text}");
+        assert!(!stale(&app));
         app.run("select.all", json!({})).unwrap();
         app.run("transparency.set", json!({"opacity": 100})).unwrap();
-        let text = crate::tests_labels::painted_text(&mut app, show);
-        assert!(text.contains("Changed since the last Refresh."), "{text}");
+        assert!(stale(&app), "an edit waits for Refresh");
         let v = command(&mut app, &json!({"highlight": "transparentObjects"})).unwrap();
         assert_eq!(v["counts"]["transparentObjects"], 0, "an opaque document");
-        // A preset and options: balance 0 rasterizes; the dropdown then reads [Custom].
+        assert!(!stale(&app), "command refreshes");
+        // A preset and options: balance 0 rasterizes; the preset then reads [Custom].
         let v = command(&mut app, &json!({"preset": "low", "options": {"balance": 0}, "showOptions": true})).unwrap();
         assert_eq!((v["options"]["balance"].as_f64(), v["options"]["gradientPpi"].as_f64()), (Some(0.0), Some(150.0)));
         assert!(app.ui.flattener_preview.show_options);
-        let text = crate::tests_labels::painted_text(&mut app, show);
-        assert!(text.contains("[Custom]") && text.contains("Raster/Vector Balance:"), "{text}");
+        assert!(custom(&app));
         assert!(command(&mut app, &json!({"highlight": "nope"})).is_err());
         // The settings persist with the UI state.
         let back: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
@@ -488,16 +535,152 @@ mod tests {
     }
 
     #[test]
-    fn zoom_and_pan_stay_inside_the_document() {
-        let fit = DRect::new(0.0, 0.0, 200.0, 100.0);
-        let mut v = View::default();
-        assert_eq!(v.visible(fit), fit);
-        v.zoom_at(fit, Point::new(50.0, 25.0), 2.0);
-        let r = v.visible(fit);
-        assert!((r.width() - 100.0).abs() < 1e-9 && r.x0 >= 0.0 && r.y0 >= 0.0, "{r:?}");
-        v.pan(fit, (-1000.0, 0.0));
-        assert_eq!(v.visible(fit).x0, 0.0);
-        v.zoom_at(fit, Point::new(0.0, 0.0), 0.25);
-        assert_eq!(v.visible(fit), fit, "never smaller than fit");
+    fn the_flattener_selectors_and_preview_fit_a_narrow_dock() {
+        use craft::ui::contract::Role;
+
+        let mut panel = crate::tests::panel_harness::Panel::new(app(), show);
+        let width = 100.0;
+        panel.room(vec2(width, 520.0)).frame();
+        panel.frame();
+        for name in ["Highlight", "Overprints", "Preset:"] {
+            let rect = panel.rect_role(name, Role::COMBO_BOX);
+            assert!(rect.left() >= 0.0 && rect.right() <= width, "{name} overflows the dock at {rect:?}");
+        }
+        let pane = panel.rect("Flattener Preview");
+        assert!(pane.left() >= 0.0 && pane.right() <= width, "preview overflows the dock at {pane:?}");
+    }
+
+    #[test]
+    fn the_flattener_selectors_keep_their_caption_rows_when_the_panel_is_wide() {
+        use craft::ui::contract::Role;
+
+        let mut panel = crate::tests::panel_harness::Panel::new(app(), show);
+        panel.room(vec2(440.0, 600.0)).frame();
+        panel.frame();
+        for (caption, role, picker) in
+            [("Refresh", Role::BUTTON, "Highlight"), ("Overprints:", Role::LABEL, "Overprints"), ("Preset:", Role::LABEL, "Preset:")]
+        {
+            let row = panel.rect_role(caption, role);
+            let field = panel.rect_role(picker, Role::COMBO_BOX);
+            assert!(field.left() >= row.right() && field.center().y >= row.top() && field.center().y <= row.bottom(), "{picker} is below {caption}");
+        }
+    }
+
+    #[test]
+    fn the_compact_flattener_applies_a_preset_and_refreshes_the_snapshot() {
+        use craft::ui::contract::Role;
+
+        let mut app = app();
+        command(&mut app, &json!({"preset": "high", "options": {"balance": 12}})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, show);
+        panel.room(vec2(100.0, 520.0)).frame();
+        panel.frame();
+        panel.click_role("Preset:", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        assert_eq!(panel.app().ui.flattener_preview.options.balance, 12.0);
+        panel.click_role("Preset:", Role::COMBO_BOX);
+        panel.click("High Resolution");
+        let expected = FlattenOptions::preset("high").unwrap();
+        assert_eq!(panel.app().ui.flattener_preview.options, expected);
+        panel.app().run("select.all", json!({})).unwrap();
+        panel.app().run("transparency.set", json!({"opacity": 100})).unwrap();
+        assert!(stale(&panel.app()), "the live document changed");
+        panel.click("Refresh");
+        assert!(!stale(&panel.app()), "Refresh takes a new snapshot");
+        let well = panel.rect("Flattener Preview");
+        panel.click_at(well.center());
+        assert!(!panel.app().flattener_preview.view.fit, "the compact preview still zooms");
+    }
+
+    /// The panel in a fixture, and the preview pane's bounds.
+    fn shown_pane() -> (std::rc::Rc<std::cell::RefCell<VectorcraftApp>>, craft::ui::testing::Fixture, egui::Rect) {
+        let app = std::rc::Rc::new(std::cell::RefCell::new(app()));
+        let drawn = std::rc::Rc::clone(&app);
+        let mut fixture = craft::ui::testing::Fixture::new(move |ui| show(&mut drawn.borrow_mut(), ui));
+        fixture.settle();
+        let pane = fixture.by_label("Flattener Preview").unwrap_or_else(|| panic!("no preview pane"));
+        (app, fixture, pane.rect)
+    }
+
+    /// One click at `at` with `modifiers` held, far enough from the last that the two make no double click.
+    fn click(fixture: &mut craft::ui::testing::Fixture, at: egui::Pos2, modifiers: egui::Modifiers) {
+        fixture.advance(2.0).hold(modifiers).click_at(at).hold(egui::Modifiers::NONE).idle(1);
+    }
+
+    fn view(app: &std::rc::Rc<std::cell::RefCell<VectorcraftApp>>) -> PreviewView {
+        app.borrow().flattener_preview.view.clone()
+    }
+
+    #[test]
+    fn a_click_zooms_in_about_the_point_and_an_alt_click_zooms_out() {
+        let (app, mut fixture, well) = shown_pane();
+        assert!(view(&app).fit);
+        let at = well.center() + egui::vec2(well.width() * 0.1, well.height() * 0.1);
+        click(&mut fixture, at, egui::Modifiers::NONE);
+        let zoomed = view(&app);
+        assert!(!zoomed.fit, "a click leaves fit");
+        // 1 is about the fit: the picture is sized to the well.
+        assert!(zoomed.transform.scale > 1.5, "a click zooms in: {zoomed:?}");
+        // The point clicked stays under the pointer: off center, the picture moved away from the well's center.
+        assert!(zoomed.transform.offset.x < 0.0 && zoomed.transform.offset.y < 0.0, "{zoomed:?}");
+        click(&mut fixture, at, egui::Modifiers::NONE);
+        let closer = view(&app);
+        assert!(closer.transform.scale > zoomed.transform.scale * 1.9, "a second click zooms in further");
+        click(&mut fixture, at, egui::Modifiers::ALT);
+        let out = view(&app);
+        assert!((out.transform.scale - zoomed.transform.scale).abs() < 1e-3, "an Alt-click zooms back out: {out:?}");
+        click(&mut fixture, at, egui::Modifiers::ALT);
+        assert!(view(&app).fit, "an Alt-click to the fit returns to fit");
+    }
+
+    #[test]
+    fn a_click_with_alt_latched_by_the_app_zooms_out() {
+        let mut app = app();
+        let mut frames = craft::ui::testing::Frames::new();
+        let mut pane = None;
+        for _ in 0..60 {
+            frames.frame(Vec::new(), |ui| show(&mut app, ui));
+            let tree = frames.tree();
+            pane = tree
+                .keys()
+                .into_iter()
+                .filter(|key| tree.name_of(*key) == Some("Flattener Preview"))
+                .filter_map(|key| tree.bounds_of(key))
+                .max_by(|a, b| a.area().total_cmp(&b.area()));
+            if pane.is_some() {
+                break;
+            }
+        }
+        let well = pane.unwrap_or_else(|| panic!("no preview pane"));
+        let at = well.center();
+        let primary =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let click = |frames: &mut craft::ui::testing::Frames, app: &mut VectorcraftApp| {
+            frames.advance(2.0);
+            frames.frame(vec![egui::Event::PointerMoved(at), primary(true)], |ui| show(app, ui));
+            frames.frame(vec![primary(false)], |ui| show(app, ui));
+            frames.idle(1, |ui| show(app, ui));
+        };
+        click(&mut frames, &mut app);
+        assert!(!app.flattener_preview.view.fit, "a click zooms in");
+        // Alt held for the user by the app (the Modifier Keys panel), with no Alt key down.
+        frames.latched(craft::keymap::Mods { alt: true, ..Default::default() });
+        click(&mut frames, &mut app);
+        assert!(app.flattener_preview.view.fit, "a click with Alt latched zooms back out to fit");
+    }
+
+    #[test]
+    fn click_zoom_stays_inside_the_zoom_range() {
+        let (app, mut fixture, well) = shown_pane();
+        // Alt-click at fit stays at fit.
+        click(&mut fixture, well.center(), egui::Modifiers::ALT);
+        assert!(view(&app).fit, "no zoom below the fit");
+        for _ in 0..6 {
+            click(&mut fixture, well.center(), egui::Modifiers::NONE);
+        }
+        let most = view(&app);
+        assert!(most.transform.scale <= *most.range.end(), "no zoom past the range: {most:?}");
+        assert!(!most.can_zoom_in(), "clicks reach the most zoom: {most:?}");
     }
 }

@@ -147,7 +147,7 @@ fn a_bare_picture_and_a_version_1_picture_open() {
     v1.extend([0xA0, 0x00, 0x05, 0x50]);
     v1.extend(rect(20, 20, 30, 30));
     v1.push(0xFF);
-    assert!(!crate::is_pict(&v1));
+    assert!(crate::is_pict(&v1));
     let p = import_pict(&v1).unwrap();
     assert!(p.warnings.is_empty(), "{:?}", p.warnings);
     assert_eq!(p.document.artboards[0].rect.size(), (60.0, 40.0).into());
@@ -231,7 +231,7 @@ fn patterns_fill_with_their_average_color() {
     assert_eq!(fill_rgb(&v[0]), Some([128, 128, 128]));
     // eraseRect with an RGB background pattern.
     assert_eq!(fill_rgb(&v[1]), Some([0, 255, 0]));
-    assert!(p.warnings.iter().any(|w| w.contains("average of their colors")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("their average color")), "{:?}", p.warnings);
 }
 
 #[test]
@@ -407,7 +407,7 @@ fn quicktime_jpeg_images_are_placed_by_their_matrix() {
     let [r, g, b, _] = px.get_pixel(1, 1).0;
     assert!(r > 240 && g < 16 && b < 16, "{r} {g} {b}");
     assert!(near(n.geometric_bounds().unwrap(), Rect::new(10.0, 5.0, 18.0, 9.0), 1e-9));
-    assert!(p.warnings.iter().any(|w| w.contains("other than JPEG")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("couldn't be read was left out")), "{:?}", p.warnings);
 }
 
 /// An image whose matrix flattens it is left out, and adds nothing to the document's images.
@@ -457,7 +457,7 @@ fn a_picture_that_never_ends_stops_at_the_opcode_limit() {
     b.resize(b.len() + 2 * ((1 << 22) + 1), 0);
     let p = import_pict(&b).unwrap();
     assert_eq!(paths(&p.document).len(), 1);
-    assert!(p.warnings.iter().any(|w| w.contains("more opcodes")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("limit on what one file may hold")), "{:?}", p.warnings);
 }
 
 /// Regions share one budget of inversion points per picture: past it, a region is left out.
@@ -470,7 +470,7 @@ fn regions_past_the_picture_budget_are_left_out() {
     let body = [rect(0, 0, 1, 16_000), be(&words)].concat();
     let region = [be(&[(body.len() + 2) as i16]), body].concat();
     let p = import_pict(&v2([0, 0, 300, 300], &[(0x81, region.clone()), (0x81, region.clone()), (0x81, region)])).unwrap();
-    assert!(p.warnings.iter().any(|w| w.contains("regions larger")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("skipped")), "{:?}", p.warnings);
     let v = paths(&p.document);
     assert_eq!(v.len(), 2);
     let NodeKind::Path { path, .. } = &v[0].kind else { panic!("a path") };

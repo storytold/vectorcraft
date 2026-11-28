@@ -140,9 +140,8 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if let Some(f) = craft_image_codecs::detect(bytes).and_then(image_format) {
         return Some(f);
     }
-    // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
-    // file or byte 10 of a bare picture (version 1 by its file's name), so a format whose
-    // signature starts the file is checked first.
+    // A PICT is known by its version opcodes after the picture's frame, at byte 522 of a file or
+    // byte 10 of a bare picture, so a format whose signature starts the file is checked first.
     if vectorcraft_metafile::is_pict(bytes) {
         return format("pict");
     }
@@ -193,8 +192,11 @@ fn restore_or_import(
     let mut fallback = None;
     if let Some((intact, bytes)) = editing {
         let native = if intact { bytes() } else { None };
-        match native.and_then(|b| native_file(&b).ok()) {
-            Some((doc, _, warnings)) => return Ok((doc, warnings, true)),
+        match native.and_then(|b| decode_native_file(&b).ok()) {
+            Some((mut doc, _, mut warnings)) => {
+                warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
+                return Ok((doc, warnings, true));
+            }
             None => fallback = Some(if intact { EDITING_DAMAGED } else { EDITING_STALE }),
         }
     }
@@ -205,9 +207,9 @@ fn restore_or_import(
     Ok((doc, warnings, false))
 }
 
-/// A native file's document and details, the colour profiles it carries installed where missing
-/// (with a warning for each that can't be used).
-pub(crate) fn native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
+/// Decode a native file and install its colour profiles, preserving profile and depth warnings.
+/// The caller must assemble any external resources and bind file fonts before layout.
+pub(crate) fn decode_native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
     let f = vectorcraft_format::load_file(bytes).map_err(err)?;
     let mut warnings = super::native::install_profiles(f.profiles);
     warnings.extend(f.depth_notes);
@@ -424,7 +426,8 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             })?
         }
         "vectorcraft" | "template" => {
-            let (d, info, warnings) = native_file(bytes)?;
+            let (mut d, info, mut warnings) = decode_native_file(bytes)?;
+            warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut d));
             native_pdf_compatible = Some(info.pdf_compatible);
             converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;
             (d, warnings, false)
@@ -688,7 +691,8 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
 /// [`open_bytes`] with the `document.open` options in `p` ([`LoadOptions::from_params`]).
 pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
     let update_links = s.prefs.update_links == "automatically";
-    open_read(s, read_for_open(name, bytes, path, p, update_links, s.prefs.low_res_proxy_eps)?)
+    let p = s.prefs.with_pdf_font_choice(p);
+    open_read(s, read_for_open(name, bytes, path, &p, update_links, s.prefs.low_res_proxy_eps)?)
 }
 
 /// A file read for `document.open` but not opened yet ([`read_for_open`], [`open_read`]).
@@ -845,6 +849,13 @@ impl ReadFile {
         r
     }
 
+    /// Is part of the read still to do ([`Self::finish_read`]): the policies and the color mode of a
+    /// file that stopped for its profile question, or the linked files and the type of an answered
+    /// one?
+    pub fn read_left(&self) -> bool {
+        self.rest.is_some() || self.links_left.is_some()
+    }
+
     /// The rest of [`read_for_open_asking`], once: the color management policies with the profile
     /// answer (or as the policy says without one), the color mode `colorMode` asks for, the linked
     /// files and the type. The app runs it off the UI thread once the question is answered.
@@ -860,7 +871,11 @@ impl ReadFile {
         let Some((update_links, low_res_proxy_eps)) = self.links_left.take() else { return };
         let base = crate::cmd::links::LinkBase::file(self.path.as_deref());
         self.links = crate::cmd::links::resolve(&mut self.loaded.doc, base, update_links, low_res_proxy_eps);
-        Session::refresh_text_bounds(&mut self.loaded.doc);
+        for note in Session::refresh_text_bounds(&mut self.loaded.doc) {
+            if !self.loaded.warnings.contains(&note) {
+                self.loaded.warnings.push(note);
+            }
+        }
     }
 
     /// The policies with the profile answer and the color mode `colorMode` asks for, once; the
@@ -869,14 +884,16 @@ impl ReadFile {
         if self.rest.is_none() {
             return Ok(());
         }
+        // One snapshot of the working settings serves the reply and the policies.
+        let working = vectorcraft_color::cms::working_settings();
         // The question the answer was given to, for the reply's `profileChoice`.
-        let question = crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &vectorcraft_color::cms::working_settings());
+        let question = crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &working);
         let answered = match (&self.choice, &question) {
             (Some(c), Some(q)) if c.issue() == q.issue => Some(json!({ "issue": q.issue.id(), "model": q.to_json()["model"], "choice": c.id() })),
             _ => None,
         };
         // A failure leaves the file waiting, unchanged.
-        let (notes, changed) = crate::cmd::colormgmt::apply_open_policies_choosing(&mut self.loaded.doc, self.choice.as_ref())?;
+        let (notes, changed) = crate::cmd::colormgmt::apply_open_policies_choosing(&mut self.loaded.doc, self.choice.as_ref(), &working)?;
         let Some(rest) = self.rest.take() else { return Ok(()) };
         self.answered = answered;
         self.loaded.warnings.extend(notes);

@@ -156,6 +156,7 @@
 	Anti-alias Rasters	栅格消除锯齿
 	Anti-aliased Artwork	图稿抗锯齿
 	Anti-aliasing Method	消除锯齿方法
+@id	language.name	简体中文
 antiAlias	Sharp	锐利
 	Crisp	清晰
 	Strong	强
@@ -869,6 +870,7 @@ antiAlias	Sharp	锐利
 	Direct Selection Tool	直接选择工具
 	Direction Handles	方向手柄
 	Disable Auto Add/Delete	禁用自动添加/删除锚点
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete 删除锚点并保持路径连接
 	Interpolate Control Points When Moving Anchors	移动锚点时插值方向手柄
 	Disable Opacity Mask	禁用不透明度蒙版
 	Discard	不存储
@@ -1426,6 +1428,9 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Tracing presets	描摹预设
+file-filter	Action sets	动作组
+file-filter	Composite fonts	复合字体
 file-filter	Preferences	首选项
 file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG
@@ -1628,6 +1633,17 @@ file-filter	Templates	模板
 	Graphic Styles	图形样式
 	Graphic Styles Options	图形样式选项
 	Graphics	图形
+	Show Contrast	显示对比度
+	Contrast For	对比度适用于
+	Normal Text	普通文本
+	Large Text	大号文本
+	Contrast Background	对比度背景
+	Behind Selection	所选对象后方
+	Current Color	当前颜色
+	Pass	通过
+	Fail	未通过
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 最低对比度：普通文本 AA 4.5:1 (1.4.3) 和 AAA 7:1 (1.4.6)，大号文本 AA 3:1 和 AAA 4.5:1，图形和控件 AA 3:1 (1.4.11)。
+	The background is read at the center of the selection.	背景在所选对象的中心读取。
 	Gravity	重力
 	Grays	灰度级数
 	Grays and Neutrals	灰色和中性色
@@ -2367,6 +2383,12 @@ file-filter	Templates	模板
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}；{size}；{detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	分辨率不可用
+	estimated memory {memory}	估计内存 {memory}
+	memory unavailable	内存不可用
+	Unknown format	未知格式
 	{kind}, {instances}	{kind}，{instances}
 	{kind}, {rows} × {cols}	{kind}，{rows} × {cols}
 	{grid}, {instances}	{grid}，{instances}
@@ -2513,6 +2535,7 @@ file-filter	Templates	模板
 	One Point Perspective Preset 5	一点透视预设 5
 	Only Web Colors	仅 Web 颜色
 	Opacity	不透明度
+	Show Opacity	显示不透明度
 	Opacity & Mask Define Knockout Shape	不透明度与蒙版定义挖空形状
 	Opacity Mask	不透明度蒙版
 	Opacity Mask Info	不透明度蒙版信息
@@ -2966,6 +2989,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Scale Artwork with Artboard	随画板缩放图稿
 	Artboards: {n}	画板：{n}
 	Rearrange All Artboards…	重新排列所有画板…
+	Rearrange…	重新排列…
+	Selected Artboards: {n}	选定的画板：{n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	单击画布以放置画板 (Esc 取消)
 	Recall Selection	召回选区
 	RECENT	最近使用
 	Recent	最近使用
@@ -3205,7 +3231,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	选择 › 相同 › 填色、描边颜色和填色和描边只匹配全局色板或专色色板的相同色调，而不是其任意色调。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	没有打开文档时显示主页屏幕；关闭时，窗口保持空白，直到你点击主页。
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	在尺寸、位置和对齐中按对象的描边和改变形状的效果测量对象；阴影、发光和模糊不计入测量。
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	缩放为 100% 时，文档的一英寸占 96 个屏幕点，而不是 72 个。
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	缩放为 100% 时，文档的一英寸占显示器上的一英寸；系统未报告可用的显示器尺寸时占 96 个屏幕点。
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	用选择工具双击编组、路径或图像时，会在隔离模式中打开它。
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	图案填色和描边随图稿一起变换，除非变换命令或变换面板的菜单另有选择。
 	Live corner radii scale with the art, unless the scale chooses otherwise.	实时转角半径随图稿一起缩放，除非缩放命令另有选择。
@@ -3216,6 +3242,7 @@ digits	Malayalam	马拉雅拉姆数字
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某个键会运行键盘快捷键中其按住列的工具或命令；快速按下则运行其常规快捷键。
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某个键多少秒后，运行其按住快捷键而不是常规快捷键。
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete 会删除所选锚点并重新拟合每个锚点周围的曲线，而不会在该处断开路径。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移动锚点时，只有一端移动的每条曲线都会保持其相对于两端的形状。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。
@@ -5444,6 +5471,14 @@ imageTrace	Outline	轮廓
 	The script asks to read and write a folder you choose, with everything in it.	脚本请求读写您选择的文件夹及其中的所有内容。
 	Allow Once	允许一次
 	Always Allow This Script	始终允许此脚本
+	No script has kept file access.	没有脚本保留了文件访问权限。
+	Read file	读取文件
+	Read and write file	读取和写入文件
+	Read and write folder	读取和写入文件夹
+	Revoke	收回权限
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	“收回权限”会移除为脚本每个版本保留的访问权限。文件夹的访问权限包括其中的所有内容。
+@msg	Script file access revoked	已收回脚本的文件访问权限
+@msg	The script file access was already revoked	脚本的文件访问权限已被收回
 	Deny	拒绝
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告
@@ -5609,6 +5644,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	脚本文件对话框的 `answer` 必须是以下之一：once、always、deny、stop
 @msg	choose a file or folder first, or deny	请先选择文件或文件夹，或拒绝
 @msg	the script file permissions could not be saved: {e}	无法保存脚本的文件权限：{e}
+@msg	the script file permissions could not be read: {e}	无法读取脚本的文件权限：{e}
 @msg	this script's file access can be allowed only once	此脚本的文件访问只能允许一次
 @msg	Only the person at the keyboard can allow a script's file access	只有键盘前的人才能允许脚本访问文件
 @msg	A script is given at most 2,048 files: the files picked after them were left out	脚本最多获得 2,048 个文件：之后选择的文件已被略去
@@ -5702,6 +5738,12 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Couldn't paste from the clipboard: {e}	无法从剪贴板粘贴：{e}
 @msg	Couldn't paste: the document it was pasted in was closed	无法粘贴：要粘贴到的文档已关闭
 @msg	nothing selected	未选择任何对象
+@msg	`{key}` must be a color or {_1}	`{key}` 必须是颜色或 {_1}
+@msg	the selected objects' colors differ: give `color`	所选对象的颜色不同：请提供 `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	所选对象的颜色不同：请提供 `opacity` 或 `color`
+@msg	the active fill or stroke has no color: give `color`	现用填色或描边没有颜色：请提供 `color`
+@msg	the active fill or stroke is hidden: give `color`	现用填色或描边已隐藏：请提供 `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	现用填色或描边通过不透明度蒙版绘制：请提供 `color`
 @msg	nothing selected is in a group	所选对象均不在编组中
 @msg	the {tool} tool has no options	{tool} 工具没有选项
 @msg	unknown tool `{tool}`	未知工具 `{tool}`
@@ -6179,6 +6221,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Photo Low Fidelity	低保真照片
 	Restricted Colors	受限颜色
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft 通用 CMYK (类 SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft 涂布纸 CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft 非涂布纸 CMYK (FOGRA52)
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	Working RGB	工作 RGB
 	Dot Gain 15%	网点扩大 15%
@@ -6723,6 +6767,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	编组填色或描边上的 3D 效果不绘制任何内容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
 @msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 对象的网格不完整，或含有非数字的值
 @msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，即滤镜的名称
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 滤镜的 id 最多 {MAX_NAME} 个字符
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 滤镜的元素
@@ -7129,6 +7174,8 @@ axis	Y Axis	Y 轴
 	Cancel Plug-in Run	取消运行插件
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} 已完成，但文档或插件在此期间已更改：请重新运行
 @msg	Running “{name}”…	正在运行“{name}”…
+@msg	Plug-in “{name}”: {notice}	增效工具“{name}”：{notice}
+@msg	`notice` must be a string with visible text	`notice` 必须是包含可见文本的字符串
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
@@ -7154,11 +7201,19 @@ axis	Y Axis	Y 轴
 @msg	module is {_1} bytes (limit {_2})	模块为 {_1} 字节（上限 {_2}）
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要批准：它请求 {0}，用户单独安装它时授予这些权限
 @msg	not JSON: {e}	不是 JSON：{e}
-@msg	not a WebAssembly binary (missing \0asm header)	不是 WebAssembly 二进制文件（缺少 \0asm 头）
+@msg	not a WebAssembly binary (missing \\0asm header)	不是 WebAssembly 二进制文件（缺少 \\0asm 头）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	函数类型的参数数目超过上限（{MAX_FUNC_TYPE_VALUES} 个）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	函数类型的结果数目超过上限（{MAX_FUNC_TYPE_VALUES} 个）
 @msg	parameter `{k}`: {what}	参数 `{k}`：{what}
 @msg	parameter `{name}`: {what}	参数 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效工具参数必须是 JSON 对象
 @msg	the module must export its linear memory as `memory`	模块必须将其线性内存导出为 `memory`
+@msg	the module must export `{name}` with the type {signature}	模块必须以类型 {signature} 导出 `{name}`
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	模块有多个 `{MANIFEST_SECTION}` 自定义段
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	内存预算（模块的初始内存为 {initial} 字节，上限 {max_memory_bytes}）
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` 自定义段中的清单必须将 `abi` 设为 {ABI_VERSION}，即此宿主实现的 ABI 版本
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	表预算（模块定义了 {count} 个表，最大的有 {largest} 个元素；上限为 {MAX_TABLES} 个表，每个 {MAX_TABLE_ELEMENTS} 个元素）
+@msg	the module's table section could not be read	无法读取模块的表段
 @msg	the objects to change are no longer in the document	要更改的对象已不在文档中
 @msg	the runtime panicked	运行时崩溃
 @msg	unexpected host trap	宿主发生意外的 trap
@@ -7166,6 +7221,10 @@ axis	Y Axis	Y 轴
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc 返回了 0（内存不足）
 @msg	vc_alloc returned a block outside memory	vc_alloc 返回了内存之外的块
 @msg	vc_run returned error code {packed}	vc_run 返回了错误代码 {packed}
+@msg	did not finish loading within {secs} s	未在 {secs} 秒内完成加载
+@msg	no thread was left to load it	没有剩余的线程来加载它
+@msg	panicked while loading	加载时崩溃
+@msg	panicked while loading: {what}	加载时崩溃：{what}
 @msg	{_1} is not a file	{_1} 不是文件
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} 为 {_2} 字节（上限 {_3}）
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} 个对象（上限 {MAX_OBJECTS}）
@@ -7185,6 +7244,11 @@ axis	Y Axis	Y 轴
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` 和 `maxItems` 必须是 0-{MAX_LIST}，`maxItems` 至少为 1，且默认值的项数在此范围内
 @msg	`name` must be a string	`name` 必须是字符串
 @msg	`opacity` must be a number	`opacity` 必须是数字
+@msg	`opacity` must be a number from 0 to 100	`opacity` 必须是 0 到 100 之间的数字
+@msg	`opacity` must be true or false	`opacity` 必须是 true 或 false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	文字字符没有自己的不透明度：请用“外观”面板的“添加新填色”或“添加新描边”添加填色或描边
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	在符号实例中选中的对象没有自己的填色或描边不透明度
+@msg	no target has that fill or stroke to take the opacity	没有目标具有可接受该不透明度的填色或描边
 @msg	`type` must be "path" or "compound"	`type` 必须是 "path" 或 "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 必须是 1-{MAX_UNIT} 个可打印字符
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` 必须为 `{other}` 列出 1 到 {MAX_CONDITION_VALUES} 个值
@@ -7203,7 +7267,7 @@ axis	Y Axis	Y 轴
 @msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 个数字的列表
 @msg	a new object needs a `path`	新对象需要 `path`
 @msg	a number	数字
-@msg	a painted live effect returns only `objects`	绘制型实时效果只返回 `objects`
+@msg	a painted live effect returns only `objects` and `notice`	绘制型实时效果只返回 `objects` 和 `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	绘制型实时效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
 @msg	a read-only object was left out	漏掉了一个只读对象
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一个只读对象：请以单独的 {{"id": …}} 或原样返回它
@@ -7228,6 +7292,8 @@ axis	Y Axis	Y 轴
 @msg	`plates` requires a stop linked to a spot swatch	`plates` 需要链接到专色色板的渐变色标
 @msg	the output	输出
 @msg	the path has no anchor points	路径没有锚点
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	复合路径 {id} 有隐藏、锁定或参考线成员，因此无法替换其成员
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	复合路径 {id} 有不是路径的成员，因此无法替换其成员
 @msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
 @msg	a number >= {_1}	大于或等于 {_1} 的数字
@@ -7307,6 +7373,8 @@ axis	Y Axis	Y 轴
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 为 {_1}；此主机支持的增效工具 API 级别为 1 到 {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` 只能为 true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 仅适用于 `api` 2 的实时效果 (`kind` "effect")
+@msg	`place` is only for an importer (`kind` "importer")	`place` 仅适用于导入器 (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” 只打开文件而不置入：其清单未设置 `place`
 @msg	`grant` must be a list of permission names	`grant` 必须是权限名称的列表
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知权限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 类型的增效工具需要权限 `{_2}`
@@ -7327,12 +7395,60 @@ axis	Y Axis	Y 轴
 @msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}：处理程序连续 {count} 次失败，其事件已关闭，直到 VectorCraft 再次启动
 @msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要权限 `doc.read`
+@msg	only a filter declares `writes`	只有滤镜才能声明 `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` 列出了未知的对象类型 `{shown}`：请使用 type、image 或 symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` 列出了两次 `{shown}`
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` 列出了 `{shown}`，但 `inputs` 未列出它
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` 需要 `api` {WRITES_API} 或更高
+@msg	`writes` needs the permission `doc.write`	`writes` 需要权限 `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} 不是文字、图像或符号实例
+@msg	the text of type given as `truncated` can't be changed	作为 `truncated` 给出的文字对象的文本不能更改
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	必须是最多 {MAX_INPUT_RUNS} 个条目的列表
+@msg	type needs at least one run	文字至少需要一个文本段
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	文本 {bytes} 字节（上限 {MAX_INPUT_TEXT}）
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	段落 {paragraphs} 个（上限 {MAX_INPUT_RUNS}）
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	整个输出中的文本超过 {MAX_INPUT_TEXT_TOTAL} 字节
+@msg	unknown key '{k}'	未知键 '{k}'
+@msg	must be a list of 6 numbers	必须是 6 个数字的列表
+@msg	a number is out of range (limit ±{MAX_COORD})	有数字超出范围（上限 ±{MAX_COORD}）
+@msg	flattens the object to a line or a point	会把对象压扁成一条线或一个点
+@msg	an object flattened to a line or a point can't be placed again	已压扁成线或点的对象无法重新放置
+@msg	must be a number from 0 to 1	必须是 0 到 1 之间的数字
+@msg	must be the name of a symbol	必须是符号的名称
+@msg	'{shown}' is not a symbol in this document	'{shown}' 不是此文档中的符号
+@msg	a run must be {{"text", "style", "inline"?}}	文本段必须是 {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` 含有随文图形的字符
+@msg	inline graphics can't be added, removed, reordered or changed	随文图形不能添加、删除、重新排序或更改
+@msg	the characters of threaded type can't be changed	串接文本的字符不能更改
+@msg	the characters of type with ruby can't be changed	带注音的文字的字符不能更改
+@msg	expected {count} paragraph styles, one per paragraph	应有 {count} 个段落样式，每个段落一个
+@msg	the document has no Kinsoku set named '{shown}'	文档中没有名为 '{shown}' 的 Kinsoku 集
+@msg	must be 1-{MAX_FAMILY} printable characters	必须是 1-{MAX_FAMILY} 个可打印字符
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	读取交给它的对象，以及文档的设置、画板、图层和色板
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` 必须列出互不相同的部分：settings、artboards、layers 或 swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` 仅适用于 `api` 3 或更高、具有权限 `doc.read` 的滤镜或带 `commands` 的实时效果
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	增效工具请求的文档信息太大，无法传递：画板、图层和色板合计最多 {MAX_CONTEXT_ITEMS} 个，最多 {MAX_CONTEXT_BYTES} 字节
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	内存预算（对象 {_1} 需要 {size} 字节的输入，剩余 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
 @msg	instruction budget	指令预算
 @msg	time budget	时间预算
 @msg	memory budget (the selection is too large to hand over)	内存预算（所选内容太大，无法传递）
 @msg	output size ({what} is {len} bytes, limit {max})	输出大小（{what} 为 {len} 字节，上限 {max}）
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason}（{id}，{script} 第 {line} 行，第 {column} 列）
+@msg	{reason} ({id}, {script})	{reason}（{id}，{script}）
+@msg	memory budget	内存预算
+@msg	call depth	调用深度
+@msg	run(input, params) returned no output object	run(input, params) 未返回输出对象
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" 需要 `script`：清单旁边增效工具 .js 文件的名称
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` 必须是清单所在文件夹中 .js 文件的名称：1-128 字节，不含文件夹，不含 `:`，不以 `.` 开头
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` 是脚本的文本，只在 plugin.install 的 dataBase64 接受的 JSON 中给出：.vcplugin 文件在 `script` 中指定其脚本
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript 增效工具的清单指定 `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" 用于对象滤镜（`kind` "filter"），而不是 `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript 增效工具不能列出权限 `{name}`：在主机的权限中，它可以列出 `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly 模块的清单省略 `runtime`："js" 用于 JavaScript 增效工具
+@msg	a JavaScript plug-in makes no command calls	JavaScript 增效工具不调用命令
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) 接受两个数字
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) 接受一个级别（0（错误）、1（警告）、2（信息）或 3（调试））和一个字符串
 @msg	the plug-in's grant can't be removed from the plug-in store	无法从增效工具存储中移除该增效工具的授权
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
@@ -8680,7 +8796,7 @@ breakText	Glyphs	字形
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	无法读取配置文件 {name}，因此新文档使用默认设置：{reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	陷印：距离近到需要陷印的对象超过 {_1} 对，或处于同一水平范围的对象过多；请减少每次陷印的对象
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	除废框和除废线：图稿外侧放不下任何除废线，且除废框已关闭
-@msg	\ at end of pattern	模式以 \ 结尾
+@msg	\\ at end of pattern	模式以 \\ 结尾
 @msg	`alignOn` cannot be empty	`alignOn` 不能为空
 @msg	`alignOn` must be a string	`alignOn` 必须是字符串
 @msg	`align` must be a string	`align` 必须是字符串
@@ -8790,7 +8906,7 @@ breakText	Glyphs	字形
 @msg	`{u}` is no Unicode character	`{u}` 不是 Unicode 字符
 @msg	`{word}` isn't in the custom dictionary	`{word}` 不在自定义词典中
 @msg	a CMap has too many mappings	某个 CMap 的映射过多
-@msg	a \u escape needs four hexadecimal digits	\u 转义需要四位十六进制数字
+@msg	a \\u escape needs four hexadecimal digits	\\u 转义需要四位十六进制数字
 @msg	a comma in an XPath expression must separate function arguments	XPath 表达式中的逗号只能用来分隔函数参数
 @msg	a document holds at most {_1} SVG filters	一个文档最多包含 {_1} 个 SVG 滤镜
 @msg	a document with unsaved changes has no recovery copy	有未保存更改的文档没有恢复副本
@@ -9155,6 +9271,8 @@ breakText	Glyphs	字形
 @msg	`dataBase64` is larger than the module limit	`dataBase64` 超过了模块大小上限
 @msg	`dataBase64` is not valid base64	`dataBase64` 不是有效的 base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` 不能与 `ids`、`reverse` 或 `append` 同时使用
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` 不能与 `ids`、`id` 或 `item` 同时使用
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` 不能与 `brush` 同时使用
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` 和 `childLimit` 用于截取摘要：请传入 `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` 是设计名称，或用 null 表示普通柱形
 @msg	`design` is a design name, or null for the default marker	`design` 是设计名称，或用 null 表示默认标记
@@ -9642,6 +9760,7 @@ breakText	Glyphs	字形
 @msg	give a pattern name or select an object painted with a pattern	请给出图案名称，或选择用图案上色的对象
 @msg	give at least one of clip, invert, disabled, linked	请至少给出 clip、invert、disabled、linked 之一
 @msg	give color, none, swatch or gradient	请给出 color、none、swatch 或 gradient
+@msg	give color, none, swatch, gradient or opacity	请给出 color、none、swatch、gradient 或 opacity
 @msg	give dataBase64	请给出 dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	请给出 at (一次单击) 或 area (围绕重叠处绘制的路径)
 @msg	give formats or a preset, not both	请给出 formats 或一个预设，不能两者都给
@@ -9943,7 +10062,7 @@ breakText	Glyphs	字形
 @msg	not a print presets file: {e}	不是打印预设文件：{e}
 @msg	not a stored or deflated central record	不是以存储或 deflate 方式保存的中央记录
 @msg	not a valid SVGZ file: {e}	不是有效的 SVGZ 文件：{e}
-@msg	not an RTF file: it doesn't start with {\rtf	不是 RTF 文件：它不是以 {\rtf 开头
+@msg	not an RTF file: it doesn't start with {\\rtf	不是 RTF 文件：它不是以 {\\rtf 开头
 @msg	not an image VectorCraft reads (see document.formats)	不是 VectorCraft 可读取的图像 (参见 document.formats)
 @msg	not area type (text in a frame) outside perspective	不是透视之外的区域文字 (文本框中的文本)
 @msg	not editing an opacity mask	当前没有在编辑不透明度蒙版
@@ -10624,6 +10743,11 @@ breakText	Glyphs	字形
 	No objects are selected.	未选择任何对象。
 	Open a document to mark its fold lines.	打开文档以标记其折线。
 	Remove Fold Line Role	移除线条类型
+	Fold Angle	折叠角度
+	Set Fold Angle…	设置折叠角度…
+	Set Fold Angle	设置折叠角度
+	Reset Fold Angle	重置折叠角度
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	请选择未锁定且未隐藏的压痕线、半切线或打孔线
 	Check	检查
 	Check Fold Lines	检查折线
 @msg	No cut lines are in the selection.	所选内容中没有切割线。

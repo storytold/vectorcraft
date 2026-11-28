@@ -7,8 +7,10 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Vec2};
 use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, LineJoin, StrokeAlign, StrokeLayer};
 
 mod area;
+mod attr_ranges;
 mod char_style;
 mod composite;
+mod file_fonts;
 mod kinsoku_set;
 mod object;
 mod para_style;
@@ -17,6 +19,9 @@ mod tabs_lists;
 mod wrap;
 
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
+pub use attr_ranges::{
+    AttrRangeError, CHAR_MITER_LIMIT, CHAR_ROTATION, CHAR_SCALE, CHAR_SPACING, FONT_SIZE, LEADING, MAX_BASELINE_SHIFT, MAX_PARA_DISTANCE,
+};
 use char_style::yes;
 pub use char_style::{
     CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, GlyphForm, MAX_AKI, MAX_DIACRITIC_POSITION, MAX_TSUME,
@@ -26,6 +31,7 @@ pub use composite::{
     COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX, CharClass,
     CompositeClass, CompositeClasses, CompositeFont, CompositePart, CompositeParts, CustomCharSet,
 };
+pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFontFace, FileFonts, MAX_FILE_FONTS, text_hash};
 pub(crate) use kinsoku_set::read_sets as read_kinsoku_sets;
 pub use kinsoku_set::{KINSOKU_BUILT_IN, KINSOKU_CATEGORY_MAX, KINSOKU_NAME_MAX, KINSOKU_SEQUENCE, KINSOKU_SETS_MAX, KinsokuSet};
 pub use para_style::{
@@ -131,6 +137,10 @@ pub struct TextObject {
     /// file saves the count only when it is not 0.
     #[serde(default, rename = "listCount", skip_serializing_if = "crate::skip::is_default")]
     pub list_count: u32,
+    /// The fonts the file this type came from carried for fonts that aren't available here,
+    /// which draw it until its text is edited ([`FileFonts`]); `None` for other type.
+    #[serde(default, rename = "fileFonts", skip_serializing_if = "Option::is_none")]
+    pub file_fonts: Option<Box<FileFonts>>,
     /// Threaded text: as [`Self::list_count`], the counts the earlier frames carry into this frame
     /// at list levels 2 on, level 2 first ([`ListCounts::from_parts`]). Empty when they are all 0,
     /// and the file saves them only when not empty. A file's longer list opens with the first 8.

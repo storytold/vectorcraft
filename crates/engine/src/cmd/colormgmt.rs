@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Color Settings…",
             ["Edit"],
             Some("Cmd+Shift+K"),
-            "{rgb?: profile, cmyk?: profile, intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool, rgbPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\", cmykPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\"|\"preserveNumbers\", askMismatchOpen?: bool, askMismatchPaste?: bool, askMissingOpen?: bool (all false by default)} set the working spaces, the color management policies and the Ask boxes → {rgb, cmyk, intent, bpc, rgbPolicy, cmykPolicy, askMismatchOpen, askMismatchPaste, askMissingOpen, profiles: [{name, kind, builtin}]}. With askMismatchOpen or askMissingOpen on, the desktop app's File › Open asks what to do when the profile of a document's color mode is not the working space, or it has none (document.open takes the answer as profileChoice; it never asks); with askMismatchPaste on, Paste asks whether colors copied from a document with another profile keep their numbers or convert (edit.paste takes it as profileMismatch; see clipboard.profileMismatch). A policy decides what opening a document (document.open, file.newFromTemplate, file.revert) does with an RGB or CMYK profile it is tagged with that is not the working space: preserveEmbedded (default) keeps it; off and preserveNumbers take it off and keep the color numbers; convert converts the colors of that model into the working space with the intent and bpc and takes it off. The open reply's warnings name each profile taken off or converted, and a document a policy changed opens with unsaved changes. The desktop app and vectorcraft-cli keep them in `Color Settings.json` next to the preferences and use them again at the next start (not with VECTORCRAFT_NO_PREFS); saved settings naming a profile that is gone leave the defaults",
+            "{rgb?: profile, cmyk?: profile (built in: \"VectorCraft Generic CMYK (SWOP-like)\" (default), \"VectorCraft Coated CMYK (FOGRA51)\" and \"VectorCraft Uncoated CMYK (FOGRA52)\" (computed from Fogra's characterization data), \"Device CMYK (uncalibrated)\"), intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool, rgbPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\", cmykPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\"|\"preserveNumbers\", askMismatchOpen?: bool, askMismatchPaste?: bool, askMissingOpen?: bool (all false by default)} set the working spaces, the color management policies and the Ask boxes → {rgb, cmyk, intent, bpc, rgbPolicy, cmykPolicy, askMismatchOpen, askMismatchPaste, askMissingOpen, profiles: [{name, kind, builtin}]}. With askMismatchOpen or askMissingOpen on, the desktop app's File › Open asks what to do when the profile of a document's color mode is not the working space, or it has none (document.open takes the answer as profileChoice; it never asks); with askMismatchPaste on, Paste asks whether colors copied from a document with another profile keep their numbers or convert (edit.paste takes it as profileMismatch; see clipboard.profileMismatch). A policy decides what opening a document (document.open, file.newFromTemplate, file.revert) does with an RGB or CMYK profile it is tagged with that is not the working space: preserveEmbedded (default) keeps it; off and preserveNumbers take it off and keep the color numbers; convert converts the colors of that model into the working space with the intent and bpc and takes it off. The open reply's warnings name each profile taken off or converted, and a document a policy changed opens with unsaved changes. The desktop app and vectorcraft-cli keep them in `Color Settings.json` next to the preferences and use them again at the next start (not with VECTORCRAFT_NO_PREFS); saved settings naming a profile that is gone leave the defaults",
             always,
             color_settings
         ),
@@ -169,7 +169,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Overprint Black…",
             ["Edit", "Edit Colors"],
             None,
-            "{remove?: false, percentage?: 100, fill?: true, stroke?: true, includeCmyBlacks?: false, includeSpotBlacks?: false, ids?} make the black fills and/or strokes of the selection (or ids; groups: their contents; type: its characters) overprint, or stop (remove). Black: K ≥ percentage with no C, M or Y (any with includeCmyBlacks), not linked to a spot swatch (unless includeSpotBlacks); a gradient is black when every stop is → {changed: objects}",
+            "{remove?: false, percentage?: 100, fill?: true, stroke?: true, includeCmyBlacks?: false, includeSpotBlacks?: false, ids?} make the black fills and/or strokes of the selection (or ids; groups: their contents; type: its characters; a grayscale or 1-bit image colorized by paint.setFill: its color, as a fill) overprint, or stop (remove). Black: K ≥ percentage with no C, M or Y (any with includeCmyBlacks), not linked to a spot swatch (unless includeSpotBlacks); a gradient is black when every stop is → {changed: objects}",
             has_doc,
             super::overprint::overprint_black
         ),
@@ -562,16 +562,30 @@ fn mode_converter(mode: ColorMode, intent: Option<Intent>, grays: Grays) -> impl
 }
 
 /// The name and color of each global swatch of `d`, for [`mode_color`].
-fn global_bases(d: &vectorcraft_doc::Document) -> Vec<(String, Color)> {
-    d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect()
+fn global_bases(d: &vectorcraft_doc::Document) -> BTreeMap<String, Color> {
+    let mut first = BTreeMap::new();
+    for w in d.swatches_iter() {
+        // An ineligible first record still shadows a later global solid of the same name.
+        first.entry(w.name.as_str()).or_insert(w);
+    }
+    first
+        .into_values()
+        .filter_map(|w| {
+            if !w.global {
+                return None;
+            }
+            let Paint::Solid { color, swatch: None, .. } = &w.paint else { return None };
+            Some((w.name.clone(), d.linked_color(*color, w.spot)))
+        })
+        .collect()
 }
 
 /// The color Document Color Mode gives `col` (swatch link `link`): a tint of a global swatch in
 /// `bases` (already converted) is that swatch's color at its tint; any other color goes through
 /// `conv` ([`mode_converter`]).
-fn mode_color(col: &Color, link: proof::Link, bases: &[(String, Color)], conv: &dyn Fn(&Color) -> Color) -> Color {
-    match link.and_then(|(name, tint)| Some((bases.iter().find(|(n, _)| n == name)?, tint))) {
-        Some(((_, base), tint)) if tint < 1.0 => base.tinted(tint),
+fn mode_color(col: &Color, link: proof::Link, bases: &BTreeMap<String, Color>, conv: &dyn Fn(&Color) -> Color) -> Color {
+    match link.and_then(|(name, tint)| Some((bases.get(name)?, tint))) {
+        Some((base, tint)) if tint < 1.0 => base.tinted(tint),
         _ => conv(col),
     }
 }
@@ -685,8 +699,8 @@ fn convert_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Co
         vectorcraft_brush::store(d, &brushes);
     }
     // This pass gives tint swatches their converted swatch's color at their tint; the passes above already did the same for the art's tints.
-    d.map_solid_paints(&mut |c, link, tint| match bases.iter().find(|(n, _)| Some(n) == link.as_ref()) {
-        Some((_, base)) if *tint < 1.0 => {
+    d.map_solid_paints(&mut |c, link, tint| match link.as_ref().and_then(|name| bases.get(name)) {
+        Some(base) if *tint < 1.0 => {
             *c = base.tinted(*tint);
             true
         }
@@ -704,7 +718,7 @@ fn convert_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Co
 /// from. → a note for each profile, and whether `d` changed.
 pub(crate) fn apply_open_policies(d: &mut vectorcraft_doc::Document) -> (Vec<String>, bool) {
     // Without a choice nothing can fail.
-    apply_open_policies_choosing(d, None).unwrap_or_default()
+    apply_open_policies_choosing(d, None, &cms::working_settings()).unwrap_or_default()
 }
 
 /// What opening a document can ask about its profile (Edit › Color Settings' Ask When Opening
@@ -879,10 +893,14 @@ impl ProfileQuestion {
 /// mismatch choice takes the place of the policy of the document's color mode, and a missing
 /// choice tags the document after the policies ran. A choice for the other kind of question, or
 /// for a document with none, is not used. → as [`apply_open_policies`]; an error when the profile
-/// to assign is not a profile of that model.
-pub(crate) fn apply_open_policies_choosing(d: &mut vectorcraft_doc::Document, choice: Option<&ProfileChoice>) -> Result<(Vec<String>, bool)> {
-    let working = cms::working_settings();
-    let question = ProfileQuestion::of(d, &working);
+/// to assign is not a profile of that model. `working` is the settings snapshot the question is
+/// built from and the policies are read from.
+pub(crate) fn apply_open_policies_choosing(
+    d: &mut vectorcraft_doc::Document,
+    choice: Option<&ProfileChoice>,
+    working: &ColorSettings,
+) -> Result<(Vec<String>, bool)> {
+    let question = ProfileQuestion::of(d, working);
     let choice = choice.filter(|c| question.as_ref().is_some_and(|q| q.issue == c.issue()));
     // A mismatch answer stands in for the policy of the document's color mode.
     let chosen = |model: ColorMode, policy: Policy| -> (Policy, bool) {
@@ -1595,4 +1613,23 @@ fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
     }
     Ok(json!({"name": name, "spot": spot}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The policies come from the settings snapshot the question was built from, not from the
+    /// working settings as they are when the policies run.
+    #[test]
+    fn open_policies_use_the_snapshot_they_are_given() {
+        let tagged = |d: &mut vectorcraft_doc::Document| d.color_profiles.rgb = Some(cms::canonical_name(cms::WIDE_GAMUT_RGB).to_string());
+        let snapshot = ColorSettings { rgb_policy: Policy::Off, ..ColorSettings::default() };
+        let mut d = vectorcraft_doc::Document::new(100.0, 100.0);
+        tagged(&mut d);
+        let (notes, changed) = apply_open_policies_choosing(&mut d, None, &snapshot).unwrap();
+        assert!(changed, "the Off policy of the snapshot takes the profile off");
+        assert_eq!(d.color_profiles.rgb, None);
+        assert!(notes.iter().any(|n| n.contains("policy is")), "{notes:?}");
+    }
 }
