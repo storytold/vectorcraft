@@ -104,6 +104,8 @@ fn canceled_custom_numbers_and_variation_choices_do_not_reach_the_brush() {
         ("6 pt. Flat", "angle", "Angle:", "30", 30.0, "/angle"),
         ("Bristle Round", "density", "Bristle Density:", "88", 88.0, "/density"),
         ("Confetti", "hueJitter", "Hue Jitter", "30", 30.0, "/hue_jitter"),
+        ("Confetti", "saturationJitter", "Saturation Jitter", "30", 30.0, "/saturation_jitter"),
+        ("Confetti", "brightnessJitter", "Brightness Jitter", "30", 30.0, "/brightness_jitter"),
     ] {
         let mut app = app();
         app.run("brush.options", json!({"name": brush, "params": {}})).unwrap();
@@ -186,7 +188,7 @@ fn canceled_art_width_drag_restores_the_opening_width() {
     let initial = fields_of(&panel.app()).number("width").unwrap();
     assert_eq!(initial, 100.25, "Cancel must preserve a valid fractional stored width");
     let mode = fields_of(&panel.app()).text("widthMode").map(str::to_owned);
-    panel.click_role("Width", Role::COMBO_BOX);
+    panel.click_role("Width: Mode", Role::COMBO_BOX);
     panel.key(Key::ArrowDown, Modifiers::NONE);
     panel.key(Key::Escape, Modifiers::NONE);
     assert_eq!(fields_of(&panel.app()).text("widthMode").map(str::to_owned), mode);
@@ -212,6 +214,56 @@ fn canceled_art_width_drag_restores_the_opening_width() {
     assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
     panel.app().run("edit.undo", json!({})).unwrap();
     assert_eq!(panel.app().run("brush.get", json!({"name": "Arrow"})).unwrap(), original);
+}
+
+/// Pattern Brush Options' Scale row: a held drag ended with Escape and a mode menu closed with
+/// Escape leave the open dialog's fields as they opened, and Cancel leaves the brush as it was; a
+/// released drag is kept by OK.
+#[test]
+fn canceled_pattern_scale_edits_do_not_reach_the_brush() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    let mut app = app();
+    app.run("brush.options", json!({"name": "Diamonds", "params": {"scale": 100.25}})).unwrap();
+    let original = app.run("brush.get", json!({"name": "Diamonds"})).unwrap();
+    let undo = app.session.active().unwrap().history.undo.len();
+    let mut panel = Panel::new(app, draw_hosted_options);
+    panel.room(egui::vec2(1000.0, 1000.0));
+    open(&mut panel.app(), "Diamonds");
+    panel.frame();
+    let initial = fields_of(&panel.app()).number("scale").unwrap();
+    assert_eq!(initial, 100.25, "Cancel must preserve a valid fractional stored scale");
+    let mode = fields_of(&panel.app()).text("scaleMode").map(str::to_owned);
+    panel.click_role("Scale: Mode", Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Escape, Modifiers::NONE);
+    assert!(is_open(&panel.app()));
+    assert_eq!(fields_of(&panel.app()).text("scaleMode").map(str::to_owned), mode);
+    panel.drag_hold_role("Scale", Role::SLIDER, egui::vec2(40.0, 0.0));
+    assert_ne!(fields_of(&panel.app()).number("scale"), Some(initial), "the held drag previews another scale");
+    panel.key(Key::Escape, Modifiers::NONE);
+    panel.release();
+    assert!(is_open(&panel.app()));
+    assert_eq!(fields_of(&panel.app()).number("scale"), Some(initial), "the canceled drag restores the opening scale");
+    panel.click("Cancel");
+    panel.frame();
+    assert_eq!(panel.app().run("brush.get", json!({"name": "Diamonds"})).unwrap(), original);
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+
+    open(&mut panel.app(), "Diamonds");
+    panel.frame();
+    panel.drag_hold_role("Scale", Role::SLIDER, egui::vec2(40.0, 0.0));
+    panel.release();
+    let accepted = fields_of(&panel.app()).number("scale").unwrap();
+    assert_ne!(accepted, initial);
+    panel.click("OK");
+    panel.frame();
+    assert_eq!(panel.app().run("brush.get", json!({"name": "Diamonds"})).unwrap()["scale"], accepted);
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(panel.app().run("brush.get", json!({"name": "Diamonds"})).unwrap(), original);
 }
 
 /// What a step of the table expects at a JSON pointer of the saved brush.
@@ -278,13 +330,16 @@ fn dialog_fields_become_brush_options_params() {
         vec![
             (
                 vec![json!({"sizeMode": "fixed", "sizeMin": 5000, "spacingMode": "pressure", "scatterMode": "random", "rotationMode": "random",
-                    "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift", "hueJitter": 400})],
+                    "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift", "hueJitter": 400, "saturationJitter": 400,
+                    "brightnessJitter": 400})],
                 vec![
                     ("/size", Is(json!([5000.0, 140.0]))),
                     ("/rotation/0", Is(json!(-180.0))),
                     ("/modes", Is(json!(["fixed", "pressure", "random", "random"]))),
                     ("/rotation_relative_to_path", Is(json!(true))),
                     ("/hue_jitter", Is(json!(180.0))),
+                    ("/saturation_jitter", Is(json!(100.0))),
+                    ("/brightness_jitter", Is(json!(100.0))),
                     ("/colorization/method", Is(json!("hueShift"))),
                     ("/colorization/key", Object),
                 ],
@@ -403,6 +458,70 @@ fn ok_redraws_the_strokes_painted_with_the_brush() {
     set(&mut app, json!({"widthMode": "fixed"}));
     confirm(&mut app).unwrap();
     assert!((drawn_height(&app, id) - before).abs() < 1e-6);
+}
+
+/// The names screen readers read in the open dialogs, from the access tree of an app frame drawn
+/// once the dialog has settled.
+fn access_names(app: &mut VectorcraftApp) -> Vec<String> {
+    crate::dialogs::tests::settle(app);
+    let out = crate::dialogs::tests::frame(app, vec![]);
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    nodes.iter().filter_map(|(_, node)| node.label()).map(str::to_string).collect()
+}
+
+/// Pattern Brush Options' Scale menu: Pressure, Tilt, Bearing, Rotation and Stylus Wheel each take
+/// a second scale, a stroke drawn without the pen's input is half way between the two, and the
+/// dialog shows the mode set when it opens again; Fixed drops the second scale.
+#[test]
+fn pattern_options_scale_follows_the_pen() {
+    let mut app = app();
+    let (id, before) = brushed(&mut app, "Diamonds");
+    open(&mut app, "Diamonds");
+    let f = fields_of(&app);
+    assert_eq!((f.text("scaleMode"), f.number("scaleMax")), (Some("fixed"), Some(100.0)));
+    // Screen readers name the second scale and the menu after the Scale row.
+    let names = access_names(&mut app);
+    for name in ["Scale: Maximum", "Scale: Mode"] {
+        assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
+    }
+    cancel(&mut app);
+    for mode in ["pressure", "tilt", "bearing", "rotation", "stylusWheel"] {
+        open(&mut app, "Diamonds");
+        set(&mut app, json!({"scaleMode": mode, "scaleMax": 300}));
+        confirm(&mut app).unwrap_or_else(|error| panic!("{mode}: {error}"));
+        let def = app.run("brush.get", json!({"name": "Diamonds"})).unwrap();
+        assert_eq!((&def["scale"], &def["scale_mode"], &def["scale_max"]), (&json!(100.0), &json!(mode), &json!(300.0)), "{mode}");
+        // A stroke drawn without the pen's input is half way: 200 %.
+        let after = drawn_height(&app, id);
+        assert!((after - 2.0 * before).abs() < 0.01 * before, "{mode}: {before} then {after}");
+        open(&mut app, "Diamonds");
+        let f = fields_of(&app);
+        assert_eq!((f.text("scaleMode"), f.number("scaleMax")), (Some(mode), Some(300.0)), "{mode}");
+        cancel(&mut app);
+    }
+    // A second scale past the range is kept within it.
+    open(&mut app, "Diamonds");
+    set(&mut app, json!({"scaleMode": "pressure", "scaleMax": 1e9}));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.run("brush.get", json!({"name": "Diamonds"})).unwrap()["scale_max"], json!(10000.0));
+    // Fixed drops the second scale, and the stroke draws as it did.
+    open(&mut app, "Diamonds");
+    set(&mut app, json!({"scaleMode": "fixed"}));
+    confirm(&mut app).unwrap();
+    let def = app.run("brush.get", json!({"name": "Diamonds"})).unwrap();
+    assert!(def.get("scale_mode").is_none() && def.get("scale_max").is_none(), "{def}");
+    assert!((drawn_height(&app, id) - before).abs() < 1e-6);
+}
+
+/// Art Brush Options names its second width and its menu after the Width row.
+#[test]
+fn art_options_name_the_second_width_and_its_menu() {
+    let mut app = app();
+    open(&mut app, "Tapered Stroke");
+    let names = access_names(&mut app);
+    for name in ["Width: Maximum", "Width: Mode"] {
+        assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
+    }
 }
 
 /// Art Brush Options draws each Direction segment as an arrow icon named by its tooltip, so the
@@ -899,6 +1018,72 @@ fn options_of_selected_object_set_one_paths_art_brush_settings() {
     assert_eq!(own_options(&app, a), json!({"width": 50.0}));
 }
 
+/// Options of Selected Object for a pattern brush sets one path's Scale mode and second scale; the
+/// brush and the other path keep theirs.
+#[test]
+fn options_of_selected_object_set_one_paths_pattern_scale_mode() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Diamonds");
+    let b = brushed_line(&mut app, 100.0, "Diamonds");
+    select(&mut app, &[a]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"scaleMode": "tilt", "scaleMax": 250}));
+    confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"scale_mode": "tilt", "scale_max": 250.0}));
+    assert_eq!(own_options(&app, b), json!({}));
+    let def = app.run("brush.get", json!({"name": "Diamonds"})).unwrap();
+    assert!(def.get("scale_mode").is_none(), "{def}");
+    // Opened again, it shows the path's own mode and second scale.
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    let f = fields_of(&app);
+    assert_eq!((f.text("scaleMode"), f.number("scaleMax")), (Some("tilt"), Some(250.0)));
+    cancel(&mut app);
+    // With paths of different scales selected, choosing a mode alone leaves each path's scale and
+    // second scale its own: the first path's scale is not given to the second path as its second
+    // scale.
+    app.run("brush.objectOptions", json!({"ids": [a], "params": {"scale": 50, "scale_mode": null, "scale_max": null}})).unwrap();
+    app.run("brush.objectOptions", json!({"ids": [b], "params": {"scale": 80}})).unwrap();
+    select(&mut app, &[a, b]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"scaleMode": "pressure"}));
+    confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"scale": 50.0, "scale_mode": "pressure"}));
+    assert_eq!(own_options(&app, b), json!({"scale": 80.0, "scale_mode": "pressure"}));
+    // A changed Scale alone keeps each path's own second scale: its old scale.
+    select(&mut app, &[a, b]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"scale": 60}));
+    confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"scale": 60.0, "scale_mode": "pressure", "scale_max": 50.0}));
+    assert_eq!(own_options(&app, b), json!({"scale": 60.0, "scale_mode": "pressure", "scale_max": 80.0}));
+}
+
+/// Options of Selected Object shows a scatter path's hue, saturation and brightness jitter, and OK
+/// sets them on that path only.
+#[test]
+fn options_of_selected_object_set_one_paths_scatter_jitter() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Confetti");
+    let b = brushed_line(&mut app, 100.0, "Confetti");
+    select(&mut app, &[a]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"hueJitter": 45, "saturationJitter": 30, "brightnessJitter": 20}));
+    confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"hue_jitter": 45.0, "saturation_jitter": 30.0, "brightness_jitter": 20.0}));
+    assert_eq!(own_options(&app, b), json!({}));
+    let brush = app.run("brush.get", json!({"name": "Confetti"})).unwrap();
+    assert_eq!(
+        (brush["hue_jitter"].clone(), brush["saturation_jitter"].clone(), brush["brightness_jitter"].clone()),
+        (json!(0.0), json!(0.0), json!(0.0)),
+        "the brush keeps its own"
+    );
+    // Opened again, it shows the path's own values.
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert_eq!(fields_of(&app).number("saturationJitter"), Some(30.0));
+    assert_eq!(fields_of(&app).number("hueJitter"), Some(45.0));
+    assert_eq!(fields_of(&app).number("brightnessJitter"), Some(20.0));
+}
+
 #[test]
 fn options_of_selected_object_change_only_the_values_edited_on_each_path() {
     let mut app = app();
@@ -966,9 +1151,10 @@ fn options_of_selected_object_show_what_a_path_can_set_for_each_type() {
         assert!(keys.iter().any(|k| k == key), "{key} in {keys:?}");
     }
     assert!(!keys.iter().any(|k| k.ends_with("Tile")), "{keys:?}");
-    // Scatter: the four values with their modes, the rotation reference and the hue jitter.
+    // Scatter: the four values with their modes, the rotation reference and the hue, saturation and
+    // brightness jitter.
     let keys = object_keys("scatter");
-    for key in ["sizeMin", "spacingMin", "scatterMin", "rotationMin", "rotationRelativeTo", "hueJitter"] {
+    for key in ["sizeMin", "spacingMin", "scatterMin", "rotationMin", "rotationRelativeTo", "hueJitter", "saturationJitter", "brightnessJitter"] {
         assert!(keys.iter().any(|k| k == key), "{key} in {keys:?}");
     }
     let p = brushed_line(&mut app, 80.0, "Diamonds");

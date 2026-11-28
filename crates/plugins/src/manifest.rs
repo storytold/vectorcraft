@@ -54,6 +54,9 @@ pub const MENU_PLACES: &[&[&str]] = &[
     &["View"],
 ];
 
+/// Most commands of one plug-in that one context menu lists (`menu.context`).
+pub const MAX_CONTEXT_COMMANDS: usize = 8;
+
 /// Where a command's `menu` places it: in the menu at `path` (one of [`MENU_PLACES`]), after the
 /// built-in item labeled `after` (1 to 64 printable characters), or at the end of that menu when
 /// `after` is left out or names no built-in item there.
@@ -64,9 +67,119 @@ pub struct MenuPlace {
     pub after: Option<String>,
 }
 
+/// A context menu a command's `menu.context` lists it in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ContextMenu {
+    /// The canvas context menu, while objects are selected.
+    Canvas,
+    /// The menu of a layer, group or object row of the Layers panel.
+    Layers,
+}
+
+impl ContextMenu {
+    /// Its name in a manifest.
+    pub fn name(self) -> &'static str {
+        match self {
+            ContextMenu::Canvas => "canvas",
+            ContextMenu::Layers => "layers",
+        }
+    }
+}
+
+/// When a context menu item can be chosen (`when`); without one it always can.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ContextWhen {
+    /// One or more objects are selected (in the Layers panel: one or more rows are clicked).
+    Selection,
+    /// Exactly one object, which is not a layer, is selected or clicked.
+    OneObject,
+    /// One of the objects selected or clicked is a type object.
+    TypeObject,
+    /// Every row clicked in the Layers panel is a layer or sublayer (Layers panel only).
+    LayerRow,
+}
+
+impl ContextWhen {
+    const ALL: [(&'static str, ContextWhen); 4] = [
+        ("selection", ContextWhen::Selection),
+        ("oneObject", ContextWhen::OneObject),
+        ("typeObject", ContextWhen::TypeObject),
+        ("layerRow", ContextWhen::LayerRow),
+    ];
+
+    /// The conditions context menu `menu` takes: every one in the Layers panel, all but
+    /// `layerRow` on the canvas.
+    fn allowed(menu: ContextMenu) -> impl Iterator<Item = (&'static str, ContextWhen)> {
+        Self::ALL.into_iter().filter(move |(_, w)| menu == ContextMenu::Layers || *w != ContextWhen::LayerRow)
+    }
+}
+
+/// One entry of a command's `menu.context`: the context menu that lists it and when its item can
+/// be chosen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct ContextPlace {
+    pub menu: ContextMenu,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub when: Option<ContextWhen>,
+}
+
+impl ContextPlace {
+    /// Reads `menu.context`: a list of `{"menu": "canvas" | "layers", "when"?: condition}`, each
+    /// menu at most once.
+    fn read_list(v: &Value) -> std::result::Result<Vec<ContextPlace>, String> {
+        let Some(list) = v.as_array() else {
+            let key = "menu.context";
+            return Err(format!("`{key}` must be a list"));
+        };
+        let mut out: Vec<ContextPlace> = Vec::with_capacity(list.len().min(2));
+        for (i, entry) in list.iter().enumerate() {
+            let Some(o) = entry.as_object() else {
+                let key = format!("menu.context[{i}]");
+                return Err(format!("`{key}` must be an object"));
+            };
+            if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "menu" | "when")) {
+                let k = crate::permissions::display_text(k, crate::permissions::MAX_SHOWN_FIELD);
+                return Err(format!("unknown key `{k}`; the keys here are {}", "menu, when"));
+            }
+            let menu = match o.get("menu").and_then(Value::as_str) {
+                Some("canvas") => ContextMenu::Canvas,
+                Some("layers") => ContextMenu::Layers,
+                _ => {
+                    let k = format!("menu.context[{i}].menu");
+                    return Err(format!("`{k}` must be one of {}", "\"canvas\", \"layers\""));
+                }
+            };
+            let when = match o.get("when") {
+                None => None,
+                Some(w) => {
+                    let found = w.as_str().and_then(|w| ContextWhen::allowed(menu).find(|(name, _)| *name == w));
+                    match found {
+                        Some((_, when)) => Some(when),
+                        None => {
+                            let k = format!("menu.context[{i}].when");
+                            let names: Vec<String> = ContextWhen::allowed(menu).map(|(name, _)| format!("{name:?}")).collect();
+                            return Err(format!("`{k}` must be one of {}", names.join(", ")));
+                        }
+                    }
+                }
+            };
+            if out.iter().any(|p| p.menu == menu) {
+                let (key, name) = ("menu.context", menu.name());
+                return Err(format!("`{key}` names \"{name}\" twice"));
+            }
+            out.push(ContextPlace { menu, when });
+        }
+        Ok(out)
+    }
+}
+
 impl MenuPlace {
-    /// Reads a command's `menu` value: `{"path": [label, …], "after"?: label}`.
-    fn read(v: &Value) -> std::result::Result<MenuPlace, String> {
+    /// Reads a command's `menu` value: `{"path"?: [label, …], "after"?: label, "context"?: [...]}`
+    /// ([`ContextPlace::read_list`]). `path` may be left out only when `context` is given, and
+    /// `after` only goes with `path`.
+    fn read(v: &Value) -> std::result::Result<(Option<MenuPlace>, Vec<ContextPlace>), String> {
         let wrong_path = || {
             let k = "menu.path";
             let places: Vec<String> =
@@ -77,9 +190,16 @@ impl MenuPlace {
             let key = "menu";
             return Err(format!("`{key}` must be an object"));
         };
-        if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "path" | "after")) {
+        if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "path" | "after" | "context")) {
             let k = crate::permissions::display_text(k, crate::permissions::MAX_SHOWN_FIELD);
-            return Err(format!("unknown key `{k}`; the keys here are {}", "path, after"));
+            return Err(format!("unknown key `{k}`; the keys here are {}", "path, after, context"));
+        }
+        let context = match o.get("context") {
+            Some(c) => ContextPlace::read_list(c)?,
+            None => Vec::new(),
+        };
+        if o.get("context").is_some() && !o.contains_key("path") && !o.contains_key("after") {
+            return Ok((None, context));
         }
         let path: Vec<&str> = match o.get("path").and_then(Value::as_array) {
             Some(path) => path.iter().map(Value::as_str).collect::<Option<_>>().ok_or_else(wrong_path)?,
@@ -98,7 +218,7 @@ impl MenuPlace {
             }
             Some(_) => return Err(format!("`{key}` must be a string")),
         };
-        Ok(MenuPlace { path, after })
+        Ok((Some(MenuPlace { path, after }), context))
     }
 }
 
@@ -118,6 +238,10 @@ pub enum Kind {
     /// An importer: reads a file in a format of its own, whose extensions the manifest lists, into
     /// a new document (File › Open, `document.open`; see [`crate::import`]).
     Importer,
+    /// A generator: draws art from its parameters alone into a generated art object, which keeps
+    /// them so the art can be drawn again with changed ones (Object › Plug-ins, `plugin.generate`;
+    /// see [`crate::generate`]).
+    Generator,
 }
 
 impl Kind {
@@ -127,6 +251,7 @@ impl Kind {
             Kind::Effect => "effect",
             Kind::Exporter => "exporter",
             Kind::Importer => "importer",
+            Kind::Generator => "generator",
         }
     }
 }
@@ -359,7 +484,7 @@ pub struct Param {
 /// plug-in's name (Effect › Plug-ins for a live effect's), or in the menu its `menu` names, runs it
 /// as the command `plugin.<plug-in id>.<id>`, and calls the plug-in's `vc_run` with
 /// `_context.command` set to `id` and the parameters it declares.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Command {
     /// `[a-z][a-z0-9_]*`, at most [`MAX_COMMAND_ID`] characters, unique within the manifest.
     pub id: String,
@@ -371,11 +496,43 @@ pub struct Command {
     pub params: Vec<(String, Param)>,
     /// The menu it is listed in instead of the plug-in's submenu (`menu`, read at
     /// [`crate::permissions::MENU_API`] and later).
-    #[serde(rename = "menu", skip_deserializing, skip_serializing_if = "Option::is_none")]
+    #[serde(skip)]
     pub place: Option<MenuPlace>,
+    /// The context menus that also list it (`menu.context`, read at
+    /// [`crate::permissions::MENU_API`] and later), at most one entry per menu.
+    #[serde(skip)]
+    pub context: Vec<ContextPlace>,
     /// Each `menu` value the manifest gives, until [`Manifest::parse`] reads them.
     #[serde(skip)]
     pub(crate) declared_menu: Vec<Value>,
+}
+
+/// A command as its manifest gives it: `id`, `label`, `params` and, when it has a place or context
+/// menus, `menu` with its `path`, `after` and `context`.
+impl Serialize for Command {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
+        fn params<S: serde::Serializer>(p: &&[(String, Param)], s: S) -> std::result::Result<S::Ok, S::Error> {
+            params_as_object(p, s)
+        }
+        #[derive(Serialize)]
+        struct Menu<'a> {
+            #[serde(flatten)]
+            place: Option<&'a MenuPlace>,
+            #[serde(skip_serializing_if = "<[_]>::is_empty")]
+            context: &'a [ContextPlace],
+        }
+        #[derive(Serialize)]
+        struct Shown<'a> {
+            id: &'a str,
+            label: &'a str,
+            #[serde(serialize_with = "params")]
+            params: &'a [(String, Param)],
+            #[serde(skip_serializing_if = "Option::is_none")]
+            menu: Option<Menu<'a>>,
+        }
+        let menu = (self.place.is_some() || !self.context.is_empty()).then_some(Menu { place: self.place.as_ref(), context: &self.context });
+        Shown { id: &self.id, label: &self.label, params: &self.params, menu }.serialize(s)
+    }
 }
 
 impl Command {
@@ -607,7 +764,7 @@ impl Manifest {
                 continue;
             }
             let name = command_name(i, &c.id);
-            let place = match menus.as_slice() {
+            let read = match menus.as_slice() {
                 [] => continue,
                 [menu] => MenuPlace::read(menu),
                 _ => {
@@ -615,9 +772,25 @@ impl Manifest {
                     Err(format!("duplicate field `{key}`"))
                 }
             };
-            c.place = Some(place.map_err(|e| Error::Manifest(format!("command {name}: {e}")))?);
+            (c.place, c.context) = read.map_err(|e| Error::Manifest(format!("command {name}: {e}")))?;
+        }
+        // Each context menu lists at most MAX_CONTEXT_COMMANDS of the plug-in's commands; the
+        // error names the first command past that.
+        for menu in [ContextMenu::Canvas, ContextMenu::Layers] {
+            let mut listed = self.commands.iter().enumerate().filter(|(_, c)| c.context.iter().any(|p| p.menu == menu));
+            if let Some((i, c)) = listed.nth(MAX_CONTEXT_COMMANDS) {
+                let (name, key) = (command_name(i, &c.id), "menu.context");
+                let e = format!("`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu");
+                return Err(Error::Manifest(format!("command {name}: {e}")));
+            }
         }
         Ok(())
+    }
+
+    /// The commands context menu `menu` lists (`menu.context`), in manifest order, each with when
+    /// its item can be chosen.
+    pub fn context_commands(&self, menu: ContextMenu) -> impl Iterator<Item = (&Command, Option<ContextWhen>)> {
+        self.commands.iter().filter_map(move |c| c.context.iter().find(|p| p.menu == menu).map(|p| (c, p.when)))
     }
 
     /// Checks what the module declared: its id, name and text lengths, its extensions, a budget its
@@ -667,6 +840,9 @@ impl Manifest {
             }
             (Budget::Heavy, Kind::Importer) => {
                 return Err(Error::Manifest("an importer always gets an import's budget: leave `budget` out".into()));
+            }
+            (Budget::Heavy, Kind::Generator) => {
+                return Err(Error::Manifest("a generator always gets the usual budget: leave `budget` out".into()));
             }
         }
         self.validate_params()?;
@@ -837,7 +1013,7 @@ impl Manifest {
         if self.commands.is_empty() {
             return Ok(());
         }
-        if matches!(self.kind, Kind::Exporter | Kind::Importer) {
+        if matches!(self.kind, Kind::Exporter | Kind::Importer | Kind::Generator) {
             return Err(Error::Manifest("only a filter or a live effect declares `commands`".into()));
         }
         if self.budget == Budget::Heavy {
@@ -1184,7 +1360,7 @@ fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Resu
             let Some(label) = label else {
                 return Err(named(&Some(id), &"missing field `label`"));
             };
-            Ok(Command { id, label, params: params.map(|p| p.0).unwrap_or_default(), place: None, declared_menu: menu })
+            Ok(Command { id, label, params: params.map(|p| p.0).unwrap_or_default(), place: None, context: Vec::new(), declared_menu: menu })
         }
     }
 
@@ -1388,6 +1564,29 @@ mod tests {
             (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"budget":"heavy"}"#, "an import's budget"),
             (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"permissions":["doc.read"]}"#, "doesn't apply"),
             (r#"{"id":"a","name":"x","kind":"filter","extensions":["plt"]}"#, "only an exporter or an importer"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
+    }
+
+    /// A generator gets the usual budget and needs `doc.write`, which its manifest implies; it
+    /// declares no extensions, commands, inputs or other permissions.
+    #[test]
+    fn a_generator_writes_art_with_the_usual_budget() {
+        let m = Manifest::parse(br#"{"id":"org.example.stars","name":"Stars","kind":"generator"}"#).unwrap();
+        assert_eq!((m.kind, m.budget), (Kind::Generator, Budget::Light));
+        assert_eq!(serde_json::to_value(&m).unwrap()["kind"], json!("generator"));
+        assert_eq!(m.permissions(), [Permission::DocWrite]);
+        let listed = Manifest::parse(br#"{"id":"a","name":"x","kind":"generator","permissions":["doc.write"]}"#).unwrap();
+        assert_eq!(listed.permissions(), [Permission::DocWrite]);
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"generator","budget":"heavy"}"#, "the usual budget"),
+            (r#"{"id":"a","name":"x","kind":"generator","extensions":["plt"]}"#, "only an exporter or an importer"),
+            (r#"{"id":"a","name":"x","kind":"generator","permissions":[]}"#, "needs the permission `doc.write`"),
+            (r#"{"id":"a","name":"x","kind":"generator","permissions":["doc.write","doc.read"]}"#, "doesn't apply"),
+            (r#"{"id":"a","name":"x","kind":"generator","commands":[{"id":"again","label":"Again"}]}"#, "only a filter or a live effect"),
+            (r#"{"id":"a","name":"x","kind":"generator","place":true}"#, "`place` is only for an importer"),
         ] {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{bad}: {e}");
@@ -1741,7 +1940,9 @@ mod tests {
         assert!(serde_json::to_value(Manifest::parse(br#"{"id":"a","name":"x","kind":"filter"}"#).unwrap()).unwrap().get("commands").is_none());
         let effect = Manifest::parse(br#"{"id":"a","name":"x","kind":"effect","commands":[{"id":"c","label":"C"}]}"#).unwrap();
         assert_eq!(effect.commands.len(), 1);
-        let label = |l: &str| Command { id: "c".into(), label: l.into(), params: Vec::new(), place: None, declared_menu: Vec::new() }.shown_label();
+        let label = |l: &str| {
+            Command { id: "c".into(), label: l.into(), params: Vec::new(), place: None, context: Vec::new(), declared_menu: Vec::new() }.shown_label()
+        };
         assert_eq!(label("Flip\u{202E}txt.exe"), "Flip\\u{202E}txt.exe");
 
         let many: Vec<String> = (0..=MAX_COMMANDS).map(|i| format!(r#"{{"id":"c{i}","label":"C"}}"#)).collect();
@@ -1854,6 +2055,78 @@ mod tests {
         let twice =
             r#"{"id":"a","name":"x","api":2,"kind":"filter","commands":[{"id":"x","label":"A","menu":{"path":["Edit"]},"menu":{"path":["Edit"]}}]}"#;
         assert!(Manifest::parse(twice.as_bytes()).unwrap_err().to_string().contains("duplicate field `menu`"));
+    }
+
+    /// At API level 2 a command's `menu.context` lists it in the canvas and Layers panel context
+    /// menus, each with an optional `when` from a fixed list, with or without a `path`. A context
+    /// entry of the wrong shape, an unknown menu or condition, `layerRow` on the canvas, a menu
+    /// named twice and more than [`MAX_CONTEXT_COMMANDS`] commands in one menu are refused, and the
+    /// error names the command and the key. At level 1 the key is ignored.
+    #[test]
+    fn a_command_menu_context_lists_it_in_context_menus() {
+        let with = |api: u32, menu: &str| {
+            format!(r#"{{"id":"org.example.t","name":"Tidy","api":{api},"kind":"filter","commands":[{{"id":"tidy","label":"Tidy","menu":{menu}}}]}}"#)
+        };
+        let m = Manifest::parse(with(2, r#"{"context":[{"menu":"canvas","when":"typeObject"},{"menu":"layers"}]}"#).as_bytes()).unwrap();
+        let c = &m.commands[0];
+        assert_eq!(c.place, None, "no other menu: it stays in its plug-in's submenu");
+        assert_eq!(
+            c.context,
+            vec![
+                ContextPlace { menu: ContextMenu::Canvas, when: Some(ContextWhen::TypeObject) },
+                ContextPlace { menu: ContextMenu::Layers, when: None }
+            ]
+        );
+        assert_eq!(c.menu_label(&m.name), "Tidy", "a context item is not renamed");
+        assert_eq!(m.context_commands(ContextMenu::Layers).map(|(c, w)| (c.id.as_str(), w)).collect::<Vec<_>>(), [("tidy", None)]);
+        let both = Manifest::parse(with(2, r#"{"path":["Select"],"context":[{"menu":"layers","when":"layerRow"}]}"#).as_bytes()).unwrap();
+        assert_eq!(both.commands[0].place, Some(MenuPlace { path: &["Select"], after: None }));
+        assert_eq!(both.commands[0].context, vec![ContextPlace { menu: ContextMenu::Layers, when: Some(ContextWhen::LayerRow) }]);
+        // The manifest a plug-in's info gives carries the context menus, with or without a place.
+        assert_eq!(
+            serde_json::to_value(&both.commands[0]).unwrap()["menu"],
+            json!({"path": ["Select"], "context": [{"menu": "layers", "when": "layerRow"}]})
+        );
+        assert_eq!(serde_json::to_value(c).unwrap()["menu"], json!({"context": [{"menu": "canvas", "when": "typeObject"}, {"menu": "layers"}]}));
+        let plain = Manifest::parse(with(2, r#"{"context":[]}"#).as_bytes()).unwrap();
+        assert!(serde_json::to_value(&plain.commands[0]).unwrap().get("menu").is_none(), "no place and no context menu: no `menu`");
+        assert!(Manifest::parse(with(2, r#"{"context":[]}"#).as_bytes()).unwrap().commands[0].context.is_empty());
+        assert!(Manifest::parse(with(1, r#"{"context":[{"menu":"sky"}]}"#).as_bytes()).unwrap().commands[0].context.is_empty(), "ignored at level 1");
+
+        for (menu, says) in [
+            (r#"{"context":"canvas"}"#, "`menu.context` must be a list"),
+            (r#"{"context":["canvas"]}"#, "`menu.context[0]` must be an object"),
+            (r#"{"context":[{"menu":"canvas","if":"selection"}]}"#, "unknown key `if`"),
+            (r#"{"context":[{"menu":"Canvas"}]}"#, "`menu.context[0].menu` must be one of \"canvas\", \"layers\""),
+            (r#"{"context":[{}]}"#, "`menu.context[0].menu` must be one of"),
+            (r#"{"context":[{"menu":"layers"},{"menu":"canvas","when":"always"}]}"#, "`menu.context[1].when` must be one of"),
+            (
+                r#"{"context":[{"menu":"canvas","when":"layerRow"}]}"#,
+                "`menu.context[0].when` must be one of \"selection\", \"oneObject\", \"typeObject\"",
+            ),
+            (r#"{"context":[{"menu":"canvas","when":1}]}"#, "`menu.context[0].when` must be one of"),
+            (r#"{"context":[{"menu":"canvas"},{"menu":"canvas"}]}"#, "`menu.context` names \"canvas\" twice"),
+            (r#"{"after":"Inverse","context":[{"menu":"canvas"}]}"#, "`menu.path` must be one of"),
+            (r#"{"path":["File"],"context":[{"menu":"canvas"}]}"#, "`menu.path` must be one of"),
+        ] {
+            let e = Manifest::parse(with(2, menu).as_bytes()).unwrap_err().to_string();
+            assert!(e.contains("command `tidy`") && e.contains(says), "{menu}: {e}");
+        }
+
+        let listed = |n: usize, menu: &str| {
+            let commands: Vec<String> =
+                (0..n).map(|i| format!(r#"{{"id":"c{i}","label":"C{i}","menu":{{"context":[{{"menu":"{menu}"}}]}}}}"#)).collect();
+            format!(r#"{{"id":"a","name":"x","api":2,"kind":"filter","commands":[{}]}}"#, commands.join(","))
+        };
+        for menu in ["canvas", "layers"] {
+            assert_eq!(
+                Manifest::parse(listed(MAX_CONTEXT_COMMANDS, menu).as_bytes()).unwrap().context_commands(ContextMenu::Canvas).count(),
+                if menu == "canvas" { MAX_CONTEXT_COMMANDS } else { 0 }
+            );
+            let e = Manifest::parse(listed(MAX_CONTEXT_COMMANDS + 1, menu).as_bytes()).unwrap_err().to_string();
+            let past = format!("command `c{MAX_CONTEXT_COMMANDS}`");
+            assert!(e.contains(&past) && e.contains("`menu.context`: a plug-in may put at most 8 commands in each context menu"), "{e}");
+        }
     }
 
     #[test]

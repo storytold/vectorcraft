@@ -35,6 +35,7 @@ mod ruler_guide_perf;
 mod ruler_origin;
 mod script_host_vs_scriptcheck;
 mod selection_commands;
+mod several_handles;
 mod stroke_visibility;
 mod text_stroke_scale;
 mod three_d_light_color;

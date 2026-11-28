@@ -496,7 +496,33 @@ fn schedule(job: Job) {
         Ok(()) => return,
         Err(job) => *job,
     };
-    run(&mut Renderer::new(), job);
+    run_here(job);
+}
+
+/// [`run`] `job` on this thread. When it panics, its bitmap failed (it is not asked for again)
+/// and stops being pending, and the panic goes on to the caller.
+fn run_here(job: Job) {
+    let key = job.key.clone();
+    if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(&mut Renderer::new(), job))) {
+        lock(&FAILED).insert(key.clone());
+        finish(&key);
+        std::panic::resume_unwind(panic);
+    }
+}
+
+/// Make the bitmap of `object`'s file (`blob`) at zoom `step` on this thread, as [`schedule`]
+/// does where no worker starts, inside `scope`.
+#[cfg(test)]
+pub(crate) fn make_here(object: &PlacedDocument, blob: ImageBlob, step: f64, scope: Scoped) {
+    let key = (object.key.clone(), step.to_bits(), false);
+    lock(&PENDING).insert(key.clone());
+    run_here(Job { key, object: object.clone(), blob, step, keep: 0, scope: Some(scope) });
+}
+
+/// Could a bitmap of file `key` not be made?
+#[cfg(test)]
+pub(crate) fn failed_for(key: &str) -> bool {
+    lock(&FAILED).iter().any(|k| k.0 == key)
 }
 
 /// The file `p` shows (its bytes `blob`) read as art, and kept for

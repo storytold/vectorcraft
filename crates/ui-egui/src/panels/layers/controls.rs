@@ -277,7 +277,7 @@ fn object_menu(tree: &DocLayers, id: NodeId, ids: &[u64]) -> Vec<MenuRow<String>
     let lock_label = if lock == "layer.lockOthers" { "Lock Others" } else { "Unlock All Layers" };
     let hide_label = if hide == "layer.hideOthers" { "Hide Others" } else { "Show All Layers" };
     let export = |multiple: bool| json!({ "ids": ids, "multiple": multiple });
-    vec![
+    let mut rows = vec![
         entry("ui.layerOptions", json!({ "ids": ids }), options, true),
         entry("layer.duplicate", json!({ "ids": ids }), duplicate, duplicate_ok),
         entry("layer.delete", json!({ "ids": ids }), delete, delete_ok),
@@ -291,7 +291,21 @@ fn object_menu(tree: &DocLayers, id: NodeId, ids: &[u64]) -> Vec<MenuRow<String>
             tl!("Collect for Export").to_string().into(),
             vec![entry("assets.add", export(false), "As Single Asset", true), entry("assets.add", export(true), "As Multiple Assets", true)],
         ),
-    ]
+    ];
+    // The commands plug-in manifests list in this menu (`menu.context`): a submenu per plug-in,
+    // each entry running its command on these rows' objects.
+    let plugins = crate::dialogs::plugin::context_commands(vectorcraft_plugins::ContextMenu::Layers, doc, ids);
+    if !plugins.is_empty() {
+        let groups = plugins
+            .into_iter()
+            .map(|(name, commands)| {
+                let entries = commands.into_iter().map(|c| entry(c.command, json!({ "ids": ids }), c.label, c.enabled)).collect();
+                MenuRow::Submenu(name.to_string().into(), entries)
+            })
+            .collect();
+        rows.extend([separator(), MenuRow::Submenu(tl!("Plug-ins").to_string().into(), groups)]);
+    }
+    rows
 }
 
 /// Locate Object, or Locate Layer with Show Layers Only on, for row `id`.
@@ -463,9 +477,7 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
     if let Some(drop) = &output.dropped {
         let run = if let Some(d) = drop.payload::<LayersDrag<RowId>>().filter(|d| own(d)) {
             footer_drop(tree, drop.index, FooterPayload::Rows(&d.layers()))
-        } else if let Some(PanelDrag::Appearance { document, source }) = drop.payload::<PanelDrag>()
-            && *document == st.uid
-        {
+        } else if let Some(source) = drop.payload::<PanelDrag>().and_then(|d| d.appearance_for(st.uid, st.reverts)) {
             footer_drop(tree, drop.index, FooterPayload::Appearance(source.0))
         } else {
             None

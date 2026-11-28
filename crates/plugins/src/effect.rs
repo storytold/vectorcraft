@@ -714,12 +714,16 @@ mod tests {
         let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         crate::safe_mode::set_active(None);
         const ID: &str = "test.effect.deferfailed";
-        // Runs to its instruction budget.
+        // Runs to its instruction budget: 100,000 instructions, not the default 50 million and 4,000
+        // per byte of input. The view's budget is measured in real time, and a run that the view's
+        // budget cuts short is deferred for time, not as failed.
         let src = crate::wat::spinning(&crate::wat::manifest(ID, "effect", "{}"), 1_000_000_000, r#"{"objects":[]}"#);
-        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
+        let limits = Limits { fuel_base: 100_000, fuel_per_byte: 0, ..Limits::default() };
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), limits).unwrap()).unwrap();
         let view = crate::deferred::Deferrals::with_clock(stepping(1));
         assert!(!view.view(|| drawn(ID, &line(2), 0)));
-        assert!(last_error(ID).is_some());
+        let e = last_error(ID).unwrap_or_default();
+        assert!(e.contains("instruction budget"), "{e}");
         assert!(!view.view(|| drawn("test.effect.notinstalled", &line(2), 1)));
         let reasons = |v: &crate::deferred::Deferrals| v.list().iter().map(|d| d.reason).collect::<Vec<_>>();
         assert_eq!(reasons(&view), [Reason::Failed, Reason::Missing]);

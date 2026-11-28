@@ -164,6 +164,7 @@ impl Permission {
             Kind::Effect => &[Permission::DocRead, Permission::EffectRender],
             Kind::Exporter => &[Permission::DocRead, Permission::ExportWrite],
             Kind::Importer => &[Permission::ImportRead],
+            Kind::Generator => &[Permission::DocWrite],
         }
     }
 
@@ -180,11 +181,12 @@ impl Permission {
 
     /// The permissions a plug-in of `kind` can't work without, which its list must hold: a live
     /// effect and an exporter are always handed objects, and only draw or write; an importer is
-    /// always handed the file being opened. A filter may leave any of its permissions out.
+    /// always handed the file being opened; a generator always adds its art to the document. A
+    /// filter may leave any of its permissions out.
     fn required(kind: Kind) -> &'static [Permission] {
         match kind {
             Kind::Filter => &[],
-            Kind::Effect | Kind::Exporter | Kind::Importer => Permission::implied(kind),
+            Kind::Effect | Kind::Exporter | Kind::Importer | Kind::Generator => Permission::implied(kind),
         }
     }
 }

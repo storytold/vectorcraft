@@ -2693,6 +2693,9 @@ font-technology	Variable	Променливи
 	Only Web Colors	Само уеб цветове
 	Opacity	Непрозрачност
 	Show Opacity	Показване на непрозрачността
+	Show Hex Field	Показване на шестнадесетичното поле
+	Hex or CSS color	Шестнадесетичен или CSS цвят
+	Parse Color	Разчитане на цвят
 	Opacity & Mask Define Knockout Shape	Непрозрачността и маската определят формата на изрязване
 	Opacity Mask	Маска за непрозрачност
 	Opacity Mask Info	Информация за маската за непрозрачност
@@ -5021,6 +5024,7 @@ axis	Both	И двете
 @msg	`color` must be a colour	`color` трябва да бъде цвят
 @msg	`sliders` must be none, oklch or hsl	`sliders` трябва да бъде none, oklch или hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH изисква sRGB като работно RGB пространство
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` трябва да бъде шестнадесетичен цвят (#rgb, #rgba, #rrggbb или #rrggbbaa) или CSS цвят rgb(), hsl() или oklch() с най-много 48 знака
 @msg	the Color Picker is not open	Палитрата с цвят не е отворена
 @msg	the screen color sampler is already open	инструментът за вземане на цвят от екрана вече е отворен
 @msg	this system has no screen color sampler	тази система няма инструмент за вземане на цвят от екрана

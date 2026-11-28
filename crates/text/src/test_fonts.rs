@@ -80,11 +80,12 @@ std::thread_local! {
 /// While held, a cataloged font database's fonts and its
 /// [`FontDb::generation`](crate::FontDb::generation) change only on this thread: a change on another
 /// thread (a system font loaded for a character no loaded font covers, fonts added, a rescan, a
-/// composite font set or removed) waits until it is dropped, before it publishes anything. A change
-/// on this thread waits until no other thread holds one, unless every other thread that holds one is
-/// itself waiting to change fonts. Tests hold it to count the layouts that a cache keyed on the
-/// generation keeps. The guards one thread holds count as one, until the last of them is dropped, in
-/// whatever order they are.
+/// composite font set or removed) waits until it is dropped, before it publishes anything. So does a
+/// change of the hyphenation exceptions ([`crate::set_hyphenation_exceptions`]), the other input of
+/// [`crate::layout_inputs`]. A change on this thread waits until no other thread holds one, unless
+/// every other thread that holds one is itself waiting to change fonts. Tests hold it to count the
+/// layouts that a cache keyed on the generation keeps. The guards one thread holds count as one,
+/// until the last of them is dropped, in whatever order they are.
 pub struct SteadyFonts {
     /// Dropped on the thread that made it.
     _thread: std::marker::PhantomData<*const ()>,

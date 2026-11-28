@@ -1,9 +1,10 @@
 //! The tools of VectorCraft's built-in add-ons. They aren't in the toolbars as they ship: the All
 //! Tools drawer lists them (under their add-on's heading) so they can be added, and each add-on's
-//! submenu selects them. Tool gestures emit engine commands. Three tools are the exceptions: the
-//! Trim at Crossings Tool is in the Scissors tool's group, the Enclosing Lasso Tool is in the Lasso
-//! tool's group and the Smart Pen Tool is in the Pen tool's group ([`crate::TOOL_GROUPS`]), where
-//! the toolbars and the All Tools drawer show them, as well as in their add-ons' submenus.
+//! submenu selects them. Tool gestures emit engine commands. Four tools are the exceptions: the
+//! Trim at Crossings Tool is in the Scissors tool's group, the Enclosing Lasso and Polygonal Lasso
+//! tools are in the Lasso tool's group and the Smart Pen Tool is in the Pen tool's group
+//! ([`crate::TOOL_GROUPS`]), where the toolbars and the All Tools drawer show them, as well as in
+//! their add-ons' submenus.
 
 pub mod anchor_eraser;
 pub mod box3d;
@@ -39,16 +40,12 @@ pub const CONTOUR: &[ToolInfo] = &[ToolInfo { id: contour::ID, label: "Contour T
 
 pub const BOX_3D: &[ToolInfo] = &[ToolInfo { id: box3d::ID, label: "3D Box Tool", shortcut: None, icon: "dc-cube" }];
 
-pub const POLYGONAL_LASSO: &[ToolInfo] =
-    &[ToolInfo { id: polygonal_lasso::ID, label: "Polygonal Lasso Tool", shortcut: None, icon: "dc-lasso-polygonal" }];
-
 /// The add-ons' tool groups, after the toolbar's own ([`crate::TOOL_GROUPS`]), each with the
 /// heading the All Tools drawer lists it under (its add-on's name).
-const HEADED: &[(&[ToolInfo], &str)] =
-    &[(PATH_TOOLS, "Path Precision Tools"), (CONTOUR, "Contour"), (BOX_3D, "3D Box"), (POLYGONAL_LASSO, "Polygonal Lasso")];
+const HEADED: &[(&[ToolInfo], &str)] = &[(PATH_TOOLS, "Path Precision Tools"), (CONTOUR, "Contour"), (BOX_3D, "3D Box")];
 
 /// The add-ons' tool groups, after the toolbar's own ([`crate::TOOL_GROUPS`]).
-pub const GROUPS: &[&[ToolInfo]] = &[PATH_TOOLS, CONTOUR, BOX_3D, POLYGONAL_LASSO];
+pub const GROUPS: &[&[ToolInfo]] = &[PATH_TOOLS, CONTOUR, BOX_3D];
 
 /// The heading the All Tools drawer lists tool `id` under: its add-on's name.
 pub fn heading(id: &str) -> Option<&'static str> {
@@ -92,7 +89,6 @@ mod tests {
         assert!(PATH_TOOLS.iter().all(|t| heading(t.id) == Some("Path Precision Tools")));
         assert_eq!(heading(contour::ID), Some("Contour"));
         assert_eq!(heading(box3d::ID), Some("3D Box"));
-        assert_eq!(heading(polygonal_lasso::ID), Some("Polygonal Lasso"));
         assert_eq!(GROUPS.len(), HEADED.len());
         assert!(crate::catalog::all_tools().any(|t| t.id == extend_path::ID));
         assert!(create("pen").is_none() && heading("pen").is_none());
@@ -123,12 +119,30 @@ mod tests {
         let groups: Vec<_> = crate::TOOL_GROUPS.iter().filter(|g| g.iter().any(|t| t.id == id)).collect();
         assert_eq!(groups.len(), 1);
         let ids: Vec<_> = groups[0].iter().map(|t| t.id).collect();
-        assert_eq!(ids, ["lasso", id]);
+        assert_eq!(ids, ["lasso", id, polygonal_lasso::ID]);
         let info = crate::tool_info(id).expect("catalogued");
         assert_eq!((info.label, info.shortcut, info.icon), ("Enclosing Lasso Tool", None, "tool-lasso-enclosing"));
         assert_eq!(crate::tool_info("lasso").and_then(|t| t.shortcut), Some("Q"), "the Lasso keeps its shortcut");
         assert_eq!(create(id).map(|tool| tool.id()), Some(id));
         assert!(heading(id).is_none(), "not listed again under the add-on");
+        assert_eq!(crate::catalog::all_tools().filter(|t| t.id == id).count(), 1);
+    }
+
+    /// The Polygonal Lasso Tool is in the Lasso tool's group, last, after the Enclosing Lasso, with
+    /// no default shortcut, listed once, and still made by its add-on.
+    #[test]
+    fn polygonal_lasso_is_in_the_lasso_group_once() {
+        let id = polygonal_lasso::ID;
+        let groups: Vec<_> = crate::TOOL_GROUPS.iter().filter(|g| g.iter().any(|t| t.id == id)).collect();
+        assert_eq!(groups.len(), 1);
+        let ids: Vec<_> = groups[0].iter().map(|t| t.id).collect();
+        assert_eq!(ids, ["lasso", enclosing_lasso::ID, id]);
+        let info = crate::tool_info(id).expect("catalogued");
+        assert_eq!((info.label, info.shortcut, info.icon), ("Polygonal Lasso Tool", None, "dc-lasso-polygonal"));
+        assert_eq!(crate::tool_info("lasso").and_then(|t| t.shortcut), Some("Q"), "the Lasso keeps its shortcut");
+        assert_eq!(create(id).map(|tool| tool.id()), Some(id));
+        assert!(heading(id).is_none(), "not listed again under the add-on");
+        assert!(!GROUPS.iter().any(|g| g.iter().any(|t| t.id == id)), "not in the add-ons' groups");
         assert_eq!(crate::catalog::all_tools().filter(|t| t.id == id).count(), 1);
     }
 
