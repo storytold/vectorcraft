@@ -16,18 +16,35 @@ static SESSION: Mutex<Option<Session>> = Mutex::new(None);
 static NOTICE_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub struct Session {
-    _lease: File,
+    _lease: Lease,
     path: PathBuf,
     own_record: Vec<u8>,
     previous_unclean: bool,
 }
 
-impl Drop for Session {
-    /// Frees the lease when the session ends. A child process that any thread starts holds a copy of
-    /// the lease's handle until it runs its program, and the lock is only freed by closing every copy
-    /// or by unlocking.
+/// The profile's [`LEASE`], open and locked.
+struct Lease(File);
+
+impl Lease {
+    /// Lock `root`'s [`LEASE`]: `None` when another window of the same profile holds it.
+    fn take(root: &Path) -> io::Result<Option<Self>> {
+        let lease_path = root.join(LEASE);
+        regular_or_missing(&lease_path)?;
+        let lease = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(lease_path)?;
+        match lease.try_lock() {
+            Ok(()) => Ok(Some(Self(lease))),
+            Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+            Err(std::fs::TryLockError::Error(error)) => Err(error),
+        }
+    }
+}
+
+impl Drop for Lease {
+    /// Frees the lease when the session ends, or when a session could not be started after the lock
+    /// was taken. A child process that any thread starts holds a copy of the lease's handle until it
+    /// runs its program, and the lock is only freed by closing every copy or by unlocking.
     fn drop(&mut self) {
-        let _ = self._lease.unlock();
+        let _ = self.0.unlock();
     }
 }
 
@@ -82,14 +99,13 @@ impl Session {
         if version.is_empty() || version.len() > MAX_METADATA_BYTES || commit.is_some_and(|value| value.len() > MAX_METADATA_BYTES) {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "Nightly session provenance is missing or too large"));
         }
-        let lease_path = root.join(LEASE);
-        regular_or_missing(&lease_path)?;
-        let lease = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(lease_path)?;
-        match lease.try_lock() {
-            Ok(()) => {}
-            Err(std::fs::TryLockError::WouldBlock) => return Ok(None),
-            Err(std::fs::TryLockError::Error(error)) => return Err(error),
-        }
+        let Some(lease) = Lease::take(root)? else { return Ok(None) };
+        Self::record(lease, root, version, commit).map(Some)
+    }
+
+    /// Write this launch's record while `lease` is held. On an error `lease` is dropped, which
+    /// unlocks it.
+    fn record(lease: Lease, root: &Path, version: &str, commit: Option<&str>) -> io::Result<Self> {
         let path = root.join(RECORD);
         let previous_unclean = regular_or_missing(&path)?;
         let own_record = serde_json::to_vec(&serde_json::json!({
@@ -99,7 +115,7 @@ impl Session {
             "commit": commit.filter(|value| !value.is_empty()),
         }))?;
         atomic_write_no_follow(&path, &own_record)?;
-        Ok(Some(Self { _lease: lease, path, own_record, previous_unclean }))
+        Ok(Self { _lease: lease, path, own_record, previous_unclean })
     }
 
     pub fn previous_unclean(&self) -> bool {
@@ -272,14 +288,47 @@ mod tests {
         let fixture = Fixture::new();
         let first = Session::begin(Some(&fixture.0), "first", None).unwrap().unwrap();
         // A child process that is starting holds such a copy.
-        let first_copy = first._lease.try_clone().unwrap();
+        let first_copy = first._lease.0.try_clone().unwrap();
         first.complete().unwrap();
         let second = Session::begin(Some(&fixture.0), "second", None).unwrap();
         assert!(second.is_some(), "a completed session frees the lease");
-        let second_copy = second.as_ref().map(|session| session._lease.try_clone().unwrap());
+        let second_copy = second.as_ref().map(|session| session._lease.0.try_clone().unwrap());
         drop(second);
         assert!(Session::begin(Some(&fixture.0), "third", None).unwrap().is_some(), "a dropped session frees the lease");
         drop((first_copy, second_copy));
+    }
+
+    /// `root`'s lease, locked as [`Session::begin`] locks it, and a copy of its handle such as a
+    /// child process that is starting holds.
+    fn locked_with_a_copy(root: &Path) -> (Lease, File) {
+        let lease = Lease::take(root).unwrap().unwrap();
+        let copy = lease.0.try_clone().unwrap();
+        (lease, copy)
+    }
+
+    #[test]
+    fn a_session_that_cannot_check_its_record_frees_the_lease_while_a_copy_of_its_handle_is_open() {
+        let fixture = Fixture::new();
+        std::fs::create_dir(fixture.0.join(RECORD)).unwrap();
+        let (lease, copy) = locked_with_a_copy(&fixture.0);
+        assert!(Session::record(lease, &fixture.0, "nightly", None).is_err(), "a folder is not a record");
+        std::fs::remove_dir(fixture.0.join(RECORD)).unwrap();
+        assert!(Session::begin(Some(&fixture.0), "next", None).unwrap().is_some(), "a session that failed to check its record frees the lease");
+        drop(copy);
+    }
+
+    #[test]
+    fn a_session_that_cannot_write_its_record_frees_the_lease_while_a_copy_of_its_handle_is_open() {
+        let fixture = Fixture::new();
+        // A folder at the temporary file's name makes the write fail after the record was checked.
+        let temporary = fixture.0.join(format!(".{RECORD}.{}.tmp", std::process::id()));
+        std::fs::create_dir(&temporary).unwrap();
+        let (lease, copy) = locked_with_a_copy(&fixture.0);
+        assert!(Session::record(lease, &fixture.0, "nightly", None).is_err(), "the record cannot be written");
+        assert!(!fixture.0.join(RECORD).exists());
+        std::fs::remove_dir(&temporary).unwrap();
+        assert!(Session::begin(Some(&fixture.0), "next", None).unwrap().is_some(), "a session that failed to write its record frees the lease");
+        drop(copy);
     }
 
     #[test]
