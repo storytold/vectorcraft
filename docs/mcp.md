@@ -10681,7 +10681,8 @@ nothing that could be read, at the failed write. Once a paste has read the chang
 does not restore the copy. While a
 text field or the Type tool has the keyboard, the app waits for them. Windows carries every format both ways and pastes a bitmap from PNG, else
 from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
-throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
+throughout, at most 32768 px a side); macOS copies every format too (the text, else the PNG as TIFF, with the SVG,
+PDF and PNG on the same pasteboard item, #6310); Linux carries one format (the text, else the PNG); both paste text and
 bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). A Paste from the menus or the keys decodes
 a bitmap (a copied image file too) on the thread that reads placed files, with "Pasting" in the status bar and the
 busy spinner, and pastes it once it is decoded, in the document it was given in: Windows' device-independent bitmap and
