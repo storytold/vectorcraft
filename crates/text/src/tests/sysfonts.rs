@@ -1255,5 +1255,12 @@ fn a_search_finds_the_file_of_a_postscript_name_split_into_family_and_style() {
     let wanted = |style: &str| WantedFonts::new(&[WantedFont { family: "Gilroy".into(), style: style.into(), installed: None }]);
     assert_eq!(wanted("Black").provided_by(&file), [0]);
     assert!(wanted("Bold").provided_by(&file).is_empty(), "another style of the family is another file");
+    assert!(wanted("").provided_by(&file).is_empty(), "without a style, the family alone is not the PostScript name");
+    // A file that carries the joined name only as its full name is found the same way.
+    let data = named(&[(3, EN, 1, "Gilroy Heavy"), (3, EN, 4, "Gilroy Heavy"), (3, EN, 6, "GilroyHvy")]);
+    let file = dir.join("Gilroy-Heavy.ttf");
+    std::fs::write(&file, &data).unwrap();
+    assert_eq!(wanted("Heavy").provided_by(&file), [0]);
+    assert!(wanted("Black").provided_by(&file).is_empty());
     let _ = std::fs::remove_dir_all(dir);
 }
