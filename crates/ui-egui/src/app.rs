@@ -275,6 +275,8 @@ impl VectorcraftApp {
             #[cfg(test)]
             now_override: None,
             #[cfg(test)]
+            clock_origin: craft::ui::runtime::motion::now(),
+            #[cfg(test)]
             fail_next_tool_choice: None,
             held_tool: Vec::new(),
         }
@@ -338,6 +340,17 @@ impl VectorcraftApp {
             return now;
         }
         now_secs()
+    }
+
+    /// The app's clock as an instant, which the control channel times requests and captures with:
+    /// [`motion::now`](craft::ui::runtime::motion::now), or `now_override` seconds after the app was
+    /// made when a test set it.
+    pub(crate) fn instant(&self) -> craft::ui::runtime::motion::Instant {
+        #[cfg(test)]
+        if let Some(now) = self.now_override {
+            return self.clock_origin + std::time::Duration::from_secs_f64(now.max(0.0));
+        }
+        craft::ui::runtime::motion::now()
     }
 
     /// Applies the work that finished off the UI thread. It stays pending while a script runs, since
