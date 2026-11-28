@@ -12633,6 +12633,36 @@ fn an_envelope_mapping_from_its_contents_strokes_is_read_back() {
     assert!(options.bounds_margin.iter().zip(margin).all(|(a, b)| (a - b).abs() < 1e-4), "{:?} {margin:?}", options.bounds_margin);
 }
 
+/// A stroked straight line, with no height without its stroke, saves the size of its box with its
+/// stroke, and opens mapping from that box.
+#[test]
+fn a_stroked_straight_line_mapping_from_its_stroke_is_read_back() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions, envelope_content_boxes, envelope_stroke_margin};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut envelope = envelope_node(
+        &mut doc,
+        EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] },
+        50.0,
+        false,
+        EnvelopeOptions::NEW,
+    );
+    let line = shapes::line(kurbo::Point::new(40.0, 50.0), kurbo::Point::new(160.0, 50.0));
+    let line = Node::path(doc.alloc_id(), line, Appearance::basic(Paint::None, solid(Color::BLACK), 10.0));
+    let NodeKind::Envelope { content, options, .. } = &mut envelope.kind else { unreachable_envelope() };
+    *content = vec![Arc::new(line)];
+    let (stroked, plain) = envelope_content_boxes(content, Affine::IDENTITY).unwrap();
+    assert!(plain.height() < 1e-9 && stroked.height() > 9.0, "{plain:?} {stroked:?}");
+    options.bounds_margin = envelope_stroke_margin(stroked, plain).unwrap();
+    let margin = options.bounds_margin;
+    assert!(margin[0] > 0.0 && margin[1] > 0.0, "{margin:?}");
+    doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    let (back, warnings, notes) = envelope_back(&doc);
+    assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let NodeKind::Envelope { options, .. } = &back.kind else { panic!("{back:#?} {notes:?}") };
+    assert!(options.bounds_margin.iter().zip(margin).all(|(a, b)| (a - b).abs() < 1e-4), "{:?} {margin:?}", options.bounds_margin);
+}
+
 /// A test's stand-in for a node that must be an envelope.
 fn unreachable_envelope() -> ! {
     panic!("not an envelope")

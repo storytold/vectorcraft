@@ -106,8 +106,8 @@ impl Kind {
 pub(crate) struct Open {
     /// The dialog's id on the window's host.
     pub id: DialogId,
-    /// The drawing whose selection and reference point the dialog acts on.
-    document: Option<u64>,
+    /// The drawing whose selection and reference point the dialog acts on: its uid and revert count.
+    document: Option<(u64, u64)>,
     /// Which transform it is.
     pub kind: Kind,
     /// The reference point of a tool click, sent with every command but Move's.
@@ -118,7 +118,12 @@ pub(crate) struct Open {
 
 impl Open {
     fn in_source(&self, app: &VectorcraftApp) -> bool {
-        self.document == app.session.active().map(|doc| doc.uid)
+        self.document == app.session.active().map(|doc| (doc.uid, doc.reverts))
+    }
+
+    /// Whether the active drawing is the opening one, reverted since the dialog opened.
+    fn reverted(&self, app: &VectorcraftApp) -> bool {
+        self.document.is_some_and(|(uid, reverts)| app.session.active().is_some_and(|doc| doc.uid == uid && doc.reverts != reverts))
     }
 
     fn owns_preview(&self, app: &VectorcraftApp) -> bool {
@@ -142,7 +147,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, kind: Kind, tool: &Value) {
         return;
     };
     let Value::Object(opening) = opening(app, kind) else { return };
-    let document = app.session.active().map(|doc| doc.uid);
+    let document = app.session.active().map(|doc| (doc.uid, doc.reverts));
     let rows = rows(app, kind, &opening);
     let fields = fields_of(&rows, &opening);
     let dialog = HostedParamDialog::new(&ctx, kind.command(), fields, move |f| {
@@ -204,8 +209,13 @@ fn ok(app: &mut VectorcraftApp, kind: Kind, ctx: &egui::Context, result: &ParamR
         return Err("the Transform dialog was replaced".into());
     }
     if !open.in_source(app) {
+        let why = if open.reverted(app) {
+            tl!("The document was reverted. Reopen this dialog to continue.")
+        } else {
+            tl!("Return to the original drawing to apply the transform")
+        };
         app.object_dialogs.transform = Some(open);
-        return Err(tl!("Return to the original drawing to apply the transform").into());
+        return Err(why.into());
     }
     open.cancel_preview(app);
     let fields = &result.fields;
@@ -544,6 +554,33 @@ mod tests {
         rig.cancel();
         assert_eq!(rig.app.session.active().unwrap().interaction.as_ref().unwrap().label, "The second drawing's edit");
         assert_eq!(rig.bounds().x0, 10.0);
+    }
+
+    #[test]
+    fn transform_refuses_its_draft_after_file_revert() {
+        let mut rig = Rig::new();
+        let dir = vectorcraft_testkit::TempDir::new("transform-revert");
+        rig.app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        rig.app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        rig.app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        rig.open("object.move");
+        rig.set("dx", json!(35));
+        assert_eq!(rig.bounds().x0, 135.0);
+
+        rig.app.run("file.revert", json!({"confirmed": true})).unwrap();
+        rig.app.run("select.all", json!({})).unwrap();
+        rig.frame();
+        assert_eq!(rig.bounds().x0, 100.0, "the draft must not preview on the restored drawing");
+        let steps = rig.undo_steps();
+        let id = rig.id();
+        let dialogs = rig.app.dialogs().unwrap();
+        rig.confirm();
+        assert_eq!(rig.bounds().x0, 100.0, "OK must not move the restored drawing's art");
+        assert_eq!(rig.undo_steps(), steps);
+        assert!(matches!(
+            dialogs.with(|h| h.held_state(id)),
+            Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
     }
 
     fn two_drawings() -> Rig {

@@ -262,6 +262,22 @@ fn document_color_mode_converts_effect_colors() {
     assert_eq!((object(&s), style(&s)), before);
 }
 
+/// Document Color Mode converts the fill of a character style, so type set in the style after the
+/// switch paints in the new mode.
+#[test]
+fn document_color_mode_converts_character_style_colors() {
+    let mut s = session();
+    let id = run(&mut s, "text.create", json!({"x": 10, "y": 40, "text": "Ink", "color": "#ff0000"}))["id"].clone();
+    run(&mut s, "charStyle.new", json!({"name": "Red", "id": id}));
+    let fill = |s: &Session| {
+        let def = doc(s).char_styles.iter().find(|c| c.name == "Red").expect("the style");
+        serde_json::from_value::<Paint>(def.attrs["fill"].clone()).expect("a fill")
+    };
+    assert!(matches!(fill(&s).color(), Some(Color::Rgb { .. })), "{:?}", fill(&s));
+    run(&mut s, "file.documentColorMode", json!({"mode": "cmyk"}));
+    assert!(matches!(fill(&s).color(), Some(Color::Cmyk { .. })), "{:?}", fill(&s));
+}
+
 /// Document Color Mode converts the series paints, label styles and line rows a graph keeps, so a
 /// graph drawn again after the switch paints its series, labels and lines in the new mode.
 #[test]

@@ -1115,6 +1115,82 @@ fn package_reads_no_placed_pdf_page_without_copy_fonts() {
     }
 }
 
+/// With Copy Fonts on, Package reads the type of a placed EPS file whose bytes a `.ai` file's
+/// editing data included, as it reads a placed PDF page's.
+#[test]
+fn package_reads_a_placed_eps_files_type_for_copy_fonts() {
+    use cmd::package::PAGES_READ;
+    use vectorcraft_testkit::ai;
+    let dir = Folder::new("package-placed-eps-fonts");
+    let eps =
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n/Helvetica findfont 12 scalefont setfont 10 10 moveto (Hi) show\n%%EOF\n";
+    let src = dir.file("art/shape.eps");
+    write(&src, eps.as_bytes());
+    let src = src.replace('\\', "/");
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 0\n[1 0 0 1 20 20] 0 0 60 60 4 4 0\n({src})`\n%%BeginDocument: {src}\n{eps}\n%%EndDocument\n~\n%AI5_EndPlace\n"
+    );
+    let doc_path = dir.file("poster.ai");
+    let page = "BT /F1 12 Tf 10 50 Td (Saved without its PDF part) Tj ET";
+    write(&doc_path, &ai::ai(ai::editing_data(200.0, 100.0, &ai::layer("Art", &place)).as_bytes(), page));
+    let mut s = session();
+    open(&mut s, &doc_path);
+    let mut placed = 0;
+    s.doc().unwrap().doc.visit_placed(|_, _| placed += 1);
+    assert_eq!(placed, 1);
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    let before = PAGES_READ.with(std::cell::Cell::get);
+    let r = run(&mut s, "file.package", json!({"folder": dir.file("out"), "copyLinks": false, "copyFonts": true}));
+    assert_eq!(PAGES_READ.with(std::cell::Cell::get) - before, 1, "{r}");
+    let listed = |r: &Value| r["fonts"].as_u64().unwrap_or(0) + r["skippedFonts"].as_array().map_or(0, |a| a.len() as u64);
+    assert_eq!(listed(&r), 1, "the type's font: {r}");
+
+    // Type only in an EPS file that the placed one, a legacy-format file, includes in turn.
+    let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /` {gsave 5 {pop} repeat concat} def /~ {grestore} def";
+    let typed =
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n/Courier findfont 12 scalefont setfont 10 10 moveto (Hi) show\n%%EOF\n";
+    let inner = format!("[1 0 0 1 0 0] 0 0 60 60 (inner.eps) `\n%%BeginDocument: inner.eps\n{typed}%%EndDocument\n~\n");
+    let outer = format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: VectorCraft\n%AI5_FileFormat 4.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n\
+         %%BeginProlog\n{prolog}\n%%EndProlog\n%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Back) Ln\n0 A\n\
+         {inner}LB\n%AI5_EndLayer--\nshowpage\n%%EOF\n"
+    );
+    write(&dir.file("art/shape.eps"), outer.as_bytes());
+    write(&doc_path, &ai::ai(ai::editing_data(200.0, 100.0, &ai::layer("Art", &place.replace(eps, &outer))).as_bytes(), page));
+    open(&mut s, &doc_path);
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    let r = run(&mut s, "file.package", json!({"folder": dir.file("out2"), "copyLinks": false, "copyFonts": true}));
+    assert_eq!(listed(&r), 1, "the inner file's font: {r}");
+
+    // The included file is only in a pattern definition, outside the page's nodes.
+    let pattern = format!("%AI3_BeginPattern: (Type)\n(Type) 0 0 60 60\n0 A\n0 Xw\n{inner}E\n%AI3_EndPattern\n");
+    let outer = outer.replace(&inner, "").replace("%AI5_BeginLayer", &format!("{pattern}%AI5_BeginLayer"));
+    let a = cmd::place::document::document_art("shape.eps", outer.as_bytes(), Some(&src), 1, false, vectorcraft_doc::PageBox::Crop, "t").unwrap();
+    let pattern = a.doc.pattern("Type").expect("the pattern definition is read");
+    let mut placements = 0;
+    for n in &pattern.art {
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut |n| {
+            assert!(!matches!(n.kind, vectorcraft_doc::NodeKind::Text(_)), "the type is only in the included file");
+            if let vectorcraft_doc::NodeKind::PlacedDocument(p) = &n.kind {
+                placements += 1;
+                let blob = &a.doc.images[&p.key];
+                assert!(!blob.is_proxy());
+                assert_eq!(blob.bytes.as_slice(), typed.as_bytes());
+            }
+        });
+    }
+    assert_eq!(placements, 1, "the pattern holds the included file");
+    for n in &a.nodes {
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut |n| assert!(!matches!(n.kind, vectorcraft_doc::NodeKind::PlacedDocument(_))));
+    }
+    write(&dir.file("art/shape.eps"), outer.as_bytes());
+    write(&doc_path, &ai::ai(ai::editing_data(200.0, 100.0, &ai::layer("Art", &place.replace(eps, &outer))).as_bytes(), page));
+    open(&mut s, &doc_path);
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    let r = run(&mut s, "file.package", json!({"folder": dir.file("out3"), "copyLinks": false, "copyFonts": true}));
+    assert_eq!(listed(&r), 1, "the pattern's included file's font: {r}");
+}
+
 /// `dir/art/badge.ai`, saved without its PDF part, its art placing each of `pics` (600 × 300 px,
 /// with a 2×1 preview) → its path.
 fn ai_placing(dir: &Folder, pics: &[&str]) -> String {

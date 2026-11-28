@@ -110,18 +110,22 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("straight"));
     ok(&mut app, &[("mode", FieldValue::Text("arc".into()))]);
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
-    // The Tangent Circle tool's radius for Shift, and Add Points to Existing Paths (off to start).
+    // The Tangent Circle tool's radius for Shift, Add Points to Existing Paths (off to start), Ask For
+    // Circle Radius and Auto-Update Default.
     app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
     let shown = held(&app, |d| {
         let f = d.expect("the held dialog").fields();
-        (f.number("radius"), f.bool("addPoints"))
+        (f.number("radius"), f.bool("addPoints"), f.bool("askRadius"), f.bool("autoUpdateDefault"))
     });
-    assert_eq!(shown, (Some(36.0), Some(false)));
+    assert_eq!(shown, (Some(36.0), Some(false), Some(false), Some(false)));
     let rows = super::options_params("tangentCircle", crate::canvas::rulers::general_lengths(&app));
     assert!(rows.iter().any(|p| p.key == "addPoints" && p.label.as_str() == "Add Points to Existing Paths"), "the option has a row");
-    ok(&mut app, &[("radius", FieldValue::Number(12.5)), ("addPoints", FieldValue::Bool(true))]);
-    assert_eq!(app.session.tool_options_of("tangentCircle")["radius"], json!(12.5));
-    assert_eq!(app.session.tool_options_of("tangentCircle")["addPoints"], json!(true));
+    ok(&mut app, &[("radius", FieldValue::Number(12.5)), ("addPoints", FieldValue::Bool(true)), ("askRadius", FieldValue::Bool(true))]);
+    let o = app.session.tool_options_of("tangentCircle");
+    assert_eq!(
+        (o["radius"].clone(), o["addPoints"].clone(), o["askRadius"].clone(), o["autoUpdateDefault"].clone()),
+        (json!(12.5), json!(true), json!(true), json!(false))
+    );
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
     assert_eq!(KIND, "pathToolOptions");
 }
@@ -189,6 +193,8 @@ fn the_tangent_circle_options_have_their_rows_and_a_fractional_tolerance() {
             ("color", "Color"),
             ("snapTolerance", "Snap Tolerance"),
             ("snapWithoutGuides", "Snap When Smart Guides Are Off"),
+            ("askRadius", "Ask For Circle Radius"),
+            ("autoUpdateDefault", "Auto-Update Default"),
         ]
     );
     let colors = params.iter().find_map(|p| match &p.kind {

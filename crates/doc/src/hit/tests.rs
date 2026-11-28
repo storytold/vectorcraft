@@ -38,6 +38,168 @@ fn unfilled_interior_misses() {
     assert!(hit_test(&d, Point::new(50.5, 25.0), HitOptions::default()).is_some());
 }
 
+/// The selection tools' options with unfilled closed paths hit inside.
+const INTERIORS: HitOptions = HitOptions { unfilled_interiors: true, ..SELECTING };
+
+/// A path of `points` with a black stroke and no fill, inserted at the top of the first layer.
+fn stroked(d: &mut Document, points: &[(f64, f64)], closed: bool) -> NodeId {
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let pts: Vec<Point> = points.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, closed));
+    d.insert(Some(l), 99, Node::path(id, path, Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0))).unwrap();
+    id
+}
+
+const FRAME: [(f64, f64); 4] = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)];
+
+#[test]
+fn an_unfilled_closed_path_is_hit_inside_unless_by_path_only_or_in_outline() {
+    let mut d = Document::new(200.0, 200.0);
+    let frame = stroked(&mut d, &FRAME, true);
+    let at = |opt: HitOptions| hit_test(&d, Point::new(50.0, 50.0), opt).map(|h| h.leaf);
+    assert_eq!(at(INTERIORS), Some(frame));
+    assert_eq!(at(SELECTING), None, "without the option, the interior misses");
+    assert_eq!(at(HitOptions { path_only: true, ..INTERIORS }), None, "Object Selection by Path Only");
+    assert_eq!(at(HitOptions { outline: true, ..INTERIORS }), None, "Outline view");
+    assert_eq!(objects_at(&d, Point::new(50.0, 50.0), INTERIORS, None), vec![frame]);
+    assert!(objects_at(&d, Point::new(150.0, 50.0), INTERIORS, None).is_empty(), "outside it");
+}
+
+#[test]
+fn an_open_path_is_not_hit_inside() {
+    let mut d = Document::new(200.0, 200.0);
+    stroked(&mut d, &FRAME, false);
+    assert_eq!(hit_test(&d, Point::new(50.0, 50.0), INTERIORS), None);
+}
+
+/// What a click paints over comes first: an object drawn inside an unfilled frame above it is hit
+/// where it paints, and the frame elsewhere inside; Select Behind lists the frame after it.
+#[test]
+fn art_inside_an_unfilled_frame_above_it_is_hit_before_the_frame() {
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let dot = d.alloc_id();
+    d.insert(Some(l), 0, Node::path(dot, shapes::rectangle(Rect::new(40.0, 40.0, 60.0, 60.0)), Appearance::default_art())).unwrap();
+    let frame = stroked(&mut d, &FRAME, true);
+    let at = |d: &Document, x: f64| hit_test(d, Point::new(x, 50.0), INTERIORS).map(|h| h.leaf);
+    assert_eq!(at(&d, 50.0), Some(dot));
+    assert_eq!(at(&d, 20.0), Some(frame));
+    assert_eq!(objects_at(&d, Point::new(50.0, 50.0), INTERIORS, None), vec![dot, frame]);
+    // The topmost of two unfilled frames is hit inside both.
+    let inner = stroked(&mut d, &[(10.0, 10.0), (90.0, 10.0), (90.0, 90.0), (10.0, 90.0)], true);
+    assert_eq!(at(&d, 20.0), Some(inner));
+    assert_eq!(at(&d, 5.0), Some(frame));
+}
+
+#[test]
+fn an_unfilled_compound_path_is_hit_inside_its_members_but_not_its_holes() {
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let look = || Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    let ring = |id, r: Rect| Arc::new(Node::path(id, shapes::rectangle(r), look()));
+    let (id, outer, hole) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let members = vec![ring(outer, Rect::new(0.0, 0.0, 100.0, 100.0)), ring(hole, Rect::new(30.0, 30.0, 70.0, 70.0))];
+    let mut compound = Node::new(id, NodeKind::Compound { children: members, rule: FillRule::EvenOdd });
+    compound.appearance = look().into();
+    d.insert(Some(l), 0, compound).unwrap();
+    let at = |x: f64| hit_test(&d, Point::new(x, 50.0), INTERIORS).map(|h| h.leaf);
+    assert_eq!(at(15.0), Some(id));
+    assert_eq!(at(50.0), None, "in the hole");
+}
+
+#[test]
+fn guides_and_clipping_paths_are_not_hit_inside() {
+    let mut d = Document::new(200.0, 200.0);
+    let guide = stroked(&mut d, &FRAME, true);
+    if let Some(NodeKind::Path { guide: g, .. }) = d.node_mut(guide).map(|n| &mut n.kind) {
+        *g = true;
+    }
+    assert_eq!(hit_test(&d, Point::new(50.0, 50.0), INTERIORS), None, "a guide");
+    // A clip group whose art covers only part of its unfilled clipping path.
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let (g, clip, art) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let mut mask = Node::path(clip, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+    if let NodeKind::Path { clipping, .. } = &mut mask.kind {
+        *clipping = true;
+    }
+    let picture = Node::path(art, shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 100.0)), Appearance::default_art());
+    d.insert(Some(l), 0, Node::new(g, NodeKind::Group { children: vec![Arc::new(mask), Arc::new(picture)], clip: true })).unwrap();
+    let at = |x: f64| hit_test(&d, Point::new(x, 50.0), INTERIORS).map(|h| h.leaf);
+    assert_eq!(at(25.0), Some(art));
+    assert_eq!(at(75.0), None, "inside the mask where no art paints");
+    assert!(objects_at(&d, Point::new(75.0, 50.0), INTERIORS, None).is_empty());
+}
+
+/// A repeat's copies of an unfilled frame are hit inside, and the copies of a clip group's unfilled
+/// compound clipping path are not.
+#[test]
+fn a_repeat_is_hit_inside_its_unfilled_copies_but_not_inside_their_masks() {
+    let look = || Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    let kind = crate::pattern::RepeatKind::Grid {
+        h_spacing: 20.0,
+        v_spacing: 20.0,
+        rows: 1,
+        cols: 2,
+        grid_type: crate::pattern::TileType::Grid,
+        flip_rows: false,
+        flip_cols: false,
+    };
+    let repeat = |d: &mut Document, source: Node| {
+        let r = d.alloc_id();
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, Node::new(r, NodeKind::Repeat(crate::pattern::RepeatSpec { kind: kind.clone(), source: vec![Arc::new(source)] })))
+            .unwrap();
+        r
+    };
+    // Copies at 0..40 and 60..100.
+    let mut d = Document::new(300.0, 200.0);
+    let frame = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), look());
+    let r = repeat(&mut d, frame);
+    assert_eq!(hit_test(&d, Point::new(80.0, 20.0), INTERIORS).map(|h| h.leaf), Some(r));
+    assert_eq!(hit_test(&d, Point::new(50.0, 20.0), INTERIORS), None, "between the copies");
+    let mut d = Document::new(300.0, 200.0);
+    let ring = |id, r: Rect| Arc::new(Node::path(id, shapes::rectangle(r), look()));
+    let members = vec![ring(d.alloc_id(), Rect::new(0.0, 0.0, 40.0, 40.0)), ring(d.alloc_id(), Rect::new(5.0, 5.0, 35.0, 35.0))];
+    let mut mask = Node::new(d.alloc_id(), NodeKind::Compound { children: members, rule: FillRule::NonZero });
+    mask.appearance = look().into();
+    let picture = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 40.0)), Appearance::default_art());
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(picture)]);
+    clip.set_clips(true);
+    let r = repeat(&mut d, clip);
+    assert_eq!(hit_test(&d, Point::new(65.0, 20.0), INTERIORS).map(|h| h.leaf), Some(r), "on the clipped art");
+    assert_eq!(hit_test(&d, Point::new(80.0, 20.0), INTERIORS), None, "inside the mask where no art paints");
+}
+
+/// Direct Selection in a dynamic symbol's art picks parts as a click on the document does: what
+/// paints first, then an unfilled frame inside; an unfilled compound clipping path by its outline.
+#[test]
+fn symbol_art_parts_are_picked_inside_unfilled_frames_after_what_paints() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let look = || Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    let dot = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(40.0, 40.0, 60.0, 60.0)), Appearance::default_art());
+    let frame = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), look());
+    let ring = |id, r: Rect| Arc::new(Node::path(id, shapes::rectangle(r), look()));
+    let (mask_id, a, b) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let members = vec![ring(a, Rect::new(150.0, 0.0, 250.0, 100.0)), ring(b, Rect::new(160.0, 10.0, 240.0, 90.0))];
+    let mut mask = Node::new(mask_id, NodeKind::Compound { children: members, rule: FillRule::NonZero });
+    mask.appearance = look().into();
+    let picture = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(150.0, 0.0, 180.0, 100.0)), Appearance::default_art());
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(picture)]);
+    clip.set_clips(true);
+    let root = Node::group(d.alloc_id(), vec![Arc::new(dot), Arc::new(frame), Arc::new(clip)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Framed".into(), art: Arc::new(root) });
+    let inst = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Framed".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    let n = d.node(inst).unwrap();
+    let at = |x: f64| symbol_part_at(&d, n, Point::new(x, 50.0), INTERIORS);
+    assert_eq!(at(50.0), Some(vec![0]), "the dot under the frame");
+    assert_eq!(at(20.0), Some(vec![1]), "inside the frame");
+    assert_eq!(at(220.0), None, "inside the clipping path where no art paints");
+}
+
 #[test]
 fn long_plain_stroke_hits_its_middle_and_curved_end() {
     let mut d = Document::new(200.0, 200.0);
@@ -1464,6 +1626,7 @@ const SELECTING: HitOptions = HitOptions {
     clip_outlines: true,
     area_type_interior: false,
     ignore_layer_preview: false,
+    unfilled_interiors: false,
     scope: None,
 };
 
