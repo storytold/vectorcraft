@@ -175,8 +175,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     Some("document" | "objects") => tl!(title).to_string(),
                     _ => format!("{} ({})", tl!(title), rows.len()),
                 };
-                let title =
-                    if sel_only && n == 0 && category.is_empty() { crate::i18n::fmt(tl!("{title} (selection)"), &[("title", &title)]) } else { title };
+                let title = if sel_only && n == 0 && category.is_empty() {
+                    crate::i18n::fmt(tl!("{title} (selection)"), &[("title", &title)])
+                } else {
+                    title
+                };
                 Text::new(title).role(TypeRole::Heading).show(ui);
                 if rows.is_empty() {
                     Text::new(tl!("None").to_string()).shade(Shade::Muted).show(ui);
