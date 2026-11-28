@@ -462,6 +462,30 @@ fn setting_a_ranges_length_moves_its_end_and_leaves_the_text() {
     assert_eq!(undo_steps(&s), before + 1);
 }
 
+/// A length that ends inside a surrogate pair moves the range's end out to the end of the character.
+#[test]
+fn a_length_ending_inside_a_surrogate_pair_keeps_the_character_whole() {
+    let (mut s, _) = doc_with("a\u{1F600}b");
+    let out = log(&mut s, "var r = app.activeDocument.textFrames[0].textRange; r.length = 2; vc.log([r.length, r.end, r.contents]);");
+    assert_eq!(out, vec![json!([3, 3, "a\u{1F600}"])]);
+}
+
+/// `textFrames.removeAll()` deletes nothing when type is on a locked artboard.
+#[test]
+fn remove_all_type_refuses_type_on_a_locked_artboard() {
+    let (mut s, id) = doc_with("kept");
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.activeDocument.textFrames.removeAll();");
+    assert!(e.contains(&format!("cannot delete objects on a locked artboard: {}", id.0)), "{e}");
+    assert!(s.active().unwrap().doc.node(id).is_some());
+    assert_eq!(undo_steps(&s), steps);
+}
+
 #[test]
 fn collections_of_text_add_words_characters_and_paragraphs() {
     let cases = [

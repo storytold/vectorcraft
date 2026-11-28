@@ -145,6 +145,8 @@ mod tests {
 
     #[test]
     fn the_font_scans_read_the_fonts_folder_next_to_the_settings() {
+        // No test installs a launch's root in this process, so the settings folder stays the same here.
+        assert_eq!(profile::data_root(), None, "a test installed a launch's root beside the others");
         install_fonts();
         let fonts = prefs_dir().map(|dir| dir.join("Fonts"));
         assert!(fonts.is_some(), "a home folder to keep the settings in");

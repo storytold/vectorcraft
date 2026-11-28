@@ -6,14 +6,21 @@
 //! A piece without `fills` (or `strokes`) keeps the ones it was given; an empty list paints none.
 //! An effect on a fill may return only `fills`, one on a stroke only `strokes`.
 //!
+//! An effect that also declares `"appearanceOutput": true` (at `api` 3) may give a piece, and each
+//! fill or stroke it returns, an `opacity` (0–1), a `blend` (a [`BlendMode`] by its identifier) and
+//! `effects` ([`Look`]): built-in effects only, which the host checks ([`CheckEffect`]), at most
+//! [`MAX_LOOK_EFFECTS`] in one list and [`MAX_RESULT_EFFECTS`] in one result. A fill that carries
+//! them is `{"paint", "opacity"?, "blend"?, "effects"?}`. The fills and strokes an effect on a fill
+//! or a stroke returns take no `effects`.
+//!
 //! The result is checked whole before any of it is used ([`decode`]): every number finite and in
 //! range (nothing is clamped), every key known, a gradient stop's `plates` only on a stop linked to
 //! a spot swatch, and every swatch and pattern a paint names in the document ([`check_references`]).
 //! One fault refuses the whole result, naming the field.
 
-use serde_json::Value;
-use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, LineCap, LineJoin};
+use serde_json::{Map, Value};
+use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, LineCap, LineJoin};
 use vectorcraft_geom::{FillRule, PathData};
 
 use crate::objects::{MAX_COORD, MAX_ITEMS, MAX_OBJECTS, MAX_STROKE_WIDTH, MITER_LIMIT, OutStroke, check_point, out_err};
@@ -24,15 +31,88 @@ use crate::{Error, Result};
 const PIECE_KEYS: [&str; 6] = ["type", "path", "fillRule", "bounds", "fills", "strokes"];
 /// The keys a stroke of a piece may have.
 const STROKE_KEYS: [&str; 5] = ["paint", "width", "join", "cap", "miterLimit"];
+/// The keys a piece, a stroke or a fill also may have when the effect declares `appearanceOutput`.
+const LOOK_KEYS: [&str; 3] = ["opacity", "blend", "effects"];
+/// The look keys a fill or stroke has that an effect on a fill or a stroke returns.
+const ROW_LOOK_KEYS: [&str; 2] = ["opacity", "blend"];
+/// The keys an effect record has.
+const EFFECT_KEYS: [&str; 3] = ["id", "params", "visible"];
+
+/// Most effect records one piece, fill or stroke may carry.
+pub const MAX_LOOK_EFFECTS: usize = 16;
+/// Most effect records one result may carry, over all its pieces, fills and strokes.
+pub const MAX_RESULT_EFFECTS: usize = 4_096;
+
+/// How the host checks an effect record a piece (`false`) or one of its fills or strokes (`true`)
+/// carries: `Err` with the reason when the record names no built-in effect that may be there or has
+/// parameters that effect does not take. The plug-in crate checks the record's form; which effects
+/// exist and what they take is the host's to say.
+pub type CheckEffect = fn(&Effect, bool) -> std::result::Result<(), String>;
+
+/// The [`CheckEffect`] of a host that lets no effect record in.
+pub fn no_effects(_: &Effect, _: bool) -> std::result::Result<(), String> {
+    Err("this host takes no effects here".into())
+}
+
+/// The host's [`CheckEffect`], set once ([`set_effect_check`]).
+static CHECK: std::sync::OnceLock<CheckEffect> = std::sync::OnceLock::new();
+
+/// Makes `check` how the effect records of painted results are checked in this process, unless
+/// one was set before. Until one is set, every effect record is refused ([`no_effects`]).
+pub fn set_effect_check(check: CheckEffect) {
+    let _ = CHECK.set(check);
+}
+
+/// How the effect records of painted results are checked ([`set_effect_check`]).
+pub(crate) fn effect_check() -> CheckEffect {
+    CHECK.get().copied().unwrap_or(no_effects)
+}
+
+/// The opacity, blending mode and effects a piece, or one of its fills or strokes, is given: each
+/// `None` (or empty) keeps what it would have without.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Look {
+    pub opacity: Option<f32>,
+    pub blend: Option<BlendMode>,
+    /// Drawn after the effects it already has.
+    pub effects: Vec<Effect>,
+}
+
+impl Look {
+    /// Does it keep everything as it is?
+    pub fn is_empty(&self) -> bool {
+        self.opacity.is_none() && self.blend.is_none() && self.effects.is_empty()
+    }
+
+    /// Gives fill or stroke `item` this opacity and blending mode where given, and these effects
+    /// after its own.
+    fn dress(&self, item: &mut AppearanceItem) {
+        let (opacity, blend, effects) = match item {
+            AppearanceItem::Fill(f) => (&mut f.opacity, &mut f.blend, &mut f.effects),
+            AppearanceItem::Stroke(s) => (&mut s.opacity, &mut s.blend, &mut s.effects),
+        };
+        if let Some(o) = self.opacity {
+            *opacity = o;
+        }
+        if let Some(b) = self.blend {
+            *blend = b;
+        }
+        effects.extend(self.effects.iter().cloned());
+    }
+}
 
 /// One piece a live effect returned: its geometry and fill rule, and its fills and strokes in paint
-/// order (`None`: the ones it was given).
+/// order (`None`: the ones it was given), with the look of the piece and of each fill and stroke it
+/// gives (`fill_looks[k]` for `fills[k]`; a missing one keeps everything).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Piece {
     pub path: PathData,
     pub rule: FillRule,
     pub fills: Option<Vec<Paint>>,
     pub strokes: Option<Vec<OutStroke>>,
+    pub look: Look,
+    pub fill_looks: Vec<Look>,
+    pub stroke_looks: Vec<Look>,
 }
 
 /// Where in an appearance the effect sits, which says what its pieces may paint.
@@ -51,6 +131,13 @@ pub enum Scope {
 /// is ignored. Any other top-level key, an unknown key in a piece, stroke or paint, a list or count past its limit, a number out of
 /// range or a paint of the wrong form refuses the whole result, naming the field.
 pub fn decode(bytes: &[u8], scope: Scope, rule: FillRule) -> Result<Vec<Piece>> {
+    decode_with(bytes, scope, rule, None)
+}
+
+/// [`decode`] for an effect that declares `appearanceOutput` when `looks` is `Some`: its pieces,
+/// fills and strokes may then carry opacity, a blending mode and effects, each effect record
+/// checked by it.
+pub fn decode_with(bytes: &[u8], scope: Scope, rule: FillRule, looks: Option<CheckEffect>) -> Result<Vec<Piece>> {
     let v: Value = serde_json::from_slice(bytes).map_err(|e| out_err("output", format!("not JSON: {e}")))?;
     if let Some(e) = crate::objects::declined(&v) {
         return Err(e);
@@ -63,13 +150,38 @@ pub fn decode(bytes: &[u8], scope: Scope, rule: FillRule) -> Result<Vec<Piece>> 
     if objects.len() > MAX_OBJECTS {
         return Err(out_err("objects", format!("{} objects (limit {MAX_OBJECTS})", objects.len())));
     }
-    let mut anchors = 0;
-    objects.iter().enumerate().map(|(i, o)| piece(o, &format!("objects[{i}]"), scope, rule, &mut anchors)).collect()
+    let mut counts = Counts { anchors: 0, effects: 0, looks, row_effects: scope == Scope::Object };
+    objects.iter().enumerate().map(|(i, o)| piece(o, &format!("objects[{i}]"), scope, rule, &mut counts)).collect()
 }
 
-fn piece(v: &Value, at: &str, scope: Scope, rule: FillRule, anchors: &mut usize) -> Result<Piece> {
+/// What a result holds so far, which its limits count: anchors and effect records, and how its
+/// effect records are checked (`None`: the result carries no look), and whether its fills and
+/// strokes may carry `effects` (only those of an object's effect: one on a fill or a stroke sits
+/// among that fill's or stroke's own effects).
+struct Counts {
+    anchors: usize,
+    effects: usize,
+    looks: Option<CheckEffect>,
+    row_effects: bool,
+}
+
+impl Counts {
+    /// The look keys a fill or stroke may have.
+    fn row_look_keys(&self) -> &'static [&'static str] {
+        if self.row_effects { &LOOK_KEYS } else { &ROW_LOOK_KEYS }
+    }
+}
+
+fn piece(v: &Value, at: &str, scope: Scope, rule: FillRule, counts: &mut Counts) -> Result<Piece> {
     let o = v.as_object().ok_or_else(|| out_err(at, "an object must be a JSON object"))?;
-    if let Some(k) = o.keys().find(|k| !PIECE_KEYS.contains(&k.as_str())) {
+    let known = |k: &str| PIECE_KEYS.contains(&k) || (counts.looks.is_some() && LOOK_KEYS.contains(&k));
+    if let Some(k) = o.keys().find(|k| !known(k)) {
+        if counts.looks.is_some() {
+            return Err(out_err(
+                &format!("{at}.{k}"),
+                "a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`",
+            ));
+        }
         return Err(out_err(&format!("{at}.{k}"), "a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`"));
     }
     if let Some(t) = o.get("type")
@@ -79,7 +191,7 @@ fn piece(v: &Value, at: &str, scope: Scope, rule: FillRule, anchors: &mut usize)
     }
     let path = o.get("path").ok_or_else(|| out_err(&format!("{at}.path"), "each piece needs a `path`"))?;
     // At most MAX_ANCHORS over all pieces.
-    let path = crate::objects::decode_path(path, &format!("{at}.path"), anchors)?;
+    let path = crate::objects::decode_path(path, &format!("{at}.path"), &mut counts.anchors)?;
     let rule = match o.get("fillRule") {
         None => rule,
         Some(r) => match r.as_str() {
@@ -101,17 +213,112 @@ fn piece(v: &Value, at: &str, scope: Scope, rule: FillRule, anchors: &mut usize)
         Scope::Stroke if fills.is_some() => return Err(out_err(&format!("{at}.fills"), "an effect on a stroke returns only `strokes`")),
         _ => {}
     }
-    let fills = fills.map(|f| f.iter().enumerate().map(|(i, p)| paint(p, &format!("{at}.fills[{i}]"))).collect::<Result<Vec<_>>>()).transpose()?;
-    let strokes =
-        strokes.map(|s| s.iter().enumerate().map(|(i, s)| stroke(s, &format!("{at}.strokes[{i}]"))).collect::<Result<Vec<_>>>()).transpose()?;
-    Ok(Piece { path, rule, fills, strokes })
+    let look = look(o, at, false, counts)?;
+    let mut fill_looks = vec![];
+    let fills = match fills {
+        None => None,
+        Some(f) => {
+            let rows = f.iter().enumerate().map(|(i, p)| fill_row(p, &format!("{at}.fills[{i}]"), counts)).collect::<Result<Vec<_>>>()?;
+            let (paints, looks): (Vec<Paint>, Vec<Look>) = rows.into_iter().unzip();
+            fill_looks = looks;
+            Some(paints)
+        }
+    };
+    let mut stroke_looks = vec![];
+    let strokes = match strokes {
+        None => None,
+        Some(s) => {
+            let rows = s.iter().enumerate().map(|(i, s)| stroke(s, &format!("{at}.strokes[{i}]"), counts)).collect::<Result<Vec<_>>>()?;
+            let (strokes, looks): (Vec<OutStroke>, Vec<Look>) = rows.into_iter().unzip();
+            stroke_looks = looks;
+            Some(strokes)
+        }
+    };
+    // A look that keeps everything is left out, so a result without any compares as one.
+    for looks in [&mut fill_looks, &mut stroke_looks] {
+        if looks.iter().all(Look::is_empty) {
+            looks.clear();
+        }
+    }
+    Ok(Piece { path, rule, fills, strokes, look, fill_looks, stroke_looks })
+}
+
+/// A fill of a piece: a paint, or with `appearanceOutput` also `{"paint", "opacity"?, "blend"?,
+/// "effects"?}` (an object with `paint` and no `type`), with its look.
+fn fill_row(v: &Value, at: &str, counts: &mut Counts) -> Result<(Paint, Look)> {
+    match v.as_object() {
+        Some(o) if counts.looks.is_some() && o.contains_key("paint") && !o.contains_key("type") => {
+            let keys: Vec<&str> = std::iter::once("paint").chain(counts.row_look_keys().iter().copied()).collect();
+            only_keys(v, at, &keys)?;
+            let look = look(o, at, true, counts)?;
+            Ok((paint(o.get("paint").unwrap_or(&Value::Null), &format!("{at}.paint"))?, look))
+        }
+        _ => Ok((paint(v, at)?, Look::default())),
+    }
+}
+
+/// The identifiers `blend` takes, in Transparency-panel order.
+fn blend_names() -> String {
+    BlendMode::ALL.iter().map(|m| format!("{m:?}")).collect::<Vec<_>>().join(", ")
+}
+
+/// The opacity, blending mode and effects object `o` of a piece (`row` off) or of one of its fills
+/// or strokes gives, checked: an `opacity` from 0 to 1, a `blend` that is one of [`BlendMode`]'s
+/// identifiers exactly, and at most [`MAX_LOOK_EFFECTS`] effect records, each `{id, params?,
+/// visible?}` that the host's [`CheckEffect`] lets in, within [`MAX_RESULT_EFFECTS`] for the whole
+/// result. Without `appearanceOutput` the keys are refused before this is reached.
+fn look(o: &Map<String, Value>, at: &str, row: bool, counts: &mut Counts) -> Result<Look> {
+    let Some(check) = counts.looks else { return Ok(Look::default()) };
+    let opacity = match o.get("opacity") {
+        None => None,
+        Some(v) => match v.as_f64().filter(|x| within(*x, 0.0, 1.0)) {
+            Some(x) => Some(x as f32),
+            None => return Err(out_err(&format!("{at}.opacity"), "`opacity` must be a number from 0 to 1")),
+        },
+    };
+    let blend = match o.get("blend") {
+        None => None,
+        Some(v) => match v.as_str().and_then(|s| BlendMode::ALL.into_iter().find(|m| format!("{m:?}") == s)) {
+            Some(b) => Some(b),
+            None => return Err(out_err(&format!("{at}.blend"), format!("unknown blending mode; `blend` is one of {}", blend_names()))),
+        },
+    };
+    let records = match o.get("effects") {
+        None => &[][..],
+        Some(Value::Array(a)) if a.len() <= MAX_LOOK_EFFECTS => a.as_slice(),
+        Some(_) => return Err(out_err(&format!("{at}.effects"), format!("`effects` must be an array of at most {MAX_LOOK_EFFECTS} records"))),
+    };
+    let mut effects = Vec::with_capacity(records.len());
+    for (j, r) in records.iter().enumerate() {
+        let at = format!("{at}.effects[{j}]");
+        counts.effects += 1;
+        if counts.effects > MAX_RESULT_EFFECTS {
+            return Err(out_err(&at, format!("a result carries at most {MAX_RESULT_EFFECTS} effect records")));
+        }
+        only_keys(r, &at, &EFFECT_KEYS)?;
+        let e = crate::objects::decode_effect(r, &at)?;
+        check(&e, row).map_err(|why| out_err(&at, why))?;
+        effects.push(e);
+    }
+    Ok(Look { opacity, blend, effects })
 }
 
 /// A stroke `{paint, width?, join?, cap?, miterLimit?}`: a width of 0–[`MAX_STROKE_WIDTH`] and a
-/// miter limit in [`MITER_LIMIT`].
-fn stroke(v: &Value, at: &str) -> Result<OutStroke> {
+/// miter limit in [`MITER_LIMIT`]; with `appearanceOutput` also its look.
+fn stroke(v: &Value, at: &str, counts: &mut Counts) -> Result<(OutStroke, Look)> {
     let s = v.as_object().ok_or_else(|| out_err(at, "a stroke must be {\"paint\", \"width\"?, \"join\"?, \"cap\"?, \"miterLimit\"?}"))?;
-    if let Some(k) = s.keys().find(|k| !STROKE_KEYS.contains(&k.as_str())) {
+    if counts.looks.is_some() && !counts.row_effects {
+        let keys: Vec<&str> = STROKE_KEYS.iter().chain(&ROW_LOOK_KEYS).copied().collect();
+        only_keys(v, at, &keys)?;
+    }
+    let known = |k: &str| STROKE_KEYS.contains(&k) || (counts.looks.is_some() && LOOK_KEYS.contains(&k));
+    if let Some(k) = s.keys().find(|k| !known(k)) {
+        if counts.looks.is_some() {
+            return Err(out_err(
+                &format!("{at}.{k}"),
+                "a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`",
+            ));
+        }
         return Err(out_err(&format!("{at}.{k}"), "a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`"));
     }
     let number = |key: &str, range: std::ops::RangeInclusive<f64>| -> Result<Option<f64>> {
@@ -136,7 +343,8 @@ fn stroke(v: &Value, at: &str) -> Result<OutStroke> {
         Some(_) => return Err(out_err(&format!("{at}.cap"), "`cap` must be \"butt\", \"round\" or \"square\"")),
     };
     let paint = paint(s.get("paint").unwrap_or(&Value::Null), &format!("{at}.paint"))?;
-    Ok(OutStroke { paint, width: number("width", 0.0..=MAX_STROKE_WIDTH)?, join, cap, miter_limit: number("miterLimit", MITER_LIMIT)? })
+    let out = OutStroke { paint, width: number("width", 0.0..=MAX_STROKE_WIDTH)?, join, cap, miter_limit: number("miterLimit", MITER_LIMIT)? };
+    Ok((out, look(s, at, true, counts)?))
 }
 
 /// Is `x` finite and in `lo..=hi`?
@@ -407,48 +615,78 @@ pub(crate) fn with_swatch_colors(mut pieces: std::sync::Arc<Vec<Piece>>, doc: &D
     pieces
 }
 
-/// How many paints, gradient stops and freeform points `pieces` hold: what a cache counts them as
-/// besides their anchors.
+/// How many paints, gradient stops and freeform points `pieces` hold, and one for each effect
+/// record they carry and for each 50 bytes of its parameters: what a cache counts them as besides
+/// their anchors.
 pub(crate) fn paint_count(pieces: &[Piece]) -> usize {
     let one = |p: &Paint| match p {
         Paint::Gradient(g) => 1 + g.gradient.stops.len() + g.freeform.as_ref().map_or(0, |f| f.points.len()),
         _ => 1,
     };
-    pieces.iter().map(|p| p.fills.iter().flatten().map(one).sum::<usize>() + p.strokes.iter().flatten().map(|s| one(&s.paint)).sum::<usize>()).sum()
+    let effects = |l: &Look| l.effects.iter().map(|e| 1 + e.params.to_string().len() / 50).sum::<usize>();
+    let looks = |p: &Piece| effects(&p.look) + p.fill_looks.iter().chain(&p.stroke_looks).map(effects).sum::<usize>();
+    pieces
+        .iter()
+        .map(|p| p.fills.iter().flatten().map(one).sum::<usize>() + p.strokes.iter().flatten().map(|s| one(&s.paint)).sum::<usize>() + looks(p))
+        .sum()
 }
 
 /// The appearance piece `p` of an object-level effect is drawn with: `base` (the object's) with
 /// its fills, then its strokes, replaced by the piece's where it has them, as a filter's output
 /// sets them (an existing item keeps everything but what the piece gives; new ones take the
-/// defaults).
+/// defaults), each given its look ([`Look`]). The piece's own look is not part of it: the art the
+/// piece becomes carries it.
 pub fn appearance(base: &Appearance, p: &Piece) -> Appearance {
     let mut ap = base.clone();
     if let Some(fills) = &p.fills {
         crate::objects::set_items(&mut ap, true, fills.iter().cloned().map(OutStroke::paint).collect());
+        dress_items(&mut ap, true, &p.fill_looks);
     }
     if let Some(strokes) = &p.strokes {
         crate::objects::set_items(&mut ap, false, strokes.clone());
+        dress_items(&mut ap, false, &p.stroke_looks);
     }
     ap
 }
 
+/// Gives the fills (`fill`) or strokes of `ap`, in paint order, the looks in `looks`.
+fn dress_items(ap: &mut Appearance, fill: bool, looks: &[Look]) {
+    for (item, look) in ap.items.iter_mut().filter(|i| i.is_fill() == fill).zip(looks) {
+        look.dress(item);
+    }
+}
+
 /// The items piece `p` of an effect on `item` (a fill or a stroke) is drawn with, in paint order:
 /// `item` itself when the piece keeps it, else one copy of it for each paint or stroke the piece
-/// gives, with that paint (and that stroke's weight, join, cap and miter limit where given).
+/// gives, with that paint (and that stroke's weight, join, cap and miter limit where given) and
+/// that fill's or stroke's look.
 pub fn items(item: &AppearanceItem, p: &Piece) -> Vec<AppearanceItem> {
+    let dressed = |mut it: AppearanceItem, look: Option<&Look>| {
+        if let Some(look) = look {
+            look.dress(&mut it);
+        }
+        it
+    };
     match item {
         AppearanceItem::Fill(f) => match &p.fills {
             None => vec![item.clone()],
-            Some(fills) => fills.iter().map(|paint| AppearanceItem::Fill(vectorcraft_doc::FillLayer { paint: paint.clone(), ..f.clone() })).collect(),
+            Some(fills) => fills
+                .iter()
+                .enumerate()
+                .map(|(k, paint)| {
+                    dressed(AppearanceItem::Fill(vectorcraft_doc::FillLayer { paint: paint.clone(), ..f.clone() }), p.fill_looks.get(k))
+                })
+                .collect(),
         },
         AppearanceItem::Stroke(s) => match &p.strokes {
             None => vec![item.clone()],
             Some(strokes) => strokes
                 .iter()
-                .map(|o| {
+                .enumerate()
+                .map(|(k, o)| {
                     let mut s = s.clone();
                     crate::objects::style(&mut s, o.clone());
-                    AppearanceItem::Stroke(s)
+                    dressed(AppearanceItem::Stroke(s), p.stroke_looks.get(k))
                 })
                 .collect(),
         },

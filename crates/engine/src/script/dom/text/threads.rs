@@ -30,11 +30,11 @@ use std::sync::{Arc, Weak};
 
 use serde_json::json;
 use vectorcraft_doc::TextKind;
-use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostMember, host_ref};
+use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostMember, MemberInfo, host_ref};
 
 use super::super::{
-    Answer, Doc, Host, Item, Link, NOT_FOUND, arg, boolean, class, current, doc_of, doc_ref, edit_item, find_doc, float, function, get, handle_of,
-    id_of, id_parts, in_compound, item_of, item_ref, method, named, num, property, text, whole, with_doc,
+    Answer, Described, Doc, Host, Item, Link, NOT_FOUND, arg, boolean, class, current, doc_of, doc_ref, edit_item, find_doc, float, function, get,
+    handle_of, id_of, id_parts, in_compound, item_of, item_ref, method, named, num, property, returns, text, typed, whole, with_doc,
 };
 use super::{
     ATTRS, Index, Log, Part, STALE_RANGE, frame_ids, from_script, part_spans, range_ref, read_only, text_of, this_frame, to_script, touched,
@@ -312,6 +312,8 @@ fn observe(h: &Host, st: &DocState, anchor: NodeId) -> std::result::Result<(Rc<I
             Some(index) => index,
             None => {
                 let text = story_text(st, &frames);
+                // Joining the frames' text costs its length, as rebuilding the index does elsewhere.
+                h.charge_call(text.len() as u64)?;
                 match logs.get(&key) {
                     Some(l) if l.reverts == st.reverts && l.index.text == text => l.index.clone(),
                     _ => Rc::new(Index::new(text)),
@@ -700,8 +702,8 @@ fn stories_index(h: &Host, a: &[Data]) -> Answer {
 // ---- classes ----
 
 /// A member of the range of a story of two or more frames that is not available yet: reading or
-/// assigning it throws, after the check that the range is still there.
-fn range_later(link: &Link, name: &'static str) -> (String, HostMember) {
+/// assigning it throws, after the check that the range is still there, and `reflect` leaves it out.
+fn range_later(link: &Link, name: &'static str) -> Described {
     let message = format!("TextRange.{name} is not available yet");
     let l = link.clone();
     let f: HostFunction = Rc::new(move |a: Vec<Data>| {
@@ -710,12 +712,12 @@ fn range_later(link: &Link, name: &'static str) -> (String, HostMember) {
         resolve(&h, this_span(&h, &a)?)?;
         Err(HostError::Error(message.clone()))
     });
-    (name.to_string(), HostMember::Property { get: f.clone(), set: f })
+    (name.to_string(), HostMember::Unavailable(f), MemberInfo { unavailable: true, ..MemberInfo::default() })
 }
 
 /// A member of `Story` that is not available yet: reading or assigning it throws, after the check
-/// that the story is still there.
-fn story_later(link: &Link, name: &'static str) -> (String, HostMember) {
+/// that the story is still there, and `reflect` leaves it out.
+fn story_later(link: &Link, name: &'static str) -> Described {
     let message = format!("Story.{name} is not available yet");
     let l = link.clone();
     let f: HostFunction = Rc::new(move |a: Vec<Data>| {
@@ -724,50 +726,51 @@ fn story_later(link: &Link, name: &'static str) -> (String, HostMember) {
         this_story(&h, &a)?;
         Err(HostError::Error(message.clone()))
     });
-    (name.to_string(), HostMember::Property { get: f.clone(), set: f })
+    (name.to_string(), HostMember::Unavailable(f), MemberInfo { unavailable: true, ..MemberInfo::default() })
 }
 
 /// The members of `TextFrame` this module adds.
-pub(super) fn frame_members(l: &Link) -> Vec<(String, HostMember)> {
+pub(super) fn frame_members(l: &Link) -> Vec<Described> {
     named(vec![
-        ("nextFrame", property(l, next_frame, set_next_frame)),
-        ("previousFrame", property(l, previous_frame, set_previous_frame)),
-        ("story", get(l, frame_story)),
+        ("nextFrame", property(l, next_frame, set_next_frame), typed("TextFrame")),
+        ("previousFrame", property(l, previous_frame, set_previous_frame), typed("TextFrame")),
+        ("story", get(l, frame_story), typed("Story")),
     ])
 }
 
 /// `TextRange.story`.
-pub(super) fn range_member(l: &Link) -> (String, HostMember) {
-    ("story".into(), get(l, range_story))
+pub(super) fn range_member(l: &Link) -> Described {
+    ("story".into(), get(l, range_story), typed("Story"))
 }
 
 /// `Story`, `Stories` and the range and collections of the text of a story of two or more frames.
 pub(super) fn classes(l: &Link) -> Vec<HostClass> {
+    let collection = |t: &str| MemberInfo { collection: true, ..typed(t) };
     let mut story = named(vec![
-        ("typename", get(l, story_typename)),
-        ("parent", get(l, story_parent)),
-        ("length", get(l, story_length)),
-        ("textFrames", get(l, story_frames)),
-        ("textRange", get(l, story_text_range)),
-        ("characters", get(l, story_characters)),
-        ("words", get(l, story_words)),
-        ("paragraphs", get(l, story_paragraphs)),
+        ("typename", get(l, story_typename), typed("string")),
+        ("parent", get(l, story_parent), typed("Document")),
+        ("length", get(l, story_length), typed("number")),
+        ("textFrames", get(l, story_frames), typed("Array")),
+        ("textRange", get(l, story_text_range), typed("*")),
+        ("characters", get(l, story_characters), collection("*")),
+        ("words", get(l, story_words), collection("*")),
+        ("paragraphs", get(l, story_paragraphs), collection("*")),
     ]);
     story.extend(["lines", "insertionPoints", "textRanges", "textSelection"].into_iter().map(|m| story_later(l, m)));
     let mut range = named(vec![
-        ("typename", get(l, span_typename)),
-        ("parent", get(l, span_story)),
-        ("story", get(l, span_story)),
-        ("contents", property(l, span_contents, span_set_contents)),
-        ("start", read_only(l, span_start, "TextRange", "start")),
-        ("end", read_only(l, span_end, "TextRange", "end")),
-        ("characterOffset", read_only(l, span_start, "TextRange", "characterOffset")),
-        ("length", read_only(l, span_length, "TextRange", "length")),
-        ("characters", get(l, span_characters)),
-        ("words", get(l, span_words)),
-        ("paragraphs", get(l, span_paragraphs)),
-        ("getParagraphLength", method(l, span_paragraph_length)),
-        ("remove", method(l, span_remove)),
+        ("typename", get(l, span_typename), typed("string")),
+        ("parent", get(l, span_story), typed("Story")),
+        ("story", get(l, span_story), typed("Story")),
+        ("contents", property(l, span_contents, span_set_contents), typed("string")),
+        ("start", read_only(l, span_start, "TextRange", "start"), typed("number")),
+        ("end", read_only(l, span_end, "TextRange", "end"), typed("number")),
+        ("characterOffset", read_only(l, span_start, "TextRange", "characterOffset"), typed("number")),
+        ("length", read_only(l, span_length, "TextRange", "length"), typed("number")),
+        ("characters", get(l, span_characters), collection("StoryCharacters")),
+        ("words", get(l, span_words), collection("StoryWords")),
+        ("paragraphs", get(l, span_paragraphs), collection("StoryParagraphs")),
+        ("getParagraphLength", method(l, span_paragraph_length), returns("number", &[])),
+        ("remove", method(l, span_remove), returns("undefined", &[])),
     ]);
     range.extend(
         [
@@ -797,7 +800,11 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         class(
             name,
             None,
-            named(vec![("typename", get(l, part_typename)), ("length", get(l, part_length)), ("parent", get(l, part_parent))]),
+            named(vec![
+                ("typename", get(l, part_typename), typed("string")),
+                ("length", get(l, part_length), typed("number")),
+                ("parent", get(l, part_parent), typed("StoryRange")),
+            ]),
             Some(function(l, part_at)),
         )
     };
@@ -811,10 +818,10 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "Stories",
             None,
             named(vec![
-                ("typename", get(l, stories_typename)),
-                ("length", get(l, stories_length)),
-                ("parent", get(l, stories_parent)),
-                ("index", method(l, stories_index)),
+                ("typename", get(l, stories_typename), typed("string")),
+                ("length", get(l, stories_length), typed("number")),
+                ("parent", get(l, stories_parent), typed("Document")),
+                ("index", method(l, stories_index), returns("number", &[("itemKey", "*")])),
             ]),
             Some(function(l, stories_at)),
         ),

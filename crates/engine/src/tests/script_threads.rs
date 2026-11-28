@@ -431,7 +431,27 @@ fn a_hidden_or_locked_frame_in_either_story_stops_a_link() {
     assert!(m.contains("hidden or locked"), "{m}");
     let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[3].nextFrame = null;");
     assert!(m.contains("hidden or locked"), "{m}");
+    // A script that catches the error goes on, and the links stay as they were.
+    let out = log(
+        &mut s,
+        "var t = app.activeDocument.textFrames; try { t[2].nextFrame = t[1]; } catch (e) { vc.log([e.name, /hidden or locked/.test(e.message)]); }\
+         vc.log(t[2].nextFrame === null);",
+    );
+    assert_eq!(out, vec![json!(["Error", true]), json!(true)]);
     unchanged(&s, &ids, &before);
+}
+
+/// Reading a story whose text is larger than what one run may pass to and from the host stops
+/// the run when the story's text is joined.
+#[test]
+fn joining_a_storys_text_counts_toward_the_runs_data_limit() {
+    let text = "word ".repeat(40_000);
+    let (mut s, _, _) = threaded(&text);
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(Some(100_000)));
+    let r = run(&mut s, "vc.log(app.activeDocument.stories[0].length);");
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(None));
+    let e = r.map(|r| panic!("the run read a 200 KB story within a 100 KB limit: {r}")).unwrap_err().to_string();
+    assert!(e.contains("more data to and from commands"), "{e}");
 }
 
 #[test]
