@@ -1,6 +1,6 @@
 //! The names declared, read before the analysis.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use super::{
     Acc, Brackets, COMPOUND, Lexer, LineBreaks, Read, Sig, T, Token, catalog, directives, for_in, goes_on_after, goes_on_with, is, member_mark,
@@ -98,9 +98,6 @@ struct Declarations<'s, 'a, 'l> {
     assign: Option<bool>,
     /// The function bodies being read, the innermost last, up to [`crate::Limits::nesting`].
     bodies: Vec<Body<'s>>,
-    /// The names the bodies being read declare so far, each with the number of those bodies that
-    /// declare it.
-    declared_around: HashMap<&'s str, usize>,
     /// The bracket depth inside the outermost function body past that limit being read. The names
     /// declared inside it are not kept.
     untracked: Option<usize>,
@@ -120,7 +117,6 @@ pub(crate) fn declarations<'s>(src: &'s str, acc: &mut Acc) -> Declared<'s> {
         var_depth: None,
         assign: None,
         bodies: vec![],
-        declared_around: HashMap::new(),
         untracked: None,
         keys: vec![],
         out: Declared::default(),
@@ -208,8 +204,10 @@ impl<'s> Declarations<'s, '_, '_> {
         } else {
             None
         };
-        // A name a body around `t` has declared with `var` before it is that body's own.
-        let own = |name: &str| self.untracked.is_none() && self.declared_around.contains_key(name);
+        // A name the innermost body around `t` has declared with `var` before it is that body's own. A
+        // name only an outer body declared is that body's variable, which a nested function may assign
+        // before a call in the outer body runs.
+        let own = |name: &str| self.untracked.is_none() && self.bodies.last().is_some_and(|b| b.names.contains(name));
         if let Some(name) = assigned.filter(|n| !own(n)) {
             if self.out.body_assigned.contains(name) || self.acc.room(self.out.body_assigned.len()) {
                 self.out.body_assigned.insert(name);
@@ -316,14 +314,6 @@ impl<'s> Declarations<'s, '_, '_> {
                 }
                 while let Some(body) = self.bodies.pop_if(|b| depth < b.depth) {
                     self.var_depth = body.var_depth;
-                    for name in body.names {
-                        if let Some(n) = self.declared_around.get_mut(name) {
-                            *n = n.saturating_sub(1);
-                            if *n == 0 {
-                                self.declared_around.remove(name);
-                            }
-                        }
-                    }
                 }
                 if self.untracked.is_some_and(|d| depth < d) {
                     self.untracked = None;
@@ -348,7 +338,6 @@ impl<'s> Declarations<'s, '_, '_> {
         if let Some(body) = self.bodies.last_mut() {
             if (var || body.depth == depth) && !body.names.contains(t.text) && self.acc.room(body.names.len()) {
                 body.names.insert(t.text);
-                *self.declared_around.entry(t.text).or_insert(0) += 1;
                 if let Some((_, names)) = self.out.bodies.get_mut(body.index) {
                     names.push(t.text);
                 }

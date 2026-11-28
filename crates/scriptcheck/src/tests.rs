@@ -673,10 +673,11 @@ fn only_a_whole_var_value_makes_save_as_the_scripts_own() {
 /// assignment of a property of that name, which may be the global object's, a function body that
 /// assigns a `saveAs` or `exportFile` property of any object, code given as text, a `with` statement
 /// and an included file each leave the write reported. A function that declares its own variable of the
-/// name, or assigns another property of it, leaves it the script's own.
+/// name, or assigns another property of it, leaves it the script's own. A nested function that assigns
+/// a variable its enclosing body declared leaves the write reported too.
 #[test]
 fn a_save_as_other_code_may_replace_writes_a_file() {
-    let cases: [(&str, &[usize]); 12] = [
+    let cases: [(&str, &[usize]); 16] = [
         ("var f = new File(p);\nvar d = app.activeDocument;\nif (flag) label:\nvar d = {saveAs: function () {}};\nd.saveAs(f);\n", &[5]),
         (
             "var f = new File(p);\nvar d = {\n    saveAs: function () {},\n    useDocument: function () {\n        d = null;\n        d = app.activeDocument;\n    }\n};\nd.useDocument();\nd.saveAs(f);\n",
@@ -698,6 +699,22 @@ fn a_save_as_other_code_may_replace_writes_a_file() {
         ),
         ("var f = new File(p);\nfunction note() { d.n = 1; }\nvar d = {saveAs: function () {}};\nnote();\nd.saveAs(f);\n", &[]),
         ("var f = new File(p);\nvar d = {saveAs: function () {}};\nfunction g() { var d = app.activeDocument; d = 1; }\nd.saveAs(f);\n", &[]),
+        (
+            "var f = new File(p);\nfunction run() {\n    var d = {saveAs: function () {}};\n    swap();\n    d.saveAs(f);\n    function swap() { d = app.activeDocument; }\n}\nrun();\n",
+            &[5],
+        ),
+        (
+            "var f = new File(p);\nfunction run() {\n    var d = {saveAs: function () {}};\n    swap();\n    d.saveAs(f);\n    function swap() { d += 1; }\n}\n",
+            &[5],
+        ),
+        (
+            "var f = new File(p);\nfunction run() {\n    var d = {saveAs: function () {}};\n    swap();\n    d.saveAs(f);\n    function swap() { d++; }\n}\n",
+            &[5],
+        ),
+        (
+            "var f = new File(p);\nfunction run() {\n    var d = {saveAs: function () {}};\n    swap();\n    d.saveAs(f);\n    function swap() { for (d in o) {} }\n}\n",
+            &[5],
+        ),
     ];
     for (src, lines) in cases {
         let r = report(src);
