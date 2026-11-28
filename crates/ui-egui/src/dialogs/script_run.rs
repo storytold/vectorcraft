@@ -581,13 +581,19 @@ pub(crate) const SHOWN_INCLUDES: usize = 20;
 /// warning lists, read without running the script; a path also checks the files its `#include`
 /// lines name. Null when the check fails: the run reports why the script can't be read.
 fn reaches(app: &mut VectorcraftApp, params: &Value) -> Value {
+    checked(app, params).unwrap_or(Value::Null)
+}
+
+/// [`reaches`], with the check's error when it fails, for example when the request asking can't
+/// read the script.
+fn checked(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
     let check = match (params.get("path"), params.get("source")) {
         (Some(path), _) => json!({"path": path, "includes": true}),
         (None, Some(source)) => json!({"data": source}),
-        (None, None) => return Value::Null,
+        (None, None) => return Ok(Value::Null),
     };
-    let Ok(r) = app.session.execute("script.check", &check) else { return Value::Null };
-    json!({"kind": r["kind"], "needs": r["needs"], "outside": r["outside"], "includes": r["includes"], "truncated": r["truncated"]})
+    let r = app.session.execute("script.check", &check).map_err(|e| e.to_string())?;
+    Ok(json!({"kind": r["kind"], "needs": r["needs"], "outside": r["outside"], "includes": r["includes"], "truncated": r["truncated"]}))
 }
 
 /// `prompt` with what the report `r` finds the script reaches outside the document, one line each;
@@ -731,8 +737,14 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         && let Some(RunWarning { params, reaches: listed, scope, automated }) = answer.take_tag::<RunWarning>()
     {
         // A script whose report changed while the warning was open is listed again before it runs.
-        let now = reaches(app, &params);
-        let ran = if now == listed {
+        // A script read when the warning opened that the answering request can't read is
+        // refused with the check's error, not listed again as changed.
+        // The check reads the script under the access the run would have.
+        let ran = match scope.clone().within_current().run(|| checked(app, &params)) {
+            Err(e) if !listed.is_null() => Err(e),
+            now => Ok(now.unwrap_or(Value::Null)),
+        }
+        .and_then(|now| if now == listed {
             let stored =
                 if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
             let run = |app: &mut VectorcraftApp| crate::script_runs::run_chosen(app, params).map(drop);
@@ -741,7 +753,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         } else {
             app.status(CHANGED_SINCE_WARNING);
             warn(app, params, now, scope, automated).map(drop)
-        };
+        });
         if let Err(e) = ran {
             app.status(e);
         }
