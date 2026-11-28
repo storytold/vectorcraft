@@ -9647,7 +9647,8 @@ art) and Align New Objects to Pixel Grid (see [Align New Objects to Pixel Grid](
 `outlineImages` is Show Images in Outline Mode. While it is off, Outline mode draws a linked image's frame crossed
 from corner to corner, and a placed document as its box crossed the same way without its art; an embedded image
 shows its frame alone. Effects that change geometry, a placed document's own or its group's, reshape the crossed box
-instead of the file's art. While it is on, images show their pixels in gray and
+instead of the file's art, and an envelope holding a placed document distorts its crossed box. Each step of a blend
+of placed documents is crossed too. While it is on, images show their pixels in gray and
 placed documents show their art.
 Pass any of these keys to change them in one undo step; `document.setUnits` stays as an alias for `units`.
 A file whose bleed (0 to 72 pt a side), superscript and subscript sizes (1 to 500%) and positions (-500 to 500%) or
