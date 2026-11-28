@@ -1070,11 +1070,21 @@ fn color_halftone_screens_midtones_into_dots_and_keeps_white_and_black() {
     let mut half = image(w, h, |x, _| if x < 32 { grey(160) } else { [0; 4] });
     halftone.apply(&mut half, w, h, &space(w, h));
     assert!((0..h).all(|y| (32..w).all(|x| at(&half, w, x, y) == [0; 4])));
-    // Dots are bigger where the image is brighter.
+    // Brighter areas have fewer dark pixels.
     let mut ramp = image(w, h, |x, _| grey((x * 4) as u8));
     halftone.apply(&mut ramp, w, h, &space(w, h));
     let lit = |x0: usize| (0..h).flat_map(|y| (x0..x0 + 16).map(move |x| (x, y))).filter(|(x, y)| at(&ramp, w, *x, *y)[0] > 127).count();
     assert!(lit(8) < lit(40), "{} < {}", lit(8), lit(40));
+}
+
+#[test]
+fn color_halftone_draws_dark_dots_on_light_rgb() {
+    let (w, h) = (64, 64);
+    let halftone = fx("pixelate.colorHalftone", json!({"maxRadius": 8, "channel1": 0, "channel2": 0, "channel3": 0}));
+    let mut d = image(w, h, |_, _| grey(192));
+    halftone.apply(&mut d, w, h, &space(w, h));
+    assert_eq!(at(&d, w, 37, 37), grey(0));
+    assert_eq!(at(&d, w, 32, 32), grey(255));
 }
 
 #[test]
