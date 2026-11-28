@@ -27,12 +27,12 @@ const NEARBY: usize = 6;
 const WALK: usize = 5;
 /// A pixel whose neighbors are all this close to it (in 0..1 premultiplied RGBA) lies in a flat area.
 const FLAT: f64 = 1.5 / 255.0;
-/// How many joined pixels within [`PURE`] of one class are taken as art of that class, such as a
-/// one-pixel line. The edge pixels of a curve that come within `PURE` of a class join in far fewer.
-/// A straight edge whose anti-aliased pixels come within `PURE` of
-/// a class gives the same pixels as a line of that class, and keeps the class too. A one-pixel line
-/// between two classes that is shorter, falls between pixels or is blurred is read as a blend of
-/// those two classes.
+/// How many joined pixels within [`PURE`] of one class (or of the colors of its flat areas, for a
+/// class named some levels off them, [`area_colors`]) are taken as art of that class, such as a
+/// one-pixel line. The edge pixels of a curve that come within `PURE` of a class join in far fewer. A
+/// straight edge whose anti-aliased pixels come within `PURE` of a class gives the same pixels as a
+/// line of that class, and keeps the class too. A one-pixel line between two classes that is shorter,
+/// falls between pixels or is blurred is read as a blend of those two classes.
 const LINE: usize = 2 * NEARBY + 1;
 
 struct Subset {
@@ -209,24 +209,33 @@ pub(crate) fn unmix(pix: &[Px], width: usize, height: usize, classes: &[[f64; 4]
     // ([`flat_classes`], [`RowDistances::around`]); the other mix lies as near as the steps that
     // `across_edge` counts when those are fewer. For the best mix,
     // the classes held by flat areas between two classes count as well ([`between_classes`]). A
-    // pixel within `PURE` of a class that is joined to at least [`LINE`] such pixels of that class
+    // pixel of a class (within `PURE` of it, or of the colors of its flat areas when it is named some
+    // levels off them, [`area_colors`]) that is joined to at least [`LINE`] such pixels of that class
     // (itself included) keeps it ([`pure_runs`]), as a one-pixel line of gray between black and white.
     let flat = flat_classes(pix, &stands_for, width, height);
     let between = between_classes(pix, &flat, &mixed, width, height);
-    let runs = pure_runs(&pure, width, height);
+    let colors = area_colors(pix, classes, &flat, &between);
+    let of_class = (!colors.iter().all(FlatColors::is_empty)).then(|| {
+        pure.iter()
+            .zip(pix)
+            .map(|(&q, px)| q.or_else(|| (0..k).find(|&c| colors.get(c).is_some_and(|cs| near_area_color(px, cs)))))
+            .collect::<Vec<_>>()
+    });
+    let of_class = of_class.as_deref().unwrap_or(&pure);
+    let runs = pure_runs(of_class, width, height);
     let mut flat_rows = RowDistances::new(|j| [flat.get(j).copied().flatten(), None], width, height, k);
     let mut between_rows = (!between.is_empty()).then(|| RowDistances::new(|j| between.get(j).copied().unwrap_or([None; 2]), width, height, k));
     let mut dist = vec![NEARBY + 1; k];
     let mut kept = vec![NEARBY + 1; k];
     for (i, key) in tied {
-        if pure.get(i).copied().flatten().is_some() && runs.get(i).is_some_and(|&r| r >= LINE) {
+        if of_class.get(i).copied().flatten().is_some() && runs.get(i).is_some_and(|&r| r >= LINE) {
             continue;
         }
         let Some(mixes) = mixed.get(&key) else { continue };
         let edges: Vec<(&Weights, usize)> = mixes
             .tied
             .iter()
-            .filter_map(|m| across_edge(pix, (&flat, &stands_for), (width, height), i, classes, &mixes.best, m).map(|r| (m, r)))
+            .filter_map(|m| across_edge(pix, (&flat, &stands_for, &colors), (width, height), i, classes, &mixes.best, m).map(|r| (m, r)))
             .collect();
         if edges.is_empty() {
             continue;
@@ -258,7 +267,10 @@ pub(crate) fn unmix(pix: &[Px], width: usize, height: usize, classes: &[[f64; 4]
 /// `other` gets past the class left out within [`WALK`] steps through the eight neighbors, and so
 /// does one that keeps going toward the other. When the first step of one path comes to a pixel
 /// that stands for its class of `other` (the edge on that side is sharp), the other path stops at
-/// a pixel within [`PURE`] of the class left out that it comes to before it gets past that class.
+/// a pixel of the class left out that it comes to before it gets past that class: a pixel within
+/// [`PURE`] of it, or, for a class named some levels off the colors of its flat areas
+/// ([`area_colors`]), within `PURE` of one of those colors, or within `PURE` of the class as named
+/// together with the pixel before it.
 /// For a class left out that lies beyond both classes of `other` on that line, the pixel has a
 /// neighbor on each side of that class, or a neighbor on each side of the pixel itself, none past
 /// the class of `other` nearer the class left out, and a chain of neighbors from the pixel to that
@@ -279,7 +291,7 @@ pub(crate) fn unmix(pix: &[Px], width: usize, height: usize, classes: &[[f64; 4]
 /// path does not come to such a pixel, and when a class left out lies beyond both classes of `other`.
 fn across_edge(
     pix: &[Px],
-    (flat, stands_for): (&[Option<usize>], &[Option<usize>]),
+    (flat, stands_for, colors): (&[Option<usize>], &[Option<usize>], &AreaColors),
     (width, height): (usize, usize),
     i: usize,
     classes: &[[f64; 4]],
@@ -356,10 +368,18 @@ fn across_edge(
         }
         false
     };
-    // Whether pixel `j` comes within `PURE` of class `c`.
-    let within = |j: usize, c: usize| {
+    // Whether pixel `j` comes within `PURE` of class `c` as named.
+    let named = |j: usize, c: usize| {
         let (Some(q), Some(cv)) = (pix.get(j), classes.get(c)) else { return false };
         (0..4).map(|k| (f64::from(q[k]) - cv[k]).powi(2)).sum::<f64>().sqrt() < PURE
+    };
+    // Whether pixel `j`, reached from pixel `prev`, is a pixel of class `c`: within `PURE` of it, or,
+    // for a class named some levels off the colors of its flat areas ([`area_colors`]), within `PURE`
+    // of one of those colors, or within `PURE` of the class as named with `prev` too (the class as
+    // named lies across at least two pixels there, which the pixels of a black-to-white edge do not).
+    let within = |prev: usize, j: usize, c: usize| match colors.get(c) {
+        Some(cs) if !cs.is_empty() => pix.get(j).is_some_and(|q| near_area_color(q, cs)) || (named(prev, c) && named(j, c)),
+        _ => named(j, c),
     };
     // The neighbor of pixel `j` near the line that lies farthest toward `a` (`toward` -1) or `b`
     // (`toward` 1), with its place.
@@ -368,19 +388,22 @@ fn across_edge(
     // pixel before (the first step is taken whatever `i` itself is). `None` when it does not get more
     // than `PURE` past `tc` in [`WALK`] steps; otherwise the steps to the first pixel past it that
     // stands for `class` (`stands_for`), or `NEARBY + 1`. With `halt`, the path also ends at a pixel
-    // within `PURE` of that class that it comes to before it gets past `tc`.
+    // of that class ([`within`]) that it comes to before it gets past `tc`.
     let walk = |toward: f64, tc: f64, class: usize, halt: Option<usize>| {
         let (mut cur, mut t) = (i, f64::NEG_INFINITY * toward);
         let mut past = false;
         for step in 1..=WALK {
+            let prev = cur;
             match next(cur, toward) {
                 Some((j, tj)) if (tj - t) * toward > 0.0 => (cur, t) = (j, tj),
                 _ => break,
             }
-            past = past || (t - tc) * toward * len > PURE;
-            if !past && halt.is_some_and(|h| within(cur, h)) {
+            // (A pixel of a flat area's color can lie past `tc` itself, when the class is named some
+            // levels off that color: the path stops there when it was not past `tc` before.)
+            if !past && halt.is_some_and(|h| within(prev, cur, h)) {
                 break;
             }
+            past = past || (t - tc) * toward * len > PURE;
             if past && stands_for.get(cur).copied().flatten() == Some(class) {
                 return Some(step);
             }
@@ -482,6 +505,88 @@ fn between_classes(pix: &[Px], flat: &[Option<usize>], mixed: &HashMap<[u32; 4],
         }
     }
     held
+}
+
+/// For each class with a flat area [`PURE`] or more from it (as when it is named some levels off its
+/// color), the distinct colors of its flat areas: the flat areas that
+/// stand for it (`flat`) and those whose mix holds it most (`between`, [`between_classes`]). Empty for
+/// a class whose flat areas all come within `PURE` of it.
+fn area_colors(pix: &[Px], classes: &[[f64; 4]], flat: &[Option<usize>], between: &[[Option<usize>; 2]]) -> Vec<FlatColors> {
+    let mut colors: Vec<FlatColors> = vec![FlatColors::default(); classes.len()];
+    let mut off_named = vec![false; classes.len()];
+    let mut kept: HashSet<(usize, [u32; 4])> = HashSet::new();
+    for (i, px) in pix.iter().enumerate() {
+        let Some(c) = flat.get(i).copied().flatten().or_else(|| between.get(i).and_then(|b| b[0])) else { continue };
+        let (Some(cv), Some(seen), Some(off)) = (classes.get(c), colors.get_mut(c), off_named.get_mut(c)) else { continue };
+        *off = *off || (0..4).map(|j| (f64::from(px[j]) - cv[j]).powi(2)).sum::<f64>().sqrt() >= PURE;
+        if kept.insert((c, px.map(f32::to_bits))) {
+            seen.push(*px);
+        }
+    }
+    for (seen, off) in colors.iter_mut().zip(off_named) {
+        if !off {
+            seen.clear();
+        }
+    }
+    colors
+}
+
+/// Whether `px` comes within [`PURE`] of one of `colors`.
+fn near_area_color(px: &Px, colors: &FlatColors) -> bool {
+    colors.near(px)
+}
+
+/// The colors of one class's flat areas, kept in cells `2 * PURE` wide on each channel, so a color
+/// within [`PURE`] of a pixel lies in the pixel's cell or, on each channel, the next cell on the side
+/// the pixel lies nearer: 16 cells in all.
+#[derive(Clone, Default)]
+struct FlatColors {
+    cells: HashMap<[i32; 4], Vec<Px>>,
+}
+
+impl FlatColors {
+    fn cell(px: &Px) -> [i32; 4] {
+        px.map(|v| (f64::from(v) / (2.0 * PURE)).floor() as i32)
+    }
+
+    fn push(&mut self, px: Px) {
+        self.cells.entry(Self::cell(&px)).or_default().push(px);
+    }
+
+    fn is_empty(&self) -> bool {
+        self.cells.is_empty()
+    }
+
+    fn clear(&mut self) {
+        self.cells.clear();
+    }
+
+    /// Whether one of the colors lies within [`PURE`] of `px`.
+    fn near(&self, px: &Px) -> bool {
+        if self.cells.is_empty() {
+            return false;
+        }
+        let at = Self::cell(px);
+        // On each channel, -1 or +1: the neighboring cell on the side of the cell's middle the pixel lies.
+        let side = [0, 1, 2, 3].map(|j| {
+            let pos = f64::from(px[j]) / (2.0 * PURE) - f64::from(at[j]);
+            if pos < 0.5 { -1 } else { 1 }
+        });
+        (0..16usize).any(|n| {
+            let mut key = at;
+            for (j, k) in key.iter_mut().enumerate() {
+                if (n >> j) & 1 == 1 {
+                    *k = k.saturating_add(side[j]);
+                }
+            }
+            self.cells.get(&key).is_some_and(|qs| qs.iter().any(|q| distance(px, q) < PURE))
+        })
+    }
+}
+
+/// How far apart two pixels are (in 0..1 premultiplied RGBA).
+fn distance(a: &Px, b: &Px) -> f64 {
+    (0..4).map(|j| (f64::from(a[j]) - f64::from(b[j])).powi(2)).sum::<f64>().sqrt()
 }
 
 /// For each of `k` classes, how far along each row the nearest pixel holding that class (`at`, the
@@ -611,6 +716,9 @@ fn in_flat_area(pix: &[Px], width: usize, height: usize, x: usize, y: usize) -> 
 
 /// Each class's weight in a pixel's mix.
 type Weights = Vec<(usize, f32)>;
+
+/// For each class, the colors of its flat areas that lie [`PURE`] or more from it ([`area_colors`]).
+type AreaColors = [FlatColors];
 
 /// A mix tried for a pixel: its squared error with its penalty, the penalty, and its classes with
 /// their weights (the first `n`).
@@ -804,6 +912,59 @@ mod tests {
     }
 
     #[test]
+    fn a_column_as_light_as_a_class_keeps_it_beside_a_flat_area_some_levels_off_it() {
+        // As above, with a flat area of the gray some levels darker than it is named to the right of
+        // the white: a column of `LINE` rows at the named value is still gray art.
+        let classes = vec![[0.9, 0.9, 0.9, 1.0], [0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 0.0]];
+        let mut pix = Vec::new();
+        for _ in 0..LINE {
+            pix.extend([[0.0f32, 0.0, 0.0, 1.0]; 5]);
+            pix.push([0.9, 0.9, 0.9, 1.0]);
+            pix.extend([[1.0f32, 1.0, 1.0, 1.0]; 5]);
+            pix.extend([[0.87f32, 0.87, 0.87, 1.0]; 5]);
+        }
+        let (pl, _, _) = unmix(&pix, 16, LINE, &classes);
+        for y in 0..LINE {
+            assert_eq!(pl[0][y * 16 + 5], 1.0, "gray in row {y}");
+            assert!(pl[0][y * 16 + 13] > 0.9, "the flat area in row {y}");
+        }
+    }
+
+    #[test]
+    fn a_short_strip_as_light_as_a_class_traces_the_same_beside_a_flat_area_some_levels_off_it() {
+        // Three rows of flat black, a strip 1 to 3 pixels wide at the gray's value and flat white: with
+        // a flat area of the gray some levels darker than it is named to the right of the white, the
+        // strip's pixels take the same mixes as without it (a strip 2 or 3 pixels wide stays gray).
+        let classes = vec![[0.9, 0.9, 0.9, 1.0], [0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 0.0]];
+        for wide in [1usize, 2, 3] {
+            let rows = |area: bool| {
+                let mut pix = Vec::new();
+                for _ in 0..3 {
+                    pix.extend([[0.0f32, 0.0, 0.0, 1.0]; 5]);
+                    pix.extend(vec![[0.9f32, 0.9, 0.9, 1.0]; wide]);
+                    pix.extend([[1.0f32, 1.0, 1.0, 1.0]; 5]);
+                    if area {
+                        pix.extend([[0.87f32, 0.87, 0.87, 1.0]; 5]);
+                    }
+                }
+                pix
+            };
+            let w = 10 + wide;
+            let (alone, _, _) = unmix(&rows(false), w, 3, &classes);
+            let (beside, _, _) = unmix(&rows(true), w + 5, 3, &classes);
+            for y in 0..3 {
+                for x in 0..w {
+                    let mix = |pl: &[Vec<f32>], w: usize| pl.iter().take(3).map(|p| p[y * w + x]).collect::<Vec<_>>();
+                    assert_eq!(mix(&beside, w + 5), mix(&alone, w), "{wide} px strip: the mix at ({x}, {y})");
+                }
+            }
+            if wide > 1 {
+                assert_eq!(beside[0][w + 5 + 5], 1.0, "{wide} px strip: gray");
+            }
+        }
+    }
+
+    #[test]
     fn an_edge_pixel_takes_no_class_beyond_both_classes_beside_it() {
         // A pale ground, a gray and a charcoal on one line: a row of flat gray, one edge pixel halfway
         // to charcoal, flat charcoal. The edge pixel is a mix of the gray and the charcoal, with none
@@ -903,6 +1064,43 @@ mod tests {
             }
             rows.around(i, &mut dist);
             assert_eq!(dist, want, "pixel ({x}, {y})");
+        }
+    }
+
+    #[test]
+    fn every_flat_area_color_keeps_its_whole_neighborhood() {
+        // A class named 228, 228, 227 and flat areas of 222 then 223: a pixel of 225 lies within
+        // `PURE` of 223 but not of 222, so it counts as art of the class only when 223 is kept.
+        let level = |v: f32| [v / 255.0, v / 255.0, v / 255.0, 1.0];
+        let classes = vec![[228.0 / 255.0, 228.0 / 255.0, 227.0 / 255.0, 1.0], [0.0, 0.0, 0.0, 1.0]];
+        let pix = vec![level(222.0), level(222.0), level(223.0), level(223.0)];
+        let flat = vec![Some(0); pix.len()];
+        let between = vec![[None; 2]; pix.len()];
+        let colors = area_colors(&pix, &classes, &flat, &between);
+        assert_eq!(colors[0].cells.values().map(Vec::len).sum::<usize>(), 2);
+        assert!(near_area_color(&level(225.0), &colors[0]));
+        let mut only_222 = FlatColors::default();
+        only_222.push(level(222.0));
+        assert!(!near_area_color(&level(225.0), &only_222));
+    }
+
+    #[test]
+    fn flat_colors_find_what_a_scan_of_every_color_finds() {
+        let at = |r: f32, g: f32, b: f32, a: f32| [r / 255.0, g / 255.0, b / 255.0, a / 255.0];
+        let stored: Vec<Px> = (0..40u8).map(|n| at(f32::from(n) * 6.3, 255.0 - f32::from(n) * 2.9, f32::from(n % 7) * 3.1, 255.0)).collect();
+        let mut index = FlatColors::default();
+        for &q in &stored {
+            index.push(q);
+        }
+        assert!(stored.iter().all(|q| index.near(q)));
+        for r in (0..=255u8).step_by(3) {
+            for g in [0.0f32, 100.0, 140.0, 200.0, 254.0] {
+                for b in [0.0f32, 2.0, 5.0, 9.0, 18.0] {
+                    let px = at(f32::from(r), g, b, 255.0);
+                    let scan = stored.iter().any(|q| distance(&px, q) < PURE);
+                    assert_eq!(index.near(&px), scan, "{px:?}");
+                }
+            }
         }
     }
 

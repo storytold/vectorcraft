@@ -1111,6 +1111,41 @@ fn a_soft_gray_band_along_black_traces_as_black_and_white() {
     assert!((36..=42).contains(&blur_three), "bands 4 px wide blurred by 3 px: {blur_three} of 192 samples traced gray");
 }
 
+/// A gray band 3 or 4 pixels wide along a black disc, with edges blurred by 0.6 pixels and a flat
+/// square of the same gray elsewhere, keeps at least 4 of every 5 samples gray when the gray is named
+/// 6 or 12 levels lighter or darker than the band's color, as it does when the gray is named exactly:
+/// the pixels of the square's color count as pixels of the gray.
+#[test]
+fn a_gray_band_along_black_keeps_its_gray_when_named_some_levels_off_its_flat_areas() {
+    const INK: [u8; 3] = [4, 4, 3];
+    for gray in [230u8, 200, 128] {
+        for off in [-12i16, -6, 6, 12] {
+            let Ok(named) = u8::try_from(i16::from(gray) + off) else { continue };
+            for wide in [3u8, 4] {
+                let img = render(120, 60, 0.6, |x, y| {
+                    let band = (40.0..43.0 + f64::from(wide)).contains(&x) && (20.0..36.0).contains(&y);
+                    let square = (80.0..110.0).contains(&x) && (15.0..45.0).contains(&y);
+                    Some(if (x - 25.0).hypot(y - 28.0) <= 18.0 {
+                        INK
+                    } else if band || square {
+                        [gray; 3]
+                    } else {
+                        WHITE
+                    })
+                });
+                let res = trace(&img, &black_gray_white([named; 3]));
+                let kept = (0..wide)
+                    .flat_map(|c| (20..36).map(move |y| Point::new(43.5 + f64::from(c), f64::from(y) + 0.5)))
+                    .filter(|&at| top_color(&res, at) == Some([named; 3]))
+                    .count();
+                let all = 16 * usize::from(wide);
+                assert!(5 * kept >= 4 * all, "gray {gray} named {named}, {wide} px band: {kept} of {all} samples traced gray");
+                assert_eq!(top_color(&res, Point::new(95.0, 30.0)), Some([named; 3]), "gray {gray} named {named}: the square");
+            }
+        }
+    }
+}
+
 /// A soft-edged gray spoke two or three pixels wide running straight out of a black disc, blurred
 /// by 1 or 1.5 pixels, loses 3 or 4 of its 16 samples nearest the disc and keeps the rest. Blurred
 /// by 2 pixels, a spoke three pixels wide loses 2 or 3 of them, and one two pixels wide traces as
