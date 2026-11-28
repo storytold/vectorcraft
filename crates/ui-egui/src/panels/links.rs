@@ -786,8 +786,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         })
         .show(ui, |ui, _| {
-            let empty = if o.show == "all" { tl!("No images") } else { tl!("Nothing matches the Show filter.") };
-            let mut list = List::<u64>::new(tl!("Links")).selection(Bind::bound(&mut selection)).empty(empty).row_menu();
+            // With no rows the body says how to bring an image in, as the other panels' empty states do.
+            if row_ids.is_empty() {
+                let detail = if o.show == "all" {
+                    tl!("File › Place… brings in an image, linked or embedded.")
+                } else {
+                    tl!("Nothing matches the Show filter.")
+                };
+                super::empty_state(ui, "link", tl!("No images"), detail);
+                return;
+            }
+            let mut list = List::<u64>::new(tl!("Links")).selection(Bind::bound(&mut selection)).row_menu();
             if let Some(id) = reveal {
                 list = list.reveal(id);
             }

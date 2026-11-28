@@ -5,7 +5,7 @@
 
 use craft::behavior::ColumnWidth;
 use craft::keymap::CommandRef;
-use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::contract::{Gap, Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Picture};
 use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::list::ThumbAspect;
@@ -249,34 +249,43 @@ const HALVES: &[ColumnWidth] = &[ColumnWidth::fill(1.0); 2];
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let l = lines(app, ui.ctx());
     let mut copy = None;
-    // Two equal halves of the panel, as the reference app's columns were.
-    let _ = Grid::new(HALVES).show(ui, |ui, _| {
-        for column in [&l.left, &l.right] {
-            Stack::new().show(ui, |ui, _| {
-                for s in column {
-                    if mono(ui, s) {
-                        copy = Some(s.clone());
+    // The numbers, the paints and the type are groups a section gap sets apart from the dividers between them.
+    Stack::new().fill_width().gap(Gap::Section).show(ui, |ui, _| {
+        Stack::new().fill_width().show(ui, |ui, _| {
+            // Two equal halves of the panel, as the reference app's columns were.
+            let _ = Grid::new(HALVES).show(ui, |ui, _| {
+                for column in [&l.left, &l.right] {
+                    Stack::new().show(ui, |ui, _| {
+                        for s in column {
+                            if mono(ui, s) {
+                                copy = Some(s.clone());
+                            }
+                        }
+                    });
+                }
+            });
+            for s in l.zoom.iter().chain(&l.brush) {
+                if mono(ui, s) {
+                    copy = Some(s.clone());
+                }
+            }
+        });
+        Divider::horizontal().show(ui);
+        Stack::new().fill_width().show(ui, |ui, _| {
+            copy = paint_block(ui, &l.fill).or(copy.take());
+            copy = paint_block(ui, &l.stroke).or(copy.take());
+        });
+        if let Some((font, size)) = &l.type_block {
+            Divider::horizontal().show(ui);
+            Stack::new().fill_width().show(ui, |ui, _| {
+                for value in [font, size] {
+                    if mono(ui, value) {
+                        copy = Some(value.clone());
                     }
                 }
             });
         }
     });
-    for s in l.zoom.iter().chain(&l.brush) {
-        if mono(ui, s) {
-            copy = Some(s.clone());
-        }
-    }
-    Divider::horizontal().show(ui);
-    copy = paint_block(ui, &l.fill).or(copy);
-    copy = paint_block(ui, &l.stroke).or(copy);
-    if let Some((font, size)) = &l.type_block {
-        Divider::horizontal().show(ui);
-        for value in [font, size] {
-            if mono(ui, value) {
-                copy = Some(value.clone());
-            }
-        }
-    }
     if let Some(text) = copy {
         app.clipboard_out = Some(text);
         app.status("Copied the value");
